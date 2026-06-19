@@ -1,13 +1,13 @@
 phase: 0
 phase_id: P00
-status: BLOCKED
+status: RUNNING
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md"
 base_commit: "99dbd085ea9a7eb28307f7752383ee9ff6dc48b2"
 started_at: "2026-06-19T16:19:34-04:00"
 completed_at: null
-active_wave: 1
+active_wave: 2
 tasks:
-  P00-T01: { status: BLOCKED, run_id: "P00-T01-20260619-baseline-validation", commit: null }
+  P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: null }
   P00-T02: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T03: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T04: { status: NOT_STARTED, run_id: null, commit: null }
@@ -26,12 +26,20 @@ decisions:
     decision: "Do not create v8-baseline-20260619"
     reason: "Public remote-main validation reached 855e975beec3bac6dc06db598081b6ac11ea8e14 but failed npm run validate before baseline tag creation."
     decided_at: "2026-06-19T16:25:18-04:00"
-blockers:
   - task: P00-T01
-    condition: "Fresh public remote-main v8 checkout validation failed at npm run validate."
+    decision: "Create v8-baseline-20260619 from refs/remotes/origin/main"
+    reason: "LF-preserving remote-main validation and LF-preserving local tag checkout validation passed npm ci, npm run validate, npm run release:check, and npm test."
+    decided_at: "2026-06-19T16:32:39-04:00"
+blockers: []
+resolved_blockers:
+  - task: P00-T01
+    condition: "Stale local-main clone resolved to v8.0.2 instead of v8.0.5."
+    resolution: "Superseded by validating public refs/heads/main at 855e975beec3bac6dc06db598081b6ac11ea8e14."
+    evidence: "docs/next/evidence/P00-T01/baseline-ref-analysis.log"
+  - task: P00-T01
+    condition: "Windows checkout converted shell scripts to CRLF and failed npm run validate."
+    resolution: "Resolved by LF-preserving checkouts using core.autocrlf=false for remote-main validation and local tag validation."
     evidence: "docs/next/evidence/P00-T01/fresh-checkout-validation.log"
-    detail: "The corrected public remote clone reached commit 855e975beec3bac6dc06db598081b6ac11ea8e14, package version 8.0.5, and npm ci passed. scripts/validate.sh then failed with CRLF parsing errors: line 5 $'\\r' command not found and line 6 set pipefail invalid option name."
-    unblock: "Provide or apply a baseline validation procedure that preserves LF line endings for shell scripts on Windows, or otherwise produce a fresh checkout where npm ci, npm run validate, npm run release:check, and npm test pass before creating the annotated baseline tag."
 evidence:
   - docs/next/evidence/P00-PREFLIGHT/preflight.log
   - docs/next/evidence/P00-T01/fresh-checkout-validation.log

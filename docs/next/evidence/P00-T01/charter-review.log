@@ -17,7 +17,9 @@ Review findings:
 - The v8 policy distinguishes permitted maintenance from v9-only feature work.
 - Branch naming, PR labeling, review ownership, and release-channel conventions are recorded.
 - The historical stale-local-main validation failure was superseded by a public remote-main validation attempt.
-- P00-T01 public remote-main v8 validation failed before local annotated baseline tag creation.
+- The CRLF validation failure was superseded by an LF-preserving public remote-main validation attempt.
+- P00-T01 LF-preserving remote-main validation passed.
+- The local annotated baseline tag was created and verified from a fresh LF-preserving checkout.
 
 Decision:
-Not accepted for Phase 0 execution. P00-T01 is blocked until public remote-main v8 validation passes and the local annotated baseline tag is created.
+Accepted for Phase 0 execution. P00-T01 governance, v8 maintenance policy, ownership routing, baseline tag, and validation evidence satisfy the task contract.

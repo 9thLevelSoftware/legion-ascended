@@ -22,41 +22,44 @@ entries:
     description: Phase 0 source, repository, and v8 preflight capture
   - task: P00-T01
     artifact: docs/next/REWRITE-CHARTER.md
-    description: Draft rewrite charter, governance roles, branch policy, release channels, and blocked remote-main baseline provenance
-    sha256: 688981E3F5D8661E23AAA414C8C3C441311C414A4ABCF97AB9665D331D60899A
+    description: Accepted rewrite charter, governance roles, branch policy, release channels, and v8 baseline provenance
+    sha256: 31F51E04ADDD4B69E472CF10F6ED64D2B191499E95FA725827C0D4C04F6CC841
   - task: P00-T01
     artifact: docs/next/V8-MAINTENANCE-POLICY.md
-    description: Draft v8 maintenance-only policy and v9-only work boundary
-    sha256: F3BFBF944A8A31E3A11EE47F2CF6DDF10626FA7C10FED147758CB2B5FA10FBF0
+    description: Accepted v8 maintenance-only policy and v9-only work boundary
+    sha256: F65F8412C4007600B9E96A8BB28487F519715670B9A86CD9496897DA465B288A
   - task: P00-T01
     artifact: docs/next/README.md
-    description: Legion Next index updated with P00-T01 governance links and blocked remote-main validation note
-    sha256: 21A5CCAB5473FDFA826F7ABC79C2638B3924C7DE40875B231B32BEEEF91E473C
+    description: Legion Next index updated with P00-T01 governance links, baseline tag, and LF-preserving validation note
+    sha256: 46472B4A80B9E04507CC21E1EC8989296BF020ABA91533D56BFEFAF29806AE5D
   - task: P00-T01
     artifact: CHANGELOG.md
-    description: Governance changelog entry for blocked P00-T01 draft outputs, historical stale-local-main evidence, and remote-main validation failure
-    sha256: A23D06480B2D3CE34E36B5A2ABAF5581BCE03DE887BA63F9916FCD3116A9037E
+    description: Governance changelog entry for accepted P00-T01 outputs, LF-preserving validation, local baseline tag, and historical failed checkout attempts
+    sha256: FB96A404D5C61FF742C88A6097EFB56091913BF545132CED058EDDCB70A6FC51
   - task: P00-T01
     artifact: .github/CODEOWNERS
     description: CODEOWNERS review routing for ADRs, protocol schemas, runtime drivers, migrations, security, eval fixtures, evidence, and ownership metadata
     sha256: C7ED21448A9D3B0F3AE6AD7A7EE48ED4C9F8B696E33C075263F23F7CC8CA9BD9
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/charter-review.log
-    description: Charter review record showing draft review passed content checks but acceptance is blocked by public remote-main validation failure
-    sha256: 6738893037A43F5758D620FBDC2B2BD66CEEE7131159DAFF9BE0FBBAB7DB9E3D
+    description: Charter review record accepting P00-T01 after LF-preserving baseline validation and local tag verification
+    sha256: 7887191971DCF98C67C6834CD170D9AC87D3FF1F4C0B896E06EBF0FBC0E8C2FA
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/fresh-checkout-validation.log
-    description: Required validation log; historical local clone failed at 8.0.2, superseding public remote-main clone reached 8.0.5 and failed npm run validate with exit code 2
-    sha256: 0559A1E67F078DDFF62C02022205EC6C24C649E6BDD816DFE7EF41B256FE7B89
+    description: Required validation log with historical failures, successful LF-preserving remote-main validation, local annotated tag creation, and successful LF-preserving local tag validation
+    sha256: 4F2BBCE119F92D929E4B1D10E33F765684AA53FBDEF945784E09BC04F700DEB6
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/baseline-ref-analysis.log
-    description: Ref mismatch analysis plus unblock attempt showing public remote-main validation superseded stale local-main but still failed before tag creation
-    sha256: 4E1C7E48854E257CA9F12B487019E1E7886DE496F092DD0BD2D8C5E0A1E21CD6
+    description: Baseline ref analysis preserving failed attempts and recording successful LF-preserving validation plus local tag verification
+    sha256: EF6FA650E3449B1516FFD938962269167046902B6B104A8B99472E83A2477B8C
   - task: P00-T01
     artifact: "local tag v8-baseline-20260619"
-    description: Not created because public remote-main validation failed before tagging
-    status: NOT_CREATED
+    description: Local annotated v8 baseline tag created in C:/Users/dasbl/Documents/legion and verified from a fresh LF-preserving local clone
+    status: CREATED
+    tag_object: "87ef9acc057cde8dd71bc25fc08bc536e9c8076c"
+    target_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
     intended_source_ref: "C:/Users/dasbl/Documents/legion refs/remotes/origin/main"
     intended_source_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
     historical_local_clone_commit: "84d6b69920c877fc6f7b2b8dbc979c32b97bbb92"
     remote_validation_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
+    validation_procedure: "core.autocrlf=false remote clone and core.autocrlf=false local tag clone"

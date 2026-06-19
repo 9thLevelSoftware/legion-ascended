@@ -53,3 +53,19 @@ scripts/validate.sh: line 6: set: pipefail
 
 Current blocker:
 The stale local-main blocker is resolved by remote-main validation, but P00-T01 remains blocked because a fresh public-remote checkout on this Windows host still fails the required validation command before tag creation. No v8-baseline-* tag was created.
+
+LF-preserving checkout unblock attempt:
+Date: 2026-06-19
+Remote-main validation reached the intended v8.0.5 commit 855e975beec3bac6dc06db598081b6ac11ea8e14.
+Validation failed because Windows checkout converted shell scripts to CRLF, causing bash to fail on scripts/validate.sh before release or test checks could run.
+The next attempt uses git -c core.autocrlf=false clone to preserve LF script endings. This is an environment-controlled checkout procedure and does not mutate the v8 source repository.
+
+LF-preserving checkout result:
+Remote LF checkout reached commit 855e975beec3bac6dc06db598081b6ac11ea8e14 with package @9thlevelsoftware/legion@8.0.5.
+Remote LF checkout passed npm ci, npm run validate, npm run release:check, and npm test.
+Created local annotated tag v8-baseline-20260619 in C:/Users/dasbl/Documents/legion against refs/remotes/origin/main.
+Tag object: 87ef9acc057cde8dd71bc25fc08bc536e9c8076c
+Tag target commit: 855e975beec3bac6dc06db598081b6ac11ea8e14
+Fresh LF-preserving local clone of C:/Users/dasbl/Documents/legion checked out v8-baseline-20260619 and passed npm ci, npm run validate, npm run release:check, and npm test.
+Final result:
+P00-T01 baseline validation and local annotated baseline tag creation are complete. Historical failed attempts are superseded, not removed.

@@ -10,7 +10,7 @@ This directory contains governance, decisions, evidence, spikes, reviews, and ha
 - Review ownership: [../../.github/CODEOWNERS](../../.github/CODEOWNERS)
 - P00-T01 evidence: [evidence/P00-T01/](evidence/P00-T01/)
 
-P00-T01 is blocked pending reproducible v8 baseline validation. The stale-local-main failure is preserved as historical evidence, and the corrected public-remote checkout reached `855e975beec3bac6dc06db598081b6ac11ea8e14` with package version `8.0.5`. That remote-main checkout still failed `npm run validate` on this Windows host before tag creation, so the proposed local baseline tag `v8-baseline-20260619` has not been created.
+P00-T01 freezes the v8 baseline at `C:/Users/dasbl/Documents/legion` `refs/remotes/origin/main` commit `855e975beec3bac6dc06db598081b6ac11ea8e14` with package version `8.0.5`. The local annotated baseline tag is `v8-baseline-20260619` (`87ef9acc057cde8dd71bc25fc08bc536e9c8076c`) and must not be pushed until the decision owner approves publication policy. Historical failed checkouts are preserved under [evidence/P00-T01/](evidence/P00-T01/); the accepted validation path uses LF-preserving checkouts with `core.autocrlf=false`.
 
 Authoritative phase execution starts from:
 

@@ -1,7 +1,7 @@
 # Legion Next Rewrite Charter
 
 ## Status
-Draft for P00-T01 review. Blocked on fresh remote-main v8 baseline validation as of 2026-06-19.
+Accepted for P00-T01 Phase 0 execution on 2026-06-19.
 
 Decision owner: `dasbl`
 
@@ -18,8 +18,11 @@ The v8 line remains the shipped maintenance line until v9 reaches an approved GA
 - Intended baseline commit in the source repository: `855e975beec3bac6dc06db598081b6ac11ea8e14`
 - Historical failed local-clone checkout: `84d6b69920c877fc6f7b2b8dbc979c32b97bbb92`, package version `8.0.2`
 - Remote-main validation checkout: `855e975beec3bac6dc06db598081b6ac11ea8e14`, package version `8.0.5`
-- Proposed P00-T01 baseline tag: `v8-baseline-20260619`
-- Tag status: not created because `npm run validate` failed in the fresh remote-main checkout.
+- P00-T01 baseline tag: `v8-baseline-20260619`
+- Baseline tag object: `87ef9acc057cde8dd71bc25fc08bc536e9c8076c`
+- Baseline tag target commit: `855e975beec3bac6dc06db598081b6ac11ea8e14`
+- Validation procedure: LF-preserving fresh checkout with `core.autocrlf=false`.
+- Publication policy: keep the baseline tag local until the decision owner approves tag publication.
 
 ## V9 Goals
 - Establish a durable development control plane.
