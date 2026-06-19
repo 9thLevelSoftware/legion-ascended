@@ -8,8 +8,8 @@ completed_at: null
 active_wave: 2
 tasks:
   P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: "b10df30f921c4ea21ebad852b478b07a6e81e95e" }
-  P00-T02: { status: DONE, run_id: "P00-T02-20260619-architecture-adrs-001-003", commit: "e326d56e18d602b44df0291eb631edb2b94f97c1" }
-  P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: "e326d56e18d602b44df0291eb631edb2b94f97c1" }
+  P00-T02: { status: DONE, run_id: "P00-T02-20260619-architecture-adrs-001-003", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
+  P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
   P00-T04: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T05: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T06: { status: NOT_STARTED, run_id: null, commit: null }
