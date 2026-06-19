@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "scenario_id", "family", "corpus_version", "fixture_version", "included_in_corpus", "risk_tier", "public_input_path", "evaluator_material_path", "current_repository_state", "user_intent", "expected_scope", "allowed_interventions", "deterministic_checks", "judged_checks", "held_out_assertions", "calibration"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "family": { "enum": ["greenfield-feature", "brownfield-feature", "bug-fix", "refactor", "api-change", "ui-flow", "security-sensitive", "interrupted-resumed", "noop-calibration"] },
+    "corpus_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "fixture_version": { "type": "string", "pattern": "^v\\d+$" },
+    "included_in_corpus": { "type": "boolean" },
+    "risk_tier": { "enum": ["R0", "R1", "R2", "R3"] },
+    "public_input_path": { "type": "string", "minLength": 1 },
+    "evaluator_material_path": { "type": "string", "minLength": 1 },
+    "current_repository_state": {
+      "type": "object",
+      "required": ["source_repository", "baseline_tag", "baseline_commit", "package_version", "checkout_policy"],
+      "properties": {
+        "source_repository": { "type": "string", "minLength": 1 },
+        "baseline_tag": { "type": "string", "minLength": 1 },
+        "baseline_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "package_version": { "type": "string", "minLength": 1 },
+        "checkout_policy": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "user_intent": { "type": "string", "minLength": 1 },
+    "expected_scope": {
+      "type": "object",
+      "required": ["allowed_paths", "forbidden_paths"],
+      "properties": {
+        "allowed_paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "forbidden_paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+    "allowed_interventions": { "type": "array", "items": { "type": "string" } },
+    "deterministic_checks": { "type": "array", "items": { "type": "string" }, "minItems": 7 },
+    "judged_checks": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+    "held_out_assertions": {
+      "type": "object",
+      "required": ["visible_to_worker", "path", "leakage_policy"],
+      "properties": {
+        "visible_to_worker": { "const": false },
+        "path": { "type": "string", "minLength": 1 },
+        "leakage_policy": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["manual_pilot", "known_good", "known_bad"],
+      "properties": {
+        "manual_pilot": { "type": "string", "minLength": 1 },
+        "known_good": { "type": "string", "minLength": 1 },
+        "known_bad": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

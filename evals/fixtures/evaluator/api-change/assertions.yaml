@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: api-change.v1
+visible_to_worker: false
+critical_assertions:
+  - legacy human-readable output remains parseable
+  - new metadata field is present in machine-readable mode
+  - migration note names compatibility behavior and fallback
+calibration:
+  known_good: Additive metadata with legacy parser compatibility and migration note.
+  known_bad: Existing output schema is replaced without fallback.

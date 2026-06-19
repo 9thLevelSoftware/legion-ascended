@@ -1,0 +1,6 @@
+P00-T05 dry-run calibration
+Scenario: noop-calibration
+Host: codex-cli
+Model: unavailable
+[REDACTED_SECRET_CANARY]
+

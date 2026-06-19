@@ -5,13 +5,13 @@ source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architec
 base_commit: "99dbd085ea9a7eb28307f7752383ee9ff6dc48b2"
 started_at: "2026-06-19T16:19:34-04:00"
 completed_at: null
-active_wave: 2
+active_wave: 3
 tasks:
   P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: "b10df30f921c4ea21ebad852b478b07a6e81e95e" }
   P00-T02: { status: DONE, run_id: "P00-T02-20260619-architecture-adrs-001-003", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
   P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
-  P00-T04: { status: NOT_STARTED, run_id: null, commit: null }
-  P00-T05: { status: NOT_STARTED, run_id: null, commit: null }
+  P00-T04: { status: DONE, run_id: "P00-T04-20260619-benchmark-corpus", commit: "pending-task-4-artifact-commit" }
+  P00-T05: { status: DONE, run_id: "P00-T05-20260619-run-capture-harness", commit: "pending-task-4-artifact-commit" }
   P00-T06: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T07: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T08: { status: NOT_STARTED, run_id: null, commit: null }
@@ -38,6 +38,14 @@ decisions:
     decision: "Accept ADR-004 through ADR-007"
     reason: "Runtime driver boundary, event/idempotency rules, risk-adaptive gates, and board/council command migration satisfy the P00-T03 acceptance criteria with adversarial review evidence."
     decided_at: "2026-06-19T16:55:00-04:00"
+  - task: P00-T04
+    decision: "Accept v8 benchmark corpus version 1.0.0"
+    reason: "The corpus represents all eight required workload categories, separates public inputs from evaluator material, records provenance, and hashes fixture inputs."
+    decided_at: "2026-06-19T18:05:00-04:00"
+  - task: P00-T05
+    decision: "Accept dependency-free PowerShell v8 run-capture harness scaffold"
+    reason: "The harness records run manifests, redacted transcripts, fixture hashes, Git snapshots, unavailable telemetry, dry-run calibration artifacts, and gradeable terminal states without changing v8 behavior."
+    decided_at: "2026-06-19T18:05:00-04:00"
 blockers: []
 resolved_blockers:
   - task: P00-T01
@@ -62,3 +70,18 @@ evidence:
   - docs/next/adr/ADR-007-kanban-migration.md
   - docs/next/evidence/P00-T02/adr-review.log
   - docs/next/evidence/P00-T03/adr-review.log
+  - docs/next/baseline/BENCHMARK-CORPUS.md
+  - docs/next/baseline/SCORING-RUBRIC.md
+  - docs/next/baseline/V8-MEASUREMENT-HARNESS.md
+  - docs/next/baseline/METRICS.md
+  - evals/baseline/manifest.yaml
+  - evals/baseline/corpus-manifest.yaml
+  - evals/baseline/fixture-hashes.sha256
+  - evals/baseline/run-manifest-template.yaml
+  - evals/baseline/scenarios
+  - evals/baseline/schema
+  - evals/baseline/rubrics
+  - evals/fixtures
+  - scripts/baseline
+  - docs/next/evidence/P00-T04/corpus-review.log
+  - docs/next/evidence/P00-T05/harness-review.log

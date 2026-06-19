@@ -1,0 +1,14 @@
+schema_version: 1
+rubric_id: legion-v8-judged-rubric
+version: 1.0.0
+judge_policy:
+  run_after_deterministic_seal: true
+  record_model_and_version: true
+  record_prompt_hash: true
+  allow_private_reasoning: false
+dimensions:
+  maintainability: 3
+  requirement_fidelity: 2
+adjudication:
+  owner: dasbl
+  tie_breaker: deterministic acceptance controls final pass when judge comments conflict with held-out assertions

@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: bug-fix.v1
+visible_to_worker: false
+critical_assertions:
+  - stale active task is cleared or reconciled on resume
+  - interrupted task identity is preserved when it is still valid
+  - regression coverage fails against the seeded stale-state case
+calibration:
+  known_good: Resume reconciliation preserves valid interrupted identity and rejects stale active state.
+  known_bad: Restart always discards active state or always trusts stale state.

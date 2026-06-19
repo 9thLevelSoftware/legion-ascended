@@ -1,0 +1,28 @@
+schema_version: 1
+corpus_id: legion-v8-baseline-corpus
+corpus_version: 1.0.0
+status: accepted-for-p00-t04
+created_at: "2026-06-19T17:30:00-04:00"
+baseline:
+  source_repository: C:/Users/dasbl/Documents/legion
+  tag: v8-baseline-20260619
+  commit: 855e975beec3bac6dc06db598081b6ac11ea8e14
+  package_version: 8.0.5
+policy:
+  public_inputs_root: evals/fixtures/public
+  evaluator_material_root: evals/fixtures/evaluator
+  hidden_material_visible_to_worker: false
+  fixture_hashes: evals/baseline/fixture-hashes.sha256
+  scoring_rubric: docs/next/baseline/SCORING-RUBRIC.md
+scenarios:
+  - { id: greenfield-feature.v1, family: greenfield-feature, manifest: evals/baseline/scenarios/greenfield-feature.v1.json, public_input: evals/fixtures/public/greenfield-feature/task.md, evaluator_material: evals/fixtures/evaluator/greenfield-feature/assertions.yaml, risk_tier: R2 }
+  - { id: brownfield-feature.v1, family: brownfield-feature, manifest: evals/baseline/scenarios/brownfield-feature.v1.json, public_input: evals/fixtures/public/brownfield-feature/task.md, evaluator_material: evals/fixtures/evaluator/brownfield-feature/assertions.yaml, risk_tier: R2 }
+  - { id: bug-fix.v1, family: bug-fix, manifest: evals/baseline/scenarios/bug-fix.v1.json, public_input: evals/fixtures/public/bug-fix/task.md, evaluator_material: evals/fixtures/evaluator/bug-fix/assertions.yaml, risk_tier: R2 }
+  - { id: refactor.v1, family: refactor, manifest: evals/baseline/scenarios/refactor.v1.json, public_input: evals/fixtures/public/refactor/task.md, evaluator_material: evals/fixtures/evaluator/refactor/assertions.yaml, risk_tier: R1 }
+  - { id: api-change.v1, family: api-change, manifest: evals/baseline/scenarios/api-change.v1.json, public_input: evals/fixtures/public/api-change/task.md, evaluator_material: evals/fixtures/evaluator/api-change/assertions.yaml, risk_tier: R3 }
+  - { id: ui-flow.v1, family: ui-flow, manifest: evals/baseline/scenarios/ui-flow.v1.json, public_input: evals/fixtures/public/ui-flow/task.md, evaluator_material: evals/fixtures/evaluator/ui-flow/assertions.yaml, risk_tier: R2 }
+  - { id: security-sensitive.v1, family: security-sensitive, manifest: evals/baseline/scenarios/security-sensitive.v1.json, public_input: evals/fixtures/public/security-sensitive/task.md, evaluator_material: evals/fixtures/evaluator/security-sensitive/assertions.yaml, risk_tier: R3 }
+  - { id: interrupted-resumed.v1, family: interrupted-resumed, manifest: evals/baseline/scenarios/interrupted-resumed.v1.json, public_input: evals/fixtures/public/interrupted-resumed/task.md, evaluator_material: evals/fixtures/evaluator/interrupted-resumed/assertions.yaml, risk_tier: R3 }
+calibration:
+  noop_fixture: evals/fixtures/public/noop-calibration/task.md
+  evidence_directory: docs/next/evidence/P00-T05/calibration-runs

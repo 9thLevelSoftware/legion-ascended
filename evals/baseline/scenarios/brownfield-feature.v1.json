@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "scenario_id": "brownfield-feature.v1",
+  "family": "brownfield-feature",
+  "corpus_version": "1.0.0",
+  "fixture_version": "v1",
+  "included_in_corpus": true,
+  "risk_tier": "R2",
+  "public_input_path": "evals/fixtures/public/brownfield-feature/task.md",
+  "evaluator_material_path": "evals/fixtures/evaluator/brownfield-feature/assertions.yaml",
+  "current_repository_state": {
+    "source_repository": "C:/Users/dasbl/Documents/legion",
+    "baseline_tag": "v8-baseline-20260619",
+    "baseline_commit": "855e975beec3bac6dc06db598081b6ac11ea8e14",
+    "package_version": "8.0.5",
+    "checkout_policy": "clone with core.autocrlf=false before each production run"
+  },
+  "user_intent": "Extend an existing workflow command with an optional evidence summary path while preserving the old invocation.",
+  "expected_scope": {
+    "allowed_paths": [
+      "commands/**",
+      "skills/**",
+      "tests/**",
+      "docs/**"
+    ],
+    "forbidden_paths": [
+      "agents/**",
+      "adapters/**",
+      "package.json",
+      "bin/**"
+    ]
+  },
+  "allowed_interventions": [
+    "clarifying_question_before_implementation"
+  ],
+  "deterministic_checks": [
+    "build_integrity",
+    "acceptance_behavior",
+    "regression_control",
+    "scope_discipline",
+    "recovery_behavior",
+    "duplicate_work_control",
+    "artifact_traceability"
+  ],
+  "judged_checks": [
+    "maintainability",
+    "requirement_fidelity"
+  ],
+  "held_out_assertions": {
+    "visible_to_worker": false,
+    "path": "evals/fixtures/evaluator/brownfield-feature/assertions.yaml",
+    "leakage_policy": "hash-only before sealed grading"
+  },
+  "calibration": {
+    "manual_pilot": "Reviewed against frozen v8 surfaces; no unavailable hosted service required.",
+    "known_good": "Optional evidence summary is additive and completion-gated.",
+    "known_bad": "Default output changes or evidence is written before completion."
+  }
+}

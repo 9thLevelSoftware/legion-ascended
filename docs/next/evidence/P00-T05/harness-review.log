@@ -1,0 +1,13 @@
+P00-T05 harness review
+Reviewed at: 2026-06-19T18:03:03.4159735-04:00
+Source contract: C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md P00-T05
+Harness scripts: scripts/baseline/capture-run.ps1, scripts/baseline/grade-run.ps1, scripts/baseline/redact-output.ps1
+Run manifest schema: evals/baseline/schema/run-manifest.schema.json
+Score schema: evals/baseline/schema/score.schema.json
+Calibration runs: p00-bug-fix-codex-cli-r1-20260619T180224, p00-noop-calibration-codex-cli-r1-20260619T180223
+Dry-run capture: PASS for noop-calibration and bug-fix scenarios.
+Schema validation: PASS for generated run manifests and scores.
+Redaction test: PASS; retained transcript contains [REDACTED_SECRET_CANARY] and does not retain the raw canary.
+Telemetry policy: PASS; token and cost are represented as unavailable with null value and reason.
+Harness limitation: production host invocation is intentionally deferred to P00-T06 and requires an approved -CommandLine invocation without -DryRun.
+Acceptance: PASS

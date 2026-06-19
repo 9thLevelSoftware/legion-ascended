@@ -1,0 +1,15 @@
+schema_version: 1
+canonical_manifest: evals/baseline/manifest.yaml
+corpus_id: legion-v8-baseline-corpus
+corpus_version: 1.0.0
+baseline_commit: 855e975beec3bac6dc06db598081b6ac11ea8e14
+fixture_hashes: evals/baseline/fixture-hashes.sha256
+scenario_ids:
+  - greenfield-feature.v1
+  - brownfield-feature.v1
+  - bug-fix.v1
+  - refactor.v1
+  - api-change.v1
+  - ui-flow.v1
+  - security-sensitive.v1
+  - interrupted-resumed.v1

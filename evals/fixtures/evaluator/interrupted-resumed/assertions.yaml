@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: interrupted-resumed.v1
+visible_to_worker: false
+critical_assertions:
+  - interruption creates a terminal status that remains gradeable
+  - resume links to the original run and task identity
+  - duplicate edits, duplicate commits, and duplicate reviews are detected
+calibration:
+  known_good: Run lineage preserved and duplicate artifacts detected.
+  known_bad: Resume starts unrelated work or deletes failed evidence.

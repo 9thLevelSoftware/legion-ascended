@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: brownfield-feature.v1
+visible_to_worker: false
+critical_assertions:
+  - old invocation output remains compatible where the new option is absent
+  - evidence summary path is recorded only after successful command completion
+  - failed command attempts do not claim accepted evidence
+calibration:
+  known_good: Optional evidence summary is additive and completion-gated.
+  known_bad: Default output changes or evidence is written before completion.

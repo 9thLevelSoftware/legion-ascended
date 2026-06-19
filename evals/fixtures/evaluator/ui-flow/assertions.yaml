@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: ui-flow.v1
+visible_to_worker: false
+critical_assertions:
+  - prompt exposes continue, pause, and cancel choices
+  - default choice is explicit and safe
+  - non-interactive invocation does not hang
+calibration:
+  known_good: Keyboard path and non-interactive fallback are both captured.
+  known_bad: Prompt hangs automation or requires mouse-like interaction.

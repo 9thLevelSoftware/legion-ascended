@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "scenario_id": "refactor.v1",
+  "family": "refactor",
+  "corpus_version": "1.0.0",
+  "fixture_version": "v1",
+  "included_in_corpus": true,
+  "risk_tier": "R1",
+  "public_input_path": "evals/fixtures/public/refactor/task.md",
+  "evaluator_material_path": "evals/fixtures/evaluator/refactor/assertions.yaml",
+  "current_repository_state": {
+    "source_repository": "C:/Users/dasbl/Documents/legion",
+    "baseline_tag": "v8-baseline-20260619",
+    "baseline_commit": "855e975beec3bac6dc06db598081b6ac11ea8e14",
+    "package_version": "8.0.5",
+    "checkout_policy": "clone with core.autocrlf=false before each production run"
+  },
+  "user_intent": "Extract duplicated command-dispatch validation into one local helper without user-visible behavior change.",
+  "expected_scope": {
+    "allowed_paths": [
+      "commands/**",
+      "skills/**",
+      "tests/**"
+    ],
+    "forbidden_paths": [
+      "agents/**",
+      "adapters/**",
+      "README.md",
+      "package.json"
+    ]
+  },
+  "allowed_interventions": [],
+  "deterministic_checks": [
+    "build_integrity",
+    "acceptance_behavior",
+    "regression_control",
+    "scope_discipline",
+    "recovery_behavior",
+    "duplicate_work_control",
+    "artifact_traceability"
+  ],
+  "judged_checks": [
+    "maintainability",
+    "requirement_fidelity"
+  ],
+  "held_out_assertions": {
+    "visible_to_worker": false,
+    "path": "evals/fixtures/evaluator/refactor/assertions.yaml",
+    "leakage_policy": "hash-only before sealed grading"
+  },
+  "calibration": {
+    "manual_pilot": "Reviewed against frozen v8 surfaces; no unavailable hosted service required.",
+    "known_good": "Helper extraction reduces duplication and keeps command output unchanged.",
+    "known_bad": "Command names, help text, adapter behavior, or package contents change."
+  }
+}

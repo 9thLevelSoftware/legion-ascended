@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "run_id", "scenario_id", "deterministic_total", "judged_total", "total", "terminal_status", "critical_failure", "dimensions"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "deterministic_total": { "type": "number", "minimum": 0, "maximum": 95 },
+    "judged_total": { "type": "number", "minimum": 0, "maximum": 5 },
+    "total": { "type": "number", "minimum": 0, "maximum": 100 },
+    "terminal_status": { "enum": ["dry-run", "passed", "failed", "interrupted", "blocked"] },
+    "critical_failure": { "type": "boolean" },
+    "dimensions": { "type": "object" }
+  },
+  "additionalProperties": false
+}

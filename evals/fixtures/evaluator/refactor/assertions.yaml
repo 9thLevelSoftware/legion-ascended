@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: refactor.v1
+visible_to_worker: false
+critical_assertions:
+  - command names and help text are unchanged
+  - package contents are unchanged except for internal helper placement
+  - duplicated validation is reduced without broad rewrites
+calibration:
+  known_good: Helper extraction reduces duplication and keeps command output unchanged.
+  known_bad: Command names, help text, adapter behavior, or package contents change.

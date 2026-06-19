@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "corpus_id", "corpus_version", "baseline", "policy", "scenarios"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "corpus_id": { "type": "string", "minLength": 1 },
+    "corpus_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "baseline": { "type": "object" },
+    "policy": { "type": "object" },
+    "scenarios": { "type": "array", "minItems": 8 }
+  }
+}

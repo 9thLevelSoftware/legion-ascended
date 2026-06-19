@@ -1,0 +1,17 @@
+## legion-next/phase-00
+?? docs/next/baseline/BENCHMARK-CORPUS.md
+?? docs/next/baseline/METRICS.md
+?? docs/next/baseline/SCORING-RUBRIC.md
+?? docs/next/baseline/V8-MEASUREMENT-HARNESS.md
+?? docs/next/evidence/P00-T05/
+?? evals/baseline/README.md
+?? evals/baseline/corpus-manifest.yaml
+?? evals/baseline/fixture-hashes.sha256
+?? evals/baseline/manifest.yaml
+?? evals/baseline/rubrics/
+?? evals/baseline/run-manifest-template.yaml
+?? evals/baseline/runs/
+?? evals/baseline/scenarios/
+?? evals/baseline/schema/
+?? evals/fixtures/
+?? scripts/

@@ -20,6 +20,8 @@ task_commits:
   P00-T01: "b10df30f921c4ea21ebad852b478b07a6e81e95e"
   P00-T02: "0168d0a3636674827995a5b516b5f10b6daaf1ad"
   P00-T03: "0168d0a3636674827995a5b516b5f10b6daaf1ad"
+  P00-T04: "pending-task-4-artifact-commit"
+  P00-T05: "pending-task-4-artifact-commit"
 entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
@@ -103,3 +105,30 @@ entries:
     historical_local_clone_commit: "84d6b69920c877fc6f7b2b8dbc979c32b97bbb92"
     remote_validation_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
     validation_procedure: "core.autocrlf=false remote clone and core.autocrlf=false local tag clone"
+  - task: P00-T04
+    artifact: docs/next/baseline/BENCHMARK-CORPUS.md
+    description: Accepted corpus governance, eight scenario families, public versus held-out material policy, fixture immutability, and provenance review
+  - task: P00-T04
+    artifact: docs/next/baseline/SCORING-RUBRIC.md
+    description: Deterministic and judged scoring rubric covering quality, recovery, duplicate work, and artifact traceability
+  - task: P00-T04
+    artifact: evals/baseline/manifest.yaml
+    description: Canonical v8 baseline corpus manifest for legion-v8-baseline-corpus version 1.0.0
+  - task: P00-T04
+    artifact: evals/baseline/fixture-hashes.sha256
+    description: SHA256 hash index for public inputs, evaluator assertions, scenario manifests, rubrics, and run template
+  - task: P00-T04
+    artifact: docs/next/evidence/P00-T04/corpus-review.log
+    description: Corpus review evidence with manifest hash, schema validation, family coverage, public/held-out separation, and provenance review
+  - task: P00-T05
+    artifact: docs/next/baseline/V8-MEASUREMENT-HARNESS.md
+    description: Accepted v8 run-capture harness design, interface, evidence capture, redaction, and non-goals
+  - task: P00-T05
+    artifact: docs/next/baseline/METRICS.md
+    description: Required baseline metrics and unavailable telemetry policy
+  - task: P00-T05
+    artifact: scripts/baseline
+    description: Dependency-free PowerShell runner, grader, redactor, and usage notes for P00-T06 baseline capture
+  - task: P00-T05
+    artifact: docs/next/evidence/P00-T05/harness-review.log
+    description: Harness review evidence with dry-run calibration, schema validation, redaction output, and accepted limitation for P00-T06 production invocation

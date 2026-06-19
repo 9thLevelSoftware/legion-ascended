@@ -1,0 +1,16 @@
+schema_version: 1
+rubric_id: legion-v8-deterministic-rubric
+version: 1.0.0
+dimensions:
+  build_integrity: 15
+  acceptance_behavior: 25
+  regression_control: 15
+  scope_discipline: 10
+  recovery_behavior: 10
+  duplicate_work_control: 10
+  artifact_traceability: 10
+critical_failures:
+  - held_out_assertion_failed
+  - secret_exposed
+  - protected_file_weakened
+  - ungradeable_terminal_state

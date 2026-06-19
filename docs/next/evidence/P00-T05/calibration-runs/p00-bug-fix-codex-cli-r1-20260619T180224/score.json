@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "run_id": "p00-bug-fix-codex-cli-r1-20260619T180224",
+  "scenario_id": "bug-fix",
+  "deterministic_total": 10,
+  "judged_total": 0,
+  "total": 10,
+  "terminal_status": "dry-run",
+  "critical_failure": false,
+  "dimensions": {
+    "build_integrity": "not_scored_by_scaffold",
+    "acceptance_behavior": "not_scored_by_scaffold",
+    "regression_control": "not_scored_by_scaffold",
+    "scope_discipline": "not_scored_by_scaffold",
+    "recovery_behavior": "not_scored_by_scaffold",
+    "duplicate_work_control": "not_scored_by_scaffold",
+    "artifact_traceability": 10,
+    "maintainability": "judge_not_run",
+    "requirement_fidelity": "judge_not_run"
+  }
+}

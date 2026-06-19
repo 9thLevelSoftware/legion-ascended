@@ -1,0 +1,14 @@
+P00-T04 corpus review
+Reviewed at: 2026-06-19T18:03:03.4101125-04:00
+Source contract: C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md P00-T04
+Corpus manifest: evals/baseline/manifest.yaml
+Corpus manifest SHA256: 89846180BC3C13BE2EE49D6D5CC27F28D272C8793DE0766C4CD83DE1128A9F48
+Fixture hash index: evals/baseline/fixture-hashes.sha256
+Fixture hash index SHA256: 0B4A7E6CFBFB0AC12C842B6DB12420C94AF6135C565A76ACB580813018D5F740
+Scenario manifest count: 9
+Required families represented: greenfield-feature, brownfield-feature, bug-fix, refactor, api-change, ui-flow, security-sensitive, interrupted-resumed
+Public inputs are under evals/fixtures/public; held-out evaluator material is under evals/fixtures/evaluator and marked visible_to_worker=false.
+Schema validation: PASS for every scenario manifest via Test-Json against evals/baseline/schema/scenario.schema.json.
+Fixture provenance and secrets review: PASS; fixtures are synthetic and contain no credentials or third-party source.
+Manual pilot: PASS by inspection against frozen v8 surfaces; no hosted service is required to attempt the scenarios.
+Acceptance: PASS

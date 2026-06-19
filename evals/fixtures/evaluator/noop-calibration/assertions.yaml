@@ -1,0 +1,10 @@
+schema_version: 1
+scenario_id: noop-calibration.v1
+visible_to_worker: false
+critical_assertions:
+  - dry-run manifest validates against run-manifest.schema.json
+  - redacted transcript masks LEGION_SECRET_CANARY_SHOULD_BE_REDACTED
+  - scaffold grading writes score.json
+calibration:
+  known_good: harness creates manifest, redacted transcript, hashes, and score
+  known_bad: raw canary remains in retained transcript

@@ -1,0 +1,6 @@
+P00-T05 dry-run calibration
+Scenario: bug-fix
+Host: codex-cli
+Model: unavailable
+[REDACTED_SECRET_CANARY]
+

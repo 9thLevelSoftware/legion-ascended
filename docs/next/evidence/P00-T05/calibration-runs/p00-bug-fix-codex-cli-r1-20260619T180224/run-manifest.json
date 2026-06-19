@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "run_id": "p00-bug-fix-codex-cli-r1-20260619T180224",
+  "scenario_id": "bug-fix",
+  "host": "codex-cli",
+  "model": "unavailable",
+  "adapter": "v8-command-surface",
+  "repeat": 1,
+  "baseline_commit": "855e975beec3bac6dc06db598081b6ac11ea8e14",
+  "fixture_hashes": "fixture-hashes.sha256",
+  "timestamps": {
+    "started_at": "2026-06-19T18:02:24.1795069-04:00",
+    "ended_at": "2026-06-19T18:02:24.4465689-04:00"
+  },
+  "telemetry": {
+    "tokens": {
+      "status": "unavailable",
+      "value": null,
+      "reason": "host did not expose telemetry"
+    },
+    "cost": {
+      "status": "unavailable",
+      "value": null,
+      "reason": "host did not expose telemetry"
+    }
+  },
+  "interventions": [],
+  "events": [
+    {
+      "type": "run_started",
+      "at": "2026-06-19T18:02:24.1795069-04:00",
+      "scenario": "bug-fix",
+      "dry_run": true
+    },
+    {
+      "type": "dry_run_completed",
+      "at": "2026-06-19T18:02:24.1815994-04:00"
+    },
+    {
+      "type": "run_completed",
+      "at": "2026-06-19T18:02:24.4465689-04:00",
+      "terminal_status": "dry-run"
+    }
+  ],
+  "terminal_status": "dry-run",
+  "artifacts": {
+    "transcript": "transcript.redacted.log",
+    "git_before": "git-before.txt",
+    "git_after": "git-after.txt",
+    "score": "score.json"
+  }
+}
