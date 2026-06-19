@@ -1,0 +1,7 @@
+P00-T10 go/no-go review
+decision: CONDITIONAL GO
+phase 1 scope: TypeScript workspace and provider-neutral workflow protocol/core
+not authorized: standalone app, dashboard-first product, chat UI, Eve-specific app shell
+decision record: docs/next/PHASE-00-DECISION.md
+backlog: docs/next/IMPLEMENTATION-BACKLOG.yaml
+dependency map: docs/next/DEPENDENCY-MAP.md

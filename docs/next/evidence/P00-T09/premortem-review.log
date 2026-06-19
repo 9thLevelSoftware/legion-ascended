@@ -1,0 +1,5 @@
+P00-T09 Phase 0 pre-mortem review
+result: PASS
+critical_open: 0
+findings register: docs/next/reviews/PHASE-00-FINDINGS.yaml
+premortem: docs/next/reviews/PHASE-00-PREMORTEM.md

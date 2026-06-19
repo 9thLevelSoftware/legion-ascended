@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "store": "node:sqlite",
+  "database": "C:\\Users\\dasbl\\AppData\\Local\\Temp\\legion-store-spike-Rx1hBG\\board.sqlite",
+  "node": "v25.9.0",
+  "platform": "win32",
+  "results": [
+    {
+      "check": "atomic_claim",
+      "passed": true,
+      "detail": {
+        "generation": 1,
+        "status": "claimed",
+        "lease_owner": "worker-a"
+      }
+    },
+    {
+      "check": "event_append_projection_rebuild",
+      "passed": true,
+      "detail": {
+        "task_id": "task-beta",
+        "status": "ready"
+      }
+    },
+    {
+      "check": "migration_rollback",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "backup_restore_hash",
+      "passed": true,
+      "detail": {
+        "originalHash": "bbcd30b23a270536420727990632d9525fc5fd74766d0192b334e1488ba3b639",
+        "backupHash": "bbcd30b23a270536420727990632d9525fc5fd74766d0192b334e1488ba3b639"
+      }
+    },
+    {
+      "check": "wal_mode",
+      "passed": true,
+      "detail": {
+        "journal_mode": "wal"
+      }
+    }
+  ]
+}

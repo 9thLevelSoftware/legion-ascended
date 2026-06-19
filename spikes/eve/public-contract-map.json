@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "task": "P00-T08",
+  "product_boundary": "Legion Next remains a workflow orchestration tool. Eve is a replaceable runtime driver candidate, not the product boundary.",
+  "verified_at": "2026-06-19",
+  "package": {
+    "name": "eve",
+    "version": "0.11.7",
+    "license": "Apache-2.0",
+    "engines": {
+      "node": ">=24"
+    }
+  },
+  "official_sources": [
+    "https://github.com/vercel/eve/blob/main/docs/README.md",
+    "https://github.com/vercel/eve/blob/main/docs/reference/typescript-api.md",
+    "https://vercel.com/blog/introducing-eve"
+  ],
+  "public_contracts": [
+    {
+      "legion_need": "filesystem-defined functional worker bundles",
+      "eve_surface": "agent directory with agent.ts, instructions, tools, skills, subagents, channels, schedules",
+      "phase_0_result": "compatible as an adapter target"
+    },
+    {
+      "legion_need": "durable execution and resumable workflow runs",
+      "eve_surface": "durable session state, sessionId, continuationToken, reconnectable session stream",
+      "phase_0_result": "compatible in principle; live crash-resume proof deferred to Phase 5"
+    },
+    {
+      "legion_need": "tool authority and approval gates",
+      "eve_surface": "defineTool, approval predicates, ctx authorization helpers, documented safeguard requirements",
+      "phase_0_result": "compatible with Legion policy enforcement outside model prose"
+    },
+    {
+      "legion_need": "sandboxed execution",
+      "eve_surface": "ctx.getSandbox and defineSandbox public helpers",
+      "phase_0_result": "compatible in principle; secret canary and filesystem/network denial tests deferred to Phase 5"
+    },
+    {
+      "legion_need": "subagent execution",
+      "eve_surface": "agent/subagents/<id>/agent.ts and defineRemoteAgent",
+      "phase_0_result": "compatible in principle"
+    },
+    {
+      "legion_need": "evals for workflow behavior",
+      "eve_surface": "defineEval, defineEvalConfig, eve/evals reporters and expect helpers",
+      "phase_0_result": "compatible as one eval backend, not the only eval mechanism"
+    }
+  ],
+  "decision": {
+    "phase_1_default": "runtime-local contract tests only",
+    "phase_5_candidate": "runtime-eve",
+    "fallback": "runtime-local and runtime-legacy-cli",
+    "blocking_for_phase_1": false
+  }
+}

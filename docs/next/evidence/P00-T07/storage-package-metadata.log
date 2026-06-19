@@ -1,0 +1,7 @@
+{
+  "version": "12.11.1",
+  "engines": {
+    "node": "20.x || 22.x || 23.x || 24.x || 25.x || 26.x"
+  },
+  "license": "MIT"
+}

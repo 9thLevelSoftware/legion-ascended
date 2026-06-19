@@ -1,4 +1,5 @@
 P00-T06 frozen v8 baseline execution
+Supersession note: this log is preserved as historical evidence for the blocked live-model benchmark attempt. It is superseded by docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md and docs/next/evidence/P00-T06/compatibility-baseline.log for Phase 1 gating.
 Recorded at: 2026-06-19T18:07:55.3024303-04:00
 Source contract: C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md P00-T06
 Baseline tag: v8-baseline-20260619

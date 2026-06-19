@@ -1,0 +1,5 @@
+P00-T08 Eve public-contract compatibility
+official docs checked: https://github.com/vercel/eve/blob/main/docs/README.md
+official API docs checked: https://github.com/vercel/eve/blob/main/docs/reference/typescript-api.md
+announcement checked: https://vercel.com/blog/introducing-eve
+decision: Eve is a replaceable runtime-driver candidate; not Phase 1 product boundary

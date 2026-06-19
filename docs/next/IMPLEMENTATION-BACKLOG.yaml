@@ -1,0 +1,177 @@
+schema_version: 1
+program: LEGION-NEXT
+decision: CONDITIONAL GO
+source_decision: docs/next/PHASE-00-DECISION.md
+items:
+  - id: P01-B001
+    phase: 1
+    title: Create TypeScript workspace and package boundaries
+    milestone: MVP-critical
+    owner: platform-owner
+    depends_on:
+      - P00-GO-004
+    maps_to:
+      - docs/next/PHASE-00-DECISION.md
+      - C:/Users/dasbl/Documents/legion/docs/rebuild/01-phase-typescript-workspace-and-protocol-core.md
+    acceptance:
+      - Workspace installs on Node 24+.
+      - Package boundaries separate protocol, core, runtime contracts, CLI compatibility, and test fixtures.
+      - No standalone app/dashboard package is introduced.
+    verification:
+      - npm install or equivalent package-manager install
+      - package file-list baseline check
+  - id: P01-B002
+    phase: 1
+    title: Define workflow protocol schemas
+    milestone: MVP-critical
+    owner: protocol-owner
+    depends_on:
+      - P01-B001
+      - P00-GO-001
+    maps_to:
+      - docs/next/adr/ADR-003-state-ownership.md
+      - docs/next/adr/ADR-005-events-idempotency.md
+    acceptance:
+      - Schemas cover Project, Change, TaskContract, TaskRun, Event, Evidence, Review, Approval, WorkerBundle, RuntimeDriver.
+      - Schema names and fields describe workflow orchestration, not chat-app state.
+      - Versioning and migration metadata are explicit.
+    verification:
+      - schema round-trip tests
+      - fixture validation tests
+  - id: P01-B003
+    phase: 1
+    title: Define provider-neutral RuntimeDriver and local fake driver contracts
+    milestone: MVP-critical
+    owner: runtime-owner
+    depends_on:
+      - P01-B002
+      - P00-GO-003
+      - P00-GO-006
+    maps_to:
+      - docs/next/adr/ADR-004-runtime-driver.md
+      - docs/next/spikes/EVE-COMPATIBILITY.md
+    acceptance:
+      - RuntimeDriver contract supports start, resume, cancel, inspect, stream, approve, and artifact.
+      - Local fake driver can produce deterministic run events for tests.
+      - Contract imports no Eve or host CLI implementation types.
+    verification:
+      - runtime contract tests
+      - import-boundary scan
+  - id: P01-B004
+    phase: 1
+    title: Define Event and idempotency fixtures
+    milestone: MVP-critical
+    owner: protocol-owner
+    depends_on:
+      - P01-B002
+    maps_to:
+      - docs/next/adr/ADR-005-events-idempotency.md
+    acceptance:
+      - Event envelope has stable ID, type, version, stream, actor, causation, correlation, timestamp, payload, and schema version.
+      - Idempotency-key examples cover Git, PR/comment, approval, runtime delivery, and local artifact writes.
+      - Replay and re-execution are separate in tests and docs.
+    verification:
+      - deterministic event fixture tests
+  - id: P01-B005
+    phase: 1
+    title: Preserve v8 workflow package surface during workspace introduction
+    milestone: MVP-critical
+    owner: compatibility-owner
+    depends_on:
+      - P01-B001
+      - P00-GO-002
+    maps_to:
+      - docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md
+    acceptance:
+      - Existing v8 commands, skills, adapters, agents, and installer paths remain packaged.
+      - New v9 code is additive and behind next/v9 package boundaries.
+    verification:
+      - npm pack dry-run comparison against P00-T06 evidence
+      - v8 validation scripts still pass where applicable
+  - id: P02-B001
+    phase: 2
+    title: Implement Git-tracked artifact model and shadow migration
+    milestone: MVP-critical
+    owner: migration-owner
+    depends_on:
+      - P01-B002
+    maps_to:
+      - docs/next/adr/ADR-003-state-ownership.md
+    acceptance:
+      - `.planning/` imports are backed up and treated as historical input.
+      - `.legion/project` owns committed intent without dual-write sync.
+    verification:
+      - migration fixture tests
+      - rollback tests
+  - id: P03-B001
+    phase: 3
+    title: Implement transactional workflow board on node:sqlite
+    milestone: MVP-critical
+    owner: storage-owner
+    depends_on:
+      - P01-B004
+      - P02-B001
+      - P00-GO-005
+    maps_to:
+      - docs/next/adr/ADR-008-local-store-selection.md
+    acceptance:
+      - Board supports append events, atomic claims, heartbeats, reclaim, migration, backup, and outbox.
+      - Linux, macOS, and Windows tests cover claim/recovery/storage faults.
+    verification:
+      - board integration tests across OS matrix
+  - id: P04-B001
+    phase: 4
+    title: Replace persona injection with functional worker bundles
+    milestone: MVP-critical
+    owner: worker-bundle-owner
+    depends_on:
+      - P01-B002
+      - P02-B001
+    maps_to:
+      - docs/next/adr/ADR-002-functional-workers.md
+      - docs/next/reviews/PHASE-00-FINDINGS.yaml
+    acceptance:
+      - Legacy persona IDs map to functional roles and domain packs.
+      - No default runtime path injects biographies, tone, or personality prose.
+    verification:
+      - bundle manifest validation
+      - prompt-content scan
+  - id: P05-B001
+    phase: 5
+    title: Implement and certify runtime-eve adapter
+    milestone: beta-critical
+    owner: runtime-owner
+    depends_on:
+      - P01-B003
+      - P03-B001
+      - P04-B001
+    maps_to:
+      - docs/next/spikes/EVE-COMPATIBILITY.md
+      - docs/next/adr/ADR-004-runtime-driver.md
+    acceptance:
+      - Public-contract start/resume/cancel/inspect/stream, approval, artifact, subagent, sandbox, and eval tests pass.
+      - Fallback to runtime-local or runtime-legacy-cli is documented and tested.
+    verification:
+      - pinned Eve compatibility suite
+  - id: P13-B001
+    phase: 13
+    title: Run release-grade workflow evals and v8/v9 A/B proof
+    milestone: GA-critical
+    owner: eval-owner
+    depends_on:
+      - P05-B001
+      - P08-B001
+      - P12-B001
+    maps_to:
+      - docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md
+      - evals/baseline/manifest.yaml
+    acceptance:
+      - v8 and v9 are compared on sealed workflow scenarios before GA quality claims.
+      - Cost, duration, intervention, recovery, duplicate-work, and defect metrics are recorded where exposed.
+    verification:
+      - live workflow eval report
+deferred_placeholders:
+  - id: P08-B001
+    reason: CLI-first workflow UX backlog expands after protocol/core and board contracts exist.
+  - id: P12-B001
+    reason: Host bridge migration backlog expands after runtime, worker, and CLI contracts stabilize.

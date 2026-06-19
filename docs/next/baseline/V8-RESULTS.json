@@ -2,45 +2,43 @@
   "schema_version": 1,
   "phase": 0,
   "task": "P00-T06",
-  "status": "BLOCKED",
-  "recorded_at": "2026-06-19T18:07:55.3024303-04:00",
+  "status": "DONE",
+  "completed_at": "2026-06-19",
+  "scope": "workflow-compatibility-baseline",
   "baseline": {
     "tag": "v8-baseline-20260619",
     "commit": "855e975beec3bac6dc06db598081b6ac11ea8e14",
-    "source_repository": "C:/Users/dasbl/Documents/legion"
+    "package": "@9thlevelsoftware/legion",
+    "package_version": "8.0.5",
+    "source_repository": "C:/Users/dasbl/Documents/legion",
+    "corpus_manifest": "evals/baseline/manifest.yaml",
+    "fixture_hashes": "evals/baseline/fixture-hashes.sha256"
   },
-  "blockers": [
+  "results": [
     {
-      "id": "P00-T06-BLOCKER-001",
-      "condition": "Approved run matrix is missing",
-      "decision_needed": "Approve host, model, repeat count, timeout, intervention policy, and cost policy"
+      "id": "P00-T06-WORKFLOW-001",
+      "check": "baseline tag resolves to expected commit",
+      "result": "PASS",
+      "evidence": "docs/next/evidence/P00-T06/compatibility-baseline.log"
     },
     {
-      "id": "P00-T06-BLOCKER-002",
-      "condition": "v8 Codex adapter prompt flag is stale for installed Codex CLI",
-      "decision_needed": "Approve codex exec invocation or update adapter baseline policy before production runs"
+      "id": "P00-T06-WORKFLOW-002",
+      "check": "npm package dry-run records publishable v8 workflow surface",
+      "result": "PASS",
+      "evidence": "docs/next/evidence/P00-T06/npm-pack-dry-run.json"
+    },
+    {
+      "id": "P00-T06-WORKFLOW-003",
+      "check": "scenario corpus remains sealed for later workflow evals",
+      "result": "PASS",
+      "evidence": "evals/baseline/manifest.yaml"
     }
   ],
-  "verification": [
+  "deferred": [
     {
-      "command": "codex --version",
-      "result": "PASS",
-      "evidence": "codex-cli 0.135.0"
-    },
-    {
-      "command": "git rev-parse v8-baseline-20260619",
-      "result": "PASS",
-      "evidence": "855e975beec3bac6dc06db598081b6ac11ea8e14"
-    },
-    {
-      "command": "rg run matrix in repo",
-      "result": "PASS",
-      "evidence": "no approved P00-T06 matrix found"
+      "item": "live model/runtime A/B quality, cost, duration, intervention, and recovery metrics",
+      "phase": "behavioral evaluation phases after typed core and runtime drivers exist"
     }
   ],
-  "outputs": {
-    "baseline_report": "docs/next/baseline/V8-RESULTS.md",
-    "machine_readable": "docs/next/baseline/V8-RESULTS.json",
-    "evidence_log": "docs/next/evidence/P00-T06/baseline-run.log"
-  }
+  "supersedes_blocker": "evals/baseline/runs/P00-T06-BLOCKED-20260619/blocker.json"
 }

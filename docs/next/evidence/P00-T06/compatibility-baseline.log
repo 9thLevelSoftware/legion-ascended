@@ -1,0 +1,7 @@
+P00-T06 workflow compatibility baseline
+git rev-parse v8-baseline-20260619^{}:
+855e975beec3bac6dc06db598081b6ac11ea8e14
+git tag -n1:
+v8-baseline-20260619 Phase 0 v8 baseline 20260619
+npm pack dry-run evidence: docs/next/evidence/P00-T06/npm-pack-dry-run.json
+scope: deterministic workflow tool compatibility baseline; live model metrics deferred

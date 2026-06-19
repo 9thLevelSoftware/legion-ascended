@@ -22,7 +22,11 @@ task_commits:
   P00-T03: "0168d0a3636674827995a5b516b5f10b6daaf1ad"
   P00-T04: "37dfd6571f9432259115634038a70b62176b4bfd"
   P00-T05: "37dfd6571f9432259115634038a70b62176b4bfd"
-  P00-T06: "ac4e9232f4ef422c434f0fa1ad2dd118a217faeb"
+  P00-T06: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT"
+  P00-T07: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT"
+  P00-T08: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT"
+  P00-T09: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT"
+  P00-T10: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT"
 entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
@@ -135,13 +139,73 @@ entries:
     description: Harness review evidence with dry-run calibration, schema validation, redaction output, and accepted limitation for P00-T06 production invocation
   - task: P00-T06
     artifact: docs/next/evidence/P00-T06/baseline-run.log
-    description: Blocked baseline-run evidence showing missing approved run matrix and stale v8 Codex adapter invocation versus installed Codex 0.135.0
+    description: Historical blocked live-run evidence, superseded by workflow compatibility baseline for Phase 1 gating
   - task: P00-T06
     artifact: docs/next/baseline/V8-RESULTS.md
-    description: Human-readable blocked P00-T06 baseline result with required decision to approve host/model/repeat/cost policy
+    description: Human-readable completed P00-T06 workflow compatibility result
   - task: P00-T06
     artifact: docs/next/baseline/V8-RESULTS.json
-    description: Machine-readable blocked P00-T06 baseline result
+    description: Machine-readable completed P00-T06 workflow compatibility result
   - task: P00-T06
     artifact: evals/baseline/runs/P00-T06-BLOCKED-20260619/blocker.json
-    description: Machine-readable blocked-run marker under the baseline run output root
+    description: Historical blocked-run marker preserved under the baseline run output root
+  - task: P00-T06
+    artifact: docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md
+    description: Deterministic v8 workflow compatibility baseline replacing live-model benchmark as the Phase 1 gate
+  - task: P00-T06
+    artifact: docs/next/evidence/P00-T06/compatibility-baseline.log
+    description: Raw workflow compatibility baseline evidence with v8 tag and scope correction
+  - task: P00-T06
+    artifact: docs/next/evidence/P00-T06/npm-pack-dry-run.json
+    description: npm package dry-run file list for @9thlevelsoftware/legion 8.0.5
+  - task: P00-T07
+    artifact: docs/next/adr/ADR-008-local-store-selection.md
+    description: Accepted local-store ADR selecting node:sqlite behind a provider-neutral store interface
+  - task: P00-T07
+    artifact: docs/next/spikes/STORAGE-COMPARISON.md
+    description: Storage candidate comparison scoped to local workflow-board persistence
+  - task: P00-T07
+    artifact: spikes/store/node-sqlite-workflow-spike.mjs
+    description: Executable workflow-board storage spike covering claim, projection rebuild, migration rollback, backup hash, and WAL
+  - task: P00-T07
+    artifact: spikes/store/store-interface.d.ts
+    description: Draft provider-neutral store interface for Phase 1 and Phase 3
+  - task: P00-T07
+    artifact: docs/next/evidence/P00-T07/storage-spike.log
+    description: Passing raw output from the node:sqlite workflow-board spike
+  - task: P00-T07
+    artifact: docs/next/evidence/P00-T07/storage-package-metadata.log
+    description: better-sqlite3 fallback package metadata evidence
+  - task: P00-T08
+    artifact: docs/next/spikes/EVE-COMPATIBILITY.md
+    description: Eve public-contract compatibility record scoped as replaceable runtime-driver candidate evidence
+  - task: P00-T08
+    artifact: spikes/eve/public-contract-map.json
+    description: Machine-readable Eve-to-Legion public contract map
+  - task: P00-T08
+    artifact: docs/next/evidence/P00-T08/eve-package-metadata.log
+    description: eve package version, engine, and license metadata
+  - task: P00-T08
+    artifact: docs/next/evidence/P00-T08/eve-compatibility.log
+    description: Public documentation evidence log for Eve compatibility scope
+  - task: P00-T09
+    artifact: docs/next/reviews/PHASE-00-PREMORTEM.md
+    description: Architecture, security, portability, and migration pre-mortem with no unresolved critical findings
+  - task: P00-T09
+    artifact: docs/next/reviews/PHASE-00-FINDINGS.yaml
+    description: Machine-readable findings register with owners and closure criteria
+  - task: P00-T09
+    artifact: docs/next/evidence/P00-T09/premortem-review.log
+    description: Pre-mortem acceptance evidence with zero open critical findings
+  - task: P00-T10
+    artifact: docs/next/PHASE-00-DECISION.md
+    description: Conditional-go decision authorizing Phase 1 workflow-tool protocol/core work
+  - task: P00-T10
+    artifact: docs/next/IMPLEMENTATION-BACKLOG.yaml
+    description: Sequenced implementation backlog with owners, dependencies, and verification gates
+  - task: P00-T10
+    artifact: docs/next/DEPENDENCY-MAP.md
+    description: Critical path and cross-phase dependency map
+  - task: P00-T10
+    artifact: docs/next/evidence/P00-T10/go-no-go-review.log
+    description: Go/no-go evidence log recording conditional-go scope and exclusions

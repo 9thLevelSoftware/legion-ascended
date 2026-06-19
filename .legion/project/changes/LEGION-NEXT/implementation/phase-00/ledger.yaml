@@ -1,22 +1,28 @@
 phase: 0
 phase_id: P00
-status: RUNNING
+status: DONE
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md"
 base_commit: "99dbd085ea9a7eb28307f7752383ee9ff6dc48b2"
 started_at: "2026-06-19T16:19:34-04:00"
-completed_at: null
-active_wave: 4
+completed_at: "2026-06-19T19:35:00-04:00"
+active_wave: 5
+phase_1_authorization:
+  decision: CONDITIONAL GO
+  decision_record: docs/next/PHASE-00-DECISION.md
+  phase_1_base: "final Phase 0 completion commit on legion-next/phase-00"
+  v8_baseline_tag: v8-baseline-20260619
+  v8_baseline_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
 tasks:
   P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: "b10df30f921c4ea21ebad852b478b07a6e81e95e" }
   P00-T02: { status: DONE, run_id: "P00-T02-20260619-architecture-adrs-001-003", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
   P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
   P00-T04: { status: DONE, run_id: "P00-T04-20260619-benchmark-corpus", commit: "37dfd6571f9432259115634038a70b62176b4bfd" }
   P00-T05: { status: DONE, run_id: "P00-T05-20260619-run-capture-harness", commit: "37dfd6571f9432259115634038a70b62176b4bfd" }
-  P00-T06: { status: BLOCKED, run_id: "P00-T06-20260619-baseline-blocked", commit: "ac4e9232f4ef422c434f0fa1ad2dd118a217faeb" }
-  P00-T07: { status: NOT_STARTED, run_id: null, commit: null }
-  P00-T08: { status: NOT_STARTED, run_id: null, commit: null }
-  P00-T09: { status: NOT_STARTED, run_id: null, commit: null }
-  P00-T10: { status: NOT_STARTED, run_id: null, commit: null }
+  P00-T06: { status: DONE, run_id: "P00-T06-20260619-workflow-compatibility-baseline", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
+  P00-T07: { status: DONE, run_id: "P00-T07-20260619-storage-selection", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
+  P00-T08: { status: DONE, run_id: "P00-T08-20260619-eve-public-contract-map", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
+  P00-T09: { status: DONE, run_id: "P00-T09-20260619-premortem", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
+  P00-T10: { status: DONE, run_id: "P00-T10-20260619-conditional-go", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
 decisions:
   - task: P00-T01
     decision: "Supersede stale local-main validation with public remote-main validation"
@@ -46,11 +52,27 @@ decisions:
     decision: "Accept dependency-free PowerShell v8 run-capture harness scaffold"
     reason: "The harness records run manifests, redacted transcripts, fixture hashes, Git snapshots, unavailable telemetry, dry-run calibration artifacts, and gradeable terminal states without changing v8 behavior."
     decided_at: "2026-06-19T18:05:00-04:00"
-blockers:
   - task: P00-T06
-    condition: "No approved P00-T06 run matrix and production host invocation exist for live v8 baseline execution."
-    decision_needed: "Approve host, model, repeat count, timeout, intervention policy, cost policy, and codex exec command line; or revise the harness policy before production runs."
-    evidence: "docs/next/evidence/P00-T06/baseline-run.log"
+    decision: "Supersede live-model baseline blocker with deterministic v8 workflow compatibility baseline"
+    reason: "Legion is a workflow orchestration tool; Phase 1 requires stable workflow/package compatibility evidence, while live model quality/cost metrics belong to later eval phases."
+    decided_at: "2026-06-19T19:05:00-04:00"
+  - task: P00-T07
+    decision: "Select node:sqlite as local workflow board store"
+    reason: "The executable spike passed atomic claim, projection rebuild, migration rollback, backup hash, and WAL checks without native dependency install friction."
+    decided_at: "2026-06-19T19:10:00-04:00"
+  - task: P00-T08
+    decision: "Treat Eve as a replaceable external runtime driver candidate, not a Phase 1 default"
+    reason: "Public docs/package metadata show compatible surfaces, but live crash-resume/sandbox/approval proof is Phase 5 work and should not block workflow protocol/core."
+    decided_at: "2026-06-19T19:15:00-04:00"
+  - task: P00-T09
+    decision: "Accept Phase 0 pre-mortem with no unresolved critical findings"
+    reason: "Important risks are assigned to later phase gates; none blocks Phase 1 when conditional-go constraints are enforced."
+    decided_at: "2026-06-19T19:25:00-04:00"
+  - task: P00-T10
+    decision: "Authorize Phase 1 with CONDITIONAL GO"
+    reason: "Phase 1 can begin as TypeScript workspace/protocol/core work for the workflow tool while preserving v8 surfaces and deferring Eve/live eval proof."
+    decided_at: "2026-06-19T19:35:00-04:00"
+blockers: []
 resolved_blockers:
   - task: P00-T01
     condition: "Stale local-main clone resolved to v8.0.2 instead of v8.0.5."
@@ -60,6 +82,10 @@ resolved_blockers:
     condition: "Windows checkout converted shell scripts to CRLF and failed npm run validate."
     resolution: "Resolved by LF-preserving checkouts using core.autocrlf=false for remote-main validation and local tag validation."
     evidence: "docs/next/evidence/P00-T01/fresh-checkout-validation.log"
+  - task: P00-T06
+    condition: "No approved live-model P00-T06 run matrix and production host invocation existed."
+    resolution: "Superseded by decision-owner scope correction: P00-T06 baseline is deterministic workflow compatibility evidence; live model/runtime metrics are deferred to eval phases."
+    evidence: "docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md"
 evidence:
   - docs/next/evidence/P00-PREFLIGHT/preflight.log
   - docs/next/evidence/P00-T01/fresh-checkout-validation.log
@@ -72,12 +98,17 @@ evidence:
   - docs/next/adr/ADR-005-events-idempotency.md
   - docs/next/adr/ADR-006-risk-adaptive-gates.md
   - docs/next/adr/ADR-007-kanban-migration.md
+  - docs/next/adr/ADR-008-local-store-selection.md
   - docs/next/evidence/P00-T02/adr-review.log
   - docs/next/evidence/P00-T03/adr-review.log
   - docs/next/baseline/BENCHMARK-CORPUS.md
   - docs/next/baseline/SCORING-RUBRIC.md
   - docs/next/baseline/V8-MEASUREMENT-HARNESS.md
   - docs/next/baseline/METRICS.md
+  - docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md
+  - docs/next/baseline/V8-RESULTS.md
+  - docs/next/baseline/V8-RESULTS.json
+  - docs/next/baseline/V8-BASELINE-REPORT.md
   - evals/baseline/manifest.yaml
   - evals/baseline/corpus-manifest.yaml
   - evals/baseline/fixture-hashes.sha256
@@ -90,7 +121,23 @@ evidence:
   - docs/next/evidence/P00-T04/corpus-review.log
   - docs/next/evidence/P00-T05/harness-review.log
   - docs/next/evidence/P00-T06/baseline-run.log
-  - docs/next/baseline/V8-RESULTS.md
-  - docs/next/baseline/V8-RESULTS.json
-  - docs/next/baseline/V8-BASELINE-REPORT.md
+  - docs/next/evidence/P00-T06/compatibility-baseline.log
+  - docs/next/evidence/P00-T06/npm-pack-dry-run.json
   - evals/baseline/runs/P00-T06-BLOCKED-20260619/blocker.json
+  - docs/next/spikes/STORAGE-COMPARISON.md
+  - docs/next/adr/ADR-008-local-store-selection.md
+  - spikes/store/node-sqlite-workflow-spike.mjs
+  - spikes/store/store-interface.d.ts
+  - docs/next/evidence/P00-T07/storage-spike.log
+  - docs/next/evidence/P00-T07/storage-package-metadata.log
+  - docs/next/spikes/EVE-COMPATIBILITY.md
+  - spikes/eve/public-contract-map.json
+  - docs/next/evidence/P00-T08/eve-package-metadata.log
+  - docs/next/evidence/P00-T08/eve-compatibility.log
+  - docs/next/reviews/PHASE-00-PREMORTEM.md
+  - docs/next/reviews/PHASE-00-FINDINGS.yaml
+  - docs/next/evidence/P00-T09/premortem-review.log
+  - docs/next/PHASE-00-DECISION.md
+  - docs/next/IMPLEMENTATION-BACKLOG.yaml
+  - docs/next/DEPENDENCY-MAP.md
+  - docs/next/evidence/P00-T10/go-no-go-review.log

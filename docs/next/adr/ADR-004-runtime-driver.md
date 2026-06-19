@@ -6,12 +6,12 @@ Accepted
 ## Context
 v8 adapters bridge Legion commands to host CLI behavior. The adapter spec captures useful capability differences such as parallel execution, agent spawning, structured messaging, native task tracking, read-only agents, prompt limits, and known quirks. This portability is valuable, but v8 adapters also combine interaction surface, model selection, dispatch mechanics, result collection, and execution semantics in one Markdown layer.
 
-The v9 architecture separates `ChannelAdapter`, `RuntimeDriver`, `ModelPolicy`, `SandboxDriver`, `ScmDriver`, `Store`, `ArtifactStore`, and `DeploymentDriver`. Eve is the planned first production runtime driver because it provides durable sessions, sandboxing, subagents, and step checkpoints. The plan also states that Eve is public preview and must not become the core product boundary.
+The v9 architecture separates `ChannelAdapter`, `RuntimeDriver`, `ModelPolicy`, `SandboxDriver`, `ScmDriver`, `Store`, `ArtifactStore`, and `DeploymentDriver`. Eve is a candidate first external durable runtime driver because it provides durable sessions, sandboxing, subagents, and step checkpoints. The plan also states that Eve is public preview and must not become the core product boundary.
 
-P00-T08 has not yet validated Eve public-contract compatibility. This ADR can choose the first driver direction, but it cannot claim compatibility proof or bind production defaults before that spike records evidence.
+P00-T08 validated Eve as a plausible public-contract adapter target from official docs and package metadata, but did not run a live Eve agent. That is intentional for Phase 0: Legion is a workflow orchestration tool, and Phase 1 only needs provider-neutral protocol/core contracts plus deterministic local-driver tests.
 
 ## Decision
-Eve is selected as the first runtime driver for Legion Next. The core remains provider-neutral. Core domain types, protocol entities, board records, policy records, task contracts, approvals, evidence indexes, and worker bundle manifests must not import Eve types or rely on private Eve internals.
+Eve is selected as the first external durable runtime driver candidate for Legion Next, not as the Phase 1 default and not as the product boundary. The core remains provider-neutral. Core domain types, protocol entities, board records, policy records, task contracts, approvals, evidence indexes, and worker bundle manifests must not import Eve types or rely on private Eve internals.
 
 The minimum `RuntimeDriver` lifecycle is:
 
@@ -31,11 +31,21 @@ Runtime implementations:
 
 | Driver | Role |
 | --- | --- |
-| `runtime-eve` | First production implementation after P00-T08 validates public contracts, version pinning, fallback behavior, and threat-model boundaries. |
-| `runtime-local` | Deterministic tests, development, and fallback environments where Eve is unavailable. |
+| `runtime-local` | Deterministic tests, development, Phase 1 contract verification, and fallback environments where Eve is unavailable. |
+| `runtime-eve` | First external durable runtime candidate after Phase 5 validates live public contracts, version pinning, fallback behavior, and threat-model boundaries. |
 | `runtime-legacy-cli` | Transitional compatibility path with reduced guarantees for v8-like flows. |
 
-P00-T08 must validate all of the following before any production default binds to Eve: public API/client contract, exact version pinning, run start/resume/cancel/inspect/stream behavior, approval delivery, artifact handoff, failure modes, fallback to local or legacy driver, and behavior when Eve is unavailable or changes API shape. If P00-T08 fails, the default remains unbound and the phase reports the runtime blocker.
+P00-T08 records the public-contract map and package metadata for Eve `0.11.7` with Node `>=24`. Phase 5 must validate all of the following before any production default binds to Eve: public API/client contract, exact version pinning, run start/resume/cancel/inspect/stream behavior, approval delivery, artifact handoff, failure modes, fallback to local or legacy driver, and behavior when Eve is unavailable or changes API shape. If Phase 5 fails, `runtime-local` and `runtime-legacy-cli` remain the only supported execution paths.
+
+## P00-T08 Compatibility Amendment
+
+Legion Next remains a workflow tool similar in operating shape to Superpowers or Get-Shit-Done. Eve compatibility is useful because it may provide durable worker execution, not because Legion is becoming an Eve app. The Phase 0 evidence is therefore sufficient to authorize Phase 1 protocol/core work and insufficient to bind production defaults to Eve.
+
+Evidence:
+
+- `docs/next/spikes/EVE-COMPATIBILITY.md`
+- `spikes/eve/public-contract-map.json`
+- `docs/next/evidence/P00-T08/eve-package-metadata.log`
 
 ## Consequences
 Legion Next can target Eve first without making Eve the product. Provider churn, outage, or public-preview changes are contained in `runtime-eve` and its compatibility tests.

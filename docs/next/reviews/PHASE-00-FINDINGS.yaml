@@ -1,0 +1,55 @@
+schema_version: 1
+phase: 0
+review: PHASE-00-PREMORTEM
+status: accepted
+critical_open: 0
+findings:
+  - id: P00-F001
+    severity: important
+    title: Product boundary drift into standalone app work
+    evidence:
+      - docs/next/reviews/PHASE-00-PREMORTEM.md
+      - C:/Users/dasbl/Documents/legion/README.md
+    owner: rewrite-program-coordinator
+    resolution_phase: Phase 1
+    closure_criteria: Phase 1 packages and docs define workflow-tool protocol/core only; no dashboard, hosted app, or chat-app shell enters Phase 1 scope.
+    disposition: open_backlog_condition
+  - id: P00-F002
+    severity: important
+    title: Eve public preview cannot be correctness boundary
+    evidence:
+      - docs/next/spikes/EVE-COMPATIBILITY.md
+      - docs/next/adr/ADR-004-runtime-driver.md
+    owner: runtime-owner
+    resolution_phase: Phase 5
+    closure_criteria: runtime-eve passes public-contract start/resume/cancel/inspect/stream, approval, sandbox, subagent, eval, and fallback tests.
+    disposition: accepted_with_phase_gate
+  - id: P00-F003
+    severity: important
+    title: Storage spike is Windows-local
+    evidence:
+      - docs/next/evidence/P00-T07/storage-spike.log
+      - docs/next/adr/ADR-008-local-store-selection.md
+    owner: storage-owner
+    resolution_phase: Phase 3
+    closure_criteria: Linux, macOS, and Windows CI run claim, migration rollback, WAL/read concurrency, backup/restore, and recovery tests.
+    disposition: accepted_with_phase_gate
+  - id: P00-F004
+    severity: important
+    title: Persona extraction can reintroduce personality as behavior
+    evidence:
+      - docs/next/adr/ADR-002-functional-workers.md
+    owner: worker-bundle-owner
+    resolution_phase: Phase 4
+    closure_criteria: Legacy persona map routes to functional role bundles without injecting biography, tone, or duplicate workflow prose.
+    disposition: accepted_with_phase_gate
+  - id: P00-F005
+    severity: minor
+    title: Live v8/v9 quality metrics deferred
+    evidence:
+      - docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md
+      - docs/next/baseline/V8-RESULTS.md
+    owner: eval-owner
+    resolution_phase: Phase 13
+    closure_criteria: Release-grade workflow evals compare v8 and v9 on sealed corpus before any GA quality claim.
+    disposition: accepted_deferred

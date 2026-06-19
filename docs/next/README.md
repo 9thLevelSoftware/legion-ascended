@@ -21,3 +21,17 @@ Authoritative phase execution starts from:
 - Active Phase 0 evidence index: .legion/project/changes/LEGION-NEXT/implementation/phase-00/evidence-index.yaml
 
 The original v8 repository at C:/Users/dasbl/Documents/legion is a reference and baseline source. Do not mutate it from this repository except through an explicitly approved Phase 0 baseline task.
+
+## Phase 0 Handoff Outputs
+
+- Phase 0 decision: [PHASE-00-DECISION.md](PHASE-00-DECISION.md)
+- Implementation backlog: [IMPLEMENTATION-BACKLOG.yaml](IMPLEMENTATION-BACKLOG.yaml)
+- Dependency map: [DEPENDENCY-MAP.md](DEPENDENCY-MAP.md)
+- Workflow compatibility baseline: [baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md](baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md)
+- Storage decision: [adr/ADR-008-local-store-selection.md](adr/ADR-008-local-store-selection.md)
+- Storage comparison: [spikes/STORAGE-COMPARISON.md](spikes/STORAGE-COMPARISON.md)
+- Eve compatibility record: [spikes/EVE-COMPATIBILITY.md](spikes/EVE-COMPATIBILITY.md)
+- Phase 0 pre-mortem: [reviews/PHASE-00-PREMORTEM.md](reviews/PHASE-00-PREMORTEM.md)
+- Findings register: [reviews/PHASE-00-FINDINGS.yaml](reviews/PHASE-00-FINDINGS.yaml)
+
+Phase 0 authorizes Phase 1 with a `CONDITIONAL GO`: build the TypeScript workspace and provider-neutral protocol/core for the workflow tool, preserve v8 workflow surfaces, keep Eve and live model benchmarking deferred to later runtime/eval phases, and do not start a standalone application or dashboard-first product in Phase 1.
