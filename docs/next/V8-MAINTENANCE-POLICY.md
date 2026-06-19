@@ -1,7 +1,7 @@
 # V8 Maintenance Policy
 
 ## Status
-Draft for P00-T01 review. Blocked on fresh v8 baseline validation as of 2026-06-19.
+Draft for P00-T01 review. Blocked on fresh remote-main v8 baseline validation as of 2026-06-19.
 
 Decision owner: `dasbl`
 
@@ -30,7 +30,7 @@ The v8 package remains the shipped compatibility baseline while Legion Next is d
 ## Baseline Rule
 Any v8 baseline tag must point to a clean, reproducibly tested commit. If a baseline correction is needed, create a superseding baseline tag and preserve the original.
 
-The proposed P00-T01 baseline tag is `v8-baseline-20260619`, intended to target the current tested v8 baseline from `C:/Users/dasbl/Documents/legion`. The tag was not created because fresh-checkout validation failed before tagging. When validation passes, the tag remains local until the decision owner approves publication.
+The proposed P00-T01 baseline tag is `v8-baseline-20260619`, intended to target `C:/Users/dasbl/Documents/legion` `refs/remotes/origin/main` at `855e975beec3bac6dc06db598081b6ac11ea8e14`. The tag was not created because fresh remote-main validation failed before tagging. When validation passes, the tag remains local until the decision owner approves publication.
 
 ## Branch and Release Control
 - Start v8 maintenance work from the accepted v8 baseline tag or the current v8 maintenance branch, never from Legion Next task branches.

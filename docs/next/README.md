@@ -10,7 +10,7 @@ This directory contains governance, decisions, evidence, spikes, reviews, and ha
 - Review ownership: [../../.github/CODEOWNERS](../../.github/CODEOWNERS)
 - P00-T01 evidence: [evidence/P00-T01/](evidence/P00-T01/)
 
-P00-T01 is blocked pending reproducible v8 baseline validation. The intended source-repository remote-tracking baseline is `C:/Users/dasbl/Documents/legion` `refs/remotes/origin/main` commit `855e975beec3bac6dc06db598081b6ac11ea8e14`, but the required fresh local clone command checked out source local `main` commit `84d6b69920c877fc6f7b2b8dbc979c32b97bbb92` and `npm run validate` failed. The proposed local baseline tag is `v8-baseline-20260619`; it has not been created.
+P00-T01 is blocked pending reproducible v8 baseline validation. The stale-local-main failure is preserved as historical evidence, and the corrected public-remote checkout reached `855e975beec3bac6dc06db598081b6ac11ea8e14` with package version `8.0.5`. That remote-main checkout still failed `npm run validate` on this Windows host before tag creation, so the proposed local baseline tag `v8-baseline-20260619` has not been created.
 
 Authoritative phase execution starts from:
 

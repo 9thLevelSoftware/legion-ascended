@@ -27,3 +27,66 @@ scripts/validate.sh: line 5: $'\r': command not found
 scripts/validate.sh: line 6: set: pipefail
 : invalid option name
 exit code: 2
+
+Remote main validation
+Started: 2026-06-19T16:25:18.5484151-04:00
+Remote: https://github.com/9thLevelSoftware/legion.git
+Target ref: refs/heads/main
+
+git clone https://github.com/9thLevelSoftware/legion.git C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-phase00-remote
+Cloning into 'C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-phase00-remote'...
+exit code: 0
+
+git -C C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-phase00-remote checkout refs/heads/main
+Note: switching to 'refs/heads/main'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 855e975 Merge pull request #21 from 9thLevelSoftware/codex/redesign-legion-explore-and-map
+exit code: 0
+
+git -C C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-phase00-remote rev-parse HEAD
+855e975beec3bac6dc06db598081b6ac11ea8e14
+exit code: 0
+
+node package version
+@9thlevelsoftware/legion@8.0.5
+exit code: 0
+
+npm --prefix C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-phase00-remote ci
+
+added 16 packages, and audited 17 packages in 830ms
+
+3 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit code: 0
+
+npm --prefix C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-phase00-remote run validate
+
+> @9thlevelsoftware/legion@8.0.5 validate
+> bash scripts/validate.sh
+
+scripts/validate.sh: line 5: $'\r': command not found
+scripts/validate.sh: line 6: set: pipefail
+: invalid option name
+exit code: 2

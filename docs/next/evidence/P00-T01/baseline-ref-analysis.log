@@ -36,3 +36,20 @@ No v8-baseline-* tag was created.
 
 Unblock condition:
 Provide a fresh-checkout procedure that resolves to the intended clean v8 baseline commit, or update the source repository local main so the specified local-clone checkout resolves to the current tested v8 baseline. Then rerun npm ci, npm run validate, npm run release:check, and npm test before creating the annotated baseline tag.
+
+Unblock attempt:
+Date: 2026-06-19
+The stale local-main clone result above is preserved as historical evidence. It is superseded by validating the public upstream repository at https://github.com/9thLevelSoftware/legion.git, refs/heads/main, which is expected to match the source repository remote-tracking ref refs/remotes/origin/main at 855e975beec3bac6dc06db598081b6ac11ea8e14.
+The original v8 repository local main is not updated or checked out. If remote-main validation passes, the local annotated baseline tag is created in C:/Users/dasbl/Documents/legion against refs/remotes/origin/main, not refs/heads/main.
+
+Unblock attempt result:
+Remote clone checkout reached the intended commit 855e975beec3bac6dc06db598081b6ac11ea8e14 and package @9thlevelsoftware/legion@8.0.5.
+npm ci passed.
+npm run validate failed with exit code 2.
+Failure excerpt:
+scripts/validate.sh: line 5: $'\r': command not found
+scripts/validate.sh: line 6: set: pipefail
+: invalid option name
+
+Current blocker:
+The stale local-main blocker is resolved by remote-main validation, but P00-T01 remains blocked because a fresh public-remote checkout on this Windows host still fails the required validation command before tag creation. No v8-baseline-* tag was created.

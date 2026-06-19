@@ -22,40 +22,41 @@ entries:
     description: Phase 0 source, repository, and v8 preflight capture
   - task: P00-T01
     artifact: docs/next/REWRITE-CHARTER.md
-    description: Draft rewrite charter, governance roles, branch policy, release channels, and blocked baseline provenance
-    sha256: 27C0E9E9699F6AB7E6E3BFE56DFBC95AEC2D0E7A1FDDEFE7FD8F5627B5739575
+    description: Draft rewrite charter, governance roles, branch policy, release channels, and blocked remote-main baseline provenance
+    sha256: 688981E3F5D8661E23AAA414C8C3C441311C414A4ABCF97AB9665D331D60899A
   - task: P00-T01
     artifact: docs/next/V8-MAINTENANCE-POLICY.md
     description: Draft v8 maintenance-only policy and v9-only work boundary
-    sha256: 7E8F65D404E0619037DFB34D961D5B29F5EA292086C178199526AC393EACCF8B
+    sha256: F3BFBF944A8A31E3A11EE47F2CF6DDF10626FA7C10FED147758CB2B5FA10FBF0
   - task: P00-T01
     artifact: docs/next/README.md
-    description: Legion Next index updated with P00-T01 governance links and blocked baseline note
-    sha256: 0EB22B79288BD1BAE5FA31E55FF4AE309E06F443CE6AFBB6F64197FCEA42C2D6
+    description: Legion Next index updated with P00-T01 governance links and blocked remote-main validation note
+    sha256: 21A5CCAB5473FDFA826F7ABC79C2638B3924C7DE40875B231B32BEEEF91E473C
   - task: P00-T01
     artifact: CHANGELOG.md
-    description: Governance changelog entry for blocked P00-T01 draft outputs without runtime behavior changes
-    sha256: 11A3C430F5A2EFBEF4294DB5567E4B25F6247D1ADC4DD7A6953395A0AAEF24A9
+    description: Governance changelog entry for blocked P00-T01 draft outputs, historical stale-local-main evidence, and remote-main validation failure
+    sha256: A23D06480B2D3CE34E36B5A2ABAF5581BCE03DE887BA63F9916FCD3116A9037E
   - task: P00-T01
     artifact: .github/CODEOWNERS
     description: CODEOWNERS review routing for ADRs, protocol schemas, runtime drivers, migrations, security, eval fixtures, evidence, and ownership metadata
     sha256: C7ED21448A9D3B0F3AE6AD7A7EE48ED4C9F8B696E33C075263F23F7CC8CA9BD9
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/charter-review.log
-    description: Charter review record showing draft review passed content checks but acceptance is blocked by v8 validation failure
-    sha256: CF0270E760A0B4FC95C71881B5DBE5B683B0DD072C660CE481FA3F5B1117BAA5
+    description: Charter review record showing draft review passed content checks but acceptance is blocked by public remote-main validation failure
+    sha256: 6738893037A43F5758D620FBDC2B2BD66CEEE7131159DAFF9BE0FBBAB7DB9E3D
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/fresh-checkout-validation.log
-    description: Required fresh local clone validation log; npm ci passed and npm run validate failed with exit code 2
-    sha256: 625257A1EAC1EC66B85B2AB562EC679F33740D8BDC952638D06BEB9D7F2AC7A7
+    description: Required validation log; historical local clone failed at 8.0.2, superseding public remote-main clone reached 8.0.5 and failed npm run validate with exit code 2
+    sha256: 0559A1E67F078DDFF62C02022205EC6C24C649E6BDD816DFE7EF41B256FE7B89
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/baseline-ref-analysis.log
-    description: Ref mismatch analysis showing source local main differs from source remote-tracking origin/main and no baseline tag was created
-    sha256: C39CB2592C6238E495729BF5BDFB0C76F81F66BE2589FB7F720D84035B57C6A7
+    description: Ref mismatch analysis plus unblock attempt showing public remote-main validation superseded stale local-main but still failed before tag creation
+    sha256: 4E1C7E48854E257CA9F12B487019E1E7886DE496F092DD0BD2D8C5E0A1E21CD6
   - task: P00-T01
     artifact: "local tag v8-baseline-20260619"
-    description: Not created because required fresh-checkout v8 validation failed before tagging
+    description: Not created because public remote-main validation failed before tagging
     status: NOT_CREATED
     intended_source_ref: "C:/Users/dasbl/Documents/legion refs/remotes/origin/main"
     intended_source_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
-    tested_checkout_commit: "84d6b69920c877fc6f7b2b8dbc979c32b97bbb92"
+    historical_local_clone_commit: "84d6b69920c877fc6f7b2b8dbc979c32b97bbb92"
+    remote_validation_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"

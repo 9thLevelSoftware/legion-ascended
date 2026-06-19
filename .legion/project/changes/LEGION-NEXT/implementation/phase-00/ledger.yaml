@@ -19,15 +19,19 @@ tasks:
   P00-T10: { status: NOT_STARTED, run_id: null, commit: null }
 decisions:
   - task: P00-T01
-    decision: "Do not create v8-baseline-20260619"
-    reason: "Fresh checkout validation failed before baseline tag creation."
+    decision: "Supersede stale local-main validation with public remote-main validation"
+    reason: "The local clone procedure resolved to source local main at 84d6b69920c877fc6f7b2b8dbc979c32b97bbb92, while the intended baseline is public refs/heads/main at 855e975beec3bac6dc06db598081b6ac11ea8e14."
     decided_at: "2026-06-19T16:19:34-04:00"
+  - task: P00-T01
+    decision: "Do not create v8-baseline-20260619"
+    reason: "Public remote-main validation reached 855e975beec3bac6dc06db598081b6ac11ea8e14 but failed npm run validate before baseline tag creation."
+    decided_at: "2026-06-19T16:25:18-04:00"
 blockers:
   - task: P00-T01
-    condition: "Fresh v8 checkout validation failed at npm run validate."
+    condition: "Fresh public remote-main v8 checkout validation failed at npm run validate."
     evidence: "docs/next/evidence/P00-T01/fresh-checkout-validation.log"
-    detail: "The specified local clone checkout resolved origin/main to source local main commit 84d6b69920c877fc6f7b2b8dbc979c32b97bbb92, package version 8.0.2, and scripts/validate.sh failed with CRLF parsing errors."
-    unblock: "Provide a fresh-checkout procedure that resolves to the intended clean v8 baseline commit or update the source repository local main so the specified procedure validates the current v8 baseline."
+    detail: "The corrected public remote clone reached commit 855e975beec3bac6dc06db598081b6ac11ea8e14, package version 8.0.5, and npm ci passed. scripts/validate.sh then failed with CRLF parsing errors: line 5 $'\\r' command not found and line 6 set pipefail invalid option name."
+    unblock: "Provide or apply a baseline validation procedure that preserves LF line endings for shell scripts on Windows, or otherwise produce a fresh checkout where npm ci, npm run validate, npm run release:check, and npm test pass before creating the annotated baseline tag."
 evidence:
   - docs/next/evidence/P00-PREFLIGHT/preflight.log
   - docs/next/evidence/P00-T01/fresh-checkout-validation.log
