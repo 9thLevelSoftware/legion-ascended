@@ -1,0 +1,16 @@
+Legion Retooled status
+## legion-next/phase-00
+?? .legion/
+?? docs/next/
+Legion Retooled HEAD
+99dbd085ea9a7eb28307f7752383ee9ff6dc48b2
+Original Legion status
+## codex/redesign-legion-explore-and-map...origin/codex/redesign-legion-explore-and-map
+?? docs/rebuild/
+Original Legion origin/main
+855e975beec3bac6dc06db598081b6ac11ea8e14
+Original Legion package version
+8.0.5
+Node and npm versions
+v25.9.0
+11.12.1

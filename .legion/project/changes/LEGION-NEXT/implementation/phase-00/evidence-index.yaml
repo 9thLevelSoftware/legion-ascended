@@ -1,0 +1,12 @@
+phase: 0
+phase_id: P00
+source_documents:
+  roadmap: C:/Users/dasbl/Documents/Legion Retooled/docs/legion-next-roadmap.md
+  phase_contract: C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md
+  transformation_plan: C:/Users/dasbl/Documents/legion/docs/rebuild/legion-next-transformation-plan.md
+  dependency_map: C:/Users/dasbl/Documents/legion/docs/rebuild/CROSS-PHASE-DEPENDENCY-MAP.md
+  execution_guide: C:/Users/dasbl/Documents/legion/docs/rebuild/AGENT-EXECUTION-GUIDE.md
+entries:
+  - task: P00-PREFLIGHT
+    artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
+    description: Phase 0 source, repository, and v8 preflight capture
