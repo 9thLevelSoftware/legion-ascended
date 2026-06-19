@@ -2,7 +2,7 @@ P00-T01 charter review record
 Date: 2026-06-19
 Decision owner: dasbl
 Phase coordinator: dasbl
-Source authorization: task dispatch instruction named dasbl as the Phase 0 governance decision owner and project owner.
+Source authorization: Phase 0 governance records in this repository, including docs/next/REWRITE-CHARTER.md, name dasbl as the decision owner; this P00-T01 review record keeps dasbl as the project owner for the governance handoff.
 
 Reviewed artifacts:
 - docs/next/REWRITE-CHARTER.md

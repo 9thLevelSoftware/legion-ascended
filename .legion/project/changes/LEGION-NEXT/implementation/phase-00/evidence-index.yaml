@@ -16,6 +16,8 @@ source_documents:
   execution_guide:
     path: C:/Users/dasbl/Documents/legion/docs/rebuild/AGENT-EXECUTION-GUIDE.md
     sha256: 2CAA682A3B1DFEDEE2B37D7C82511447BE525B2F6D55704F9851BFAC1D07E97A
+task_commits:
+  P00-T01: "b10df30f921c4ea21ebad852b478b07a6e81e95e"
 entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
@@ -43,7 +45,7 @@ entries:
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/charter-review.log
     description: Charter review record accepting P00-T01 after LF-preserving baseline validation and local tag verification
-    sha256: 7887191971DCF98C67C6834CD170D9AC87D3FF1F4C0B896E06EBF0FBC0E8C2FA
+    sha256: 84E79D491E964DC6EC0364D1F038AA28C5DE289FA08797A3ECC19CBB9D0D5648
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/fresh-checkout-validation.log
     description: Required validation log with historical failures, successful LF-preserving remote-main validation, local annotated tag creation, and successful LF-preserving local tag validation

@@ -7,7 +7,7 @@ started_at: "2026-06-19T16:19:34-04:00"
 completed_at: null
 active_wave: 2
 tasks:
-  P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: null }
+  P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: "b10df30f921c4ea21ebad852b478b07a6e81e95e" }
   P00-T02: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T03: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T04: { status: NOT_STARTED, run_id: null, commit: null }
