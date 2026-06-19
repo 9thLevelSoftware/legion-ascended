@@ -1,0 +1,96 @@
+P01-T01 post npmrc cleanup verification
+started_at: 2026-06-19T19:40:40.4564598-04:00
+
+>>> pnpm run bootstrap
+$ pnpm install --frozen-lockfile --strict-peer-dependencies --config.auto-install-peers=false
+[ERR_PNPM_LOCKFILE_CONFIG_MISMATCH] Cannot proceed with the frozen installation. The current "settings.autoInstallPeers" configuration doesn't match the value found in the lockfile
+
+Update your lockfile using "pnpm install --no-frozen-lockfile"
+[ELIFECYCLE] Command failed with exit code 1.
+
+Root cause: lockfile settings.autoInstallPeers did not match new strict install command.
+
+>>> pnpm install --no-frozen-lockfile --strict-peer-dependencies --config.auto-install-peers=false
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Already up to date
+Progress: resolved 1, reused 0, downloaded 0, added 0, done
+
+Done in 329ms using pnpm v11.4.0
+
+>>> pnpm run bootstrap
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Already up to date
+Progress: resolved 1, reused 0, downloaded 0, added 0, done
+
+Done in 340ms using pnpm v11.4.0
+$ pnpm install --frozen-lockfile --strict-peer-dependencies --config.auto-install-peers=false
+[ERR_PNPM_LOCKFILE_CONFIG_MISMATCH] Cannot proceed with the frozen installation. The current "settings.autoInstallPeers" configuration doesn't match the value found in the lockfile
+
+Update your lockfile using "pnpm install --no-frozen-lockfile"
+[ELIFECYCLE] Command failed with exit code 1.
+
+>>> temporary auto-install-peers=false lockfile regeneration
+Already up to date
+Done in 224ms using pnpm v11.4.0
+
+> pnpm-lock.yaml:4:  autoInstallPeers: true
+  pnpm-lock.yaml:5:  excludeLinksFromLockfile: false
+
+
+Final strict-peer bootstrap verification
+
+>>> pnpm run bootstrap
+$ pnpm install --frozen-lockfile --strict-peer-dependencies
+Already up to date
+Done in 232ms using pnpm v11.4.0
+
+>>> npm run validate
+
+> @9thlevelsoftware/legion@9.0.0-alpha.0 validate
+> pnpm run typecheck && pnpm run test
+
+$ tsc -p tsconfig.base.json --showConfig
+{
+    "compilerOptions": {
+        "target": "es2024",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "lib": [
+            "es2024"
+        ],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "composite": true,
+        "incremental": false,
+        "noEmitOnError": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "useUnknownInCatchVariables": true,
+        "skipLibCheck": false,
+        "moduleDetection": "force",
+        "newLine": "lf",
+        "preserveConstEnums": true
+    },
+    "files": [
+        "./spikes/store/store-interface.d.ts"
+    ]
+}
+$ pnpm -r --if-present test
+No projects matched the filters in "C:\Users\dasbl\Documents\Legion Retooled\.worktrees\legion-next-phase-01"
+
+>>> npm test
+
+> @9thlevelsoftware/legion@9.0.0-alpha.0 test
+> pnpm -r --if-present test
+
+No projects matched the filters in "C:\Users\dasbl\Documents\Legion Retooled\.worktrees\legion-next-phase-01"
+completed_at: 2026-06-19T19:41:53.6758730-04:00
+result: PASS_AFTER_STRICT_PEER_ADJUSTMENT

@@ -1,0 +1,594 @@
+npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "prefer-frozen-lockfile". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+[
+  {
+    "id": "@9thlevelsoftware/legion@9.0.0-alpha.0",
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "size": 148318,
+    "unpackedSize": 662004,
+    "shasum": "76bdb5444eb36c8d02933316cfa32281c8ad98d1",
+    "integrity": "sha512-M1411sgqBykbQx1t15Zh2pt2Yk0W1cpRFMSLIRfTGWKf7mRT3fRlEuxyiWJVr24ao9YSjs2Ed9Z63i63jMXwEg==",
+    "filename": "9thlevelsoftware-legion-9.0.0-alpha.0.tgz",
+    "files": [
+      {
+        "path": "CHANGELOG.md",
+        "size": 623,
+        "mode": 420
+      },
+      {
+        "path": "docs/legion-next-roadmap.md",
+        "size": 13990,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/.gitkeep",
+        "size": 44,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-001-runtime-product.md",
+        "size": 6650,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-002-functional-workers.md",
+        "size": 7975,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-003-state-ownership.md",
+        "size": 8376,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-004-runtime-driver.md",
+        "size": 6241,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-005-events-idempotency.md",
+        "size": 7547,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-006-risk-adaptive-gates.md",
+        "size": 7717,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-007-kanban-migration.md",
+        "size": 7090,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/adr/ADR-008-local-store-selection.md",
+        "size": 3168,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/.gitkeep",
+        "size": 44,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/BENCHMARK-CORPUS.md",
+        "size": 4206,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/METRICS.md",
+        "size": 1367,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/SCORING-RUBRIC.md",
+        "size": 1874,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/V8-BASELINE-REPORT.md",
+        "size": 426,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/V8-MEASUREMENT-HARNESS.md",
+        "size": 1910,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/V8-RESULTS.json",
+        "size": 1516,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/V8-RESULTS.md",
+        "size": 1713,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md",
+        "size": 2849,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/DEPENDENCY-MAP.md",
+        "size": 3011,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-PREFLIGHT/preflight.log",
+        "size": 1425,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T01/baseline-ref-analysis.log",
+        "size": 4152,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T01/charter-review.log",
+        "size": 1333,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T01/fresh-checkout-validation.log",
+        "size": 266423,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T02/adr-review.log",
+        "size": 6179,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T03/adr-review.log",
+        "size": 6311,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T04/corpus-review.log",
+        "size": 1196,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/fixture-hashes.sha256",
+        "size": 187,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/git-after.txt",
+        "size": 556,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/git-before.txt",
+        "size": 556,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/run-manifest.json",
+        "size": 1368,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/score.json",
+        "size": 708,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/transcript.redacted.log",
+        "size": 113,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-bug-fix-codex-cli-r1-20260619T180224/workspace/public-fixture/task.md",
+        "size": 461,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/fixture-hashes.sha256",
+        "size": 196,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/git-after.txt",
+        "size": 556,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/git-before.txt",
+        "size": 556,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/run-manifest.json",
+        "size": 1395,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/score.json",
+        "size": 726,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/transcript.redacted.log",
+        "size": 122,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/calibration-runs/p00-noop-calibration-codex-cli-r1-20260619T180223/workspace/public-fixture/task.md",
+        "size": 244,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T05/harness-review.log",
+        "size": 1076,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T06/baseline-run.log",
+        "size": 1634,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T06/compatibility-baseline.log",
+        "size": 353,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T06/npm-pack-dry-run.json",
+        "size": 15946,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T07/storage-package-metadata.log",
+        "size": 133,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T07/storage-spike.log",
+        "size": 1095,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T08/eve-compatibility.log",
+        "size": 373,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T08/eve-package-metadata.log",
+        "size": 99,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T09/premortem-review.log",
+        "size": 180,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P00-T10/go-no-go-review.log",
+        "size": 364,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-PREFLIGHT/preflight.log",
+        "size": 2483,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-PREFLIGHT/v8-baseline-suite.log",
+        "size": 145669,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-PREFLIGHT/v8-npm-pack-dry-run.json",
+        "size": 15946,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-PREFLIGHT/v8-package-file-list-comparison.json",
+        "size": 3733,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-T01/npm-compat-and-pack.log",
+        "size": 2631,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-T01/toolchain-install.log",
+        "size": 1110,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/evidence/P01-T01/workspace-aliases.log",
+        "size": 2960,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/IMPLEMENTATION-BACKLOG.yaml",
+        "size": 6579,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/PHASE-00-DECISION.md",
+        "size": 3321,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/README.md",
+        "size": 2970,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/reviews/.gitkeep",
+        "size": 44,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/reviews/PHASE-00-FINDINGS.yaml",
+        "size": 2352,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/reviews/PHASE-00-PREMORTEM.md",
+        "size": 5524,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/REWRITE-CHARTER.md",
+        "size": 6593,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/spikes/.gitkeep",
+        "size": 44,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/spikes/EVE-COMPATIBILITY.md",
+        "size": 3364,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/spikes/STORAGE-COMPARISON.md",
+        "size": 3266,
+        "mode": 420
+      },
+      {
+        "path": "docs/next/V8-MAINTENANCE-POLICY.md",
+        "size": 2801,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/.gitkeep",
+        "size": 44,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/corpus-manifest.yaml",
+        "size": 435,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/fixture-hashes.sha256",
+        "size": 3816,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/manifest.yaml",
+        "size": 2836,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/README.md",
+        "size": 564,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/rubrics/deterministic.yaml",
+        "size": 407,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/rubrics/judged.yaml",
+        "size": 428,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/run-manifest-template.yaml",
+        "size": 958,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/runs/.gitkeep",
+        "size": 83,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/runs/P00-T06-BLOCKED-20260619/blocker.json",
+        "size": 1459,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/api-change.v1.json",
+        "size": 1962,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/brownfield-feature.v1.json",
+        "size": 1987,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/bug-fix.v1.json",
+        "size": 1915,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/greenfield-feature.v1.json",
+        "size": 2015,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/interrupted-resumed.v1.json",
+        "size": 1978,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/noop-calibration.v1.json",
+        "size": 1789,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/refactor.v1.json",
+        "size": 1885,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/security-sensitive.v1.json",
+        "size": 1997,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/scenarios/ui-flow.v1.json",
+        "size": 1936,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/schema/corpus-manifest.schema.json",
+        "size": 518,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/schema/run-manifest.schema.json",
+        "size": 2434,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/schema/scenario.schema.json",
+        "size": 3195,
+        "mode": 420
+      },
+      {
+        "path": "evals/baseline/schema/score.schema.json",
+        "size": 857,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/api-change/assertions.yaml",
+        "size": 436,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/brownfield-feature/assertions.yaml",
+        "size": 488,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/bug-fix/assertions.yaml",
+        "size": 485,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/greenfield-feature/assertions.yaml",
+        "size": 458,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/interrupted-resumed/assertions.yaml",
+        "size": 459,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/noop-calibration/assertions.yaml",
+        "size": 427,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/refactor/assertions.yaml",
+        "size": 463,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/security-sensitive/assertions.yaml",
+        "size": 435,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/evaluator/ui-flow/assertions.yaml",
+        "size": 400,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/PROVENANCE.md",
+        "size": 515,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/api-change/task.md",
+        "size": 453,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/brownfield-feature/task.md",
+        "size": 456,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/bug-fix/task.md",
+        "size": 461,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/greenfield-feature/task.md",
+        "size": 501,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/interrupted-resumed/task.md",
+        "size": 476,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/noop-calibration/task.md",
+        "size": 244,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/refactor/task.md",
+        "size": 462,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/security-sensitive/task.md",
+        "size": 486,
+        "mode": 420
+      },
+      {
+        "path": "evals/fixtures/public/ui-flow/task.md",
+        "size": 450,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1349,
+        "mode": 420
+      },
+      {
+        "path": "pnpm-workspace.yaml",
+        "size": 67,
+        "mode": 420
+      },
+      {
+        "path": "tsconfig.base.json",
+        "size": 792,
+        "mode": 420
+      }
+    ],
+    "entryCount": 115,
+    "bundled": []
+  }
+]

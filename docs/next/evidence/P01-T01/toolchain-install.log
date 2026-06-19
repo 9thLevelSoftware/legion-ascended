@@ -1,0 +1,33 @@
+P01-T01 toolchain install
+started_at: 2026-06-19T19:39:14.2635047-04:00
+node: v25.9.0
+npm: 11.12.1
+pnpm: 11.4.0
+
+>>> corepack enable
+
+>>> pnpm install
+
+   ╭──────────────────────────────────────────────╮
+   │                                              │
+   │      Update available! 11.4.0 → 11.8.0.      │
+   │     Changelog: https://pnpm.io/v/11.8.0      │
+   │   To update, run: corepack use pnpm@11.8.0   │
+   │                                              │
+   ╰──────────────────────────────────────────────╯
+
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +1
++
+Progress: resolved 1, reused 0, downloaded 1, added 1, done
+
+devDependencies:
++ typescript 6.0.3
+
+Done in 916ms using pnpm v11.4.0
+
+>>> pnpm install --frozen-lockfile
+Already up to date
+Done in 217ms using pnpm v11.4.0
+completed_at: 2026-06-19T19:39:16.2290350-04:00
+result: PASS

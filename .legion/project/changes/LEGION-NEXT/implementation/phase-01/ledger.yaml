@@ -7,7 +7,7 @@ started_at: "2026-06-19T19:33:27-04:00"
 completed_at: null
 active_wave: 1
 tasks:
-  P01-T01: { status: READY, run_id: null, commit: null }
+  P01-T01: { status: RUNNING, run_id: "P01-T01-20260619-workspace-tooling", commit: null }
   P01-T02: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T03: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T04: { status: NOT_STARTED, run_id: null, commit: null }
@@ -27,6 +27,10 @@ decisions:
     decision: "Use LF-preserving v8 pack evidence as Phase 1 package baseline"
     reason: "P00 and P01 v8 package dry-runs list the same 135 package paths. Byte size and tarball hash differences are line-ending normalization; the P01 LF dry-run matches Git blob sizes and avoids treating checkout policy as package-surface drift."
     decided_at: "2026-06-19T19:33:27-04:00"
+  - task: P01-T01
+    decision: "Keep P01-T01 scoped to v9 workspace tooling in the new implementation repository"
+    reason: "The roadmap establishes C:/Users/dasbl/Documents/Legion Retooled as the primary implementation repository and C:/Users/dasbl/Documents/legion as a read-only v8 reference/baseline. P01-T01 therefore adds the Node 24/pnpm/TypeScript workspace foundation here and uses v8 package evidence as the compatibility baseline; P01-T10 owns materializing or isolating legacy prompt-package assets without mutating the original repo."
+    decided_at: "2026-06-19T19:45:00-04:00"
 blockers: []
 evidence:
   - docs/next/evidence/P01-PREFLIGHT/preflight.log

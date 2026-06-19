@@ -35,3 +35,17 @@ The original v8 repository at C:/Users/dasbl/Documents/legion is a reference and
 - Findings register: [reviews/PHASE-00-FINDINGS.yaml](reviews/PHASE-00-FINDINGS.yaml)
 
 Phase 0 authorizes Phase 1 with a `CONDITIONAL GO`: build the TypeScript workspace and provider-neutral protocol/core for the workflow tool, preserve v8 workflow surfaces, keep Eve and live model benchmarking deferred to later runtime/eval phases, and do not start a standalone application or dashboard-first product in Phase 1.
+
+## Phase 1 Workspace Bootstrap
+
+Phase 1 starts from the dedicated `legion-next/phase-01` branch/worktree and targets Node 24 with pnpm 11.4.0.
+
+Use these local commands for the v9 workspace:
+
+```powershell
+corepack enable
+pnpm run bootstrap
+pnpm run validate
+```
+
+The root package remains named `@9thlevelsoftware/legion`, but the v8 prompt-package surface remains the frozen reference line until the Phase 1 legacy boundary task (`P01-T10`) materializes or isolates it under explicit package-content tests. Phase 1 Wave 1 must not add a dashboard, hosted service, chat UI, SQLite implementation, dispatcher loop, or Eve-specific runtime binding.

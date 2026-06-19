@@ -1,0 +1,94 @@
+P01-T01 workspace aliases
+started_at: 2026-06-19T19:39:26.6315379-04:00
+
+>>> pnpm run typecheck
+'run' is not recognized as an internal or external command,
+operable program or batch file.
+undefined
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command "run typecheck" not found
+
+Did you mean "pnpm typecheck"?
+
+Retry with corrected PowerShell argument splatting
+retry_started_at: 2026-06-19T19:39:39.1342636-04:00
+
+>>> pnpm run typecheck
+$ tsc -p tsconfig.base.json --showConfig
+{
+    "compilerOptions": {
+        "target": "es2024",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "lib": [
+            "es2024"
+        ],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "composite": true,
+        "incremental": false,
+        "noEmitOnError": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "useUnknownInCatchVariables": true,
+        "skipLibCheck": false,
+        "moduleDetection": "force",
+        "newLine": "lf",
+        "preserveConstEnums": true
+    },
+    "files": [
+        "./spikes/store/store-interface.d.ts"
+    ]
+}
+
+>>> pnpm run test
+$ pnpm -r --if-present test
+No projects matched the filters in "C:\Users\dasbl\Documents\Legion Retooled\.worktrees\legion-next-phase-01"
+
+>>> pnpm run validate
+$ pnpm run typecheck && pnpm run test
+$ tsc -p tsconfig.base.json --showConfig
+{
+    "compilerOptions": {
+        "target": "es2024",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "lib": [
+            "es2024"
+        ],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "composite": true,
+        "incremental": false,
+        "noEmitOnError": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "useUnknownInCatchVariables": true,
+        "skipLibCheck": false,
+        "moduleDetection": "force",
+        "newLine": "lf",
+        "preserveConstEnums": true
+    },
+    "files": [
+        "./spikes/store/store-interface.d.ts"
+    ]
+}
+$ pnpm -r --if-present test
+No projects matched the filters in "C:\Users\dasbl\Documents\Legion Retooled\.worktrees\legion-next-phase-01"
+completed_at: 2026-06-19T19:39:41.5373100-04:00
+result: PASS_AFTER_INVOCATION_RETRY

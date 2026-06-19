@@ -1,0 +1,55 @@
+{
+  "name": "@9thlevelsoftware/legion",
+  "version": "9.0.0-alpha.0",
+  "description": "Durable workflow orchestration tool for Legion Next.",
+  "type": "module",
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=24.0.0 <26",
+    "pnpm": ">=11.4.0 <12"
+  },
+  "scripts": {
+    "bootstrap": "pnpm install --frozen-lockfile --strict-peer-dependencies",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "tsc -p tsconfig.base.json --showConfig",
+    "test": "pnpm -r --if-present test",
+    "validate": "pnpm run typecheck && pnpm run test",
+    "validate:next": "pnpm run validate",
+    "pack:dry-run": "npm pack --dry-run && pnpm pack --dry-run",
+    "prepublishOnly": "pnpm run validate && pnpm pack --dry-run"
+  },
+  "files": [
+    "CHANGELOG.md",
+    "docs/legion-next-roadmap.md",
+    "docs/next/README.md",
+    "docs/next/PHASE-00-DECISION.md",
+    "docs/next/V8-MAINTENANCE-POLICY.md",
+    "docs/next/adr/",
+    "docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md",
+    "evals/baseline/",
+    "evals/fixtures/",
+    "packages/",
+    "schemas/",
+    "tsconfig.base.json",
+    "pnpm-workspace.yaml"
+  ],
+  "keywords": [
+    "ai-agents",
+    "workflow-orchestration",
+    "development-control-plane",
+    "legion",
+    "typescript"
+  ],
+  "author": {
+    "name": "9thLevelSoftware",
+    "url": "https://github.com/9thLevelSoftware"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/9thLevelSoftware/legion.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}
