@@ -18,11 +18,11 @@ tasks:
   P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
   P00-T04: { status: DONE, run_id: "P00-T04-20260619-benchmark-corpus", commit: "37dfd6571f9432259115634038a70b62176b4bfd" }
   P00-T05: { status: DONE, run_id: "P00-T05-20260619-run-capture-harness", commit: "37dfd6571f9432259115634038a70b62176b4bfd" }
-  P00-T06: { status: DONE, run_id: "P00-T06-20260619-workflow-compatibility-baseline", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
-  P00-T07: { status: DONE, run_id: "P00-T07-20260619-storage-selection", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
-  P00-T08: { status: DONE, run_id: "P00-T08-20260619-eve-public-contract-map", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
-  P00-T09: { status: DONE, run_id: "P00-T09-20260619-premortem", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
-  P00-T10: { status: DONE, run_id: "P00-T10-20260619-conditional-go", commit: "PENDING_FINAL_PHASE0_COMPLETION_COMMIT" }
+  P00-T06: { status: DONE, run_id: "P00-T06-20260619-workflow-compatibility-baseline", commit: "48393ad385053d08e78c17a1aae0aa9ac9572cd1" }
+  P00-T07: { status: DONE, run_id: "P00-T07-20260619-storage-selection", commit: "48393ad385053d08e78c17a1aae0aa9ac9572cd1" }
+  P00-T08: { status: DONE, run_id: "P00-T08-20260619-eve-public-contract-map", commit: "48393ad385053d08e78c17a1aae0aa9ac9572cd1" }
+  P00-T09: { status: DONE, run_id: "P00-T09-20260619-premortem", commit: "48393ad385053d08e78c17a1aae0aa9ac9572cd1" }
+  P00-T10: { status: DONE, run_id: "P00-T10-20260619-conditional-go", commit: "48393ad385053d08e78c17a1aae0aa9ac9572cd1" }
 decisions:
   - task: P00-T01
     decision: "Supersede stale local-main validation with public remote-main validation"
