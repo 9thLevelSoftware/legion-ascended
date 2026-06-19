@@ -18,6 +18,8 @@ source_documents:
     sha256: 2CAA682A3B1DFEDEE2B37D7C82511447BE525B2F6D55704F9851BFAC1D07E97A
 task_commits:
   P00-T01: "b10df30f921c4ea21ebad852b478b07a6e81e95e"
+  P00-T02: "e326d56e18d602b44df0291eb631edb2b94f97c1"
+  P00-T03: "e326d56e18d602b44df0291eb631edb2b94f97c1"
 entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
