@@ -1,0 +1,35 @@
+phase: 1
+phase_id: P01
+status: RUNNING
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/01-phase-typescript-workspace-and-protocol-core.md"
+base_commit: "cefef6665321e5e34a541183546587ff9a6a85b7"
+started_at: "2026-06-19T19:33:27-04:00"
+completed_at: null
+active_wave: 1
+tasks:
+  P01-T01: { status: READY, run_id: null, commit: null }
+  P01-T02: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T03: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T04: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T05: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T06: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T07: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T08: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T09: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T10: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T11: { status: NOT_STARTED, run_id: null, commit: null }
+decisions:
+  - task: P01-PREFLIGHT
+    decision: "Authorize Wave 1 start"
+    reason: "Phase 0 ledger is DONE with no open blockers; Phase 0 conditional-go constraints authorize workflow-tool TypeScript workspace/protocol/core work; isolated v8 baseline suite passed on commit 855e975beec3bac6dc06db598081b6ac11ea8e14."
+    decided_at: "2026-06-19T19:33:27-04:00"
+  - task: P01-PREFLIGHT
+    decision: "Use LF-preserving v8 pack evidence as Phase 1 package baseline"
+    reason: "P00 and P01 v8 package dry-runs list the same 135 package paths. Byte size and tarball hash differences are line-ending normalization; the P01 LF dry-run matches Git blob sizes and avoids treating checkout policy as package-surface drift."
+    decided_at: "2026-06-19T19:33:27-04:00"
+blockers: []
+evidence:
+  - docs/next/evidence/P01-PREFLIGHT/preflight.log
+  - docs/next/evidence/P01-PREFLIGHT/v8-baseline-suite.log
+  - docs/next/evidence/P01-PREFLIGHT/v8-npm-pack-dry-run.json
+  - docs/next/evidence/P01-PREFLIGHT/v8-package-file-list-comparison.json

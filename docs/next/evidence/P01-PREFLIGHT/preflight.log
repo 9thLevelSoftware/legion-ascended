@@ -1,0 +1,24 @@
+P01 preflight
+started_at: 2026-06-19T19:33:27.6967726-04:00
+phase_branch: legion-next/phase-01
+phase_base_commit: cefef6665321e5e34a541183546587ff9a6a85b7
+source_document: C:\Users\dasbl\Documents\legion\docs\rebuild\01-phase-typescript-workspace-and-protocol-core.md
+source_document_sha256: 362BD33CFFA70A02F035DCAADB0227267AE78D97206AB33E73897FEF0CB69EF9
+
+Preflight checks:
+- PASS P00 conditions: phase-00 ledger status is DONE, blockers list is empty, and docs/next/PHASE-00-DECISION.md authorizes workflow-tool protocol/core work with CONDITIONAL GO.
+- PASS v8 suite: isolated LF-preserving v8 worktree at commit 855e975beec3bac6dc06db598081b6ac11ea8e14 passed npm ci, npm run validate, npm run release:check, npm test, and npm pack --dry-run --json. Raw log: docs/next/evidence/P01-PREFLIGHT/v8-baseline-suite.log.
+- PASS tool versions: current local runtime v25.9.0, npm 11.12.1, corepack 0.34.7, pnpm 11.4.0. pnpm 11.4.0 engines: { "node": ">=22.13" }. TypeScript metadata: { "version": "6.0.3", "engines": { "node": ">=14.17" } }. Zod version probe: "4.4.3". zod-to-json-schema version probe: "3.25.2".
+- PASS phase branch and ledger: legion-next/phase-01 worktree exists from final Phase 0 head; phase ledger is seeded in .legion/project/changes/LEGION-NEXT/implementation/phase-01/ledger.yaml.
+- PASS package baseline: P00 package evidence and P01 LF baseline both list 135 files, path_set_match=True. Byte sizes/hashes differ for 81 files because P00 evidence captured CRLF-sized files while P01 used LF-preserving checkout matching Git blob sizes. Comparison: docs/next/evidence/P01-PREFLIGHT/v8-package-file-list-comparison.json.
+
+Observed non-blockers:
+- npm ci on the v8 baseline reports 2 moderate vulnerabilities from legacy dependencies. This is preserved as v8 baseline evidence and does not authorize changing v8 assets in Phase 1.
+- The active shell has Node v25.9.0. Phase 1 target files will pin Node 24+ support; current Node 25 is only the local execution runtime for this preflight.
+
+Scope guard:
+- Phase 1 remains limited to the workflow orchestration tool: TypeScript workspace, protocol schemas, provider-neutral core, package boundaries, validation, and v8 package-surface compatibility.
+- Standalone app, dashboard-first product, chat UI, hosted service, SQLite implementation, dispatcher loops, and Eve-specific app/runtime binding remain out of scope for Phase 1.
+
+result: PASS
+completed_at: 2026-06-19T19:33:27.6994359-04:00

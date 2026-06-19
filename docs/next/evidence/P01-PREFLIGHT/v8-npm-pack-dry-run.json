@@ -1,0 +1,691 @@
+[
+  {
+    "id": "@9thlevelsoftware/legion@8.0.5",
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "size": 736134,
+    "unpackedSize": 2338686,
+    "shasum": "8107500541e3fd59598dec554a20211a67bcd80d",
+    "integrity": "sha512-+vm3e2dSKdzHRiyIH2dTaIjBTUzf4vqbSoQ2ITztvuYEtsXMaIyutCj7N8+oMDTepIEevmGq6kcQ3/0L1Stq2w==",
+    "filename": "9thlevelsoftware-legion-8.0.5.tgz",
+    "files": [
+      {
+        "path": ".codex-plugin/plugin.json",
+        "size": 1412,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 81679,
+        "mode": 420
+      },
+      {
+        "path": "adapters/ADAPTER.md",
+        "size": 6945,
+        "mode": 420
+      },
+      {
+        "path": "adapters/aider.md",
+        "size": 9412,
+        "mode": 420
+      },
+      {
+        "path": "adapters/antigravity-cli.md",
+        "size": 4072,
+        "mode": 420
+      },
+      {
+        "path": "adapters/claude-code.md",
+        "size": 6040,
+        "mode": 420
+      },
+      {
+        "path": "adapters/codex-cli.md",
+        "size": 5874,
+        "mode": 420
+      },
+      {
+        "path": "adapters/copilot-cli.md",
+        "size": 4784,
+        "mode": 420
+      },
+      {
+        "path": "adapters/cursor.md",
+        "size": 3713,
+        "mode": 420
+      },
+      {
+        "path": "adapters/gemini-cli.md",
+        "size": 5280,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-cli.md",
+        "size": 11403,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-code.md",
+        "size": 5510,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kiro-cli.md",
+        "size": 5101,
+        "mode": 420
+      },
+      {
+        "path": "adapters/opencode.md",
+        "size": 9364,
+        "mode": 420
+      },
+      {
+        "path": "adapters/windsurf.md",
+        "size": 3615,
+        "mode": 420
+      },
+      {
+        "path": "agents/agents-orchestrator.md",
+        "size": 14117,
+        "mode": 420
+      },
+      {
+        "path": "agents/data-analytics-engineer.md",
+        "size": 22249,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-brand-guardian.md",
+        "size": 12219,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ui-designer.md",
+        "size": 8719,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-architect.md",
+        "size": 9643,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-researcher.md",
+        "size": 14548,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-visual-storyteller.md",
+        "size": 8011,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-whimsy-injector.md",
+        "size": 6642,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-ai-engineer.md",
+        "size": 8053,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-backend-architect.md",
+        "size": 10127,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-frontend-developer.md",
+        "size": 9844,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-infrastructure-devops.md",
+        "size": 19148,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-laravel-specialist.md",
+        "size": 19456,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-mobile-app-builder.md",
+        "size": 7791,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-rapid-prototyper.md",
+        "size": 7676,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-security-engineer.md",
+        "size": 17203,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-senior-developer.md",
+        "size": 23313,
+        "mode": 420
+      },
+      {
+        "path": "agents/lsp-index-engineer.md",
+        "size": 11879,
+        "mode": 420
+      },
+      {
+        "path": "agents/macos-spatial-metal-engineer.md",
+        "size": 12863,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-app-store-optimizer.md",
+        "size": 13734,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-content-social-strategist.md",
+        "size": 15115,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-growth-hacker.md",
+        "size": 17715,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-social-platform-specialist.md",
+        "size": 11947,
+        "mode": 420
+      },
+      {
+        "path": "agents/polymath.md",
+        "size": 9048,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-feedback-synthesizer.md",
+        "size": 19681,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-sprint-prioritizer.md",
+        "size": 11675,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-technical-writer.md",
+        "size": 17521,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-trend-researcher.md",
+        "size": 11311,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-experiment-tracker.md",
+        "size": 10222,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-project-shepherd.md",
+        "size": 10522,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-operations.md",
+        "size": 10526,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-producer.md",
+        "size": 11526,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-manager-senior.md",
+        "size": 10607,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-executive-summary-generator.md",
+        "size": 9796,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-finance-tracker.md",
+        "size": 9422,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-legal-compliance-checker.md",
+        "size": 16554,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-support-responder.md",
+        "size": 16050,
+        "mode": 420
+      },
+      {
+        "path": "agents/terminal-integration-specialist.md",
+        "size": 26248,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-api-tester.md",
+        "size": 13183,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-code-polisher.md",
+        "size": 19168,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-performance-benchmarker.md",
+        "size": 12832,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-qa-verification-specialist.md",
+        "size": 16616,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-test-results-analyzer.md",
+        "size": 15252,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-tool-evaluator.md",
+        "size": 8132,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-workflow-optimizer.md",
+        "size": 11644,
+        "mode": 420
+      },
+      {
+        "path": "agents/visionos-spatial-engineer.md",
+        "size": 22349,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-cockpit-interaction-specialist.md",
+        "size": 24051,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-immersive-developer.md",
+        "size": 25594,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-interface-architect.md",
+        "size": 22639,
+        "mode": 420
+      },
+      {
+        "path": "bin/install.js",
+        "size": 71686,
+        "mode": 420
+      },
+      {
+        "path": "bin/runtime-metadata.js",
+        "size": 18900,
+        "mode": 420
+      },
+      {
+        "path": "checksums.sha256",
+        "size": 13013,
+        "mode": 420
+      },
+      {
+        "path": "commands/advise.md",
+        "size": 10719,
+        "mode": 420
+      },
+      {
+        "path": "commands/agent.md",
+        "size": 5197,
+        "mode": 420
+      },
+      {
+        "path": "commands/board.md",
+        "size": 11924,
+        "mode": 420
+      },
+      {
+        "path": "commands/build.md",
+        "size": 32038,
+        "mode": 420
+      },
+      {
+        "path": "commands/explore.md",
+        "size": 6379,
+        "mode": 420
+      },
+      {
+        "path": "commands/learn.md",
+        "size": 8926,
+        "mode": 420
+      },
+      {
+        "path": "commands/map.md",
+        "size": 6658,
+        "mode": 420
+      },
+      {
+        "path": "commands/milestone.md",
+        "size": 10302,
+        "mode": 420
+      },
+      {
+        "path": "commands/plan.md",
+        "size": 28384,
+        "mode": 420
+      },
+      {
+        "path": "commands/polish.md",
+        "size": 17559,
+        "mode": 420
+      },
+      {
+        "path": "commands/portfolio.md",
+        "size": 10195,
+        "mode": 420
+      },
+      {
+        "path": "commands/quick.md",
+        "size": 14640,
+        "mode": 420
+      },
+      {
+        "path": "commands/retro.md",
+        "size": 8698,
+        "mode": 420
+      },
+      {
+        "path": "commands/review.md",
+        "size": 42659,
+        "mode": 420
+      },
+      {
+        "path": "commands/ship.md",
+        "size": 12255,
+        "mode": 420
+      },
+      {
+        "path": "commands/start.md",
+        "size": 9300,
+        "mode": 420
+      },
+      {
+        "path": "commands/status.md",
+        "size": 13462,
+        "mode": 420
+      },
+      {
+        "path": "commands/update.md",
+        "size": 4184,
+        "mode": 420
+      },
+      {
+        "path": "commands/validate.md",
+        "size": 13947,
+        "mode": 420
+      },
+      {
+        "path": "docs/control-modes.md",
+        "size": 6932,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-audit.md",
+        "size": 6138,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-certification-checklists.md",
+        "size": 7443,
+        "mode": 420
+      },
+      {
+        "path": "docs/security/install-integrity.md",
+        "size": 1155,
+        "mode": 420
+      },
+      {
+        "path": "docs/settings.schema.json",
+        "size": 5628,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1611,
+        "mode": 420
+      },
+      {
+        "path": "settings.json",
+        "size": 1204,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-creator/SKILL.md",
+        "size": 16006,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/CATALOG.md",
+        "size": 22382,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/DOMAINS.md",
+        "size": 16241,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/GAP_ANALYSIS.md",
+        "size": 26754,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md",
+        "size": 1459,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/SKILL.md",
+        "size": 11169,
+        "mode": 420
+      },
+      {
+        "path": "skills/authority-enforcer/SKILL.md",
+        "size": 31842,
+        "mode": 420
+      },
+      {
+        "path": "skills/board-of-directors/SKILL.md",
+        "size": 32658,
+        "mode": 420
+      },
+      {
+        "path": "skills/cli-dispatch/SKILL.md",
+        "size": 23611,
+        "mode": 420
+      },
+      {
+        "path": "skills/code-polish/SKILL.md",
+        "size": 28620,
+        "mode": 420
+      },
+      {
+        "path": "skills/codebase-mapper/SKILL.md",
+        "size": 86881,
+        "mode": 420
+      },
+      {
+        "path": "skills/design-workflows/SKILL.md",
+        "size": 56502,
+        "mode": 420
+      },
+      {
+        "path": "skills/execution-tracker/SKILL.md",
+        "size": 14030,
+        "mode": 420
+      },
+      {
+        "path": "skills/github-sync/SKILL.md",
+        "size": 24413,
+        "mode": 420
+      },
+      {
+        "path": "skills/hooks-integration/SKILL.md",
+        "size": 5619,
+        "mode": 420
+      },
+      {
+        "path": "skills/intent-router/SKILL.md",
+        "size": 52318,
+        "mode": 420
+      },
+      {
+        "path": "skills/legion/SKILL.md",
+        "size": 2423,
+        "mode": 420
+      },
+      {
+        "path": "skills/marketing-workflows/SKILL.md",
+        "size": 27769,
+        "mode": 420
+      },
+      {
+        "path": "skills/memory-manager/SKILL.md",
+        "size": 52408,
+        "mode": 420
+      },
+      {
+        "path": "skills/milestone-tracker/SKILL.md",
+        "size": 17183,
+        "mode": 420
+      },
+      {
+        "path": "skills/phase-decomposer/SKILL.md",
+        "size": 53315,
+        "mode": 420
+      },
+      {
+        "path": "skills/plan-critique/SKILL.md",
+        "size": 26251,
+        "mode": 420
+      },
+      {
+        "path": "skills/polymath-engine/SKILL.md",
+        "size": 5685,
+        "mode": 420
+      },
+      {
+        "path": "skills/portfolio-manager/SKILL.md",
+        "size": 13730,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/SKILL.md",
+        "size": 17951,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/project-template.md",
+        "size": 706,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/roadmap-template.md",
+        "size": 720,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/state-template.md",
+        "size": 621,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-evaluators/SKILL.md",
+        "size": 65932,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-loop/SKILL.md",
+        "size": 62212,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-panel/SKILL.md",
+        "size": 32846,
+        "mode": 420
+      },
+      {
+        "path": "skills/security-review/SKILL.md",
+        "size": 27319,
+        "mode": 420
+      },
+      {
+        "path": "skills/ship-pipeline/SKILL.md",
+        "size": 13430,
+        "mode": 420
+      },
+      {
+        "path": "skills/spec-pipeline/SKILL.md",
+        "size": 34493,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/SKILL.md",
+        "size": 94932,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-A.md",
+        "size": 4628,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-B.md",
+        "size": 6145,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-core/SKILL.md",
+        "size": 13789,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-domains/SKILL.md",
+        "size": 1468,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-github/SKILL.md",
+        "size": 1591,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-memory/SKILL.md",
+        "size": 1396,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common/SKILL.md",
+        "size": 49717,
+        "mode": 420
+      }
+    ],
+    "entryCount": 135,
+    "bundled": []
+  }
+]

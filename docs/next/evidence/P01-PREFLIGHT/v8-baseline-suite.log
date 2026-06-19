@@ -1,0 +1,3039 @@
+P01 preflight v8 baseline suite
+started_at: 2026-06-19T19:31:03.9593039-04:00
+source_repo: C:\Users\dasbl\Documents\legion
+baseline_commit: 855e975beec3bac6dc06db598081b6ac11ea8e14
+worktree: C:\Users\dasbl\AppData\Local\Temp\legion-v8-baseline-p01-20260619193103
+Preparing worktree (detached HEAD 855e975)
+HEAD is now at 855e975 Merge pull request #21 from 9thLevelSoftware/codex/redesign-legion-explore-and-map
+
+>>> npm ci
+
+added 16 packages, and audited 17 packages in 782ms
+
+3 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+>>> npm run validate
+
+> @9thlevelsoftware/legion@8.0.5 validate
+> bash scripts/validate.sh
+
+
+=== CHECK 0 - Release version sync ===
+  PASS  Version sync package.json == CHANGELOG.md (8.0.5)
+
+=== CHECK 1 - Agent frontmatter schema ===
+  PASS  agents-orchestrator.md
+  PASS  data-analytics-engineer.md
+  PASS  design-brand-guardian.md
+  PASS  design-ui-designer.md
+  PASS  design-ux-architect.md
+  PASS  design-ux-researcher.md
+  PASS  design-visual-storyteller.md
+  PASS  design-whimsy-injector.md
+  PASS  engineering-ai-engineer.md
+  PASS  engineering-backend-architect.md
+  PASS  engineering-frontend-developer.md
+  PASS  engineering-infrastructure-devops.md
+  PASS  engineering-laravel-specialist.md
+  PASS  engineering-mobile-app-builder.md
+  PASS  engineering-rapid-prototyper.md
+  PASS  engineering-security-engineer.md
+  PASS  engineering-senior-developer.md
+  PASS  lsp-index-engineer.md
+  PASS  macos-spatial-metal-engineer.md
+  PASS  marketing-app-store-optimizer.md
+  PASS  marketing-content-social-strategist.md
+  PASS  marketing-growth-hacker.md
+  PASS  marketing-social-platform-specialist.md
+  PASS  polymath.md
+  PASS  product-feedback-synthesizer.md
+  PASS  product-sprint-prioritizer.md
+  PASS  product-technical-writer.md
+  PASS  product-trend-researcher.md
+  PASS  project-management-experiment-tracker.md
+  PASS  project-management-project-shepherd.md
+  PASS  project-management-studio-operations.md
+  PASS  project-management-studio-producer.md
+  PASS  project-manager-senior.md
+  PASS  support-executive-summary-generator.md
+  PASS  support-finance-tracker.md
+  PASS  support-legal-compliance-checker.md
+  PASS  support-support-responder.md
+  PASS  terminal-integration-specialist.md
+  PASS  testing-api-tester.md
+  PASS  testing-code-polisher.md
+  PASS  testing-performance-benchmarker.md
+  PASS  testing-qa-verification-specialist.md
+  PASS  testing-test-results-analyzer.md
+  PASS  testing-tool-evaluator.md
+  PASS  testing-workflow-optimizer.md
+  PASS  visionos-spatial-engineer.md
+  PASS  xr-cockpit-interaction-specialist.md
+  PASS  xr-immersive-developer.md
+  PASS  xr-interface-architect.md
+
+=== CHECK 2 - Agent-registry sync ===
+  PASS  agents-orchestrator - found in registry
+  PASS  data-analytics-engineer - found in registry
+  PASS  design-brand-guardian - found in registry
+  PASS  design-ui-designer - found in registry
+  PASS  design-ux-architect - found in registry
+  PASS  design-ux-researcher - found in registry
+  PASS  design-visual-storyteller - found in registry
+  PASS  design-whimsy-injector - found in registry
+  PASS  engineering-ai-engineer - found in registry
+  PASS  engineering-backend-architect - found in registry
+  PASS  engineering-frontend-developer - found in registry
+  PASS  engineering-infrastructure-devops - found in registry
+  PASS  engineering-laravel-specialist - found in registry
+  PASS  engineering-mobile-app-builder - found in registry
+  PASS  engineering-rapid-prototyper - found in registry
+  PASS  engineering-security-engineer - found in registry
+  PASS  engineering-senior-developer - found in registry
+  PASS  lsp-index-engineer - found in registry
+  PASS  macos-spatial-metal-engineer - found in registry
+  PASS  marketing-app-store-optimizer - found in registry
+  PASS  marketing-content-social-strategist - found in registry
+  PASS  marketing-growth-hacker - found in registry
+  PASS  marketing-social-platform-specialist - found in registry
+  PASS  polymath - found in registry
+  PASS  product-feedback-synthesizer - found in registry
+  PASS  product-sprint-prioritizer - found in registry
+  PASS  product-technical-writer - found in registry
+  PASS  product-trend-researcher - found in registry
+  PASS  project-management-experiment-tracker - found in registry
+  PASS  project-management-project-shepherd - found in registry
+  PASS  project-management-studio-operations - found in registry
+  PASS  project-management-studio-producer - found in registry
+  PASS  project-manager-senior - found in registry
+  PASS  support-executive-summary-generator - found in registry
+  PASS  support-finance-tracker - found in registry
+  PASS  support-legal-compliance-checker - found in registry
+  PASS  support-support-responder - found in registry
+  PASS  terminal-integration-specialist - found in registry
+  PASS  testing-api-tester - found in registry
+  PASS  testing-code-polisher - found in registry
+  PASS  testing-performance-benchmarker - found in registry
+  PASS  testing-qa-verification-specialist - found in registry
+  PASS  testing-test-results-analyzer - found in registry
+  PASS  testing-tool-evaluator - found in registry
+  PASS  testing-workflow-optimizer - found in registry
+  PASS  visionos-spatial-engineer - found in registry
+  PASS  xr-cockpit-interaction-specialist - found in registry
+  PASS  xr-immersive-developer - found in registry
+  PASS  xr-interface-architect - found in registry
+  PASS  registry -> design-brand-guardian.md exists
+  PASS  registry -> design-ui-designer.md exists
+  PASS  registry -> design-ux-architect.md exists
+  PASS  registry -> design-ux-researcher.md exists
+  PASS  registry -> design-visual-storyteller.md exists
+  PASS  registry -> design-whimsy-injector.md exists
+  PASS  registry -> engineering-ai-engineer.md exists
+  PASS  registry -> engineering-backend-architect.md exists
+  PASS  registry -> engineering-infrastructure-devops.md exists
+  PASS  registry -> engineering-frontend-developer.md exists
+  PASS  registry -> engineering-laravel-specialist.md exists
+  PASS  registry -> engineering-mobile-app-builder.md exists
+  PASS  registry -> engineering-rapid-prototyper.md exists
+  PASS  registry -> engineering-security-engineer.md exists
+  PASS  registry -> engineering-senior-developer.md exists
+  PASS  registry -> marketing-app-store-optimizer.md exists
+  PASS  registry -> marketing-content-social-strategist.md exists
+  PASS  registry -> marketing-growth-hacker.md exists
+  PASS  registry -> marketing-social-platform-specialist.md exists
+  PASS  registry -> product-feedback-synthesizer.md exists
+  PASS  registry -> product-sprint-prioritizer.md exists
+  PASS  registry -> product-technical-writer.md exists
+  PASS  registry -> product-trend-researcher.md exists
+  PASS  registry -> project-management-experiment-tracker.md exists
+  PASS  registry -> project-management-project-shepherd.md exists
+  PASS  registry -> project-management-studio-operations.md exists
+  PASS  registry -> project-management-studio-producer.md exists
+  PASS  registry -> project-manager-senior.md exists
+  PASS  registry -> macos-spatial-metal-engineer.md exists
+  PASS  registry -> terminal-integration-specialist.md exists
+  PASS  registry -> visionos-spatial-engineer.md exists
+  PASS  registry -> xr-cockpit-interaction-specialist.md exists
+  PASS  registry -> xr-immersive-developer.md exists
+  PASS  registry -> xr-interface-architect.md exists
+  PASS  registry -> agents-orchestrator.md exists
+  PASS  registry -> data-analytics-engineer.md exists
+  PASS  registry -> lsp-index-engineer.md exists
+  PASS  registry -> polymath.md exists
+  PASS  registry -> support-executive-summary-generator.md exists
+  PASS  registry -> support-finance-tracker.md exists
+  PASS  registry -> support-legal-compliance-checker.md exists
+  PASS  registry -> support-support-responder.md exists
+  PASS  registry -> testing-api-tester.md exists
+  PASS  registry -> testing-code-polisher.md exists
+  PASS  registry -> testing-performance-benchmarker.md exists
+  PASS  registry -> testing-qa-verification-specialist.md exists
+  PASS  registry -> testing-test-results-analyzer.md exists
+  PASS  registry -> testing-tool-evaluator.md exists
+  PASS  registry -> testing-workflow-optimizer.md exists
+
+=== CHECK 3 - Persona structure contract ===
+  PASS  agents-orchestrator.md
+  PASS  data-analytics-engineer.md
+  PASS  design-brand-guardian.md
+  PASS  design-ui-designer.md
+  PASS  design-ux-architect.md
+  PASS  design-ux-researcher.md
+  PASS  design-visual-storyteller.md
+  PASS  design-whimsy-injector.md
+  PASS  engineering-ai-engineer.md
+  PASS  engineering-backend-architect.md
+  PASS  engineering-frontend-developer.md
+  PASS  engineering-infrastructure-devops.md
+  PASS  engineering-laravel-specialist.md
+  PASS  engineering-mobile-app-builder.md
+  PASS  engineering-rapid-prototyper.md
+  PASS  engineering-security-engineer.md
+  PASS  engineering-senior-developer.md
+  PASS  lsp-index-engineer.md
+  PASS  macos-spatial-metal-engineer.md
+  PASS  marketing-app-store-optimizer.md
+  PASS  marketing-content-social-strategist.md
+  PASS  marketing-growth-hacker.md
+  PASS  marketing-social-platform-specialist.md
+  PASS  polymath.md
+  PASS  product-feedback-synthesizer.md
+  PASS  product-sprint-prioritizer.md
+  PASS  product-technical-writer.md
+  PASS  product-trend-researcher.md
+  PASS  project-management-experiment-tracker.md
+  PASS  project-management-project-shepherd.md
+  PASS  project-management-studio-operations.md
+  PASS  project-management-studio-producer.md
+  PASS  project-manager-senior.md
+  PASS  support-executive-summary-generator.md
+  PASS  support-finance-tracker.md
+  PASS  support-legal-compliance-checker.md
+  PASS  support-support-responder.md
+  PASS  terminal-integration-specialist.md
+  PASS  testing-api-tester.md
+  PASS  testing-code-polisher.md
+  PASS  testing-performance-benchmarker.md
+  PASS  testing-qa-verification-specialist.md
+  PASS  testing-test-results-analyzer.md
+  PASS  testing-tool-evaluator.md
+  PASS  testing-workflow-optimizer.md
+  PASS  visionos-spatial-engineer.md
+  PASS  xr-cockpit-interaction-specialist.md
+  PASS  xr-immersive-developer.md
+  PASS  xr-interface-architect.md
+
+=== CHECK 4 - Skill path resolution in <execution_context> blocks ===
+  PASS  advise.md -> skills/workflow-common-core/SKILL.md
+  PASS  advise.md -> skills/agent-registry/SKILL.md
+  PASS  advise.md -> skills/agent-registry/CATALOG.md
+  PASS  agent.md -> skills/workflow-common-core/SKILL.md
+  PASS  agent.md -> skills/agent-registry/SKILL.md
+  PASS  agent.md -> skills/agent-registry/CATALOG.md
+  PASS  agent.md -> skills/agent-creator/SKILL.md
+  PASS  board.md -> skills/workflow-common-core/SKILL.md
+  PASS  board.md -> skills/agent-registry/SKILL.md
+  PASS  board.md -> skills/board-of-directors/SKILL.md
+  PASS  board.md -> skills/cli-dispatch/SKILL.md
+  PASS  build.md -> skills/workflow-common-core/SKILL.md
+  PASS  build.md -> skills/agent-registry/SKILL.md
+  PASS  build.md -> skills/agent-registry/CATALOG.md
+  PASS  build.md -> skills/wave-executor/SKILL.md
+  PASS  build.md -> skills/execution-tracker/SKILL.md
+  PASS  build.md -> skills/intent-router/SKILL.md
+  PASS  explore.md -> skills/workflow-common-core/SKILL.md
+  PASS  explore.md -> skills/questioning-flow/SKILL.md
+  PASS  explore.md -> skills/polymath-engine/SKILL.md
+  PASS  learn.md -> skills/workflow-common-core/SKILL.md
+  PASS  learn.md -> skills/memory-manager/SKILL.md
+  PASS  map.md -> skills/workflow-common-core/SKILL.md
+  PASS  map.md -> skills/codebase-mapper/SKILL.md
+  PASS  milestone.md -> skills/workflow-common-core/SKILL.md
+  PASS  milestone.md -> skills/milestone-tracker/SKILL.md
+  PASS  milestone.md -> skills/execution-tracker/SKILL.md
+  PASS  plan.md -> skills/workflow-common-core/SKILL.md
+  PASS  plan.md -> skills/agent-registry/SKILL.md
+  PASS  plan.md -> skills/agent-registry/CATALOG.md
+  PASS  plan.md -> skills/phase-decomposer/SKILL.md
+  PASS  polish.md -> skills/workflow-common-core/SKILL.md
+  PASS  polish.md -> skills/code-polish/SKILL.md
+  PASS  polish.md -> skills/agent-registry/SKILL.md
+  PASS  portfolio.md -> skills/workflow-common-core/SKILL.md
+  PASS  portfolio.md -> skills/portfolio-manager/SKILL.md
+  PASS  portfolio.md -> skills/agent-registry/SKILL.md
+  PASS  quick.md -> skills/workflow-common-core/SKILL.md
+  PASS  quick.md -> skills/agent-registry/SKILL.md
+  PASS  quick.md -> skills/agent-registry/CATALOG.md
+  PASS  quick.md -> skills/review-loop/SKILL.md
+  PASS  quick.md -> skills/workflow-common-github/SKILL.md
+  PASS  retro.md -> skills/workflow-common-core/SKILL.md
+  PASS  retro.md -> skills/memory-manager/SKILL.md
+  PASS  retro.md -> skills/execution-tracker/SKILL.md
+  PASS  review.md -> skills/workflow-common-core/SKILL.md
+  PASS  review.md -> skills/agent-registry/SKILL.md
+  PASS  review.md -> skills/agent-registry/CATALOG.md
+  PASS  review.md -> skills/review-loop/SKILL.md
+  PASS  review.md -> skills/review-panel/SKILL.md
+  PASS  review.md -> skills/execution-tracker/SKILL.md
+  PASS  review.md -> skills/intent-router/SKILL.md
+  PASS  review.md -> skills/code-polish/SKILL.md
+  PASS  ship.md -> skills/workflow-common-core/SKILL.md
+  PASS  ship.md -> skills/ship-pipeline/SKILL.md
+  PASS  ship.md -> skills/execution-tracker/SKILL.md
+  PASS  start.md -> skills/workflow-common-core/SKILL.md
+  PASS  start.md -> skills/agent-registry/SKILL.md
+  PASS  start.md -> skills/questioning-flow/SKILL.md
+  PASS  start.md -> skills/portfolio-manager/SKILL.md
+  PASS  start.md -> skills/codebase-mapper/SKILL.md
+  PASS  status.md -> skills/workflow-common-core/SKILL.md
+  PASS  status.md -> skills/execution-tracker/SKILL.md
+  PASS  status.md -> skills/milestone-tracker/SKILL.md
+  PASS  status.md -> skills/intent-router/SKILL.md
+  PASS  update.md -> skills/workflow-common-core/SKILL.md
+  PASS  validate.md -> skills/workflow-common-core/SKILL.md
+  PASS  validate.md -> skills/agent-registry/SKILL.md
+
+=== CHECK 5 - Agent minimum size contract + telemetry ===
+  PASS  agents-orchestrator.md - 269 lines
+  PASS  data-analytics-engineer.md - 281 lines
+  PASS  design-brand-guardian.md - 336 lines
+  PASS  design-ui-designer.md - 179 lines
+  PASS  design-ux-architect.md - 218 lines
+  PASS  design-ux-researcher.md - 354 lines
+  PASS  design-visual-storyteller.md - 163 lines
+  PASS  design-whimsy-injector.md - 172 lines
+  PASS  engineering-ai-engineer.md - 160 lines
+  PASS  engineering-backend-architect.md - 249 lines
+  PASS  engineering-frontend-developer.md - 239 lines
+  PASS  engineering-infrastructure-devops.md - 378 lines
+  PASS  engineering-laravel-specialist.md - 259 lines
+  PASS  engineering-mobile-app-builder.md - 171 lines
+  PASS  engineering-rapid-prototyper.md - 171 lines
+  PASS  engineering-security-engineer.md - 347 lines
+  PASS  engineering-senior-developer.md - 350 lines
+  PASS  lsp-index-engineer.md - 328 lines
+  PASS  macos-spatial-metal-engineer.md - 351 lines
+  PASS  marketing-app-store-optimizer.md - 334 lines
+  PASS  marketing-content-social-strategist.md - 200 lines
+  PASS  marketing-growth-hacker.md - 225 lines
+  PASS  marketing-social-platform-specialist.md - 161 lines
+  PASS  polymath.md - 318 lines
+  PASS  product-feedback-synthesizer.md - 255 lines
+  PASS  product-sprint-prioritizer.md - 189 lines
+  PASS  product-technical-writer.md - 471 lines
+  PASS  product-trend-researcher.md - 176 lines
+  PASS  project-management-experiment-tracker.md - 212 lines
+  PASS  project-management-project-shepherd.md - 208 lines
+  PASS  project-management-studio-operations.md - 214 lines
+  PASS  project-management-studio-producer.md - 217 lines
+  PASS  project-manager-senior.md - 170 lines
+  PASS  support-executive-summary-generator.md - 226 lines
+  PASS  support-finance-tracker.md - 172 lines
+  PASS  support-legal-compliance-checker.md - 321 lines
+  PASS  support-support-responder.md - 309 lines
+  PASS  terminal-integration-specialist.md - 227 lines
+  PASS  testing-api-tester.md - 320 lines
+  PASS  testing-code-polisher.md - 221 lines
+  PASS  testing-performance-benchmarker.md - 282 lines
+  PASS  testing-qa-verification-specialist.md - 329 lines
+  PASS  testing-test-results-analyzer.md - 319 lines
+  PASS  testing-tool-evaluator.md - 158 lines
+  PASS  testing-workflow-optimizer.md - 155 lines
+  PASS  visionos-spatial-engineer.md - 214 lines
+  PASS  xr-cockpit-interaction-specialist.md - 212 lines
+  PASS  xr-immersive-developer.md - 248 lines
+  PASS  xr-interface-architect.md - 206 lines
+  INFO  under-80: 0, over-300 (telemetry): 15, over-350 (telemetry): 4
+
+=== CHECK 6 - README metrics block sync ===
+  PASS  README metrics block is in sync
+
+=== CHECK 7 - Release consistency checks ===
+
+Context Budget Telemetry:
+- commands/build.md: 203.7KB (~52155 tokens), skills=6, soft=180KB, hard=225.0KB
+- commands/plan.md: 98.3KB (~25164 tokens), skills=4, soft=180KB, hard=225.0KB
+- commands/review.md: 231.8KB (~59342 tokens), skills=8, soft=190KB, hard=237.5KB
+- commands/status.md: 95.0KB (~24330 tokens), skills=4, soft=120KB, hard=150.0KB
+
+Warnings:
+- commands/build.md context budget above soft ceiling: 203.7KB (soft 180KB)
+- commands/review.md context budget above soft ceiling: 231.8KB (soft 190KB)
+Release checks passed.
+  PASS  scripts/release-check.js
+
+========================================
+  SUMMARY
+  PASS: 316   FAIL: 0   WARN: 0
+========================================
+  Result: ALL REQUIRED CHECKS PASSED
+
+>>> npm run release:check
+
+> @9thlevelsoftware/legion@8.0.5 release:check
+> node scripts/release-check.js
+
+
+Context Budget Telemetry:
+- commands/build.md: 203.7KB (~52155 tokens), skills=6, soft=180KB, hard=225.0KB
+- commands/plan.md: 98.3KB (~25164 tokens), skills=4, soft=180KB, hard=225.0KB
+- commands/review.md: 231.8KB (~59342 tokens), skills=8, soft=190KB, hard=237.5KB
+- commands/status.md: 95.0KB (~24330 tokens), skills=4, soft=120KB, hard=150.0KB
+
+Warnings:
+- commands/build.md context budget above soft ceiling: 203.7KB (soft 180KB)
+- commands/review.md context budget above soft ceiling: 231.8KB (soft 190KB)
+Release checks passed.
+
+>>> npm test
+
+> @9thlevelsoftware/legion@8.0.5 test
+> node --test
+
+▶ Adapter Conformance: YAML Frontmatter - CLI Identity
+  ▶ aider.md
+    ✔ cli is a non-empty string (0.4476ms)
+    ✔ cli_display_name is a non-empty string (0.0848ms)
+    ✔ version is a non-empty string (0.0849ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0792ms)
+  ✔ aider.md (1.2312ms)
+  ▶ antigravity-cli.md
+    ✔ cli is a non-empty string (0.0898ms)
+    ✔ cli_display_name is a non-empty string (0.0569ms)
+    ✔ version is a non-empty string (0.048ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0474ms)
+  ✔ antigravity-cli.md (0.3719ms)
+  ▶ claude-code.md
+    ✔ cli is a non-empty string (0.0942ms)
+    ✔ cli_display_name is a non-empty string (0.0747ms)
+    ✔ version is a non-empty string (0.0578ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0294ms)
+  ✔ claude-code.md (0.3486ms)
+  ▶ codex-cli.md
+    ✔ cli is a non-empty string (0.0467ms)
+    ✔ cli_display_name is a non-empty string (0.0449ms)
+    ✔ version is a non-empty string (0.0287ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0233ms)
+  ✔ codex-cli.md (0.2204ms)
+  ▶ copilot-cli.md
+    ✔ cli is a non-empty string (0.0379ms)
+    ✔ cli_display_name is a non-empty string (0.0384ms)
+    ✔ version is a non-empty string (0.0413ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0266ms)
+  ✔ copilot-cli.md (0.2077ms)
+  ▶ cursor.md
+    ✔ cli is a non-empty string (0.0809ms)
+    ✔ cli_display_name is a non-empty string (0.0378ms)
+    ✔ version is a non-empty string (0.026ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0309ms)
+  ✔ cursor.md (0.2353ms)
+  ▶ gemini-cli.md
+    ✔ cli is a non-empty string (0.0532ms)
+    ✔ cli_display_name is a non-empty string (0.02ms)
+    ✔ version is a non-empty string (0.0156ms)
+    ✔ support_tier is one of certified, beta, experimental (0.017ms)
+  ✔ gemini-cli.md (0.1576ms)
+  ▶ kilo-cli.md
+    ✔ cli is a non-empty string (0.0381ms)
+    ✔ cli_display_name is a non-empty string (0.0264ms)
+    ✔ version is a non-empty string (0.0155ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0204ms)
+  ✔ kilo-cli.md (0.146ms)
+  ▶ kilo-code.md
+    ✔ cli is a non-empty string (0.0549ms)
+    ✔ cli_display_name is a non-empty string (0.0195ms)
+    ✔ version is a non-empty string (0.0194ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0281ms)
+  ✔ kilo-code.md (0.2031ms)
+  ▶ kiro-cli.md
+    ✔ cli is a non-empty string (0.0516ms)
+    ✔ cli_display_name is a non-empty string (0.0294ms)
+    ✔ version is a non-empty string (0.0223ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0174ms)
+  ✔ kiro-cli.md (0.1749ms)
+  ▶ opencode.md
+    ✔ cli is a non-empty string (0.0315ms)
+    ✔ cli_display_name is a non-empty string (0.0192ms)
+    ✔ version is a non-empty string (0.0142ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0254ms)
+  ✔ opencode.md (0.1316ms)
+  ▶ windsurf.md
+    ✔ cli is a non-empty string (0.0491ms)
+    ✔ cli_display_name is a non-empty string (0.0193ms)
+    ✔ version is a non-empty string (0.0157ms)
+    ✔ support_tier is one of certified, beta, experimental (0.0159ms)
+  ✔ windsurf.md (0.1519ms)
+✔ Adapter Conformance: YAML Frontmatter - CLI Identity (4.0786ms)
+▶ Adapter Conformance: YAML Frontmatter - Capabilities
+  ▶ aider.md
+    ✔ capabilities.parallel_execution is a boolean (0.0784ms)
+    ✔ capabilities.agent_spawning is a boolean (0.015ms)
+    ✔ capabilities.structured_messaging is a boolean (0.014ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0285ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0155ms)
+  ✔ aider.md (0.2181ms)
+  ▶ antigravity-cli.md
+    ✔ capabilities.parallel_execution is a boolean (0.0442ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0146ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0138ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0165ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0217ms)
+  ✔ antigravity-cli.md (0.1663ms)
+  ▶ claude-code.md
+    ✔ capabilities.parallel_execution is a boolean (0.0529ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0143ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0139ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0143ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0647ms)
+  ✔ claude-code.md (1.2349ms)
+  ▶ codex-cli.md
+    ✔ capabilities.parallel_execution is a boolean (0.038ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0138ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0133ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0126ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0127ms)
+  ✔ codex-cli.md (0.1388ms)
+  ▶ copilot-cli.md
+    ✔ capabilities.parallel_execution is a boolean (0.0341ms)
+    ✔ capabilities.agent_spawning is a boolean (0.016ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0125ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0209ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0125ms)
+  ✔ copilot-cli.md (0.1376ms)
+  ▶ cursor.md
+    ✔ capabilities.parallel_execution is a boolean (0.04ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0122ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0124ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0154ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0118ms)
+  ✔ cursor.md (0.1733ms)
+  ▶ gemini-cli.md
+    ✔ capabilities.parallel_execution is a boolean (0.0429ms)
+    ✔ capabilities.agent_spawning is a boolean (0.013ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0134ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0136ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0222ms)
+  ✔ gemini-cli.md (0.1555ms)
+  ▶ kilo-cli.md
+    ✔ capabilities.parallel_execution is a boolean (0.0623ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0236ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0381ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0276ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0214ms)
+  ✔ kilo-cli.md (0.2568ms)
+  ▶ kilo-code.md
+    ✔ capabilities.parallel_execution is a boolean (0.0614ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0243ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0254ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0937ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0359ms)
+  ✔ kilo-code.md (0.3473ms)
+  ▶ kiro-cli.md
+    ✔ capabilities.parallel_execution is a boolean (0.069ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0222ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0839ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0149ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0146ms)
+  ✔ kiro-cli.md (0.2528ms)
+  ▶ opencode.md
+    ✔ capabilities.parallel_execution is a boolean (0.0321ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0141ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0205ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0245ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0255ms)
+  ✔ opencode.md (0.1614ms)
+  ▶ windsurf.md
+    ✔ capabilities.parallel_execution is a boolean (0.0496ms)
+    ✔ capabilities.agent_spawning is a boolean (0.0173ms)
+    ✔ capabilities.structured_messaging is a boolean (0.0258ms)
+    ✔ capabilities.native_task_tracking is a boolean (0.0212ms)
+    ✔ capabilities.read_only_agents is a boolean (0.0166ms)
+  ✔ windsurf.md (0.1786ms)
+✔ Adapter Conformance: YAML Frontmatter - Capabilities (3.6035ms)
+▶ Adapter Conformance: YAML Frontmatter - Detection
+  ▶ aider.md
+    ✔ detection.primary is a non-empty string (0.0644ms)
+    ✔ detection.secondary is a non-empty string (0.0389ms)
+  ✔ aider.md (0.146ms)
+  ▶ antigravity-cli.md
+    ✔ detection.primary is a non-empty string (0.023ms)
+    ✔ detection.secondary is a non-empty string (0.0388ms)
+  ✔ antigravity-cli.md (0.0843ms)
+  ▶ claude-code.md
+    ✔ detection.primary is a non-empty string (0.0253ms)
+    ✔ detection.secondary is a non-empty string (0.0186ms)
+  ✔ claude-code.md (0.0752ms)
+  ▶ codex-cli.md
+    ✔ detection.primary is a non-empty string (0.0222ms)
+    ✔ detection.secondary is a non-empty string (0.0137ms)
+  ✔ codex-cli.md (0.0608ms)
+  ▶ copilot-cli.md
+    ✔ detection.primary is a non-empty string (0.0229ms)
+    ✔ detection.secondary is a non-empty string (0.0142ms)
+  ✔ copilot-cli.md (0.0642ms)
+  ▶ cursor.md
+    ✔ detection.primary is a non-empty string (0.0246ms)
+    ✔ detection.secondary is a non-empty string (0.0137ms)
+  ✔ cursor.md (0.0592ms)
+  ▶ gemini-cli.md
+    ✔ detection.primary is a non-empty string (0.0298ms)
+    ✔ detection.secondary is a non-empty string (0.0154ms)
+  ✔ gemini-cli.md (0.0816ms)
+  ▶ kilo-cli.md
+    ✔ detection.primary is a non-empty string (0.0278ms)
+    ✔ detection.secondary is a non-empty string (0.0145ms)
+  ✔ kilo-cli.md (0.068ms)
+  ▶ kilo-code.md
+    ✔ detection.primary is a non-empty string (0.0257ms)
+    ✔ detection.secondary is a non-empty string (0.0138ms)
+  ✔ kilo-code.md (0.066ms)
+  ▶ kiro-cli.md
+    ✔ detection.primary is a non-empty string (0.0501ms)
+    ✔ detection.secondary is a non-empty string (0.0144ms)
+  ✔ kiro-cli.md (0.0855ms)
+  ▶ opencode.md
+    ✔ detection.primary is a non-empty string (0.0274ms)
+    ✔ detection.secondary is a non-empty string (0.0188ms)
+  ✔ opencode.md (0.0906ms)
+  ▶ windsurf.md
+    ✔ detection.primary is a non-empty string (0.0302ms)
+    ✔ detection.secondary is a non-empty string (0.0135ms)
+  ✔ windsurf.md (0.0717ms)
+✔ Adapter Conformance: YAML Frontmatter - Detection (1.1415ms)
+▶ Adapter Conformance: YAML Frontmatter - Limits & Quirks
+  ▶ aider.md
+    ✔ max_prompt_size is a positive integer (0.0671ms)
+    ✔ known_quirks is an array (0.0288ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.1856ms)
+  ✔ aider.md (0.3186ms)
+  ▶ antigravity-cli.md
+    ✔ max_prompt_size is a positive integer (0.0391ms)
+    ✔ known_quirks is an array (0.0229ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.018ms)
+  ✔ antigravity-cli.md (0.1279ms)
+  ▶ claude-code.md
+    ✔ max_prompt_size is a positive integer (0.0305ms)
+    ✔ known_quirks is an array (0.0135ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0156ms)
+  ✔ claude-code.md (0.1045ms)
+  ▶ codex-cli.md
+    ✔ max_prompt_size is a positive integer (0.0382ms)
+    ✔ known_quirks is an array (0.0153ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0173ms)
+  ✔ codex-cli.md (0.134ms)
+  ▶ copilot-cli.md
+    ✔ max_prompt_size is a positive integer (0.0274ms)
+    ✔ known_quirks is an array (0.014ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0659ms)
+  ✔ copilot-cli.md (0.1477ms)
+  ▶ cursor.md
+    ✔ max_prompt_size is a positive integer (0.0379ms)
+    ✔ known_quirks is an array (0.0168ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0218ms)
+  ✔ cursor.md (0.1098ms)
+  ▶ gemini-cli.md
+    ✔ max_prompt_size is a positive integer (0.0259ms)
+    ✔ known_quirks is an array (0.0123ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0264ms)
+  ✔ gemini-cli.md (0.0895ms)
+  ▶ kilo-cli.md
+    ✔ max_prompt_size is a positive integer (0.0274ms)
+    ✔ known_quirks is an array (0.014ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0147ms)
+  ✔ kilo-cli.md (0.0893ms)
+  ▶ kilo-code.md
+    ✔ max_prompt_size is a positive integer (0.0326ms)
+    ✔ known_quirks is an array (0.026ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0386ms)
+  ✔ kilo-code.md (0.1308ms)
+  ▶ kiro-cli.md
+    ✔ max_prompt_size is a positive integer (0.0356ms)
+    ✔ known_quirks is an array (0.0187ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0164ms)
+  ✔ kiro-cli.md (0.1ms)
+  ▶ opencode.md
+    ✔ max_prompt_size is a positive integer (0.0291ms)
+    ✔ known_quirks is an array (0.0163ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0214ms)
+  ✔ opencode.md (0.1011ms)
+  ▶ windsurf.md
+    ✔ max_prompt_size is a positive integer (0.9678ms)
+    ✔ known_quirks is an array (0.0293ms)
+    ✔ known_quirks entries are lowercase-hyphenated strings (0.0186ms)
+  ✔ windsurf.md (1.0584ms)
+✔ Adapter Conformance: YAML Frontmatter - Limits & Quirks (2.6993ms)
+▶ Adapter Conformance: Required Markdown Sections
+  ▶ aider.md
+    ✔ contains Tool Mappings heading (0.1011ms)
+    ✔ contains Interaction Protocol heading (0.0518ms)
+    ✔ contains Execution Protocol heading (0.0429ms)
+  ✔ aider.md (0.2261ms)
+  ▶ antigravity-cli.md
+    ✔ contains Tool Mappings heading (0.03ms)
+    ✔ contains Interaction Protocol heading (0.0294ms)
+    ✔ contains Execution Protocol heading (0.0147ms)
+  ✔ antigravity-cli.md (0.1028ms)
+  ▶ claude-code.md
+    ✔ contains Tool Mappings heading (0.0263ms)
+    ✔ contains Interaction Protocol heading (0.0142ms)
+    ✔ contains Execution Protocol heading (0.0147ms)
+  ✔ claude-code.md (0.0816ms)
+  ▶ codex-cli.md
+    ✔ contains Tool Mappings heading (0.0322ms)
+    ✔ contains Interaction Protocol heading (0.0216ms)
+    ✔ contains Execution Protocol heading (0.0214ms)
+  ✔ codex-cli.md (0.1059ms)
+  ▶ copilot-cli.md
+    ✔ contains Tool Mappings heading (0.0643ms)
+    ✔ contains Interaction Protocol heading (0.0152ms)
+    ✔ contains Execution Protocol heading (0.0147ms)
+  ✔ copilot-cli.md (0.1349ms)
+  ▶ cursor.md
+    ✔ contains Tool Mappings heading (0.0333ms)
+    ✔ contains Interaction Protocol heading (0.0144ms)
+    ✔ contains Execution Protocol heading (0.014ms)
+  ✔ cursor.md (0.0931ms)
+  ▶ gemini-cli.md
+    ✔ contains Tool Mappings heading (0.0258ms)
+    ✔ contains Interaction Protocol heading (0.0141ms)
+    ✔ contains Execution Protocol heading (0.0139ms)
+  ✔ gemini-cli.md (0.0804ms)
+  ▶ kilo-cli.md
+    ✔ contains Tool Mappings heading (0.029ms)
+    ✔ contains Interaction Protocol heading (0.0141ms)
+    ✔ contains Execution Protocol heading (0.0143ms)
+  ✔ kilo-cli.md (0.0825ms)
+  ▶ kilo-code.md
+    ✔ contains Tool Mappings heading (0.0565ms)
+    ✔ contains Interaction Protocol heading (0.0449ms)
+    ✔ contains Execution Protocol heading (0.0334ms)
+  ✔ kilo-code.md (0.1874ms)
+  ▶ kiro-cli.md
+    ✔ contains Tool Mappings heading (0.0382ms)
+    ✔ contains Interaction Protocol heading (0.0161ms)
+    ✔ contains Execution Protocol heading (0.0251ms)
+  ✔ kiro-cli.md (0.1159ms)
+  ▶ opencode.md
+    ✔ contains Tool Mappings heading (0.0252ms)
+    ✔ contains Interaction Protocol heading (0.0151ms)
+    ✔ contains Execution Protocol heading (0.0139ms)
+  ✔ opencode.md (0.0805ms)
+  ▶ windsurf.md
+    ✔ contains Tool Mappings heading (0.0239ms)
+    ✔ contains Interaction Protocol heading (0.0137ms)
+    ✔ contains Execution Protocol heading (0.0188ms)
+  ✔ windsurf.md (0.0996ms)
+✔ Adapter Conformance: Required Markdown Sections (1.5591ms)
+▶ Adapter Conformance: Tool Mappings Completeness
+  ▶ aider.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0962ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0188ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0149ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0151ms)
+    ✔ contains tool mapping for collect_results (0.0188ms)
+    ✔ contains tool mapping for ask_user (0.0147ms)
+    ✔ contains tool mapping for model_planning (0.0147ms)
+    ✔ contains tool mapping for model_execution (0.0133ms)
+    ✔ contains tool mapping for model_check (0.0147ms)
+    ✔ contains tool mapping for shutdown_agents (0.0162ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0138ms)
+    ✔ contains tool mapping for global_config_dir (0.0143ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0137ms)
+    ✔ contains tool mapping for commit_signature (0.014ms)
+  ✔ aider.md (0.3864ms)
+  ▶ antigravity-cli.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0536ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0137ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0134ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0194ms)
+    ✔ contains tool mapping for collect_results (0.0142ms)
+    ✔ contains tool mapping for ask_user (0.0146ms)
+    ✔ contains tool mapping for model_planning (0.0152ms)
+    ✔ contains tool mapping for model_execution (0.0255ms)
+    ✔ contains tool mapping for model_check (0.0146ms)
+    ✔ contains tool mapping for shutdown_agents (0.0216ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0155ms)
+    ✔ contains tool mapping for global_config_dir (0.0138ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0142ms)
+    ✔ contains tool mapping for commit_signature (0.0151ms)
+  ✔ antigravity-cli.md (0.3563ms)
+  ▶ claude-code.md
+    ✔ contains tool mapping for spawn_agent_personality (0.059ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0138ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0143ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0135ms)
+    ✔ contains tool mapping for collect_results (0.0139ms)
+    ✔ contains tool mapping for ask_user (0.166ms)
+    ✔ contains tool mapping for model_planning (0.0154ms)
+    ✔ contains tool mapping for model_execution (0.0135ms)
+    ✔ contains tool mapping for model_check (0.0139ms)
+    ✔ contains tool mapping for shutdown_agents (0.0138ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0191ms)
+    ✔ contains tool mapping for global_config_dir (0.0134ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0136ms)
+    ✔ contains tool mapping for commit_signature (0.0402ms)
+  ✔ claude-code.md (0.5167ms)
+  ▶ codex-cli.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0602ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0132ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0134ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0127ms)
+    ✔ contains tool mapping for collect_results (0.0127ms)
+    ✔ contains tool mapping for ask_user (0.014ms)
+    ✔ contains tool mapping for model_planning (0.0267ms)
+    ✔ contains tool mapping for model_execution (0.0126ms)
+    ✔ contains tool mapping for model_check (0.0138ms)
+    ✔ contains tool mapping for shutdown_agents (0.0295ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0156ms)
+    ✔ contains tool mapping for global_config_dir (0.0247ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0157ms)
+    ✔ contains tool mapping for commit_signature (0.0151ms)
+  ✔ codex-cli.md (0.3941ms)
+  ▶ copilot-cli.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0602ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0148ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0144ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0144ms)
+    ✔ contains tool mapping for collect_results (0.0139ms)
+    ✔ contains tool mapping for ask_user (0.0136ms)
+    ✔ contains tool mapping for model_planning (0.0133ms)
+    ✔ contains tool mapping for model_execution (0.0261ms)
+    ✔ contains tool mapping for model_check (0.0136ms)
+    ✔ contains tool mapping for shutdown_agents (0.0149ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0138ms)
+    ✔ contains tool mapping for global_config_dir (0.0153ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0168ms)
+    ✔ contains tool mapping for commit_signature (0.0365ms)
+  ✔ copilot-cli.md (0.3874ms)
+  ▶ cursor.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0615ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0146ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0149ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0196ms)
+    ✔ contains tool mapping for collect_results (0.0138ms)
+    ✔ contains tool mapping for ask_user (0.0138ms)
+    ✔ contains tool mapping for model_planning (0.0134ms)
+    ✔ contains tool mapping for model_execution (0.0294ms)
+    ✔ contains tool mapping for model_check (0.0145ms)
+    ✔ contains tool mapping for shutdown_agents (0.0143ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0205ms)
+    ✔ contains tool mapping for global_config_dir (0.0153ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0144ms)
+    ✔ contains tool mapping for commit_signature (0.0145ms)
+  ✔ cursor.md (0.3681ms)
+  ▶ gemini-cli.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0584ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0137ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0144ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0152ms)
+    ✔ contains tool mapping for collect_results (0.0177ms)
+    ✔ contains tool mapping for ask_user (0.0142ms)
+    ✔ contains tool mapping for model_planning (0.0266ms)
+    ✔ contains tool mapping for model_execution (0.015ms)
+    ✔ contains tool mapping for model_check (0.0178ms)
+    ✔ contains tool mapping for shutdown_agents (0.015ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0154ms)
+    ✔ contains tool mapping for global_config_dir (0.014ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0152ms)
+    ✔ contains tool mapping for commit_signature (0.0403ms)
+  ✔ gemini-cli.md (0.4048ms)
+  ▶ kilo-cli.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0762ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0356ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0145ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0229ms)
+    ✔ contains tool mapping for collect_results (0.0143ms)
+    ✔ contains tool mapping for ask_user (0.019ms)
+    ✔ contains tool mapping for model_planning (0.0146ms)
+    ✔ contains tool mapping for model_execution (0.0169ms)
+    ✔ contains tool mapping for model_check (0.0146ms)
+    ✔ contains tool mapping for shutdown_agents (0.0167ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0153ms)
+    ✔ contains tool mapping for global_config_dir (0.0145ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0228ms)
+    ✔ contains tool mapping for commit_signature (0.0139ms)
+  ✔ kilo-cli.md (0.4107ms)
+  ▶ kilo-code.md
+    ✔ contains tool mapping for spawn_agent_personality (0.075ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0138ms)
+    ✔ contains tool mapping for spawn_agent_readonly (1.2319ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0405ms)
+    ✔ contains tool mapping for collect_results (0.0235ms)
+    ✔ contains tool mapping for ask_user (0.0172ms)
+    ✔ contains tool mapping for model_planning (0.0214ms)
+    ✔ contains tool mapping for model_execution (0.0169ms)
+    ✔ contains tool mapping for model_check (0.015ms)
+    ✔ contains tool mapping for shutdown_agents (0.0148ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0161ms)
+    ✔ contains tool mapping for global_config_dir (0.0146ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0147ms)
+    ✔ contains tool mapping for commit_signature (0.0144ms)
+  ✔ kilo-code.md (1.6381ms)
+  ▶ kiro-cli.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0771ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0153ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.014ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0154ms)
+    ✔ contains tool mapping for collect_results (0.026ms)
+    ✔ contains tool mapping for ask_user (0.0172ms)
+    ✔ contains tool mapping for model_planning (0.0374ms)
+    ✔ contains tool mapping for model_execution (0.0152ms)
+    ✔ contains tool mapping for model_check (0.0153ms)
+    ✔ contains tool mapping for shutdown_agents (0.0177ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0151ms)
+    ✔ contains tool mapping for global_config_dir (0.0266ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0151ms)
+    ✔ contains tool mapping for commit_signature (0.0192ms)
+  ✔ kiro-cli.md (0.4254ms)
+  ▶ opencode.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0692ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0144ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0162ms)
+    ✔ contains tool mapping for coordinate_parallel (0.021ms)
+    ✔ contains tool mapping for collect_results (0.0157ms)
+    ✔ contains tool mapping for ask_user (0.0162ms)
+    ✔ contains tool mapping for model_planning (0.0148ms)
+    ✔ contains tool mapping for model_execution (0.0146ms)
+    ✔ contains tool mapping for model_check (0.0166ms)
+    ✔ contains tool mapping for shutdown_agents (0.0171ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0141ms)
+    ✔ contains tool mapping for global_config_dir (0.0218ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0263ms)
+    ✔ contains tool mapping for commit_signature (0.0232ms)
+  ✔ opencode.md (0.3941ms)
+  ▶ windsurf.md
+    ✔ contains tool mapping for spawn_agent_personality (0.0616ms)
+    ✔ contains tool mapping for spawn_agent_autonomous (0.0208ms)
+    ✔ contains tool mapping for spawn_agent_readonly (0.0155ms)
+    ✔ contains tool mapping for coordinate_parallel (0.0134ms)
+    ✔ contains tool mapping for collect_results (0.0145ms)
+    ✔ contains tool mapping for ask_user (0.0149ms)
+    ✔ contains tool mapping for model_planning (0.0146ms)
+    ✔ contains tool mapping for model_execution (0.0134ms)
+    ✔ contains tool mapping for model_check (0.0139ms)
+    ✔ contains tool mapping for shutdown_agents (0.0149ms)
+    ✔ contains tool mapping for cleanup_coordination (0.0147ms)
+    ✔ contains tool mapping for global_config_dir (0.014ms)
+    ✔ contains tool mapping for plugin_discovery_glob (0.0143ms)
+    ✔ contains tool mapping for commit_signature (0.015ms)
+  ✔ windsurf.md (0.345ms)
+✔ Adapter Conformance: Tool Mappings Completeness (6.1966ms)
+▶ Adapter Conformance: Cross-adapter Consistency
+  ✔ exactly 12 adapter files exist (excluding ADAPTER.md) (0.0596ms)
+  ✔ all adapter cli values are unique (1.0025ms)
+✔ Adapter Conformance: Cross-adapter Consistency (1.0995ms)
+▶ Adapter Conformance: Detection Cross-Reference with workflow-common
+  ▶ aider.md
+    ✔ has a matching entry in workflow-common Step 1 (0.07ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.2116ms)
+  ✔ aider.md (0.3177ms)
+  ▶ antigravity-cli.md
+    ✔ has a matching entry in workflow-common Step 1 (0.041ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0442ms)
+  ✔ antigravity-cli.md (0.1131ms)
+  ▶ claude-code.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0298ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0868ms)
+  ✔ claude-code.md (0.1401ms)
+  ▶ codex-cli.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0262ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0256ms)
+  ✔ codex-cli.md (0.0737ms)
+  ▶ copilot-cli.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0263ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0278ms)
+  ✔ copilot-cli.md (0.0739ms)
+  ▶ cursor.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0265ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.016ms)
+  ✔ cursor.md (0.0621ms)
+  ▶ gemini-cli.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0211ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0157ms)
+  ✔ gemini-cli.md (0.0555ms)
+  ▶ kilo-cli.md
+    ✔ has a matching entry in workflow-common Step 1 (0.022ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0178ms)
+  ✔ kilo-cli.md (0.059ms)
+  ▶ kilo-code.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0336ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0415ms)
+  ✔ kilo-code.md (0.0956ms)
+  ▶ kiro-cli.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0288ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0234ms)
+  ✔ kiro-cli.md (0.0706ms)
+  ▶ opencode.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0224ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.0181ms)
+  ✔ opencode.md (0.071ms)
+  ▶ windsurf.md
+    ✔ has a matching entry in workflow-common Step 1 (0.0237ms)
+    ✔ detection.primary shares key paths with workflow-common entry (0.1496ms)
+  ✔ windsurf.md (0.2884ms)
+✔ Adapter Conformance: Detection Cross-Reference with workflow-common (1.5893ms)
+✔ Codex adapter primary detection includes the repo-native plugin marker (0.7077ms)
+▶ Adapter Conformance: Capability-Quirk Consistency
+  ▶ aider.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.1543ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0614ms)
+  ✔ aider.md (0.2656ms)
+  ▶ antigravity-cli.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0477ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0203ms)
+  ✔ antigravity-cli.md (0.1095ms)
+  ▶ claude-code.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0316ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0175ms)
+  ✔ claude-code.md (0.0734ms)
+  ▶ codex-cli.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.029ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0165ms)
+  ✔ codex-cli.md (0.072ms)
+  ▶ copilot-cli.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0326ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0223ms)
+  ✔ copilot-cli.md (0.0775ms)
+  ▶ cursor.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0399ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0216ms)
+  ✔ cursor.md (0.0853ms)
+  ▶ gemini-cli.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0385ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0786ms)
+  ✔ gemini-cli.md (0.1986ms)
+  ▶ kilo-cli.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0473ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.048ms)
+  ✔ kilo-cli.md (0.14ms)
+  ▶ kilo-code.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.06ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0526ms)
+  ✔ kilo-code.md (0.1669ms)
+  ▶ kiro-cli.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.1194ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0751ms)
+  ✔ kiro-cli.md (0.26ms)
+  ▶ opencode.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0655ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.1819ms)
+  ✔ opencode.md (0.3097ms)
+  ▶ windsurf.md
+    ✔ agent_spawning: true must not have "no-agent-spawning" quirk (0.0606ms)
+    ✔ parallel_execution: true must not have "no-parallel-execution" quirk (0.0269ms)
+  ✔ windsurf.md (0.132ms)
+✔ Adapter Conformance: Capability-Quirk Consistency (2.2089ms)
+✔ agent contract: 49 agents, minimum size, and required sections (8.2884ms)
+✔ agent contract: metadata fields valid when present (5.1883ms)
+✔ agent contract: all 48 agents have metadata (completeness gate) (4.1391ms)
+✔ split-role integrity: generalist senior + laravel specialist (0.4915ms)
+  Validated 30 unique domains
+▶ Authority Matrix Loading
+  ✔ should load JSON fixture without errors (0.3587ms)
+  ✔ should contain agents section (0.1116ms)
+  ✔ should have at least 4 agents defined (0.0928ms)
+✔ Authority Matrix Loading (1.5049ms)
+▶ Agent Domain Validation
+  ✔ all agents have exclusive_domains defined (0.2045ms)
+  ✔ all domains are kebab-case format (0.2175ms)
+  ✔ all agents have agent_file reference (0.1713ms)
+  ✔ security-engineer has OWASP and STRIDE domains (0.1128ms)
+  ✔ frontend-developer has UI/UX and accessibility domains (0.079ms)
+  ✔ sre-chaos has SLO and chaos engineering domains (0.0792ms)
+  ✔ code-reviewer has style and patterns domains (0.0774ms)
+  ✔ qa-automation has testing domains (0.0546ms)
+✔ Agent Domain Validation (1.4466ms)
+▶ Domain Overlap Detection
+  ✔ no overlapping domains between different agents (0.3276ms)
+  ✔ overlap detection function works correctly (0.7328ms)
+  ✔ no overlap detected for completely different domains (0.1217ms)
+  ✔ security and frontend domains do not overlap (0.1037ms)
+✔ Domain Overlap Detection (2.4574ms)
+▶ Authority Lookup
+  ✔ lookup finds correct agent for known domains (0.113ms)
+  ✔ lookup returns null for unknown domains (0.0362ms)
+  ✔ each domain is owned by exactly one agent (0.3952ms)
+✔ Authority Lookup (1.0262ms)
+▶ Matrix Serialization
+  ✔ fixture file exists and is readable (0.2192ms)
+  ✔ matrix has version metadata (0.1713ms)
+  ✔ matrix validates required requirements (0.1397ms)
+  ✔ fixture has overlap test scenarios (0.1288ms)
+  ✔ fixture has domain validation rules (0.1194ms)
+  ✔ fixture has authority lookup examples (0.1233ms)
+✔ Matrix Serialization (0.9964ms)
+▶ Edge Cases and Error Handling
+  ✔ handles missing fixture gracefully (0.3979ms)
+  ✔ validates agent domain count (0.21ms)
+  ✔ no duplicate domains within same agent (0.2102ms)
+  ✔ validates domain rules (0.1518ms)
+✔ Edge Cases and Error Handling (1.0523ms)
+✔ checksums manifest matches the published package file set (15.8046ms)
+✔ map command declares supported modes and required artifacts (1.9052ms)
+✔ codebase mapper specifies map metadata, index schemas, and search protocol (0.9481ms)
+✔ consumer commands point stale or ad-hoc analysis users to legion:map (2.4273ms)
+✔ explore and start are decoupled through saved design documents (0.6603ms)
+✔ intent router maps codebase analysis separately from design exploration (0.4906ms)
+▶ Dependency Risk — SKILL.md specification
+  ✔ Section 4.6 exists in codebase-mapper SKILL.md (0.9415ms)
+  ✔ Section 4.6 defines ecosystem detection table with npm, pip, bundle, cargo, go (0.142ms)
+  ✔ Section 4.6 includes outdated detection protocol (0.1052ms)
+  ✔ Section 4.6 includes heavy dependency detection with thresholds (0.1068ms)
+  ✔ Section 4.6 includes unmaintained package heuristic (0.084ms)
+  ✔ Section 4.6 includes graceful degradation for each subsection (0.0978ms)
+✔ Dependency Risk — SKILL.md specification (2.1397ms)
+▶ Dependency Risk — CODEBASE.md template
+  ✔ Template includes ## Dependency Risk section (0.1112ms)
+  ✔ Template includes Outdated Packages table with required columns (0.1526ms)
+  ✔ Template includes Heavy Dependencies subsection (0.1601ms)
+  ✔ Template includes Potentially Unmaintained subsection (0.1409ms)
+  ✔ Template includes Dependency Risk Summary table (0.1138ms)
+  ✔ Template includes graceful degradation placeholder for missing ecosystem (0.0673ms)
+✔ Dependency Risk — CODEBASE.md template (0.9578ms)
+▶ Dependency Risk — calibration logic
+  ✔ Risk calibration thresholds are relative to dependency count (0.0734ms)
+  ✔ Outdated risk levels use major/minor/patch severity categories (0.0624ms)
+  ✔ Sample npm outdated fixture is valid JSON with expected structure (0.3248ms)
+✔ Dependency Risk — calibration logic (0.5476ms)
+▶ Test Coverage Enrichment — SKILL.md specification
+  ✔ Section 9.4 exists (Coverage Tool Integration) (0.6085ms)
+  ✔ Section 9.4 defines coverage report detection for nyc, jest, pytest-cov, go test, SimpleCov, cargo-tarpaulin (0.1562ms)
+  ✔ Section 9.4 includes extraction logic for JSON summary, LCOV, Cobertura XML, Go cover formats (0.0974ms)
+  ✔ Section 9.4 includes quality classification thresholds (>=80 HIGH, 50-79 MEDIUM, <50 LOW) (0.0568ms)
+  ✔ Section 9.4 includes graceful degradation to sample-based ratio (0.0587ms)
+  ✔ Section 9.5 exists (Critical File Coverage Correlation) (0.0305ms)
+  ✔ Section 9.5 defines risk scoring formula using fan-in and complexity (0.0938ms)
+  ✔ Section 9.5 includes ranked output table format (0.0862ms)
+  ✔ Section 9.5 includes graceful degradation for missing cross-reference data (0.0617ms)
+✔ Test Coverage Enrichment — SKILL.md specification (1.3663ms)
+▶ Test Coverage Enrichment — CODEBASE.md template
+  ✔ Template Test Coverage Map includes Source field (0.0761ms)
+  ✔ Template includes Critical Untested Files subsection (0.0408ms)
+  ✔ Critical Untested Files table has required columns (File, Lines, Fan-in, Risk Score, Risk Level, Recommendation) (0.0593ms)
+  ✔ Template preserves graceful degradation placeholder (0.0283ms)
+✔ Test Coverage Enrichment — CODEBASE.md template (0.2575ms)
+▶ Config agent references: authority-matrix.yaml
+  ✔ authority-matrix.yaml contains agent entries (1.2813ms)
+  ✔ agent file exists for authority-matrix entry "engineering-security-engineer" (0.0987ms)
+  ✔ agent file exists for authority-matrix entry "engineering-infrastructure-devops" (0.0625ms)
+  ✔ agent file exists for authority-matrix entry "engineering-backend-architect" (0.0649ms)
+  ✔ agent file exists for authority-matrix entry "engineering-frontend-developer" (0.0532ms)
+  ✔ agent file exists for authority-matrix entry "engineering-ai-engineer" (0.0414ms)
+  ✔ agent file exists for authority-matrix entry "engineering-mobile-app-builder" (0.048ms)
+  ✔ agent file exists for authority-matrix entry "engineering-rapid-prototyper" (0.0472ms)
+  ✔ agent file exists for authority-matrix entry "engineering-laravel-specialist" (0.0477ms)
+  ✔ agent file exists for authority-matrix entry "engineering-senior-developer" (0.0724ms)
+  ✔ agent file exists for authority-matrix entry "testing-qa-verification-specialist" (0.0467ms)
+  ✔ agent file exists for authority-matrix entry "testing-api-tester" (0.027ms)
+  ✔ agent file exists for authority-matrix entry "testing-performance-benchmarker" (0.0305ms)
+  ✔ agent file exists for authority-matrix entry "testing-workflow-optimizer" (0.0211ms)
+  ✔ agent file exists for authority-matrix entry "testing-test-results-analyzer" (0.0202ms)
+  ✔ agent file exists for authority-matrix entry "testing-tool-evaluator" (0.0217ms)
+  ✔ agent file exists for authority-matrix entry "design-brand-guardian" (0.0461ms)
+  ✔ agent file exists for authority-matrix entry "design-ux-architect" (0.0253ms)
+  ✔ agent file exists for authority-matrix entry "design-ux-researcher" (0.0231ms)
+  ✔ agent file exists for authority-matrix entry "design-visual-storyteller" (0.0167ms)
+  ✔ agent file exists for authority-matrix entry "design-ui-designer" (0.0154ms)
+  ✔ agent file exists for authority-matrix entry "design-whimsy-injector" (0.0168ms)
+  ✔ agent file exists for authority-matrix entry "marketing-content-social-strategist" (0.0155ms)
+  ✔ agent file exists for authority-matrix entry "marketing-growth-hacker" (0.016ms)
+  ✔ agent file exists for authority-matrix entry "marketing-social-platform-specialist" (0.0274ms)
+  ✔ agent file exists for authority-matrix entry "marketing-app-store-optimizer" (0.0161ms)
+  ✔ agent file exists for authority-matrix entry "product-sprint-prioritizer" (0.0158ms)
+  ✔ agent file exists for authority-matrix entry "product-feedback-synthesizer" (0.0217ms)
+  ✔ agent file exists for authority-matrix entry "product-trend-researcher" (0.0176ms)
+  ✔ agent file exists for authority-matrix entry "product-technical-writer" (0.0168ms)
+  ✔ agent file exists for authority-matrix entry "project-manager-senior" (0.0187ms)
+  ✔ agent file exists for authority-matrix entry "project-management-project-shepherd" (0.0248ms)
+  ✔ agent file exists for authority-matrix entry "project-management-studio-producer" (0.02ms)
+  ✔ agent file exists for authority-matrix entry "project-management-studio-operations" (0.0211ms)
+  ✔ agent file exists for authority-matrix entry "project-management-experiment-tracker" (0.0172ms)
+  ✔ agent file exists for authority-matrix entry "support-finance-tracker" (0.0178ms)
+  ✔ agent file exists for authority-matrix entry "support-legal-compliance-checker" (0.0212ms)
+  ✔ agent file exists for authority-matrix entry "support-executive-summary-generator" (0.0285ms)
+  ✔ agent file exists for authority-matrix entry "support-support-responder" (0.0255ms)
+  ✔ agent file exists for authority-matrix entry "visionos-spatial-engineer" (0.0167ms)
+  ✔ agent file exists for authority-matrix entry "macos-spatial-metal-engineer" (0.0171ms)
+  ✔ agent file exists for authority-matrix entry "xr-interface-architect" (0.0158ms)
+  ✔ agent file exists for authority-matrix entry "xr-immersive-developer" (0.017ms)
+  ✔ agent file exists for authority-matrix entry "xr-cockpit-interaction-specialist" (0.0408ms)
+  ✔ agent file exists for authority-matrix entry "terminal-integration-specialist" (0.0192ms)
+  ✔ agent file exists for authority-matrix entry "agents-orchestrator" (0.0324ms)
+  ✔ agent file exists for authority-matrix entry "data-analytics-engineer" (0.017ms)
+  ✔ agent file exists for authority-matrix entry "lsp-index-engineer" (0.0261ms)
+  ✔ agent file exists for authority-matrix entry "polymath" (0.0267ms)
+✔ Config agent references: authority-matrix.yaml (3.8168ms)
+▶ Config agent references: intent-teams.yaml
+  ✔ intent-teams.yaml contains agent references (0.0969ms)
+  ✔ agent file exists for intent-teams reference "design-ui-designer" (0.0324ms)
+  ✔ agent file exists for intent-teams reference "engineering-backend-architect" (0.0162ms)
+  ✔ agent file exists for intent-teams reference "engineering-frontend-developer" (0.0153ms)
+  ✔ agent file exists for intent-teams reference "engineering-infrastructure-devops" (0.0238ms)
+  ✔ agent file exists for intent-teams reference "engineering-security-engineer" (0.0219ms)
+  ✔ agent file exists for intent-teams reference "product-technical-writer" (0.0309ms)
+  ✔ agent file exists for intent-teams reference "testing-api-tester" (0.0181ms)
+  ✔ agent file exists for intent-teams reference "testing-qa-verification-specialist" (0.037ms)
+✔ Config agent references: intent-teams.yaml (0.4279ms)
+▶ Config agent references: roster-gap-config.yaml
+  ✔ roster-gap-config.yaml contains agent references (0.1129ms)
+  ✔ agent file exists for roster-gap-config reference "data-analytics-engineer" (0.0269ms)
+  ✔ agent file exists for roster-gap-config reference "engineering-ai-engineer" (0.0166ms)
+  ✔ agent file exists for roster-gap-config reference "engineering-backend-architect" (0.0146ms)
+  ✔ agent file exists for roster-gap-config reference "engineering-frontend-developer" (0.0151ms)
+  ✔ agent file exists for roster-gap-config reference "engineering-infrastructure-devops" (0.0135ms)
+  ✔ agent file exists for roster-gap-config reference "engineering-security-engineer" (0.0198ms)
+  ✔ agent file exists for roster-gap-config reference "engineering-senior-developer" (0.0149ms)
+  ✔ agent file exists for roster-gap-config reference "product-technical-writer" (0.014ms)
+  ✔ agent file exists for roster-gap-config reference "project-management-studio-operations" (0.0228ms)
+  ✔ agent file exists for roster-gap-config reference "support-legal-compliance-checker" (0.0157ms)
+  ✔ agent file exists for roster-gap-config reference "testing-api-tester" (0.013ms)
+  ✔ agent file exists for roster-gap-config reference "testing-performance-benchmarker" (0.0142ms)
+  ✔ agent file exists for roster-gap-config reference "testing-qa-verification-specialist" (0.0127ms)
+✔ Config agent references: roster-gap-config.yaml (0.4575ms)
+▶ Config agent references: agent count consistency
+  ✔ STATE.md contains agent count references (0.0349ms)
+  ✔ STATE.md agent count "49 agents across" matches actual (49) (0.0593ms)
+  ✔ STATE.md agent count "49 agents across" matches actual (49) (0.0212ms)
+✔ Config agent references: agent count consistency (0.1621ms)
+✔ always-load command context budgets stay under hard ceilings (4.2503ms)
+▶ Schema Validation
+  ✔ schema has control_mode property (0.4046ms)
+  ✔ control_mode enum contains exactly the 4 modes (0.543ms)
+  ✔ control_mode enum has exactly 4 values (0.1196ms)
+  ✔ control_mode default is guarded (0.0693ms)
+✔ Schema Validation (2.3395ms)
+▶ Settings File
+  ✔ settings.json has control_mode property (0.1181ms)
+  ✔ settings.json control_mode is guarded (0.0948ms)
+✔ Settings File (0.5701ms)
+▶ Profile Structure
+  ✔ fixture loads and parses without error (0.1478ms)
+  ✔ exactly 4 profiles exist (0.0823ms)
+  ✔ each profile has exactly 5 boolean flags (0.1146ms)
+  ✔ all flag values are booleans (0.1221ms)
+  ✔ autonomous profile has all flags false (0.1109ms)
+  ✔ guarded profile has correct flag values (0.0649ms)
+✔ Profile Structure (1.691ms)
+▶ Profile Flag Values
+  ✔ advisory profile has only read_only true (0.0876ms)
+  ✔ surgical profile has correct flag values (0.0389ms)
+✔ Profile Flag Values (0.4949ms)
+▶ Settings Resolution
+  ✔ workflow-common-core references control_mode (0.2223ms)
+✔ Settings Resolution (0.2565ms)
+▶ Cross-Reference Validation
+  ✔ authority-enforcer contains Mode Profile Loading section (0.2116ms)
+  ✔ authority-enforcer references all 5 flag names (0.2432ms)
+  ✔ wave-executor references mode_profile (0.3609ms)
+✔ Cross-Reference Validation (0.874ms)
+▶ Edge Cases
+  ✔ schema rejects invalid mode values (0.125ms)
+  ✔ no profile has extra flags beyond the 5 expected (0.1105ms)
+  ✔ all flag values are strictly boolean, not truthy strings (0.1089ms)
+  ✔ no duplicate profiles exist (0.0405ms)
+  ✔ each profile has a non-empty description (0.0447ms)
+✔ Edge Cases (0.8236ms)
+▶ Cross-reference validation: command execution_context skill references
+  ✔ advise.md execution_context references exist on disk (1.304ms)
+  ✔ agent.md execution_context references exist on disk (0.5428ms)
+  ✔ board.md execution_context references exist on disk (0.4279ms)
+  ✔ build.md execution_context references exist on disk (0.5489ms)
+  ✔ explore.md execution_context references exist on disk (0.8054ms)
+  ✔ learn.md execution_context references exist on disk (0.6746ms)
+  ✔ map.md execution_context references exist on disk (0.6921ms)
+  ✔ milestone.md execution_context references exist on disk (0.4935ms)
+  ✔ plan.md execution_context references exist on disk (0.4751ms)
+  ✔ polish.md execution_context references exist on disk (0.3943ms)
+  ✔ portfolio.md execution_context references exist on disk (0.3336ms)
+  ✔ quick.md execution_context references exist on disk (0.381ms)
+  ✔ retro.md execution_context references exist on disk (0.2718ms)
+  ✔ review.md execution_context references exist on disk (0.605ms)
+  ✔ ship.md execution_context references exist on disk (0.3126ms)
+  ✔ start.md execution_context references exist on disk (0.3744ms)
+  ✔ status.md execution_context references exist on disk (0.3072ms)
+  ✔ update.md execution_context references exist on disk (0.1787ms)
+  ✔ validate.md execution_context references exist on disk (0.2097ms)
+✔ Cross-reference validation: command execution_context skill references (10.5382ms)
+▶ Cross-reference validation: CATALOG.md agent file references
+  ✔ catalog contains agent IDs (0.2399ms)
+  ✔ agent file exists for catalog entry "design-brand-guardian" (0.1359ms)
+  ✔ agent file exists for catalog entry "design-ui-designer" (0.0846ms)
+  ✔ agent file exists for catalog entry "design-ux-architect" (0.2332ms)
+  ✔ agent file exists for catalog entry "design-ux-researcher" (0.1915ms)
+  ✔ agent file exists for catalog entry "design-visual-storyteller" (0.1686ms)
+  ✔ agent file exists for catalog entry "design-whimsy-injector" (0.1682ms)
+  ✔ agent file exists for catalog entry "engineering-ai-engineer" (0.1644ms)
+  ✔ agent file exists for catalog entry "engineering-backend-architect" (0.1649ms)
+  ✔ agent file exists for catalog entry "engineering-infrastructure-devops" (0.1955ms)
+  ✔ agent file exists for catalog entry "engineering-frontend-developer" (0.226ms)
+  ✔ agent file exists for catalog entry "engineering-laravel-specialist" (0.1366ms)
+  ✔ agent file exists for catalog entry "engineering-mobile-app-builder" (0.0855ms)
+  ✔ agent file exists for catalog entry "engineering-rapid-prototyper" (0.0744ms)
+  ✔ agent file exists for catalog entry "engineering-security-engineer" (0.07ms)
+  ✔ agent file exists for catalog entry "engineering-senior-developer" (0.0668ms)
+  ✔ agent file exists for catalog entry "marketing-app-store-optimizer" (0.0688ms)
+  ✔ agent file exists for catalog entry "marketing-content-social-strategist" (0.0749ms)
+  ✔ agent file exists for catalog entry "marketing-growth-hacker" (0.0935ms)
+  ✔ agent file exists for catalog entry "marketing-social-platform-specialist" (0.0869ms)
+  ✔ agent file exists for catalog entry "product-feedback-synthesizer" (0.1005ms)
+  ✔ agent file exists for catalog entry "product-sprint-prioritizer" (0.0798ms)
+  ✔ agent file exists for catalog entry "product-technical-writer" (0.0706ms)
+  ✔ agent file exists for catalog entry "product-trend-researcher" (0.076ms)
+  ✔ agent file exists for catalog entry "project-management-experiment-tracker" (0.0765ms)
+  ✔ agent file exists for catalog entry "project-management-project-shepherd" (0.0733ms)
+  ✔ agent file exists for catalog entry "project-management-studio-operations" (0.0715ms)
+  ✔ agent file exists for catalog entry "project-management-studio-producer" (0.0732ms)
+  ✔ agent file exists for catalog entry "project-manager-senior" (0.1314ms)
+  ✔ agent file exists for catalog entry "macos-spatial-metal-engineer" (0.1628ms)
+  ✔ agent file exists for catalog entry "terminal-integration-specialist" (0.1159ms)
+  ✔ agent file exists for catalog entry "visionos-spatial-engineer" (0.1384ms)
+  ✔ agent file exists for catalog entry "xr-cockpit-interaction-specialist" (0.1339ms)
+  ✔ agent file exists for catalog entry "xr-immersive-developer" (0.1259ms)
+  ✔ agent file exists for catalog entry "xr-interface-architect" (0.1373ms)
+  ✔ agent file exists for catalog entry "agents-orchestrator" (0.1385ms)
+  ✔ agent file exists for catalog entry "data-analytics-engineer" (0.1593ms)
+  ✔ agent file exists for catalog entry "lsp-index-engineer" (0.0989ms)
+  ✔ agent file exists for catalog entry "polymath" (0.1051ms)
+  ✔ agent file exists for catalog entry "support-executive-summary-generator" (0.0776ms)
+  ✔ agent file exists for catalog entry "support-finance-tracker" (0.0696ms)
+  ✔ agent file exists for catalog entry "support-legal-compliance-checker" (0.0713ms)
+  ✔ agent file exists for catalog entry "support-support-responder" (0.0691ms)
+  ✔ agent file exists for catalog entry "testing-api-tester" (0.0705ms)
+  ✔ agent file exists for catalog entry "testing-code-polisher" (0.0665ms)
+  ✔ agent file exists for catalog entry "testing-performance-benchmarker" (0.0692ms)
+  ✔ agent file exists for catalog entry "testing-qa-verification-specialist" (0.0938ms)
+  ✔ agent file exists for catalog entry "testing-test-results-analyzer" (0.072ms)
+  ✔ agent file exists for catalog entry "testing-tool-evaluator" (0.0735ms)
+  ✔ agent file exists for catalog entry "testing-workflow-optimizer" (0.0704ms)
+✔ Cross-reference validation: CATALOG.md agent file references (6.9904ms)
+▶ Cross-reference validation: agent files back-referenced in CATALOG.md
+  ✔ agent "agents-orchestrator" appears in CATALOG.md (0.3663ms)
+  ✔ agent "data-analytics-engineer" appears in CATALOG.md (0.0609ms)
+  ✔ agent "design-brand-guardian" appears in CATALOG.md (0.0328ms)
+  ✔ agent "design-ui-designer" appears in CATALOG.md (0.0297ms)
+  ✔ agent "design-ux-architect" appears in CATALOG.md (0.0287ms)
+  ✔ agent "design-ux-researcher" appears in CATALOG.md (0.0302ms)
+  ✔ agent "design-visual-storyteller" appears in CATALOG.md (0.0325ms)
+  ✔ agent "design-whimsy-injector" appears in CATALOG.md (0.0265ms)
+  ✔ agent "engineering-ai-engineer" appears in CATALOG.md (0.0365ms)
+  ✔ agent "engineering-backend-architect" appears in CATALOG.md (0.0439ms)
+  ✔ agent "engineering-frontend-developer" appears in CATALOG.md (0.0384ms)
+  ✔ agent "engineering-infrastructure-devops" appears in CATALOG.md (0.0288ms)
+  ✔ agent "engineering-laravel-specialist" appears in CATALOG.md (0.0279ms)
+  ✔ agent "engineering-mobile-app-builder" appears in CATALOG.md (0.0275ms)
+  ✔ agent "engineering-rapid-prototyper" appears in CATALOG.md (0.035ms)
+  ✔ agent "engineering-security-engineer" appears in CATALOG.md (0.0293ms)
+  ✔ agent "engineering-senior-developer" appears in CATALOG.md (0.0422ms)
+  ✔ agent "lsp-index-engineer" appears in CATALOG.md (0.0359ms)
+  ✔ agent "macos-spatial-metal-engineer" appears in CATALOG.md (0.0329ms)
+  ✔ agent "marketing-app-store-optimizer" appears in CATALOG.md (0.0351ms)
+  ✔ agent "marketing-content-social-strategist" appears in CATALOG.md (0.0371ms)
+  ✔ agent "marketing-growth-hacker" appears in CATALOG.md (0.0276ms)
+  ✔ agent "marketing-social-platform-specialist" appears in CATALOG.md (0.0292ms)
+  ✔ agent "polymath" appears in CATALOG.md (0.0382ms)
+  ✔ agent "product-feedback-synthesizer" appears in CATALOG.md (0.0326ms)
+  ✔ agent "product-sprint-prioritizer" appears in CATALOG.md (0.0373ms)
+  ✔ agent "product-technical-writer" appears in CATALOG.md (0.0309ms)
+  ✔ agent "product-trend-researcher" appears in CATALOG.md (1.1414ms)
+  ✔ agent "project-management-experiment-tracker" appears in CATALOG.md (0.2139ms)
+  ✔ agent "project-management-project-shepherd" appears in CATALOG.md (0.1204ms)
+  ✔ agent "project-management-studio-operations" appears in CATALOG.md (0.0769ms)
+  ✔ agent "project-management-studio-producer" appears in CATALOG.md (0.0756ms)
+  ✔ agent "project-manager-senior" appears in CATALOG.md (0.0703ms)
+  ✔ agent "support-executive-summary-generator" appears in CATALOG.md (0.0713ms)
+  ✔ agent "support-finance-tracker" appears in CATALOG.md (0.1113ms)
+  ✔ agent "support-legal-compliance-checker" appears in CATALOG.md (0.0963ms)
+  ✔ agent "support-support-responder" appears in CATALOG.md (0.052ms)
+  ✔ agent "terminal-integration-specialist" appears in CATALOG.md (0.1037ms)
+  ✔ agent "testing-api-tester" appears in CATALOG.md (0.0616ms)
+  ✔ agent "testing-code-polisher" appears in CATALOG.md (0.0377ms)
+  ✔ agent "testing-performance-benchmarker" appears in CATALOG.md (0.0351ms)
+  ✔ agent "testing-qa-verification-specialist" appears in CATALOG.md (0.0331ms)
+  ✔ agent "testing-test-results-analyzer" appears in CATALOG.md (0.0376ms)
+  ✔ agent "testing-tool-evaluator" appears in CATALOG.md (0.0372ms)
+  ✔ agent "testing-workflow-optimizer" appears in CATALOG.md (0.0365ms)
+  ✔ agent "visionos-spatial-engineer" appears in CATALOG.md (0.0365ms)
+  ✔ agent "xr-cockpit-interaction-specialist" appears in CATALOG.md (0.0401ms)
+  ✔ agent "xr-immersive-developer" appears in CATALOG.md (0.0319ms)
+  ✔ agent "xr-interface-architect" appears in CATALOG.md (0.0684ms)
+✔ Cross-reference validation: agent files back-referenced in CATALOG.md (4.5204ms)
+▶ Cross-reference validation: repo-native Codex plugin wiring
+  ✔ .codex-plugin/plugin.json exists and stays version-synced with package.json (0.5161ms)
+  ✔ legion bridge skill and runtime metadata include map command (0.1738ms)
+✔ Cross-reference validation: repo-native Codex plugin wiring (0.7466ms)
+▶ Decision-complete planning harness
+  ✔ workflow-common-core defines the shared execution harness contract (0.8315ms)
+  ✔ phase-decomposer emits markdown-only execution contract sections (0.8241ms)
+  ✔ spec-pipeline resolves design decisions before planning (0.3785ms)
+  ✔ plan-critique requires REWORK for high-impact decision-completeness gaps (0.3022ms)
+  ✔ wave-executor enforces BLOCKED instead of guessing (0.4243ms)
+  ✔ Kilo adapter documents Kimi K2.6 Turbo as strict execution guidance only (0.468ms)
+  ✔ focused personas reference the mandatory persona contract (2.1913ms)
+✔ Decision-complete planning harness (6.2725ms)
+  Found 3 locations with duplicates
+    src/auth/login.js:45: 3 findings
+    src/api/users.js:120: 2 findings
+    src/api/users.js:200: 2 findings
+▶ Finding Deduplication
+  ✔ should load findings fixture (0.4423ms)
+  ✔ deduplicateFindings should be exported and functional (0.1206ms)
+  ✔ should deduplicate findings by file:line (0.1684ms)
+  ✔ should keep highest severity when duplicates at same location (0.1298ms)
+  ✔ should preserve unique findings without duplicates (0.0897ms)
+  ✔ should handle empty findings array (0.466ms)
+  ✔ should handle single finding (0.108ms)
+  ✔ should handle findings with null/undefined severity (0.1149ms)
+  ✔ should correctly identify duplicates in fixture (0.5884ms)
+✔ Finding Deduplication (3.3749ms)
+▶ Severity Comparison
+  ✔ BLOCKER > WARNING (0.1357ms)
+  ✔ WARNING > SUGGESTION (0.0386ms)
+  ✔ BLOCKER > SUGGESTION (0.0473ms)
+  ✔ equal severities return 0 (0.0709ms)
+  ✔ unknown severities default to 0 priority (0.04ms)
+✔ Severity Comparison (0.45ms)
+▶ Domain Filtering
+  ✔ filterByDomain should be exported and functional (0.0832ms)
+  ✔ security-engineer should only see security domains (0.1078ms)
+  ✔ frontend-developer should only see frontend domains (0.0959ms)
+  ✔ code-reviewer should only see code style domains (0.1021ms)
+  ✔ should filter out findings outside agent domain (0.0981ms)
+  ✔ should return empty array for unknown agent (0.0727ms)
+  ✔ should return empty array for agent without domains (0.1284ms)
+✔ Domain Filtering (1.1973ms)
+▶ Combined Deduplication and Filtering
+  ✔ should deduplicate then filter by domain (0.2364ms)
+  ✔ should handle complex multi-agent scenario (0.1304ms)
+✔ Combined Deduplication and Filtering (0.7849ms)
+▶ Fixture Validation
+  ✔ fixture has expected deduplication rules (0.2459ms)
+  ✔ fixture has domain filtering tests (0.2016ms)
+  ✔ fixture has severity order defined (0.2627ms)
+  ✔ all findings have required fields (0.2014ms)
+✔ Fixture Validation (1.0234ms)
+▶ Edge Cases
+  ✔ handles findings with same file but different lines (0.0982ms)
+  ✔ handles findings with same line but different files (0.0424ms)
+  ✔ handles all findings at same location with same severity (0.0381ms)
+✔ Edge Cases (0.2385ms)
+▶ Standard Location Detection
+  ✔ detect routes directory (app/routes/) (0.6751ms)
+  ✔ detect routes directory (src/routes/) (0.1015ms)
+  ✔ detect routes directory (pages/api/) (0.0871ms)
+  ✔ detect tests directory (tests/) (0.1007ms)
+  ✔ detect tests directory (__tests__/) (0.0757ms)
+  ✔ detect components directory (src/components/) (0.063ms)
+  ✔ detect components directory (app/components/) (0.0842ms)
+  ✔ detect config directory (config/) (0.0978ms)
+  ✔ detect types directory (types/) (0.0892ms)
+  ✔ detect utils directory (utils/, src/utils/, lib/) (0.1934ms)
+  ✔ detect services directory (0.0753ms)
+  ✔ detect middleware directory (0.054ms)
+  ✔ detect assets directory (public/, static/, assets/) (0.0668ms)
+  ✔ detect styles directory (styles/, css/, scss/) (0.0545ms)
+✔ Standard Location Detection (2.7262ms)
+▶ Directory Mapping Structure Validation
+  ✔ valid mapping has all required fields (0.5331ms)
+  ✔ invalid mapping missing category field (0.4874ms)
+  ✔ invalid mapping missing pattern field (0.0808ms)
+  ✔ priority ordering: explicit (10) > inferred (5) > default (1) (0.217ms)
+  ✔ valid priority values are 10, 5, or 1 (0.1755ms)
+  ✔ pattern glob matching validation (0.4289ms)
+  ✔ category normalization to standard names (0.1316ms)
+✔ Directory Mapping Structure Validation (2.4659ms)
+▶ Edge Cases
+  ✔ empty codebase returns empty mappings (0.1915ms)
+  ✔ minimal codebase with no standard directories (0.0943ms)
+  ✔ multiple matching directories resolve by priority (0.2294ms)
+  ✔ nested directories: parent/child resolution (0.1725ms)
+  ✔ case sensitivity handling (0.1467ms)
+  ✔ symlink handling (0.0823ms)
+  ✔ monorepo package boundaries (0.06ms)
+  ✔ custom directory names via configuration (0.045ms)
+✔ Edge Cases (1.214ms)
+▶ CODEBASE.md Integration
+  ✔ mappings serialize to YAML correctly (0.0712ms)
+  ✔ mappings deserialize from YAML correctly (0.0448ms)
+  ✔ file path lookup against mappings (0.0738ms)
+  ✔ priority-based resolution for overlapping patterns (0.079ms)
+  ✔ CODEBASE.md structure includes metadata (0.0384ms)
+✔ CODEBASE.md Integration (0.3728ms)
+▶ Helper Functions
+  ✔ resolveDirectoryConflict returns single directory unchanged (0.0479ms)
+  ✔ resolveDirectoryConflict returns null for empty array (0.0362ms)
+  ✔ matchesPattern handles globstar correctly (0.1163ms)
+  ✔ matchesPattern handles single star correctly (0.0946ms)
+✔ Helper Functions (0.379ms)
+▶ Schema: board property
+  ✔ schema defines board property (type object) (0.5479ms)
+✔ Schema: board property (2.2917ms)
+▶ Schema: dispatch property
+  ✔ schema defines dispatch property (type object) (0.1717ms)
+✔ Schema: dispatch property (0.5838ms)
+▶ Schema: review.evaluator_depth
+  ✔ schema defines review.evaluator_depth (1.8734ms)
+✔ Schema: review.evaluator_depth (2.372ms)
+▶ Schema: review.coverage_thresholds
+  ✔ schema defines review.coverage_thresholds (0.1806ms)
+✔ Schema: review.coverage_thresholds (0.6929ms)
+▶ Settings: board defaults
+  ✔ settings.json has board section with default_size: 5 (0.2118ms)
+  ✔ settings.json board has min_size: 3 (0.1086ms)
+  ✔ settings.json board has discussion_rounds: 2 (0.0917ms)
+  ✔ settings.json board has assessment_timeout_ms: 300000 (0.0922ms)
+  ✔ settings.json board has persist_artifacts: true (0.1096ms)
+✔ Settings: board defaults (1.2448ms)
+▶ Settings: dispatch defaults
+  ✔ settings.json has dispatch section with enabled: true (0.1891ms)
+  ✔ settings.json dispatch has fallback_to_internal: true (0.0853ms)
+  ✔ settings.json dispatch has timeout_ms: 300000 (0.0956ms)
+  ✔ settings.json dispatch has max_retries: 1 (0.0792ms)
+✔ Settings: dispatch defaults (0.8874ms)
+▶ Settings: review.evaluator_depth
+  ✔ settings.json has review.evaluator_depth = "multi-pass" (0.1453ms)
+✔ Settings: review.evaluator_depth (0.5233ms)
+▶ Settings: review.coverage_thresholds
+  ✔ settings.json has coverage_thresholds.overall = 70 (0.1085ms)
+  ✔ settings.json has coverage_thresholds.business_logic = 90 (0.0689ms)
+  ✔ settings.json has coverage_thresholds.api_routes = 80 (0.0708ms)
+✔ Settings: review.coverage_thresholds (0.5842ms)
+▶ Adapter Dispatch Conformance: Dispatch Section Presence
+  ▶ gemini-cli.md
+    ✔ has a parseable ## Dispatch Configuration section (0.4922ms)
+  ✔ gemini-cli.md (0.5545ms)
+  ▶ codex-cli.md
+    ✔ has a parseable ## Dispatch Configuration section (0.3156ms)
+  ✔ codex-cli.md (0.3889ms)
+  ▶ copilot-cli.md
+    ✔ has a parseable ## Dispatch Configuration section (0.2736ms)
+  ✔ copilot-cli.md (0.3408ms)
+✔ Adapter Dispatch Conformance: Dispatch Section Presence (1.4494ms)
+▶ Adapter Dispatch Conformance: Dispatch Fields
+  ▶ gemini-cli.md
+    ✔ available is true (0.1756ms)
+    ✔ capabilities is a non-empty array of valid entries (0.1464ms)
+    ✔ invoke_command is a non-empty string (0.1097ms)
+    ✔ prompt_delivery is a valid value (0.1907ms)
+    ✔ timeout_ms is a positive integer (0.0827ms)
+    ✔ detection_command is a non-empty string (0.0941ms)
+  ✔ gemini-cli.md (1.0294ms)
+  ▶ codex-cli.md
+    ✔ available is true (0.0629ms)
+    ✔ capabilities is a non-empty array of valid entries (0.063ms)
+    ✔ invoke_command is a non-empty string (0.0255ms)
+    ✔ prompt_delivery is a valid value (0.0305ms)
+    ✔ timeout_ms is a positive integer (0.0185ms)
+    ✔ detection_command is a non-empty string (0.0204ms)
+  ✔ codex-cli.md (0.3149ms)
+  ▶ copilot-cli.md
+    ✔ available is true (0.0454ms)
+    ✔ capabilities is a non-empty array of valid entries (0.0337ms)
+    ✔ invoke_command is a non-empty string (0.0204ms)
+    ✔ prompt_delivery is a valid value (0.0191ms)
+    ✔ timeout_ms is a positive integer (0.0316ms)
+    ✔ detection_command is a non-empty string (0.0336ms)
+  ✔ copilot-cli.md (0.2538ms)
+✔ Adapter Dispatch Conformance: Dispatch Fields (1.7538ms)
+✔ dry-run fixture suite: success and failure prerequisites (33.8005ms)
+▶ Full Workflow Integration
+  ✔ fixture file loads correctly (0.6715ms)
+  ✔ load mappings from YAML fixture (0.124ms)
+  ✔ mappings have required fields (0.1516ms)
+  ✔ routes mapping has correct patterns (0.0807ms)
+  ✔ tests mapping has correct patterns (0.0678ms)
+  ✔ components mapping has correct patterns (0.0763ms)
+  ✔ full workflow: detect mappings → validate path → suggest correction (0.4346ms)
+  ✔ end-to-end: validate multiple file categories (0.3019ms)
+✔ Full Workflow Integration (3.2957ms)
+▶ Auto-Update Detection
+  ✔ detect new directories not in mappings (0.2761ms)
+  ✔ no changes for existing mapped directories (0.1243ms)
+  ✔ ignore node_modules and hidden directories (0.0879ms)
+  ✔ detect new directory → update mappings → validate against new mappings (0.1129ms)
+  ✔ monorepo package detection triggers mapping updates (0.0682ms)
+✔ Auto-Update Detection (1.5871ms)
+▶ CODEBASE.md Section Integration
+  ✔ YAML structure includes version metadata (0.2422ms)
+  ✔ YAML structure includes requirements validated (0.15ms)
+  ✔ YAML structure includes enforcement configuration (0.1489ms)
+  ✔ YAML structure includes auto-update configuration (0.1228ms)
+  ✔ YAML structure includes monorepo support (0.1121ms)
+  ✔ all categories have priority levels (0.2758ms)
+  ✔ all categories have descriptions (0.2256ms)
+✔ CODEBASE.md Section Integration (1.4011ms)
+▶ Cross-Feature Integration
+  ✔ mappings + spec pipeline + wave executor integration (0.1414ms)
+  ✔ path validation returns appropriate error messages (0.1473ms)
+  ✔ path suggestions include multiple options (0.1303ms)
+  ✔ glob patterns match correctly in integration (0.1448ms)
+✔ Cross-Feature Integration (0.8391ms)
+▶ Error Handling and Edge Cases
+  ✔ handle empty mappings gracefully (0.2828ms)
+  ✔ handle missing patterns in category (0.1488ms)
+  ✔ handle empty structure in detection (0.7505ms)
+  ✔ handle null/undefined inputs (0.2082ms)
+  ✔ handle deeply nested paths (0.1073ms)
+  ✔ handle special characters in paths (0.1554ms)
+  ✔ validate all categories have valid patterns (0.2004ms)
+  ✔ priority values are within expected range (0.1166ms)
+✔ Error Handling and Edge Cases (2.4776ms)
+▶ Performance and Scalability
+  ✔ validation is fast for typical paths (1.0818ms)
+  ✔ mappings load quickly from fixture (2.4802ms)
+✔ Performance and Scalability (3.7122ms)
+▶ Protocol File Structure
+  ✔ escalation-protocol.yaml exists and is non-empty (0.4215ms)
+  ✔ defines escalation_format with required_fields (0.1935ms)
+  ✔ has all 4 required fields (0.1804ms)
+  ✔ defines optional fields (0.112ms)
+  ✔ defines block_tag as escalation (0.0721ms)
+✔ Protocol File Structure (2.0044ms)
+▶ Severity Levels
+  ✔ defines severity_levels section (0.1607ms)
+  ✔ defines all 3 severity levels (0.1191ms)
+  ✔ each severity has routing rules (0.1152ms)
+  ✔ blocker severity halts execution (0.0959ms)
+✔ Severity Levels (0.9279ms)
+▶ Escalation Type Taxonomy
+  ✔ defines escalation_types section (0.1359ms)
+  ✔ defines all 8 escalation types (0.1035ms)
+  ✔ each type has description and examples (0.5814ms)
+✔ Escalation Type Taxonomy (1.1029ms)
+▶ Control Mode Behaviors
+  ✔ defines control_mode_behaviors section (0.0775ms)
+  ✔ defines all 4 control modes (0.0619ms)
+  ✔ each mode has description and behavior (0.0602ms)
+  ✔ autonomous mode overrides severity to info (0.0394ms)
+  ✔ surgical mode has auto_escalate_file_scope (0.0302ms)
+✔ Control Mode Behaviors (0.5027ms)
+▶ Resolution Tracking
+  ✔ defines resolution section (0.0643ms)
+  ✔ defines all 4 resolution statuses (0.088ms)
+  ✔ deferred resolution is user-selected only (0.1591ms)
+  ✔ resolution tracking location is SUMMARY.md (0.0357ms)
+✔ Resolution Tracking (0.541ms)
+▶ Cross-Reference Validation
+  ✔ wave-executor references escalation detection (0.4112ms)
+  ✔ authority-enforcer injects escalation format (0.2612ms)
+  ✔ review-loop uses structured escalation blocks (0.219ms)
+  ✔ CLAUDE.md documents escalation protocol (0.1762ms)
+  ✔ CLAUDE.md escalation types match protocol types (0.2157ms)
+✔ Cross-Reference Validation (1.3687ms)
+✔ installer lazy-loads YAML support for Kilo Code mode merging (1.0748ms)
+▶ installer local mode installs runtime-native artifacts for every supported runtime
+  ✔ claude local install + uninstall (255.7682ms)
+  ✔ codex local install + uninstall (194.3974ms)
+  ✔ cursor local install + uninstall (163.1371ms)
+  ✔ copilot local install + uninstall (187.535ms)
+  ✔ gemini local install + uninstall (178.7272ms)
+  ✔ antigravity local install + uninstall (237.529ms)
+  ✔ kiro local install + uninstall (156.3238ms)
+  ✔ windsurf local install + uninstall (159.6881ms)
+  ✔ opencode local install + uninstall (170.4628ms)
+  ✔ kilo local install + uninstall (239.8457ms)
+  ✔ kilocode local install + uninstall (303.9542ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2252.44ms)
+▶ installer global mode installs runtime-native artifacts for every globally supported runtime
+  ✔ claude global install + uninstall (158.801ms)
+  ✔ codex global install + uninstall (175.3704ms)
+  ✔ copilot global install + uninstall (172.3664ms)
+  ✔ gemini global install + uninstall (178.9049ms)
+  ✔ antigravity global install + uninstall (243.3344ms)
+  ✔ kiro global install + uninstall (156.7361ms)
+  ✔ opencode global install + uninstall (166.598ms)
+  ✔ kilo global install + uninstall (238.7218ms)
+  ✔ kilocode global install + uninstall (324.011ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (1817.1372ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (532.7411ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (227.481ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (123.3405ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (166.3058ms)
+✔ installer --verify validates checksums in local source installs (145.8444ms)
+▶ Agent-Based Filtering
+  ✔ should exclude plans by agent ID (frontend-developer) (1.4399ms)
+  ✔ should exclude plans by agent ID (security-engineer) (0.1657ms)
+  ✔ should include only specific agent types (--just-document) (0.1144ms)
+  ✔ should include multiple agent types (0.1443ms)
+  ✔ should handle plans without agents field (0.106ms)
+  ✔ should return empty array when no matching agents (0.0927ms)
+✔ Agent-Based Filtering (3.0038ms)
+▶ File-Based Filtering
+  ✔ should exclude plans with .tsx files (--skip-frontend) (0.3597ms)
+  ✔ should exclude plans with Python files (--skip-backend) (0.2304ms)
+  ✔ should match glob-style patterns correctly (0.3191ms)
+  ✔ should match double-star patterns for any depth (0.303ms)
+  ✔ should combine multiple patterns with OR logic (0.2259ms)
+  ✔ should handle plans without files_modified field (0.0988ms)
+  ✔ should include mode work correctly (0.2134ms)
+✔ File-Based Filtering (2.039ms)
+▶ Task-Based Filtering
+  ✔ should filter by include_task_types (0.27ms)
+  ✔ should filter by exclude_task_types (0.1186ms)
+  ✔ should combine include and exclude filters (0.0888ms)
+  ✔ should handle plans without tasks field (0.1252ms)
+  ✔ should handle empty task types array (0.0742ms)
+✔ Task-Based Filtering (1.4091ms)
+▶ Content-Based Filtering
+  ✔ should detect documentation intent (0.1383ms)
+  ✔ should detect testing intent (0.055ms)
+  ✔ should detect security intent (0.0502ms)
+  ✔ should detect implementation intent (0.0611ms)
+  ✔ should return unknown for ambiguous objectives (0.0548ms)
+  ✔ should handle missing objective (0.0497ms)
+✔ Content-Based Filtering (0.5668ms)
+▶ Empty Plan Filtering
+  ✔ should filter plans with zero tasks (0.1626ms)
+  ✔ should keep plans with tasks field as undefined (0.0842ms)
+  ✔ should keep plans with non-empty tasks (0.0546ms)
+✔ Empty Plan Filtering (0.408ms)
+▶ Intent Flag Detection
+  ✔ should detect --just-harden flag (1.3922ms)
+  ✔ should detect --just-document flag (0.0933ms)
+  ✔ should detect --just-security flag (0.0863ms)
+  ✔ should detect --skip-frontend flag (0.1102ms)
+  ✔ should detect --skip-backend flag (0.078ms)
+✔ Intent Flag Detection (2.6327ms)
+▶ Flag Combination Parsing
+  ✔ should parse multiple flags in single command (0.1175ms)
+  ✔ should parse flags in any order (0.0778ms)
+  ✔ should handle flags with equals syntax (0.113ms)
+  ✔ should handle flags with space separator (0.1119ms)
+  ✔ should handle multiple skip patterns (0.1605ms)
+  ✔ should strip quotes from pattern values (0.1053ms)
+✔ Flag Combination Parsing (0.9166ms)
+▶ Edge Cases and Error Handling
+  ✔ should return null intent when no intent flags provided (0.1263ms)
+  ✔ should handle empty arguments (0.5091ms)
+  ✔ should ignore unknown flags gracefully (0.0597ms)
+  ✔ should be case sensitive for flags (0.0377ms)
+  ✔ should handle flags with underscores instead of dashes (0.0304ms)
+  ✔ should handle missing pattern value gracefully (0.0313ms)
+  ✔ should handle empty pattern value (0.0314ms)
+✔ Edge Cases and Error Handling (1.4963ms)
+▶ Intent Configuration Loading
+  ✔ should load fixture file (0.1901ms)
+  ✔ should load harden intent configuration (0.5645ms)
+  ✔ should load document intent configuration (0.245ms)
+  ✔ should load security-only intent configuration (0.2015ms)
+  ✔ should return null for unknown intent (0.1776ms)
+  ✔ should have valid domains in harden intent (0.1827ms)
+  ✔ should have filter configuration (0.1781ms)
+✔ Intent Configuration Loading (1.894ms)
+▶ Flag to Intent Mapping
+  ✔ --just-harden maps to harden intent (0.2283ms)
+  ✔ --just-document maps to document intent (0.1918ms)
+  ✔ --just-security maps to security-only intent (0.2158ms)
+✔ Flag to Intent Mapping (0.7624ms)
+▶ Review Panel Intent Filtering
+  ✔ should filter to security domains only with --just-security (0.4912ms)
+  ✔ should exclude non-security findings (0.0975ms)
+  ✔ should filter by specific domain list (0.109ms)
+  ✔ should apply intent filter for harden (0.5893ms)
+  ✔ should apply intent filter for document (0.1211ms)
+✔ Review Panel Intent Filtering (2.0243ms)
+▶ Ad-Hoc Review Teams
+  ✔ should spawn security-only review team (0.1473ms)
+  ✔ should build document review team (0.0894ms)
+  ✔ should build harden review team (0.0796ms)
+  ✔ should return null for unknown intent (0.0723ms)
+✔ Ad-Hoc Review Teams (0.5351ms)
+▶ Security Audit Report Synthesis
+  ✔ should synthesize report from security findings (0.1932ms)
+  ✔ should categorize findings by severity (0.0797ms)
+  ✔ should include finding details in report (0.0589ms)
+  ✔ should handle empty findings array (0.9369ms)
+✔ Security Audit Report Synthesis (1.4043ms)
+▶ Integration with Review Panel
+  ✔ should apply intent filter before deduplication (0.2303ms)
+  ✔ should maintain authority filtering after intent filter (0.1892ms)
+✔ Integration with Review Panel (0.5444ms)
+▶ Intent Team Template Loading
+  ✔ should load fixture file (1.5277ms)
+  ✔ should parse YAML into configuration object (0.5772ms)
+  ✔ should have version metadata (0.2992ms)
+  ✔ should have requirements validated (0.266ms)
+✔ Intent Team Template Loading (3.5804ms)
+▶ Intent Configuration Parsing
+  ✔ should parse harden intent with all properties (0.3384ms)
+  ✔ should parse document intent with agents (0.2428ms)
+  ✔ should parse security-only with empty secondary (0.6703ms)
+  ✔ should parse include and exclude domains (0.2932ms)
+  ✔ should parse filter configuration (0.8608ms)
+  ✔ should parse severity threshold for review mode (0.4121ms)
+✔ Intent Configuration Parsing (3.116ms)
+▶ Agent Resolution
+  ✔ should resolve primary agents for harden intent (0.3172ms)
+  ✔ should resolve secondary agents for harden intent (0.2154ms)
+  ✔ should resolve document intent agents (0.2273ms)
+  ✔ should return empty array for unknown intent (0.2071ms)
+✔ Agent Resolution (1.0695ms)
+▶ Team Assembly
+  ✔ should build team for harden intent (0.2558ms)
+  ✔ should build team for document intent (0.1818ms)
+  ✔ should build security-only team (0.2232ms)
+  ✔ should return null for unknown intent (0.1834ms)
+✔ Team Assembly (0.9266ms)
+▶ Mode Detection
+  ✔ should detect filter_plans mode for harden (0.222ms)
+  ✔ should detect filter_plans mode for document (0.1944ms)
+  ✔ should detect filter_review mode for security-only (0.1965ms)
+  ✔ should return null for unknown intent (0.1424ms)
+✔ Mode Detection (0.8671ms)
+▶ Domain to Authority Mapping
+  ✔ should map harden domains to agents (0.827ms)
+  ✔ should only map included domains (0.5894ms)
+  ✔ should return empty object for unknown intent (0.5303ms)
+✔ Domain to Authority Mapping (2.207ms)
+▶ Error Handling
+  ✔ should handle missing fixture gracefully (0.4256ms)
+  ✔ should return null when authority matrix missing (0.4537ms)
+✔ Error Handling (0.9972ms)
+▶ Mutual Exclusion Rules
+  ✔ --just-harden + --just-document should be rejected (1.0385ms)
+  ✔ --just-document + --just-security should be rejected (0.2147ms)
+  ✔ --just-harden + --just-security should be rejected (0.1619ms)
+  ✔ --just-document + --skip-frontend is redundant and rejected (0.1936ms)
+  ✔ --skip-frontend + --skip-backend = nothing to build (0.1954ms)
+✔ Mutual Exclusion Rules (3.7411ms)
+▶ Command Context Requirements
+  ✔ --just-harden only valid for build command (0.2407ms)
+  ✔ --just-document only valid for build command (0.2026ms)
+  ✔ --just-security only valid for review command (0.2086ms)
+  ✔ --skip-frontend valid for any command (0.1961ms)
+  ✔ --skip-backend valid for any command (0.2809ms)
+✔ Command Context Requirements (1.515ms)
+▶ Valid Combinations
+  ✔ --skip-frontend alone is valid (0.9466ms)
+  ✔ --skip-backend alone is valid (0.084ms)
+  ✔ --just-harden + --skip-frontend is valid (0.0454ms)
+  ✔ --just-document alone is valid (0.0514ms)
+  ✔ --just-security alone is valid for review (0.0514ms)
+  ✔ no flags is valid (default behavior) (0.0396ms)
+✔ Valid Combinations (1.3602ms)
+▶ Error Messages with Suggestions
+  ✔ suggests /legion:build when using --just-harden with wrong command (0.1258ms)
+  ✔ suggests /legion:review when using --just-security with wrong command (0.6373ms)
+  ✔ suggests alternative when skipping all files (0.056ms)
+  ✔ provides specific error for conflicting flags (0.0414ms)
+✔ Error Messages with Suggestions (0.9331ms)
+▶ Edge Cases
+  ✔ handles null flags object (0.0552ms)
+  ✔ handles undefined command (0.0361ms)
+  ✔ detects duplicate --just-harden flags (0.0348ms)
+  ✔ validates all error scenarios return errors array (0.0311ms)
+  ✔ isValidCombination helper returns boolean (0.0538ms)
+  ✔ parseFlags handles empty array (0.0631ms)
+✔ Edge Cases (0.3551ms)
+▶ Lint commands: required YAML frontmatter fields
+  ✔ advise.md has valid frontmatter (1.8496ms)
+  ✔ agent.md has valid frontmatter (0.5551ms)
+  ✔ board.md has valid frontmatter (0.3765ms)
+  ✔ build.md has valid frontmatter (1.0474ms)
+  ✔ explore.md has valid frontmatter (0.3564ms)
+  ✔ learn.md has valid frontmatter (0.3555ms)
+  ✔ map.md has valid frontmatter (0.4079ms)
+  ✔ milestone.md has valid frontmatter (0.3081ms)
+  ✔ plan.md has valid frontmatter (0.4153ms)
+  ✔ polish.md has valid frontmatter (0.4644ms)
+  ✔ portfolio.md has valid frontmatter (0.3568ms)
+  ✔ quick.md has valid frontmatter (0.2718ms)
+  ✔ retro.md has valid frontmatter (0.2502ms)
+  ✔ review.md has valid frontmatter (0.3107ms)
+  ✔ ship.md has valid frontmatter (0.2425ms)
+  ✔ start.md has valid frontmatter (0.2374ms)
+  ✔ status.md has valid frontmatter (0.2375ms)
+  ✔ update.md has valid frontmatter (0.2547ms)
+  ✔ validate.md has valid frontmatter (0.3538ms)
+✔ Lint commands: required YAML frontmatter fields (10.4595ms)
+▶ Lint commands: required XML sections
+  ✔ advise.md has required XML sections (0.5701ms)
+  ✔ agent.md has required XML sections (0.2622ms)
+  ✔ board.md has required XML sections (0.2818ms)
+  ✔ build.md has required XML sections (0.3055ms)
+  ✔ explore.md has required XML sections (0.1555ms)
+  ✔ learn.md has required XML sections (0.1411ms)
+  ✔ map.md has required XML sections (0.108ms)
+  ✔ milestone.md has required XML sections (0.1317ms)
+  ✔ plan.md has required XML sections (0.1716ms)
+  ✔ polish.md has required XML sections (0.1523ms)
+  ✔ portfolio.md has required XML sections (0.1269ms)
+  ✔ quick.md has required XML sections (0.1552ms)
+  ✔ retro.md has required XML sections (0.15ms)
+  ✔ review.md has required XML sections (0.1868ms)
+  ✔ ship.md has required XML sections (0.1165ms)
+  ✔ start.md has required XML sections (0.0972ms)
+  ✔ status.md has required XML sections (0.0992ms)
+  ✔ update.md has required XML sections (0.2399ms)
+  ✔ validate.md has required XML sections (0.5847ms)
+✔ Lint commands: required XML sections (4.4469ms)
+▶ Lint commands: name consistency with filename
+  ✔ advise.md name field matches filename (0.3669ms)
+  ✔ agent.md name field matches filename (0.1684ms)
+  ✔ board.md name field matches filename (0.1355ms)
+  ✔ build.md name field matches filename (0.1723ms)
+  ✔ explore.md name field matches filename (0.1263ms)
+  ✔ learn.md name field matches filename (0.1322ms)
+  ✔ map.md name field matches filename (0.1354ms)
+  ✔ milestone.md name field matches filename (0.145ms)
+  ✔ plan.md name field matches filename (0.167ms)
+  ✔ polish.md name field matches filename (0.1551ms)
+  ✔ portfolio.md name field matches filename (0.1119ms)
+  ✔ quick.md name field matches filename (0.102ms)
+  ✔ retro.md name field matches filename (0.101ms)
+  ✔ review.md name field matches filename (0.1602ms)
+  ✔ ship.md name field matches filename (0.1133ms)
+  ✔ start.md name field matches filename (0.1071ms)
+  ✔ status.md name field matches filename (0.1158ms)
+  ✔ update.md name field matches filename (0.1192ms)
+  ✔ validate.md name field matches filename (0.1275ms)
+✔ Lint commands: name consistency with filename (3.0481ms)
+▶ Lint commands: no orphan closing tags
+  ✔ advise.md has no orphan closing tags (0.2708ms)
+  ✔ agent.md has no orphan closing tags (0.122ms)
+  ✔ board.md has no orphan closing tags (0.1294ms)
+  ✔ build.md has no orphan closing tags (0.1384ms)
+  ✔ explore.md has no orphan closing tags (0.0964ms)
+  ✔ learn.md has no orphan closing tags (0.1012ms)
+  ✔ map.md has no orphan closing tags (0.084ms)
+  ✔ milestone.md has no orphan closing tags (0.1041ms)
+  ✔ plan.md has no orphan closing tags (0.1365ms)
+  ✔ polish.md has no orphan closing tags (0.1272ms)
+  ✔ portfolio.md has no orphan closing tags (0.1025ms)
+  ✔ quick.md has no orphan closing tags (0.1014ms)
+  ✔ retro.md has no orphan closing tags (0.0893ms)
+  ✔ review.md has no orphan closing tags (0.7196ms)
+  ✔ ship.md has no orphan closing tags (0.2502ms)
+  ✔ start.md has no orphan closing tags (0.2129ms)
+  ✔ status.md has no orphan closing tags (0.2127ms)
+  ✔ update.md has no orphan closing tags (0.2051ms)
+  ✔ validate.md has no orphan closing tags (0.2369ms)
+✔ Lint commands: no orphan closing tags (3.8208ms)
+✔ schema_has_task_type_column: OUTCOMES.md schema includes Task Type column (0.6538ms)
+✔ store_has_task_type_validation: Store operation contains task_type validation rules (0.1483ms)
+✔ store_inference_chain_complete: task_type inference chain is fully documented (0.1922ms)
+✔ recall_has_archetype_grouping: Recall operation documents archetypeScores (0.2345ms)
+✔ recall_recency_decay_documented: Recency decay rules are present in recall (0.2562ms)
+▶ migrate-plans-to-v2
+  ✔ singular agent becomes agents array (4.0218ms)
+  ✔ plain integer plan field becomes NN-PP string (0.4888ms)
+  ✔ flat string expected_artifacts becomes structured (0.3221ms)
+  ✔ idempotent: running on already-migrated text yields same text (0.5721ms)
+✔ migrate-plans-to-v2 (6.0899ms)
+▶ No agent self-deferrals contract
+  ✔ phase-decomposer requires planned work to complete, block, or escalate (1.5569ms)
+  ✔ wave-executor injects no-deferral rules into both execution prompts (0.9345ms)
+  ✔ wave-executor makes deferred a user-only escalation resolution (1.0838ms)
+  ✔ authority-enforcer uses domain ownership wording instead of defer-to wording (0.6655ms)
+  ✔ cli-dispatch cannot silently skip or defer failed dispatch work (0.4528ms)
+  ✔ escalation protocol records deferred only after user choice (0.4672ms)
+✔ No agent self-deferrals contract (7.4973ms)
+▶ Cycle Delta — Cycle Comparison section (review-loop)
+  ✔ Cycle Comparison substep exists (0.5791ms)
+  ✔ contains cycle_delta data structure (0.1158ms)
+  ✔ contains findings_resolved classification (0.0768ms)
+  ✔ contains findings_new classification (0.0713ms)
+  ✔ contains findings_unchanged classification (0.0977ms)
+  ✔ contains findings_downgraded classification (0.0736ms)
+  ✔ contains findings_upgraded classification (0.072ms)
+✔ Cycle Delta — Cycle Comparison section (review-loop) (1.8245ms)
+▶ Cycle Delta — Two-tier fingerprint strategy (review-loop)
+  ✔ documents Location fingerprint (0.2264ms)
+  ✔ documents Full fingerprint (0.6885ms)
+  ✔ location fingerprint excludes severity from the key (0.4045ms)
+✔ Cycle Delta — Two-tier fingerprint strategy (review-loop) (1.4961ms)
+▶ Cycle Delta — REVIEW.md template sections (review-loop)
+  ✔ Cycle Delta section heading exists (0.2342ms)
+  ✔ Progression Summary subsection exists (0.0998ms)
+  ✔ Findings Resolved subsection exists (0.0916ms)
+  ✔ Findings New subsection exists (0.1364ms)
+  ✔ Findings Unchanged subsection exists (0.0936ms)
+  ✔ Severity Changes subsection exists (0.0935ms)
+✔ Cycle Delta — REVIEW.md template sections (review-loop) (0.9829ms)
+▶ Cycle Delta — Single-cycle graceful degradation (review-loop)
+  ✔ contains guidance to omit Cycle Delta for single-cycle reviews (0.1755ms)
+  ✔ single-cycle omission language is present (0.186ms)
+✔ Cycle Delta — Single-cycle graceful degradation (review-loop) (0.4609ms)
+▶ Cycle Delta — Verification guidance (review-loop)
+  ✔ contains Cycle Delta verification section (0.1288ms)
+  ✔ contains Sample test scenario (0.0898ms)
+  ✔ contains invariant formula referencing all five classification types (0.1396ms)
+✔ Cycle Delta — Verification guidance (review-loop) (0.4764ms)
+▶ Cycle Delta — Escalation and Stale Loop coverage (review-loop)
+  ✔ ## Cycle Delta appears exactly 3 times (Sections 7, 8, 8.5) (0.1947ms)
+  ✔ Section 8 (Escalation) references Cycle Delta (0.1036ms)
+  ✔ Section 8.5 (Stale Loop Abort) references Cycle Delta (0.1274ms)
+✔ Cycle Delta — Escalation and Stale Loop coverage (review-loop) (0.5495ms)
+▶ Observability Summary — Agent Selection Rationale (wave-executor)
+  ✔ Agent Selection Rationale section exists as heading (0.5654ms)
+  ✔ candidate comparison table has required headers (0.1727ms)
+  ✔ contains Task type detected field (0.1007ms)
+  ✔ contains Confidence field (0.0992ms)
+  ✔ contains Adapter field (0.0655ms)
+  ✔ contains Model tier field (0.0996ms)
+✔ Observability Summary — Agent Selection Rationale (wave-executor) (1.8063ms)
+▶ Observability Summary — Phase Decision Summary (wave-executor)
+  ✔ Phase Decision Summary section exists (0.1091ms)
+  ✔ references decision_capture (0.099ms)
+  ✔ decision summary table has required headers (0.1623ms)
+✔ Observability Summary — Phase Decision Summary (wave-executor) (0.5024ms)
+▶ Observability Summary — Score Export (agent-registry)
+  ✔ Score Export section exists (0.1529ms)
+  ✔ contains score_export structure (0.1011ms)
+  ✔ contains semantic_score field (0.0495ms)
+  ✔ contains heuristic_score field (0.0419ms)
+  ✔ contains memory_boost field (0.0659ms)
+  ✔ contains total_score field (0.0373ms)
+  ✔ contains recommendation_source field (0.0312ms)
+✔ Observability Summary — Score Export (agent-registry) (0.623ms)
+▶ Observability Summary — Graceful degradation (wave-executor)
+  ✔ contains guidance to omit rationale for autonomous tasks (0.1454ms)
+  ✔ omission applies when autonomous is true (0.0669ms)
+✔ Observability Summary — Graceful degradation (wave-executor) (0.2639ms)
+▶ Observability Summary — Score Data for Observability (phase-decomposer)
+  ✔ Score Data for Observability section exists (0.048ms)
+  ✔ references score_export structure (0.0473ms)
+✔ Observability Summary — Score Data for Observability (phase-decomposer) (0.1379ms)
+▶ Path Validation Against Mappings
+  ✔ valid routes path passes validation (0.7904ms)
+  ✔ valid tests path passes validation (0.1429ms)
+  ✔ valid components path passes validation (0.1089ms)
+  ✔ valid services path passes validation (0.1251ms)
+  ✔ valid utils path passes validation (0.1083ms)
+  ✔ valid types path passes validation (0.1074ms)
+  ✔ valid middleware path passes validation (0.1208ms)
+  ✔ valid config path passes validation (0.1159ms)
+  ✔ valid assets path passes validation (0.3395ms)
+  ✔ valid styles path passes validation (0.969ms)
+  ✔ invalid routes file returns error and suggestions (0.4041ms)
+  ✔ invalid tests file returns error and suggestions (0.2218ms)
+  ✔ path suggestions include correct directory (0.1631ms)
+  ✔ category inference from file type works (0.0908ms)
+  ✔ multiple valid categories detected for ambiguous paths (0.6162ms)
+  ✔ unknown category returns error (0.0717ms)
+✔ Path Validation Against Mappings (6.1664ms)
+▶ Spec Pipeline Integration
+  ✔ validateDeliverablePath validates during spec drafting (0.5313ms)
+  ✔ validateDeliverablePath catches misplaced deliverables (0.0833ms)
+  ✔ strict mode returns error on violations (0.0815ms)
+  ✔ warn mode returns warning on violations (0.0597ms)
+  ✔ off mode allows all paths (0.0535ms)
+  ✔ override mechanism allows exceptions (0.1043ms)
+  ✔ override does not apply to non-matching paths (0.0733ms)
+  ✔ path validation includes suggestions for fixes (0.0705ms)
+✔ Spec Pipeline Integration (1.4589ms)
+▶ Wave Executor Integration
+  ✔ file placement validation before agent spawn (0.1504ms)
+  ✔ blocking mode prevents misplaced files (0.0906ms)
+  ✔ non-blocking mode allows with warning (0.0625ms)
+  ✔ auto-correction suggests proper directory (0.0707ms)
+  ✔ warning mode for out-of-directory files (0.1218ms)
+  ✔ correctly placed files have no warnings (0.0405ms)
+  ✔ monorepo package paths are validated correctly (0.0473ms)
+✔ Wave Executor Integration (0.9502ms)
+▶ Configuration-Based Enforcement
+  ✔ strict mode configuration returns error (0.1204ms)
+  ✔ warn mode configuration returns warning (0.0425ms)
+  ✔ off mode configuration returns off (0.0309ms)
+  ✔ default mode applies when category not specified (0.0591ms)
+  ✔ category-specific settings override default (0.0718ms)
+  ✔ per-category strictness settings are respected (0.059ms)
+✔ Configuration-Based Enforcement (0.7084ms)
+▶ Path Enforcement Helper Functions
+  ✔ inferCategoryFromPath detects test files (0.0982ms)
+  ✔ inferCategoryFromPath detects route files (0.0346ms)
+  ✔ inferCategoryFromPath detects component files (0.0551ms)
+  ✔ inferCategoryFromPath detects service files (0.1649ms)
+  ✔ inferCategoryFromPath detects style files (0.0486ms)
+  ✔ inferCategoryFromPath returns null for unknown files (0.0402ms)
+  ✔ detectMultipleCategories finds all matches (0.0768ms)
+  ✔ matchesPattern handles various glob patterns (0.2103ms)
+✔ Path Enforcement Helper Functions (0.8522ms)
+▶ Wave File Overlap Detection (DSC-04)
+  ✔ 1. Overlap detected — plans A and B in same wave share a file (0.671ms)
+  ✔ 2. No overlap — plans A and C in same wave share no files (0.1118ms)
+  ✔ 3. Multiple overlaps — two plans share 2+ files (0.5257ms)
+  ✔ 4. Directory prefix matching — directory entry covers file (0.0881ms)
+  ✔ 5. Cross-wave no overlap — same file in different waves is OK (0.6234ms)
+  ✔ 6. Single plan wave — no overlap possible (0.0945ms)
+  ✔ 7. Empty files_modified — no overlap possible (0.0865ms)
+  ✔ 8. Three plans pairwise — A overlaps B but not C (0.088ms)
+  ▶ Fixture-based tests
+    ✔ fixtures parse correctly and detect overlap between plan-a and plan-b (0.9127ms)
+  ✔ Fixture-based tests (1.0481ms)
+✔ Wave File Overlap Detection (DSC-04) (4.1607ms)
+▶ Plan Schema Conformance (v6.0)
+  ▶ verification_commands field
+    ✔ valid plan has verification_commands array (5.0323ms)
+    ✔ missing verification_commands triggers BLOCKER (0.5123ms)
+    ✔ empty verification_commands array triggers BLOCKER (0.1003ms)
+    ✔ verification_commands entries are non-empty strings (0.2538ms)
+  ✔ verification_commands field (6.7575ms)
+  ▶ files_forbidden field
+    ✔ valid plan has files_forbidden array (0.3284ms)
+    ✔ missing files_forbidden for code plan triggers WARNING (0.1236ms)
+    ✔ files_modified and files_forbidden have no overlap — BLOCKER if overlap (0.4232ms)
+    ✔ empty files_forbidden array is valid (0.109ms)
+    ✔ directory prefix in files_forbidden catches nested paths (0.1194ms)
+  ✔ files_forbidden field (1.3098ms)
+  ▶ expected_artifacts field
+    ✔ valid plan has expected_artifacts with path and provides (0.4159ms)
+    ✔ missing expected_artifacts triggers WARNING (0.0859ms)
+    ✔ required artifacts appear in files_modified (0.2124ms)
+    ✔ artifact entries have required structure (path, provides) (0.2484ms)
+  ✔ expected_artifacts field (1.0577ms)
+  ▶ Phase 1 plan files conform to v6.0 schema
+    ✔ 01-01-PLAN.md passes schema validation (0.9844ms)
+    ✔ 01-02-PLAN.md passes schema validation (0.5637ms)
+    ✔ 01-03-PLAN.md passes schema validation (0.6913ms)
+  ✔ Phase 1 plan files conform to v6.0 schema (2.3537ms)
+  ▶ agents field convention
+    ✔ plan frontmatter has plural agents array (not singular agent) (0.8324ms)
+  ✔ agents field convention (0.8983ms)
+✔ Plan Schema Conformance (v6.0) (13.0496ms)
+▶ Planning count cap contract
+  ✔ active workflow surfaces do not cap plans per phase or phases per milestone (6.1226ms)
+  ✔ /legion:plan explicitly allows unlimited phase plans (0.9485ms)
+  ✔ /legion:start roadmap guidance treats plan counts as estimates (0.3882ms)
+  ✔ /legion:milestone has no fixed phase-count limit (0.3676ms)
+  ✔ settings schema scopes max_tasks_per_plan to tasks inside one plan (0.3185ms)
+✔ Planning count cap contract (8.8842ms)
+▶ semantic-first recommendation fixtures
+  ✔ backend-performance (15.9688ms)
+  ✔ marketing-campaign (7.4914ms)
+  ✔ ambiguous-low-confidence (7.5211ms)
+  ✔ typescript-react-frontend (9.1758ms)
+  ✔ python-ml-pipeline (7.859ms)
+  ✔ laravel-php-app (7.0617ms)
+  ✔ swift-visionos-spatial (6.8367ms)
+  ✔ review-security-audit (5.85ms)
+  ✔ devops-deployment (8.9728ms)
+  ✔ mobile-flutter-app (9.3755ms)
+✔ semantic-first recommendation fixtures (87.6643ms)
+✔ metadata score is present in recommendation output (7.9812ms)
+✔ technology-specific prompts produce higher confidence than generic prompts (10.3385ms)
+✔ metadata scoring does not override semantic relevance (5.021ms)
+✔ parseAgentMetadata returns metadata for known agents (5.8511ms)
+✔ metadataScore scores exact matches correctly (0.1388ms)
+✔ metadataScore scores artifact_types and review_strengths correctly (0.0783ms)
+✔ metadataScore scores partial/substring matches correctly (0.0448ms)
+✔ metadataScore returns 0 when agent has no metadata (0.0403ms)
+✔ metadataScore returns 0 for unmatched concepts (0.0422ms)
+✔ archetypeBoost is present in recommendation output (6.3663ms)
+✔ archetype_boost_integration: archetypeScores parameter flows through to scoring (5.282ms)
+✔ archetype_gating: archetype boost is zero when baseline is zero (5.1286ms)
+✔ archetype_top_agent_bonus: top agent gets +1.0 bonus (0.0935ms)
+✔ archetype_volume_modifier: fewer outcomes produce proportionally lower boost (0.0571ms)
+✔ archetype_clamping: boost never exceeds 5.0 (0.0488ms)
+✔ no_archetype_data: engine works identically when archetypeScores is not provided (9.8663ms)
+✔ detectTaskType_mapping: maps concepts to correct task types (0.0834ms)
+✔ archetypeBoost returns 0 for agent not in archetype list (0.0482ms)
+✔ archetypeBoost returns 0 for null taskType (0.2046ms)
+✔ memory boost is additive and does not remove mandatory testing role (4.9852ms)
+✔ classifyConfidence: metadata elevation at threshold 6 (0.0876ms)
+✔ recommendAgents returns gracefully for invalid prompt (0.0699ms)
+✔ recommendAgents handles non-numeric memoryScores gracefully (4.8275ms)
+  Current agent count: 49 (limit: 48)
+  ⚠️  Agent count (49) exceeds limit (48) by 1
+  ✓ testing-qa-verification-specialist
+  ✓ engineering-security-engineer
+  ✓ testing-api-tester
+  ✓ product-technical-writer
+  ✓ engineering-frontend-developer
+  ✓ engineering-frontend-developer
+  ✓ engineering-backend-architect
+  ✓ engineering-infrastructure-devops
+  ✓ engineering-security-engineer
+  ✓ testing-api-tester
+  Coverage: 4 full, 13 partial, 1 minimal
+  Severity: 1 critical, 3 important
+  Marketing agents: 4 (expected: no production coverage)
+  Current: 49, Limit: 48, Over: true
+  ⚠️  LIMIT EXCEEDED: 49 agents (over by 1)
+  Agent creation should be blocked or require removal
+  Can create new agent: false
+  Overage: 1, Severity: warning
+  Division breakdown:
+    Specialized: 4
+    Design: 6
+    Engineering: 9
+    Spatial Computing: 6
+    Marketing: 4
+    Product: 4
+    Project Management: 5
+    Support: 4
+    Testing: 7
+  Coverage scores: 12 full, 23 partial, 33 none
+  ✓ All required files present
+  Agent creation blocked - at limit
+
+  === Roster Gap Analysis Test Summary ===
+  Production Roles: 15420 bytes
+  Coverage Matrix: 17045 bytes
+  Total Agents: 49
+  Agent Limit: 48
+  Divisions: 9
+▶ Agent Registry Parsing
+  ✔ ROSTER-01: should parse agent list from agents directory (1.317ms)
+  ✔ ROSTER-01: should validate division count is 9 (6.0687ms)
+  ✔ ROSTER-04: should track agent count against 52-agent limit (0.554ms)
+  ✔ ROSTER-01: should detect when agent count exceeds limit (0.2406ms)
+  ✔ ROSTER-01: should extract task types from agent files (1.2358ms)
+  ✔ ROSTER-01: should detect no duplicate agent entries (0.9703ms)
+  ✔ ROSTER-01: should handle malformed agent entries gracefully (4.5851ms)
+  ✔ ROSTER-01: should have all expected divisions represented (5.8676ms)
+✔ Agent Registry Parsing (22.2514ms)
+▶ Intent Teams Validation
+  ✔ ROSTER-05: should verify all referenced agents exist in roster (1.198ms)
+  ✔ ROSTER-05: should detect orphaned intent mappings (0.6955ms)
+  ✔ ROSTER-05: should resolve intent-to-agent mappings (0.2886ms)
+  ✔ ROSTER-05: should handle fallback for missing agents (0.3914ms)
+  ✔ ROSTER-05: should validate harden intent team composition (0.3285ms)
+  ✔ ROSTER-05: should validate security-only intent (0.3094ms)
+✔ Intent Teams Validation (3.5249ms)
+▶ Gap Detection Algorithm
+  ✔ ROSTER-02: should compare production roles vs agent coverage (1.2046ms)
+  ✔ ROSTER-02: should score coverage strength (full/partial/minimal) (0.561ms)
+  ✔ ROSTER-02: should identify critical gaps (missing security-engineer) (0.28ms)
+  ✔ ROSTER-02: should identify important gaps (missing technical-writer) (0.2506ms)
+  ✔ ROSTER-02: should handle nice-to-have gaps with lower priority (1.0585ms)
+  ✔ ROSTER-02: should classify gap severity correctly (0.4703ms)
+  ✔ ROSTER-02: should prevent false positives for intentional gaps (0.3802ms)
+  ✔ ROSTER-02: should aggregate gaps at division level (9.3211ms)
+  ✔ ROSTER-02: should analyze cross-division coverage (0.323ms)
+  ✔ ROSTER-02: should deduplicate gap findings (0.4859ms)
+✔ Gap Detection Algorithm (14.7387ms)
+▶ 52-Agent Limit Enforcement
+  ✔ ROSTER-04: should compare current count to limit (0.4064ms)
+  ✔ ROSTER-04: should detect limit exceeded (48 agents) (0.3443ms)
+  ✔ ROSTER-04: should block agent creation when at limit (0.2994ms)
+  ✔ ROSTER-04: should suggest agent replacement logic (0.3019ms)
+  ✔ ROSTER-04: should validate /legion:agent workflow respects limit (0.2993ms)
+  ✔ ROSTER-04: should classify warning vs error based on overage (0.2938ms)
+  ✔ ROSTER-04: should track agent count by division (8.6084ms)
+  ✔ ROSTER-04: should generate limit compliance report (0.375ms)
+✔ 52-Agent Limit Enforcement (11.2076ms)
+▶ Coverage Analysis
+  ✔ ROSTER-02: should detect SRE-equivalent coverage (0.2258ms)
+  ✔ ROSTER-02: should identify SRE coverage gaps (0.2153ms)
+  ✔ ROSTER-03: should validate security-auditor coverage (0.1533ms)
+  ✔ ROSTER-03: should identify security-engineer gap (0.2495ms)
+  ✔ ROSTER-04: should validate data-scientist coverage (0.1752ms)
+  ✔ ROSTER-04: should identify data science gaps (0.1502ms)
+  ✔ ROSTER-06: should score coverage algorithm correctly (0.2263ms)
+  ✔ ROSTER-06: should generate coverage report format (0.1683ms)
+✔ Coverage Analysis (1.7227ms)
+▶ Integration Tests
+  ✔ should run full gap analysis workflow end-to-end (0.3232ms)
+  ✔ should generate gap report in expected format (0.1913ms)
+  ✔ should integrate with /legion:agent for gap closure (0.3073ms)
+  ✔ should suggest agent creation priorities (0.2426ms)
+  ✔ should prioritize gaps for user presentation (0.1693ms)
+  ✔ should verify analysis output matches fixture expectations (0.3081ms)
+✔ Integration Tests (1.6682ms)
+▶ Test Suite Summary
+  ✔ should have all required fixtures (5.8292ms)
+✔ Test Suite Summary (5.8999ms)
+✔ runtime metadata has complete evidence-backed contracts (1.6654ms)
+✔ adapter frontmatter matches runtime metadata (3.0907ms)
+✔ README, runtime audit, and certification docs stay in sync with runtime metadata (0.2215ms)
+▶ Sequential Files Convention
+  ▶ resolveSequentialOrder — dispatch behavior
+    ✔ 1. No sequential_files — all dispatched in parallel (1.4692ms)
+    ✔ 2. Empty sequential_files — all dispatched in parallel (0.8763ms)
+    ✔ 3. Single plan with sequential_files — dispatched normally (no conflict) (0.2411ms)
+    ✔ 4. Two plans share a sequential file — dispatched sequentially (1.0024ms)
+    ✔ 5. Two plans, no overlap — dispatched in parallel (0.1761ms)
+    ✔ 6. Three plans, partial overlap — entire wave falls back to sequential (0.1685ms)
+    ✔ 7. Cross-wave irrelevance — same file in different waves causes no constraint (0.1422ms)
+    ✔ sequential order respects plan number sorting (0.113ms)
+  ✔ resolveSequentialOrder — dispatch behavior (6.7153ms)
+  ▶ validateNoModifiedOverlap — field validation
+    ✔ 8. sequential_files must not overlap with files_modified (0.1907ms)
+    ✔ no overlap between sequential_files and files_modified is valid (0.1356ms)
+    ✔ empty sequential_files is valid (0.0792ms)
+    ✔ undefined sequential_files is valid (0.1254ms)
+  ✔ validateNoModifiedOverlap — field validation (0.681ms)
+✔ Sequential Files Convention (8ms)
+▶ Wave Detection
+  ✔ detectWaves should be exported and functional (0.4986ms)
+  ✔ should identify tasks with no dependencies as Wave A (1.0799ms)
+  ✔ should identify tasks depending on Wave A as Wave B (0.2621ms)
+  ✔ should detect diamond dependency pattern correctly (0.2495ms)
+  ✔ should detect circular dependencies as error (0.2929ms)
+  ✔ should detect 3+ wave patterns as error (0.2349ms)
+  ✔ should return empty waves for empty input (0.2188ms)
+✔ Wave Detection (3.8612ms)
+▶ Wave Gate Validation
+  ✔ validateWaveGates should be exported and functional (0.3404ms)
+  ✔ should validate Wave A complete before Wave B starts (0.414ms)
+  ✔ should detect incomplete Wave A tasks (0.2736ms)
+  ✔ should detect missing dependencies for Wave B tasks (0.2042ms)
+✔ Wave Gate Validation (1.5666ms)
+▶ Dependency Graph Construction
+  ✔ buildDependencyGraph should be exported and functional (0.1926ms)
+  ✔ should build correct dependency graph (0.2194ms)
+  ✔ should build reverse dependencies (0.1471ms)
+  ✔ should handle tasks with no dependencies (0.1545ms)
+✔ Dependency Graph Construction (1.5408ms)
+▶ Parallel Execution Safety
+  ✔ canExecuteInParallel should be exported and functional (0.0707ms)
+  ✔ Wave A tasks can execute in parallel (0.087ms)
+  ✔ Wave B tasks without inter-dependencies can execute in parallel (0.0476ms)
+  ✔ should detect intra-wave dependencies (0.0528ms)
+✔ Parallel Execution Safety (0.3329ms)
+▶ Dynamic Agent Spawning Detection
+  ✔ requiresDynamicSpawning should be exported and functional (0.078ms)
+  ✔ should detect research tasks as needing dynamic spawning (0.0894ms)
+  ✔ should not flag implementation tasks (0.0627ms)
+  ✔ should not flag decision tasks (0.0477ms)
+✔ Dynamic Agent Spawning Detection (0.3826ms)
+▶ Remediation Phase Identification
+  ✔ identifyRemediationTasks should be exported and functional (0.0918ms)
+  ✔ should identify fix tasks as remediation (0.1066ms)
+  ✔ should identify remediate tasks (0.0686ms)
+  ✔ should identify correction tasks (0.0482ms)
+  ✔ should identify by type (0.0462ms)
+✔ Remediation Phase Identification (0.4507ms)
+▶ Artifact Passing Between Waves
+  ✔ Wave A outputs should match Wave B inputs (0.1301ms)
+  ✔ should identify orphan Wave B inputs (0.0743ms)
+✔ Artifact Passing Between Waves (0.263ms)
+▶ Wave Boundary Gates
+  ✔ should create gate between Wave A and Wave B (0.0915ms)
+  ✔ gate should require all Wave A tasks (0.0932ms)
+✔ Wave Boundary Gates (0.2675ms)
+▶ validate-command-spawn-truthfulness
+  ✔ spawn-with-agent-call passes (2.9305ms)
+  ✔ spawn-without-agent-call fails (0.9994ms)
+  ✔ inline-persona-mode passes (0.4403ms)
+  ✔ no-spawn-no-inline passes (exempt) (0.3599ms)
+  ✔ validateCommandsDir aggregates (0.8821ms)
+✔ validate-command-spawn-truthfulness (6.3823ms)
+▶ validate-plan-frontmatter
+  ✔ valid-current passes (38.517ms)
+  ✔ valid-multi-agent passes (0.637ms)
+  ✔ invalid-singular-agent fails (uses agent: not agents:) (0.4399ms)
+  ✔ invalid-flat-artifacts fails (expected_artifacts as strings) (0.3458ms)
+  ✔ invalid-extra-field fails (additionalProperties) (0.346ms)
+  ✔ invalid-vague-action fails decision-complete body validation (0.9892ms)
+  ✔ validatePlanDir aggregates results (1.1207ms)
+  ✔ all real .planning/phases/**/PLAN.md validate (enabled post-migration) (129.924ms)
+✔ validate-plan-frontmatter (173.1323ms)
+▶ validate-settings
+  ✔ actual settings.json is valid against schema (28.2805ms)
+  ✔ valid fixture passes (9.811ms)
+  ✔ invalid-extra-field fails with additionalProperties error (8.6812ms)
+  ✔ invalid-missing-required fails with required error (7.7334ms)
+  ✔ invalid-wrong-type fails with type error (6.609ms)
+✔ validate-settings (61.9976ms)
+ℹ tests 1390
+ℹ suites 249
+ℹ pass 1390
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5609.7722
+
+>>> npm pack --dry-run --json
+[
+  {
+    "id": "@9thlevelsoftware/legion@8.0.5",
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "size": 736134,
+    "unpackedSize": 2338686,
+    "shasum": "8107500541e3fd59598dec554a20211a67bcd80d",
+    "integrity": "sha512-+vm3e2dSKdzHRiyIH2dTaIjBTUzf4vqbSoQ2ITztvuYEtsXMaIyutCj7N8+oMDTepIEevmGq6kcQ3/0L1Stq2w==",
+    "filename": "9thlevelsoftware-legion-8.0.5.tgz",
+    "files": [
+      {
+        "path": ".codex-plugin/plugin.json",
+        "size": 1412,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 81679,
+        "mode": 420
+      },
+      {
+        "path": "adapters/ADAPTER.md",
+        "size": 6945,
+        "mode": 420
+      },
+      {
+        "path": "adapters/aider.md",
+        "size": 9412,
+        "mode": 420
+      },
+      {
+        "path": "adapters/antigravity-cli.md",
+        "size": 4072,
+        "mode": 420
+      },
+      {
+        "path": "adapters/claude-code.md",
+        "size": 6040,
+        "mode": 420
+      },
+      {
+        "path": "adapters/codex-cli.md",
+        "size": 5874,
+        "mode": 420
+      },
+      {
+        "path": "adapters/copilot-cli.md",
+        "size": 4784,
+        "mode": 420
+      },
+      {
+        "path": "adapters/cursor.md",
+        "size": 3713,
+        "mode": 420
+      },
+      {
+        "path": "adapters/gemini-cli.md",
+        "size": 5280,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-cli.md",
+        "size": 11403,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-code.md",
+        "size": 5510,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kiro-cli.md",
+        "size": 5101,
+        "mode": 420
+      },
+      {
+        "path": "adapters/opencode.md",
+        "size": 9364,
+        "mode": 420
+      },
+      {
+        "path": "adapters/windsurf.md",
+        "size": 3615,
+        "mode": 420
+      },
+      {
+        "path": "agents/agents-orchestrator.md",
+        "size": 14117,
+        "mode": 420
+      },
+      {
+        "path": "agents/data-analytics-engineer.md",
+        "size": 22249,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-brand-guardian.md",
+        "size": 12219,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ui-designer.md",
+        "size": 8719,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-architect.md",
+        "size": 9643,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-researcher.md",
+        "size": 14548,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-visual-storyteller.md",
+        "size": 8011,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-whimsy-injector.md",
+        "size": 6642,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-ai-engineer.md",
+        "size": 8053,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-backend-architect.md",
+        "size": 10127,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-frontend-developer.md",
+        "size": 9844,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-infrastructure-devops.md",
+        "size": 19148,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-laravel-specialist.md",
+        "size": 19456,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-mobile-app-builder.md",
+        "size": 7791,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-rapid-prototyper.md",
+        "size": 7676,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-security-engineer.md",
+        "size": 17203,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-senior-developer.md",
+        "size": 23313,
+        "mode": 420
+      },
+      {
+        "path": "agents/lsp-index-engineer.md",
+        "size": 11879,
+        "mode": 420
+      },
+      {
+        "path": "agents/macos-spatial-metal-engineer.md",
+        "size": 12863,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-app-store-optimizer.md",
+        "size": 13734,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-content-social-strategist.md",
+        "size": 15115,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-growth-hacker.md",
+        "size": 17715,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-social-platform-specialist.md",
+        "size": 11947,
+        "mode": 420
+      },
+      {
+        "path": "agents/polymath.md",
+        "size": 9048,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-feedback-synthesizer.md",
+        "size": 19681,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-sprint-prioritizer.md",
+        "size": 11675,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-technical-writer.md",
+        "size": 17521,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-trend-researcher.md",
+        "size": 11311,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-experiment-tracker.md",
+        "size": 10222,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-project-shepherd.md",
+        "size": 10522,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-operations.md",
+        "size": 10526,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-producer.md",
+        "size": 11526,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-manager-senior.md",
+        "size": 10607,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-executive-summary-generator.md",
+        "size": 9796,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-finance-tracker.md",
+        "size": 9422,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-legal-compliance-checker.md",
+        "size": 16554,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-support-responder.md",
+        "size": 16050,
+        "mode": 420
+      },
+      {
+        "path": "agents/terminal-integration-specialist.md",
+        "size": 26248,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-api-tester.md",
+        "size": 13183,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-code-polisher.md",
+        "size": 19168,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-performance-benchmarker.md",
+        "size": 12832,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-qa-verification-specialist.md",
+        "size": 16616,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-test-results-analyzer.md",
+        "size": 15252,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-tool-evaluator.md",
+        "size": 8132,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-workflow-optimizer.md",
+        "size": 11644,
+        "mode": 420
+      },
+      {
+        "path": "agents/visionos-spatial-engineer.md",
+        "size": 22349,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-cockpit-interaction-specialist.md",
+        "size": 24051,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-immersive-developer.md",
+        "size": 25594,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-interface-architect.md",
+        "size": 22639,
+        "mode": 420
+      },
+      {
+        "path": "bin/install.js",
+        "size": 71686,
+        "mode": 420
+      },
+      {
+        "path": "bin/runtime-metadata.js",
+        "size": 18900,
+        "mode": 420
+      },
+      {
+        "path": "checksums.sha256",
+        "size": 13013,
+        "mode": 420
+      },
+      {
+        "path": "commands/advise.md",
+        "size": 10719,
+        "mode": 420
+      },
+      {
+        "path": "commands/agent.md",
+        "size": 5197,
+        "mode": 420
+      },
+      {
+        "path": "commands/board.md",
+        "size": 11924,
+        "mode": 420
+      },
+      {
+        "path": "commands/build.md",
+        "size": 32038,
+        "mode": 420
+      },
+      {
+        "path": "commands/explore.md",
+        "size": 6379,
+        "mode": 420
+      },
+      {
+        "path": "commands/learn.md",
+        "size": 8926,
+        "mode": 420
+      },
+      {
+        "path": "commands/map.md",
+        "size": 6658,
+        "mode": 420
+      },
+      {
+        "path": "commands/milestone.md",
+        "size": 10302,
+        "mode": 420
+      },
+      {
+        "path": "commands/plan.md",
+        "size": 28384,
+        "mode": 420
+      },
+      {
+        "path": "commands/polish.md",
+        "size": 17559,
+        "mode": 420
+      },
+      {
+        "path": "commands/portfolio.md",
+        "size": 10195,
+        "mode": 420
+      },
+      {
+        "path": "commands/quick.md",
+        "size": 14640,
+        "mode": 420
+      },
+      {
+        "path": "commands/retro.md",
+        "size": 8698,
+        "mode": 420
+      },
+      {
+        "path": "commands/review.md",
+        "size": 42659,
+        "mode": 420
+      },
+      {
+        "path": "commands/ship.md",
+        "size": 12255,
+        "mode": 420
+      },
+      {
+        "path": "commands/start.md",
+        "size": 9300,
+        "mode": 420
+      },
+      {
+        "path": "commands/status.md",
+        "size": 13462,
+        "mode": 420
+      },
+      {
+        "path": "commands/update.md",
+        "size": 4184,
+        "mode": 420
+      },
+      {
+        "path": "commands/validate.md",
+        "size": 13947,
+        "mode": 420
+      },
+      {
+        "path": "docs/control-modes.md",
+        "size": 6932,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-audit.md",
+        "size": 6138,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-certification-checklists.md",
+        "size": 7443,
+        "mode": 420
+      },
+      {
+        "path": "docs/security/install-integrity.md",
+        "size": 1155,
+        "mode": 420
+      },
+      {
+        "path": "docs/settings.schema.json",
+        "size": 5628,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1611,
+        "mode": 420
+      },
+      {
+        "path": "settings.json",
+        "size": 1204,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-creator/SKILL.md",
+        "size": 16006,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/CATALOG.md",
+        "size": 22382,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/DOMAINS.md",
+        "size": 16241,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/GAP_ANALYSIS.md",
+        "size": 26754,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md",
+        "size": 1459,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/SKILL.md",
+        "size": 11169,
+        "mode": 420
+      },
+      {
+        "path": "skills/authority-enforcer/SKILL.md",
+        "size": 31842,
+        "mode": 420
+      },
+      {
+        "path": "skills/board-of-directors/SKILL.md",
+        "size": 32658,
+        "mode": 420
+      },
+      {
+        "path": "skills/cli-dispatch/SKILL.md",
+        "size": 23611,
+        "mode": 420
+      },
+      {
+        "path": "skills/code-polish/SKILL.md",
+        "size": 28620,
+        "mode": 420
+      },
+      {
+        "path": "skills/codebase-mapper/SKILL.md",
+        "size": 86881,
+        "mode": 420
+      },
+      {
+        "path": "skills/design-workflows/SKILL.md",
+        "size": 56502,
+        "mode": 420
+      },
+      {
+        "path": "skills/execution-tracker/SKILL.md",
+        "size": 14030,
+        "mode": 420
+      },
+      {
+        "path": "skills/github-sync/SKILL.md",
+        "size": 24413,
+        "mode": 420
+      },
+      {
+        "path": "skills/hooks-integration/SKILL.md",
+        "size": 5619,
+        "mode": 420
+      },
+      {
+        "path": "skills/intent-router/SKILL.md",
+        "size": 52318,
+        "mode": 420
+      },
+      {
+        "path": "skills/legion/SKILL.md",
+        "size": 2423,
+        "mode": 420
+      },
+      {
+        "path": "skills/marketing-workflows/SKILL.md",
+        "size": 27769,
+        "mode": 420
+      },
+      {
+        "path": "skills/memory-manager/SKILL.md",
+        "size": 52408,
+        "mode": 420
+      },
+      {
+        "path": "skills/milestone-tracker/SKILL.md",
+        "size": 17183,
+        "mode": 420
+      },
+      {
+        "path": "skills/phase-decomposer/SKILL.md",
+        "size": 53315,
+        "mode": 420
+      },
+      {
+        "path": "skills/plan-critique/SKILL.md",
+        "size": 26251,
+        "mode": 420
+      },
+      {
+        "path": "skills/polymath-engine/SKILL.md",
+        "size": 5685,
+        "mode": 420
+      },
+      {
+        "path": "skills/portfolio-manager/SKILL.md",
+        "size": 13730,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/SKILL.md",
+        "size": 17951,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/project-template.md",
+        "size": 706,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/roadmap-template.md",
+        "size": 720,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/state-template.md",
+        "size": 621,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-evaluators/SKILL.md",
+        "size": 65932,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-loop/SKILL.md",
+        "size": 62212,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-panel/SKILL.md",
+        "size": 32846,
+        "mode": 420
+      },
+      {
+        "path": "skills/security-review/SKILL.md",
+        "size": 27319,
+        "mode": 420
+      },
+      {
+        "path": "skills/ship-pipeline/SKILL.md",
+        "size": 13430,
+        "mode": 420
+      },
+      {
+        "path": "skills/spec-pipeline/SKILL.md",
+        "size": 34493,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/SKILL.md",
+        "size": 94932,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-A.md",
+        "size": 4628,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-B.md",
+        "size": 6145,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-core/SKILL.md",
+        "size": 13789,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-domains/SKILL.md",
+        "size": 1468,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-github/SKILL.md",
+        "size": 1591,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-memory/SKILL.md",
+        "size": 1396,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common/SKILL.md",
+        "size": 49717,
+        "mode": 420
+      }
+    ],
+    "entryCount": 135,
+    "bundled": []
+  }
+]
+completed_at: 2026-06-19T19:31:21.1551102-04:00
+result: PASS

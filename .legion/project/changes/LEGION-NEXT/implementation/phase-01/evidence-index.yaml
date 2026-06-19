@@ -1,0 +1,44 @@
+phase: 1
+phase_id: P01
+source_documents:
+  phase_contract:
+    path: C:/Users/dasbl/Documents/legion/docs/rebuild/01-phase-typescript-workspace-and-protocol-core.md
+    sha256: 362BD33CFFA70A02F035DCAADB0227267AE78D97206AB33E73897FEF0CB69EF9
+  phase_0_decision:
+    path: docs/next/PHASE-00-DECISION.md
+    sha256: A678B51E53865AE46096A3378AB0C9BB621B9D860AEE1A8F02588D955337B1F6
+  implementation_backlog:
+    path: docs/next/IMPLEMENTATION-BACKLOG.yaml
+    sha256: 7195F5537248072443A3D4875893DB86A6849A9EC2E377F292C28DF1E902AF26
+  dependency_map:
+    path: docs/next/DEPENDENCY-MAP.md
+    sha256: BA02A2523F464FF10B4F4E5FFEE612D63ED2232697FAFF2E19F0987FD6078AB7
+task_commits:
+  P01-T01: null
+  P01-T02: null
+  P01-T03: null
+  P01-T04: null
+  P01-T05: null
+  P01-T06: null
+  P01-T07: null
+  P01-T08: null
+  P01-T09: null
+  P01-T10: null
+  P01-T11: null
+entries:
+  - task: P01-PREFLIGHT
+    artifact: docs/next/evidence/P01-PREFLIGHT/preflight.log
+    description: Phase 1 preflight summary confirming Phase 0 conditional-go status, v8 baseline suite, selected tool metadata, branch creation, package baseline, and scope guard
+    sha256: 5441408417FD2FEB342CC82FD6A99109AD7A58AF43285CAA6861CB1147120DF8
+  - task: P01-PREFLIGHT
+    artifact: docs/next/evidence/P01-PREFLIGHT/v8-baseline-suite.log
+    description: Raw isolated LF-preserving v8 baseline suite log covering npm ci, npm run validate, npm run release:check, npm test, and npm pack --dry-run --json
+    sha256: F3AF9D0A8F3718FBEB4BFF23534281B1B5008D42F4FB1A01A32DA5E1F6BCEFBB
+  - task: P01-PREFLIGHT
+    artifact: docs/next/evidence/P01-PREFLIGHT/v8-npm-pack-dry-run.json
+    description: Fresh LF-preserving npm package dry-run for @9thlevelsoftware/legion 8.0.5 at v8-baseline-20260619
+    sha256: 0FC753695775B68FBD69690BB59D8C3B67D10B6117B8BBD7714A7B22052653C8
+  - task: P01-PREFLIGHT
+    artifact: docs/next/evidence/P01-PREFLIGHT/v8-package-file-list-comparison.json
+    description: P00 package evidence versus P01 LF package evidence comparison showing identical file path set and documented line-ending-related byte differences
+    sha256: 825654CF1E4643EB698C1F0BB7D8C1875B6536B55E53687D733A0C4C27B13D63

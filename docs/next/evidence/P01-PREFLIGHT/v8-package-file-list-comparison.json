@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-19T23:32:36.289Z",
+  "note": "P01 preflight re-ran npm pack from an LF-preserving v8 baseline worktree. The package path set matches P00 evidence; byte-size/hash differences are line-ending normalization and are not package surface drift.",
+  "p00_evidence": {
+    "path": "docs/next/evidence/P00-T06/npm-pack-dry-run.json",
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "file_count": 135,
+    "size": 742150,
+    "unpacked_size": 2374176,
+    "shasum": "f4d86908cedea898053af198f80d9c7d612dcaed",
+    "sha256": "f8c97297949fed7179e010612ae865866346b3ed1972f725b89cf1b83df6c73d"
+  },
+  "p01_lf_baseline": {
+    "path": "docs/next/evidence/P01-PREFLIGHT/v8-npm-pack-dry-run.json",
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "file_count": 135,
+    "size": 736134,
+    "unpacked_size": 2338686,
+    "shasum": "8107500541e3fd59598dec554a20211a67bcd80d",
+    "sha256": "0fc753695775b68fbd69690bb59d8c3b67d10b6117b8bbd7714a7b22052653c8"
+  },
+  "path_set_match": true,
+  "only_in_p00": [],
+  "only_in_p01_lf": [],
+  "size_difference_count": 81,
+  "first_size_differences": [
+    {
+      "path": ".codex-plugin/plugin.json",
+      "p00_size": 1450,
+      "p01_lf_size": 1412,
+      "delta": -38
+    },
+    {
+      "path": "README.md",
+      "p00_size": 82689,
+      "p01_lf_size": 81679,
+      "delta": -1010
+    },
+    {
+      "path": "adapters/ADAPTER.md",
+      "p00_size": 7070,
+      "p01_lf_size": 6945,
+      "delta": -125
+    },
+    {
+      "path": "adapters/aider.md",
+      "p00_size": 9574,
+      "p01_lf_size": 9412,
+      "delta": -162
+    },
+    {
+      "path": "adapters/claude-code.md",
+      "p00_size": 6166,
+      "p01_lf_size": 6040,
+      "delta": -126
+    },
+    {
+      "path": "adapters/codex-cli.md",
+      "p00_size": 5998,
+      "p01_lf_size": 5874,
+      "delta": -124
+    },
+    {
+      "path": "adapters/copilot-cli.md",
+      "p00_size": 4884,
+      "p01_lf_size": 4784,
+      "delta": -100
+    },
+    {
+      "path": "adapters/cursor.md",
+      "p00_size": 3797,
+      "p01_lf_size": 3713,
+      "delta": -84
+    },
+    {
+      "path": "adapters/gemini-cli.md",
+      "p00_size": 5388,
+      "p01_lf_size": 5280,
+      "delta": -108
+    },
+    {
+      "path": "adapters/kilo-cli.md",
+      "p00_size": 11584,
+      "p01_lf_size": 11403,
+      "delta": -181
+    },
+    {
+      "path": "adapters/kilo-code.md",
+      "p00_size": 5580,
+      "p01_lf_size": 5510,
+      "delta": -70
+    },
+    {
+      "path": "adapters/opencode.md",
+      "p00_size": 9516,
+      "p01_lf_size": 9364,
+      "delta": -152
+    },
+    {
+      "path": "adapters/windsurf.md",
+      "p00_size": 3690,
+      "p01_lf_size": 3615,
+      "delta": -75
+    },
+    {
+      "path": "agents/design-ui-designer.md",
+      "p00_size": 8898,
+      "p01_lf_size": 8719,
+      "delta": -179
+    },
+    {
+      "path": "agents/design-ux-architect.md",
+      "p00_size": 9861,
+      "p01_lf_size": 9643,
+      "delta": -218
+    },
+    {
+      "path": "agents/design-ux-researcher.md",
+      "p00_size": 14902,
+      "p01_lf_size": 14548,
+      "delta": -354
+    },
+    {
+      "path": "agents/engineering-infrastructure-devops.md",
+      "p00_size": 19526,
+      "p01_lf_size": 19148,
+      "delta": -378
+    },
+    {
+      "path": "agents/engineering-security-engineer.md",
+      "p00_size": 17550,
+      "p01_lf_size": 17203,
+      "delta": -347
+    },
+    {
+      "path": "agents/engineering-senior-developer.md",
+      "p00_size": 23644,
+      "p01_lf_size": 23313,
+      "delta": -331
+    },
+    {
+      "path": "agents/marketing-content-social-strategist.md",
+      "p00_size": 15315,
+      "p01_lf_size": 15115,
+      "delta": -200
+    }
+  ]
+}
