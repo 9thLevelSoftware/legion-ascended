@@ -14,3 +14,24 @@ Original Legion package version
 Node and npm versions
 v25.9.0
 11.12.1
+Source document SHA256 hashes
+
+Algorithm : SHA256
+Hash      : EB8607EE31ED8462D01695B240CC10C44DB47632F1E38B94A6783FBD49A85811
+Path      : C:\Users\dasbl\Documents\Legion Retooled\docs\legion-next-roadmap.md
+
+Algorithm : SHA256
+Hash      : EFA71CE356F8BBE369A1EB81199A0E48C147C49954A03E0C1F103E8BB5F2FE3F
+Path      : C:\Users\dasbl\Documents\legion\docs\rebuild\00-phase-architecture-contract-baseline-and-rewrite-guardrails.md
+
+Algorithm : SHA256
+Hash      : 6B1C96E78FB005E21917BE28EA43DAADFC7DE4C29EA0F25A9BFA1CF14EB09D55
+Path      : C:\Users\dasbl\Documents\legion\docs\rebuild\legion-next-transformation-plan.md
+
+Algorithm : SHA256
+Hash      : 2B0F6E5279D274B230100D59AE9DFD6F92618A8E1218F50F2427BD9459C82C1B
+Path      : C:\Users\dasbl\Documents\legion\docs\rebuild\CROSS-PHASE-DEPENDENCY-MAP.md
+
+Algorithm : SHA256
+Hash      : 2CAA682A3B1DFEDEE2B37D7C82511447BE525B2F6D55704F9851BFAC1D07E97A
+Path      : C:\Users\dasbl\Documents\legion\docs\rebuild\AGENT-EXECUTION-GUIDE.md
