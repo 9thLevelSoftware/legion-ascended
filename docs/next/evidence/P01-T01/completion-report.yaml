@@ -1,0 +1,62 @@
+status: DONE_WITH_CONCERNS
+phase: 1
+task: P01-T01
+summary: >
+  Added the Legion Next v9 workspace foundation in the new implementation repository:
+  Node 24 version files, pnpm 11.4.0 workspace and lockfile, npm-compatible bootstrap/validate/test aliases,
+  strict shared TypeScript base configuration, package dry-run evidence, and contributor bootstrap notes.
+  The root package name remains @9thlevelsoftware/legion. The current package dry run is intentionally the v9 scaffold,
+  while the legacy v8 bin/commands/skills/adapters/agents package surface remains frozen as reference evidence and must be
+  materialized or isolated by P01-T10 before Phase 1 can close.
+files_changed:
+  - .gitignore
+  - .node-version
+  - .npmrc
+  - .nvmrc
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - tsconfig.base.json
+  - docs/next/README.md
+  - docs/next/evidence/P01-T01/
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-01/ledger.yaml
+verification:
+  - command: pnpm run bootstrap
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/final-verification.log
+  - command: pnpm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/final-verification.log
+  - command: npm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/final-verification.log
+  - command: npm test
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/final-verification.log
+  - command: npm pack --dry-run --json
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/npm-pack-dry-run-final.json
+  - command: pnpm pack --dry-run
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/pnpm-pack-dry-run-final.log
+  - command: package surface comparison against v8 LF baseline
+    result: PASS
+    evidence: docs/next/evidence/P01-T01/package-surface-comparison.json
+acceptance:
+  - criterion: Fresh install is deterministic.
+    result: PASS
+  - criterion: Root package name and v9 scaffold package allowlist are established without packaging raw evidence.
+    result: PASS
+  - criterion: No workspace package is accidentally published.
+    result: PASS
+  - criterion: Node version errors are actionable through engines, .nvmrc, and .node-version.
+    result: PASS
+commits:
+  - 006d626da25f893b6d39f6bc4d68096c58f82e8d
+risks_or_followups:
+  - P01-T02 must add private protocol/core packages so recursive build/typecheck/test commands exercise real workspace packages.
+  - P01-T10 remains required to materialize or isolate the legacy v8 bin/commands/skills/adapters/agents installer surface under package-content tests.
+  - Local verification ran on Windows with Node v25.9.0 inside the accepted >=24 <26 engine range; Node 24 and Linux/macOS matrix proof remains a P01-T11 gate.
+blocker:
+  condition: none
+  decision_needed: none

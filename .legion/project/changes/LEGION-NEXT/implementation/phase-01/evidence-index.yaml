@@ -14,7 +14,7 @@ source_documents:
     path: docs/next/DEPENDENCY-MAP.md
     sha256: BA02A2523F464FF10B4F4E5FFEE612D63ED2232697FAFF2E19F0987FD6078AB7
 task_commits:
-  P01-T01: null
+  P01-T01: "006d626da25f893b6d39f6bc4d68096c58f82e8d"
   P01-T02: null
   P01-T03: null
   P01-T04: null
@@ -42,3 +42,47 @@ entries:
     artifact: docs/next/evidence/P01-PREFLIGHT/v8-package-file-list-comparison.json
     description: P00 package evidence versus P01 LF package evidence comparison showing identical file path set and documented line-ending-related byte differences
     sha256: 825654CF1E4643EB698C1F0BB7D8C1875B6536B55E53687D733A0C4C27B13D63
+  - task: P01-T01
+    artifact: package.json
+    description: Root @9thlevelsoftware/legion v9 scaffold manifest with Node 24 engine, pnpm 11.4.0 package manager, workspace-aware aliases, and narrowed package allowlist
+    sha256: C5D13752A4BECB86F2908ADF82A15280239EFF74DBF2DA8064FCA4CCAC9AE542
+  - task: P01-T01
+    artifact: pnpm-workspace.yaml
+    description: Deterministic pnpm workspace definition for apps/* and packages/*
+    sha256: EBE33D553DB6D822F7E82E8431B7C9743F6E8FC6F313759FF436D5079B54465B
+  - task: P01-T01
+    artifact: pnpm-lock.yaml
+    description: pnpm 11.4.0 lockfile for the Phase 1 workspace foundation
+    sha256: 7ED34691D9F24221617C3FDF13EDD879EE17D6BB88B9F36A4354930651F30EE2
+  - task: P01-T01
+    artifact: tsconfig.base.json
+    description: Strict shared TypeScript base configuration for future protocol/core packages
+    sha256: 968C1FED06A9B7E3BD3AF58695E6BCA63BBFCE4422CAC15BC2819F59A010DD5D
+  - task: P01-T01
+    artifact: docs/next/README.md
+    description: Phase 1 workspace bootstrap notes and scope guard
+    sha256: 68C6DABAF35A6E13885E3F300A84413F41467206C06CE8A5EDA511C3FDD0E1AC
+  - task: P01-T01
+    artifact: docs/next/evidence/P01-T01/final-verification.log
+    description: Final P01-T01 verification covering frozen pnpm bootstrap, pnpm/npm validation aliases, npm test alias, npm pack dry-run, and pnpm pack dry-run
+    sha256: 0B2486F41F71A072FA9B6247D53DDF98C0F52ECA22894A486A6696436E41AF42
+  - task: P01-T01
+    artifact: docs/next/evidence/P01-T01/lockfile-hash.txt
+    description: Lockfile SHA256 record
+    sha256: 75988D26596CF4989A4A1F63371A0CADFD85565A4212F452AC4EEC08093DF2C0
+  - task: P01-T01
+    artifact: docs/next/evidence/P01-T01/npm-pack-dry-run-final.json
+    description: Final npm package dry-run JSON for the v9 scaffold package
+    sha256: 90D43CE0DE0C67BE0F0ED29F7C1038EDEAA9EDF79A5A86B6EC67E61ED4A4233D
+  - task: P01-T01
+    artifact: docs/next/evidence/P01-T01/pnpm-pack-dry-run-final.log
+    description: Final pnpm package dry-run log for the v9 scaffold package
+    sha256: 79F110BE1972EE1846A58D6BA2DD7EC69840798D714DD41188FB6F57A21137BB
+  - task: P01-T01
+    artifact: docs/next/evidence/P01-T01/package-surface-comparison.json
+    description: Current v9 scaffold package versus frozen v8 package surface comparison, recording deferred legacy roots for P01-T10
+    sha256: 61972A7EC0AF4D45E4E50EA877B2098485FA095EEA131C186EDDB092A4FF999A
+  - task: P01-T01
+    artifact: docs/next/evidence/P01-T01/completion-report.yaml
+    description: Structured P01-T01 completion report
+    sha256: 829646FFF8892FC9B99F4FA050D32AC8E9145B7640332B6193A69C4EB763F2AB

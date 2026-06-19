@@ -7,8 +7,8 @@ started_at: "2026-06-19T19:33:27-04:00"
 completed_at: null
 active_wave: 1
 tasks:
-  P01-T01: { status: RUNNING, run_id: "P01-T01-20260619-workspace-tooling", commit: null }
-  P01-T02: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T01: { status: DONE, run_id: "P01-T01-20260619-workspace-tooling", commit: "006d626da25f893b6d39f6bc4d68096c58f82e8d" }
+  P01-T02: { status: READY, run_id: null, commit: null }
   P01-T03: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T04: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T05: { status: NOT_STARTED, run_id: null, commit: null }
@@ -37,3 +37,9 @@ evidence:
   - docs/next/evidence/P01-PREFLIGHT/v8-baseline-suite.log
   - docs/next/evidence/P01-PREFLIGHT/v8-npm-pack-dry-run.json
   - docs/next/evidence/P01-PREFLIGHT/v8-package-file-list-comparison.json
+  - docs/next/evidence/P01-T01/final-verification.log
+  - docs/next/evidence/P01-T01/lockfile-hash.txt
+  - docs/next/evidence/P01-T01/npm-pack-dry-run-final.json
+  - docs/next/evidence/P01-T01/pnpm-pack-dry-run-final.log
+  - docs/next/evidence/P01-T01/package-surface-comparison.json
+  - docs/next/evidence/P01-T01/completion-report.yaml
