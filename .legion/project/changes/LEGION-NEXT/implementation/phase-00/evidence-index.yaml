@@ -22,7 +22,7 @@ task_commits:
   P00-T03: "0168d0a3636674827995a5b516b5f10b6daaf1ad"
   P00-T04: "37dfd6571f9432259115634038a70b62176b4bfd"
   P00-T05: "37dfd6571f9432259115634038a70b62176b4bfd"
-  P00-T06: "pending-task-5-blocker-commit"
+  P00-T06: "ac4e9232f4ef422c434f0fa1ad2dd118a217faeb"
 entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log

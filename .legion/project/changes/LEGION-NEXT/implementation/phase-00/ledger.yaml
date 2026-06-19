@@ -12,7 +12,7 @@ tasks:
   P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: "0168d0a3636674827995a5b516b5f10b6daaf1ad" }
   P00-T04: { status: DONE, run_id: "P00-T04-20260619-benchmark-corpus", commit: "37dfd6571f9432259115634038a70b62176b4bfd" }
   P00-T05: { status: DONE, run_id: "P00-T05-20260619-run-capture-harness", commit: "37dfd6571f9432259115634038a70b62176b4bfd" }
-  P00-T06: { status: BLOCKED, run_id: "P00-T06-20260619-baseline-blocked", commit: "pending-task-5-blocker-commit" }
+  P00-T06: { status: BLOCKED, run_id: "P00-T06-20260619-baseline-blocked", commit: "ac4e9232f4ef422c434f0fa1ad2dd118a217faeb" }
   P00-T07: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T08: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T09: { status: NOT_STARTED, run_id: null, commit: null }
