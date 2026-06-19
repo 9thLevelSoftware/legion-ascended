@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "phase": 0,
+  "task": "P00-T06",
+  "status": "BLOCKED",
+  "recorded_at": "2026-06-19T18:07:55.3024303-04:00",
+  "baseline": {
+    "tag": "v8-baseline-20260619",
+    "commit": "855e975beec3bac6dc06db598081b6ac11ea8e14",
+    "source_repository": "C:/Users/dasbl/Documents/legion"
+  },
+  "blockers": [
+    {
+      "id": "P00-T06-BLOCKER-001",
+      "condition": "Approved run matrix is missing",
+      "decision_needed": "Approve host, model, repeat count, timeout, intervention policy, and cost policy"
+    },
+    {
+      "id": "P00-T06-BLOCKER-002",
+      "condition": "v8 Codex adapter prompt flag is stale for installed Codex CLI",
+      "decision_needed": "Approve codex exec invocation or update adapter baseline policy before production runs"
+    }
+  ],
+  "verification": [
+    {
+      "command": "codex --version",
+      "result": "PASS",
+      "evidence": "codex-cli 0.135.0"
+    },
+    {
+      "command": "git rev-parse v8-baseline-20260619",
+      "result": "PASS",
+      "evidence": "855e975beec3bac6dc06db598081b6ac11ea8e14"
+    },
+    {
+      "command": "rg run matrix in repo",
+      "result": "PASS",
+      "evidence": "no approved P00-T06 matrix found"
+    }
+  ],
+  "outputs": {
+    "baseline_report": "docs/next/baseline/V8-RESULTS.md",
+    "machine_readable": "docs/next/baseline/V8-RESULTS.json",
+    "evidence_log": "docs/next/evidence/P00-T06/baseline-run.log"
+  }
+}

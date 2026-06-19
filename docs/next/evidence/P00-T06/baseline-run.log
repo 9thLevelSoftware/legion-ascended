@@ -1,0 +1,16 @@
+P00-T06 frozen v8 baseline execution
+Recorded at: 2026-06-19T18:07:55.3024303-04:00
+Source contract: C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md P00-T06
+Baseline tag: v8-baseline-20260619
+Baseline tag target: 855e975beec3bac6dc06db598081b6ac11ea8e14
+Installed Codex: codex-cli 0.135.0
+Decision: BLOCKED
+Blocker 1: no approved P00-T06 run matrix of host, model, repeats, timeout, and intervention policy exists in the accepted corpus or ledger.
+Blocker 2: C:/Users/dasbl/Documents/legion/adapters/codex-cli.md documents prompt_flag -p, but installed Codex 0.135.0 uses -p for profile and requires codex exec [PROMPT] or stdin for non-interactive prompt delivery.
+Blocker 3: running eight benchmark scenarios through live model execution would consume external model/runtime resources without decision-owner approval for model, repeat count, timeout, and cost policy.
+Verification performed:
+- codex --version: codex-cli 0.135.0
+- codex exec --help: inspected and confirmed non-interactive prompt interface
+- git rev-parse v8-baseline-20260619: 855e975beec3bac6dc06db598081b6ac11ea8e14
+- rg run matrix in repo: no approved P00-T06 run matrix found
+Required decision: approve a P00-T06 run matrix and host command line, or revise P00-T05 harness policy to use a different benchmark host.

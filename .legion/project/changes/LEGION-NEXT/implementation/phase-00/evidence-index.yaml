@@ -22,6 +22,7 @@ task_commits:
   P00-T03: "0168d0a3636674827995a5b516b5f10b6daaf1ad"
   P00-T04: "37dfd6571f9432259115634038a70b62176b4bfd"
   P00-T05: "37dfd6571f9432259115634038a70b62176b4bfd"
+  P00-T06: "pending-task-5-blocker-commit"
 entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
@@ -132,3 +133,15 @@ entries:
   - task: P00-T05
     artifact: docs/next/evidence/P00-T05/harness-review.log
     description: Harness review evidence with dry-run calibration, schema validation, redaction output, and accepted limitation for P00-T06 production invocation
+  - task: P00-T06
+    artifact: docs/next/evidence/P00-T06/baseline-run.log
+    description: Blocked baseline-run evidence showing missing approved run matrix and stale v8 Codex adapter invocation versus installed Codex 0.135.0
+  - task: P00-T06
+    artifact: docs/next/baseline/V8-RESULTS.md
+    description: Human-readable blocked P00-T06 baseline result with required decision to approve host/model/repeat/cost policy
+  - task: P00-T06
+    artifact: docs/next/baseline/V8-RESULTS.json
+    description: Machine-readable blocked P00-T06 baseline result
+  - task: P00-T06
+    artifact: evals/baseline/runs/P00-T06-BLOCKED-20260619/blocker.json
+    description: Machine-readable blocked-run marker under the baseline run output root
