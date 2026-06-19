@@ -45,7 +45,7 @@ entries:
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/charter-review.log
     description: Charter review record accepting P00-T01 after LF-preserving baseline validation and local tag verification
-    sha256: 84E79D491E964DC6EC0364D1F038AA28C5DE289FA08797A3ECC19CBB9D0D5648
+    sha256: 0D07E7C9F7C945F02BF948253FB7D2CB1510FEBDDE996C73C88B7829B170FECC
   - task: P00-T01
     artifact: docs/next/evidence/P00-T01/fresh-checkout-validation.log
     description: Required validation log with historical failures, successful LF-preserving remote-main validation, local annotated tag creation, and successful LF-preserving local tag validation
