@@ -54,6 +54,42 @@ entries:
     artifact: docs/next/evidence/P00-T01/baseline-ref-analysis.log
     description: Baseline ref analysis preserving failed attempts and recording successful LF-preserving validation plus local tag verification
     sha256: EF6FA650E3449B1516FFD938962269167046902B6B104A8B99472E83A2477B8C
+  - task: P00-T02
+    artifact: docs/next/adr/ADR-001-runtime-product.md
+    description: Accepted ADR defining Legion Next as a typed runtime product, permitting executable runtime dependencies, and rejecting context-only durability
+    sha256: 164DCEA5D66ECFE7597C99C72DB5F2F43F11FD70E8C097752D3F1B2283DB131A
+  - task: P00-T02
+    artifact: docs/next/adr/ADR-002-functional-workers.md
+    description: Accepted ADR making functional worker bundles the v9 default and defining persona knowledge extraction plus temporary compatibility mapping
+    sha256: 6BBB5DA1688D00E747550FFE5816ED4308BD18A490EC619042047B5CF5CAC478
+  - task: P00-T02
+    artifact: docs/next/adr/ADR-003-state-ownership.md
+    description: Accepted ADR assigning exactly one canonical source to each target state class and separating committed intent from ignored operational data
+    sha256: 55C9D66A0F79A53A11DA46531BF4FE0C3931B8C5E09CDE829B5C552DD4FFCB6B
+  - task: P00-T02
+    artifact: docs/next/evidence/P00-T02/adr-review.log
+    description: Adversarial review log for ADR-001 through ADR-003 with findings, resolutions, state matrix summary, persona inventory sample, and acceptance decision
+    sha256: 227BA21628845EFE2BF236645BD15844D3D3B56BD0484FA00B28F4C221DC945B
+  - task: P00-T03
+    artifact: docs/next/adr/ADR-004-runtime-driver.md
+    description: Accepted ADR selecting Eve as first runtime driver while keeping the core provider-neutral and deferring default binding to P00-T08 evidence
+    sha256: 2CEF66BC4EE963E438E8A82694B0B0A55C4D667F0868FB48D8141950BB854283
+  - task: P00-T03
+    artifact: docs/next/adr/ADR-005-events-idempotency.md
+    description: Accepted ADR defining event IDs, idempotency keys, outbox rules, side-effect classes, and event replay versus model re-execution
+    sha256: A6A40A63AAB7645BA7B270DB11819AC75E93FEEDB0579FB25B4F6E274114E054
+  - task: P00-T03
+    artifact: docs/next/adr/ADR-006-risk-adaptive-gates.md
+    description: Accepted ADR defining deterministic R0 through R3 risk tiers, gates, overrides, audit requirements, and risk examples
+    sha256: F66B334A5C065A3FB3B47F4BC6CC05AA8BFAB6588755B00DBA0136C516DFE738
+  - task: P00-T03
+    artifact: docs/next/adr/ADR-007-kanban-migration.md
+    description: Accepted ADR reserving board for operational Kanban, council for governance deliberation, and mapping every current v8 command
+    sha256: 1B83A75C9904259D42592BB0C72F8F13BD93ED0B75BD4D801175739BC1A37B0D
+  - task: P00-T03
+    artifact: docs/next/evidence/P00-T03/adr-review.log
+    description: Adversarial review log for ADR-004 through ADR-007 with side-effect review, risk test cases, command migration map summary, and acceptance decision
+    sha256: C9A20B347F1DBB223D501BFE68D5C45C799E33CFE171FC57E5A3CC1BCCB2878B
   - task: P00-T01
     artifact: "local tag v8-baseline-20260619"
     description: Local annotated v8 baseline tag created in C:/Users/dasbl/Documents/legion and verified from a fresh LF-preserving local clone

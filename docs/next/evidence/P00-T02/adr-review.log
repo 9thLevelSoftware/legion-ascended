@@ -1,0 +1,57 @@
+P00-T02 ADR Review Log
+Date: 2026-06-19
+Reviewer identity: architecture-worker adversarial pass
+Task: P00-T02 - Approve ADR-001 through ADR-003: product, workers, and state ownership
+
+Source files reviewed:
+- docs/next/REWRITE-CHARTER.md
+- C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md, P00-T02 contract
+- C:/Users/dasbl/Documents/legion/docs/rebuild/legion-next-transformation-plan.md, sections 3 through 9
+- C:/Users/dasbl/Documents/legion/.planning/FEEDBACK-ROI-ANALYSIS.md
+- C:/Users/dasbl/Documents/legion/commands/*.md inventory: advise, agent, board, build, explore, learn, map, milestone, plan, polish, portfolio, quick, retro, review, ship, start, status, update, validate
+- C:/Users/dasbl/Documents/legion/skills/**/*.md inventory, with focused reads of skills/execution-tracker/SKILL.md, skills/agent-registry/SKILL.md, skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md, skills/wave-executor/SKILL.md, and skills/review-loop/SKILL.md
+- C:/Users/dasbl/Documents/legion/agents/*.md inventory, with focused reads of agents/engineering-security-engineer.md and agents/testing-qa-verification-specialist.md
+
+Findings and resolutions:
+
+| Finding | Severity | Resolution |
+| --- | --- | --- |
+| ADR-001 could accidentally imply the v8 ROI analysis was wrong rather than v9 being a different product. | Important | ADR-001 context states the v8 analysis was coherent for v8 and that v9 deliberately creates a typed runtime product. |
+| ADR-001 needed explicit permission for runtime dependencies rather than only implying them through the control plane. | Important | ADR-001 decision now explicitly permits executable runtime dependencies under ADR, evidence, portability, and security constraints. |
+| ADR-001 needed to reject transcript or memory durability directly. | Critical | ADR-001 rejects context-only durability and names state that cannot be owned by conversation context. |
+| ADR-002 risked discarding unique persona knowledge. | Critical | ADR-002 defines extraction into skills, rubrics, domain packs, capability metadata, and policy before default persona removal. |
+| ADR-002 needed a concrete retention/discard inventory grounded in v8 surfaces. | Important | ADR-002 includes sample mappings for security engineer, QA verification specialist, senior project manager, UI designer, agent-registry, board-of-directors skill, and board command. |
+| ADR-003 could create dual writers between `.legion/project`, `.legion/var`, Git, runtime checkpoints, and evidence stores. | Critical | ADR-003 includes a canonical source matrix and reconciliation behavior. Operational state uses `.legion/var`; committed intent uses `.legion/project`; code state uses Git; bulk evidence uses artifact store with committed references. |
+| ADR-003 needed to separate accepted evidence references from bulk evidence payloads. | Important | ADR-003 assigns accepted references to `.legion/project/.../evidence-index.json` and payloads to the artifact store. |
+
+State ownership matrix summary:
+- `.legion/project` owns committed, reviewable intent: Project, Change, Requirement, Decision, Oracle, TaskContract, approved release intent, and accepted evidence references.
+- `.legion/var` owns ignored operational data: Task, TaskRun, ReviewDecision while in operation, Approval, Event, Outbox item, runtime state records, comments, leases, and operational projections.
+- Git owns code state, branches, commits, and tags.
+- Artifact store owns large logs, traces, screenshots, reports, and telemetry payloads, with hashes referenced from committed evidence indexes.
+- Runtime driver checkpoints are provider execution state, not task or board truth.
+- Derived projections are disposable and rebuilt from the canonical source for the corresponding state class.
+
+Persona retention/discard sample summary:
+- Retain security review checklists, OWASP/STRIDE domain knowledge, secrets-handling rules, and security severity rubrics from `engineering-security-engineer`.
+- Retain evidence-quality, visual/API/CLI verification, root-cause debugging, and regression-test procedures from `testing-qa-verification-specialist`.
+- Retain task-contract decomposition, acceptance-criteria structure, and scope-control policy from project-management personas.
+- Retain agent catalog metadata and task-type scoring concepts from `agent-registry`, but not persona ranking as the v9 runtime router.
+- Retain governance deliberation as optional `council`, but discard use of `board` for governance naming in v9.
+- Discard biography, fictional identity, motivational framing, persona memory claims, tone rules, and duplicated generic workflow instructions from default worker prompts.
+
+Adversarial review focus:
+- Portability: ADR-001 and ADR-004-compatible language keeps core independent of host CLI and runtime provider.
+- Offline operation: ADR-001 permits local runtime and store dependencies; ADR-003 assigns Git-readable intent independent of the daemon.
+- User ownership of project data: ADR-003 keeps committed intent reviewable and `.planning/` migration one-way with backup.
+- Failure recovery: ADR-003 assigns task/events/run state to transactional operational storage and rejects conversation context as durability.
+
+Final acceptance decision:
+- ADR-001-runtime-product.md: ACCEPTED
+- ADR-002-functional-workers.md: ACCEPTED
+- ADR-003-state-ownership.md: ACCEPTED
+
+Blocker review:
+- State ownership can be made unambiguous: yes.
+- Persona removal would discard unique knowledge before extraction policy: no, extraction policy is mandatory before default removal.
+- Required v8 host cannot invoke thin bridge to external/local control plane: not found in this task scope.

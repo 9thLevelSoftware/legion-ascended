@@ -1,0 +1,72 @@
+P00-T03 ADR Review Log
+Date: 2026-06-19
+Reviewer identity: architecture-worker adversarial pass
+Task: P00-T03 - Approve ADR-004 through ADR-007: runtime, events, risk gates, and naming
+
+Source files reviewed:
+- docs/next/REWRITE-CHARTER.md
+- C:/Users/dasbl/Documents/legion/docs/rebuild/00-phase-architecture-contract-baseline-and-rewrite-guardrails.md, P00-T03 contract
+- C:/Users/dasbl/Documents/legion/docs/rebuild/legion-next-transformation-plan.md, sections 10 through 16, 19, and 21
+- C:/Users/dasbl/Documents/legion/adapters/ADAPTER.md
+- C:/Users/dasbl/Documents/legion/adapters/*.md inventory: aider, antigravity-cli, claude-code, codex-cli, copilot-cli, cursor, gemini-cli, kilo-cli, kilo-code, kiro-cli, opencode, windsurf
+- C:/Users/dasbl/Documents/legion/settings.json
+- C:/Users/dasbl/Documents/legion/commands/board.md
+- C:/Users/dasbl/Documents/legion/commands/*.md command inventory
+- C:/Users/dasbl/Documents/legion/skills/wave-executor/SKILL.md
+- C:/Users/dasbl/Documents/legion/skills/review-loop/SKILL.md
+
+Findings and resolutions:
+
+| Finding | Severity | Resolution |
+| --- | --- | --- |
+| ADR-004 could overclaim Eve compatibility before P00-T08. | Critical | ADR-004 explicitly says P00-T08 has not validated compatibility and must validate public contracts and fallback policy before production defaults bind to Eve. |
+| ADR-004 needed a provider-neutral core boundary. | Critical | ADR-004 states core domain types and board/policy/evidence entities must not import Eve types or rely on private Eve internals. |
+| ADR-005 needed at-least-once assumptions and explicit dedupe rules for non-idempotent effects. | Critical | ADR-005 defines at-least-once delivery, event IDs, idempotency keys, outbox rules, side-effect classes, and per-effect approval or dedupe rules. |
+| ADR-005 needed to distinguish event replay from model re-execution. | Critical | ADR-005 defines replay as projection rebuild from events and re-execution as a new or resumed model/tool run with new records. |
+| ADR-006 risk tiers could remain subjective if examples did not map to deterministic gates. | Critical | ADR-006 includes scoring inputs, thresholds, hard floors, mandatory gates, override authority, and deterministic examples. |
+| ADR-006 could let a low score weaken charter protections. | Critical | ADR-006 states risk gates may increase protections but may not silently decrease constitution, charter, security, or protected-oracle requirements. |
+| ADR-007 needed to include every current v8 `/legion:*` command, not just the transformation-plan subset. | Critical | ADR-007 includes all 19 current command files with keep, rename, alias, or remove disposition. |
+| ADR-007 needed to avoid confusing operational Kanban with governance deliberation. | Critical | ADR-007 reserves board for operational Kanban and council for governance deliberation, with `/legion:board` renamed to council in v9. |
+
+Side-effect and idempotency review summary:
+- Event handlers assume at-least-once delivery.
+- Outbox intent, event append, and state transition share one transaction.
+- S2 Git effects require dedupe by tree, parent, message, tag name, target, branch, and change ID as applicable.
+- S3 external reversible effects require provider target plus logical key dedupe and approval when visibility or user impact is material.
+- S4 destructive or hard-to-reverse effects require explicit human approval plus dedupe, dry-run, rollback, or recovery evidence where practical.
+- No non-idempotent side effect remains without an approval or dedupe rule.
+
+Risk-tier test cases summary:
+
+| Case | Expected tier | Mandatory gates |
+| --- | --- | --- |
+| Typo in committed docs | R0 | Deterministic docs check and evidence note. |
+| Isolated internal utility refactor with tests | R1 | Task contract, deterministic verification, evidence, lightweight review. |
+| User-facing CLI command touching multiple modules | R3 by total score in ADR example, or no lower than R2 by user-facing floor if overridden | Spec/oracle/review/integration gates unless audited override applies. |
+| Persistent board migration | R3 | Migration oracle, dry-run, rollback or forward-fix evidence, review, approval. |
+| Production credential rotation | R3 | Security review, explicit approval, outbox, recovery evidence, observation. |
+
+Command migration map summary:
+- Current v8 commands reviewed: 19.
+- `board` governance collision resolved by renaming governance to `council`.
+- Operational Kanban uses `legion board`.
+- v8 `/legion:review` keeps the review concept as `legion review`.
+- v8 `/legion:update` is removed from the v9 workflow surface because package updates are not project work-control state.
+- All other current v8 command names have explicit rename or compatibility-alias targets.
+
+Adversarial review focus:
+- Local/offline use: ADR-004 keeps `runtime-local`; ADR-003 keeps Git-readable committed intent.
+- Eve outage/API churn: ADR-004 requires fallback policy and P00-T08 public-contract proof before binding defaults.
+- Cross-platform operation: ADR-004 inherits adapter capability lessons but keeps execution behind provider-neutral driver interfaces.
+- Human approval latency: ADR-005 and ADR-006 place approvals in durable records and outbox gating instead of ad hoc prompts.
+
+Final acceptance decision:
+- ADR-004-runtime-driver.md: ACCEPTED
+- ADR-005-events-idempotency.md: ACCEPTED
+- ADR-006-risk-adaptive-gates.md: ACCEPTED
+- ADR-007-kanban-migration.md: ACCEPTED
+
+Blocker review:
+- Runtime boundary requires undocumented Eve internal API: no, ADR-004 forbids private internals and defers proof to P00-T08.
+- Required side effect cannot be idempotent or approval-gated: no, ADR-005 classifies and gates them.
+- Risk classification remains subjective without deterministic inputs: no, ADR-006 supplies inputs, thresholds, floors, overrides, and test cases.

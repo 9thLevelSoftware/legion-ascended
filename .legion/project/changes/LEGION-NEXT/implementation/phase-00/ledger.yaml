@@ -8,8 +8,8 @@ completed_at: null
 active_wave: 2
 tasks:
   P00-T01: { status: DONE, run_id: "P00-T01-20260619-baseline-validation", commit: "b10df30f921c4ea21ebad852b478b07a6e81e95e" }
-  P00-T02: { status: NOT_STARTED, run_id: null, commit: null }
-  P00-T03: { status: NOT_STARTED, run_id: null, commit: null }
+  P00-T02: { status: DONE, run_id: "P00-T02-20260619-architecture-adrs-001-003", commit: null }
+  P00-T03: { status: DONE, run_id: "P00-T03-20260619-architecture-adrs-004-007", commit: null }
   P00-T04: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T05: { status: NOT_STARTED, run_id: null, commit: null }
   P00-T06: { status: NOT_STARTED, run_id: null, commit: null }
@@ -30,6 +30,14 @@ decisions:
     decision: "Create v8-baseline-20260619 from refs/remotes/origin/main"
     reason: "LF-preserving remote-main validation and LF-preserving local tag checkout validation passed npm ci, npm run validate, npm run release:check, and npm test."
     decided_at: "2026-06-19T16:32:39-04:00"
+  - task: P00-T02
+    decision: "Accept ADR-001 through ADR-003"
+    reason: "Runtime product boundary, functional worker default, and state ownership matrix satisfy the P00-T02 acceptance criteria with adversarial review evidence."
+    decided_at: "2026-06-19T16:55:00-04:00"
+  - task: P00-T03
+    decision: "Accept ADR-004 through ADR-007"
+    reason: "Runtime driver boundary, event/idempotency rules, risk-adaptive gates, and board/council command migration satisfy the P00-T03 acceptance criteria with adversarial review evidence."
+    decided_at: "2026-06-19T16:55:00-04:00"
 blockers: []
 resolved_blockers:
   - task: P00-T01
@@ -45,3 +53,12 @@ evidence:
   - docs/next/evidence/P00-T01/fresh-checkout-validation.log
   - docs/next/evidence/P00-T01/baseline-ref-analysis.log
   - docs/next/evidence/P00-T01/charter-review.log
+  - docs/next/adr/ADR-001-runtime-product.md
+  - docs/next/adr/ADR-002-functional-workers.md
+  - docs/next/adr/ADR-003-state-ownership.md
+  - docs/next/adr/ADR-004-runtime-driver.md
+  - docs/next/adr/ADR-005-events-idempotency.md
+  - docs/next/adr/ADR-006-risk-adaptive-gates.md
+  - docs/next/adr/ADR-007-kanban-migration.md
+  - docs/next/evidence/P00-T02/adr-review.log
+  - docs/next/evidence/P00-T03/adr-review.log
