@@ -15,6 +15,10 @@ Source files reviewed:
 - C:/Users/dasbl/Documents/legion/skills/wave-executor/SKILL.md
 - C:/Users/dasbl/Documents/legion/skills/review-loop/SKILL.md
 
+External source input status:
+- `git -C C:/Users/dasbl/Documents/legion status --short --branch --untracked-files=all` reports untracked `docs/rebuild/` source documents in the original v8 repo.
+- Those untracked rebuild documents are intentional approved source inputs for the Legion Next retooling effort and were not created, moved, removed, or otherwise mutated by Task 3.
+
 Findings and resolutions:
 
 | Finding | Severity | Resolution |

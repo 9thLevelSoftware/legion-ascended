@@ -67,11 +67,11 @@ entries:
   - task: P00-T02
     artifact: docs/next/adr/ADR-003-state-ownership.md
     description: Accepted ADR assigning exactly one canonical source to each target state class and separating committed intent from ignored operational data
-    sha256: 55C9D66A0F79A53A11DA46531BF4FE0C3931B8C5E09CDE829B5C552DD4FFCB6B
+    sha256: BA9FE7971A7D8E8D857F82493F5C2BAE93755A73239EE2C638C8D5AF8ABD5E2F
   - task: P00-T02
     artifact: docs/next/evidence/P00-T02/adr-review.log
     description: Adversarial review log for ADR-001 through ADR-003 with findings, resolutions, state matrix summary, persona inventory sample, and acceptance decision
-    sha256: 227BA21628845EFE2BF236645BD15844D3D3B56BD0484FA00B28F4C221DC945B
+    sha256: 91F80F7022669EA23D8BBA42B5CA1CE80F7F44DAB3B458109AFAC051F8F84134
   - task: P00-T03
     artifact: docs/next/adr/ADR-004-runtime-driver.md
     description: Accepted ADR selecting Eve as first runtime driver while keeping the core provider-neutral and deferring default binding to P00-T08 evidence
@@ -91,7 +91,7 @@ entries:
   - task: P00-T03
     artifact: docs/next/evidence/P00-T03/adr-review.log
     description: Adversarial review log for ADR-004 through ADR-007 with side-effect review, risk test cases, command migration map summary, and acceptance decision
-    sha256: C9A20B347F1DBB223D501BFE68D5C45C799E33CFE171FC57E5A3CC1BCCB2878B
+    sha256: 3EF963E8C2FF912AAB880BF00B536FE629CEC4AC5CF881B55D6BF6A1ABE5ABF7
   - task: P00-T01
     artifact: "local tag v8-baseline-20260619"
     description: Local annotated v8 baseline tag created in C:/Users/dasbl/Documents/legion and verified from a fresh LF-preserving local clone

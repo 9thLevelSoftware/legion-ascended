@@ -30,18 +30,22 @@ Each target domain state class has exactly one canonical source:
 | TaskContract | `.legion/project/changes/<change-id>/taskgraph.json` | Machine-validated contract graph, dependencies, scopes, and oracle references. |
 | Task | `.legion/var/board.sqlite` append-only task events | Current task rows are projections rebuilt from task events. |
 | TaskRun | `.legion/var/board.sqlite` `task_runs` plus immutable run manifests under `.legion/var/runs/<run-id>/manifest.json` | Records attempt, pinned versions, runtime driver, worker bundle, base commit, and idempotency key. |
-| EvidenceBundle | Artifact store payloads, with accepted references in `.legion/project/changes/<change-id>/evidence-index.json` | Git contains hashes and verdicts, not necessarily bulk evidence. |
-| ReviewDecision | `.legion/var/board.sqlite` review decision events until accepted, then accepted verdict reference in the change evidence index | The accepted reference is reviewable intent; the event stream is operational provenance. |
+| EvidencePayload | Artifact/telemetry store | Bulk logs, traces, screenshots, reports, metrics, and telemetry payloads. |
+| AcceptedEvidenceReference | `.legion/project/changes/<change-id>/evidence-index.json` | Git-visible hashes, verdicts, and artifact references; not necessarily bulk evidence bytes. |
+| ReviewDecisionEvent | `.legion/var/board.sqlite` review decision events | Operational provenance for reviewer findings, verdict changes, and review-cycle state. |
+| AcceptedReviewVerdictReference | `.legion/project/changes/<change-id>/evidence-index.json` | Git-visible reference to the accepted verdict and evidence hash; not the mutable review event stream. |
 | Approval | `.legion/var/board.sqlite` approval events and approval records | Human authorization is operational state with audit fields, not a comment. |
-| Release | `.legion/project/changes/<change-id>/release.md` for approved release intent, `.legion/var/board.sqlite` for release runs and observation events | Intent and operations are separated by state class. |
-| Observation | Artifact store payloads and `.legion/var/board.sqlite` observation events | Accepted observation summaries can be referenced from evidence indexes. |
+| ReleaseIntent | `.legion/project/changes/<change-id>/release.md` | Approved release plan, promotion criteria, rollback intent, and decision owner sign-off. |
+| ReleaseRun | `.legion/var/board.sqlite` release run and release event records | Operational execution state for release attempts, retries, and observations triggered by a release. |
+| ObservationPayload | Artifact/telemetry store | Large logs, metrics, traces, screenshots, reports, and health payloads. |
+| ObservationEvent | `.legion/var/board.sqlite` observation events | Operational facts that link observation runs to releases, payloads, and outcomes. |
 | Event | `.legion/var/board.sqlite` append-only event tables | Events are facts used to rebuild operational projections. |
 | Code state | Git commits, branches, and tags | No board row or evidence file can substitute for Git state. |
 | Worker bundle definitions | Versioned package/workspace files in the v9 source tree | Runtime selection references a versioned bundle, not a transcript. |
-| Runtime session checkpoint | Runtime driver storage plus `.legion/var` run records | Driver checkpoints do not own Legion task state. |
+| Runtime session checkpoint | Runtime driver storage | Driver checkpoints do not own Legion task state; Legion run records link to them from `.legion/var`. |
 | Outbox item | `.legion/var/board.sqlite` outbox table | Side effects are retried from outbox records with idempotency keys. |
 | Derived projection | Rebuilt from the canonical source for that state class | Projections are cacheable and disposable. |
-| Comment or discussion note | Non-authoritative coordination record in `.legion/var/board.sqlite` comments or external channel | Scope changes must revise committed intent and emit events. |
+| Comment or discussion note | `.legion/var/board.sqlite` comments | Comments and external discussion are non-authoritative coordination; scope changes must revise committed intent and emit events. |
 
 `.legion/project` is the only committed Legion project state path. `.legion/var` is ignored and must not be committed. `.legion/project` must not contain mutable leases, queue state, active claims, retry counters, runtime caches, or provider session state. `.legion/var` must not become the only copy of approved specs, ADRs, task contracts, release intent, or accepted evidence references.
 

@@ -12,6 +12,10 @@ Source files reviewed:
 - C:/Users/dasbl/Documents/legion/skills/**/*.md inventory, with focused reads of skills/execution-tracker/SKILL.md, skills/agent-registry/SKILL.md, skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md, skills/wave-executor/SKILL.md, and skills/review-loop/SKILL.md
 - C:/Users/dasbl/Documents/legion/agents/*.md inventory, with focused reads of agents/engineering-security-engineer.md and agents/testing-qa-verification-specialist.md
 
+External source input status:
+- `git -C C:/Users/dasbl/Documents/legion status --short --branch --untracked-files=all` reports untracked `docs/rebuild/` source documents in the original v8 repo.
+- Those untracked rebuild documents are intentional approved source inputs for the Legion Next retooling effort and were not created, moved, removed, or otherwise mutated by Task 3.
+
 Findings and resolutions:
 
 | Finding | Severity | Resolution |
@@ -26,7 +30,7 @@ Findings and resolutions:
 
 State ownership matrix summary:
 - `.legion/project` owns committed, reviewable intent: Project, Change, Requirement, Decision, Oracle, TaskContract, approved release intent, and accepted evidence references.
-- `.legion/var` owns ignored operational data: Task, TaskRun, ReviewDecision while in operation, Approval, Event, Outbox item, runtime state records, comments, leases, and operational projections.
+- `.legion/var` owns ignored operational data: Task, TaskRun, ReviewDecisionEvent, ReleaseRun, ObservationEvent, Approval, Event, Outbox item, runtime state records, comments, leases, and operational projections.
 - Git owns code state, branches, commits, and tags.
 - Artifact store owns large logs, traces, screenshots, reports, and telemetry payloads, with hashes referenced from committed evidence indexes.
 - Runtime driver checkpoints are provider execution state, not task or board truth.
