@@ -5,11 +5,11 @@ source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/01-phase-typescri
 base_commit: "cefef6665321e5e34a541183546587ff9a6a85b7"
 started_at: "2026-06-19T19:33:27-04:00"
 completed_at: null
-active_wave: 1
+active_wave: 2
 tasks:
   P01-T01: { status: DONE, run_id: "P01-T01-20260619-workspace-tooling", commit: "006d626da25f893b6d39f6bc4d68096c58f82e8d" }
-  P01-T02: { status: RUNNING, run_id: "P01-T02-20260619-package-boundaries", commit: null }
-  P01-T03: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T02: { status: DONE, run_id: "P01-T02-20260619-package-boundaries", commit: "042a2135ba5789094b76114f1cb165ff4e6117bd" }
+  P01-T03: { status: READY, run_id: null, commit: null }
   P01-T04: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T05: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T06: { status: NOT_STARTED, run_id: null, commit: null }
@@ -43,3 +43,10 @@ evidence:
   - docs/next/evidence/P01-T01/pnpm-pack-dry-run-final.log
   - docs/next/evidence/P01-T01/package-surface-comparison.json
   - docs/next/evidence/P01-T01/completion-report.yaml
+  - docs/next/evidence/P01-T02/boundary-checker-red.log
+  - docs/next/evidence/P01-T02/boundary-checker-green.log
+  - docs/next/evidence/P01-T02/workspace-package-verification.log
+  - docs/next/evidence/P01-T02/npm-alias-verification.log
+  - docs/next/evidence/P01-T02/workspace-graph.json
+  - docs/next/evidence/P01-T02/package-export-snapshots.json
+  - docs/next/evidence/P01-T02/completion-report.yaml

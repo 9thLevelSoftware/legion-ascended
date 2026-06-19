@@ -1,0 +1,65 @@
+status: DONE
+phase: 1
+task: P01-T02
+summary: >
+  Created the private @legion/protocol and @legion/core workspace packages with explicit root exports,
+  topological build/typecheck/test scripts, a documented package authoring guide, and a boundary checker that rejects
+  forbidden cross-package imports, deep workspace imports, and provider/storage imports in protocol/core code.
+files_changed:
+  - package.json
+  - pnpm-lock.yaml
+  - tsconfig.base.json
+  - turbo.json
+  - packages/protocol/package.json
+  - packages/protocol/tsconfig.json
+  - packages/protocol/src/index.ts
+  - packages/core/package.json
+  - packages/core/tsconfig.json
+  - packages/core/src/index.ts
+  - scripts/check-package-boundaries.mjs
+  - tests/package-boundaries.test.mjs
+  - docs/next/PACKAGE-AUTHORING.md
+  - docs/next/evidence/P01-T02/
+verification:
+  - command: node --test tests/package-boundaries.test.mjs
+    result: FAIL
+    evidence: docs/next/evidence/P01-T02/boundary-checker-red.log
+  - command: node --test tests/package-boundaries.test.mjs
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/boundary-checker-green.log
+  - command: pnpm run build
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/workspace-package-verification.log
+  - command: pnpm run typecheck
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/workspace-package-verification.log
+  - command: pnpm run check:boundaries
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/workspace-package-verification.log
+  - command: pnpm run test
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/workspace-package-verification.log
+  - command: pnpm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/workspace-package-verification.log
+  - command: npm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/npm-alias-verification.log
+  - command: npm test
+    result: PASS
+    evidence: docs/next/evidence/P01-T02/npm-alias-verification.log
+acceptance:
+  - criterion: Protocol has zero internal workspace dependencies.
+    result: PASS
+  - criterion: Core depends only on protocol and approved utility packages.
+    result: PASS
+  - criterion: Private packages cannot be published accidentally.
+    result: PASS
+commits:
+  - 042a2135ba5789094b76114f1cb165ff4e6117bd
+risks_or_followups:
+  - Protocol and core only expose version constants until P01-T03 through P01-T08 add real schemas and state machines.
+  - turbo.json is a build-graph descriptor for future CI/tooling; current local gates use pnpm recursion and TypeScript project/package dependencies.
+blocker:
+  condition: none
+  decision_needed: none

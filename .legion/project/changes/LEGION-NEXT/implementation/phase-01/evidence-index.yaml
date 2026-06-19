@@ -15,7 +15,7 @@ source_documents:
     sha256: BA02A2523F464FF10B4F4E5FFEE612D63ED2232697FAFF2E19F0987FD6078AB7
 task_commits:
   P01-T01: "006d626da25f893b6d39f6bc4d68096c58f82e8d"
-  P01-T02: null
+  P01-T02: "042a2135ba5789094b76114f1cb165ff4e6117bd"
   P01-T03: null
   P01-T04: null
   P01-T05: null
@@ -86,3 +86,63 @@ entries:
     artifact: docs/next/evidence/P01-T01/completion-report.yaml
     description: Structured P01-T01 completion report
     sha256: 829646FFF8892FC9B99F4FA050D32AC8E9145B7640332B6193A69C4EB763F2AB
+  - task: P01-T02
+    artifact: scripts/check-package-boundaries.mjs
+    description: Package boundary checker enforcing protocol/core dependency direction, public package exports, and provider/storage import exclusions
+    sha256: 29BCFC94B5D80046D81C7C2B2132C3B446670BEE369C4F23C9BEC2549567A336
+  - task: P01-T02
+    artifact: tests/package-boundaries.test.mjs
+    description: Node test coverage for legal imports, forbidden protocol-to-core imports, deep imports, and provider/storage import rejection
+    sha256: C664635F3F26831F6A0FED74856F69DB81AE48E78566015A5E228E052683A0D5
+  - task: P01-T02
+    artifact: packages/protocol/package.json
+    description: Private @legion/protocol package manifest with explicit root export and build/typecheck/test scripts
+    sha256: B9A4E3962EAD4A2ED75AB7DADB00EC3137C6699825C0C3183A1DF410E64C6D59
+  - task: P01-T02
+    artifact: packages/protocol/src/index.ts
+    description: Initial protocol package public API barrel with version constant only
+    sha256: 7363643F2A62D36643AD1B0280ACA3DA27148A4D87D0529A569696BECE6ED83C
+  - task: P01-T02
+    artifact: packages/core/package.json
+    description: Private @legion/core package manifest depending only on @legion/protocol with explicit root export and build/typecheck/test scripts
+    sha256: 75042981A583AB3FF63A55CAB180B253FABC946019710D015E6D62B88722D090
+  - task: P01-T02
+    artifact: packages/core/src/index.ts
+    description: Initial core package public API barrel with version constant and protocol-version support constant
+    sha256: 328D8B8422DD9D19057244BFA06E67B97D99C771F185C9261B710B00403948A1
+  - task: P01-T02
+    artifact: docs/next/PACKAGE-AUTHORING.md
+    description: Package authoring guide documenting current layers and future package onboarding rules
+    sha256: 0AC1A7E33713A11ED8C27079DC6FB653F96A4BE598CEDE9BEE624C955E7DEF5B
+  - task: P01-T02
+    artifact: turbo.json
+    description: Build graph task descriptor for build, typecheck, test, and package-boundary gates
+    sha256: 8CB8EC40ADCDD4A3A142E08FA82211EA315555AA8BDCE73D1B85AA0DAD590C5E
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/boundary-checker-red.log
+    description: Required RED test showing boundary checker module missing before implementation
+    sha256: CAA55862CE40811B9ADE6EC183CE49D8FA9E2D1388C8EBABB3E329F0C0E0BEA5
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/boundary-checker-green.log
+    description: Focused boundary checker GREEN test output
+    sha256: 55E1A122DC9DEED4848D76A2987969C0661BC7B75947256578872ACA0367E4B4
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/workspace-package-verification.log
+    description: Workspace package install, build, typecheck, boundary, test, validate, and frozen bootstrap verification log
+    sha256: 4BF9E0D7E3D635E134DB63ED973714CB62B99391270EB4DA7AAD27867DE52CBF
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/npm-alias-verification.log
+    description: npm run validate and npm test compatibility alias verification after package skeleton changes
+    sha256: C8E7A24410160022B73F49BB39D7F4DA182E1974FF2C65CF2995EC7A181B7BC7
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/workspace-graph.json
+    description: pnpm workspace graph snapshot
+    sha256: 620D9D4E482DF80F447451C9C833A59B26129FDD2475BBC744B6272B887DAC71
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/package-export-snapshots.json
+    description: Package export, dependency, privacy, and script snapshot for protocol/core
+    sha256: 8FF2510FF1D5CDCA43D2B7F1A71CC26CC057F980D4DF6E0980EFD27CCD4E8B41
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/completion-report.yaml
+    description: Structured P01-T02 completion report
+    sha256: 0CEABD1E1E01E017D24F6DC21F80B948A1753917E704C6B08E0C9F3DCB4B6EEA
