@@ -12,6 +12,14 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  packages/core:
+    dependencies:
+      '@legion/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
+  packages/protocol: {}
+
 packages:
 
   typescript@6.0.3:

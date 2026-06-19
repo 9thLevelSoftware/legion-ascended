@@ -1,0 +1,91 @@
+P01-T02 npm alias verification
+started_at: 2026-06-19T19:49:32.4331779-04:00
+
+>>> npm run validate
+
+> @9thlevelsoftware/legion@9.0.0-alpha.0 validate
+> pnpm run typecheck && pnpm run check:boundaries && pnpm run test
+
+$ pnpm -r typecheck
+Scope: 2 of 3 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck: Done
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+$ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
+✔ accepts legal protocol and core imports (8.456ms)
+✔ rejects protocol imports from core (5.091ms)
+✔ rejects deep imports across workspace package exports (4.4476ms)
+✔ rejects provider and storage imports in protocol and core (4.5307ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 80.7099
+Scope: 2 of 3 workspace projects
+packages/protocol test$ node --test --test-reporter=spec
+packages/protocol test: ℹ tests 0
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 0
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 22.3563
+packages/protocol test: Done
+packages/core test$ node --test --test-reporter=spec
+packages/core test: ℹ tests 0
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 0
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 9.2131
+packages/core test: Done
+
+>>> npm test
+
+> @9thlevelsoftware/legion@9.0.0-alpha.0 test
+> node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
+
+✔ accepts legal protocol and core imports (8.3871ms)
+✔ rejects protocol imports from core (5.5838ms)
+✔ rejects deep imports across workspace package exports (4.405ms)
+✔ rejects provider and storage imports in protocol and core (4.3987ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 90.8088
+Scope: 2 of 3 workspace projects
+packages/protocol test$ node --test --test-reporter=spec
+packages/protocol test: ℹ tests 0
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 0
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 8.9249
+packages/protocol test: Done
+packages/core test$ node --test --test-reporter=spec
+packages/core test: ℹ tests 0
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 0
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 8.5725
+packages/core test: Done
+completed_at: 2026-06-19T19:49:35.7644737-04:00
+result: PASS

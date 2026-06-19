@@ -1,0 +1,18 @@
+P01-T02 boundary checker GREEN test
+started_at: 2026-06-19T19:48:08.7546719-04:00
+
+>>> node --test tests/package-boundaries.test.mjs
+✔ accepts legal protocol and core imports (9.2602ms)
+✔ rejects protocol imports from core (4.9205ms)
+✔ rejects deep imports across workspace package exports (4.353ms)
+✔ rejects provider and storage imports in protocol and core (5.1094ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 89.6443
+completed_at: 2026-06-19T19:48:08.9061330-04:00
+result: PASS

@@ -1,0 +1,20 @@
+[
+  {
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "path": "C:\\Users\\dasbl\\Documents\\Legion Retooled\\.worktrees\\legion-next-phase-01",
+    "private": false
+  },
+  {
+    "name": "@legion/core",
+    "version": "0.1.0",
+    "path": "C:\\Users\\dasbl\\Documents\\Legion Retooled\\.worktrees\\legion-next-phase-01\\packages\\core",
+    "private": true
+  },
+  {
+    "name": "@legion/protocol",
+    "version": "0.1.0",
+    "path": "C:\\Users\\dasbl\\Documents\\Legion Retooled\\.worktrees\\legion-next-phase-01\\packages\\protocol",
+    "private": true
+  }
+]

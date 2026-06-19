@@ -1,0 +1,178 @@
+P01-T02 workspace package verification
+started_at: 2026-06-19T19:48:21.2142882-04:00
+
+>>> pnpm install --no-frozen-lockfile --strict-peer-dependencies
+Scope: all 3 workspace projects
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Already up to date
+Progress: resolved 1, reused 0, downloaded 0, added 0, done
+
+Done in 346ms using pnpm v11.4.0
+
+>>> pnpm run build
+$ pnpm -r build
+Scope: 2 of 3 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/core build$ tsc -p tsconfig.json
+packages/core build: Done
+
+>>> pnpm run typecheck
+$ pnpm -r typecheck
+Scope: 2 of 3 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck: Done
+
+>>> pnpm run check:boundaries
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+
+>>> pnpm run test
+$ node --test tests && pnpm -r --if-present test
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\dasbl\Documents\Legion Retooled\.worktrees\legion-next-phase-01\tests'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v25.9.0
+✖ tests (39.0617ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43.7355
+
+✖ failing tests:
+
+test at tests:1:1
+✖ tests (39.0617ms)
+  'test failed'
+[ELIFECYCLE] Test failed. See above for more details.
+
+Retry after root test script correction
+
+>>> pnpm run build
+$ pnpm -r build
+Scope: 2 of 3 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/core build$ tsc -p tsconfig.json
+packages/core build: Done
+
+>>> pnpm run typecheck
+$ pnpm -r typecheck
+Scope: 2 of 3 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck: Done
+
+>>> pnpm run check:boundaries
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+
+>>> pnpm run test
+$ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
+✔ accepts legal protocol and core imports (9.7586ms)
+✔ rejects protocol imports from core (5.9415ms)
+✔ rejects deep imports across workspace package exports (5.0746ms)
+✔ rejects provider and storage imports in protocol and core (5.3868ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 91.2579
+Scope: 2 of 3 workspace projects
+packages/protocol test$ node --test --test-reporter=spec
+packages/protocol test: ℹ tests 0
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 0
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 11.5698
+packages/protocol test: Done
+packages/core test$ node --test --test-reporter=spec
+packages/core test: ℹ tests 0
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 0
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 9.3326
+packages/core test: Done
+
+>>> pnpm run validate
+$ pnpm run typecheck && pnpm run check:boundaries && pnpm run test
+$ pnpm -r typecheck
+Scope: 2 of 3 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck: Done
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+$ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
+✔ accepts legal protocol and core imports (8.7431ms)
+✔ rejects protocol imports from core (5.8532ms)
+✔ rejects deep imports across workspace package exports (4.9275ms)
+✔ rejects provider and storage imports in protocol and core (4.4018ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 81.003
+Scope: 2 of 3 workspace projects
+packages/protocol test$ node --test --test-reporter=spec
+packages/protocol test: ℹ tests 0
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 0
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 8.6872
+packages/protocol test: Done
+packages/core test$ node --test --test-reporter=spec
+packages/core test: ℹ tests 0
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 0
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 8.8075
+packages/core test: Done
+
+>>> pnpm run bootstrap
+$ pnpm install --frozen-lockfile --strict-peer-dependencies
+Scope: all 3 workspace projects
+Already up to date
+Done in 219ms using pnpm v11.4.0
+completed_at: 2026-06-19T19:48:54.5471001-04:00
+result: PASS_AFTER_TEST_SCRIPT_CORRECTION

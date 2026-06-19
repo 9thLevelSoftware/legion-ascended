@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-19T23:49:10.954Z",
+  "packages": [
+    {
+      "package_path": "packages/protocol/package.json",
+      "name": "@legion/protocol",
+      "private": true,
+      "version": "0.1.0",
+      "exports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js"
+        }
+      },
+      "dependencies": {},
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "node --test --test-reporter=spec"
+      }
+    },
+    {
+      "package_path": "packages/core/package.json",
+      "name": "@legion/core",
+      "private": true,
+      "version": "0.1.0",
+      "exports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js"
+        }
+      },
+      "dependencies": {
+        "@legion/protocol": "workspace:*"
+      },
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "node --test --test-reporter=spec"
+      }
+    }
+  ]
+}

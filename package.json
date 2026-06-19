@@ -10,10 +10,11 @@
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile --strict-peer-dependencies",
-    "build": "pnpm -r --if-present build",
-    "typecheck": "tsc -p tsconfig.base.json --showConfig",
-    "test": "pnpm -r --if-present test",
-    "validate": "pnpm run typecheck && pnpm run test",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "check:boundaries": "node scripts/check-package-boundaries.mjs",
+    "test": "node --test \"tests/**/*.test.mjs\" && pnpm -r --if-present test",
+    "validate": "pnpm run typecheck && pnpm run check:boundaries && pnpm run test",
     "validate:next": "pnpm run validate",
     "pack:dry-run": "npm pack --dry-run && pnpm pack --dry-run",
     "prepublishOnly": "pnpm run validate && pnpm pack --dry-run"
