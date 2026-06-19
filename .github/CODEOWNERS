@@ -1,0 +1,26 @@
+# Legion Next Phase 0 governance ownership.
+
+# Phase governance and accepted evidence
+docs/next/README.md @dasbl
+docs/next/REWRITE-CHARTER.md @dasbl
+docs/next/V8-MAINTENANCE-POLICY.md @dasbl
+docs/next/evidence/** @dasbl
+.legion/project/changes/LEGION-NEXT/implementation/phase-00/** @dasbl
+
+# Critical architecture surfaces
+docs/next/adr/** @dasbl
+docs/next/protocols/** @dasbl
+docs/next/runtime/** @dasbl
+docs/next/security/** @dasbl
+docs/next/migrations/** @dasbl
+docs/next/baseline/** @dasbl
+evals/** @dasbl
+spikes/eve/** @dasbl
+spikes/storage/** @dasbl
+packages/**/runtime/** @dasbl
+packages/**/protocol/** @dasbl
+packages/**/migrations/** @dasbl
+
+# Ownership metadata
+.github/CODEOWNERS @dasbl
+CHANGELOG.md @dasbl

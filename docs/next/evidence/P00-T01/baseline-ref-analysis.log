@@ -1,0 +1,38 @@
+P00-T01 baseline ref analysis
+Date: 2026-06-19
+
+Source repository:
+C:/Users/dasbl/Documents/legion
+
+Source repository refs at validation time:
+refs/heads/main                84d6b69920c877fc6f7b2b8dbc979c32b97bbb92
+refs/remotes/origin/main       855e975beec3bac6dc06db598081b6ac11ea8e14
+refs/tags/v8.0.5               ad7450f9342bbe587948437ec81a0fd22dca562f
+
+Specified fresh-checkout procedure executed:
+git clone 'C:/Users/dasbl/Documents/legion' $baselineDir
+git -C $baselineDir checkout origin/main
+
+Observed fresh checkout:
+HEAD                            84d6b69920c877fc6f7b2b8dbc979c32b97bbb92
+Decorations                     HEAD, origin/main
+Commit subject                  Release Legion 8.0.2
+npm package                     @9thlevelsoftware/legion
+npm package version             8.0.2
+
+Validation result:
+npm ci                          PASS
+npm run validate                FAIL, exit code 2
+npm run release:check           NOT RUN
+npm test                        NOT RUN
+
+Failure excerpt:
+scripts/validate.sh: line 5: $'\r': command not found
+scripts/validate.sh: line 6: set: pipefail
+: invalid option name
+
+Baseline tag result:
+No v8-baseline-* tag was created.
+
+Unblock condition:
+Provide a fresh-checkout procedure that resolves to the intended clean v8 baseline commit, or update the source repository local main so the specified local-clone checkout resolves to the current tested v8 baseline. Then rerun npm ci, npm run validate, npm run release:check, and npm test before creating the annotated baseline tag.

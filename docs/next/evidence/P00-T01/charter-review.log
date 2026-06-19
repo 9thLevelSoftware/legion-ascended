@@ -1,0 +1,22 @@
+P00-T01 charter review record
+Date: 2026-06-19
+Decision owner: dasbl
+Phase coordinator: dasbl
+Source authorization: task dispatch instruction named dasbl as the Phase 0 governance decision owner and project owner.
+
+Reviewed artifacts:
+- docs/next/REWRITE-CHARTER.md
+- docs/next/V8-MAINTENANCE-POLICY.md
+- docs/next/README.md
+- CHANGELOG.md
+- .github/CODEOWNERS
+
+Review findings:
+- The rewrite charter names a single decision owner.
+- The rewrite charter names review owners for ADRs, protocol schemas, runtime drivers, migrations, security, and evaluation fixtures.
+- The v8 policy distinguishes permitted maintenance from v9-only feature work.
+- Branch naming, PR labeling, review ownership, and release-channel conventions are recorded.
+- P00-T01 fresh-checkout v8 validation failed before local annotated baseline tag creation.
+
+Decision:
+Not accepted for Phase 0 execution. P00-T01 is blocked until fresh-checkout v8 validation passes and the local annotated baseline tag is created.

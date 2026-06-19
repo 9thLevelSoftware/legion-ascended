@@ -20,3 +20,42 @@ entries:
   - task: P00-PREFLIGHT
     artifact: docs/next/evidence/P00-PREFLIGHT/preflight.log
     description: Phase 0 source, repository, and v8 preflight capture
+  - task: P00-T01
+    artifact: docs/next/REWRITE-CHARTER.md
+    description: Draft rewrite charter, governance roles, branch policy, release channels, and blocked baseline provenance
+    sha256: 27C0E9E9699F6AB7E6E3BFE56DFBC95AEC2D0E7A1FDDEFE7FD8F5627B5739575
+  - task: P00-T01
+    artifact: docs/next/V8-MAINTENANCE-POLICY.md
+    description: Draft v8 maintenance-only policy and v9-only work boundary
+    sha256: 7E8F65D404E0619037DFB34D961D5B29F5EA292086C178199526AC393EACCF8B
+  - task: P00-T01
+    artifact: docs/next/README.md
+    description: Legion Next index updated with P00-T01 governance links and blocked baseline note
+    sha256: 0EB22B79288BD1BAE5FA31E55FF4AE309E06F443CE6AFBB6F64197FCEA42C2D6
+  - task: P00-T01
+    artifact: CHANGELOG.md
+    description: Governance changelog entry for blocked P00-T01 draft outputs without runtime behavior changes
+    sha256: 11A3C430F5A2EFBEF4294DB5567E4B25F6247D1ADC4DD7A6953395A0AAEF24A9
+  - task: P00-T01
+    artifact: .github/CODEOWNERS
+    description: CODEOWNERS review routing for ADRs, protocol schemas, runtime drivers, migrations, security, eval fixtures, evidence, and ownership metadata
+    sha256: C7ED21448A9D3B0F3AE6AD7A7EE48ED4C9F8B696E33C075263F23F7CC8CA9BD9
+  - task: P00-T01
+    artifact: docs/next/evidence/P00-T01/charter-review.log
+    description: Charter review record showing draft review passed content checks but acceptance is blocked by v8 validation failure
+    sha256: CF0270E760A0B4FC95C71881B5DBE5B683B0DD072C660CE481FA3F5B1117BAA5
+  - task: P00-T01
+    artifact: docs/next/evidence/P00-T01/fresh-checkout-validation.log
+    description: Required fresh local clone validation log; npm ci passed and npm run validate failed with exit code 2
+    sha256: 625257A1EAC1EC66B85B2AB562EC679F33740D8BDC952638D06BEB9D7F2AC7A7
+  - task: P00-T01
+    artifact: docs/next/evidence/P00-T01/baseline-ref-analysis.log
+    description: Ref mismatch analysis showing source local main differs from source remote-tracking origin/main and no baseline tag was created
+    sha256: C39CB2592C6238E495729BF5BDFB0C76F81F66BE2589FB7F720D84035B57C6A7
+  - task: P00-T01
+    artifact: "local tag v8-baseline-20260619"
+    description: Not created because required fresh-checkout v8 validation failed before tagging
+    status: NOT_CREATED
+    intended_source_ref: "C:/Users/dasbl/Documents/legion refs/remotes/origin/main"
+    intended_source_commit: "855e975beec3bac6dc06db598081b6ac11ea8e14"
+    tested_checkout_commit: "84d6b69920c877fc6f7b2b8dbc979c32b97bbb92"
