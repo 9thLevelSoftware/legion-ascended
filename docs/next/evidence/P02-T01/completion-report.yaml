@@ -35,7 +35,7 @@ acceptance:
   - criterion: No repository path escapes or ambiguous absolute paths are accepted.
     result: PASS
 commits:
-  - pending-pr-commit
+  - 645b5f1
 risks_or_followups:
   - P02-T02 must define the project manifest and constitution service that persist returned ArtifactRevision metadata in protocol records.
 blocker:
