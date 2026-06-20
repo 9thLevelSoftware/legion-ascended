@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  changeBundleJsonSchema,
   currentSpecDocumentJsonSchema,
   projectManifestJsonSchema
 } from "../dist/index.js";
@@ -10,6 +11,7 @@ import {
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const outputDirectory = join(scriptDirectory, "..", "..", "..", "schemas", "artifacts");
 const outputSchemas = {
+  "change-bundle.schema.json": changeBundleJsonSchema,
   "project-manifest.schema.json": projectManifestJsonSchema,
   "spec-document.schema.json": currentSpecDocumentJsonSchema
 };
