@@ -1,0 +1,49 @@
+status: DONE
+phase: 1
+task: P01-T11
+summary: >
+  Established Phase 1 CI and local validation gates for the typed protocol/core
+  nucleus and legacy package compatibility surface. Added SHA-pinned Linux,
+  macOS, and Windows workflows, a shared validate-next runner, generated protocol
+  documentation, drift checks for schemas/docs, and evidence for CI security and
+  required failure seeds.
+base_commit: 5a09910
+files_changed:
+  - .github/workflows/ci.yml
+  - .github/workflows/protocol-compat.yml
+  - checksums.sha256
+  - docs/next/evidence/P01-T11/**
+  - docs/next/protocol/**
+  - package.json
+  - scripts/validate-next.mjs
+  - tests/validate-next.test.mjs
+verification:
+  - command: node --test tests\validate-next.test.mjs
+    result: PASS
+    evidence: docs/next/evidence/P01-T11/local-validation-log.md
+  - command: node scripts\validate-next.mjs --check-generated-drift
+    result: FAIL_EXPECTED
+    evidence: docs/next/evidence/P01-T11/seed-checks.md
+  - command: pnpm validate:next
+    result: PASS
+    evidence: docs/next/evidence/P01-T11/local-validation-log.md
+acceptance:
+  - criterion: Linux, macOS, and Windows blocking jobs exist for Phase 1 surfaces.
+    result: PASS
+  - criterion: CI and local validation use the same commands.
+    result: PASS
+  - criterion: Protocol docs match generated schemas and transition code.
+    result: PASS
+  - criterion: Existing v8 validate/test behavior remains green.
+    result: PASS
+required_evidence:
+  - local_validation_log: docs/next/evidence/P01-T11/local-validation-log.md
+  - seed_checks: docs/next/evidence/P01-T11/seed-checks.md
+  - ci_security_review: docs/next/evidence/P01-T11/ci-security-review.md
+  - protocol_docs: docs/next/protocol/**
+risks_or_followups:
+  - CI run URLs and uploaded artifacts are only available after this branch is pushed and GitHub Actions executes on the pull request.
+  - Hosted runner image labels are floating by design; action code and Node version are pinned separately.
+blocker:
+  condition: none
+  decision_needed: none
