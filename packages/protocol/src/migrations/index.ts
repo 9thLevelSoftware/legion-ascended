@@ -202,14 +202,14 @@ export function applyMigrations(input: unknown, options: ApplyMigrationsInput): 
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
     }
 
-    const migrated = assertVersionedRecord(migration.migrate(cloneVersionedRecord(record)));
+    const migrated = assertVersionedRecord(migration.migrate(record));
     if (migrated.schemaVersion !== migration.toVersion) {
       throw new Error(
         `Migration ${migration.id} returned schemaVersion ${migrated.schemaVersion}; expected ${migration.toVersion}.`
       );
     }
 
-    record = cloneVersionedRecord(migrated);
+    record = migrated;
     appliedMigrations.push(migration.id);
   }
 
@@ -222,7 +222,7 @@ export function applyMigrations(input: unknown, options: ApplyMigrationsInput): 
 export function generateCompatibilityReport(input: CompatibilityReportInput): string {
   const rows =
     input.registry.migrations.length === 0
-      ? "| none | none | none | none | none |\n"
+      ? "| none | none | none | none | none |"
       : input.registry.migrations
           .map(
             (migration) =>

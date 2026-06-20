@@ -211,4 +211,13 @@ test("P01-T09 compatibility reports include matrix and evolution policy text", (
   assert.match(report, /synthetic\.v1-to-v2/);
   assert.match(report, /Breaking schema changes require a major protocol version or an explicit migration/);
   assert.match(protocolEvolutionPolicyDocumentation, /Deprecated fields require a removal version/);
+
+  const emptyReport = generateCompatibilityReport({
+    registry: createMigrationRegistry({
+      currentVersion: CURRENT_PROTOCOL_VERSION,
+      supportedVersions: [CURRENT_PROTOCOL_VERSION]
+    })
+  });
+  assert.match(emptyReport, /\| none \| none \| none \| none \| none \|/);
+  assert.doesNotMatch(emptyReport, /\| none \| none \| none \| none \| none \|\n\n\n/);
 });
