@@ -1,0 +1,66 @@
+status: DONE
+phase: 1
+task: P01-T08
+summary: >
+  Implemented pure risk classification and gate derivation for ADR-006 in packages/core.
+  The classifier normalizes structured workflow risk signals, derives tiers from score
+  thresholds plus hard floors, produces deterministic explanations and protocol-compatible
+  risk profiles, supports approved policy data evolution, and rejects unauthorized tier
+  downgrades. Gate derivation is isolated as policy data and remains provider-neutral.
+  Review follow-up hardened malformed JavaScript/custom-policy inputs, enforced retained
+  gates from lower-tier overrides, and kept returned risk-profile reasons within protocol
+  limits. A second review follow-up validates approved policy artifact fields before
+  trusting custom policy data.
+base_commit: 2583c5e50997272b8c07b58d14f0eee5f818644e
+files_changed:
+  - packages/core/src/index.ts
+  - packages/core/src/gates/index.ts
+  - packages/core/src/risk/index.ts
+  - packages/core/test/risk-gates.test.mjs
+  - docs/next/evidence/P01-T08/core-p01-t08-test.log
+  - docs/next/evidence/P01-T08/full-validation.log
+  - docs/next/evidence/P01-T08/golden-case-report.md
+  - docs/next/evidence/P01-T08/monotonicity-property-tests.md
+  - docs/next/evidence/P01-T08/policy-review.md
+verification:
+  - command: pnpm --filter @legion/core test -- --test-name-pattern=P01-T08
+    result: PASS
+    evidence: docs/next/evidence/P01-T08/core-p01-t08-test.log
+  - command: pnpm validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T08/full-validation.log
+acceptance:
+  - criterion: Classification is inspectable and reproducible.
+    result: PASS
+  - criterion: Policy can evolve by versioned data without changing core reducers.
+    result: PASS
+  - criterion: Risk tier never depends on a worker persona or model self-assessment alone.
+    result: PASS
+  - criterion: ADR sample changes produce expected tiers and gates.
+    result: PASS
+  - criterion: Adding a high-risk signal never lowers a tier.
+    result: PASS
+  - criterion: Unauthorized downgrade is rejected.
+    result: PASS
+  - criterion: Explanation lists all signals and overrides deterministically.
+    result: PASS
+  - criterion: Malformed custom policy data fails explicitly instead of weakening gates.
+    result: PASS
+  - criterion: Custom policy approval artifacts are fully validated before trust.
+    result: PASS
+  - criterion: Lower-tier override retained protections are enforced in the returned gate set.
+    result: PASS
+  - criterion: Returned protocol risk-profile reason strings stay within protocol limits.
+    result: PASS
+required_evidence:
+  - golden_case_report: docs/next/evidence/P01-T08/golden-case-report.md
+  - monotonicity_property_tests: docs/next/evidence/P01-T08/monotonicity-property-tests.md
+  - policy_review_record: docs/next/evidence/P01-T08/policy-review.md
+  - focused_core_test_output: docs/next/evidence/P01-T08/core-p01-t08-test.log
+  - full_validation_output: docs/next/evidence/P01-T08/full-validation.log
+risks_or_followups:
+  - Constitution or project-specific delegated-owner policy can be layered through approved policy artifacts when those artifacts exist.
+  - Later planner and dispatcher phases still need to supply validated structured signals; this task deliberately does not infer risk from untrusted prose.
+blocker:
+  condition: none
+  decision_needed: none
