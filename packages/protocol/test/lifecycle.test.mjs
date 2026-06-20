@@ -23,6 +23,22 @@ async function readLifecycleFixture(name) {
   return JSON.parse(await readFile(join(fixtureDirectory, name), "utf8"));
 }
 
+function hasJsonSchemaVariantRequiring(schema, status, requiredFields) {
+  if (schema && typeof schema === "object") {
+    const properties = schema.properties;
+    const required = Array.isArray(schema.required) ? schema.required : [];
+    const statusSchema = properties?.status;
+
+    if (statusSchema?.const === status && requiredFields.every((field) => required.includes(field))) {
+      return true;
+    }
+
+    return Object.values(schema).some((value) => hasJsonSchemaVariantRequiring(value, status, requiredFields));
+  }
+
+  return false;
+}
+
 test("P01-T05 valid lifecycle fixture corpus parses and serializes identically", async () => {
   const valid = await readLifecycleFixture("lifecycle-valid.json");
 
@@ -171,6 +187,92 @@ test("P01-T05 release and observation schemas represent rollback and forward-fix
   assert.equal(observationSchema.safeParse(observation).success, true);
   assert.equal(releaseSchema.safeParse({ ...release, status: "forward_fix_required", forwardFixPlan: undefined }).success, false);
   assert.equal(observationSchema.safeParse({ ...observation, status: "rolled_back", rollbackEvidenceRefs: [] }).success, false);
+});
+
+test("review feedback: lifecycle schemas reject impossible chronology and empty collected evidence", async () => {
+  const { approval, evidenceBundle, observation, release, reviewDecision, taskRun } = await readLifecycleFixture("lifecycle-valid.json");
+
+  assert.equal(
+    taskRunSchema.safeParse({
+      ...taskRun,
+      status: "succeeded",
+      finishedAt: "2026-06-20T01:31:00.000Z"
+    }).success,
+    false
+  );
+  assert.equal(
+    approvalSchema.safeParse({
+      ...approval,
+      decidedAt: "2026-06-20T01:34:00.000Z"
+    }).success,
+    false
+  );
+  assert.equal(
+    approvalSchema.safeParse({
+      ...approval,
+      expiresAt: "2026-06-20T01:34:00.000Z"
+    }).success,
+    false
+  );
+  assert.equal(
+    observationSchema.safeParse({
+      ...observation,
+      endedAt: "2026-06-20T01:37:00.000Z"
+    }).success,
+    false
+  );
+  assert.equal(
+    releaseSchema.safeParse({
+      ...release,
+      deployment: {
+        ...release.deployment,
+        deployedAt: "2026-06-20T01:36:00.000Z"
+      }
+    }).success,
+    false
+  );
+  assert.equal(
+    evidenceBundleSchema.safeParse({
+      ...evidenceBundle,
+      retention: {
+        ...evidenceBundle.retention,
+        retainUntil: "2026-06-20T01:32:00.000Z"
+      }
+    }).success,
+    false
+  );
+  assert.equal(
+    evidenceBundleSchema.safeParse({
+      ...evidenceBundle,
+      items: [
+        {
+          ...evidenceBundle.items[0],
+          command: {
+            ...evidenceBundle.items[0].command,
+            startedAt: "2026-06-20T01:40:00.000Z",
+            endedAt: "2026-06-20T01:39:00.000Z"
+          }
+        }
+      ]
+    }).success,
+    false
+  );
+  assert.equal(evidenceBundleSchema.safeParse({ ...evidenceBundle, status: "collected", items: [] }).success, false);
+  assert.equal(reviewDecisionSchema.safeParse({ ...reviewDecision, status: "accepted", submittedAt: undefined }).success, false);
+  assert.equal(
+    reviewDecisionSchema.safeParse({
+      ...reviewDecision,
+      submittedAt: "2026-06-20T01:33:00.000Z"
+    }).success,
+    false
+  );
+});
+
+test("review feedback: submitted review audit fields are represented in generated JSON Schema", () => {
+  assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "submitted", ["submittedAt"]), true);
+  assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "accepted", ["submittedAt"]), true);
+  assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "rejected", ["submittedAt"]), true);
+  assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "superseded", ["submittedAt"]), true);
 });
 
 test("P01-T05 invalid lifecycle fixture cases are rejected", async () => {

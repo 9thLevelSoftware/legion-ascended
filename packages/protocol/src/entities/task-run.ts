@@ -120,49 +120,59 @@ const taskRunBaseSchema = schemaMetadataSchema.extend({
   error: protocolErrorSchema.optional()
 });
 
-export const taskRunSchema = z.discriminatedUnion("status", [
-  taskRunBaseSchema.extend({
-    status: z.literal("created"),
-    startedAt: utcTimestampSchema.optional(),
-    finishedAt: utcTimestampSchema.optional(),
-    manifest: taskRunManifestSchema
-  }),
-  taskRunBaseSchema.extend({
-    status: z.literal("started"),
-    startedAt: utcTimestampSchema,
-    finishedAt: utcTimestampSchema.optional(),
-    manifest: frozenTaskRunManifestSchema
-  }),
-  taskRunBaseSchema.extend({
-    status: z.literal("succeeded"),
-    startedAt: utcTimestampSchema,
-    finishedAt: utcTimestampSchema,
-    manifest: frozenTaskRunManifestSchema
-  }),
-  taskRunBaseSchema.extend({
-    status: z.literal("failed"),
-    startedAt: utcTimestampSchema,
-    finishedAt: utcTimestampSchema,
-    manifest: frozenTaskRunManifestSchema
-  }),
-  taskRunBaseSchema.extend({
-    status: z.literal("blocked"),
-    startedAt: utcTimestampSchema,
-    finishedAt: utcTimestampSchema,
-    manifest: frozenTaskRunManifestSchema
-  }),
-  taskRunBaseSchema.extend({
-    status: z.literal("canceled"),
-    startedAt: utcTimestampSchema,
-    finishedAt: utcTimestampSchema,
-    manifest: frozenTaskRunManifestSchema
-  }),
-  taskRunBaseSchema.extend({
-    status: z.literal("superseded"),
-    startedAt: utcTimestampSchema,
-    finishedAt: utcTimestampSchema,
-    manifest: frozenTaskRunManifestSchema
-  })
-]);
+export const taskRunSchema = z
+  .discriminatedUnion("status", [
+    taskRunBaseSchema.extend({
+      status: z.literal("created"),
+      startedAt: utcTimestampSchema.optional(),
+      finishedAt: utcTimestampSchema.optional(),
+      manifest: taskRunManifestSchema
+    }),
+    taskRunBaseSchema.extend({
+      status: z.literal("started"),
+      startedAt: utcTimestampSchema,
+      finishedAt: utcTimestampSchema.optional(),
+      manifest: frozenTaskRunManifestSchema
+    }),
+    taskRunBaseSchema.extend({
+      status: z.literal("succeeded"),
+      startedAt: utcTimestampSchema,
+      finishedAt: utcTimestampSchema,
+      manifest: frozenTaskRunManifestSchema
+    }),
+    taskRunBaseSchema.extend({
+      status: z.literal("failed"),
+      startedAt: utcTimestampSchema,
+      finishedAt: utcTimestampSchema,
+      manifest: frozenTaskRunManifestSchema
+    }),
+    taskRunBaseSchema.extend({
+      status: z.literal("blocked"),
+      startedAt: utcTimestampSchema,
+      finishedAt: utcTimestampSchema,
+      manifest: frozenTaskRunManifestSchema
+    }),
+    taskRunBaseSchema.extend({
+      status: z.literal("canceled"),
+      startedAt: utcTimestampSchema,
+      finishedAt: utcTimestampSchema,
+      manifest: frozenTaskRunManifestSchema
+    }),
+    taskRunBaseSchema.extend({
+      status: z.literal("superseded"),
+      startedAt: utcTimestampSchema,
+      finishedAt: utcTimestampSchema,
+      manifest: frozenTaskRunManifestSchema
+    })
+  ])
+  .superRefine((taskRun, context) => {
+    if (taskRun.startedAt && taskRun.finishedAt && new Date(taskRun.finishedAt).getTime() < new Date(taskRun.startedAt).getTime()) {
+      context.addIssue({
+        code: "custom",
+        message: "finishedAt cannot be before startedAt.",
+        path: ["finishedAt"]
+      });
+    }
+  });
 
 export type TaskRun = z.infer<typeof taskRunSchema>;

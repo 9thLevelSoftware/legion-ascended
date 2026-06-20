@@ -30,6 +30,14 @@ export const evidenceCommandResultSchema = z.strictObject({
   outputHash: contentHashSchema,
   startedAt: utcTimestampSchema.optional(),
   endedAt: utcTimestampSchema.optional()
+}).superRefine((result, context) => {
+  if (result.startedAt && result.endedAt && new Date(result.endedAt).getTime() < new Date(result.startedAt).getTime()) {
+    context.addIssue({
+      code: "custom",
+      message: "endedAt cannot be before startedAt.",
+      path: ["endedAt"]
+    });
+  }
 });
 
 export type EvidenceCommandResult = z.infer<typeof evidenceCommandResultSchema>;
@@ -53,18 +61,49 @@ export const evidenceItemSchema = z.strictObject({
 
 export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
 
-export const evidenceBundleSchema = schemaMetadataSchema.extend({
+const evidenceBundleBaseSchema = schemaMetadataSchema.extend({
   kind: z.literal("evidence"),
   id: evidenceIdSchema,
   projectId: projectIdSchema,
   changeId: changeIdSchema,
   taskId: taskIdSchema.optional(),
   runId: runIdSchema.optional(),
-  status: evidenceStatusSchema,
   sensitivity: evidenceSensitivitySchema,
   retention: evidenceRetentionSchema,
-  items: z.array(evidenceItemSchema),
   traceRefs: z.array(traceReferenceSchema)
 });
+
+export const evidenceBundleSchema = z
+  .discriminatedUnion("status", [
+    evidenceBundleBaseSchema.extend({
+      status: z.literal("unknown"),
+      items: z.array(evidenceItemSchema)
+    }),
+    evidenceBundleBaseSchema.extend({
+      status: z.literal("collecting"),
+      items: z.array(evidenceItemSchema)
+    }),
+    evidenceBundleBaseSchema.extend({
+      status: z.literal("collected"),
+      items: z.array(evidenceItemSchema).min(1)
+    }),
+    evidenceBundleBaseSchema.extend({
+      status: z.literal("failed"),
+      items: z.array(evidenceItemSchema)
+    }),
+    evidenceBundleBaseSchema.extend({
+      status: z.literal("expired"),
+      items: z.array(evidenceItemSchema)
+    })
+  ])
+  .superRefine((bundle, context) => {
+    if (bundle.retention.retainUntil && new Date(bundle.retention.retainUntil).getTime() < new Date(bundle.createdAt).getTime()) {
+      context.addIssue({
+        code: "custom",
+        message: "retainUntil cannot be before createdAt.",
+        path: ["retention", "retainUntil"]
+      });
+    }
+  });
 
 export type EvidenceBundle = z.infer<typeof evidenceBundleSchema>;

@@ -74,45 +74,55 @@ const releaseOpenLoopFields = {
   rollbackEvidenceRefs: z.array(evidenceIdSchema).optional()
 };
 
-export const releaseSchema = z.discriminatedUnion("status", [
-  releaseBaseSchema.extend({
-    status: z.literal("requested"),
-    ...releaseOpenLoopFields
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("staging"),
-    ...releaseOpenLoopFields
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("deployed"),
-    ...releaseOpenLoopFields
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("healthy"),
-    ...releaseOpenLoopFields
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("failed"),
-    ...releaseOpenLoopFields
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("rollback_required"),
-    ...releaseOpenLoopFields
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("rolled_back"),
-    forwardFixPlan: releaseForwardFixPlanSchema.optional(),
-    rollbackEvidenceRefs: z.array(evidenceIdSchema).min(1)
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("forward_fix_required"),
-    forwardFixPlan: releaseForwardFixPlanSchema,
-    rollbackEvidenceRefs: z.array(evidenceIdSchema).optional()
-  }),
-  releaseBaseSchema.extend({
-    status: z.literal("superseded"),
-    ...releaseOpenLoopFields
-  })
-]);
+export const releaseSchema = z
+  .discriminatedUnion("status", [
+    releaseBaseSchema.extend({
+      status: z.literal("requested"),
+      ...releaseOpenLoopFields
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("staging"),
+      ...releaseOpenLoopFields
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("deployed"),
+      ...releaseOpenLoopFields
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("healthy"),
+      ...releaseOpenLoopFields
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("failed"),
+      ...releaseOpenLoopFields
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("rollback_required"),
+      ...releaseOpenLoopFields
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("rolled_back"),
+      forwardFixPlan: releaseForwardFixPlanSchema.optional(),
+      rollbackEvidenceRefs: z.array(evidenceIdSchema).min(1)
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("forward_fix_required"),
+      forwardFixPlan: releaseForwardFixPlanSchema,
+      rollbackEvidenceRefs: z.array(evidenceIdSchema).optional()
+    }),
+    releaseBaseSchema.extend({
+      status: z.literal("superseded"),
+      ...releaseOpenLoopFields
+    })
+  ])
+  .superRefine((release, context) => {
+    if (release.deployment && new Date(release.deployment.deployedAt).getTime() < new Date(release.createdAt).getTime()) {
+      context.addIssue({
+        code: "custom",
+        message: "deployedAt cannot be before createdAt.",
+        path: ["deployment", "deployedAt"]
+      });
+    }
+  });
 
 export type Release = z.infer<typeof releaseSchema>;

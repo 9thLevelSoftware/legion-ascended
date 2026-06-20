@@ -75,27 +75,47 @@ const decidedApprovalFields = {
   decisionReason: z.string().min(1).max(2_048)
 };
 
-export const approvalSchema = z.discriminatedUnion("status", [
-  approvalBaseSchema.extend({
-    status: z.literal("requested"),
-    ...undecidedApprovalFields
-  }),
-  approvalBaseSchema.extend({
-    status: z.literal("granted"),
-    ...decidedApprovalFields
-  }),
-  approvalBaseSchema.extend({
-    status: z.literal("denied"),
-    ...decidedApprovalFields
-  }),
-  approvalBaseSchema.extend({
-    status: z.literal("expired"),
-    ...undecidedApprovalFields
-  }),
-  approvalBaseSchema.extend({
-    status: z.literal("revoked"),
-    ...decidedApprovalFields
-  })
-]);
+export const approvalSchema = z
+  .discriminatedUnion("status", [
+    approvalBaseSchema.extend({
+      status: z.literal("requested"),
+      ...undecidedApprovalFields
+    }),
+    approvalBaseSchema.extend({
+      status: z.literal("granted"),
+      ...decidedApprovalFields
+    }),
+    approvalBaseSchema.extend({
+      status: z.literal("denied"),
+      ...decidedApprovalFields
+    }),
+    approvalBaseSchema.extend({
+      status: z.literal("expired"),
+      ...undecidedApprovalFields
+    }),
+    approvalBaseSchema.extend({
+      status: z.literal("revoked"),
+      ...decidedApprovalFields
+    })
+  ])
+  .superRefine((approval, context) => {
+    const requestedAt = new Date(approval.requestedAt).getTime();
+
+    if (approval.expiresAt && new Date(approval.expiresAt).getTime() < requestedAt) {
+      context.addIssue({
+        code: "custom",
+        message: "expiresAt cannot be before requestedAt.",
+        path: ["expiresAt"]
+      });
+    }
+
+    if (approval.decidedAt && new Date(approval.decidedAt).getTime() < requestedAt) {
+      context.addIssue({
+        code: "custom",
+        message: "decidedAt cannot be before requestedAt.",
+        path: ["decidedAt"]
+      });
+    }
+  });
 
 export type Approval = z.infer<typeof approvalSchema>;

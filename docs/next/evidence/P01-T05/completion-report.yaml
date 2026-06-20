@@ -5,7 +5,8 @@ summary: >
   Defined lifecycle protocol schemas for task contracts, operational tasks, immutable run attempts, evidence bundles,
   independent review decisions, approvals, releases, and observations. The schemas model the Legion workflow files as
   durable machine-readable records while preserving the separation between intent, mutable operational state, attempts,
-  proof, authorization, and production observation.
+  proof, authorization, and production observation. Review follow-up hardened lifecycle chronology, collected-evidence
+  cardinality, and generated JSON Schema audit requirements for submitted and terminal reviews.
 files_changed:
   - packages/protocol/src/entities/task-contract.ts
   - packages/protocol/src/entities/task.ts
@@ -52,6 +53,12 @@ acceptance:
     result: PASS
   - criterion: Task-run manifest becomes immutable after start.
     result: PASS
+  - criterion: Lifecycle timestamps cannot run backward across task runs, approvals, releases, observations, evidence, or reviews.
+    result: PASS
+  - criterion: Collected evidence bundles cannot be empty.
+    result: PASS
+  - criterion: Submitted and terminal review audit timestamps are represented in generated JSON Schema.
+    result: PASS
 required_evidence:
   - schema_matrix: docs/next/evidence/P01-T05/schema-matrix.md
   - negative_test_report: docs/next/evidence/P01-T05/negative-test-report.md
@@ -60,6 +67,7 @@ required_evidence:
 risks_or_followups:
   - Runtime enforcement of lifecycle transitions belongs to later core/storage/orchestration phases.
   - JSON Schema cannot express task-contract write/forbidden path set disjointness without custom keywords; Zod parsing and tests enforce it.
+  - JSON Schema cannot express cross-field timestamp ordering without custom keywords; Zod parsing and tests enforce it.
 blocker:
   condition: none
   decision_needed: none

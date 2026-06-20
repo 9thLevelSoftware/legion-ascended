@@ -27,7 +27,14 @@ Architecture references:
 ## JSON Schema Coverage Notes
 
 - Task-run status variants require frozen manifests for started and terminal runs.
+- Task-run runtime refinements reject terminal attempts whose `finishedAt` precedes `startedAt`.
+- Evidence status variants require collected bundles to contain at least one evidence item.
+- Evidence runtime refinements reject command durations and retention windows that run backward.
+- Review status variants require `submittedAt` for submitted, accepted, rejected, and superseded review records.
 - Review finding severity variants require evidence references for blocking findings.
+- Review runtime refinements reject `submittedAt` values before review creation.
 - Approval status variants require decision audit fields for granted, denied, and revoked approvals.
+- Approval runtime refinements reject `decidedAt` or `expiresAt` values before `requestedAt`.
 - Release and observation status variants structurally require forward-fix or rollback evidence references when those statuses are active.
+- Release and observation runtime refinements reject deployment or observation timelines that run backward.
 - Task-contract write and forbidden scope disjointness remains a Zod runtime refinement, because the generated JSON Schema path arrays cannot express set disjointness without custom keywords.

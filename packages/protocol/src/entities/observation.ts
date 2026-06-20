@@ -54,41 +54,51 @@ const observationOpenLoopFields = {
   forwardFixRefs: z.array(taskIdSchema).optional()
 };
 
-export const observationSchema = z.discriminatedUnion("status", [
-  observationBaseSchema.extend({
-    status: z.literal("pending"),
-    ...observationOpenLoopFields
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("observing"),
-    ...observationOpenLoopFields
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("healthy"),
-    ...observationOpenLoopFields
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("degraded"),
-    ...observationOpenLoopFields
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("failed"),
-    ...observationOpenLoopFields
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("rolled_back"),
-    rollbackEvidenceRefs: z.array(evidenceIdSchema).min(1),
-    forwardFixRefs: z.array(taskIdSchema).optional()
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("forward_fix_required"),
-    rollbackEvidenceRefs: z.array(evidenceIdSchema).optional(),
-    forwardFixRefs: z.array(taskIdSchema).min(1)
-  }),
-  observationBaseSchema.extend({
-    status: z.literal("unknown"),
-    ...observationOpenLoopFields
-  })
-]);
+export const observationSchema = z
+  .discriminatedUnion("status", [
+    observationBaseSchema.extend({
+      status: z.literal("pending"),
+      ...observationOpenLoopFields
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("observing"),
+      ...observationOpenLoopFields
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("healthy"),
+      ...observationOpenLoopFields
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("degraded"),
+      ...observationOpenLoopFields
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("failed"),
+      ...observationOpenLoopFields
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("rolled_back"),
+      rollbackEvidenceRefs: z.array(evidenceIdSchema).min(1),
+      forwardFixRefs: z.array(taskIdSchema).optional()
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("forward_fix_required"),
+      rollbackEvidenceRefs: z.array(evidenceIdSchema).optional(),
+      forwardFixRefs: z.array(taskIdSchema).min(1)
+    }),
+    observationBaseSchema.extend({
+      status: z.literal("unknown"),
+      ...observationOpenLoopFields
+    })
+  ])
+  .superRefine((observation, context) => {
+    if (observation.endedAt && new Date(observation.endedAt).getTime() < new Date(observation.startedAt).getTime()) {
+      context.addIssue({
+        code: "custom",
+        message: "endedAt cannot be before startedAt.",
+        path: ["endedAt"]
+      });
+    }
+  });
 
 export type Observation = z.infer<typeof observationSchema>;

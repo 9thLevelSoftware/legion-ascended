@@ -48,29 +48,62 @@ export const reviewFindingSchema = z.discriminatedUnion("severity", [
 
 export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
 
-export const reviewDecisionSchema = schemaMetadataSchema
-  .extend({
-    kind: z.literal("review"),
-    id: reviewIdSchema,
-    projectId: projectIdSchema,
-    changeId: changeIdSchema,
-    taskId: taskIdSchema.optional(),
-    runId: runIdSchema.optional(),
-    status: reviewStatusSchema,
-    reviewer: actorSchema,
-    submittedAt: utcTimestampSchema.optional(),
-    verdicts: reviewVerdictsSchema,
-    confidence: z.enum(["low", "medium", "high"]),
-    findings: z.array(reviewFindingSchema),
-    supersedes: z.array(reviewIdSchema),
-    evidenceRefs: z.array(evidenceIdSchema).optional(),
-    traceRefs: z.array(traceReferenceSchema).optional()
-  })
+const reviewDecisionBaseSchema = schemaMetadataSchema.extend({
+  kind: z.literal("review"),
+  id: reviewIdSchema,
+  projectId: projectIdSchema,
+  changeId: changeIdSchema,
+  taskId: taskIdSchema.optional(),
+  runId: runIdSchema.optional(),
+  reviewer: actorSchema,
+  verdicts: reviewVerdictsSchema,
+  confidence: z.enum(["low", "medium", "high"]),
+  findings: z.array(reviewFindingSchema),
+  supersedes: z.array(reviewIdSchema),
+  evidenceRefs: z.array(evidenceIdSchema).optional(),
+  traceRefs: z.array(traceReferenceSchema).optional()
+});
+
+const openReviewDecisionFields = {
+  submittedAt: utcTimestampSchema.optional()
+};
+
+const terminalReviewDecisionFields = {
+  submittedAt: utcTimestampSchema
+};
+
+export const reviewDecisionSchema = z
+  .discriminatedUnion("status", [
+    reviewDecisionBaseSchema.extend({
+      status: z.literal("requested"),
+      ...openReviewDecisionFields
+    }),
+    reviewDecisionBaseSchema.extend({
+      status: z.literal("submitted"),
+      ...terminalReviewDecisionFields
+    }),
+    reviewDecisionBaseSchema.extend({
+      status: z.literal("accepted"),
+      ...terminalReviewDecisionFields
+    }),
+    reviewDecisionBaseSchema.extend({
+      status: z.literal("rejected"),
+      ...terminalReviewDecisionFields
+    }),
+    reviewDecisionBaseSchema.extend({
+      status: z.literal("superseded"),
+      ...terminalReviewDecisionFields
+    }),
+    reviewDecisionBaseSchema.extend({
+      status: z.literal("unknown"),
+      ...openReviewDecisionFields
+    })
+  ])
   .superRefine((reviewDecision, context) => {
-    if (reviewDecision.status === "submitted" && !reviewDecision.submittedAt) {
+    if (reviewDecision.submittedAt && new Date(reviewDecision.submittedAt).getTime() < new Date(reviewDecision.createdAt).getTime()) {
       context.addIssue({
         code: "custom",
-        message: "Submitted reviews require submittedAt.",
+        message: "submittedAt cannot be before createdAt.",
         path: ["submittedAt"]
       });
     }

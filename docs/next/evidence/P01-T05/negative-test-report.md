@@ -21,3 +21,16 @@ Invalid fixture cases covered:
 | Rolled-back observation omits rollback evidence | `observationSchema` | Rolled-back observations require rollback evidence references. |
 
 The protocol test suite also verifies unknown and not-verified outcomes remain representable for evidence and review records.
+
+Review-feedback regression coverage:
+
+| Case | Schema | Expected rejection |
+| --- | --- | --- |
+| Terminal task run finishes before it starts | `taskRunSchema` | `finishedAt` cannot precede `startedAt`. |
+| Approval is decided or expires before it is requested | `approvalSchema` | `decidedAt` and `expiresAt` cannot precede `requestedAt`. |
+| Observation ends before it starts | `observationSchema` | `endedAt` cannot precede `startedAt`. |
+| Release deploys before release record creation | `releaseSchema` | `deployment.deployedAt` cannot precede `createdAt`. |
+| Evidence retention ends before evidence creation | `evidenceBundleSchema` | `retention.retainUntil` cannot precede `createdAt`. |
+| Evidence command ends before it starts | `evidenceBundleSchema` | Command `endedAt` cannot precede `startedAt`. |
+| Collected evidence bundle has no evidence items | `evidenceBundleSchema` | `status: collected` requires at least one item. |
+| Terminal review omits or backdates submission time | `reviewDecisionSchema` | Terminal review statuses require `submittedAt`, and it cannot precede `createdAt`. |
