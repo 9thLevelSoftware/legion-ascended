@@ -141,6 +141,8 @@ const SECTION_HEADINGS = {
 
 const REQUIRED_SECTION_KEYS = Object.keys(SECTION_HEADINGS) as (keyof typeof SECTION_HEADINGS)[];
 const PLACEHOLDER_PATTERN = /\b(?:todo|tbd|fixme)\b|<[^>\n]+>/i;
+const STRUCTURAL_SECTION_HEADINGS = new Set<string>(Object.values(SECTION_HEADINGS));
+const INVALID_CURRENT_SPEC_PATH = `${PROJECT_ARTIFACT_PATHS.currentSpecs}/invalid-requirement-id.md` as ArtifactPath;
 
 function isEnoent(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
@@ -168,6 +170,32 @@ function normalizeRequirementId(input: RequirementId | string): RequirementId {
   return requirementIdSchema.parse(input);
 }
 
+function invalidRequirementIdDiagnostics(input: RequirementId | string): readonly ArtifactDiagnostic[] {
+  const parsed = requirementIdSchema.safeParse(input);
+  if (parsed.success) return [];
+
+  return parsed.error.issues.map((issue) =>
+    specDiagnostic({
+      code: "invalid_requirement_id",
+      message: `${issue.message}${issue.path.length > 0 ? ` at ${issue.path.join(".")}` : ""}`,
+      path: INVALID_CURRENT_SPEC_PATH
+    })
+  );
+}
+
+function specPathForRequirementResult(requirementId: RequirementId | string): {
+  readonly ok: true;
+  readonly artifactPath: ArtifactPath;
+} | CurrentSpecFailure {
+  const diagnostics = invalidRequirementIdDiagnostics(requirementId);
+  if (diagnostics.length > 0) return failure("invalid", diagnostics);
+
+  return {
+    ok: true,
+    artifactPath: artifactPathForRole({ role: "current-spec", requirementId: normalizeRequirementId(requirementId) })
+  };
+}
+
 function specPathForRequirement(requirementId: RequirementId | string): ArtifactPath {
   return artifactPathForRole({ role: "current-spec", requirementId });
 }
@@ -175,13 +203,16 @@ function specPathForRequirement(requirementId: RequirementId | string): Artifact
 function normalizeDocument(input: CurrentSpecDocumentDraft, revision: number): CurrentSpecDocument | {
   readonly diagnostics: readonly ArtifactDiagnostic[];
 } {
-  const path = specPathForRequirement(input.primaryRequirementId);
+  const pathResult = specPathForRequirementResult(input.primaryRequirementId);
+  const path = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
     kind: input.kind ?? "current-spec",
     revision
   });
+
+  if (!pathResult.ok) return { diagnostics: pathResult.diagnostics };
 
   if (!parsed.success) {
     return {
@@ -196,6 +227,19 @@ function normalizeDocument(input: CurrentSpecDocumentDraft, revision: number): C
   }
 
   return parsed.data;
+}
+
+function structuralSectionHeading(input: string | undefined): string | undefined {
+  const heading = input?.trim();
+  return heading !== undefined && STRUCTURAL_SECTION_HEADINGS.has(heading) ? heading : undefined;
+}
+
+function firstReservedSectionHeading(content: string): string | undefined {
+  for (const match of content.matchAll(/^## ([^\n#]+)\s*$/gm)) {
+    const heading = structuralSectionHeading(match[1]);
+    if (heading !== undefined) return heading;
+  }
+  return undefined;
 }
 
 function frontmatterForDocument(document: CurrentSpecDocument): Omit<CurrentSpecDocument, "sections"> {
@@ -256,18 +300,32 @@ export function renderCurrentSpecMarkdown(document: CurrentSpecDocument): string
 function parseSections(body: string, artifactPath: ArtifactPath): CurrentSpecSections | {
   readonly diagnostics: readonly ArtifactDiagnostic[];
 } {
-  const matches = [...body.matchAll(/^## ([^\n#]+)\s*$/gm)];
+  const matches = [...body.matchAll(/^## ([^\n#]+)\s*$/gm)].filter((match) =>
+    structuralSectionHeading(match[1]) !== undefined
+  );
   const byHeading = new Map<string, string>();
   const diagnostics: ArtifactDiagnostic[] = [];
 
   for (const [index, match] of matches.entries()) {
-    const heading = match[1]?.trim();
+    const heading = structuralSectionHeading(match[1]);
     if (!heading || match.index === undefined) continue;
+    if (byHeading.has(heading)) {
+      diagnostics.push(
+        specDiagnostic({
+          code: "duplicate_section_heading",
+          message: `Current spec contains duplicate structural section heading: ${heading}.`,
+          path: artifactPath
+        })
+      );
+      continue;
+    }
     const contentStart = match.index + match[0].length;
     const next = matches[index + 1];
     const contentEnd = next?.index ?? body.length;
     byHeading.set(heading, body.slice(contentStart, contentEnd).trim());
   }
+
+  if (diagnostics.length > 0) return { diagnostics };
 
   const sections: Partial<Record<keyof CurrentSpecSections, string | RequirementId[]>> = {};
   for (const key of REQUIRED_SECTION_KEYS) {
@@ -423,6 +481,21 @@ function validateDocumentSemantics(document: CurrentSpecDocument, artifactPath: 
         })
       );
       break;
+    }
+  }
+
+  for (const key of REQUIRED_SECTION_KEYS) {
+    const value = document.sections[key];
+    if (Array.isArray(value)) continue;
+    const reservedHeading = firstReservedSectionHeading(value);
+    if (reservedHeading !== undefined) {
+      diagnostics.push(
+        specDiagnostic({
+          code: "reserved_section_heading",
+          message: `Current spec section ${SECTION_HEADINGS[key]} contains reserved heading ## ${reservedHeading}; use ### or lower for nested Markdown headings.`,
+          path: artifactPath
+        })
+      );
     }
   }
 
@@ -727,9 +800,12 @@ export async function createCurrentSpec(input: CreateCurrentSpecInput): Promise<
 }
 
 export async function readCurrentSpec(input: ReadCurrentSpecInput): Promise<CurrentSpecResult> {
+  const pathResult = specPathForRequirementResult(input.requirementId);
+  if (!pathResult.ok) return pathResult;
+
   return readSpecByPath({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: specPathForRequirement(input.requirementId)
+    artifactPath: pathResult.artifactPath
   });
 }
 
@@ -755,7 +831,10 @@ export async function validateCurrentSpecs(input: ListCurrentSpecsInput): Promis
 }
 
 export async function updateCurrentSpec(input: UpdateCurrentSpecInput): Promise<CurrentSpecResult> {
-  const expectedPath = specPathForRequirement(input.document.primaryRequirementId);
+  const pathResult = specPathForRequirementResult(input.document.primaryRequirementId);
+  if (!pathResult.ok) return pathResult;
+
+  const expectedPath = pathResult.artifactPath;
   const current = await readSpecByPath({
     repositoryRoot: input.repositoryRoot,
     artifactPath: expectedPath

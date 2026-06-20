@@ -11,8 +11,10 @@ import {
   diffCurrentSpecIndexes,
   initProject,
   listCurrentSpecs,
+  parseCurrentSpecMarkdown,
   readCurrentSpec,
   renameCurrentSpec,
+  renderCurrentSpecMarkdown,
   updateCurrentSpec,
   validateCurrentSpecs
 } from "../dist/index.js";
@@ -136,6 +138,82 @@ test("P02-T03 ignores non-file .md entries when listing current specs", async ()
 
     assert.equal(result.ok, true);
     assert.deepEqual(result.index.entries, []);
+  });
+});
+
+test("P02-T03 returns invalid diagnostics for malformed current spec requirement IDs", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const operations = [
+      () => readCurrentSpec({ repositoryRoot, requirementId: "req_bad_underscore" }),
+      () =>
+        renameCurrentSpec({
+          repositoryRoot,
+          requirementId: "req_bad_underscore",
+          expectedRevision: 1,
+          capability: { title: "Renamed" }
+        }),
+      () =>
+        deprecateCurrentSpec({
+          repositoryRoot,
+          requirementId: "req_bad_underscore",
+          expectedRevision: 1,
+          deprecatedAt: "2026-06-20T01:00:00.000Z",
+          reason: "Invalid input should be reported as a typed diagnostic."
+        })
+    ];
+
+    for (const operation of operations) {
+      const result = await operation();
+      assert.equal(result.ok, false);
+      assert.equal(result.status, "invalid");
+      assert.equal(result.diagnostics[0].code, "invalid_requirement_id");
+      assert.match(result.diagnostics[0].message, /Invalid Requirement ID/);
+    }
+  });
+});
+
+test("P02-T03 preserves non-structural markdown headings inside current spec sections", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const requirementId = formatEntityId("requirement", "section-heading");
+    const document = specDocument(requirementId, {
+      sections: {
+        ...specDocument(requirementId).sections,
+        purpose: "Defines top-level intent.\n\n## Edge cases\n\nNested details remain part of the purpose section."
+      }
+    });
+
+    const created = await createCurrentSpec({ repositoryRoot, document });
+    assert.equal(created.ok, true);
+
+    const read = await readCurrentSpec({ repositoryRoot, requirementId });
+    assert.equal(read.ok, true);
+    assert.equal(read.document.sections.purpose, document.sections.purpose);
+
+    const parsed = parseCurrentSpecMarkdown({
+      artifactPath: ".legion/project/specs/req_section-heading.md",
+      content: renderCurrentSpecMarkdown(read.document)
+    });
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.document.sections.purpose, document.sections.purpose);
+  });
+});
+
+test("P02-T03 rejects reserved current spec section headings inside section content", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const requirementId = formatEntityId("requirement", "reserved-heading");
+    const result = await createCurrentSpec({
+      repositoryRoot,
+      document: specDocument(requirementId, {
+        sections: {
+          ...specDocument(requirementId).sections,
+          purpose: "Defines top-level intent.\n\n## Behaviors\n\nThis reserved heading would be ambiguous after render."
+        }
+      })
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "invalid");
+    assert.equal(result.diagnostics[0].code, "reserved_section_heading");
   });
 });
 
