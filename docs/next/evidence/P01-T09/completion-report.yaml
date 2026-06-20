@@ -1,0 +1,55 @@
+status: DONE
+phase: 1
+task: P01-T09
+summary: >
+  Implemented protocol-only schema evolution utilities for explicit version negotiation,
+  migration registration, ordered migration application, canonical compatibility fixtures,
+  and generated compatibility reports. The implementation is additive, pure, and does
+  not change v8 publishing, runtime behavior, storage, Eve, providers, or user-visible flows.
+base_commit: 5a34fd3aa1dd35af888e11881bd54f667aa9bc94
+files_changed:
+  - packages/protocol/src/index.ts
+  - packages/protocol/src/versioning/index.ts
+  - packages/protocol/src/migrations/index.ts
+  - packages/protocol/test/compatibility/versioning.test.mjs
+  - packages/protocol/test/compatibility/fixtures/synthetic-v1.json
+  - packages/protocol/test/compatibility/fixtures/synthetic-v2.json
+  - docs/next/evidence/P01-T09/compatibility-report.md
+  - docs/next/evidence/P01-T09/compatibility-test-matrix.md
+  - docs/next/evidence/P01-T09/synthetic-migration-proof.md
+  - docs/next/evidence/P01-T09/policy-review.md
+  - docs/next/evidence/P01-T09/protocol-compatibility-test.log
+  - docs/next/evidence/P01-T09/full-validation.log
+verification:
+  - command: pnpm --filter @legion/protocol test -- --test-name-pattern=P01-T09
+    result: PASS
+    evidence: docs/next/evidence/P01-T09/protocol-compatibility-test.log
+  - command: pnpm validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T09/full-validation.log
+acceptance:
+  - criterion: No persisted record is accepted without a version.
+    result: PASS
+  - criterion: Migration failures cannot partially mutate input.
+    result: PASS
+  - criterion: Breaking schema changes require a major protocol version or explicit migration.
+    result: PASS
+  - criterion: Round-trip/readability fixtures remain readable after refactors.
+    result: PASS
+  - criterion: Unsupported versions fail closed with actionable errors.
+    result: PASS
+  - criterion: Repeated migration is idempotent.
+    result: PASS
+required_evidence:
+  - compatibility_test_matrix: docs/next/evidence/P01-T09/compatibility-test-matrix.md
+  - synthetic_v1_to_v2_migration_proof: docs/next/evidence/P01-T09/synthetic-migration-proof.md
+  - policy_review: docs/next/evidence/P01-T09/policy-review.md
+  - generated_compatibility_report: docs/next/evidence/P01-T09/compatibility-report.md
+  - focused_protocol_test_output: docs/next/evidence/P01-T09/protocol-compatibility-test.log
+  - full_validation_output: docs/next/evidence/P01-T09/full-validation.log
+risks_or_followups:
+  - Future real schema versions still need domain-specific migration functions and invariant checks when those schemas exist.
+  - P01-T09 deliberately does not replace the existing P01-T06 event compatibility fixture normalizer; it provides the shared compatibility surface for later persistent records.
+blocker:
+  condition: none
+  decision_needed: none
