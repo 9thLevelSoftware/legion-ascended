@@ -19,12 +19,47 @@ export const changeStatusSchema = z.enum([
 
 export type ChangeStatus = z.infer<typeof changeStatusSchema>;
 
-export const acceptanceStateSchema = z.strictObject({
-  status: z.enum(["not_ready", "ready", "accepted", "rejected", "blocked", "superseded"]),
-  acceptedAt: utcTimestampSchema.optional(),
-  acceptedBy: z.string().min(1).max(128).optional(),
-  reason: z.string().min(1).max(2_048).optional()
-});
+const acceptanceActorSchema = z.string().min(1).max(128);
+const acceptanceReasonSchema = z.string().min(1).max(2_048);
+
+export const acceptanceStateSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("not_ready"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  }),
+  z.strictObject({
+    status: z.literal("ready"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  }),
+  z.strictObject({
+    status: z.literal("accepted"),
+    acceptedAt: utcTimestampSchema,
+    acceptedBy: acceptanceActorSchema,
+    reason: acceptanceReasonSchema.optional()
+  }),
+  z.strictObject({
+    status: z.literal("rejected"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema
+  }),
+  z.strictObject({
+    status: z.literal("blocked"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema
+  }),
+  z.strictObject({
+    status: z.literal("superseded"),
+    acceptedAt: utcTimestampSchema.optional(),
+    acceptedBy: acceptanceActorSchema.optional(),
+    reason: acceptanceReasonSchema.optional()
+  })
+]);
 
 export type AcceptanceState = z.infer<typeof acceptanceStateSchema>;
 

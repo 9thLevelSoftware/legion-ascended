@@ -20,6 +20,22 @@ async function readEntityFixture(name) {
   return JSON.parse(await readFile(join(fixtureDirectory, name), "utf8"));
 }
 
+function hasJsonSchemaVariantRequiring(schema, status, requiredFields) {
+  if (schema && typeof schema === "object") {
+    const properties = schema.properties;
+    const required = Array.isArray(schema.required) ? schema.required : [];
+    const statusSchema = properties?.status;
+
+    if (statusSchema?.const === status && requiredFields.every((field) => required.includes(field))) {
+      return true;
+    }
+
+    return Object.values(schema).some((value) => hasJsonSchemaVariantRequiring(value, status, requiredFields));
+  }
+
+  return false;
+}
+
 test("P01-T04 valid entity fixture corpus parses and serializes identically", async () => {
   const valid = await readEntityFixture("valid.json");
 
@@ -86,6 +102,131 @@ test("P01-T04 trace references bind entity kind to matching ID prefix", async ()
       ]
     }).success,
     false
+  );
+});
+
+test("review feedback: project IDs must match project slugs", async () => {
+  const { project } = await readEntityFixture("valid.json");
+
+  assert.equal(projectSchema.safeParse(project).success, true);
+  assert.equal(projectSchema.safeParse({ ...project, id: "prj_other-project" }).success, false);
+});
+
+test("review feedback: accepted, rejected, and blocked change acceptance states require audit fields", async () => {
+  const { change } = await readEntityFixture("valid.json");
+
+  assert.equal(
+    changeSchema.safeParse({
+      ...change,
+      acceptance: {
+        status: "accepted",
+        acceptedAt: "2026-06-19T20:30:00.000Z",
+        acceptedBy: "dasbl"
+      }
+    }).success,
+    true
+  );
+  assert.equal(changeSchema.safeParse({ ...change, acceptance: { status: "accepted" } }).success, false);
+  assert.equal(changeSchema.safeParse({ ...change, acceptance: { status: "rejected" } }).success, false);
+  assert.equal(changeSchema.safeParse({ ...change, acceptance: { status: "blocked" } }).success, false);
+  assert.equal(changeSchema.safeParse({ ...change, acceptance: { status: "blocked", reason: "Missing oracle evidence" } }).success, true);
+});
+
+test("review feedback: risk overrides must be internally consistent", async () => {
+  const { change } = await readEntityFixture("valid.json");
+  const override = {
+    from: "R3",
+    to: "R2",
+    reason: "Scoped schema-only change after review.",
+    approvedBy: {
+      kind: "human",
+      id: "dasbl"
+    },
+    approvedAt: "2026-06-19T20:35:00.000Z"
+  };
+
+  assert.equal(changeSchema.safeParse({ ...change, risk: { ...change.risk, override } }).success, true);
+  assert.equal(changeSchema.safeParse({ ...change, risk: { ...change.risk, tier: "R3", override } }).success, false);
+  assert.equal(
+    changeSchema.safeParse({
+      ...change,
+      risk: {
+        ...change.risk,
+        override: {
+          ...override,
+          from: "R2"
+        }
+      }
+    }).success,
+    false
+  );
+});
+
+test("review feedback: superseded requirements require replacement references", async () => {
+  const { requirement } = await readEntityFixture("valid.json");
+
+  assert.equal(requirementSchema.safeParse({ ...requirement, status: "superseded" }).success, false);
+  assert.equal(
+    requirementSchema.safeParse({
+      ...requirement,
+      status: "superseded",
+      supersededBy: "req_protocol-entities-v2"
+    }).success,
+    true
+  );
+});
+
+test("review feedback: decisions enforce audit fields and selected alternative consistency", async () => {
+  const { decision } = await readEntityFixture("valid.json");
+  const twoSelectedAlternatives = decision.alternatives.map((alternative) => ({ ...alternative, selected: true }));
+  const noSelectedAlternatives = decision.alternatives.map((alternative) => ({ ...alternative, selected: false }));
+
+  assert.equal(decisionSchema.safeParse({ ...decision, status: "accepted", supersededBy: undefined }).success, true);
+  assert.equal(
+    decisionSchema.safeParse({
+      ...decision,
+      status: "accepted",
+      supersededBy: undefined,
+      alternatives: noSelectedAlternatives
+    }).success,
+    false
+  );
+  assert.equal(
+    decisionSchema.safeParse({
+      ...decision,
+      status: "proposed",
+      approver: undefined,
+      decidedAt: undefined,
+      supersededBy: undefined,
+      alternatives: twoSelectedAlternatives
+    }).success,
+    false
+  );
+});
+
+test("review feedback: decision audit rules are preserved in generated JSON Schema", () => {
+  assert.equal(hasJsonSchemaVariantRequiring(entityJsonSchemas.decision, "accepted", ["approver", "decidedAt"]), true);
+  assert.equal(
+    hasJsonSchemaVariantRequiring(entityJsonSchemas.decision, "superseded", ["approver", "decidedAt", "supersededBy"]),
+    true
+  );
+});
+
+test("review feedback: oracle type and execution mode must agree", async () => {
+  const { oracle } = await readEntityFixture("valid.json");
+
+  assert.equal(oracleSchema.safeParse({ ...oracle, type: "executable", execution: { mode: "manual-inspection", instructions: "Inspect output." } }).success, false);
+  assert.equal(oracleSchema.safeParse({ ...oracle, type: "inspectable" }).success, false);
+  assert.equal(
+    oracleSchema.safeParse({
+      ...oracle,
+      type: "inspectable",
+      execution: {
+        mode: "manual-inspection",
+        instructions: "Inspect the evidence bundle."
+      }
+    }).success,
+    true
   );
 });
 

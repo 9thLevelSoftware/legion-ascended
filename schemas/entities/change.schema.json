@@ -1261,39 +1261,180 @@
       "additionalProperties": false
     },
     "acceptance": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string",
-          "enum": [
-            "not_ready",
-            "ready",
-            "accepted",
-            "rejected",
-            "blocked",
-            "superseded"
-          ]
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "not_ready"
+            },
+            "acceptedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+            },
+            "acceptedBy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
         },
-        "acceptedAt": {
-          "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
-          "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "ready"
+            },
+            "acceptedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+            },
+            "acceptedBy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
         },
-        "acceptedBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "accepted"
+            },
+            "acceptedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+            },
+            "acceptedBy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "status",
+            "acceptedAt",
+            "acceptedBy"
+          ],
+          "additionalProperties": false
         },
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2048
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "rejected"
+            },
+            "acceptedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+            },
+            "acceptedBy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "blocked"
+            },
+            "acceptedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+            },
+            "acceptedBy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "superseded"
+            },
+            "acceptedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+            },
+            "acceptedBy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
         }
-      },
-      "required": [
-        "status"
-      ],
-      "additionalProperties": false
+      ]
     },
     "decisionRefs": {
       "type": "array",

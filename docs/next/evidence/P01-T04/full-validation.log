@@ -14,10 +14,10 @@ packages/core typecheck: Done
 $ node scripts/check-package-boundaries.mjs
 Package boundary check passed.
 $ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
-✔ accepts legal protocol and core imports (8.6926ms)
-✔ rejects protocol imports from core (5.3248ms)
-✔ rejects deep imports across workspace package exports (4.6743ms)
-✔ rejects provider and storage imports in protocol and core (4.3616ms)
+✔ accepts legal protocol and core imports (9.45ms)
+✔ rejects protocol imports from core (5.2079ms)
+✔ rejects deep imports across workspace package exports (4.6455ms)
+✔ rejects provider and storage imports in protocol and core (4.7529ms)
 ℹ tests 4
 ℹ suites 0
 ℹ pass 4
@@ -25,33 +25,40 @@ $ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 77.8991
+ℹ duration_ms 79.251
 Scope: 2 of 3 workspace projects
 packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 packages/protocol test: $ tsc -p tsconfig.json
-packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (10.1203ms)
-packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (3.2318ms)
-packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (0.8438ms)
-packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (1.1743ms)
-packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (0.912ms)
-packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (0.7759ms)
-packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (0.9934ms)
-packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (2.9672ms)
-packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.6581ms)
-packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.7411ms)
-packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.5696ms)
-packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.6045ms)
-packages/protocol test: ✔ common protocol structures are strict and versioned (1.1761ms)
-packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (4.9435ms)
-packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (3.2214ms)
-packages/protocol test: ℹ tests 15
+packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (11.5785ms)
+packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (3.4585ms)
+packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (0.9395ms)
+packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (0.9124ms)
+packages/protocol test: ✔ review feedback: project IDs must match project slugs (0.8043ms)
+packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.3178ms)
+packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (0.9903ms)
+packages/protocol test: ✔ review feedback: superseded requirements require replacement references (0.9674ms)
+packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.5205ms)
+packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.5371ms)
+packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (1.1423ms)
+packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (0.9839ms)
+packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (0.6835ms)
+packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (0.8765ms)
+packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (4.4599ms)
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.731ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.6828ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.5518ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.7398ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (1.1689ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (6.7488ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.2143ms)
+packages/protocol test: ℹ tests 22
 packages/protocol test: ℹ suites 0
-packages/protocol test: ℹ pass 15
+packages/protocol test: ℹ pass 22
 packages/protocol test: ℹ fail 0
 packages/protocol test: ℹ cancelled 0
 packages/protocol test: ℹ skipped 0
 packages/protocol test: ℹ todo 0
-packages/protocol test: ℹ duration_ms 151.0936
+packages/protocol test: ℹ duration_ms 157.6858
 packages/protocol test: Done
 packages/core test$ node --test --test-reporter=spec
 packages/core test: ℹ tests 0
@@ -61,5 +68,5 @@ packages/core test: ℹ fail 0
 packages/core test: ℹ cancelled 0
 packages/core test: ℹ skipped 0
 packages/core test: ℹ todo 0
-packages/core test: ℹ duration_ms 8.8263
+packages/core test: ℹ duration_ms 8.2074
 packages/core test: Done

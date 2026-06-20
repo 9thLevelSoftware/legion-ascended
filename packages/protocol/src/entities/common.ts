@@ -26,20 +26,40 @@ export const riskTierSchema = z.enum(["R0", "R1", "R2", "R3"]);
 
 export type RiskTier = z.infer<typeof riskTierSchema>;
 
-export const riskProfileSchema = z.strictObject({
-  tier: riskTierSchema,
-  reasons: z.array(z.string().min(1).max(128)).min(1),
-  hardFloors: z.array(z.string().min(1).max(128)).optional(),
-  override: z
-    .strictObject({
-      from: riskTierSchema,
-      to: riskTierSchema,
-      reason: z.string().min(1).max(2_048),
-      approvedBy: actorSchema,
-      approvedAt: utcTimestampSchema
-    })
-    .optional()
-});
+export const riskProfileSchema = z
+  .strictObject({
+    tier: riskTierSchema,
+    reasons: z.array(z.string().min(1).max(128)).min(1),
+    hardFloors: z.array(z.string().min(1).max(128)).optional(),
+    override: z
+      .strictObject({
+        from: riskTierSchema,
+        to: riskTierSchema,
+        reason: z.string().min(1).max(2_048),
+        approvedBy: actorSchema,
+        approvedAt: utcTimestampSchema
+      })
+      .optional()
+  })
+  .superRefine((risk, context) => {
+    if (risk.override === undefined) return;
+
+    if (risk.tier !== risk.override.to) {
+      context.addIssue({
+        code: "custom",
+        message: "The active risk tier must match the override target tier.",
+        path: ["tier"]
+      });
+    }
+
+    if (risk.override.from === risk.override.to) {
+      context.addIssue({
+        code: "custom",
+        message: "Risk override source and target tiers must differ.",
+        path: ["override", "to"]
+      });
+    }
+  });
 
 export type RiskProfile = z.infer<typeof riskProfileSchema>;
 

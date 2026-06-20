@@ -18,45 +18,62 @@ export const decisionAlternativeSchema = z.strictObject({
 
 export type DecisionAlternative = z.infer<typeof decisionAlternativeSchema>;
 
-export const decisionSchema = schemaMetadataSchema
-  .extend({
-    kind: z.literal("decision"),
-    id: decisionIdSchema,
-    projectId: projectIdSchema,
-    status: decisionStatusSchema,
-    title: z.string().min(1).max(160),
-    context: z.string().min(1).max(4_096),
-    alternatives: z.array(decisionAlternativeSchema).min(2),
-    rationale: z.string().min(1).max(4_096),
-    approver: actorSchema.optional(),
-    decidedAt: utcTimestampSchema.optional(),
-    supersedes: z.array(decisionIdSchema),
-    supersededBy: decisionIdSchema.optional(),
-    affectedArtifacts: z.array(artifactReferenceSchema).min(1),
-    traceRefs: z.array(traceReferenceSchema).min(1)
-  })
+const decisionBaseSchema = schemaMetadataSchema.extend({
+  kind: z.literal("decision"),
+  id: decisionIdSchema,
+  projectId: projectIdSchema,
+  title: z.string().min(1).max(160),
+  context: z.string().min(1).max(4_096),
+  alternatives: z.array(decisionAlternativeSchema).min(2),
+  rationale: z.string().min(1).max(4_096),
+  supersedes: z.array(decisionIdSchema),
+  affectedArtifacts: z.array(artifactReferenceSchema).min(1),
+  traceRefs: z.array(traceReferenceSchema).min(1)
+});
+
+export const decisionSchema = z
+  .discriminatedUnion("status", [
+    decisionBaseSchema.extend({
+      status: z.literal("proposed"),
+      approver: actorSchema.optional(),
+      decidedAt: utcTimestampSchema.optional(),
+      supersededBy: decisionIdSchema.optional()
+    }),
+    decisionBaseSchema.extend({
+      status: z.literal("accepted"),
+      approver: actorSchema,
+      decidedAt: utcTimestampSchema,
+      supersededBy: decisionIdSchema.optional()
+    }),
+    decisionBaseSchema.extend({
+      status: z.literal("rejected"),
+      approver: actorSchema,
+      decidedAt: utcTimestampSchema,
+      supersededBy: decisionIdSchema.optional()
+    }),
+    decisionBaseSchema.extend({
+      status: z.literal("superseded"),
+      approver: actorSchema,
+      decidedAt: utcTimestampSchema,
+      supersededBy: decisionIdSchema
+    })
+  ])
   .superRefine((decision, context) => {
-    if (decision.status !== "proposed" && decision.approver === undefined) {
+    const selectedCount = decision.alternatives.filter((alternative) => alternative.selected).length;
+
+    if (decision.status === "accepted" && selectedCount !== 1) {
       context.addIssue({
         code: "custom",
-        message: "Non-proposed decisions require an approver.",
-        path: ["approver"]
+        message: "Accepted decisions must have exactly one selected alternative.",
+        path: ["alternatives"]
       });
     }
 
-    if (decision.status !== "proposed" && decision.decidedAt === undefined) {
+    if (decision.status === "proposed" && selectedCount > 1) {
       context.addIssue({
         code: "custom",
-        message: "Non-proposed decisions require a decision timestamp.",
-        path: ["decidedAt"]
-      });
-    }
-
-    if (decision.status === "superseded" && decision.supersededBy === undefined) {
-      context.addIssue({
-        code: "custom",
-        message: "Superseded decisions require a replacement decision reference.",
-        path: ["supersededBy"]
+        message: "Proposed decisions cannot have more than one selected alternative.",
+        path: ["alternatives"]
       });
     }
   });

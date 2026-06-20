@@ -42,6 +42,13 @@ export const oracleExecutionSchema = z.discriminatedUnion("mode", [
 
 export type OracleExecution = z.infer<typeof oracleExecutionSchema>;
 
+export const oracleAutomatedExecutionSchema = z.discriminatedUnion("mode", [
+  oracleCommandExecutionSchema,
+  oracleDriverExecutionSchema
+]);
+
+export type OracleAutomatedExecution = z.infer<typeof oracleAutomatedExecutionSchema>;
+
 export const oracleExpectedConditionsSchema = z.strictObject({
   preconditions: z.array(z.string().min(1).max(1_024)).min(1),
   postconditions: z.array(z.string().min(1).max(1_024)).min(1),
@@ -58,19 +65,32 @@ export const oracleRequirementCoverageSchema = z.strictObject({
 
 export type OracleRequirementCoverage = z.infer<typeof oracleRequirementCoverageSchema>;
 
-export const oracleSchema = schemaMetadataSchema.extend({
+const oracleBaseSchema = schemaMetadataSchema.extend({
   kind: z.literal("oracle"),
   id: oracleIdSchema,
   projectId: projectIdSchema,
-  type: oracleTypeSchema,
   title: z.string().min(1).max(160),
   owner: actorSchema,
   protectedPaths: z.array(artifactPathSchema).min(1),
   sourceArtifacts: z.array(artifactReferenceSchema).min(1),
-  execution: oracleExecutionSchema,
   expected: oracleExpectedConditionsSchema,
   requirementCoverage: z.array(oracleRequirementCoverageSchema).min(1),
   traceRefs: z.array(traceReferenceSchema).min(1)
 });
+
+export const oracleSchema = z.discriminatedUnion("type", [
+  oracleBaseSchema.extend({
+    type: z.literal("executable"),
+    execution: oracleAutomatedExecutionSchema
+  }),
+  oracleBaseSchema.extend({
+    type: z.literal("inspectable"),
+    execution: oracleInspectionExecutionSchema
+  }),
+  oracleBaseSchema.extend({
+    type: z.literal("hybrid"),
+    execution: oracleExecutionSchema
+  })
+]);
 
 export type Oracle = z.infer<typeof oracleSchema>;

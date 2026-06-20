@@ -25,14 +25,24 @@ export const projectPolicyReferenceSchema = z.strictObject({
 
 export type ProjectPolicyReference = z.infer<typeof projectPolicyReferenceSchema>;
 
-export const projectSchema = schemaMetadataSchema.extend({
-  kind: z.literal("project"),
-  id: projectIdSchema,
-  slug: z.string().regex(/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/, "Invalid project slug"),
-  name: z.string().min(1).max(160),
-  description: z.string().min(1).max(2_048).optional(),
-  repository: repositoryReferenceSchema,
-  policy: projectPolicyReferenceSchema
-});
+export const projectSchema = schemaMetadataSchema
+  .extend({
+    kind: z.literal("project"),
+    id: projectIdSchema,
+    slug: z.string().regex(/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/, "Invalid project slug"),
+    name: z.string().min(1).max(160),
+    description: z.string().min(1).max(2_048).optional(),
+    repository: repositoryReferenceSchema,
+    policy: projectPolicyReferenceSchema
+  })
+  .superRefine((project, context) => {
+    if (project.id !== `prj_${project.slug}`) {
+      context.addIssue({
+        code: "custom",
+        message: "Project ID must match prj_{slug}.",
+        path: ["id"]
+      });
+    }
+  });
 
 export type Project = z.infer<typeof projectSchema>;

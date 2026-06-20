@@ -31,18 +31,43 @@ export const requirementAcceptanceSchema = z.strictObject({
 
 export type RequirementAcceptance = z.infer<typeof requirementAcceptanceSchema>;
 
-export const requirementSchema = schemaMetadataSchema.extend({
+const requirementBaseSchema = schemaMetadataSchema.extend({
   kind: z.literal("requirement"),
   id: requirementIdSchema,
   projectId: projectIdSchema,
-  status: requirementStatusSchema,
   priority: requirementPrioritySchema,
   category: requirementCategorySchema,
   statement: z.string().min(1).max(2_048),
   acceptance: requirementAcceptanceSchema,
   traceRefs: z.array(traceReferenceSchema).min(1),
-  supersedes: z.array(requirementIdSchema),
-  supersededBy: requirementIdSchema.optional()
+  supersedes: z.array(requirementIdSchema)
 });
+
+export const requirementSchema = z.discriminatedUnion("status", [
+  requirementBaseSchema.extend({
+    status: z.literal("draft"),
+    supersededBy: requirementIdSchema.optional()
+  }),
+  requirementBaseSchema.extend({
+    status: z.literal("proposed"),
+    supersededBy: requirementIdSchema.optional()
+  }),
+  requirementBaseSchema.extend({
+    status: z.literal("accepted"),
+    supersededBy: requirementIdSchema.optional()
+  }),
+  requirementBaseSchema.extend({
+    status: z.literal("superseded"),
+    supersededBy: requirementIdSchema
+  }),
+  requirementBaseSchema.extend({
+    status: z.literal("rejected"),
+    supersededBy: requirementIdSchema.optional()
+  }),
+  requirementBaseSchema.extend({
+    status: z.literal("archived"),
+    supersededBy: requirementIdSchema.optional()
+  })
+]);
 
 export type Requirement = z.infer<typeof requirementSchema>;
