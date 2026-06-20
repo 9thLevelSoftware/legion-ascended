@@ -24,9 +24,15 @@
 - `P01-T07 lifecycle state catalogs include explicit control and terminal states`
 - `P01-T07 transition matrices are exported for every aggregate`
 - `P01-T07 legal transition table moves each aggregate through its protocol facts`
+- `P01-T07 matrices describe reducer outcomes for conditioned transitions`
 - `P01-T07 illegal transitions preserve state and emit no synthetic facts`
+- `P01-T07 stale and mismatched cross-aggregate task events are ignored`
+- `P01-T07 task blockers accumulate in reducer and command decision`
 - `P01-T07 task completion command requires expected generation, evidence, and passed review`
+- `P01-T07 task command decisions reject misrouted envelopes and terminal invalidation`
 - `P01-T07 task replay is deterministic and equivalent from genesis`
 - `P01-T07 terminal tasks do not resume without a higher-generation retry event`
+- `P01-T07 release guards reject stale observations and invalid rollback states`
+- `P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots`
 
 Raw result: `core-test.log`

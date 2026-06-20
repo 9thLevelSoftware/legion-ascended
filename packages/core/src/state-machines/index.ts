@@ -33,6 +33,7 @@ import {
 } from "../transition.js";
 import type {
   ExpectedGenerationInput,
+  RejectedTransition,
   TransitionDecision
 } from "../transition.js";
 
@@ -153,6 +154,8 @@ const APPROVAL_TERMINAL_STATES = ["granted", "denied", "expired", "revoked", "in
 const INTEGRATION_TERMINAL_STATES = ["effect_succeeded", "effect_failed", "invalidated", "canceled"] as const;
 const RELEASE_TERMINAL_STATES = ["healthy", "rolled_back", "forward_fix_required", "superseded", "invalidated", "canceled"] as const;
 const OBSERVATION_TERMINAL_STATES = ["healthy", "failed", "rolled_back", "forward_fix_required", "invalidated", "canceled"] as const;
+const TASK_RETRYABLE_TERMINAL_STATES = ["completed", "failed"] as const;
+const TASK_INVALIDATABLE_STATES = ["queued", "ready", "claimed", "running", "blocked", "needs_human", "needs_replan", "stale"] as const;
 
 export const CHANGE_TRANSITION_MATRIX: TransitionMatrix<"change", ChangeLifecycleState> = {
   aggregate: "change",
@@ -181,10 +184,15 @@ export const TASK_TRANSITION_MATRIX: TransitionMatrix<"task", TaskLifecycleState
     { from: "blocked", eventType: "task.retry_scheduled.v1", to: "ready" },
     { from: "needs_replan", eventType: "task.retry_scheduled.v1", to: "ready" },
     { from: "completed", eventType: "task.retry_scheduled.v1", to: "ready" },
+    { from: "failed", eventType: "task.retry_scheduled.v1", to: "ready" },
+    { from: "queued", eventType: "task.invalidated.v1", to: "invalidated" },
     { from: "ready", eventType: "task.invalidated.v1", to: "invalidated" },
     { from: "claimed", eventType: "task.invalidated.v1", to: "invalidated" },
     { from: "running", eventType: "task.invalidated.v1", to: "invalidated" },
-    { from: "blocked", eventType: "task.invalidated.v1", to: "invalidated" }
+    { from: "blocked", eventType: "task.invalidated.v1", to: "invalidated" },
+    { from: "needs_human", eventType: "task.invalidated.v1", to: "invalidated" },
+    { from: "needs_replan", eventType: "task.invalidated.v1", to: "invalidated" },
+    { from: "stale", eventType: "task.invalidated.v1", to: "invalidated" }
   ]
 };
 
@@ -195,8 +203,14 @@ export const TASK_RUN_TRANSITION_MATRIX: TransitionMatrix<"taskRun", TaskRunLife
   transitions: [
     { from: "created", eventType: "run.started.v1", to: "started" },
     { from: "started", eventType: "run.finished.v1", to: "succeeded" },
+    { from: "started", eventType: "run.finished.v1", to: "failed" },
+    { from: "started", eventType: "run.finished.v1", to: "blocked" },
+    { from: "started", eventType: "run.finished.v1", to: "canceled" },
     { from: "started", eventType: "input.recorded.v1", to: "needs_human" },
-    { from: "needs_human", eventType: "run.finished.v1", to: "blocked" }
+    { from: "needs_human", eventType: "run.finished.v1", to: "succeeded" },
+    { from: "needs_human", eventType: "run.finished.v1", to: "failed" },
+    { from: "needs_human", eventType: "run.finished.v1", to: "blocked" },
+    { from: "needs_human", eventType: "run.finished.v1", to: "canceled" }
   ]
 };
 
@@ -206,7 +220,11 @@ export const REVIEW_TRANSITION_MATRIX: TransitionMatrix<"review", ReviewLifecycl
   terminalStates: REVIEW_TERMINAL_STATES,
   transitions: [
     { from: "unknown", eventType: "review.submitted.v1", to: "submitted" },
-    { from: "requested", eventType: "review.submitted.v1", to: "accepted" }
+    { from: "unknown", eventType: "review.submitted.v1", to: "accepted" },
+    { from: "unknown", eventType: "review.submitted.v1", to: "rejected" },
+    { from: "requested", eventType: "review.submitted.v1", to: "submitted" },
+    { from: "requested", eventType: "review.submitted.v1", to: "accepted" },
+    { from: "requested", eventType: "review.submitted.v1", to: "rejected" }
   ]
 };
 
@@ -236,8 +254,13 @@ export const RELEASE_TRANSITION_MATRIX: TransitionMatrix<"release", ReleaseLifec
   states: RELEASE_LIFECYCLE_STATES,
   terminalStates: RELEASE_TERMINAL_STATES,
   transitions: [
+    { from: "requested", eventType: "release.requested.v1", to: "staging" },
     { from: "requested", eventType: "release.deployed.v1", to: "deployed" },
+    { from: "staging", eventType: "release.deployed.v1", to: "deployed" },
     { from: "deployed", eventType: "observation.recorded.v1", to: "healthy" },
+    { from: "deployed", eventType: "observation.recorded.v1", to: "failed" },
+    { from: "deployed", eventType: "observation.recorded.v1", to: "rollback_required" },
+    { from: "deployed", eventType: "observation.recorded.v1", to: "forward_fix_required" },
     { from: "deployed", eventType: "release.rolled_back.v1", to: "rolled_back" },
     { from: "failed", eventType: "release.rolled_back.v1", to: "rolled_back" },
     { from: "rollback_required", eventType: "release.rolled_back.v1", to: "rolled_back" }
@@ -250,7 +273,16 @@ export const OBSERVATION_TRANSITION_MATRIX: TransitionMatrix<"observation", Obse
   terminalStates: OBSERVATION_TERMINAL_STATES,
   transitions: [
     { from: "pending", eventType: "observation.recorded.v1", to: "observing" },
+    { from: "pending", eventType: "observation.recorded.v1", to: "healthy" },
+    { from: "pending", eventType: "observation.recorded.v1", to: "degraded" },
+    { from: "pending", eventType: "observation.recorded.v1", to: "failed" },
+    { from: "pending", eventType: "observation.recorded.v1", to: "rolled_back" },
+    { from: "pending", eventType: "observation.recorded.v1", to: "forward_fix_required" },
     { from: "observing", eventType: "observation.recorded.v1", to: "healthy" },
+    { from: "observing", eventType: "observation.recorded.v1", to: "degraded" },
+    { from: "observing", eventType: "observation.recorded.v1", to: "failed" },
+    { from: "observing", eventType: "observation.recorded.v1", to: "rolled_back" },
+    { from: "observing", eventType: "observation.recorded.v1", to: "forward_fix_required" },
     { from: "degraded", eventType: "observation.recorded.v1", to: "failed" }
   ]
 };
@@ -622,6 +654,10 @@ function appendUniqueMany<T>(values: readonly T[], additions: readonly T[]): rea
   return additions.reduce((current, value) => appendUnique(current, value), values);
 }
 
+function isSubset<T>(candidate: readonly T[], source: readonly T[]): boolean {
+  return candidate.every((value) => source.includes(value));
+}
+
 function sameAggregate(event: EventEnvelope, kind: EventEnvelope["aggregate"]["kind"], id: string): boolean {
   return event.aggregate.kind === kind && event.aggregate.id === id;
 }
@@ -631,6 +667,16 @@ function newerOrSameGeneration(state: { readonly generation: number }, event: Ev
 }
 
 export function reduceChangeState(state: ChangeMachineState, event: EventEnvelope): ChangeMachineState {
+  if (event.changeId === state.changeId && newerOrSameGeneration(state, event) && !includesString(CHANGE_TERMINAL_STATES, state.status)) {
+    if (state.status === "planned" && event.type === "task.created.v1") {
+      return { ...state, status: "in_progress", generation: event.generation };
+    }
+
+    if (state.status === "in_progress" && event.type === "review.submitted.v1") {
+      return { ...state, status: "verifying", generation: event.generation };
+    }
+  }
+
   if (!sameAggregate(event, "change", state.changeId)) return state;
   if (!newerOrSameGeneration(state, event)) return state;
   if (includesString(CHANGE_TERMINAL_STATES, state.status)) return state;
@@ -653,7 +699,10 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
   if (event.type === "evidence.collected.v1") {
     const taskId = taskIdField(payload);
     const evidenceId = evidenceIdField(payload);
+    const runId = runIdField(payload);
     if (taskId !== state.taskId || !evidenceId) return state;
+    if (!newerOrSameGeneration(state, event) || includesString(TASK_TERMINAL_STATES, state.status)) return state;
+    if (state.runId && runId && runId !== state.runId) return state;
     return {
       ...state,
       evidenceRefs: appendUnique(state.evidenceRefs, evidenceId)
@@ -664,6 +713,7 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
     const taskId = taskIdField(payload);
     const reviewId = reviewIdField(payload);
     if (taskId !== state.taskId || !reviewId) return state;
+    if (!newerOrSameGeneration(state, event) || includesString(TASK_TERMINAL_STATES, state.status)) return state;
 
     const reviewRefs = appendUnique(state.reviewRefs, reviewId);
     const verdict = stringField(payload, "verdict");
@@ -694,7 +744,13 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
   if (!newerOrSameGeneration(state, event)) return state;
 
   if (includesString(TASK_TERMINAL_STATES, state.status)) {
-    if (event.type !== "task.retry_scheduled.v1" || event.generation <= state.generation) return state;
+    if (
+      event.type !== "task.retry_scheduled.v1" ||
+      event.generation <= state.generation ||
+      !includesString(TASK_RETRYABLE_TERMINAL_STATES, state.status)
+    ) {
+      return state;
+    }
     const retryRunId = runIdField(payload);
     const retried: TaskMachineState = {
       ...state,
@@ -741,7 +797,7 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
       };
     }
     case "task.blocked.v1": {
-      if (state.status !== "running" && state.status !== "claimed" && state.status !== "ready") return state;
+      if (state.status !== "running" && state.status !== "claimed" && state.status !== "ready" && state.status !== "blocked") return state;
       const blocker = blockerField(payload);
       return {
         ...state,
@@ -764,7 +820,7 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
     case "task.completed.v1": {
       if (state.status !== "running") return state;
       const evidenceRefs = evidenceRefsField(payload);
-      if (evidenceRefs.length === 0 || state.passedReviewRefs.length === 0) return state;
+      if (evidenceRefs.length === 0) return state;
       return {
         ...state,
         status: "completed",
@@ -773,6 +829,7 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
       };
     }
     case "task.invalidated.v1":
+      if (!includesString(TASK_INVALIDATABLE_STATES, state.status)) return state;
       return {
         ...state,
         status: "invalidated",
@@ -879,12 +936,15 @@ export function reduceIntegrationState(state: IntegrationMachineState, event: Ev
 export function reduceReleaseState(state: ReleaseMachineState, event: EventEnvelope): ReleaseMachineState {
   const payload = payloadRecord(event);
 
+  if (!newerOrSameGeneration(state, event)) return state;
+
   if (event.type === "observation.recorded.v1") {
     const releaseId = releaseIdField(payload);
     if (releaseId !== state.releaseId || state.status !== "deployed") return state;
     const observationStatus = stringField(payload, "status");
     if (observationStatus === "healthy") return { ...state, status: "healthy", generation: event.generation };
-    if (observationStatus === "failed") return { ...state, status: "failed", generation: event.generation };
+    if (observationStatus === "degraded") return { ...state, status: "failed", generation: event.generation };
+    if (observationStatus === "failed") return { ...state, status: "rollback_required", generation: event.generation };
     if (observationStatus === "rolled_back") return { ...state, status: "rolled_back", generation: event.generation };
     if (observationStatus === "forward_fix_required") {
       return { ...state, status: "forward_fix_required", generation: event.generation };
@@ -893,14 +953,18 @@ export function reduceReleaseState(state: ReleaseMachineState, event: EventEnvel
   }
 
   if (!sameAggregate(event, "release", state.releaseId)) return state;
-  if (!newerOrSameGeneration(state, event)) return state;
   if (includesString(RELEASE_TERMINAL_STATES, state.status)) return state;
+
+  if (event.type === "release.requested.v1" && state.status === "requested") {
+    return { ...state, status: "staging", generation: event.generation };
+  }
 
   if (event.type === "release.deployed.v1" && (state.status === "requested" || state.status === "staging")) {
     return { ...state, status: "deployed", generation: event.generation };
   }
 
   if (event.type === "release.rolled_back.v1") {
+    if (state.status !== "deployed" && state.status !== "failed" && state.status !== "rollback_required") return state;
     const evidenceRefs = evidenceRefsField(payload);
     if (evidenceRefs.length === 0) return state;
     return {
@@ -926,6 +990,7 @@ export function reduceObservationState(state: ObservationMachineState, event: Ev
   const status = stringField(payload, "status");
   if (
     status === "healthy" ||
+    status === "degraded" ||
     status === "failed" ||
     status === "rolled_back" ||
     status === "forward_fix_required"
@@ -940,15 +1005,41 @@ export interface TaskCommandDecisionInput extends ExpectedGenerationInput {
   readonly allocatedRunId?: RunId;
 }
 
+function taskCommandRoutingRejection(state: TaskMachineState, input: TaskCommandDecisionInput): RejectedTransition | undefined {
+  const { command } = input;
+  if (command.projectId !== state.projectId) return rejectTransition("aggregate_mismatch");
+  if (command.changeId && command.changeId !== state.changeId) return rejectTransition("aggregate_mismatch");
+  if (command.taskId && command.taskId !== state.taskId) return rejectTransition("aggregate_mismatch");
+
+  const payload = payloadRecord(command);
+  const taskId = taskIdField(payload);
+  if (taskId && taskId !== state.taskId) return rejectTransition("aggregate_mismatch");
+
+  const payloadRunId = runIdField(payload);
+  if (payloadRunId && state.runId && payloadRunId !== state.runId) return rejectTransition("aggregate_mismatch");
+
+  if (command.runId) {
+    if (command.type === "task.claim.v1" && input.allocatedRunId && command.runId !== input.allocatedRunId) {
+      return rejectTransition("aggregate_mismatch");
+    }
+    if (command.type !== "task.claim.v1" && state.runId && command.runId !== state.runId) {
+      return rejectTransition("aggregate_mismatch");
+    }
+  }
+
+  return undefined;
+}
+
 export function decideTaskCommand(state: TaskMachineState, input: TaskCommandDecisionInput): TransitionDecision {
   const generationRejection = rejectIfGenerationMismatch(state, input);
   if (generationRejection) return generationRejection;
 
-  const payload = payloadRecord(input.command);
-  const taskId = taskIdField(payload);
-  if (taskId && taskId !== state.taskId) return rejectTransition("aggregate_mismatch");
+  const routingRejection = taskCommandRoutingRejection(state, input);
+  if (routingRejection) return routingRejection;
 
-  if (includesString(TASK_TERMINAL_STATES, state.status) && input.command.type !== "task.invalidate.v1") {
+  const payload = payloadRecord(input.command);
+
+  if (includesString(TASK_TERMINAL_STATES, state.status)) {
     return rejectTransition("terminal_state");
   }
 
@@ -970,7 +1061,7 @@ export function decideTaskCommand(state: TaskMachineState, input: TaskCommandDec
       ]);
     }
     case "task.block.v1": {
-      if (state.status !== "ready" && state.status !== "claimed" && state.status !== "running") {
+      if (state.status !== "ready" && state.status !== "claimed" && state.status !== "running" && state.status !== "blocked") {
         return rejectTransition("illegal_transition");
       }
       const reason = stringField(payload, "reason");
@@ -996,9 +1087,8 @@ export function decideTaskCommand(state: TaskMachineState, input: TaskCommandDec
       const runId = runIdField(payload);
       const evidenceRefs = evidenceRefsField(payload);
       if (!runId || (state.runId && runId !== state.runId)) return rejectTransition("aggregate_mismatch");
-      if (evidenceRefs.length === 0 && state.evidenceRefs.length === 0) return rejectTransition("missing_evidence");
+      if (evidenceRefs.length === 0 || !isSubset(evidenceRefs, state.evidenceRefs)) return rejectTransition("missing_evidence");
       if (state.passedReviewRefs.length === 0) return rejectTransition("missing_review");
-      const completionEvidenceRefs = evidenceRefs.length > 0 ? evidenceRefs : state.evidenceRefs;
       return acceptTransition([
         {
           type: "task.completed.v1",
@@ -1007,12 +1097,13 @@ export function decideTaskCommand(state: TaskMachineState, input: TaskCommandDec
           payload: {
             taskId: state.taskId,
             runId,
-            evidenceRefs: completionEvidenceRefs
+            evidenceRefs
           }
         }
       ]);
     }
     case "task.invalidate.v1": {
+      if (!includesString(TASK_INVALIDATABLE_STATES, state.status)) return rejectTransition("illegal_transition");
       const reason = stringField(payload, "reason");
       if (!reason) return rejectTransition("invalid_command_payload");
       return acceptTransition([

@@ -146,7 +146,7 @@ function sortStable(value: unknown): unknown {
   }
 
   const sorted: Record<string, unknown> = {};
-  const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
+  const entries = Object.entries(value).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
   for (const [key, entryValue] of entries) {
     sorted[key] = sortStable(entryValue);
   }
@@ -154,5 +154,9 @@ function sortStable(value: unknown): unknown {
 }
 
 export function stableStateStringify(value: unknown): string {
-  return JSON.stringify(sortStable(value));
+  const serialized = JSON.stringify(sortStable(value));
+  if (typeof serialized !== "string") {
+    throw new TypeError("stableStateStringify requires a JSON-serializable value.");
+  }
+  return serialized;
 }

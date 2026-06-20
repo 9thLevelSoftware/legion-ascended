@@ -6,11 +6,15 @@ import {
   CHANGE_LIFECYCLE_STATES,
   INTEGRATION_LIFECYCLE_STATES,
   OBSERVATION_LIFECYCLE_STATES,
+  OBSERVATION_TRANSITION_MATRIX,
   RELEASE_LIFECYCLE_STATES,
+  RELEASE_TRANSITION_MATRIX,
   REVIEW_LIFECYCLE_STATES,
+  REVIEW_TRANSITION_MATRIX,
   STATE_MACHINE_TRANSITION_MATRICES,
   TASK_LIFECYCLE_STATES,
   TASK_RUN_LIFECYCLE_STATES,
+  TASK_RUN_TRANSITION_MATRIX,
   TRANSITION_REJECTION_CATALOG,
   createApprovalState,
   createChangeState,
@@ -63,7 +67,7 @@ function eventOf(type, aggregate, payload, generation = 1, sequence = 0) {
   };
 }
 
-function commandOf(type, payload) {
+function commandOf(type, payload, overrides = {}) {
   return {
     schemaVersion: "0.1.0",
     id: "cmd_01jz0000000000000000000000",
@@ -75,7 +79,8 @@ function commandOf(type, payload) {
     runId: RUN_ID,
     actor: ACTOR,
     issuedAt: OCCURRED_AT,
-    payload
+    payload,
+    ...overrides
   };
 }
 
@@ -186,6 +191,20 @@ test("P01-T07 legal transition table moves each aggregate through its protocol f
       to: "blocked"
     },
     {
+      name: "change in progress",
+      reduce: reduceChangeState,
+      state: createChangeState({ projectId: PROJECT_ID, changeId: CHANGE_ID, status: "planned" }),
+      event: taskEvent("task.created.v1", { contractId: CONTRACT_ID, contractRevision: 1, priority: 10 }),
+      to: "in_progress"
+    },
+    {
+      name: "change verifying",
+      reduce: reduceChangeState,
+      state: createChangeState({ projectId: PROJECT_ID, changeId: CHANGE_ID, status: "in_progress" }),
+      event: eventOf("review.submitted.v1", { kind: "review", id: REVIEW_ID }, { reviewId: REVIEW_ID, taskId: TASK_ID, reviewer: ACTOR, verdict: "pass" }),
+      to: "verifying"
+    },
+    {
       name: "task run started",
       reduce: reduceTaskRunState,
       state: createTaskRunState({ projectId: PROJECT_ID, changeId: CHANGE_ID, taskId: TASK_ID, runId: RUN_ID, status: "created" }),
@@ -241,13 +260,25 @@ test("P01-T07 legal transition table moves each aggregate through its protocol f
   }
 });
 
+test("P01-T07 matrices describe reducer outcomes for conditioned transitions", () => {
+  assert.ok(TASK_RUN_TRANSITION_MATRIX.transitions.some((row) => row.from === "started" && row.eventType === "run.finished.v1" && row.to === "failed"));
+  assert.ok(TASK_RUN_TRANSITION_MATRIX.transitions.some((row) => row.from === "started" && row.eventType === "run.finished.v1" && row.to === "blocked"));
+  assert.ok(TASK_RUN_TRANSITION_MATRIX.transitions.some((row) => row.from === "started" && row.eventType === "run.finished.v1" && row.to === "canceled"));
+  assert.ok(REVIEW_TRANSITION_MATRIX.transitions.some((row) => row.from === "requested" && row.eventType === "review.submitted.v1" && row.to === "rejected"));
+  assert.ok(REVIEW_TRANSITION_MATRIX.transitions.some((row) => row.from === "requested" && row.eventType === "review.submitted.v1" && row.to === "submitted"));
+  assert.ok(RELEASE_TRANSITION_MATRIX.transitions.some((row) => row.from === "deployed" && row.eventType === "observation.recorded.v1" && row.to === "failed"));
+  assert.ok(RELEASE_TRANSITION_MATRIX.transitions.some((row) => row.from === "deployed" && row.eventType === "observation.recorded.v1" && row.to === "rollback_required"));
+  assert.ok(OBSERVATION_TRANSITION_MATRIX.transitions.some((row) => row.from === "observing" && row.eventType === "observation.recorded.v1" && row.to === "degraded"));
+  assert.ok(OBSERVATION_TRANSITION_MATRIX.transitions.some((row) => row.from === "observing" && row.eventType === "observation.recorded.v1" && row.to === "forward_fix_required"));
+});
+
 test("P01-T07 illegal transitions preserve state and emit no synthetic facts", () => {
   const cases = [
     {
-      name: "task cannot complete without evidence and review",
+      name: "task cannot complete without evidence refs",
       reduce: reduceTaskState,
       state: taskState("running", { runId: RUN_ID }),
-      event: taskEvent("task.completed.v1", { runId: RUN_ID, evidenceRefs: [EVIDENCE_ID] })
+      event: taskEvent("task.completed.v1", { runId: RUN_ID, evidenceRefs: [] })
     },
     {
       name: "approval cannot be denied after grant",
@@ -266,6 +297,62 @@ test("P01-T07 illegal transitions preserve state and emit no synthetic facts", (
   for (const { name, reduce, state, event } of cases) {
     assert.deepEqual(reduce(state, event), state, name);
   }
+});
+
+test("P01-T07 stale and mismatched cross-aggregate task events are ignored", () => {
+  const current = taskState("running", {
+    generation: 2,
+    runId: RUN_ID,
+    evidenceRefs: [EVIDENCE_ID],
+    reviewRefs: [REVIEW_ID],
+    passedReviewRefs: [REVIEW_ID]
+  });
+  const staleEvidence = eventOf(
+    "evidence.collected.v1",
+    { kind: "evidence", id: "evd_old-evidence" },
+    { evidenceId: "evd_old-evidence", taskId: TASK_ID, runId: RUN_ID, verdict: "pass" },
+    1
+  );
+  const wrongRunEvidence = eventOf(
+    "evidence.collected.v1",
+    { kind: "evidence", id: "evd_wrong-run" },
+    { evidenceId: "evd_wrong-run", taskId: TASK_ID, runId: "run_wrong-r1", verdict: "pass" },
+    2
+  );
+  const terminalReview = eventOf(
+    "review.submitted.v1",
+    { kind: "review", id: "rev_late-fail" },
+    { reviewId: "rev_late-fail", taskId: TASK_ID, reviewer: ACTOR, verdict: "fail" },
+    2
+  );
+
+  assert.deepEqual(reduceTaskState(current, staleEvidence), current);
+  assert.deepEqual(reduceTaskState(current, wrongRunEvidence), current);
+  assert.deepEqual(reduceTaskState(taskState("completed", { generation: 2 }), terminalReview), taskState("completed", { generation: 2 }));
+});
+
+test("P01-T07 task blockers accumulate in reducer and command decision", () => {
+  const blocked = reduceTaskState(
+    taskState("blocked", {
+      runId: RUN_ID,
+      blockers: [{ code: "first_blocker", reason: "First blocker.", severity: "major" }]
+    }),
+    taskEvent("task.blocked.v1", { blocker: { code: "second_blocker", reason: "Second blocker.", severity: "critical" } })
+  );
+
+  assert.equal(blocked.status, "blocked");
+  assert.deepEqual(blocked.blockers.map((blocker) => blocker.code), ["first_blocker", "second_blocker"]);
+
+  const decision = decideTaskCommand(
+    taskState("blocked", { runId: RUN_ID }),
+    {
+      command: commandOf("task.block.v1", { taskId: TASK_ID, reason: "Still blocked." }),
+      expectedGeneration: 1
+    }
+  );
+
+  assert.equal(decision.accepted, true);
+  assert.equal(decision.events[0].type, "task.blocked.v1");
 });
 
 test("P01-T07 task completion command requires expected generation, evidence, and passed review", () => {
@@ -288,6 +375,18 @@ test("P01-T07 task completion command requires expected generation, evidence, an
   assert.equal(missingEvidence.accepted, false);
   assert.equal(missingEvidence.rejection.code, "missing_evidence");
 
+  const unattachedEvidence = decideTaskCommand(taskState("running", {
+    runId: RUN_ID,
+    evidenceRefs: ["evd_other-evidence"],
+    reviewRefs: [REVIEW_ID],
+    passedReviewRefs: [REVIEW_ID]
+  }), {
+    command,
+    expectedGeneration: 1
+  });
+  assert.equal(unattachedEvidence.accepted, false);
+  assert.equal(unattachedEvidence.rejection.code, "missing_evidence");
+
   const missingReview = decideTaskCommand(taskState("running", { runId: RUN_ID, evidenceRefs: [EVIDENCE_ID] }), {
     command,
     expectedGeneration: 1
@@ -308,6 +407,41 @@ test("P01-T07 task completion command requires expected generation, evidence, an
   assert.equal(accepted.accepted, true);
   assert.deepEqual(accepted.events.map((event) => event.type), ["task.completed.v1"]);
   assert.deepEqual(accepted.events[0].payload.evidenceRefs, [EVIDENCE_ID]);
+});
+
+test("P01-T07 task command decisions reject misrouted envelopes and terminal invalidation", () => {
+  const misroutedProject = decideTaskCommand(
+    taskState("running", {
+      runId: RUN_ID,
+      evidenceRefs: [EVIDENCE_ID],
+      reviewRefs: [REVIEW_ID],
+      passedReviewRefs: [REVIEW_ID]
+    }),
+    {
+      command: commandOf("task.complete.v1", { taskId: TASK_ID, runId: RUN_ID, evidenceRefs: [EVIDENCE_ID] }, { projectId: "prj_other-project" }),
+      expectedGeneration: 1
+    }
+  );
+  assert.equal(misroutedProject.accepted, false);
+  assert.equal(misroutedProject.rejection.code, "aggregate_mismatch");
+
+  const misroutedRun = decideTaskCommand(
+    taskState("ready"),
+    {
+      command: commandOf("task.claim.v1", { taskId: TASK_ID, workerBundleId: "worker.codex" }, { runId: "run_wrong-r1" }),
+      allocatedRunId: RUN_ID,
+      expectedGeneration: 1
+    }
+  );
+  assert.equal(misroutedRun.accepted, false);
+  assert.equal(misroutedRun.rejection.code, "aggregate_mismatch");
+
+  const terminalInvalidation = decideTaskCommand(taskState("completed"), {
+    command: commandOf("task.invalidate.v1", { taskId: TASK_ID, reason: "Too late." }),
+    expectedGeneration: 1
+  });
+  assert.equal(terminalInvalidation.accepted, false);
+  assert.equal(terminalInvalidation.rejection.code, "terminal_state");
 });
 
 test("P01-T07 task replay is deterministic and equivalent from genesis", () => {
@@ -357,4 +491,36 @@ test("P01-T07 terminal tasks do not resume without a higher-generation retry eve
 
   assert.equal(retried.status, "ready");
   assert.equal(retried.generation, 2);
+
+  assert.equal(
+    reduceTaskState(taskState("invalidated", { generation: 2 }), taskEvent("task.retry_scheduled.v1", { runId: RUN_ID, attempt: 2, reason: "Retry." }, 3)).status,
+    "invalidated"
+  );
+});
+
+test("P01-T07 release guards reject stale observations and invalid rollback states", () => {
+  const deployed = createReleaseState({ projectId: PROJECT_ID, changeId: CHANGE_ID, releaseId: RELEASE_ID, status: "deployed", generation: 2 });
+  const staleObservation = eventOf(
+    "observation.recorded.v1",
+    { kind: "observation", id: OBSERVATION_ID },
+    { observationId: OBSERVATION_ID, releaseId: RELEASE_ID, status: "healthy" },
+    1
+  );
+  const requestedRollback = eventOf(
+    "release.rolled_back.v1",
+    { kind: "release", id: RELEASE_ID },
+    { releaseId: RELEASE_ID, evidenceRefs: [EVIDENCE_ID] },
+    1
+  );
+
+  assert.deepEqual(reduceReleaseState(deployed, staleObservation), deployed);
+  assert.equal(
+    reduceReleaseState(createReleaseState({ projectId: PROJECT_ID, changeId: CHANGE_ID, releaseId: RELEASE_ID, status: "requested" }), requestedRollback).status,
+    "requested"
+  );
+});
+
+test("P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots", () => {
+  assert.equal(stableStateStringify({ b: 1, a: { d: 4, c: 3 } }), "{\"a\":{\"c\":3,\"d\":4},\"b\":1}");
+  assert.throws(() => stableStateStringify(undefined), /JSON-serializable/);
 });
