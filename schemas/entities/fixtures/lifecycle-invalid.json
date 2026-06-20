@@ -1,0 +1,244 @@
+{
+  "cases": [
+    {
+      "name": "task contract has overlapping write and forbidden scope",
+      "schema": "taskContract",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:30:00.000Z",
+        "kind": "task-contract",
+        "id": "ctr_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "revision": 1,
+        "title": "Bad contract",
+        "objective": "Demonstrate invalid scope overlap.",
+        "requirementIds": [
+          "req_protocol-entities"
+        ],
+        "dependencies": [],
+        "context": {
+          "specRefs": [],
+          "designRefs": [],
+          "predecessorArtifacts": []
+        },
+        "scope": {
+          "read": [
+            "packages/protocol/src/entities/common.ts"
+          ],
+          "write": [
+            "packages/protocol/src/entities/task-contract.ts"
+          ],
+          "forbidden": [
+            "packages/protocol/src/entities/task-contract.ts"
+          ],
+          "sequentialFiles": []
+        },
+        "interfaces": {
+          "consumes": [],
+          "produces": []
+        },
+        "oracleRefs": [
+          "orc_protocol-entity-fixtures"
+        ],
+        "verification": [
+          {
+            "command": "pnpm",
+            "args": [
+              "test"
+            ],
+            "expectedExitCode": 0
+          }
+        ],
+        "risk": {
+          "tier": "R2",
+          "reasons": [
+            "public-schema-contract"
+          ]
+        },
+        "approvals": [],
+        "completion": {
+          "expectedArtifacts": [],
+          "requiredEvidence": [
+            "test-report"
+          ],
+          "blockedConditions": [
+            "Oracle cannot be executed"
+          ]
+        }
+      }
+    },
+    {
+      "name": "task carries immutable contract objective",
+      "schema": "task",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:31:00.000Z",
+        "kind": "task",
+        "id": "tsk_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "contractId": "ctr_p01-t05-lifecycle",
+        "contractRevision": 1,
+        "status": "ready",
+        "generation": 1,
+        "priority": 10,
+        "dependencies": [],
+        "blockers": [],
+        "updatedAt": "2026-06-20T01:31:00.000Z",
+        "objective": "Mutable task rows must not own contract intent."
+      }
+    },
+    {
+      "name": "started task run lacks frozen manifest timestamp",
+      "schema": "taskRun",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:32:00.000Z",
+        "kind": "task-run",
+        "id": "run_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "taskId": "tsk_p01-t05-lifecycle",
+        "contractId": "ctr_p01-t05-lifecycle",
+        "contractRevision": 1,
+        "attempt": 1,
+        "status": "started",
+        "startedAt": "2026-06-20T01:32:00.000Z",
+        "manifest": {
+          "runtime": {
+            "driver": "runtime-local",
+            "version": "0.1.0"
+          }
+        }
+      }
+    },
+    {
+      "name": "evidence bundle attempts to store secret material",
+      "schema": "evidenceBundle",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:33:00.000Z",
+        "kind": "evidence",
+        "id": "evd_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "status": "collected",
+        "sensitivity": "secret",
+        "retention": {
+          "class": "project"
+        },
+        "items": [],
+        "traceRefs": []
+      }
+    },
+    {
+      "name": "blocking review finding omits evidence references",
+      "schema": "reviewDecision",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:34:00.000Z",
+        "kind": "review",
+        "id": "rev_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "status": "submitted",
+        "reviewer": {
+          "kind": "worker",
+          "id": "worker_task-reviewer"
+        },
+        "submittedAt": "2026-06-20T01:34:00.000Z",
+        "verdicts": {
+          "specification": "fail",
+          "integration": "unknown",
+          "evidence": "fail"
+        },
+        "confidence": "high",
+        "findings": [
+          {
+            "id": "finding-blocking",
+            "severity": "blocking",
+            "title": "Blocking issue",
+            "body": "Blocking findings must cite evidence."
+          }
+        ],
+        "supersedes": []
+      }
+    },
+    {
+      "name": "approval has unspecified action targets",
+      "schema": "approval",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:35:00.000Z",
+        "kind": "approval",
+        "id": "apv_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "status": "requested",
+        "requestedBy": {
+          "kind": "worker",
+          "id": "worker_release-controller"
+        },
+        "requestedAt": "2026-06-20T01:35:00.000Z",
+        "scope": {
+          "effectClass": "S4",
+          "action": "deploy.production",
+          "targets": []
+        },
+        "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t05-lifecycle:run_p01-t05-lifecycle:deploy.production:sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      }
+    },
+    {
+      "name": "forward-fix release omits forward-fix plan",
+      "schema": "release",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:37:00.000Z",
+        "kind": "release",
+        "id": "rel_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "status": "forward_fix_required",
+        "environment": "production",
+        "releaseIntent": {
+          "path": ".legion/project/changes/chg_phase-01-protocol/release.md",
+          "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "taskRefs": [],
+        "approvalRefs": [],
+        "evidenceRefs": [],
+        "healthCriteria": [],
+        "rollbackPlan": {
+          "strategy": "revert",
+          "criteria": [
+            "Failure"
+          ],
+          "evidenceRefs": []
+        }
+      }
+    },
+    {
+      "name": "rolled-back observation omits rollback evidence",
+      "schema": "observation",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-20T01:38:00.000Z",
+        "kind": "observation",
+        "id": "obs_p01-t05-lifecycle",
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "releaseId": "rel_p01-t05-lifecycle",
+        "status": "rolled_back",
+        "environment": "production",
+        "startedAt": "2026-06-20T01:38:00.000Z",
+        "healthCriteria": [
+          "Healthy"
+        ],
+        "signals": [],
+        "evidenceRefs": [],
+        "rollbackEvidenceRefs": []
+      }
+    }
+  ]
+}

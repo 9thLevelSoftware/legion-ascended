@@ -1,0 +1,5 @@
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+--- schema hash comparison before vs after regeneration ---
+PASS: schema hashes unchanged after regeneration.
