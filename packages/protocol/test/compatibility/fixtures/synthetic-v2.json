@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "0.2.0",
+  "id": "synthetic-record",
+  "payload": {
+    "count": 1,
+    "label": "workflow"
+  },
+  "status": "active"
+}
