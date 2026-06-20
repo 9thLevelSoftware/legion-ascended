@@ -20,7 +20,7 @@ task_commits:
   P02-T01: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7"
   P02-T02: "93b17d7ec547cd46564144d3a406224cfadf0dd8"
   P02-T03: "748d9e9bb87085560b40b3e498c0b22936cb07ff"
-  P02-T04: "825b65f0956342562dd67cd66ed28e0505f3c970"
+  P02-T04: "fe8ab0835820ecf0a3e062ea3ed46541856de898"
   P02-T05: null
   P02-T06: null
   P02-T07: null
@@ -175,7 +175,7 @@ entries:
   - task: P02-T04
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
     description: Phase 2 ledger updated for P02-T04 completion
-    sha256: d2b1fe8711ef0e7e548959d11b3eb59b8ec3abcdb24de02bc38ef5ef3a2d38b9
+    sha256: bd4c98c7d66b18a8633a12471100936fe208441ae6efdcc0f72b27ce0448b4fe
   - task: P02-T04
     artifact: packages/artifacts/src/changes/schema.ts
     description: Change-bundle, delta-spec, change-design, and decision-log schemas plus generated JSON Schema source
@@ -183,7 +183,7 @@ entries:
   - task: P02-T04
     artifact: packages/artifacts/src/changes/service.ts
     description: Change-bundle repository service for create/load/validate/diff operations, stale-base detection, and conflicting delta diagnostics
-    sha256: 9c8fc996654bef7a4683f749f050f438530272d2b97b0f7ce6a11ec5f35c1bf7
+    sha256: 7a54b2fbd6f18af587696ac56fa7c95a653b371ba5b2d5baa0a4af9c509fc2e5
   - task: P02-T04
     artifact: packages/artifacts/src/changes/index.ts
     description: Change-bundle package exports
@@ -199,7 +199,7 @@ entries:
   - task: P02-T04
     artifact: packages/artifacts/test/changes.test.mjs
     description: P02-T04 regression tests for create/load/validate/diff, conflicting deltas, stale current-spec bases, and typed invalid-input diagnostics
-    sha256: 9e2edc7c42bfad00776c5ea21c08f091096646c16457cb4bdaf01ac7ad97824a
+    sha256: d30218297950208c23d56aa71d46854c3cb236f17e3eeef44ddf90f5a10b859d
   - task: P02-T04
     artifact: schemas/artifacts/change-bundle.schema.json
     description: Generated change-bundle JSON Schema
@@ -211,7 +211,7 @@ entries:
   - task: P02-T04
     artifact: docs/next/evidence/P02-T04/change-bundle-service-test.log
     description: Focused @legion/artifacts change-bundle service test report
-    sha256: 0a4827279a3f3199291d7dc114f2800af609aa6a81b414cb6626760a78a9acfc
+    sha256: 5c48460d9f7fb1683be33bf3e8d71c21d3fe843c422a710e2a2ef91e7ff39d30
   - task: P02-T04
     artifact: docs/next/evidence/P02-T04/sample-change-tree.json
     description: Temporary project change-bundle golden proof with proposal, delta, decision, diff, reload, and validation evidence
@@ -223,8 +223,8 @@ entries:
   - task: P02-T04
     artifact: docs/next/evidence/P02-T04/full-validation.log
     description: Full workspace validate-next log after P02-T04 implementation
-    sha256: 44fa42c3afd41d29fbc02859b70ff733267d5defc4296cdb5ed54007922ccbdc
+    sha256: 5ac2f0c7211824a93da05d2de8ab1052d2e6c2c06fdf9584bb2c693f3bd5fab3
   - task: P02-T04
     artifact: docs/next/evidence/P02-T04/completion-report.yaml
     description: Structured P02-T04 completion report
-    sha256: b13f01c1f1f245ff81f33bdfb8f7545c5916188728fdb1f5c4436f35e18d1e5b
+    sha256: aef78add72a3308dcf7d3e10e2655aca00d47cf07d80f22b2e4b5c796c22f855

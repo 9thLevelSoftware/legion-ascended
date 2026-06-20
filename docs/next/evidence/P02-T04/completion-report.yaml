@@ -40,6 +40,7 @@ acceptance:
 commits:
   - 999becbaa27dcff046b61359d29747fd24ea9d6d
   - 825b65f0956342562dd67cd66ed28e0505f3c970
+  - fe8ab0835820ecf0a3e062ea3ed46541856de898
 risks_or_followups:
   - P02-T05 should consume change-bundle proposal and delta artifacts rather than re-reading current specs directly for planning inputs.
   - P02-T07 owns archive-time mutation of current truth; P02-T04 intentionally keeps change creation separate from current-spec updates.
