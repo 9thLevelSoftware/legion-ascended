@@ -15,6 +15,12 @@ const DEFAULT_PACKAGES = [
     root: "packages/core",
     src: "packages/core/src",
     allowedWorkspaceImports: ["@legion/protocol"]
+  },
+  {
+    name: "@legion/artifacts",
+    root: "packages/artifacts",
+    src: "packages/artifacts/src",
+    allowedWorkspaceImports: ["@legion/protocol", "@legion/core"]
   }
 ];
 
