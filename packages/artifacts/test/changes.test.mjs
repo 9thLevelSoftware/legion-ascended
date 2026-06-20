@@ -355,6 +355,99 @@ test("P02-T04 preflights bundle artifact paths before writing partial deltas", a
   });
 });
 
+test("P02-T04 validates add deltas against current truth", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const addedRequirement = requirement("new-capability", {
+      traceRefs: [
+        {
+          path: ".legion/project/specs/req_new-capability.md",
+          anchor: "req_new-capability",
+          relation: "defines",
+          entity: { kind: "requirement", id: "req_new-capability" }
+        }
+      ]
+    });
+    const created = await createChangeBundle({
+      ...changeInput(currentSpec, { repositoryRoot }),
+      deltaSpecs: [
+        {
+          operation: "add",
+          requirementId: addedRequirement.id,
+          proposedRequirement: addedRequirement,
+          sections: {
+            ...currentSpec.document.sections,
+            traceIds: [addedRequirement.id]
+          },
+          rationale: "Propose a new requirement before it exists in current truth."
+        }
+      ]
+    });
+    assert.equal(created.ok, true);
+
+    const currentTruthCollision = await createCurrentSpec({
+      repositoryRoot,
+      document: specDocument(addedRequirement.id, {
+        requirements: [addedRequirement],
+        sections: {
+          ...specDocument(addedRequirement.id).sections,
+          traceIds: [addedRequirement.id]
+        }
+      })
+    });
+    assert.equal(currentTruthCollision.ok, true);
+
+    const validation = await validateChangeBundle({ repositoryRoot, changeId: "chg_workflow-delta" });
+    assert.equal(validation.ok, false);
+    assert.equal(validation.status, "invalid");
+    assert.equal(validation.diagnostics[0].code, "add_delta_targets_existing_requirement");
+  });
+});
+
+test("P02-T04 rejects loaded bundles whose identity no longer matches their path", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const created = await createChangeBundle(changeInput(currentSpec, { repositoryRoot }));
+    assert.equal(created.ok, true);
+
+    const proposalPath = path.join(repositoryRoot, ".legion", "project", "changes", "chg_workflow-delta", "change.yaml");
+    const bundle = JSON.parse(await readFile(proposalPath, "utf8"));
+    bundle.change.id = "chg_other-delta";
+    await writeFile(proposalPath, JSON.stringify(bundle), "utf8");
+
+    const loaded = await loadChangeBundle({ repositoryRoot, changeId: "chg_workflow-delta" });
+    assert.equal(loaded.ok, false);
+    assert.equal(loaded.status, "invalid");
+    assert.equal(loaded.diagnostics[0].code, "change_bundle_identity_mismatch");
+  });
+});
+
+test("P02-T04 rejects delta frontmatter that disagrees with the bundle entry", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const created = await createChangeBundle(changeInput(currentSpec, { repositoryRoot }));
+    assert.equal(created.ok, true);
+
+    const deltaPath = path.join(
+      repositoryRoot,
+      ".legion",
+      "project",
+      "changes",
+      "chg_workflow-delta",
+      "delta-specs",
+      "req_workflow-control.md"
+    );
+    const deltaMarkdown = await readFile(deltaPath, "utf8");
+    await writeFile(deltaPath, deltaMarkdown.replace('"baseCurrentSpecRevision":1', '"baseCurrentSpecRevision":2'), "utf8");
+
+    const loaded = await loadChangeBundle({ repositoryRoot, changeId: "chg_workflow-delta" });
+    assert.equal(loaded.ok, false);
+    assert.equal(loaded.status, "invalid");
+    assert.equal(loaded.diagnostics[0].code, "delta_artifact_mismatch");
+    assert.equal(loaded.diagnostics[1].code, "delta_frontmatter_mismatch");
+  });
+});
+
 test("P02-T04 returns typed diagnostics for invalid change bundle inputs", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const currentSpec = await createBaselineSpec(repositoryRoot);
@@ -382,5 +475,13 @@ test("P02-T04 returns typed diagnostics for invalid change bundle inputs", async
     assert.equal(noDeltas.ok, false);
     assert.equal(noDeltas.status, "invalid");
     assert.equal(noDeltas.diagnostics[0].code, "invalid_delta_specs");
+
+    const invalidBaseGitSha = await createChangeBundle({
+      ...changeInput(currentSpec, { repositoryRoot }),
+      baseGitSha: "not-a-git-sha"
+    });
+    assert.equal(invalidBaseGitSha.ok, false);
+    assert.equal(invalidBaseGitSha.status, "invalid");
+    assert.equal(invalidBaseGitSha.diagnostics[0].code, "invalid_base_git_sha");
   });
 });

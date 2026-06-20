@@ -6,6 +6,7 @@ import {
   changeIdSchema,
   decisionIdSchema,
   decisionSchema,
+  gitShaSchema,
   projectIdSchema,
   requirementIdSchema,
   utcTimestampSchema,
@@ -46,6 +47,7 @@ import {
   stableProtocolJson
 } from "../revisions.js";
 import {
+  listCurrentSpecs,
   parseCurrentSpecMarkdown,
   readCurrentSpec,
   type CurrentSpecSuccess
@@ -236,6 +238,23 @@ function parseTimestamp(input: {
           code: input.code,
           message: issue.message,
           path: input.path
+        })
+      )
+    );
+  }
+  return parsed.data;
+}
+
+function parseBaseGitSha(input: GitSha | string, path: ArtifactPath): GitSha | ChangeBundleFailure {
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure(
+      "invalid",
+      parsed.error.issues.map((issue) =>
+        changeDiagnostic({
+          code: "invalid_base_git_sha",
+          message: issue.message,
+          path
         })
       )
     );
@@ -510,6 +529,117 @@ async function readCurrentSpecByArtifactPath(input: {
       mediaType: "text/markdown"
     })
   };
+}
+
+async function currentRequirementExists(input: {
+  readonly repositoryRoot: string;
+  readonly requirementId: RequirementId;
+}): Promise<boolean | ChangeBundleFailure> {
+  const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
+  if (!currentSpecs.ok) return failure(currentSpecs.status, currentSpecs.diagnostics);
+
+  return currentSpecs.index.entries.some((entry) =>
+    entry.requirements.some((requirement) => requirement.id === input.requirementId)
+  );
+}
+
+function bundleIdentityDiagnostics(input: {
+  readonly bundle: ChangeBundle;
+  readonly requestedChangeId: ChangeId;
+  readonly expectedPaths: ChangeBundle["paths"];
+}): readonly ArtifactDiagnostic[] {
+  const diagnostics: ArtifactDiagnostic[] = [];
+  const expected = input.expectedPaths;
+  const actual = input.bundle.paths;
+
+  if (input.bundle.change.id !== input.requestedChangeId) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "change_bundle_identity_mismatch",
+        message: `Loaded change bundle declares ${input.bundle.change.id}, but ${input.requestedChangeId} was requested.`,
+        path: expected.proposal
+      })
+    );
+  }
+
+  const pathChecks: readonly (keyof ChangeBundle["paths"])[] = ["root", "proposal", "deltaSpecRoot", "design", "decisions"];
+  for (const key of pathChecks) {
+    if (actual[key] !== expected[key]) {
+      diagnostics.push(
+        changeDiagnostic({
+          code: "change_bundle_path_mismatch",
+          message: `Loaded change bundle path ${String(key)} must be ${expected[key]}, not ${actual[key]}.`,
+          path: expected.proposal
+        })
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function deltaEntryDiagnostics(input: {
+  readonly entry: ChangeBundle["deltas"][number];
+  readonly delta: ChangeDeltaSpec;
+  readonly changeId: ChangeId;
+}): readonly ArtifactDiagnostic[] {
+  const diagnostics: ArtifactDiagnostic[] = [];
+  if (input.delta.changeId !== input.changeId) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "delta_frontmatter_mismatch",
+        message: `Delta spec ${input.entry.path} declares change ${input.delta.changeId}, not ${input.changeId}.`,
+        path: input.entry.path
+      })
+    );
+  }
+  if (input.delta.requirementId !== input.entry.requirementId) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "delta_frontmatter_mismatch",
+        message: `Delta spec ${input.entry.path} declares requirement ${input.delta.requirementId}, not ${input.entry.requirementId}.`,
+        path: input.entry.path
+      })
+    );
+  }
+  if (input.delta.operation !== input.entry.operation) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "delta_frontmatter_mismatch",
+        message: `Delta spec ${input.entry.path} declares operation ${input.delta.operation}, not ${input.entry.operation}.`,
+        path: input.entry.path
+      })
+    );
+  }
+  if (!referencesEqual(input.delta.baseCurrentSpec, input.entry.baseCurrentSpec)) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "delta_frontmatter_mismatch",
+        message: `Delta spec ${input.entry.path} base current spec does not match the bundle entry.`,
+        path: input.entry.path
+      })
+    );
+  }
+  if (input.delta.baseCurrentSpecRevision !== input.entry.baseCurrentSpecRevision) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "delta_frontmatter_mismatch",
+        message: `Delta spec ${input.entry.path} base current spec revision does not match the bundle entry.`,
+        path: input.entry.path
+      })
+    );
+  }
+  if (input.delta.baseRequirementHash !== input.entry.baseRequirementHash) {
+    diagnostics.push(
+      changeDiagnostic({
+        code: "delta_frontmatter_mismatch",
+        message: `Delta spec ${input.entry.path} base requirement hash does not match the bundle entry.`,
+        path: input.entry.path
+      })
+    );
+  }
+
+  return diagnostics;
 }
 
 function referencesEqual(left: ArtifactReference | undefined, right: ArtifactReference | undefined): boolean {
@@ -896,6 +1026,8 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
       })
     ]);
   }
+  const baseGitSha = parseBaseGitSha(input.baseGitSha, paths.proposal);
+  if (typeof baseGitSha !== "string") return baseGitSha;
   if (!projectId.success) {
     return failure("invalid", [
       changeDiagnostic({
@@ -942,7 +1074,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
       content,
       revision: 1,
       mediaType: "text/markdown",
-      baseGitSha: input.baseGitSha
+      baseGitSha
     });
     return { delta, artifactPath, content, reference: revision.artifact, revision };
   });
@@ -981,7 +1113,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     content: designContent,
     revision: 1,
     mediaType: "text/markdown",
-    baseGitSha: input.baseGitSha
+    baseGitSha
   });
 
   const decisionLog = buildDecisionLog({
@@ -1000,7 +1132,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     content: decisionContent,
     revision: 1,
     mediaType: "text/markdown",
-    baseGitSha: input.baseGitSha
+    baseGitSha
   });
 
   const preflight = await preflightNewArtifactPaths({
@@ -1040,7 +1172,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
         revision: spec.document.revision,
         reference: spec.reference
       })))),
-      baseGitSha: input.baseGitSha,
+      baseGitSha,
       requirementIds: currentRequirementIds
     },
     proposedTruth: {
@@ -1077,7 +1209,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     kind: "change-bundle",
     revision: 1,
     owners,
-    baseGitSha: input.baseGitSha,
+    baseGitSha,
     paths,
     change: parsedChange.data,
     deltas: deltaArtifactsByRequirement.map((artifact) => ({
@@ -1113,7 +1245,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
       role: "delta-spec",
       content: artifact.content,
       mediaType: "text/markdown",
-      baseGitSha: input.baseGitSha
+      baseGitSha
     });
     if (!written.ok) return written;
   }
@@ -1124,7 +1256,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     role: "design",
     content: designContent,
     mediaType: "text/markdown",
-    baseGitSha: input.baseGitSha
+    baseGitSha
   });
   if (!writtenDesign.ok) return writtenDesign;
 
@@ -1134,7 +1266,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     role: "decision-log",
     content: decisionContent,
     mediaType: "text/markdown",
-    baseGitSha: input.baseGitSha
+    baseGitSha
   });
   if (!writtenDecisions.ok) return writtenDecisions;
 
@@ -1144,7 +1276,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     role: "proposal",
     content: proposalContent,
     mediaType: "application/json",
-    baseGitSha: input.baseGitSha
+    baseGitSha
   });
   if (!writtenProposal.ok) return writtenProposal;
 
@@ -1177,6 +1309,11 @@ export async function loadChangeBundle(input: LoadChangeBundleInput): Promise<Ch
 
   const bundle = proposal.value;
   const diagnostics: ArtifactDiagnostic[] = [];
+  diagnostics.push(...bundleIdentityDiagnostics({
+    bundle,
+    requestedChangeId: changeId,
+    expectedPaths: paths
+  }));
   const deltaSpecs: ChangeDeltaSpec[] = [];
 
   for (const entry of bundle.deltas) {
@@ -1196,6 +1333,11 @@ export async function loadChangeBundle(input: LoadChangeBundleInput): Promise<Ch
         })
       );
     }
+    diagnostics.push(...deltaEntryDiagnostics({
+      entry,
+      delta: parsed.document,
+      changeId
+    }));
     deltaSpecs.push(parsed.document);
   }
 
@@ -1264,7 +1406,26 @@ export async function validateChangeBundle(input: ValidateChangeBundleInput): Pr
   diagnostics.push(...conflictDiagnostics(loaded.bundle.deltas, loaded.bundle.paths.proposal));
 
   for (const delta of loaded.bundle.deltas) {
-    if (delta.operation === "add") continue;
+    if (delta.operation === "add") {
+      const exists = await currentRequirementExists({
+        repositoryRoot: input.repositoryRoot,
+        requirementId: delta.requirementId
+      });
+      if (typeof exists !== "boolean") {
+        diagnostics.push(...exists.diagnostics);
+        continue;
+      }
+      if (exists) {
+        diagnostics.push(
+          changeDiagnostic({
+            code: "add_delta_targets_existing_requirement",
+            message: `Current truth already contains requirement ${delta.requirementId}.`,
+            path: delta.path
+          })
+        );
+      }
+      continue;
+    }
     if (delta.baseCurrentSpec === undefined) {
       diagnostics.push(
         changeDiagnostic({
