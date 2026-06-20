@@ -36,6 +36,15 @@ function normalizePath(filePath) {
   return filePath.split(path.sep).join('/');
 }
 
+function canonicalPath(filePath) {
+  const resolved = path.resolve(filePath);
+  try {
+    return normalizePath(fs.realpathSync.native(resolved));
+  } catch {
+    return normalizePath(resolved);
+  }
+}
+
 function resolveTemplate(template, projectDir, homeDir, scope) {
   return normalizePath(
     template
@@ -177,8 +186,8 @@ function assertManifest(runtimeKey, scope, projectDir, homeDir) {
     const expectedPath = expectedNativePath(surface, scope, projectDir, homeDir);
     if (!expectedPath) continue;
     assert.equal(
-      manifest.paths.native[surface.key],
-      expectedPath,
+      canonicalPath(manifest.paths.native[surface.key]),
+      canonicalPath(expectedPath),
       `${runtimeKey}: native surface path mismatch for ${surface.key}`
     );
   }
@@ -222,13 +231,17 @@ function readYaml(filePath) {
 
 function assertKiloCodeSkill(skillFile, manifestFile) {
   const content = fs.readFileSync(skillFile, 'utf8');
+  const manifestReferences = new Set([normalizePath(manifestFile), canonicalPath(manifestFile)]);
   assert.match(content, /^name:\s+legion$/m, `${skillFile}: should define the legion skill`);
   assert.match(
     content,
     /Route Legion requests and \/legion:\* intents/,
     `${skillFile}: should describe Legion request routing`
   );
-  assert.ok(content.includes(manifestFile.split(path.sep).join('/')), `${skillFile}: should reference the install manifest`);
+  assert.ok(
+    [...manifestReferences].some((manifestReference) => content.includes(manifestReference)),
+    `${skillFile}: should reference the install manifest`
+  );
   assert.match(content, /\/legion:board/, `${skillFile}: should map the board workflow`);
   assert.match(content, /\/legion:map/, `${skillFile}: should map the map workflow`);
   assert.match(content, /\/legion:validate/, `${skillFile}: should map the validate workflow`);
