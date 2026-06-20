@@ -86,7 +86,7 @@ function sortStable(value: unknown): unknown {
   }
 
   const sorted: Record<string, unknown> = {};
-  for (const [key, entryValue] of Object.entries(value).sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [key, entryValue] of Object.entries(value).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))) {
     sorted[key] = sortStable(entryValue);
   }
   return sorted;

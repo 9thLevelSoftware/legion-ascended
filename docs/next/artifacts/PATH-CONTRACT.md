@@ -34,10 +34,10 @@ JSON reads use caller-provided protocol schemas through `readJsonArtifact`. Inva
 
 ## Revisions And Atomic Writes
 
-`writeRevisionedArtifact` requires the caller to pass the current protocol revision and expected revision. If they differ, the write fails before touching the target file. Successful writes return an existing protocol `ArtifactRevision` containing role, artifact reference, content hash, and next revision. Domain services in later Phase 2 tasks persist that metadata in their owning protocol records instead of creating a second durable metadata source.
+`writeRevisionedArtifact` requires the caller to pass the current protocol revision and expected revision. If they differ, the write fails before touching the target file. Updates to an existing artifact must also pass the superseded `ArtifactReference`; while holding the per-artifact write lock, the writer hashes the current target bytes and rejects the write if they no longer match that superseded reference. Successful writes return an existing protocol `ArtifactRevision` containing role, artifact reference, content hash, next revision, and optional superseded reference. Domain services in later Phase 2 tasks persist that metadata in their owning protocol records instead of creating a second durable metadata source.
 
-Writes use a temp file in the target directory, write and fsync the temp file, optionally run a test/fault hook, atomically rename it over the target, and then best-effort fsync the parent directory where the platform allows it. An interrupted write before rename removes the temp file and leaves the prior target bytes readable.
+Writes use a short-lived lock file and temp file in the target directory, write and fsync the temp file, optionally run a test/fault hook, atomically rename it over the target, and then best-effort fsync the parent directory where the platform allows it. An interrupted write before rename removes the temp file and leaves the prior target bytes readable.
 
 ## Local Serialization Policy
 
-This package provides atomic file replacement and revision compare-and-swap checks for local artifact mutations. It does not make file locks a durable workflow queue primitive. Local callers may serialize same-process writes through their service layer; durable dispatch, leases, retries, and queue ownership belong to the Phase 3 board store named by ADR-003 and ADR-008.
+This package provides atomic file replacement, revision compare-and-swap checks, and fail-fast local serialization for same-artifact writes. The lock file is a filesystem safety guard, not a durable workflow queue primitive. Durable dispatch, leases, retries, and queue ownership belong to the Phase 3 board store named by ADR-003 and ADR-008.

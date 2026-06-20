@@ -13,6 +13,7 @@ import {
   hashContent,
   readJsonArtifact,
   resolveProjectArtifactPath,
+  stableProtocolJson,
   writeRevisionedArtifact
 } from "../dist/index.js";
 
@@ -24,6 +25,18 @@ async function withRepository(callback) {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
+
+  return {
+    promise,
+    resolve: () => resolve()
+  };
 }
 
 test("canonical project artifact paths reject ambiguous or escaping input", () => {
@@ -61,6 +74,20 @@ test("canonical project artifact paths reject ambiguous or escaping input", () =
   ]);
   assert.equal(collisions.length, 1);
   assert.match(collisions[0].message, /case-insensitive collision/);
+});
+
+test("stable protocol JSON sorts keys without locale-dependent ordering", () => {
+  assert.equal(
+    stableProtocolJson({
+      z: 1,
+      "\u00e4": 2,
+      a: {
+        z: 3,
+        "\u00e4": 4
+      }
+    }),
+    "{\"a\":{\"z\":3,\"\u00e4\":4},\"z\":1,\"\u00e4\":2}\n"
+  );
 });
 
 test("repository discovery and path resolution stay beneath the real project root", async (t) => {
@@ -198,6 +225,7 @@ test("revisioned writes hash content, enforce CAS, and preserve bytes on interru
         content: "{\"tasks\":[\"interrupted\"]}\n",
         expectedRevision: 1,
         currentRevision: 1,
+        supersedes: first.reference,
         beforeCommit: async () => {
           throw new Error("simulated crash before atomic rename");
         }
@@ -208,5 +236,77 @@ test("revisioned writes hash content, enforce CAS, and preserve bytes on interru
     assert.equal(await readFile(absolutePath, "utf8"), initialContent);
     const parentEntries = await readdir(path.dirname(absolutePath));
     assert.equal(parentEntries.some((entry) => entry.includes(".tmp")), false);
+  });
+});
+
+test("revisioned writes reject concurrent writers and stale superseded content", async () => {
+  await withRepository(async (repositoryRoot) => {
+    const changeId = formatEntityId("change", "legion-next");
+    const artifactPath = artifactPathForRole({ role: "taskgraph", changeId });
+    const initialContent = "{\n  \"tasks\": []\n}\n";
+    const first = await writeRevisionedArtifact({
+      repositoryRoot,
+      artifactPath,
+      role: "taskgraph",
+      content: initialContent,
+      expectedRevision: 0,
+      currentRevision: 0,
+      mediaType: "application/json"
+    });
+
+    const updateStarted = deferred();
+    const releaseUpdate = deferred();
+    const updateContent = "{\"tasks\":[\"first-update\"]}\n";
+    const concurrentContent = "{\"tasks\":[\"concurrent-update\"]}\n";
+    const update = writeRevisionedArtifact({
+      repositoryRoot,
+      artifactPath,
+      role: "taskgraph",
+      content: updateContent,
+      expectedRevision: 1,
+      currentRevision: 1,
+      supersedes: first.reference,
+      beforeCommit: async () => {
+        updateStarted.resolve();
+        await releaseUpdate.promise;
+      }
+    });
+
+    try {
+      await updateStarted.promise;
+      await assert.rejects(
+        writeRevisionedArtifact({
+          repositoryRoot,
+          artifactPath,
+          role: "taskgraph",
+          content: concurrentContent,
+          expectedRevision: 1,
+          currentRevision: 1,
+          supersedes: first.reference
+        }),
+        /artifact write already in progress/
+      );
+    } finally {
+      releaseUpdate.resolve();
+    }
+
+    const second = await update;
+    assert.equal(second.revision.revision, 2);
+
+    const absolutePath = path.join(repositoryRoot, ...artifactPath.split("/"));
+    assert.equal(await readFile(absolutePath, "utf8"), updateContent);
+
+    await assert.rejects(
+      writeRevisionedArtifact({
+        repositoryRoot,
+        artifactPath,
+        role: "taskgraph",
+        content: "{\"tasks\":[\"stale-supersedes\"]}\n",
+        expectedRevision: 1,
+        currentRevision: 1,
+        supersedes: first.reference
+      }),
+      /current artifact content does not match expected superseded reference/
+    );
   });
 });

@@ -4,9 +4,10 @@ task: P02-T01
 summary: >
   Created the private @legion/artifacts package as the Phase 2 foundation for
   canonical project artifact paths, root-contained resolution, protocol-schema
-  JSON reads, content hashes, protocol ArtifactRevision metadata, compare-and-swap
-  revision checks, and atomic temp-file replacement. Documented the path contract
-  and local serialization policy for downstream project/change/spec services.
+  JSON reads, content hashes, protocol ArtifactRevision metadata, superseded-hash
+  compare-and-swap revision checks, fail-fast local write serialization, and
+  atomic temp-file replacement. Documented the path contract and local
+  serialization policy for downstream project/change/spec services.
 files_changed:
   - docs/next/artifacts/PATH-CONTRACT.md
   - docs/next/evidence/P02-T01/**
@@ -36,6 +37,8 @@ acceptance:
     result: PASS
 commits:
   - 645b5f1
+  - e9a775e
+  - 5c40fb5
 risks_or_followups:
   - P02-T02 must define the project manifest and constitution service that persist returned ArtifactRevision metadata in protocol records.
 blocker:
