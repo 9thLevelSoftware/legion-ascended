@@ -14,10 +14,10 @@ packages/core typecheck: Done
 $ node scripts/check-package-boundaries.mjs
 Package boundary check passed.
 $ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
-✔ accepts legal protocol and core imports (7.8984ms)
-✔ rejects protocol imports from core (5.076ms)
-✔ rejects deep imports across workspace package exports (3.8532ms)
-✔ rejects provider and storage imports in protocol and core (3.6155ms)
+✔ accepts legal protocol and core imports (8.7723ms)
+✔ rejects protocol imports from core (5.2654ms)
+✔ rejects deep imports across workspace package exports (4.7942ms)
+✔ rejects provider and storage imports in protocol and core (5.0585ms)
 ℹ tests 4
 ℹ suites 0
 ℹ pass 4
@@ -25,57 +25,57 @@ $ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 66.0954
+ℹ duration_ms 74.1349
 Scope: 2 of 3 workspace projects
 packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 packages/protocol test: $ tsc -p tsconfig.json
-packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (11.4605ms)
-packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (1.7086ms)
-packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.0144ms)
-packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (0.9521ms)
-packages/protocol test: ✔ review feedback: project IDs must match project slugs (0.8929ms)
-packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.3027ms)
-packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (0.8881ms)
-packages/protocol test: ✔ review feedback: superseded requirements require replacement references (0.9053ms)
-packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.5347ms)
-packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.515ms)
-packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (1.1887ms)
-packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.5346ms)
-packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (1.0211ms)
-packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (1.4227ms)
-packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (5.4304ms)
-packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (12.4946ms)
-packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.6315ms)
-packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (2.0384ms)
-packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.5021ms)
-packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.1437ms)
-packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (6.1271ms)
-packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.2907ms)
-packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (1.444ms)
-packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (0.9816ms)
-packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (1.8998ms)
-packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (0.8906ms)
-packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (7.8695ms)
-packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (0.6695ms)
-packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (12.3821ms)
-packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (2.3111ms)
-packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.261ms)
-packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (1.7416ms)
-packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (0.846ms)
-packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (0.885ms)
-packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (1.125ms)
-packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (0.8151ms)
-packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.0864ms)
-packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (1.0214ms)
-packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (1.945ms)
-packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (11.3112ms)
-packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.4745ms)
-packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.6528ms)
-packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.5446ms)
-packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.8345ms)
-packages/protocol test: ✔ common protocol structures are strict and versioned (1.0966ms)
-packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (6.592ms)
-packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.492ms)
+packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (10.8744ms)
+packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (2.1741ms)
+packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.6084ms)
+packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (1.3558ms)
+packages/protocol test: ✔ review feedback: project IDs must match project slugs (1.0021ms)
+packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.7449ms)
+packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (1.2171ms)
+packages/protocol test: ✔ review feedback: superseded requirements require replacement references (1.1774ms)
+packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.7913ms)
+packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.586ms)
+packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (1.6642ms)
+packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.5599ms)
+packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (1.1038ms)
+packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (1.3862ms)
+packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (7.4093ms)
+packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (11.9401ms)
+packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.702ms)
+packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (2.4205ms)
+packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.8558ms)
+packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.8067ms)
+packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (7.561ms)
+packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.2896ms)
+packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (2.3203ms)
+packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (2.3523ms)
+packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (2.0062ms)
+packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (1.2258ms)
+packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (11.4409ms)
+packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (1.0754ms)
+packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (15.9908ms)
+packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (3.0296ms)
+packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.7318ms)
+packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (2.1927ms)
+packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (1.5153ms)
+packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (2.31ms)
+packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (1.1866ms)
+packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (1.1564ms)
+packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.2686ms)
+packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.9063ms)
+packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (2.3991ms)
+packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (14.9934ms)
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (4.078ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.7951ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.8201ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.8252ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (1.2001ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (5.7979ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.9545ms)
 packages/protocol test: ℹ tests 47
 packages/protocol test: ℹ suites 0
 packages/protocol test: ℹ pass 47
@@ -83,29 +83,31 @@ packages/protocol test: ℹ fail 0
 packages/protocol test: ℹ cancelled 0
 packages/protocol test: ℹ skipped 0
 packages/protocol test: ℹ todo 0
-packages/protocol test: ℹ duration_ms 208.9999
+packages/protocol test: ℹ duration_ms 256.036
 packages/protocol test: Done
 packages/core test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 packages/core test: $ tsc -p tsconfig.json
-packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.6601ms)
-packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.4319ms)
-packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.8163ms)
-packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.2253ms)
-packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1812ms)
-packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.2883ms)
-packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.555ms)
-packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.2484ms)
-packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.2033ms)
-packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.4663ms)
-packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.1196ms)
-packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (0.0728ms)
-packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.253ms)
-packages/core test: ℹ tests 13
+packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.6258ms)
+packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.4503ms)
+packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.8475ms)
+packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.1236ms)
+packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1527ms)
+packages/core test: ✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.238ms)
+packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.4234ms)
+packages/core test: ✔ P01-T07 integration completions must match the recorded side-effect intent (0.1269ms)
+packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.3641ms)
+packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.2757ms)
+packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.167ms)
+packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.388ms)
+packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.166ms)
+packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (0.0914ms)
+packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.4096ms)
+packages/core test: ℹ tests 15
 packages/core test: ℹ suites 0
-packages/core test: ℹ pass 13
+packages/core test: ℹ pass 15
 packages/core test: ℹ fail 0
 packages/core test: ℹ cancelled 0
 packages/core test: ℹ skipped 0
 packages/core test: ℹ todo 0
-packages/core test: ℹ duration_ms 161.4222
+packages/core test: ℹ duration_ms 191.7288
 packages/core test: Done

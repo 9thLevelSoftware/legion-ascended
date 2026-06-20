@@ -8,7 +8,9 @@ summary: >
   a narrow LF checkout rule because the exact documentation snapshot test failed on Windows CRLF checkouts.
   Review follow-up aligned transition matrices with reducer outcomes, moved task completion business gating
   into the command decision path, added stale cross-aggregate guards, validated task command routing, and
-  tightened terminal retry/invalidation semantics.
+  tightened terminal retry/invalidation semantics. A second review follow-up stopped comparing evidence/review
+  aggregate generations to task generations and required integration completions to match the recorded effect
+  intent identity.
 base_commit: 29157cfa8dce95dc0256499dd862d0c7342d4202
 files_changed:
   - .gitattributes
@@ -43,6 +45,10 @@ acceptance:
   - criterion: Replay from genesis equals incrementally reduced state.
     result: PASS
   - criterion: Review feedback regressions for generation, routing, matrix alignment, and terminal guards are covered.
+    result: PASS
+  - criterion: Retried tasks can collect current-run evidence and review facts from their own aggregate generations.
+    result: PASS
+  - criterion: Integration completion events match the recorded side-effect identity before terminal transition.
     result: PASS
 required_evidence:
   - transition_coverage_report: docs/next/evidence/P01-T07/transition-coverage.md

@@ -666,6 +666,10 @@ function newerOrSameGeneration(state: { readonly generation: number }, event: Ev
   return event.generation >= state.generation;
 }
 
+function matchesCurrentChange(event: EventEnvelope, changeId: ChangeId): boolean {
+  return !event.changeId || event.changeId === changeId;
+}
+
 export function reduceChangeState(state: ChangeMachineState, event: EventEnvelope): ChangeMachineState {
   if (event.changeId === state.changeId && newerOrSameGeneration(state, event) && !includesString(CHANGE_TERMINAL_STATES, state.status)) {
     if (state.status === "planned" && event.type === "task.created.v1") {
@@ -701,8 +705,8 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
     const evidenceId = evidenceIdField(payload);
     const runId = runIdField(payload);
     if (taskId !== state.taskId || !evidenceId) return state;
-    if (!newerOrSameGeneration(state, event) || includesString(TASK_TERMINAL_STATES, state.status)) return state;
-    if (state.runId && runId && runId !== state.runId) return state;
+    if (!matchesCurrentChange(event, state.changeId) || includesString(TASK_TERMINAL_STATES, state.status)) return state;
+    if (state.runId && runId !== state.runId) return state;
     return {
       ...state,
       evidenceRefs: appendUnique(state.evidenceRefs, evidenceId)
@@ -713,7 +717,7 @@ export function reduceTaskState(state: TaskMachineState, event: EventEnvelope): 
     const taskId = taskIdField(payload);
     const reviewId = reviewIdField(payload);
     if (taskId !== state.taskId || !reviewId) return state;
-    if (!newerOrSameGeneration(state, event) || includesString(TASK_TERMINAL_STATES, state.status)) return state;
+    if (!matchesCurrentChange(event, state.changeId) || includesString(TASK_TERMINAL_STATES, state.status)) return state;
 
     const reviewRefs = appendUnique(state.reviewRefs, reviewId);
     const verdict = stringField(payload, "verdict");
@@ -924,9 +928,11 @@ export function reduceIntegrationState(state: IntegrationMachineState, event: Ev
     };
   }
   if (event.type === "integration.effect_succeeded.v1" && state.status === "intent_recorded") {
+    if (!state.effectKind || !state.targetHash || effectKind !== state.effectKind || targetHash !== state.targetHash) return state;
     return { ...state, status: "effect_succeeded", generation: event.generation };
   }
   if (event.type === "integration.effect_failed.v1" && state.status === "intent_recorded") {
+    if (!state.effectKind || !state.targetHash || effectKind !== state.effectKind || targetHash !== state.targetHash) return state;
     return { ...state, status: "effect_failed", generation: event.generation };
   }
 

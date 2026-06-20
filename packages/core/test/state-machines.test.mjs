@@ -235,7 +235,14 @@ test("P01-T07 legal transition table moves each aggregate through its protocol f
     {
       name: "integration succeeded",
       reduce: reduceIntegrationState,
-      state: createIntegrationState({ projectId: PROJECT_ID, changeId: CHANGE_ID, runId: RUN_ID, status: "intent_recorded" }),
+      state: createIntegrationState({
+        projectId: PROJECT_ID,
+        changeId: CHANGE_ID,
+        runId: RUN_ID,
+        status: "intent_recorded",
+        effectKind: "git.push",
+        targetHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }),
       event: eventOf("integration.effect_succeeded.v1", { kind: "run", id: RUN_ID }, { effectKind: "git.push", targetHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }),
       to: "effect_succeeded"
     },
@@ -299,6 +306,31 @@ test("P01-T07 illegal transitions preserve state and emit no synthetic facts", (
   }
 });
 
+test("P01-T07 retried tasks accept current-run evidence and review aggregate facts", () => {
+  const current = taskState("running", {
+    generation: 2,
+    runId: RUN_ID
+  });
+  const currentRunEvidence = eventOf(
+    "evidence.collected.v1",
+    { kind: "evidence", id: EVIDENCE_ID },
+    { evidenceId: EVIDENCE_ID, taskId: TASK_ID, runId: RUN_ID, verdict: "pass" },
+    1
+  );
+  const currentTaskReview = eventOf(
+    "review.submitted.v1",
+    { kind: "review", id: REVIEW_ID },
+    { reviewId: REVIEW_ID, taskId: TASK_ID, reviewer: ACTOR, verdict: "pass" },
+    1
+  );
+
+  const withEvidence = reduceTaskState(current, currentRunEvidence);
+  const withReview = reduceTaskState(withEvidence, currentTaskReview);
+
+  assert.deepEqual(withEvidence.evidenceRefs, [EVIDENCE_ID]);
+  assert.deepEqual(withReview.passedReviewRefs, [REVIEW_ID]);
+});
+
 test("P01-T07 stale and mismatched cross-aggregate task events are ignored", () => {
   const current = taskState("running", {
     generation: 2,
@@ -307,17 +339,17 @@ test("P01-T07 stale and mismatched cross-aggregate task events are ignored", () 
     reviewRefs: [REVIEW_ID],
     passedReviewRefs: [REVIEW_ID]
   });
-  const staleEvidence = eventOf(
-    "evidence.collected.v1",
-    { kind: "evidence", id: "evd_old-evidence" },
-    { evidenceId: "evd_old-evidence", taskId: TASK_ID, runId: RUN_ID, verdict: "pass" },
-    1
-  );
   const wrongRunEvidence = eventOf(
     "evidence.collected.v1",
     { kind: "evidence", id: "evd_wrong-run" },
     { evidenceId: "evd_wrong-run", taskId: TASK_ID, runId: "run_wrong-r1", verdict: "pass" },
-    2
+    1
+  );
+  const missingRunEvidence = eventOf(
+    "evidence.collected.v1",
+    { kind: "evidence", id: "evd_missing-run" },
+    { evidenceId: "evd_missing-run", taskId: TASK_ID, verdict: "pass" },
+    1
   );
   const terminalReview = eventOf(
     "review.submitted.v1",
@@ -326,9 +358,43 @@ test("P01-T07 stale and mismatched cross-aggregate task events are ignored", () 
     2
   );
 
-  assert.deepEqual(reduceTaskState(current, staleEvidence), current);
   assert.deepEqual(reduceTaskState(current, wrongRunEvidence), current);
+  assert.deepEqual(reduceTaskState(current, missingRunEvidence), current);
   assert.deepEqual(reduceTaskState(taskState("completed", { generation: 2 }), terminalReview), taskState("completed", { generation: 2 }));
+});
+
+test("P01-T07 integration completions must match the recorded side-effect intent", () => {
+  const intent = createIntegrationState({
+    projectId: PROJECT_ID,
+    changeId: CHANGE_ID,
+    runId: RUN_ID,
+    status: "intent_recorded",
+    effectKind: "git.push",
+    targetHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  });
+
+  assert.deepEqual(
+    reduceIntegrationState(
+      intent,
+      eventOf("integration.effect_succeeded.v1", { kind: "run", id: RUN_ID }, { effectKind: "git.comment", targetHash: intent.targetHash })
+    ),
+    intent
+  );
+  assert.deepEqual(
+    reduceIntegrationState(
+      intent,
+      eventOf("integration.effect_failed.v1", { kind: "run", id: RUN_ID }, { effectKind: intent.effectKind, targetHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", error: { code: "effect_failed", message: "Failed.", retryable: true } })
+    ),
+    intent
+  );
+
+  assert.equal(
+    reduceIntegrationState(
+      intent,
+      eventOf("integration.effect_succeeded.v1", { kind: "run", id: RUN_ID }, { effectKind: intent.effectKind, targetHash: intent.targetHash })
+    ).status,
+    "effect_succeeded"
+  );
 });
 
 test("P01-T07 task blockers accumulate in reducer and command decision", () => {

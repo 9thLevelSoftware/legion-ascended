@@ -26,7 +26,9 @@
 - `P01-T07 legal transition table moves each aggregate through its protocol facts`
 - `P01-T07 matrices describe reducer outcomes for conditioned transitions`
 - `P01-T07 illegal transitions preserve state and emit no synthetic facts`
+- `P01-T07 retried tasks accept current-run evidence and review aggregate facts`
 - `P01-T07 stale and mismatched cross-aggregate task events are ignored`
+- `P01-T07 integration completions must match the recorded side-effect intent`
 - `P01-T07 task blockers accumulate in reducer and command decision`
 - `P01-T07 task completion command requires expected generation, evidence, and passed review`
 - `P01-T07 task command decisions reject misrouted envelopes and terminal invalidation`
