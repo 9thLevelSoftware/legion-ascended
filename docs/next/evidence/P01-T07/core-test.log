@@ -1,0 +1,17 @@
+$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.5892ms)
+✔ P01-T07 transition matrices are exported for every aggregate (0.511ms)
+✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.8756ms)
+✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1875ms)
+✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.4219ms)
+✔ P01-T07 task replay is deterministic and equivalent from genesis (6.4499ms)
+✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.1862ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 190.9997

@@ -1,0 +1,52 @@
+status: DONE
+phase: 1
+task: P01-T07
+summary: >
+  Pure lifecycle state machines, transition matrices, typed transition rejections, task command decisions,
+  deterministic replay helpers, and tests were added to packages/core without introducing storage, runtime,
+  provider, clock, network, or random dependencies. Generated protocol README snapshots were normalized under
+  a narrow LF checkout rule because the exact documentation snapshot test failed on Windows CRLF checkouts.
+base_commit: 29157cfa8dce95dc0256499dd862d0c7342d4202
+files_changed:
+  - .gitattributes
+  - packages/core/package.json
+  - packages/core/src/index.ts
+  - packages/core/src/transition.ts
+  - packages/core/src/state-machines/index.ts
+  - packages/core/test/state-machines.test.mjs
+  - schemas/events/README.md
+  - schemas/api/README.md
+  - docs/next/evidence/P01-T07/transition-coverage.md
+  - docs/next/evidence/P01-T07/property-test-results.md
+  - docs/next/evidence/P01-T07/state-diagram.md
+  - docs/next/evidence/P01-T07/core-test.log
+  - docs/next/evidence/P01-T07/full-validation.log
+verification:
+  - command: pnpm --filter @legion/core test
+    result: PASS
+    evidence: docs/next/evidence/P01-T07/core-test.log
+  - command: pnpm validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T07/full-validation.log
+acceptance:
+  - criterion: Every lifecycle state used in the roadmap is represented.
+    result: PASS
+  - criterion: Completion requires evidence and review where protocol requires it.
+    result: PASS
+  - criterion: Reducers contain no I/O, clock, random, provider, or mutable global state.
+    result: PASS
+  - criterion: Illegal transitions emit no events and preserve state.
+    result: PASS
+  - criterion: Replay from genesis equals incrementally reduced state.
+    result: PASS
+required_evidence:
+  - transition_coverage_report: docs/next/evidence/P01-T07/transition-coverage.md
+  - property_test_results: docs/next/evidence/P01-T07/property-test-results.md
+  - state_diagrams: docs/next/evidence/P01-T07/state-diagram.md
+  - core_test_output: docs/next/evidence/P01-T07/core-test.log
+  - full_validation_output: docs/next/evidence/P01-T07/full-validation.log
+risks_or_followups:
+  - Non-task command decision functions are represented by reducers and matrices now; aggregate-specific command deciders can be expanded when later phases define deterministic ID allocation/context inputs.
+blocker:
+  condition: none
+  decision_needed: none
