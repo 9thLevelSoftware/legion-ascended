@@ -5,7 +5,8 @@ summary: >
   Defined Legion Next project, change, requirement, decision, and oracle intent entity schemas in @legion/protocol.
   The schemas compose the P01-T03 primitives, keep Git-tracked current/proposed truth metadata separate from mutable
   operational state, require explicit oracle ownership/protection and requirement coverage, and support decision
-  supersession without rewriting historical decisions.
+  supersession without rewriting historical decisions. Follow-up review hardening added lifecycle audit invariants,
+  risk override consistency checks, project ID/slug consistency, and JSON-Schema-representable decision audit variants.
 files_changed:
   - packages/protocol/src/entities/change.ts
   - packages/protocol/src/entities/common.ts
@@ -43,8 +44,11 @@ acceptance:
     result: PASS
   - criterion: Entity schemas reject mutable queue, lease, runtime session, and UI projection fields.
     result: PASS
+  - criterion: Review feedback invariants for project IDs, supersession, acceptance audit fields, risk overrides, decision alternatives, oracle type/mode consistency, and generated decision JSON Schema are covered.
+    result: PASS
 commits:
   - e244d57764384d543eeba4fd007c4a40078f5c0a
+  - dde1539fdf30d037661d5a14aa38dd43c94d0407
 risks_or_followups:
   - P01-T05 must compose these intent entities with task contract, run, evidence, review, approval, release, and observation schemas without reintroducing operational state into Git intent documents.
 blocker:
