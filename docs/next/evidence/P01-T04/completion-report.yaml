@@ -1,0 +1,52 @@
+status: DONE
+phase: 1
+task: P01-T04
+summary: >
+  Defined Legion Next project, change, requirement, decision, and oracle intent entity schemas in @legion/protocol.
+  The schemas compose the P01-T03 primitives, keep Git-tracked current/proposed truth metadata separate from mutable
+  operational state, require explicit oracle ownership/protection and requirement coverage, and support decision
+  supersession without rewriting historical decisions.
+files_changed:
+  - packages/protocol/src/entities/change.ts
+  - packages/protocol/src/entities/common.ts
+  - packages/protocol/src/entities/decision.ts
+  - packages/protocol/src/entities/oracle.ts
+  - packages/protocol/src/entities/project.ts
+  - packages/protocol/src/entities/requirement.ts
+  - packages/protocol/src/entities/schema-documents.ts
+  - packages/protocol/src/index.ts
+  - packages/protocol/scripts/generate-primitives-json-schema.mjs
+  - packages/protocol/test/entities.test.mjs
+  - schemas/entities/change.schema.json
+  - schemas/entities/decision.schema.json
+  - schemas/entities/oracle.schema.json
+  - schemas/entities/project.schema.json
+  - schemas/entities/requirement.schema.json
+  - schemas/entities/fixtures/valid.json
+  - schemas/entities/fixtures/invalid.json
+verification:
+  - command: pnpm --filter @legion/protocol test
+    result: PASS
+    evidence: docs/next/evidence/P01-T04/schema-test-report.log
+  - command: pnpm --filter @legion/protocol generate:schemas plus generated schema hash comparison
+    result: PASS
+    evidence: docs/next/evidence/P01-T04/schema-reproducibility.log
+  - command: pnpm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T04/full-validation.log
+acceptance:
+  - criterion: Current truth and proposed change metadata are structurally distinct.
+    result: PASS
+  - criterion: Oracle ownership/protection is explicit.
+    result: PASS
+  - criterion: Decision supersession can be represented without rewriting history.
+    result: PASS
+  - criterion: Entity schemas reject mutable queue, lease, runtime session, and UI projection fields.
+    result: PASS
+commits:
+  - e244d57764384d543eeba4fd007c4a40078f5c0a
+risks_or_followups:
+  - P01-T05 must compose these intent entities with task contract, run, evidence, review, approval, release, and observation schemas without reintroducing operational state into Git intent documents.
+blocker:
+  condition: none
+  decision_needed: none
