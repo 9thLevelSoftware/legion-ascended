@@ -444,6 +444,7 @@
                   "role": {
                     "type": "string",
                     "enum": [
+                      "project-manifest",
                       "constitution",
                       "current-spec",
                       "delta-spec",

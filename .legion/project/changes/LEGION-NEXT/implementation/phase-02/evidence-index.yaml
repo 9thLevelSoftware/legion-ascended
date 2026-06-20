@@ -1,0 +1,118 @@
+phase: 2
+phase_id: P02
+source_documents:
+  phase_contract:
+    path: C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md
+    sha256: 34AE8B1623D8B09A737730C64BA6BCE9E537EF59DABF40B00939350780C86195
+  path_contract:
+    path: docs/next/artifacts/PATH-CONTRACT.md
+    sha256: 93040C5A4075A6D72EAA5EB7CE3BA106ECAAC8107BD841E3CA547EBD505635CE
+  p02_t01_completion:
+    path: docs/next/evidence/P02-T01/completion-report.yaml
+    sha256: ABDD8279B5F7F41BC667E794F1CEBFCD779DEFC25F8763E8184E9BB32F37439A
+  implementation_backlog:
+    path: docs/next/IMPLEMENTATION-BACKLOG.yaml
+    sha256: 7195F5537248072443A3D4875893DB86A6849A9EC2E377F292C28DF1E902AF26
+  dependency_map:
+    path: docs/next/DEPENDENCY-MAP.md
+    sha256: BA02A2523F464FF10B4F4E5FFEE612D63ED2232697FAFF2E19F0987FD6078AB7
+task_commits:
+  P02-T01: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7"
+  P02-T02: "93b17d7ec547cd46564144d3a406224cfadf0dd8"
+  P02-T03: null
+  P02-T04: null
+  P02-T05: null
+  P02-T06: null
+  P02-T07: null
+  P02-T08: null
+  P02-T09: null
+  P02-T10: null
+entries:
+  - task: P02-T01
+    artifact: docs/next/evidence/P02-T01/path-security-and-atomic-write-test.log
+    description: Focused artifact path security and atomic write test output from the accepted P02-T01 handoff
+    sha256: E34FC08AA5510B7B8960E26B58F9B7C0BF2900E0C81C74E8B5B630E0B199062B
+  - task: P02-T01
+    artifact: docs/next/evidence/P02-T01/package-boundary-report.log
+    description: Package boundary verification from the accepted P02-T01 handoff
+    sha256: 3311FA8608F95E74A601A4033607C4A36D197C5DA2D9346604F0F5B055CB5C45
+  - task: P02-T01
+    artifact: docs/next/evidence/P02-T01/full-validation.log
+    description: Full workspace validation from the accepted P02-T01 handoff
+    sha256: E81F28C30BD297AA078C8F06FB33A37052BFA57AFA8887B27B8512F3457891B4
+  - task: P02-T01
+    artifact: docs/next/evidence/P02-T01/completion-report.yaml
+    description: Structured P02-T01 completion report
+    sha256: ABDD8279B5F7F41BC667E794F1CEBFCD779DEFC25F8763E8184E9BB32F37439A
+  - task: P02-T02
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger reconciled after P02-T01 and updated for P02-T02 completion
+    sha256: 4DFF0354CA3DAD1788FE05F8A4D46EFD3AA8E510E92CDD27CA6A09EA4EA0D527
+  - task: P02-T02
+    artifact: packages/artifacts/src/project/service.ts
+    description: Project initialization, loading, validation, dry-run, collision diagnostics, Git ignore, and constitution update service
+    sha256: 83B7717301DFD64E23BFA5F1B4A8BB4E31F8DA641CFD97EC6874EE834512EB85
+  - task: P02-T02
+    artifact: packages/artifacts/src/project/constitution.ts
+    description: Default project constitution text and integrity validation rules
+    sha256: 1E208D69E45ED38C1CF89D67CE5A3E52168AF2E96A65A6245BF3C2F4C7F6A6C9
+  - task: P02-T02
+    artifact: packages/artifacts/src/project/schema.ts
+    description: Project manifest Zod schema and generated JSON Schema document source
+    sha256: 7E7C89AC7A63562E88E8A7EFDF605A89C1208EAFF08B1AC952792DAEEB18C7A1
+  - task: P02-T02
+    artifact: packages/artifacts/src/paths.ts
+    description: Artifact path contract update adding the canonical project manifest path and role mapping
+    sha256: 4E4B0A00970EF66FD56462D5DD9D19C239AF5217BB2826AA3810174DCA9A5A91
+  - task: P02-T02
+    artifact: packages/protocol/src/entities/common.ts
+    description: Protocol artifact-role enum update adding project-manifest
+    sha256: DBC85F793CEC730182BD517698F5A33B3B1D5714D2125418748C767885873D44
+  - task: P02-T02
+    artifact: packages/artifacts/test/project.test.mjs
+    description: P02-T02 regression tests covering idempotent init, dry-run, collisions, malformed constitution, ownership, and revision checks
+    sha256: 922D0D0510EAFB5512CF733C5DE0C0C35A25E41D9B8011B81709C690BF41B757
+  - task: P02-T02
+    artifact: templates/project/constitution.md
+    description: Human-reviewable default project constitution template
+    sha256: 8ED4FFDE7D1107C7B4C926965DC7B5BBCD06F7877E602F21E0B127D87B3D993F
+  - task: P02-T02
+    artifact: schemas/artifacts/project-manifest.schema.json
+    description: Generated project manifest JSON Schema
+    sha256: 6365623C244700202062E5D31131EAD0AD69BE3ACA75F40C0118D6541DC95CA3
+  - task: P02-T02
+    artifact: .gitignore
+    description: Ignore rule for non-authoritative `.legion/var/` operational state
+    sha256: FDA56C82A4C97029E832116BA8AA8FF128A6DFD5388EA89FB86FDBF8F3CC5F8F
+  - task: P02-T02
+    artifact: packages/artifacts/scripts/generate-artifacts-json-schema.mjs
+    description: Deterministic artifact JSON Schema generator used by package tests and validate-next
+    sha256: 4BE123C1BCD3F2D808FAB2D0E52381CF59322FFF4B87DE03A7EA16AB8D83E8BF
+  - task: P02-T02
+    artifact: scripts/validate-next.mjs
+    description: Shared validation gate extended to regenerate artifact schemas
+    sha256: E8D3ABA1F8E53FB04BCF70E71A1D1D4AC0381BDD7B13991B0A5F022FB503D9F5
+  - task: P02-T02
+    artifact: tests/validate-next.test.mjs
+    description: Validation-plan regression coverage for artifact schema generation
+    sha256: 4C978D484C598A66871CAAA1883949978938CBF56C69F263476097484BB1FE2A
+  - task: P02-T02
+    artifact: docs/next/evidence/P02-T02/project-service-test.log
+    description: Focused @legion/artifacts project service test report
+    sha256: 05AD22CE0695BB25B7C7CD12086A620B538BA631450107518F5D83B3FE35FD51
+  - task: P02-T02
+    artifact: docs/next/evidence/P02-T02/golden-init-and-git-ownership.log
+    description: Temporary Git repository double-init, ignore ownership, and golden tree hash proof
+    sha256: EFEFC6080AA78E809CDFB8124343E733AFF268A4528EA8E1885EC77E40EE39AD
+  - task: P02-T02
+    artifact: docs/next/evidence/P02-T02/idempotency-report.md
+    description: Human-readable idempotency and ownership report for the golden initialization proof
+    sha256: 4398F6CA20CC81567FEEDC7C619BED8F192CBCFD59AA1938484D1C5A641B9AA0
+  - task: P02-T02
+    artifact: docs/next/evidence/P02-T02/full-validation.log
+    description: Full workspace validate-next log after P02-T02 implementation
+    sha256: 0ED9514D2268278BC67E35B7D4C5043AED2C4A56314C2C68EF2021D15C1510D6
+  - task: P02-T02
+    artifact: docs/next/evidence/P02-T02/completion-report.yaml
+    description: Structured P02-T02 completion report
+    sha256: 4D56E3556A42E4947CFB09A7AEF9B8469112340B72244F9C35CA1C024F89A259

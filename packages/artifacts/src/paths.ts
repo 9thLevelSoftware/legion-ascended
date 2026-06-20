@@ -16,7 +16,7 @@ import {
 export const LEGION_PROJECT_ROOT = ".legion/project" as const;
 
 export const PROJECT_ARTIFACT_PATHS = Object.freeze({
-  projectMetadata: ".legion/project/project.json",
+  projectManifest: ".legion/project/project.json",
   constitution: ".legion/project/constitution.md",
   currentSpecs: ".legion/project/specs",
   changes: ".legion/project/changes",
@@ -168,6 +168,8 @@ function parseOracleId(input: OracleId | string | undefined): OracleId {
 
 export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPath {
   switch (input.role) {
+    case "project-manifest":
+      return canonicalProjectArtifactPath(PROJECT_ARTIFACT_PATHS.projectManifest);
     case "constitution":
       return canonicalProjectArtifactPath(PROJECT_ARTIFACT_PATHS.constitution);
     case "current-spec": {

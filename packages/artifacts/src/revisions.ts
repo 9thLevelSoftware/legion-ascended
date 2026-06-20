@@ -27,7 +27,7 @@ export interface ProtocolSchema<T> {
     readonly success: false;
     readonly error: {
       readonly issues?: readonly {
-        readonly path?: readonly (string | number)[];
+        readonly path?: readonly PropertyKey[];
         readonly message: string;
       }[];
     };
@@ -154,7 +154,7 @@ function jsonParseLocation(error: unknown, text: string): { readonly line?: numb
   return offsetLocation(text, offset);
 }
 
-function schemaDiagnostics(path: ArtifactPath, issues: readonly { readonly path?: readonly (string | number)[]; readonly message: string }[] | undefined): readonly ArtifactDiagnostic[] {
+function schemaDiagnostics(path: ArtifactPath, issues: readonly { readonly path?: readonly PropertyKey[]; readonly message: string }[] | undefined): readonly ArtifactDiagnostic[] {
   if (!issues || issues.length === 0) {
     return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path })];
   }

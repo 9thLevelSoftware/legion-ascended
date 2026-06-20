@@ -83,6 +83,7 @@ export const traceReferenceSchema = z.strictObject({
 export type TraceReference = z.infer<typeof traceReferenceSchema>;
 
 export const artifactRoleSchema = z.enum([
+  "project-manifest",
   "constitution",
   "current-spec",
   "delta-spec",

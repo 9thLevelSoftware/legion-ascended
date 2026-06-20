@@ -1,0 +1,14 @@
+P02-T02 golden init and ownership evidence
+first_status: initialized
+second_status: already_initialized
+manifest_byte_stable: true
+constitution_byte_stable: true
+var_ignore_check: ignored
+project_manifest_check: trackable
+git_status_short_ignored:
+?? .gitignore
+?? .legion/
+golden_tree_hashes:
+.gitignore sha256:2fb415ed418f1b257f5ca8808ae2783a7bbfc8feedfd19194daf07cf024a1b0d
+.legion/project/constitution.md sha256:8ed4ffde7d1107c7b4c926965dc7b5bbcd06f7877e602f21e0b127d87b3d993f
+.legion/project/project.json sha256:a344353d113e70d8a7e1b1e3330449528ee13bec7c1c201da0dc9db87e60f8ff
