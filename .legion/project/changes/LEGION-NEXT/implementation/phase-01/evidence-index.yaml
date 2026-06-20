@@ -45,7 +45,7 @@ entries:
   - task: P01-T01
     artifact: package.json
     description: Root @9thlevelsoftware/legion v9 scaffold manifest with Node 24 engine, pnpm 11.4.0 package manager, workspace-aware aliases, and narrowed package allowlist
-    sha256: C5D13752A4BECB86F2908ADF82A15280239EFF74DBF2DA8064FCA4CCAC9AE542
+    sha256: DA36E5CBDD24C32BFB98820B06A39534278F2CE631FA56579EE0FADE9339EDBB
   - task: P01-T01
     artifact: pnpm-workspace.yaml
     description: Deterministic pnpm workspace definition for apps/* and packages/*
@@ -134,6 +134,10 @@ entries:
     artifact: docs/next/evidence/P01-T02/npm-alias-verification.log
     description: npm run validate and npm test compatibility alias verification after package skeleton changes
     sha256: C8E7A24410160022B73F49BB39D7F4DA182E1974FF2C65CF2995EC7A181B7BC7
+  - task: P01-T02
+    artifact: docs/next/evidence/P01-T02/main-clean-validation.log
+    description: Clean main validation after merging Phase 0 and Phase 1 branches with ignored package dist directories removed first
+    sha256: 12898A723ACFC692467F44F5830524734545ED707C54931028E63E32F4B25D80
   - task: P01-T02
     artifact: docs/next/evidence/P01-T02/workspace-graph.json
     description: pnpm workspace graph snapshot

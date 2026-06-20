@@ -1,0 +1,54 @@
+# Main clean validation after phase branch merge
+
+Removed ignored package dist directories before validation.
+
+>>> pnpm run validate
+$ pnpm run typecheck && pnpm run check:boundaries && pnpm run test
+$ pnpm run build && pnpm -r typecheck
+$ pnpm -r build
+Scope: 2 of 3 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/core build$ tsc -p tsconfig.json
+packages/core build: Done
+Scope: 2 of 3 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck: Done
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+$ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
+✔ accepts legal protocol and core imports (8.7213ms)
+✔ rejects protocol imports from core (5.0079ms)
+✔ rejects deep imports across workspace package exports (4.5144ms)
+✔ rejects provider and storage imports in protocol and core (4.7075ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 81.0858
+Scope: 2 of 3 workspace projects
+packages/protocol test$ node --test --test-reporter=spec
+packages/protocol test: ℹ tests 0
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 0
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 8.4158
+packages/protocol test: Done
+packages/core test$ node --test --test-reporter=spec
+packages/core test: ℹ tests 0
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 0
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 16.8055
+packages/core test: Done
