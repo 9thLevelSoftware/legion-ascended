@@ -1,0 +1,88 @@
+{
+  "events": [
+    {
+      "schemaVersion": "0.1.0",
+      "id": "evt_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "type": "task.claimed.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "changeId": "chg_phase-01-protocol",
+      "aggregate": {
+        "kind": "task",
+        "id": "tsk_p01-t06-events"
+      },
+      "generation": 1,
+      "sequence": 1,
+      "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "actor": {
+        "kind": "system",
+        "id": "system_dispatcher"
+      },
+      "occurredAt": "2026-06-20T02:00:00.000Z",
+      "payload": {
+        "taskId": "tsk_p01-t06-events",
+        "runId": "run_p01-t06-events",
+        "claimedBy": {
+          "kind": "worker",
+          "id": "worker_protocol-event-worker"
+        }
+      },
+      "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t06-events:run_p01-t06-events:runtime.claim:sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "schemaVersion": "0.1.0",
+      "id": "evt_01jz8m2fj7q9k3vw5x6ybcdhnq",
+      "type": "integration.effect_succeeded.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "changeId": "chg_phase-01-protocol",
+      "aggregate": {
+        "kind": "run",
+        "id": "run_p01-t06-events"
+      },
+      "generation": 1,
+      "sequence": 2,
+      "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "causationId": "evt_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "actor": {
+        "kind": "tool",
+        "id": "tool_git"
+      },
+      "occurredAt": "2026-06-20T02:01:00.000Z",
+      "payload": {
+        "effectKind": "git.commit",
+        "targetHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "artifact": {
+          "path": ".legion/project/changes/chg_phase-01-protocol/evidence/commit.txt",
+          "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "mediaType": "text/plain"
+        }
+      },
+      "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t06-events:run_p01-t06-events:git.commit:sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "schemaVersion": "0.1.0",
+      "id": "evt_01jz8m2fj7q9k3vw5x6ybcdhnr",
+      "type": "migration.applied.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "aggregate": {
+        "kind": "project",
+        "id": "prj_legion-next"
+      },
+      "generation": 1,
+      "sequence": 3,
+      "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "actor": {
+        "kind": "system",
+        "id": "system_migration"
+      },
+      "occurredAt": "2026-06-20T02:02:00.000Z",
+      "payload": {
+        "migrationId": "phase-01-event-api-contracts",
+        "fromVersion": "0.0.1",
+        "toVersion": "0.1.0"
+      }
+    }
+  ]
+}

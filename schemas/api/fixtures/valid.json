@@ -1,0 +1,178 @@
+{
+  "commands": [
+    {
+      "schemaVersion": "0.1.0",
+      "id": "cmd_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "type": "task.claim.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "changeId": "chg_phase-01-protocol",
+      "taskId": "tsk_p01-t06-events",
+      "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "actor": {
+        "kind": "worker",
+        "id": "worker_protocol-event-worker"
+      },
+      "issuedAt": "2026-06-20T02:00:00.000Z",
+      "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t06-events:run_p01-t06-events:runtime.claim:sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "payload": {
+        "taskId": "tsk_p01-t06-events",
+        "workerBundleId": "protocol-event-worker"
+      }
+    },
+    {
+      "schemaVersion": "0.1.0",
+      "id": "cmd_01jz8m2fj7q9k3vw5x6ybcdhnq",
+      "type": "doctor.run.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "actor": {
+        "kind": "human",
+        "id": "dasbl"
+      },
+      "issuedAt": "2026-06-20T02:05:00.000Z",
+      "payload": {
+        "scope": "schema",
+        "targetId": "prj_legion-next"
+      }
+    }
+  ],
+  "commandResults": [
+    {
+      "schemaVersion": "0.1.0",
+      "commandId": "cmd_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "commandType": "task.claim.v1",
+      "status": "success",
+      "resultType": "task.claim.accepted.v1",
+      "completedAt": "2026-06-20T02:00:01.000Z",
+      "eventRefs": [
+        "evt_01jz8m2fj7q9k3vw5x6ybcdhnp"
+      ],
+      "result": {
+        "entityRefs": [
+          {
+            "kind": "task",
+            "id": "tsk_p01-t06-events"
+          },
+          {
+            "kind": "run",
+            "id": "run_p01-t06-events"
+          }
+        ]
+      }
+    },
+    {
+      "schemaVersion": "0.1.0",
+      "commandId": "cmd_01jz8m2fj7q9k3vw5x6ybcdhnr",
+      "commandType": "task.claim.v1",
+      "status": "rejected",
+      "resultType": "task.claim.rejected.v1",
+      "completedAt": "2026-06-20T02:00:02.000Z",
+      "rejection": {
+        "code": "claim_conflict",
+        "message": "Task is already claimed by another worker.",
+        "retryable": true
+      }
+    }
+  ],
+  "queryRequests": [
+    {
+      "schemaVersion": "0.1.0",
+      "id": "qry_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "type": "board.snapshot.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "actor": {
+        "kind": "human",
+        "id": "dasbl"
+      },
+      "issuedAt": "2026-06-20T02:06:00.000Z",
+      "limit": 50,
+      "filters": {
+        "changeId": "chg_phase-01-protocol",
+        "status": "all"
+      }
+    },
+    {
+      "schemaVersion": "0.1.0",
+      "id": "qry_01jz8m2fj7q9k3vw5x6ybcdhnq",
+      "type": "event.stream.v1",
+      "version": 1,
+      "projectId": "prj_legion-next",
+      "actor": {
+        "kind": "worker",
+        "id": "worker_projection-builder"
+      },
+      "issuedAt": "2026-06-20T02:07:00.000Z",
+      "cursor": "cur_cGFnZS0x",
+      "limit": 100,
+      "filters": {
+        "taskId": "tsk_p01-t06-events"
+      }
+    }
+  ],
+  "queryResponses": [
+    {
+      "schemaVersion": "0.1.0",
+      "requestId": "qry_01jz8m2fj7q9k3vw5x6ybcdhnp",
+      "type": "board.snapshot.v1",
+      "generatedAt": "2026-06-20T02:06:01.000Z",
+      "items": [
+        {
+          "kind": "board-task",
+          "taskId": "tsk_p01-t06-events",
+          "changeId": "chg_phase-01-protocol",
+          "contractId": "ctr_p01-t06-events",
+          "status": "claimed",
+          "priority": 10,
+          "generation": 1,
+          "updatedAt": "2026-06-20T02:00:00.000Z"
+        }
+      ],
+      "pagination": {
+        "nextCursor": "cur_cGFnZS0y",
+        "hasMore": true
+      }
+    },
+    {
+      "schemaVersion": "0.1.0",
+      "requestId": "qry_01jz8m2fj7q9k3vw5x6ybcdhnq",
+      "type": "event.stream.v1",
+      "generatedAt": "2026-06-20T02:07:01.000Z",
+      "items": [
+        {
+          "schemaVersion": "0.1.0",
+          "id": "evt_01jz8m2fj7q9k3vw5x6ybcdhnp",
+          "type": "task.claimed.v1",
+          "version": 1,
+          "projectId": "prj_legion-next",
+          "changeId": "chg_phase-01-protocol",
+          "aggregate": {
+            "kind": "task",
+            "id": "tsk_p01-t06-events"
+          },
+          "generation": 1,
+          "sequence": 1,
+          "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+          "actor": {
+            "kind": "system",
+            "id": "system_dispatcher"
+          },
+          "occurredAt": "2026-06-20T02:00:00.000Z",
+          "payload": {
+            "taskId": "tsk_p01-t06-events",
+            "runId": "run_p01-t06-events",
+            "claimedBy": {
+              "kind": "worker",
+              "id": "worker_protocol-event-worker"
+            }
+          },
+          "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t06-events:run_p01-t06-events:runtime.claim:sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "pagination": {
+        "hasMore": false
+      }
+    }
+  ]
+}

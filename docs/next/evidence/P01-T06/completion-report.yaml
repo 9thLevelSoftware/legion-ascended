@@ -1,0 +1,71 @@
+status: DONE
+phase: 1
+task: P01-T06
+summary: >
+  Defined versioned append-only event contracts, provider-neutral command/query API contracts, generated JSON Schema
+  artifacts, generated contract documentation snapshots, and compatibility fixtures for the Legion v9 workflow protocol.
+  The event catalog models workflow state transitions as immutable facts with aggregate generation, sequence, causality,
+  actor, timestamp, payload, and idempotency metadata. The API catalog keeps commands and queries transport-neutral while
+  requiring every state-changing command to publish typed success and rejection result contracts.
+files_changed:
+  - packages/protocol/src/events/envelope.ts
+  - packages/protocol/src/events/schema-documents.ts
+  - packages/protocol/src/api/contracts.ts
+  - packages/protocol/src/api/schema-documents.ts
+  - packages/protocol/src/index.ts
+  - packages/protocol/scripts/generate-primitives-json-schema.mjs
+  - packages/protocol/test/events-api.test.mjs
+  - schemas/events/envelope.schema.json
+  - schemas/events/fixture-corpus.schema.json
+  - schemas/events/compatibility-fixture.schema.json
+  - schemas/events/README.md
+  - schemas/events/fixtures/valid.json
+  - schemas/events/fixtures/invalid.json
+  - schemas/events/fixtures/compat-v0.0.json
+  - schemas/api/command-envelope.schema.json
+  - schemas/api/command-result.schema.json
+  - schemas/api/query-request.schema.json
+  - schemas/api/query-response.schema.json
+  - schemas/api/fixture-corpus.schema.json
+  - schemas/api/README.md
+  - schemas/api/fixtures/valid.json
+  - schemas/api/fixtures/invalid.json
+  - docs/next/evidence/P01-T06/
+verification:
+  - command: pnpm --filter @legion/protocol test
+    result: PASS
+    evidence: docs/next/evidence/P01-T06/schema-test-report.log
+  - command: pnpm --filter @legion/protocol generate:schemas plus event/api generated artifact hash comparison
+    result: PASS
+    evidence: docs/next/evidence/P01-T06/schema-reproducibility.log
+  - command: pnpm validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T06/full-validation.log
+acceptance:
+  - criterion: Events are facts, not imperative instructions.
+    result: PASS
+  - criterion: Transport and runtime provider details remain outside protocol contracts.
+    result: PASS
+  - criterion: Event ordering and duplicate semantics are explicit.
+    result: PASS
+  - criterion: Event handler coverage is exhaustively testable and fails when a type is missing.
+    result: PASS
+  - criterion: Duplicate event envelopes can be recognized by event ID or idempotency key.
+    result: PASS
+  - criterion: Every state-changing command has success and typed rejection result metadata.
+    result: PASS
+  - criterion: Prior minor event compatibility fixture normalizes to the current envelope.
+    result: PASS
+required_evidence:
+  - event_catalog_review: docs/next/evidence/P01-T06/event-catalog-review.md
+  - schema_compatibility_test_output: docs/next/evidence/P01-T06/schema-test-report.log
+  - generated_docs_snapshot: schemas/events/README.md
+  - generated_api_docs_snapshot: schemas/api/README.md
+  - generated_hashes: docs/next/evidence/P01-T06/generated-artifact-hashes.sha256
+risks_or_followups:
+  - Runtime command handlers, projection rebuilders, and storage-backed replay semantics belong to later core/storage/orchestration phases.
+  - JSON Schema snapshots cannot represent Zod super-refinement checks for matching event type to payload or command type to payload; protocol tests exercise those runtime refinements.
+  - ADR-007 legacy bridge routing remains a Phase 12 concern; this task defines v9 protocol contracts only.
+blocker:
+  condition: none
+  decision_needed: none
