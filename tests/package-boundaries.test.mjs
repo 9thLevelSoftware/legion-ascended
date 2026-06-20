@@ -20,11 +20,12 @@ async function withFixture(files, callback) {
   }
 }
 
-test('accepts legal protocol and core imports', async () => {
+test('accepts legal protocol, core, and artifacts imports', async () => {
   await withFixture(
     {
       'packages/protocol/src/index.ts': 'export const LEGION_PROTOCOL_VERSION = "0.1.0";\n',
-      'packages/core/src/index.ts': 'import { LEGION_PROTOCOL_VERSION } from "@legion/protocol";\nexport const version = LEGION_PROTOCOL_VERSION;\n'
+      'packages/core/src/index.ts': 'import { LEGION_PROTOCOL_VERSION } from "@legion/protocol";\nexport const version = LEGION_PROTOCOL_VERSION;\n',
+      'packages/artifacts/src/index.ts': 'import { stableStateStringify } from "@legion/core";\nimport { artifactPathSchema } from "@legion/protocol";\nexport const value = stableStateStringify(artifactPathSchema.parse("a.txt"));\n'
     },
     async (root) => {
       const result = await checkPackageBoundaries({ root });
@@ -65,17 +66,18 @@ test('rejects deep imports across workspace package exports', async () => {
   );
 });
 
-test('rejects provider and storage imports in protocol and core', async () => {
+test('rejects provider and storage imports in protocol, core, and artifacts', async () => {
   await withFixture(
     {
       'packages/protocol/src/index.ts': 'import { defineAgent } from "eve";\nexport const value = defineAgent;\n',
-      'packages/core/src/index.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n'
+      'packages/core/src/index.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n',
+      'packages/artifacts/src/storage.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n'
     },
     async (root) => {
       const result = await checkPackageBoundaries({ root });
 
       assert.equal(result.ok, false);
-      assert.equal(result.violations.length, 2);
+      assert.equal(result.violations.length, 3);
       assert.ok(result.violations.every((violation) => /forbidden provider or storage import/.test(violation.message)));
     }
   );
@@ -88,7 +90,8 @@ test('rejects workspace package imports of legacy prompt assets', async () => {
       'agents/engineering-senior-developer.md': '# legacy persona\n',
       'packages/protocol/src/index.ts': 'export const LEGION_PROTOCOL_VERSION = "0.1.0";\n',
       'packages/core/src/command-loader.ts': 'import startCommand from "../../../commands/start.md";\nexport const command = startCommand;\n',
-      'packages/core/src/persona-loader.ts': 'import persona from "../../../agents/engineering-senior-developer.md";\nexport const senior = persona;\n'
+      'packages/core/src/persona-loader.ts': 'import persona from "../../../agents/engineering-senior-developer.md";\nexport const senior = persona;\n',
+      'packages/artifacts/src/legacy-loader.ts': 'import startCommand from "../../../commands/start.md";\nexport const command = startCommand;\n'
     },
     async (root) => {
       const result = await checkPackageBoundaries({ root });
