@@ -1,0 +1,77 @@
+name: Protocol Compatibility
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol_compat:
+    name: Protocol compatibility (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+
+      - name: Build typed packages
+        run: pnpm run typecheck
+
+      - name: Regenerate protocol schemas
+        run: pnpm --filter @legion/protocol generate:schemas
+
+      - name: Regenerate protocol documentation
+        run: node scripts/validate-next.mjs --generate-protocol-docs
+
+      - name: Check generated protocol drift
+        run: node scripts/validate-next.mjs --check-generated-drift
+
+      - name: Run protocol compatibility tests
+        run: pnpm --filter @legion/protocol test
+
+      - name: Upload protocol failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: protocol-${{ matrix.os }}-failure-evidence
+          if-no-files-found: ignore
+          path: |
+            schemas/
+            docs/next/protocol/
+            packages/protocol/test/compatibility/
+            package.json
+            pnpm-lock.yaml
+            npm-debug.log*
+            pnpm-debug.log*

@@ -17,10 +17,11 @@
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "check:package-contents": "node scripts/check-package-contents.mjs",
     "test": "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
-    "validate": "pnpm run typecheck && pnpm run check:boundaries && pnpm run check:package-contents && pnpm run test",
-    "validate:next": "pnpm run validate",
+    "docs:protocol": "node scripts/validate-next.mjs --generate-protocol-docs",
+    "validate": "pnpm run validate:next",
+    "validate:next": "node scripts/validate-next.mjs",
     "pack:dry-run": "npm pack --dry-run && pnpm pack --dry-run",
-    "prepublishOnly": "pnpm run validate && pnpm pack --dry-run"
+    "prepublishOnly": "pnpm run validate:next"
   },
   "files": [
     ".codex-plugin/",
