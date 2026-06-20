@@ -7,6 +7,9 @@ summary: >
   thresholds plus hard floors, produces deterministic explanations and protocol-compatible
   risk profiles, supports approved policy data evolution, and rejects unauthorized tier
   downgrades. Gate derivation is isolated as policy data and remains provider-neutral.
+  Review follow-up hardened malformed JavaScript/custom-policy inputs, enforced retained
+  gates from lower-tier overrides, and kept returned risk-profile reasons within protocol
+  limits.
 base_commit: 2583c5e50997272b8c07b58d14f0eee5f818644e
 files_changed:
   - packages/core/src/index.ts
@@ -39,6 +42,12 @@ acceptance:
   - criterion: Unauthorized downgrade is rejected.
     result: PASS
   - criterion: Explanation lists all signals and overrides deterministically.
+    result: PASS
+  - criterion: Malformed custom policy data fails explicitly instead of weakening gates.
+    result: PASS
+  - criterion: Lower-tier override retained protections are enforced in the returned gate set.
+    result: PASS
+  - criterion: Returned protocol risk-profile reason strings stay within protocol limits.
     result: PASS
 required_evidence:
   - golden_case_report: docs/next/evidence/P01-T08/golden-case-report.md

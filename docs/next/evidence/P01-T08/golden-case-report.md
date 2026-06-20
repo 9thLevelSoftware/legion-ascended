@@ -18,4 +18,4 @@
 
 ## Result
 
-`pnpm --filter @legion/core test -- --test-name-pattern=P01-T08` passed. The focused test output records five P01-T08 tests passing, including the ADR-006 golden examples.
+`pnpm --filter @legion/core test -- --test-name-pattern=P01-T08` passed. The focused test output records ten P01-T08 tests passing, including the ADR-006 golden examples and review follow-up regressions.

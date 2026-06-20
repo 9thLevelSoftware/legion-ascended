@@ -1,3 +1,4 @@
+import { actorSchema, utcTimestampSchema } from "@legion/protocol";
 import type { Actor, ArtifactReference, RiskProfile, RiskTier, UtcTimestamp } from "@legion/protocol";
 
 import { deriveGateSet, isRiskGateId } from "../gates/index.js";
@@ -172,6 +173,22 @@ const RISK_TIER_BY_RANK: Readonly<Record<number, RiskTier>> = {
   2: "R2",
   3: "R3"
 };
+
+const RISK_PROFILE_REASON_MAX_LENGTH = 128;
+
+interface NormalizedRiskDecisionInput {
+  readonly signals: readonly unknown[];
+  readonly overrides?: readonly unknown[];
+  readonly policy?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRiskTier(value: unknown): value is RiskTier {
+  return typeof value === "string" && RISK_TIERS.some((tier) => tier === value);
+}
 
 const DEFAULT_SIGNAL_DEFINITIONS: readonly RiskSignalDefinition[] = [
   {
@@ -357,11 +374,85 @@ function assertScore(score: number, signalName: RiskSignalName): asserts score i
   }
 }
 
-function assertDefaultOrApprovedPolicy(policy: RiskPolicy, inputPolicy: RiskPolicy | undefined): void {
-  if (inputPolicy === undefined || inputPolicy === DEFAULT_RISK_POLICY) return;
-  if (policy.approval?.kind === "approved_policy_artifact") return;
+function normalizeRiskDecisionInput(input: unknown): NormalizedRiskDecisionInput {
+  if (!isRecord(input)) {
+    throw new TypeError("Input to deriveRiskDecision must be defined.");
+  }
+
+  const signals = input["signals"];
+  if (!Array.isArray(signals)) {
+    throw new TypeError("Input signals must be an array.");
+  }
+
+  const overrides = input["overrides"];
+  if (overrides !== undefined && !Array.isArray(overrides)) {
+    throw new TypeError("Input overrides must be an array.");
+  }
+
+  const policy = input["policy"];
+  return {
+    signals,
+    ...(overrides === undefined ? {} : { overrides }),
+    ...(policy === undefined ? {} : { policy })
+  };
+}
+
+function assertDefaultOrApprovedPolicy(policy: unknown, inputPolicy: unknown): asserts policy is RiskPolicy {
+  if (inputPolicy === undefined || policy === DEFAULT_RISK_POLICY) return;
+
+  if (!isRecord(policy)) {
+    throw new Error("custom risk policy must be a valid object");
+  }
+
+  const approval = policy["approval"];
+  if (isRecord(approval) && approval["kind"] === "approved_policy_artifact") return;
 
   throw new Error("custom risk policy requires an approved policy artifact");
+}
+
+function assertRiskPolicyShape(policy: RiskPolicy): void {
+  if (!Array.isArray(policy.signalDefinitions) || policy.signalDefinitions.length === 0) {
+    throw new Error("risk policy must define signal definitions");
+  }
+
+  for (const definition of policy.signalDefinitions) {
+    if (!isRecord(definition)) {
+      throw new Error("risk policy signal definition must be a valid object");
+    }
+
+    const name = definition["name"];
+    if (typeof name !== "string" || !isRiskSignalName(name)) {
+      throw new Error(`risk policy contains unknown signal ${String(name)}`);
+    }
+
+    const scoreMeanings = definition["scoreMeanings"];
+    if (!Array.isArray(scoreMeanings) || scoreMeanings.length !== 4 || scoreMeanings.some((meaning) => typeof meaning !== "string")) {
+      throw new Error(`risk policy signal ${name} must define four score meanings`);
+    }
+
+    const floorRules = definition["floorRules"];
+    if (!Array.isArray(floorRules)) {
+      throw new Error(`risk policy signal ${name} must define floor rules`);
+    }
+  }
+
+  if (!Array.isArray(policy.scoreThresholds) || policy.scoreThresholds.length === 0) {
+    throw new Error("risk policy must define score thresholds");
+  }
+
+  if (!Array.isArray(policy.decisionOwnerIds)) {
+    throw new Error("risk policy must define decision owner IDs");
+  }
+
+  if (!isRecord(policy.gatesByTier)) {
+    throw new Error("risk policy gatesByTier must define gate arrays");
+  }
+
+  for (const tier of RISK_TIERS) {
+    if (!Array.isArray(policy.gatesByTier[tier])) {
+      throw new Error(`risk policy gatesByTier must define gate array for ${tier}`);
+    }
+  }
 }
 
 function signalDefinitionMap(policy: RiskPolicy): ReadonlyMap<RiskSignalName, RiskSignalDefinition> {
@@ -372,19 +463,46 @@ function signalDefinitionMap(policy: RiskPolicy): ReadonlyMap<RiskSignalName, Ri
   return definitions;
 }
 
-function normalizeSignals(inputSignals: readonly RiskSignalInput[], policy: RiskPolicy): readonly NormalizedRiskSignal[] {
+function normalizeSignals(inputSignals: readonly unknown[], policy: RiskPolicy): readonly NormalizedRiskSignal[] {
   const definitions = signalDefinitionMap(policy);
   const supplied = new Map<RiskSignalName, RiskSignalInput>();
 
   for (const input of inputSignals) {
-    if (!isRiskSignalName(input.name)) {
-      throw new TypeError(`Unknown normalized risk signal ${input.name}.`);
+    if (!isRecord(input)) {
+      throw new TypeError("Each risk signal input must be a valid object.");
     }
-    assertScore(input.score, input.name);
 
-    const existing = supplied.get(input.name);
-    if (existing === undefined || input.score > existing.score) {
-      supplied.set(input.name, input);
+    const nameValue = input["name"];
+    if (typeof nameValue !== "string" || !isRiskSignalName(nameValue)) {
+      throw new TypeError(`Unknown normalized risk signal ${String(nameValue)}.`);
+    }
+
+    const scoreValue = input["score"];
+    if (typeof scoreValue !== "number") {
+      throw new TypeError(`Risk signal ${nameValue} score must be 0, 1, 2, or 3.`);
+    }
+    assertScore(scoreValue, nameValue);
+
+    const rationaleValue = input["rationale"];
+    if (typeof rationaleValue !== "string" || rationaleValue.length === 0) {
+      throw new TypeError(`Risk signal ${nameValue} rationale must be a non-empty string.`);
+    }
+
+    const sourceValue = input["source"];
+    if (typeof sourceValue !== "string" || sourceValue.length === 0) {
+      throw new TypeError(`Risk signal ${nameValue} source must be a non-empty string.`);
+    }
+
+    const normalizedInput: RiskSignalInput = {
+      name: nameValue,
+      score: scoreValue,
+      rationale: rationaleValue,
+      source: sourceValue
+    };
+
+    const existing = supplied.get(nameValue);
+    if (existing === undefined || scoreValue > existing.score) {
+      supplied.set(nameValue, normalizedInput);
     }
   }
 
@@ -470,6 +588,117 @@ function assertGateId(gate: RiskGateId): void {
   if (!isRiskGateId(gate)) {
     throw new Error(`Unknown risk gate ${gate}.`);
   }
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function normalizeRiskGateId(value: unknown): RiskGateId {
+  if (typeof value !== "string" || !isRiskGateId(value)) {
+    throw new Error(`Unknown risk gate ${String(value)}.`);
+  }
+  return value;
+}
+
+function normalizeActor(value: unknown, label: string): Actor {
+  try {
+    return actorSchema.parse(value);
+  } catch {
+    throw new Error(`${label} must be a valid actor`);
+  }
+}
+
+function normalizeTimestamp(value: unknown, label: string): UtcTimestamp {
+  try {
+    return utcTimestampSchema.parse(value);
+  } catch {
+    throw new Error(`${label} must be a canonical UTC timestamp`);
+  }
+}
+
+function normalizeOverrides(overrides: readonly unknown[] | undefined): readonly RiskOverride[] {
+  if (overrides === undefined) return [];
+
+  return overrides.map((override, index) => {
+    if (!isRecord(override)) {
+      throw new Error(`risk override ${index} must be a valid object`);
+    }
+
+    const kind = override["kind"];
+    if (kind === "add_gate") {
+      return {
+        kind,
+        gate: normalizeRiskGateId(override["gate"]),
+        reason: requireString(override["reason"], "add-gate override reason")
+      };
+    }
+
+    if (kind === "waive_gate") {
+      return {
+        kind,
+        gate: normalizeRiskGateId(override["gate"]),
+        reason: requireString(override["reason"], "waive-gate override reason"),
+        evidence: requireString(override["evidence"], "waive-gate override evidence"),
+        approvedBy: normalizeActor(override["approvedBy"], "waive-gate override approvedBy"),
+        approvedAt: normalizeTimestamp(override["approvedAt"], "waive-gate override approvedAt"),
+        replacementEvidence: requireString(override["replacementEvidence"], "waive-gate override replacementEvidence")
+      };
+    }
+
+    if (kind === "raise_tier") {
+      const to = override["to"];
+      if (!isRiskTier(to)) {
+        throw new Error(`raise-tier override target must be a risk tier`);
+      }
+
+      const approvedBy = override["approvedBy"];
+      const approvedAt = override["approvedAt"];
+      return {
+        kind,
+        to,
+        reason: requireString(override["reason"], "raise-tier override reason"),
+        ...(approvedBy === undefined ? {} : { approvedBy: normalizeActor(approvedBy, "raise-tier override approvedBy") }),
+        ...(approvedAt === undefined ? {} : { approvedAt: normalizeTimestamp(approvedAt, "raise-tier override approvedAt") })
+      };
+    }
+
+    if (kind === "lower_tier") {
+      const to = override["to"];
+      if (!isRiskTier(to)) {
+        throw new Error("lower-tier override target must be a risk tier");
+      }
+
+      const reason = override["reason"];
+      const evidence = override["evidence"];
+      const protectionsRetained = override["protectionsRetained"];
+      if (
+        typeof reason !== "string" ||
+        reason.length === 0 ||
+        typeof evidence !== "string" ||
+        evidence.length === 0 ||
+        !Array.isArray(protectionsRetained) ||
+        protectionsRetained.length === 0
+      ) {
+        throw new Error("lower-tier override requires reason, evidence, and retained protections");
+      }
+
+      return {
+        kind,
+        to,
+        reason,
+        evidence,
+        approvedBy: normalizeActor(override["approvedBy"], "lower-tier override approvedBy"),
+        approvedAt: normalizeTimestamp(override["approvedAt"], "lower-tier override approvedAt"),
+        protectionsRetained: protectionsRetained.map((gate) => normalizeRiskGateId(gate))
+      };
+    }
+
+    throw new Error(`unsupported risk override kind ${String(kind)}`);
+  });
 }
 
 function applyTierOverrides(input: {
@@ -584,24 +813,41 @@ function deriveGateAdjustments(overrides: readonly RiskOverride[], policy: RiskP
     });
   }
 
+  for (const override of overrides) {
+    if (override.kind !== "lower_tier") continue;
+
+    for (const gate of override.protectionsRetained) {
+      adjustments.push({
+        kind: "add",
+        gate,
+        reason: `Retained by lower-tier override: ${override.reason}`
+      });
+    }
+  }
+
   return { adjustments, explanations };
+}
+
+function protocolReason(value: string): string {
+  if (value.length <= RISK_PROFILE_REASON_MAX_LENGTH) return value;
+  return `${value.slice(0, RISK_PROFILE_REASON_MAX_LENGTH - 3)}...`;
 }
 
 function profileReasons(signals: readonly NormalizedRiskSignal[], thresholdTier: RiskTier, baseTier: RiskTier): string[] {
   const reasons = signals
     .filter((signal) => signal.score > 0)
-    .map((signal) => `${signal.name}:${signal.score}:${signal.rationale}`);
+    .map((signal) => protocolReason(`${signal.name}:${signal.score}:${signal.rationale}`));
 
   if (reasons.length > 0) {
-    return [`score_threshold:${thresholdTier}`, `base_tier:${baseTier}`, ...reasons];
+    return [protocolReason(`score_threshold:${thresholdTier}`), protocolReason(`base_tier:${baseTier}`), ...reasons];
   }
 
-  return [`score_threshold:${thresholdTier}`, `base_tier:${baseTier}`, "all_normalized_signals_zero"];
+  return [protocolReason(`score_threshold:${thresholdTier}`), protocolReason(`base_tier:${baseTier}`), "all_normalized_signals_zero"];
 }
 
 function profileHardFloorReasons(floors: readonly RiskHardFloor[]): string[] | undefined {
   if (floors.length === 0) return undefined;
-  return floors.map((floor) => `${floor.signal}:${floor.tier}:${floor.reason}`);
+  return floors.map((floor) => protocolReason(`${floor.signal}:${floor.tier}:${floor.reason}`));
 }
 
 function riskProfileFor(input: {
@@ -656,17 +902,20 @@ function tierRuleExplanations(input: {
   return rules;
 }
 
-export function deriveRiskDecision(input: RiskDecisionInput): RiskDecision {
-  const policy = input.policy ?? DEFAULT_RISK_POLICY;
-  assertDefaultOrApprovedPolicy(policy, input.policy);
+export function deriveRiskDecision(input: RiskDecisionInput): RiskDecision;
+export function deriveRiskDecision(input: unknown): RiskDecision {
+  const normalizedInput = normalizeRiskDecisionInput(input);
+  const policy = normalizedInput.policy === undefined ? DEFAULT_RISK_POLICY : normalizedInput.policy;
+  assertDefaultOrApprovedPolicy(policy, normalizedInput.policy);
+  assertRiskPolicyShape(policy);
 
-  const signals = normalizeSignals(input.signals, policy);
+  const signals = normalizeSignals(normalizedInput.signals, policy);
   const totalScore = signals.reduce((total, signal) => total + signal.score, 0);
   const thresholdTier = thresholdTierForScore(totalScore, policy);
   const hardFloors = deriveHardFloors(signals, policy);
   const baseTier = deriveBaseTier(thresholdTier, hardFloors, signals);
   const hardFloorTier = highestFloorTier(hardFloors);
-  const overrides = input.overrides ?? [];
+  const overrides = normalizeOverrides(normalizedInput.overrides);
   const tierOverrideResult = applyTierOverrides({
     baseTier,
     hardFloorTier,
@@ -720,6 +969,10 @@ export function deriveRiskDecision(input: RiskDecisionInput): RiskDecision {
 }
 
 export function riskTierFromScore(totalScore: number): RiskTier {
+  if (typeof totalScore !== "number" || !Number.isFinite(totalScore)) {
+    throw new TypeError("Risk score must be a valid number.");
+  }
+
   if (totalScore < 0) {
     throw new RangeError("Risk score cannot be negative.");
   }

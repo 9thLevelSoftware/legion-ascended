@@ -23,7 +23,10 @@ The implementation stays inside `packages/core/src/risk/**` and `packages/core/s
 - Tier derivation is pure: total score threshold plus hard floors plus authorized overrides.
 - Gate derivation is pure policy data keyed by final tier plus explicit gate overrides.
 - Lower-tier overrides require decision owner approval and cannot go below hard floors.
+- Lower-tier overrides enforce every listed retained protection in the returned gate set.
 - Custom policy data requires an approved policy artifact before it can affect decisions.
+- Malformed JavaScript inputs and malformed approved policy data fail with explicit errors instead of TypeErrors or silent fallback gate weakening.
+- Protocol-compatible `RiskProfile` reason strings are capped to the protocol limit before embedding in returned profiles.
 - Repository/user free text is ignored by the derivation API unless represented as structured signals or an approved policy artifact.
 
 Result: PASS.

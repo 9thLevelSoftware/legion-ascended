@@ -152,7 +152,14 @@ export function isRiskGateId(value: string): value is RiskGateId {
   return RISK_GATE_IDS.some((gateId) => gateId === value);
 }
 
-function appendGate(gates: DerivedRiskGate[], gateId: RiskGateId, source: "tier" | "override", tier?: RiskTier, overrideReason?: string): void {
+function assertKnownGateId(value: unknown): asserts value is RiskGateId {
+  if (typeof value !== "string" || !isRiskGateId(value)) {
+    throw new Error(`Missing definition for risk gate ID: ${String(value)}`);
+  }
+}
+
+function appendGate(gates: DerivedRiskGate[], gateId: unknown, source: "tier" | "override", tier?: RiskTier, overrideReason?: string): void {
+  assertKnownGateId(gateId);
   if (gates.some((gate) => gate.id === gateId)) return;
 
   const definition = RISK_GATE_DEFINITIONS[gateId];
@@ -171,6 +178,9 @@ export function deriveGateSet(input: {
 }): readonly DerivedRiskGate[] {
   const gates: DerivedRiskGate[] = [];
   const requiredGateIds = input.gatesByTier[input.tier];
+  if (!Array.isArray(requiredGateIds)) {
+    throw new Error(`risk policy gatesByTier must define gate array for ${input.tier}`);
+  }
 
   for (const gateId of requiredGateIds) {
     appendGate(gates, gateId, "tier", input.tier);
@@ -182,6 +192,7 @@ export function deriveGateSet(input: {
       continue;
     }
 
+    assertKnownGateId(adjustment.gate);
     const index = gates.findIndex((gate) => gate.id === adjustment.gate);
     if (index >= 0) {
       gates.splice(index, 1);
