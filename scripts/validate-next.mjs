@@ -275,7 +275,7 @@ function captureShellCommand(command, options = {}) {
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
     child.on("error", rejectCommand);
-    child.on("exit", (code, signal) => {
+    child.on("close", (code, signal) => {
       const output = Buffer.concat(stdout).toString("utf8");
       const errorOutput = Buffer.concat(stderr).toString("utf8");
 

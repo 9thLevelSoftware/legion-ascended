@@ -17,7 +17,7 @@
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "check:package-contents": "node scripts/check-package-contents.mjs",
     "test": "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
-    "docs:protocol": "node scripts/validate-next.mjs --generate-protocol-docs",
+    "docs:protocol": "pnpm run typecheck && node scripts/validate-next.mjs --generate-protocol-docs",
     "validate": "pnpm run validate:next",
     "validate:next": "node scripts/validate-next.mjs",
     "pack:dry-run": "npm pack --dry-run && pnpm pack --dry-run",

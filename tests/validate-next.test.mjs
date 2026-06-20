@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +32,39 @@ function workflowRunsCommand(workflow, command) {
   return Object.values(workflow.jobs ?? {}).some((job) =>
     (job.steps ?? []).some((step) => typeof step.run === "string" && step.run.includes(command))
   );
+}
+
+function normalizeLineEndings(value) {
+  return value.replace(/\r\n/g, "\n");
+}
+
+function runCommand(command) {
+  return new Promise((resolveCommand, rejectCommand) => {
+    const child = spawn(command, {
+      cwd: ROOT,
+      env: process.env,
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const stdout = [];
+    const stderr = [];
+
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", rejectCommand);
+    child.on("close", (code, signal) => {
+      if (code === 0) {
+        resolveCommand();
+        return;
+      }
+
+      rejectCommand(
+        new Error(
+          `Command failed (${signal ?? code}): ${command}\n${Buffer.concat(stdout).toString("utf8")}${Buffer.concat(stderr).toString("utf8")}`
+        )
+      );
+    });
+  });
 }
 
 test("P01-T11 validate-next plan is the shared CI/local gate order", () => {
@@ -78,10 +112,15 @@ test("P01-T11 protocol compatibility workflow uses pinned actions and generated 
 });
 
 test("P01-T11 generated protocol docs match the current schema and transition sources", async () => {
+  await runCommand("pnpm run typecheck");
   const expectedDocs = await renderProtocolDocs({ root: ROOT });
 
   for (const [relativePath, expectedContents] of Object.entries(expectedDocs)) {
     const actualContents = await readFile(path.join(ROOT, relativePath), "utf8");
-    assert.equal(actualContents, expectedContents, `${relativePath} is out of date`);
+    assert.equal(
+      normalizeLineEndings(actualContents),
+      normalizeLineEndings(expectedContents),
+      `${relativePath} is out of date`
+    );
   }
 });
