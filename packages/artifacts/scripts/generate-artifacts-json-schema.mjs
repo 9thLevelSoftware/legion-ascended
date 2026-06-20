@@ -2,10 +2,17 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { projectManifestJsonSchema } from "../dist/index.js";
+import {
+  currentSpecDocumentJsonSchema,
+  projectManifestJsonSchema
+} from "../dist/index.js";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const outputPath = join(scriptDirectory, "..", "..", "..", "schemas", "artifacts", "project-manifest.schema.json");
+const outputDirectory = join(scriptDirectory, "..", "..", "..", "schemas", "artifacts");
+const outputSchemas = {
+  "project-manifest.schema.json": projectManifestJsonSchema,
+  "spec-document.schema.json": currentSpecDocumentJsonSchema
+};
 
 async function readExistingLineEnding(filePath) {
   try {
@@ -17,7 +24,10 @@ async function readExistingLineEnding(filePath) {
   }
 }
 
-await mkdir(dirname(outputPath), { recursive: true });
-const lineEnding = await readExistingLineEnding(outputPath);
-const document = JSON.stringify(projectManifestJsonSchema, null, 2).replace(/\n/g, lineEnding);
-await writeFile(outputPath, `${document}${lineEnding}`, "utf8");
+await mkdir(outputDirectory, { recursive: true });
+for (const [fileName, schema] of Object.entries(outputSchemas)) {
+  const outputPath = join(outputDirectory, fileName);
+  const lineEnding = await readExistingLineEnding(outputPath);
+  const document = JSON.stringify(schema, null, 2).replace(/\n/g, lineEnding);
+  await writeFile(outputPath, `${document}${lineEnding}`, "utf8");
+}

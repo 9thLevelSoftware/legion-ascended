@@ -1,0 +1,43 @@
+{
+  "task": "P02-T03",
+  "command": "temporary initProject + createCurrentSpec + listCurrentSpecs",
+  "result": "PASS",
+  "sourceArtifact": ".legion/project/specs/req_workflow-control.md",
+  "sourceRevision": {
+    "role": "current-spec",
+    "artifact": {
+      "path": ".legion/project/specs/req_workflow-control.md",
+      "sha256": "sha256:fad18b145729f6035729285faa89f84bd6f942d836f5f18f2a39589bf0e2a4db",
+      "mediaType": "text/markdown"
+    },
+    "revision": 1
+  },
+  "indexHash": "sha256:d797eeb7a9a2c7d3c46cdd3b89bad79766e616f514f9ed392d3ccb076e992213",
+  "index": {
+    "schemaVersion": "0.1.0",
+    "kind": "current-spec-index",
+    "entries": [
+      {
+        "path": ".legion/project/specs/req_workflow-control.md",
+        "revision": 1,
+        "capability": {
+          "id": "workflow-control",
+          "title": "Workflow Control",
+          "status": "active"
+        },
+        "primaryRequirementId": "req_workflow-control",
+        "requirements": [
+          {
+            "id": "req_workflow-control",
+            "contentHash": "sha256:209656052b5500d2955e39f433a07a8d74bbe0169756ad4a08dcb28b8013c7aa"
+          }
+        ],
+        "artifact": {
+          "path": ".legion/project/specs/req_workflow-control.md",
+          "sha256": "sha256:fad18b145729f6035729285faa89f84bd6f942d836f5f18f2a39589bf0e2a4db",
+          "mediaType": "text/markdown"
+        }
+      }
+    ]
+  }
+}
