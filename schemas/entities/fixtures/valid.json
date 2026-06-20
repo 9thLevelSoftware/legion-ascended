@@ -1,0 +1,250 @@
+{
+  "project": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-19T20:00:00.000Z",
+    "kind": "project",
+    "id": "prj_legion-next",
+    "slug": "legion-next",
+    "name": "Legion Next",
+    "description": "Durable workflow orchestration boundary for the Legion v9 rebuild.",
+    "repository": {
+      "provider": "github",
+      "defaultBranch": "main",
+      "remoteUrl": "https://github.com/9thLevelSoftware/legion-ascended.git"
+    },
+    "policy": {
+      "constitution": {
+        "path": ".legion/project/constitution.md",
+        "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "mediaType": "text/markdown"
+      },
+      "currentSpecRoot": ".legion/project/specs",
+      "changeRoot": ".legion/project/changes",
+      "adrRoot": ".legion/project/adr",
+      "riskPolicyRefs": [
+        {
+          "path": ".legion/project/policies/risk.yaml",
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "mediaType": "application/yaml"
+        }
+      ],
+      "oraclePolicyRefs": [
+        {
+          "path": ".legion/project/policies/oracle.yaml",
+          "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "mediaType": "application/yaml"
+        }
+      ],
+      "decisionOwners": [
+        {
+          "kind": "human",
+          "id": "dasbl",
+          "displayName": "dasbl"
+        }
+      ]
+    }
+  },
+  "change": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-19T20:05:00.000Z",
+    "kind": "change",
+    "id": "chg_phase-01-protocol",
+    "projectId": "prj_legion-next",
+    "title": "Define Phase 1 workflow entity schemas",
+    "summary": "Add project, change, requirement, decision, and oracle schemas for Legion workflow intent.",
+    "status": "proposed",
+    "currentTruth": {
+      "specRefs": [
+        {
+          "path": ".legion/project/specs/workflow-orchestration.md",
+          "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "mediaType": "text/markdown"
+        }
+      ],
+      "baseSpecHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "baseGitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "requirementIds": [
+        "req_protocol-entities"
+      ]
+    },
+    "proposedTruth": {
+      "deltaSpecRefs": [
+        {
+          "path": ".legion/project/changes/chg_phase-01-protocol/delta-specs/protocol.md",
+          "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "mediaType": "text/markdown"
+        }
+      ],
+      "targetSpecHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "requirementIds": [
+        "req_protocol-entities"
+      ]
+    },
+    "artifactRevisions": [
+      {
+        "role": "delta-spec",
+        "artifact": {
+          "path": ".legion/project/changes/chg_phase-01-protocol/delta-specs/protocol.md",
+          "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "mediaType": "text/markdown"
+        },
+        "revision": 1,
+        "baseGitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "risk": {
+      "tier": "R2",
+      "reasons": [
+        "public-schema-contract",
+        "multi-entity-protocol-surface"
+      ]
+    },
+    "acceptance": {
+      "status": "ready"
+    },
+    "decisionRefs": [
+      "dec_protocol-entity-boundary"
+    ],
+    "oracleRefs": [
+      "orc_protocol-entity-fixtures"
+    ]
+  },
+  "requirement": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-19T20:10:00.000Z",
+    "kind": "requirement",
+    "id": "req_protocol-entities",
+    "projectId": "prj_legion-next",
+    "status": "proposed",
+    "priority": "must",
+    "category": "behavior",
+    "statement": "Legion workflow intent entities must be validated with versioned protocol schemas.",
+    "acceptance": {
+      "language": "Project, change, requirement, decision, and oracle documents parse only when required workflow intent fields are present.",
+      "criteria": [
+        "Valid entity fixtures parse without mutation.",
+        "Missing version, status, coverage, or protection fields are rejected."
+      ],
+      "oracleRefs": [
+        "orc_protocol-entity-fixtures"
+      ]
+    },
+    "traceRefs": [
+      {
+        "path": ".legion/project/changes/chg_phase-01-protocol/delta-specs/protocol.md",
+        "anchor": "protocol-entities",
+        "relation": "defines"
+      }
+    ],
+    "supersedes": []
+  },
+  "decision": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-19T20:15:00.000Z",
+    "kind": "decision",
+    "id": "dec_protocol-entity-boundary",
+    "projectId": "prj_legion-next",
+    "status": "superseded",
+    "title": "Keep Phase 1 entity schemas in protocol",
+    "context": "Workflow intent documents need a provider-neutral validation boundary before artifact migration.",
+    "alternatives": [
+      {
+        "id": "protocol-package",
+        "title": "Protocol package",
+        "summary": "Define intent schemas in @legion/protocol.",
+        "selected": true
+      },
+      {
+        "id": "markdown-only",
+        "title": "Markdown only",
+        "summary": "Leave intent documents unvalidated until later phases.",
+        "selected": false
+      }
+    ],
+    "rationale": "Protocol-level schemas keep current truth and proposed changes reviewable without making runtime state canonical in Git.",
+    "approver": {
+      "kind": "human",
+      "id": "dasbl",
+      "displayName": "dasbl"
+    },
+    "decidedAt": "2026-06-19T20:20:00.000Z",
+    "supersedes": [],
+    "supersededBy": "dec_protocol-entity-boundary-v2",
+    "affectedArtifacts": [
+      {
+        "path": ".legion/project/changes/chg_phase-01-protocol/decisions.md",
+        "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "mediaType": "text/markdown"
+      }
+    ],
+    "traceRefs": [
+      {
+        "path": ".legion/project/changes/chg_phase-01-protocol/decisions.md",
+        "anchor": "protocol-entity-boundary",
+        "relation": "records"
+      }
+    ]
+  },
+  "oracle": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-19T20:25:00.000Z",
+    "kind": "oracle",
+    "id": "orc_protocol-entity-fixtures",
+    "projectId": "prj_legion-next",
+    "type": "executable",
+    "title": "Entity fixture validation oracle",
+    "owner": {
+      "kind": "worker",
+      "id": "worker_oracle-author",
+      "displayName": "Oracle author"
+    },
+    "protectedPaths": [
+      ".legion/project/changes/chg_phase-01-protocol/oracle/entity-fixtures.json"
+    ],
+    "sourceArtifacts": [
+      {
+        "path": ".legion/project/changes/chg_phase-01-protocol/oracle/entity-fixtures.json",
+        "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "mediaType": "application/json"
+      }
+    ],
+    "execution": {
+      "mode": "command",
+      "command": "pnpm",
+      "args": [
+        "--filter",
+        "@legion/protocol",
+        "test"
+      ],
+      "expectedExitCode": 0,
+      "timeoutMs": 120000
+    },
+    "expected": {
+      "preconditions": [
+        "The protocol package has been built from source."
+      ],
+      "postconditions": [
+        "Valid fixtures parse identically.",
+        "Invalid fixtures are rejected."
+      ],
+      "evidence": [
+        "schema-test-report"
+      ]
+    },
+    "requirementCoverage": [
+      {
+        "requirementId": "req_protocol-entities",
+        "coverage": "primary",
+        "criteria": [
+          "Entity fixtures exercise required version, status, trace, supersession, owner, and protection fields."
+        ]
+      }
+    ],
+    "traceRefs": [
+      {
+        "path": ".legion/project/changes/chg_phase-01-protocol/oracle/entity-fixtures.json",
+        "relation": "verifies"
+      }
+    ]
+  }
+}

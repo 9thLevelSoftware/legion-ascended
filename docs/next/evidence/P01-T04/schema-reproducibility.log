@@ -1,0 +1,13 @@
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+generated_schema_hashes_after_regeneration:
+C:\Users\dasbl\Documents\Legion Retooled\schemas\entities\change.schema.json|9AE81CE76AAD20A2AA455E8DE7D5AC0530F9661C3FD05CE19EBAEE8C7484087C
+C:\Users\dasbl\Documents\Legion Retooled\schemas\entities\decision.schema.json|502CFAAF4505281F42D8E1886485C88A6E5EC224991D1A8F6403407ACEAB6B2E
+C:\Users\dasbl\Documents\Legion Retooled\schemas\entities\oracle.schema.json|680A50948CF44C9969DD5C00063DF36835D4963E1BD767E6AF1892D019286239
+C:\Users\dasbl\Documents\Legion Retooled\schemas\entities\project.schema.json|851C12DC8C942013070F116D011DA267A8D6783FB1E9B4CC0F64317E0D505A04
+C:\Users\dasbl\Documents\Legion Retooled\schemas\entities\requirement.schema.json|29B8F1A580462EF836D9685245AD047FB99BFDE197FF0AD2321282CCD1A0A999
+C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\common.schema.json|923CF9C480DC1C06A61C8ED7F4AEF00BEB0F48149FB88684D82B9067EF685F7F
+C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\ids.schema.json|4885193852E95FBFFE13F916C0769656E68A2EDF10961A8D59345D82379309AE
+C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\values.schema.json|47D8E07684A8A59D146E3A63BF239E7CCFF29E041F844ED487082C6772BBEB39
+RESULT: PASS generated schema hashes stable across regeneration

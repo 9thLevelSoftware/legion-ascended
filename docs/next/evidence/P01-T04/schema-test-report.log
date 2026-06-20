@@ -1,0 +1,32 @@
+$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+✔ P01-T04 valid entity fixture corpus parses and serializes identically (11.8468ms)
+✔ P01-T04 entity schemas reject mutable operational state and missing required fields (3.26ms)
+✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.1062ms)
+✔ P01-T04 trace references bind entity kind to matching ID prefix (1.0225ms)
+✔ review feedback: project IDs must match project slugs (0.8656ms)
+✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.3907ms)
+✔ review feedback: risk overrides must be internally consistent (1.0302ms)
+✔ review feedback: superseded requirements require replacement references (0.9947ms)
+✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.597ms)
+✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.5593ms)
+✔ review feedback: oracle type and execution mode must agree (1.1674ms)
+✔ P01-T04 oracle ownership and protection are explicit (0.9671ms)
+✔ P01-T04 decisions can be superseded without rewriting history (0.7156ms)
+✔ P01-T04 invalid entity fixture cases are rejected (0.9955ms)
+✔ P01-T04 generated entity JSON schemas match committed artifacts (4.8575ms)
+✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.6085ms)
+✔ canonical scalar primitives reject ambiguous representations (0.7282ms)
+✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.5702ms)
+✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.5225ms)
+✔ common protocol structures are strict and versioned (1.2278ms)
+✔ generated primitive JSON schemas match committed artifacts (6.5387ms)
+✔ fixture corpus captures valid and invalid primitive examples (2.4355ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 158.6229

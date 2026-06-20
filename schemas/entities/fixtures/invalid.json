@@ -1,0 +1,177 @@
+{
+  "cases": [
+    {
+      "name": "project records mutable lease state",
+      "schema": "project",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-19T20:00:00.000Z",
+        "kind": "project",
+        "id": "prj_legion-next",
+        "slug": "legion-next",
+        "name": "Legion Next",
+        "repository": {
+          "provider": "github",
+          "defaultBranch": "main"
+        },
+        "policy": {
+          "constitution": {
+            "path": ".legion/project/constitution.md",
+            "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "currentSpecRoot": ".legion/project/specs",
+          "changeRoot": ".legion/project/changes",
+          "adrRoot": ".legion/project/adr",
+          "riskPolicyRefs": [],
+          "oraclePolicyRefs": [],
+          "decisionOwners": [
+            {
+              "kind": "human",
+              "id": "dasbl"
+            }
+          ]
+        },
+        "activeLease": "lease_001"
+      }
+    },
+    {
+      "name": "change omits current truth base hash",
+      "schema": "change",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-19T20:05:00.000Z",
+        "kind": "change",
+        "id": "chg_phase-01-protocol",
+        "projectId": "prj_legion-next",
+        "title": "Bad change",
+        "summary": "This change lacks current truth hash ownership.",
+        "status": "proposed",
+        "currentTruth": {
+          "specRefs": [],
+          "baseGitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "requirementIds": []
+        },
+        "proposedTruth": {
+          "deltaSpecRefs": [],
+          "targetSpecHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "requirementIds": []
+        },
+        "artifactRevisions": [],
+        "risk": {
+          "tier": "R2",
+          "reasons": [
+            "public-schema-contract"
+          ]
+        },
+        "acceptance": {
+          "status": "ready"
+        },
+        "decisionRefs": [],
+        "oracleRefs": []
+      }
+    },
+    {
+      "name": "requirement omits acceptance language",
+      "schema": "requirement",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-19T20:10:00.000Z",
+        "kind": "requirement",
+        "id": "req_protocol-entities",
+        "projectId": "prj_legion-next",
+        "status": "proposed",
+        "priority": "must",
+        "category": "behavior",
+        "statement": "A requirement without acceptance language is not enough.",
+        "traceRefs": [],
+        "supersedes": []
+      }
+    },
+    {
+      "name": "superseded decision omits replacement",
+      "schema": "decision",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-19T20:15:00.000Z",
+        "kind": "decision",
+        "id": "dec_protocol-entity-boundary",
+        "projectId": "prj_legion-next",
+        "status": "superseded",
+        "title": "Bad decision",
+        "context": "Supersession must point to the replacement decision.",
+        "alternatives": [
+          {
+            "id": "one",
+            "title": "One",
+            "summary": "First alternative.",
+            "selected": true
+          },
+          {
+            "id": "two",
+            "title": "Two",
+            "summary": "Second alternative.",
+            "selected": false
+          }
+        ],
+        "rationale": "Missing replacement.",
+        "approver": {
+          "kind": "human",
+          "id": "dasbl"
+        },
+        "decidedAt": "2026-06-19T20:20:00.000Z",
+        "supersedes": [],
+        "affectedArtifacts": [
+          {
+            "path": ".legion/project/changes/chg_phase-01-protocol/decisions.md",
+            "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+          }
+        ],
+        "traceRefs": [
+          {
+            "path": ".legion/project/changes/chg_phase-01-protocol/decisions.md",
+            "relation": "records"
+          }
+        ]
+      }
+    },
+    {
+      "name": "oracle omits explicit protected paths",
+      "schema": "oracle",
+      "value": {
+        "schemaVersion": "1.0.0",
+        "createdAt": "2026-06-19T20:25:00.000Z",
+        "kind": "oracle",
+        "id": "orc_protocol-entity-fixtures",
+        "projectId": "prj_legion-next",
+        "type": "executable",
+        "title": "Bad oracle",
+        "owner": {
+          "kind": "worker",
+          "id": "worker_oracle-author"
+        },
+        "protectedPaths": [],
+        "sourceArtifacts": [],
+        "execution": {
+          "mode": "command",
+          "command": "pnpm",
+          "args": [],
+          "expectedExitCode": 0,
+          "timeoutMs": 120000
+        },
+        "expected": {
+          "preconditions": [
+            "Built package."
+          ],
+          "postconditions": [
+            "Rejected invalid fixture."
+          ],
+          "evidence": [
+            "schema-test-report"
+          ]
+        },
+        "requirementCoverage": [],
+        "traceRefs": []
+      }
+    }
+  ]
+}
