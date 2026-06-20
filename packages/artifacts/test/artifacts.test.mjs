@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -64,6 +64,7 @@ test("canonical project artifact paths reject ambiguous or escaping input", () =
   assert.throws(() => canonicalProjectArtifactPath("../outside.json"), /Invalid artifact path/);
   assert.throws(() => canonicalProjectArtifactPath("C:\\temp\\artifact.json"), /Invalid artifact path/);
   assert.throws(() => canonicalProjectArtifactPath(".legion/project/changes/CHG_alpha/change.yaml"), /lowercase/);
+  assert.throws(() => canonicalProjectArtifactPath(".legion/project/specs/req_api.md:meta"), /alternate data streams/);
   assert.throws(() => canonicalProjectArtifactPath(".legion/project/specs/caf\u00e9.md"), /Invalid artifact path/);
   assert.throws(() => artifactPathForRole({ role: "proposal", changeId: "LEGION-NEXT" }), /Invalid Change ID/);
 
@@ -80,13 +81,17 @@ test("stable protocol JSON sorts keys without locale-dependent ordering", () => 
   assert.equal(
     stableProtocolJson({
       z: 1,
+      a_b: 5,
+      "a-b": 6,
       "\u00e4": 2,
       a: {
         z: 3,
+        a_b: 7,
+        "a-b": 8,
         "\u00e4": 4
       }
     }),
-    "{\"a\":{\"z\":3,\"\u00e4\":4},\"z\":1,\"\u00e4\":2}\n"
+    "{\"a\":{\"a-b\":8,\"a_b\":7,\"z\":3,\"\u00e4\":4},\"a-b\":6,\"a_b\":5,\"z\":1,\"\u00e4\":2}\n"
   );
 });
 
@@ -203,6 +208,10 @@ test("revisioned writes hash content, enforce CAS, and preserve bytes on interru
 
     const absolutePath = path.join(repositoryRoot, ...artifactPath.split("/"));
     assert.equal(await readFile(absolutePath, "utf8"), initialContent);
+    if (process.platform !== "win32") {
+      const mode = (await stat(absolutePath)).mode & 0o777;
+      assert.equal(mode & 0o444, 0o444);
+    }
 
     await assert.rejects(
       writeRevisionedArtifact({

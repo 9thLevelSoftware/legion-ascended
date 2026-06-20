@@ -79,6 +79,12 @@ function assertLowercaseProjectPath(value: string): void {
   }
 }
 
+function assertNoWindowsStreamSeparator(value: string): void {
+  if (value.includes(":")) {
+    throw new ArtifactPathError(`Project artifact path must not contain ':' to avoid Windows alternate data streams: ${value}`);
+  }
+}
+
 export function canonicalProjectArtifactPath(input: unknown): ArtifactPath {
   const parsed = artifactPathSchema.safeParse(input);
   if (!parsed.success) {
@@ -90,6 +96,7 @@ export function canonicalProjectArtifactPath(input: unknown): ArtifactPath {
   }
 
   assertLowercaseProjectPath(parsed.data);
+  assertNoWindowsStreamSeparator(parsed.data);
   return parsed.data;
 }
 

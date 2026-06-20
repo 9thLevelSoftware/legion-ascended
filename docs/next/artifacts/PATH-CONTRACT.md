@@ -6,7 +6,7 @@ P02-T01 establishes `@legion/artifacts` as the only supported low-level API for 
 
 All committed Legion project artifacts live under `.legion/project` relative to the repository root. `.legion/var` remains operational state and is outside this contract.
 
-The resolver persists only POSIX-style repository paths. Absolute paths, backslashes, `.` or `..` segments, duplicate separators, Unicode path segments, and uppercase path segments are rejected. The uppercase bootstrap path used by earlier Phase 0/1 governance records is historical input; new v9 artifact APIs emit lowercase protocol IDs.
+The resolver persists only POSIX-style repository paths. Absolute paths, backslashes, `.` or `..` segments, duplicate separators, Unicode path segments, Windows alternate-data-stream separators (`:`), and uppercase path segments are rejected. The uppercase bootstrap path used by earlier Phase 0/1 governance records is historical input; new v9 artifact APIs emit lowercase protocol IDs.
 
 ## Canonical Layout
 

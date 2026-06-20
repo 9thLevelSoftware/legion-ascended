@@ -69,7 +69,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 }
 
 async function writeSyncedTempFile(tempPath: string, bytes: Uint8Array): Promise<void> {
-  const handle = await open(tempPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o600);
+  const handle = await open(tempPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o666);
   try {
     await handle.writeFile(bytes);
     await handle.sync();
