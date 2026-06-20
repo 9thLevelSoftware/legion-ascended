@@ -1,0 +1,380 @@
+{
+  "taskContract": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:30:00.000Z",
+    "kind": "task-contract",
+    "id": "ctr_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "revision": 1,
+    "title": "Define lifecycle entity schemas",
+    "objective": "Define task contract, task, run, evidence, review, approval, release, and observation schemas.",
+    "requirementIds": [
+      "req_protocol-entities"
+    ],
+    "dependencies": [],
+    "context": {
+      "specRefs": [
+        {
+          "path": ".legion/project/specs/workflow-orchestration.md",
+          "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "mediaType": "text/markdown"
+        }
+      ],
+      "designRefs": [
+        {
+          "path": ".legion/project/changes/chg_phase-01-protocol/design.md",
+          "sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+          "mediaType": "text/markdown"
+        }
+      ],
+      "predecessorArtifacts": []
+    },
+    "scope": {
+      "read": [
+        "packages/protocol/src/entities/common.ts"
+      ],
+      "write": [
+        "packages/protocol/src/entities/task-contract.ts",
+        "packages/protocol/test/lifecycle.test.mjs"
+      ],
+      "forbidden": [
+        "packages/core/src/index.ts"
+      ],
+      "sequentialFiles": [
+        "packages/protocol/src/index.ts"
+      ]
+    },
+    "interfaces": {
+      "consumes": [
+        {
+          "name": "riskProfileSchema",
+          "description": "Shared risk tier and override schema."
+        }
+      ],
+      "produces": [
+        {
+          "name": "taskContractSchema",
+          "description": "Versioned task contract schema."
+        }
+      ]
+    },
+    "oracleRefs": [
+      "orc_protocol-entity-fixtures"
+    ],
+    "verification": [
+      {
+        "command": "pnpm",
+        "args": [
+          "--filter",
+          "@legion/protocol",
+          "test"
+        ],
+        "expectedExitCode": 0
+      }
+    ],
+    "risk": {
+      "tier": "R2",
+      "reasons": [
+        "public-schema-contract",
+        "workflow-lifecycle-surface"
+      ]
+    },
+    "approvals": [
+      "contract-approved"
+    ],
+    "completion": {
+      "expectedArtifacts": [
+        {
+          "path": "packages/protocol/src/entities/task-contract.ts",
+          "sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+          "mediaType": "text/typescript"
+        }
+      ],
+      "requiredEvidence": [
+        "schema-test-report",
+        "generated-artifact-hashes"
+      ],
+      "blockedConditions": [
+        "Acceptance oracle cannot be executed",
+        "Required write falls outside allowlist"
+      ]
+    }
+  },
+  "task": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:31:00.000Z",
+    "kind": "task",
+    "id": "tsk_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "contractId": "ctr_p01-t05-lifecycle",
+    "contractRevision": 1,
+    "status": "ready",
+    "generation": 1,
+    "priority": 10,
+    "dependencies": [],
+    "blockers": [],
+    "updatedAt": "2026-06-20T01:31:00.000Z"
+  },
+  "taskRun": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:32:00.000Z",
+    "kind": "task-run",
+    "id": "run_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "taskId": "tsk_p01-t05-lifecycle",
+    "contractId": "ctr_p01-t05-lifecycle",
+    "contractRevision": 1,
+    "attempt": 1,
+    "status": "started",
+    "startedAt": "2026-06-20T01:32:00.000Z",
+    "manifest": {
+      "runtime": {
+        "driver": "runtime-local",
+        "version": "0.1.0"
+      },
+      "workerBundle": {
+        "id": "implementer",
+        "version": "1.0.0",
+        "instructionsHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "model": {
+        "provider": "openai",
+        "id": "gpt-5",
+        "policyVersion": "1.0.0"
+      },
+      "inputs": {
+        "contractHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "currentSpecsHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "deltaSpecsHash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "oracleHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "repository": {
+        "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "workspace": {
+        "sandboxDriver": "local-worktree",
+        "worktreePath": ".legion/var/workspaces/run_p01-t05-lifecycle"
+      },
+      "policy": {
+        "version": "1.0.0",
+        "riskTier": "R2"
+      },
+      "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t05-lifecycle:run_p01-t05-lifecycle:runtime.start:sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "frozenAt": "2026-06-20T01:32:00.000Z"
+    }
+  },
+  "evidenceBundle": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:33:00.000Z",
+    "kind": "evidence",
+    "id": "evd_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "taskId": "tsk_p01-t05-lifecycle",
+    "runId": "run_p01-t05-lifecycle",
+    "status": "collected",
+    "sensitivity": "internal",
+    "retention": {
+      "class": "project",
+      "retainUntil": "2027-06-20T01:33:00.000Z"
+    },
+    "items": [
+      {
+        "id": "item-schema-test-report",
+        "classification": "test-report",
+        "verdict": "pass",
+        "artifact": {
+          "path": "docs/next/evidence/P01-T05/schema-test-report.log",
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "mediaType": "text/plain"
+        },
+        "command": {
+          "command": "pnpm",
+          "args": [
+            "--filter",
+            "@legion/protocol",
+            "test"
+          ],
+          "exitCode": 0,
+          "outputHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "traceRefs": [
+          {
+            "path": ".legion/project/changes/chg_phase-01-protocol/oracle/entity-fixtures.json",
+            "relation": "verifies",
+            "entity": {
+              "kind": "oracle",
+              "id": "orc_protocol-entity-fixtures"
+            }
+          }
+        ]
+      }
+    ],
+    "traceRefs": [
+      {
+        "path": ".legion/project/changes/chg_phase-01-protocol/evidence-index.json",
+        "relation": "records"
+      }
+    ]
+  },
+  "reviewDecision": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:34:00.000Z",
+    "kind": "review",
+    "id": "rev_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "taskId": "tsk_p01-t05-lifecycle",
+    "runId": "run_p01-t05-lifecycle",
+    "status": "submitted",
+    "reviewer": {
+      "kind": "worker",
+      "id": "worker_task-reviewer"
+    },
+    "submittedAt": "2026-06-20T01:34:00.000Z",
+    "verdicts": {
+      "specification": "pass",
+      "integration": "not_verified",
+      "evidence": "pass"
+    },
+    "confidence": "medium",
+    "findings": [
+      {
+        "id": "finding-docs-gap",
+        "severity": "minor",
+        "title": "Documentation evidence should stay current",
+        "body": "Evidence logs need to be refreshed after schema changes.",
+        "evidenceRefs": [
+          "evd_p01-t05-lifecycle"
+        ]
+      }
+    ],
+    "supersedes": []
+  },
+  "approval": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:35:00.000Z",
+    "kind": "approval",
+    "id": "apv_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "taskId": "tsk_p01-t05-lifecycle",
+    "runId": "run_p01-t05-lifecycle",
+    "status": "granted",
+    "requestedBy": {
+      "kind": "worker",
+      "id": "worker_release-controller"
+    },
+    "requestedAt": "2026-06-20T01:35:00.000Z",
+    "scope": {
+      "effectClass": "S2",
+      "action": "git.commit",
+      "targets": [
+        {
+          "kind": "task",
+          "id": "tsk_p01-t05-lifecycle"
+        }
+      ]
+    },
+    "idempotencyKey": "prj_legion-next:chg_phase-01-protocol:tsk_p01-t05-lifecycle:run_p01-t05-lifecycle:git.commit:sha256:9999999999999999999999999999999999999999999999999999999999999999",
+    "decidedBy": {
+      "kind": "human",
+      "id": "dasbl"
+    },
+    "decidedAt": "2026-06-20T01:36:00.000Z",
+    "decisionReason": "Schema-only commit approved for PR publication.",
+    "expiresAt": "2026-06-21T01:36:00.000Z"
+  },
+  "release": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:37:00.000Z",
+    "kind": "release",
+    "id": "rel_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "status": "forward_fix_required",
+    "environment": "staging",
+    "releaseIntent": {
+      "path": ".legion/project/changes/chg_phase-01-protocol/release.md",
+      "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "mediaType": "text/markdown"
+    },
+    "deployment": {
+      "environment": "staging",
+      "deploymentId": "deploy-p01-t05",
+      "deployedAt": "2026-06-20T01:37:00.000Z"
+    },
+    "taskRefs": [
+      "tsk_p01-t05-lifecycle"
+    ],
+    "approvalRefs": [
+      "apv_p01-t05-lifecycle"
+    ],
+    "evidenceRefs": [
+      "evd_p01-t05-lifecycle"
+    ],
+    "healthCriteria": [
+      "Schema validation remains green after release candidate generation."
+    ],
+    "rollbackPlan": {
+      "strategy": "revert",
+      "criteria": [
+        "Generated schemas fail validation."
+      ],
+      "evidenceRefs": [
+        "evd_p01-t05-lifecycle"
+      ]
+    },
+    "forwardFixPlan": {
+      "owner": {
+        "kind": "worker",
+        "id": "worker_release-controller"
+      },
+      "criteria": [
+        "Open linked fix task and re-run protocol validation."
+      ],
+      "taskRefs": [
+        "tsk_p01-t05-lifecycle"
+      ]
+    }
+  },
+  "observation": {
+    "schemaVersion": "1.0.0",
+    "createdAt": "2026-06-20T01:38:00.000Z",
+    "kind": "observation",
+    "id": "obs_p01-t05-lifecycle",
+    "projectId": "prj_legion-next",
+    "changeId": "chg_phase-01-protocol",
+    "releaseId": "rel_p01-t05-lifecycle",
+    "status": "rolled_back",
+    "environment": "staging",
+    "deploymentId": "deploy-p01-t05",
+    "startedAt": "2026-06-20T01:38:00.000Z",
+    "endedAt": "2026-06-20T01:45:00.000Z",
+    "healthCriteria": [
+      "Protocol validation remains green."
+    ],
+    "signals": [
+      {
+        "name": "protocol-validation",
+        "status": "pass",
+        "observedAt": "2026-06-20T01:39:00.000Z",
+        "evidenceRefs": [
+          "evd_p01-t05-lifecycle"
+        ]
+      }
+    ],
+    "evidenceRefs": [
+      "evd_p01-t05-lifecycle"
+    ],
+    "rollbackEvidenceRefs": [
+      "evd_p01-t05-lifecycle"
+    ],
+    "forwardFixRefs": [
+      "tsk_p01-t05-lifecycle"
+    ]
+  }
+}

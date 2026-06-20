@@ -1,0 +1,4 @@
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+--- git diff --name-only -- schemas/entities schemas/primitives ---

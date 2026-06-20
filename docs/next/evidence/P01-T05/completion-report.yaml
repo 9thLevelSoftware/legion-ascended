@@ -1,0 +1,65 @@
+status: DONE
+phase: 1
+task: P01-T05
+summary: >
+  Defined lifecycle protocol schemas for task contracts, operational tasks, immutable run attempts, evidence bundles,
+  independent review decisions, approvals, releases, and observations. The schemas model the Legion workflow files as
+  durable machine-readable records while preserving the separation between intent, mutable operational state, attempts,
+  proof, authorization, and production observation.
+files_changed:
+  - packages/protocol/src/entities/task-contract.ts
+  - packages/protocol/src/entities/task.ts
+  - packages/protocol/src/entities/task-run.ts
+  - packages/protocol/src/entities/evidence.ts
+  - packages/protocol/src/entities/review.ts
+  - packages/protocol/src/entities/approval.ts
+  - packages/protocol/src/entities/release.ts
+  - packages/protocol/src/entities/observation.ts
+  - packages/protocol/src/entities/schema-documents.ts
+  - packages/protocol/src/index.ts
+  - packages/protocol/scripts/generate-primitives-json-schema.mjs
+  - packages/protocol/test/lifecycle.test.mjs
+  - schemas/entities/task-contract.schema.json
+  - schemas/entities/task.schema.json
+  - schemas/entities/task-run.schema.json
+  - schemas/entities/evidence.schema.json
+  - schemas/entities/review.schema.json
+  - schemas/entities/approval.schema.json
+  - schemas/entities/release.schema.json
+  - schemas/entities/observation.schema.json
+  - schemas/entities/fixtures/lifecycle-valid.json
+  - schemas/entities/fixtures/lifecycle-invalid.json
+verification:
+  - command: pnpm --filter @legion/protocol test
+    result: PASS
+    evidence: docs/next/evidence/P01-T05/schema-test-report.log
+  - command: pnpm --filter @legion/protocol generate:schemas plus schema diff check
+    result: PASS
+    evidence: docs/next/evidence/P01-T05/schema-reproducibility.log
+  - command: pnpm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T05/full-validation.log
+acceptance:
+  - criterion: Intent contract, operational task, and run attempt are separate.
+    result: PASS
+  - criterion: Evidence and review can represent unknown or not-verified results.
+    result: PASS
+  - criterion: Production rollback and forward-fix paths are structurally representable.
+    result: PASS
+  - criterion: Approval schema cannot authorize unspecified action scope.
+    result: PASS
+  - criterion: Review findings require evidence references for blocking severity.
+    result: PASS
+  - criterion: Task-run manifest becomes immutable after start.
+    result: PASS
+required_evidence:
+  - schema_matrix: docs/next/evidence/P01-T05/schema-matrix.md
+  - negative_test_report: docs/next/evidence/P01-T05/negative-test-report.md
+  - architecture_reviewer_approval: docs/next/evidence/P01-T05/architecture-reviewer-approval.md
+  - generated_hashes: docs/next/evidence/P01-T05/generated-artifact-hashes.sha256
+risks_or_followups:
+  - Runtime enforcement of lifecycle transitions belongs to later core/storage/orchestration phases.
+  - JSON Schema cannot express task-contract write/forbidden path set disjointness without custom keywords; Zod parsing and tests enforce it.
+blocker:
+  condition: none
+  decision_needed: none
