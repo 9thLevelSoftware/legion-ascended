@@ -593,9 +593,13 @@ async function readAllSpecs(repositoryRoot: string): Promise<CurrentSpecSuccess[
   }
 
   const specs: CurrentSpecSuccess[] = [];
-  for (const entry of entries.map((value) => value.name).sort()) {
-    if (!entry.endsWith(".md")) continue;
-    const artifactPath = `${PROJECT_ARTIFACT_PATHS.currentSpecs}/${entry}` as ArtifactPath;
+  const markdownFiles = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
+
+  for (const fileName of markdownFiles) {
+    const artifactPath = `${PROJECT_ARTIFACT_PATHS.currentSpecs}/${fileName}` as ArtifactPath;
     const spec = await readSpecByPath({ repositoryRoot, artifactPath });
     if (!spec.ok) return spec;
     specs.push(spec);
@@ -812,9 +816,18 @@ export async function renameCurrentSpec(input: RenameCurrentSpecInput): Promise<
   const current = await readCurrentSpec(input);
   if (!current.ok) return current;
 
+  if (input.capability.id !== undefined && input.capability.id !== current.document.capability.id) {
+    return failure("invalid", [
+      specDiagnostic({
+        code: "capability_id_change_blocked",
+        message: "Renaming a capability ID is not supported. Create a new spec and archive the old one instead.",
+        path: current.artifactPath
+      })
+    ]);
+  }
+
   const updatedCapability: CurrentSpecCapability = {
     ...current.document.capability,
-    ...(input.capability.id === undefined ? {} : { id: input.capability.id }),
     title: input.capability.title
   };
   const result = await updateCurrentSpec({
@@ -892,9 +905,8 @@ export function diffCurrentSpecIndexes(input: DiffCurrentSpecIndexesInput): Curr
       added.push(id);
       continue;
     }
-    if (beforeLocation.path !== afterLocation.path && beforeLocation.contentHash === afterLocation.contentHash) {
+    if (beforeLocation.path !== afterLocation.path) {
       moved.push({ id, from: beforeLocation.path, to: afterLocation.path });
-      continue;
     }
     if (beforeLocation.contentHash !== afterLocation.contentHash) {
       modified.push(id);

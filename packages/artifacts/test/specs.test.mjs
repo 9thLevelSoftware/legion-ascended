@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -128,6 +128,17 @@ test("P02-T03 creates, reads, lists, and deterministically indexes current specs
   });
 });
 
+test("P02-T03 ignores non-file .md entries when listing current specs", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    await mkdir(path.join(repositoryRoot, ".legion", "project", "specs", "req_directory.md"), { recursive: true });
+
+    const result = await listCurrentSpecs({ repositoryRoot });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.index.entries, []);
+  });
+});
+
 test("P02-T03 rejects duplicate requirement IDs across specs with both source locations", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const sharedRequirement = requirement("shared-contract", {
@@ -242,19 +253,40 @@ test("P02-T03 classifies semantic spec index diffs", () => {
         ...before.entries[2],
         path: ".legion/project/specs/req_moved-new.md",
         artifact: { path: ".legion/project/specs/req_moved-new.md", sha256: "sha256:3333333333333333333333333333333333333333333333333333333333333333", mediaType: "text/markdown" }
+      },
+      {
+        path: ".legion/project/specs/req_moved-modified-new.md",
+        revision: 2,
+        capability: { id: "moved-modified", title: "Moved Modified", status: "active" },
+        primaryRequirementId: "req_moved-modified",
+        requirements: [{ id: "req_moved-modified", contentHash: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" }],
+        artifact: { path: ".legion/project/specs/req_moved-modified-new.md", sha256: "sha256:5555555555555555555555555555555555555555555555555555555555555555", mediaType: "text/markdown" }
       }
     ]
   };
+  before.entries.push({
+    path: ".legion/project/specs/req_moved-modified.md",
+    revision: 1,
+    capability: { id: "moved-modified", title: "Moved Modified", status: "active" },
+    primaryRequirementId: "req_moved-modified",
+    requirements: [{ id: "req_moved-modified", contentHash: "sha256:9999999999999999999999999999999999999999999999999999999999999999" }],
+    artifact: { path: ".legion/project/specs/req_moved-modified.md", sha256: "sha256:6666666666666666666666666666666666666666666666666666666666666666", mediaType: "text/markdown" }
+  });
 
   assert.deepEqual(diffCurrentSpecIndexes({ before, after }), {
     added: ["req_added"],
-    modified: ["req_alpha"],
+    modified: ["req_alpha", "req_moved-modified"],
     removed: ["req_removed"],
     moved: [
       {
         id: "req_moved",
         from: ".legion/project/specs/req_moved.md",
         to: ".legion/project/specs/req_moved-new.md"
+      },
+      {
+        id: "req_moved-modified",
+        from: ".legion/project/specs/req_moved-modified.md",
+        to: ".legion/project/specs/req_moved-modified-new.md"
       }
     ]
   });
@@ -279,6 +311,16 @@ test("P02-T03 blocks stale edits and supports rename and deprecate operations", 
     assert.equal(renamed.status, "renamed");
     assert.equal(renamed.document.revision, 2);
     assert.equal(renamed.document.capability.title, "Renamed stale edit capability");
+
+    const changedId = await renameCurrentSpec({
+      repositoryRoot,
+      requirementId,
+      expectedRevision: 2,
+      capability: { id: "different-capability", title: "Different capability" }
+    });
+    assert.equal(changedId.ok, false);
+    assert.equal(changedId.status, "invalid");
+    assert.equal(changedId.diagnostics[0].code, "capability_id_change_blocked");
 
     const stale = await updateCurrentSpec({
       repositoryRoot,
