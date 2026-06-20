@@ -1,0 +1,47 @@
+status: DONE
+phase: 1
+task: P01-T03
+summary: >
+  Defined shared protocol primitives for Legion Next workflow entities, canonical scalar values, artifact references,
+  idempotency keys, metadata, actor/provenance/error/blocker/validation structures, generated JSON Schema artifacts,
+  and a valid/invalid fixture corpus. The implementation stays inside @legion/protocol and uses Zod-authored schemas
+  with deterministic schema generation.
+files_changed:
+  - packages/protocol/package.json
+  - pnpm-lock.yaml
+  - packages/protocol/src/index.ts
+  - packages/protocol/src/primitives/ids.ts
+  - packages/protocol/src/primitives/values.ts
+  - packages/protocol/src/primitives/common.ts
+  - packages/protocol/src/primitives/schema-documents.ts
+  - packages/protocol/scripts/generate-primitives-json-schema.mjs
+  - packages/protocol/test/primitives.test.mjs
+  - schemas/primitives/ids.schema.json
+  - schemas/primitives/values.schema.json
+  - schemas/primitives/common.schema.json
+  - schemas/primitives/fixtures/valid.json
+  - schemas/primitives/fixtures/invalid.json
+verification:
+  - command: pnpm --filter @legion/protocol test
+    result: PASS
+    evidence: docs/next/evidence/P01-T03/protocol-test-report.log
+  - command: pnpm --filter @legion/protocol generate:schemas && git diff --exit-code -- schemas/primitives packages/protocol/src/primitives packages/protocol/scripts/generate-primitives-json-schema.mjs
+    result: PASS
+    evidence: docs/next/evidence/P01-T03/schema-reproducibility.log
+  - command: pnpm run validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T03/full-validation.log
+acceptance:
+  - criterion: IDs are unambiguous by entity kind.
+    result: PASS
+  - criterion: All time/hash/version fields have one canonical representation.
+    result: PASS
+  - criterion: Unknown fields are handled according to an explicit strictness policy.
+    result: PASS
+commits:
+  - 5b30427c442587d174bac9212590f64792751b2b
+risks_or_followups:
+  - Downstream P01-T04 through P01-T06 must compose these primitives into full entity, command/API, and event schemas without redefining IDs or scalar formats.
+blocker:
+  condition: none
+  decision_needed: none

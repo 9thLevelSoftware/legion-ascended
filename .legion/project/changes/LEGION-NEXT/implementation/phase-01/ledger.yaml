@@ -9,10 +9,10 @@ active_wave: 2
 tasks:
   P01-T01: { status: DONE, run_id: "P01-T01-20260619-workspace-tooling", commit: "006d626da25f893b6d39f6bc4d68096c58f82e8d" }
   P01-T02: { status: DONE, run_id: "P01-T02-20260619-package-boundaries", commit: "042a2135ba5789094b76114f1cb165ff4e6117bd" }
-  P01-T03: { status: READY, run_id: null, commit: null }
-  P01-T04: { status: NOT_STARTED, run_id: null, commit: null }
-  P01-T05: { status: NOT_STARTED, run_id: null, commit: null }
-  P01-T06: { status: NOT_STARTED, run_id: null, commit: null }
+  P01-T03: { status: DONE, run_id: "P01-T03-20260620-protocol-primitives", commit: "5b30427c442587d174bac9212590f64792751b2b" }
+  P01-T04: { status: READY, run_id: null, commit: null }
+  P01-T05: { status: READY, run_id: null, commit: null }
+  P01-T06: { status: READY, run_id: null, commit: null }
   P01-T07: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T08: { status: NOT_STARTED, run_id: null, commit: null }
   P01-T09: { status: NOT_STARTED, run_id: null, commit: null }
@@ -50,3 +50,8 @@ evidence:
   - docs/next/evidence/P01-T02/workspace-graph.json
   - docs/next/evidence/P01-T02/package-export-snapshots.json
   - docs/next/evidence/P01-T02/completion-report.yaml
+  - docs/next/evidence/P01-T03/protocol-test-report.log
+  - docs/next/evidence/P01-T03/full-validation.log
+  - docs/next/evidence/P01-T03/schema-reproducibility.log
+  - docs/next/evidence/P01-T03/fixture-inventory.log
+  - docs/next/evidence/P01-T03/completion-report.yaml

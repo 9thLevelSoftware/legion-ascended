@@ -1,0 +1,62 @@
+# P01-T03 full validation
+
+Commit: 5b30427c442587d174bac9212590f64792751b2b
+
+>>> pnpm run validate
+$ pnpm run typecheck && pnpm run check:boundaries && pnpm run test
+$ pnpm run build && pnpm -r typecheck
+$ pnpm -r build
+Scope: 2 of 3 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/core build$ tsc -p tsconfig.json
+packages/core build: Done
+Scope: 2 of 3 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck: Done
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+$ node --test "tests/**/*.test.mjs" && pnpm -r --if-present test
+✔ accepts legal protocol and core imports (9.1031ms)
+✔ rejects protocol imports from core (5.8517ms)
+✔ rejects deep imports across workspace package exports (5.1045ms)
+✔ rejects provider and storage imports in protocol and core (4.624ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 81.353
+Scope: 2 of 3 workspace projects
+packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/protocol test: $ tsc -p tsconfig.json
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (4.8601ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (1.1099ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.6317ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.5751ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (1.1042ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (4.6623ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.7917ms)
+packages/protocol test: ℹ tests 7
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 7
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 129.0693
+packages/protocol test: Done
+packages/core test$ node --test --test-reporter=spec
+packages/core test: ℹ tests 0
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 0
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 9.8443
+packages/core test: Done
