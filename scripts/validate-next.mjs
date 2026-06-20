@@ -11,6 +11,7 @@ const VALIDATE_NEXT_PLAN = [
   { id: "typecheck", command: "pnpm run typecheck" },
   { id: "package-boundaries", command: "pnpm run check:boundaries" },
   { id: "schema-generation", command: "pnpm --filter @legion/protocol generate:schemas" },
+  { id: "artifact-schema-generation", command: "pnpm --filter @legion/artifacts generate:schemas" },
   { id: "protocol-docs", command: "node scripts/validate-next.mjs --generate-protocol-docs" },
   { id: "schema-doc-drift", command: "node scripts/validate-next.mjs --check-generated-drift" },
   { id: "package-contents", command: "pnpm run check:package-contents" },

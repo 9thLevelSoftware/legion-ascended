@@ -15,10 +15,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --filter @legion/protocol build && pnpm run build && node --test --test-reporter=spec \"test/**/*.test.mjs\""
+    "generate:schemas": "pnpm run build && node scripts/generate-artifacts-json-schema.mjs",
+    "test": "pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec \"test/**/*.test.mjs\""
   },
   "dependencies": {
-    "@legion/protocol": "workspace:*"
+    "@legion/protocol": "workspace:*",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"
