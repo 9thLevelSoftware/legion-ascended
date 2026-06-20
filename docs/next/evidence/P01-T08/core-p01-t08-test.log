@@ -1,0 +1,30 @@
+$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs" "--test-name-pattern=P01-T08"
+$ tsc -p tsconfig.json
+✔ P01-T08 ADR-006 golden examples classify into expected tiers and gates (1.7834ms)
+✔ P01-T08 adding a high-risk signal never lowers the derived tier (0.4157ms)
+✔ P01-T08 lower-tier overrides require decision-owner approval and cannot undercut hard floors (0.4307ms)
+✔ P01-T08 explanations list normalized signals and overrides deterministically (0.1667ms)
+✔ P01-T08 untrusted text cannot alter policy without an approved policy artifact (0.2999ms)
+✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.6648ms)
+✔ P01-T07 transition matrices are exported for every aggregate (0.4741ms)
+✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.9383ms)
+✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.1382ms)
+✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1465ms)
+✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.2366ms)
+✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.4542ms)
+✔ P01-T07 integration completions must match the recorded side-effect intent (0.1381ms)
+✔ P01-T07 task blockers accumulate in reducer and command decision (0.416ms)
+✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.2994ms)
+✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.1833ms)
+✔ P01-T07 task replay is deterministic and equivalent from genesis (0.402ms)
+✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.1078ms)
+✔ P01-T07 release guards reject stale observations and invalid rollback states (0.0707ms)
+✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.2815ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 258.5215
