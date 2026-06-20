@@ -11,6 +11,7 @@ import {
   PROJECT_MANIFEST_PATH,
   initProject,
   loadProject,
+  projectManifestSchema,
   updateConstitution,
   validateProject
 } from "../dist/index.js";
@@ -106,6 +107,76 @@ test("P02-T02 dry-run init reports planned writes and legacy .legion collisions 
     assert.equal(collided.status, "migration_required");
     assert.equal(collided.diagnostics[0].code, "migration_required");
     assert.equal(await readFile(path.join(repositoryRoot, ".legion", "SKILL.md"), "utf8"), "legacy codex protocol\n");
+  });
+});
+
+test("P02-T02 manifest schema reports malformed input without throwing", () => {
+  for (const input of [
+    {
+      schemaVersion: "0.1.0",
+      kind: "project-manifest",
+      revision: 1
+    },
+    {
+      schemaVersion: "0.1.0",
+      kind: "project-manifest",
+      revision: 1,
+      project: null,
+      artifactRevisions: null
+    },
+    {
+      schemaVersion: "0.1.0",
+      kind: "project-manifest",
+      revision: 1,
+      project: {
+        policy: {}
+      },
+      artifactRevisions: {
+        constitution: {}
+      }
+    }
+  ]) {
+    let result;
+    assert.doesNotThrow(() => {
+      result = projectManifestSchema.safeParse(input);
+    });
+    assert.equal(result.success, false);
+  }
+});
+
+test("P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    await mkdir(path.join(repositoryRoot, ".legion"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", ".DS_Store"), "finder metadata\n", "utf8");
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+    assert.equal(initialized.status, "initialized");
+  });
+
+  await withTempRepository(async (repositoryRoot) => {
+    await mkdir(path.join(repositoryRoot, ".legion"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", ".DS_Store"), "finder metadata\n", "utf8");
+    await writeFile(path.join(repositoryRoot, ".legion", "SKILL.md"), "legacy codex protocol\n", "utf8");
+
+    const collided = await initProject(initInput(repositoryRoot));
+    assert.equal(collided.ok, false);
+    assert.equal(collided.status, "migration_required");
+    assert.equal(collided.diagnostics[0].code, "migration_required");
+  });
+});
+
+test("P02-T02 accepts common .legion var ignore patterns without appending duplicates", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    await writeFile(path.join(repositoryRoot, ".gitignore"), "/.legion/var\n", "utf8");
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+    assert.equal(initialized.status, "initialized");
+    assert.equal(await readFile(path.join(repositoryRoot, ".gitignore"), "utf8"), "/.legion/var\n");
+
+    const validation = await validateProject({ repositoryRoot });
+    assert.equal(validation.ok, true);
   });
 });
 

@@ -2,20 +2,23 @@ $ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --te
 $ tsc -p tsconfig.json
 $ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
 $ tsc -p tsconfig.json
-✔ canonical project artifact paths reject ambiguous or escaping input (1.3653ms)
-✔ stable protocol JSON sorts keys without locale-dependent ordering (0.1649ms)
-✔ repository discovery and path resolution stay beneath the real project root (8.0791ms)
-✔ JSON artifact reads return protocol validation diagnostics with source paths (8.7012ms)
-✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (12.4867ms)
-✔ revisioned writes reject concurrent writers and stale superseded content (13.8331ms)
-✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (127.2789ms)
-✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (5.1821ms)
-✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (67.1062ms)
-ℹ tests 9
+✔ canonical project artifact paths reject ambiguous or escaping input (1.4144ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.1699ms)
+✔ repository discovery and path resolution stay beneath the real project root (8.0762ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (8.9725ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (13.9649ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (13.6847ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (126.9847ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (4.1378ms)
+✔ P02-T02 manifest schema reports malformed input without throwing (0.9312ms)
+✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (13.9363ms)
+✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (13.6659ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (65.2345ms)
+ℹ tests 12
 ℹ suites 0
-ℹ pass 9
+ℹ pass 12
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 397.5582
+ℹ duration_ms 428.8848

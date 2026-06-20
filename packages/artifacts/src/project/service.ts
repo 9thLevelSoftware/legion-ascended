@@ -158,6 +158,15 @@ function normalizeGitignoreLine(value: string): string {
   return value.trim().replace(/\\/g, "/");
 }
 
+function isLegionVarIgnorePattern(value: string): boolean {
+  const line = normalizeGitignoreLine(value);
+  return line === ".legion/var" || line === ".legion/var/" || line === "/.legion/var" || line === "/.legion/var/";
+}
+
+function isIgnorableLegionRootEntry(name: string): boolean {
+  return name === ".DS_Store" || name === "Thumbs.db" || name === "desktop.ini" || name.startsWith("._");
+}
+
 async function ensureVarIgnored(repositoryRoot: string): Promise<void> {
   const gitignorePath = path.join(repositoryRoot, ".gitignore");
   let existing = "";
@@ -170,8 +179,8 @@ async function ensureVarIgnored(repositoryRoot: string): Promise<void> {
     if (!isEnoent(error)) throw error;
   }
 
-  const lines = existing.split(/\r?\n/).map(normalizeGitignoreLine);
-  if (lines.includes(LEGION_VAR_GITIGNORE_ENTRY)) return;
+  const lines = existing.split(/\r?\n/);
+  if (lines.some(isLegionVarIgnorePattern)) return;
 
   const prefix = existing.length === 0 || existing.endsWith("\n") || existing.endsWith("\r\n") ? existing : `${existing}${lineEnding}`;
   await writeFile(gitignorePath, `${prefix}${LEGION_VAR_GITIGNORE_ENTRY}${lineEnding}`, "utf8");
@@ -188,7 +197,7 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   const entries = await readdir(legionRoot, { withFileTypes: true });
   const unknownEntries = entries
     .map((entry) => entry.name)
-    .filter((name) => name !== "project" && name !== "var")
+    .filter((name) => name !== "project" && name !== "var" && !isIgnorableLegionRootEntry(name))
     .sort();
 
   if (unknownEntries.length > 0) {
@@ -457,8 +466,8 @@ async function validateVarIgnore(repositoryRoot: string): Promise<readonly Artif
   const gitignorePath = path.join(repositoryRoot, ".gitignore");
   try {
     const contents = await readFile(gitignorePath, "utf8");
-    const lines = contents.split(/\r?\n/).map(normalizeGitignoreLine);
-    if (lines.includes(LEGION_VAR_GITIGNORE_ENTRY)) return [];
+    const lines = contents.split(/\r?\n/);
+    if (lines.some(isLegionVarIgnorePattern)) return [];
   } catch (error) {
     if (!isEnoent(error)) throw error;
   }

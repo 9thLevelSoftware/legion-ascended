@@ -51,7 +51,7 @@ entries:
   - task: P02-T02
     artifact: packages/artifacts/src/project/service.ts
     description: Project initialization, loading, validation, dry-run, collision diagnostics, Git ignore, and constitution update service
-    sha256: 949A96C945A69EDC2B53EE8E2B192E2070F7BB16E0192CC7B70158E34677944F
+    sha256: 83B7717301DFD64E23BFA5F1B4A8BB4E31F8DA641CFD97EC6874EE834512EB85
   - task: P02-T02
     artifact: packages/artifacts/src/project/constitution.ts
     description: Default project constitution text and integrity validation rules
@@ -71,7 +71,7 @@ entries:
   - task: P02-T02
     artifact: packages/artifacts/test/project.test.mjs
     description: P02-T02 regression tests covering idempotent init, dry-run, collisions, malformed constitution, ownership, and revision checks
-    sha256: F1A7EBC57AFA7FDC75BFF33642EABD952DF7C92E46F384321E45FC1B31A69069
+    sha256: 922D0D0510EAFB5512CF733C5DE0C0C35A25E41D9B8011B81709C690BF41B757
   - task: P02-T02
     artifact: templates/project/constitution.md
     description: Human-reviewable default project constitution template
@@ -99,7 +99,7 @@ entries:
   - task: P02-T02
     artifact: docs/next/evidence/P02-T02/project-service-test.log
     description: Focused @legion/artifacts project service test report
-    sha256: D053D3FE3556BD3E8E5EB1F574383708EA9AE1A9CA98A8D6FFBAA56CDF6045C8
+    sha256: 05AD22CE0695BB25B7C7CD12086A620B538BA631450107518F5D83B3FE35FD51
   - task: P02-T02
     artifact: docs/next/evidence/P02-T02/golden-init-and-git-ownership.log
     description: Temporary Git repository double-init, ignore ownership, and golden tree hash proof
@@ -111,7 +111,7 @@ entries:
   - task: P02-T02
     artifact: docs/next/evidence/P02-T02/full-validation.log
     description: Full workspace validate-next log after P02-T02 implementation
-    sha256: F61214165869FA073D0A0AD257A7E05390D73A446FD10C0480D9234B3E6A0848
+    sha256: 0ED9514D2268278BC67E35B7D4C5043AED2C4A56314C2C68EF2021D15C1510D6
   - task: P02-T02
     artifact: docs/next/evidence/P02-T02/completion-report.yaml
     description: Structured P02-T02 completion report
