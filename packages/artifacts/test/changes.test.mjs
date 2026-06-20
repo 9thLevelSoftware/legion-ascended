@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -267,16 +267,120 @@ test("P02-T04 detects stale current-spec bases during change validation", async 
   });
 });
 
-test("P02-T04 returns typed diagnostics for invalid change bundle inputs", async () => {
+test("P02-T04 validates secondary-requirement deltas against the recorded base spec path", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const primaryRequirementId = formatEntityId("requirement", "workflow-control");
+    const secondaryRequirementId = formatEntityId("requirement", "secondary-behavior");
+    const secondaryRequirement = requirement("secondary-behavior", {
+      traceRefs: [
+        {
+          path: `.legion/project/specs/${primaryRequirementId}.md`,
+          anchor: secondaryRequirementId,
+          relation: "defines",
+          entity: { kind: "requirement", id: secondaryRequirementId }
+        }
+      ]
+    });
+    const createdSpec = await createCurrentSpec({
+      repositoryRoot,
+      document: specDocument(primaryRequirementId, {
+        requirements: [requirement("workflow-control"), secondaryRequirement],
+        sections: {
+          ...specDocument(primaryRequirementId).sections,
+          traceIds: [primaryRequirementId, secondaryRequirementId]
+        }
+      })
+    });
+    assert.equal(createdSpec.ok, true);
+
+    const updatedSecondary = {
+      ...createdSpec.document.requirements[1],
+      statement: "secondary-behavior deltas validate against their recorded base spec artifact."
+    };
+    const created = await createChangeBundle({
+      ...changeInput(createdSpec, { repositoryRoot }),
+      deltaSpecs: [
+        {
+          operation: "modify",
+          requirementId: secondaryRequirementId,
+          proposedRequirement: updatedSecondary,
+          sections: createdSpec.document.sections,
+          rationale: "Secondary requirements live inside the primary capability spec."
+        }
+      ]
+    });
+    assert.equal(created.ok, true);
+
+    const validation = await validateChangeBundle({ repositoryRoot, changeId: "chg_workflow-delta" });
+    assert.equal(validation.ok, true);
+  });
+});
+
+test("P02-T04 rejects proposed requirement IDs that differ from the delta target", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const currentSpec = await createBaselineSpec(repositoryRoot);
+    const baseInput = changeInput(currentSpec, { repositoryRoot });
     const result = await createChangeBundle({
-      ...changeInput(currentSpec, { repositoryRoot }),
-      createdAt: "2026-06-20"
+      ...baseInput,
+      deltaSpecs: [
+        {
+          ...baseInput.deltaSpecs[0],
+          proposedRequirement: requirement("different-target")
+        }
+      ]
     });
 
     assert.equal(result.ok, false);
     assert.equal(result.status, "invalid");
-    assert.equal(result.diagnostics[0].code, "invalid_created_at");
+    assert.equal(result.diagnostics[0].code, "invalid_delta_spec");
+  });
+});
+
+test("P02-T04 preflights bundle artifact paths before writing partial deltas", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const changeRoot = path.join(repositoryRoot, ".legion", "project", "changes", "chg_workflow-delta");
+    await mkdir(changeRoot, { recursive: true });
+    await writeFile(path.join(changeRoot, "design.md"), "pre-existing design", "utf8");
+
+    const result = await createChangeBundle(changeInput(currentSpec, { repositoryRoot }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "conflict");
+    assert.equal(result.diagnostics[0].code, "artifact_already_exists");
+    await assert.rejects(
+      readFile(path.join(changeRoot, "delta-specs", "req_workflow-control.md"), "utf8"),
+      /ENOENT/
+    );
+  });
+});
+
+test("P02-T04 returns typed diagnostics for invalid change bundle inputs", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const invalidTimestamp = await createChangeBundle({
+      ...changeInput(currentSpec, { repositoryRoot }),
+      createdAt: "2026-06-20"
+    });
+
+    assert.equal(invalidTimestamp.ok, false);
+    assert.equal(invalidTimestamp.status, "invalid");
+    assert.equal(invalidTimestamp.diagnostics[0].code, "invalid_created_at");
+
+    const noOwners = await createChangeBundle({
+      ...changeInput(currentSpec, { repositoryRoot }),
+      owners: []
+    });
+    assert.equal(noOwners.ok, false);
+    assert.equal(noOwners.status, "invalid");
+    assert.equal(noOwners.diagnostics[0].code, "invalid_owners");
+
+    const noDeltas = await createChangeBundle({
+      ...changeInput(currentSpec, { repositoryRoot }),
+      deltaSpecs: []
+    });
+    assert.equal(noDeltas.ok, false);
+    assert.equal(noDeltas.status, "invalid");
+    assert.equal(noDeltas.diagnostics[0].code, "invalid_delta_specs");
   });
 });

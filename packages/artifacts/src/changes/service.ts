@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import {
   LEGION_PROTOCOL_VERSION,
@@ -46,6 +46,7 @@ import {
   stableProtocolJson
 } from "../revisions.js";
 import {
+  parseCurrentSpecMarkdown,
   readCurrentSpec,
   type CurrentSpecSuccess
 } from "../specs/service.js";
@@ -168,6 +169,10 @@ function isEnoent(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }
 
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function failure(status: ChangeBundleFailure["status"], diagnostics: readonly ArtifactDiagnostic[]): ChangeBundleFailure {
   return { ok: false, status, diagnostics };
 }
@@ -239,6 +244,16 @@ function parseTimestamp(input: {
 }
 
 function parseOwners(input: readonly Actor[], path: ArtifactPath): readonly Actor[] | ChangeBundleFailure {
+  if (input.length === 0) {
+    return failure("invalid", [
+      changeDiagnostic({
+        code: "invalid_owners",
+        message: "At least one owner is required for a change bundle.",
+        path
+      })
+    ]);
+  }
+
   const owners: Actor[] = [];
   const diagnostics: ArtifactDiagnostic[] = [];
 
@@ -434,6 +449,65 @@ async function readMarkdownArtifact<T>(input: {
       path: resolved.repositoryPath,
       content,
       mediaType: input.mediaType
+    })
+  };
+}
+
+async function readCurrentSpecByArtifactPath(input: {
+  readonly repositoryRoot: string;
+  readonly artifactPath: ArtifactPath;
+}): Promise<{
+  readonly ok: true;
+  readonly document: CurrentSpecSuccess["document"];
+  readonly artifactPath: ArtifactPath;
+  readonly reference: ArtifactReference;
+} | ChangeBundleFailure> {
+  let resolved;
+  try {
+    resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath
+    });
+  } catch (error) {
+    return failure("invalid", [
+      changeDiagnostic({
+        code: "invalid_path",
+        message: error instanceof Error ? error.message : String(error),
+        path: input.artifactPath
+      })
+    ]);
+  }
+
+  let content: string;
+  try {
+    content = await readFile(resolved.absolutePath, "utf8");
+  } catch (error) {
+    if (isEnoent(error)) {
+      return failure("not_found", [
+        changeDiagnostic({
+          code: "not_found",
+          message: "Current spec artifact does not exist.",
+          path: resolved.repositoryPath
+        })
+      ]);
+    }
+    throw error;
+  }
+
+  const parsed = parseCurrentSpecMarkdown({
+    artifactPath: resolved.repositoryPath,
+    content
+  });
+  if (!parsed.ok) return failure(parsed.status, parsed.diagnostics);
+
+  return {
+    ok: true,
+    document: parsed.document,
+    artifactPath: resolved.repositoryPath,
+    reference: artifactReferenceForContent({
+      path: resolved.repositoryPath,
+      content,
+      mediaType: "text/markdown"
     })
   };
 }
@@ -741,6 +815,48 @@ async function writeNewArtifact(input: {
   }
 }
 
+async function preflightNewArtifactPaths(input: {
+  readonly repositoryRoot: string;
+  readonly artifactPaths: readonly ArtifactPath[];
+}): Promise<{ readonly ok: true } | ChangeBundleFailure> {
+  const diagnostics: ArtifactDiagnostic[] = [];
+
+  for (const artifactPath of input.artifactPaths) {
+    let resolved;
+    try {
+      resolved = await resolveProjectArtifactPath({
+        repositoryRoot: input.repositoryRoot,
+        artifactPath
+      });
+    } catch (error) {
+      return failure("invalid", [
+        changeDiagnostic({
+          code: "invalid_path",
+          message: error instanceof Error ? error.message : String(error),
+          path: artifactPath
+        })
+      ]);
+    }
+
+    try {
+      await stat(resolved.absolutePath);
+      diagnostics.push(
+        changeDiagnostic({
+          code: "artifact_already_exists",
+          message: `Change artifact already exists: ${resolved.repositoryPath}.`,
+          path: resolved.repositoryPath
+        })
+      );
+    } catch (error) {
+      if (isEnoent(error)) continue;
+      throw error;
+    }
+  }
+
+  if (diagnostics.length > 0) return failure("conflict", diagnostics);
+  return { ok: true };
+}
+
 function success(input: {
   readonly status: ChangeBundleSuccess["status"];
   readonly bundle: ChangeBundle;
@@ -771,6 +887,15 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
 
   const projectId = projectIdSchema.safeParse(input.projectId);
   const paths = changePaths(changeId);
+  if (input.deltaSpecs.length === 0) {
+    return failure("invalid", [
+      changeDiagnostic({
+        code: "invalid_delta_specs",
+        message: "At least one delta spec is required to create a change bundle.",
+        path: paths.proposal
+      })
+    ]);
+  }
   if (!projectId.success) {
     return failure("invalid", [
       changeDiagnostic({
@@ -821,6 +946,9 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     });
     return { delta, artifactPath, content, reference: revision.artifact, revision };
   });
+  const deltaArtifactsByRequirement = [...deltaArtifacts].sort((left, right) =>
+    compareStrings(left.delta.requirementId, right.delta.requirementId)
+  );
 
   const design = changeDesignDocumentSchema.safeParse({
     schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
@@ -875,11 +1003,24 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     baseGitSha: input.baseGitSha
   });
 
-  const currentSpecRefs = current.specs.map((spec) => spec.reference);
-  const currentRequirementIds = [...current.requirements.keys()].sort();
-  const deltaRequirementIds = normalizedDeltas.deltas.map((delta) => delta.requirementId).sort();
+  const preflight = await preflightNewArtifactPaths({
+    repositoryRoot: input.repositoryRoot,
+    artifactPaths: [
+      ...deltaArtifactsByRequirement.map((artifact) => artifact.artifactPath),
+      paths.design,
+      paths.decisions,
+      paths.proposal
+    ]
+  });
+  if (!preflight.ok) return preflight;
+
+  const currentSpecsByPath = [...current.specs].sort((left, right) =>
+    compareStrings(left.artifactPath, right.artifactPath)
+  );
+  const currentRequirementIds = [...current.requirements.keys()].sort(compareStrings);
+  const deltaRequirementIds = normalizedDeltas.deltas.map((delta) => delta.requirementId).sort(compareStrings);
   const artifactRevisions = [
-    ...deltaArtifacts.map((artifact) => artifact.revision),
+    ...deltaArtifactsByRequirement.map((artifact) => artifact.revision),
     designRevision,
     decisionRevision
   ];
@@ -893,8 +1034,8 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     summary: input.summary,
     status: "draft",
     currentTruth: {
-      specRefs: currentSpecRefs,
-      baseSpecHash: hashContent(stableProtocolJson(current.specs.map((spec) => ({
+      specRefs: currentSpecsByPath.map((spec) => spec.reference),
+      baseSpecHash: hashContent(stableProtocolJson(currentSpecsByPath.map((spec) => ({
         path: spec.artifactPath,
         revision: spec.document.revision,
         reference: spec.reference
@@ -903,8 +1044,8 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
       requirementIds: currentRequirementIds
     },
     proposedTruth: {
-      deltaSpecRefs: deltaArtifacts.map((artifact) => artifact.reference),
-      targetSpecHash: hashContent(stableProtocolJson(deltaArtifacts.map((artifact) => ({
+      deltaSpecRefs: deltaArtifactsByRequirement.map((artifact) => artifact.reference),
+      targetSpecHash: hashContent(stableProtocolJson(deltaArtifactsByRequirement.map((artifact) => ({
         operation: artifact.delta.operation,
         requirementId: artifact.delta.requirementId,
         reference: artifact.reference
@@ -939,7 +1080,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
     baseGitSha: input.baseGitSha,
     paths,
     change: parsedChange.data,
-    deltas: deltaArtifacts.map((artifact) => ({
+    deltas: deltaArtifactsByRequirement.map((artifact) => ({
       operation: artifact.delta.operation,
       requirementId: artifact.delta.requirementId,
       path: artifact.artifactPath,
@@ -965,7 +1106,7 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
   const bundleDocument = bundle.data;
   const proposalContent = stableProtocolJson(bundleDocument);
 
-  for (const artifact of deltaArtifacts) {
+  for (const artifact of deltaArtifactsByRequirement) {
     const written = await writeNewArtifact({
       repositoryRoot: input.repositoryRoot,
       artifactPath: artifact.artifactPath,
@@ -1124,10 +1265,20 @@ export async function validateChangeBundle(input: ValidateChangeBundleInput): Pr
 
   for (const delta of loaded.bundle.deltas) {
     if (delta.operation === "add") continue;
+    if (delta.baseCurrentSpec === undefined) {
+      diagnostics.push(
+        changeDiagnostic({
+          code: "stale_change_base",
+          message: `Current spec base for ${delta.requirementId} is missing from the change bundle.`,
+          path: delta.path
+        })
+      );
+      continue;
+    }
 
-    const current = await readCurrentSpec({
+    const current = await readCurrentSpecByArtifactPath({
       repositoryRoot: input.repositoryRoot,
-      requirementId: delta.requirementId
+      artifactPath: delta.baseCurrentSpec.path
     });
     if (!current.ok) {
       diagnostics.push(

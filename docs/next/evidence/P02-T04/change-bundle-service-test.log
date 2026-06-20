@@ -2,36 +2,39 @@ $ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --te
 $ tsc -p tsconfig.json
 $ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
 $ tsc -p tsconfig.json
-✔ canonical project artifact paths reject ambiguous or escaping input (1.5334ms)
-✔ stable protocol JSON sorts keys without locale-dependent ordering (0.1924ms)
-✔ repository discovery and path resolution stay beneath the real project root (12.0868ms)
-✔ JSON artifact reads return protocol validation diagnostics with source paths (13.7372ms)
-✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (15.7285ms)
-✔ revisioned writes reject concurrent writers and stale superseded content (18.8174ms)
-✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (81.2503ms)
-✔ P02-T04 rejects conflicting delta operations before writing a bundle (28.2591ms)
-✔ P02-T04 detects stale current-spec bases during change validation (63.9533ms)
-✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (19.4068ms)
-✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (171.412ms)
-✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (6.1855ms)
-✔ P02-T02 manifest schema reports malformed input without throwing (1.0719ms)
-✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (17.7711ms)
-✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (14.9257ms)
-✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (67.2851ms)
-✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (42.6518ms)
-✔ P02-T03 ignores non-file .md entries when listing current specs (17.1947ms)
-✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (17.4455ms)
-✔ P02-T03 preserves non-structural markdown headings inside current spec sections (29.4744ms)
-✔ P02-T03 rejects reserved current spec section headings inside section content (16.8944ms)
-✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (24.3288ms)
-✔ P02-T03 classifies semantic spec index diffs (0.6743ms)
-✔ P02-T03 blocks stale edits and supports rename and deprecate operations (37.8637ms)
-✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (11.5036ms)
-ℹ tests 25
+✔ canonical project artifact paths reject ambiguous or escaping input (1.5638ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.18ms)
+✔ repository discovery and path resolution stay beneath the real project root (9.3445ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (9.2588ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (14.4375ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (14.628ms)
+✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (66.0266ms)
+✔ P02-T04 rejects conflicting delta operations before writing a bundle (16.9544ms)
+✔ P02-T04 detects stale current-spec bases during change validation (44.5931ms)
+✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (44.1131ms)
+✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (15.4062ms)
+✔ P02-T04 preflights bundle artifact paths before writing partial deltas (18.5799ms)
+✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (15.1705ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (130.7875ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (5.3653ms)
+✔ P02-T02 manifest schema reports malformed input without throwing (0.9707ms)
+✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (16.3657ms)
+✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (13.912ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (70.6975ms)
+✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (34.8949ms)
+✔ P02-T03 ignores non-file .md entries when listing current specs (11.323ms)
+✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (11.2303ms)
+✔ P02-T03 preserves non-structural markdown headings inside current spec sections (15.1787ms)
+✔ P02-T03 rejects reserved current spec section headings inside section content (10.2529ms)
+✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (16.4976ms)
+✔ P02-T03 classifies semantic spec index diffs (0.3645ms)
+✔ P02-T03 blocks stale edits and supports rename and deprecate operations (33.6541ms)
+✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (11.731ms)
+ℹ tests 28
 ℹ suites 0
-ℹ pass 25
+ℹ pass 28
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 518.8351
+ℹ duration_ms 458.1197

@@ -79,6 +79,13 @@ export const changeDeltaSpecSchema = z
           path: ["sections"]
         });
       }
+      if (delta.proposedRequirement !== undefined && delta.proposedRequirement.id !== delta.requirementId) {
+        context.addIssue({
+          code: "custom",
+          message: "Added or modified deltas must propose the same requirement ID as the delta target.",
+          path: ["proposedRequirement", "id"]
+        });
+      }
     }
 
     if (delta.operation === "remove" && (delta.proposedRequirement !== undefined || delta.sections !== undefined)) {
