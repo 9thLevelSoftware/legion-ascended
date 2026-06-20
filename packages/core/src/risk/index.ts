@@ -1,4 +1,4 @@
-import { actorSchema, utcTimestampSchema } from "@legion/protocol";
+import { actorSchema, artifactReferenceSchema, utcTimestampSchema } from "@legion/protocol";
 import type { Actor, ArtifactReference, RiskProfile, RiskTier, UtcTimestamp } from "@legion/protocol";
 
 import { deriveGateSet, isRiskGateId } from "../gates/index.js";
@@ -405,9 +405,22 @@ function assertDefaultOrApprovedPolicy(policy: unknown, inputPolicy: unknown): a
   }
 
   const approval = policy["approval"];
-  if (isRecord(approval) && approval["kind"] === "approved_policy_artifact") return;
+  if (isApprovedPolicyArtifact(approval)) return;
 
   throw new Error("custom risk policy requires an approved policy artifact");
+}
+
+function isApprovedPolicyArtifact(approval: unknown): approval is ApprovedRiskPolicyArtifact {
+  if (!isRecord(approval) || approval["kind"] !== "approved_policy_artifact") return false;
+
+  const reason = approval["reason"];
+  if (typeof reason !== "string" || reason.length === 0) return false;
+
+  return (
+    artifactReferenceSchema.safeParse(approval["artifact"]).success &&
+    actorSchema.safeParse(approval["approvedBy"]).success &&
+    utcTimestampSchema.safeParse(approval["approvedAt"]).success
+  );
 }
 
 function assertRiskPolicyShape(policy: RiskPolicy): void {

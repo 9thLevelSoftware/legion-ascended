@@ -264,6 +264,23 @@ test("P01-T08 untrusted text cannot alter policy without an approved policy arti
     /custom risk policy requires an approved policy artifact/
   );
 
+  assert.throws(
+    () => decisionFor(signals, [], {
+      policy: {
+        ...DEFAULT_RISK_POLICY,
+        version: "0.1.1",
+        approval: {
+          kind: "approved_policy_artifact"
+        },
+        gatesByTier: {
+          ...DEFAULT_RISK_POLICY.gatesByTier,
+          R2: ["deterministic_verification"]
+        }
+      }
+    }),
+    /custom risk policy requires an approved policy artifact/
+  );
+
   const approvedPolicy = {
     ...APPROVED_POLICY,
     gatesByTier: {
