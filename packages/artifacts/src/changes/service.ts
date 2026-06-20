@@ -642,6 +642,23 @@ function deltaEntryDiagnostics(input: {
   return diagnostics;
 }
 
+function changeArtifactIdentityDiagnostics(input: {
+  readonly artifactPath: ArtifactPath;
+  readonly actualChangeId: ChangeId;
+  readonly expectedChangeId: ChangeId;
+  readonly code: string;
+  readonly label: string;
+}): readonly ArtifactDiagnostic[] {
+  if (input.actualChangeId === input.expectedChangeId) return [];
+  return [
+    changeDiagnostic({
+      code: input.code,
+      message: `${input.label} declares change ${input.actualChangeId}, not ${input.expectedChangeId}.`,
+      path: input.artifactPath
+    })
+  ];
+}
+
 function referencesEqual(left: ArtifactReference | undefined, right: ArtifactReference | undefined): boolean {
   return left?.path === right?.path && left?.sha256 === right?.sha256 && left?.mediaType === right?.mediaType;
 }
@@ -723,15 +740,16 @@ async function currentSpecMap(input: {
   return { ok: true, specs, requirements };
 }
 
-function normalizeDeltaSpecs(input: {
+async function normalizeDeltaSpecs(input: {
+  readonly repositoryRoot: string;
   readonly changeId: ChangeId;
   readonly proposalPath: ArtifactPath;
   readonly deltas: readonly ChangeDeltaSpecInput[];
   readonly baseRequirements: ReadonlyMap<RequirementId, BaseRequirement>;
-}): {
+}): Promise<{
   readonly ok: true;
   readonly deltas: readonly ChangeDeltaSpec[];
-} | ChangeBundleFailure {
+} | ChangeBundleFailure> {
   const diagnostics: ArtifactDiagnostic[] = [];
   const normalizedHeaders: { requirementId: RequirementId; operation: DeltaOperation }[] = [];
   const deltas: ChangeDeltaSpec[] = [];
@@ -770,6 +788,24 @@ function normalizeDeltaSpecs(input: {
         })
       );
       continue;
+    }
+
+    if (delta.operation === "add") {
+      const exists = await currentRequirementExists({
+        repositoryRoot: input.repositoryRoot,
+        requirementId
+      });
+      if (typeof exists !== "boolean") return exists;
+      if (exists) {
+        diagnostics.push(
+          changeDiagnostic({
+            code: "add_delta_targets_existing_requirement",
+            message: `Delta add for ${requirementId} targets an existing current requirement.`,
+            path: input.proposalPath
+          })
+        );
+        continue;
+      }
     }
 
     const parsed = changeDeltaSpecSchema.safeParse({
@@ -1053,7 +1089,8 @@ export async function createChangeBundle(input: CreateChangeBundleInput): Promis
   });
   if (!current.ok) return current;
 
-  const normalizedDeltas = normalizeDeltaSpecs({
+  const normalizedDeltas = await normalizeDeltaSpecs({
+    repositoryRoot: input.repositoryRoot,
     changeId,
     proposalPath: paths.proposal,
     deltas: input.deltaSpecs,
@@ -1348,6 +1385,13 @@ export async function loadChangeBundle(input: LoadChangeBundleInput): Promise<Ch
     schema: changeDesignDocumentSchema
   });
   if ("diagnostics" in design) return design;
+  diagnostics.push(...changeArtifactIdentityDiagnostics({
+    artifactPath: bundle.paths.design,
+    actualChangeId: design.document.changeId,
+    expectedChangeId: changeId,
+    code: "design_change_id_mismatch",
+    label: "Design artifact"
+  }));
   const designRevision = findRevision({ bundle, role: "design", path: bundle.paths.design });
   if (!referencesEqual(design.reference, designRevision?.artifact)) {
     diagnostics.push(
@@ -1366,6 +1410,13 @@ export async function loadChangeBundle(input: LoadChangeBundleInput): Promise<Ch
     schema: changeDecisionLogSchema
   });
   if ("diagnostics" in decisions) return decisions;
+  diagnostics.push(...changeArtifactIdentityDiagnostics({
+    artifactPath: bundle.paths.decisions,
+    actualChangeId: decisions.document.changeId,
+    expectedChangeId: changeId,
+    code: "decision_log_change_id_mismatch",
+    label: "Decision log artifact"
+  }));
   const decisionRevision = findRevision({ bundle, role: "decision-log", path: bundle.paths.decisions });
   if (!referencesEqual(decisions.reference, decisionRevision?.artifact)) {
     diagnostics.push(

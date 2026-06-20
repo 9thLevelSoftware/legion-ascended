@@ -2,42 +2,44 @@ $ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --te
 $ tsc -p tsconfig.json
 $ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
 $ tsc -p tsconfig.json
-✔ canonical project artifact paths reject ambiguous or escaping input (1.5252ms)
-✔ stable protocol JSON sorts keys without locale-dependent ordering (0.1716ms)
-✔ repository discovery and path resolution stay beneath the real project root (9.5525ms)
-✔ JSON artifact reads return protocol validation diagnostics with source paths (10.2193ms)
-✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (13.6859ms)
-✔ revisioned writes reject concurrent writers and stale superseded content (14.3621ms)
-✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (64.6021ms)
-✔ P02-T04 rejects conflicting delta operations before writing a bundle (16.1729ms)
-✔ P02-T04 detects stale current-spec bases during change validation (42.4526ms)
-✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (38.6571ms)
-✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (14.3525ms)
-✔ P02-T04 preflights bundle artifact paths before writing partial deltas (17.2021ms)
-✔ P02-T04 validates add deltas against current truth (39.6812ms)
-✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (34.241ms)
-✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (34.3134ms)
-✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (13.0763ms)
-✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (129.5502ms)
-✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (4.8516ms)
-✔ P02-T02 manifest schema reports malformed input without throwing (0.9277ms)
-✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (13.8645ms)
-✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (13.6238ms)
-✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (63.715ms)
-✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (33.4667ms)
-✔ P02-T03 ignores non-file .md entries when listing current specs (11.9189ms)
-✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (10.9346ms)
-✔ P02-T03 preserves non-structural markdown headings inside current spec sections (15.6826ms)
-✔ P02-T03 rejects reserved current spec section headings inside section content (10.4149ms)
-✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (15.8207ms)
-✔ P02-T03 classifies semantic spec index diffs (0.3763ms)
-✔ P02-T03 blocks stale edits and supports rename and deprecate operations (30.1457ms)
-✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (10.0933ms)
-ℹ tests 31
+✔ canonical project artifact paths reject ambiguous or escaping input (1.7999ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.2109ms)
+✔ repository discovery and path resolution stay beneath the real project root (12.6977ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (13.2598ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (16.6677ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (16.1959ms)
+✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (75.9554ms)
+✔ P02-T04 rejects conflicting delta operations before writing a bundle (17.3306ms)
+✔ P02-T04 detects stale current-spec bases during change validation (52.1031ms)
+✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (45.4635ms)
+✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (16.7658ms)
+✔ P02-T04 preflights bundle artifact paths before writing partial deltas (23.1591ms)
+✔ P02-T04 validates add deltas against current truth (47.3498ms)
+✔ P02-T04 rejects add bundle creation when the target already exists in unlisted current truth (21.9758ms)
+✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (38.4864ms)
+✔ P02-T04 rejects side artifacts whose change IDs disagree with the bundle path (77.4988ms)
+✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (35.1507ms)
+✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (12.4851ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (145.6391ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (5.5386ms)
+✔ P02-T02 manifest schema reports malformed input without throwing (0.9802ms)
+✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (16.1254ms)
+✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (14.8987ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (73.4087ms)
+✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (39.5204ms)
+✔ P02-T03 ignores non-file .md entries when listing current specs (14.2316ms)
+✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (11.5817ms)
+✔ P02-T03 preserves non-structural markdown headings inside current spec sections (17.1264ms)
+✔ P02-T03 rejects reserved current spec section headings inside section content (12.6784ms)
+✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (20.236ms)
+✔ P02-T03 classifies semantic spec index diffs (0.4064ms)
+✔ P02-T03 blocks stale edits and supports rename and deprecate operations (34.5003ms)
+✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (12.3719ms)
+ℹ tests 33
 ℹ suites 0
-ℹ pass 31
+ℹ pass 33
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 535.5863
+ℹ duration_ms 700.6861

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -90,6 +91,14 @@ function specDocument(primaryRequirementId, overrides = {}) {
       traceIds: [primaryRequirementId]
     },
     ...overrides
+  };
+}
+
+function markdownReference(artifactPath, content) {
+  return {
+    path: artifactPath,
+    sha256: `sha256:${createHash("sha256").update(Buffer.from(content, "utf8")).digest("hex")}`,
+    mediaType: "text/markdown"
   };
 }
 
@@ -404,6 +413,57 @@ test("P02-T04 validates add deltas against current truth", async () => {
   });
 });
 
+test("P02-T04 rejects add bundle creation when the target already exists in unlisted current truth", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const existingRequirement = requirement("existing-capability", {
+      traceRefs: [
+        {
+          path: ".legion/project/specs/req_existing-capability.md",
+          anchor: "req_existing-capability",
+          relation: "defines",
+          entity: { kind: "requirement", id: "req_existing-capability" }
+        }
+      ]
+    });
+    const unlistedCurrentSpec = await createCurrentSpec({
+      repositoryRoot,
+      document: specDocument(existingRequirement.id, {
+        requirements: [existingRequirement],
+        sections: {
+          ...specDocument(existingRequirement.id).sections,
+          traceIds: [existingRequirement.id]
+        }
+      })
+    });
+    assert.equal(unlistedCurrentSpec.ok, true);
+
+    const created = await createChangeBundle({
+      ...changeInput(currentSpec, { repositoryRoot }),
+      deltaSpecs: [
+        {
+          operation: "add",
+          requirementId: existingRequirement.id,
+          proposedRequirement: existingRequirement,
+          sections: {
+            ...currentSpec.document.sections,
+            traceIds: [existingRequirement.id]
+          },
+          rationale: "This add collides with current truth outside the caller-supplied base list."
+        }
+      ]
+    });
+
+    assert.equal(created.ok, false);
+    assert.equal(created.status, "invalid");
+    assert.equal(created.diagnostics[0].code, "add_delta_targets_existing_requirement");
+    await assert.rejects(
+      readFile(path.join(repositoryRoot, ".legion", "project", "changes", "chg_workflow-delta", "change.yaml"), "utf8"),
+      /ENOENT/
+    );
+  });
+});
+
 test("P02-T04 rejects loaded bundles whose identity no longer matches their path", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const currentSpec = await createBaselineSpec(repositoryRoot);
@@ -420,6 +480,53 @@ test("P02-T04 rejects loaded bundles whose identity no longer matches their path
     assert.equal(loaded.status, "invalid");
     assert.equal(loaded.diagnostics[0].code, "change_bundle_identity_mismatch");
   });
+});
+
+test("P02-T04 rejects side artifacts whose change IDs disagree with the bundle path", async () => {
+  const cases = [
+    {
+      pathKey: "design",
+      role: "design",
+      fileName: "design.md",
+      diagnosticCode: "design_change_id_mismatch"
+    },
+    {
+      pathKey: "decisions",
+      role: "decision-log",
+      fileName: "decisions.md",
+      diagnosticCode: "decision_log_change_id_mismatch"
+    }
+  ];
+
+  for (const sideArtifact of cases) {
+    await withTempRepository(async (repositoryRoot) => {
+      const currentSpec = await createBaselineSpec(repositoryRoot);
+      const created = await createChangeBundle(changeInput(currentSpec, { repositoryRoot }));
+      assert.equal(created.ok, true);
+
+      const changeRoot = path.join(repositoryRoot, ".legion", "project", "changes", "chg_workflow-delta");
+      const proposalPath = path.join(changeRoot, "change.yaml");
+      const sideArtifactPath = path.join(changeRoot, sideArtifact.fileName);
+      const originalMarkdown = await readFile(sideArtifactPath, "utf8");
+      const editedMarkdown = originalMarkdown.replace('"changeId":"chg_workflow-delta"', '"changeId":"chg_other-delta"');
+      assert.notEqual(editedMarkdown, originalMarkdown);
+      await writeFile(sideArtifactPath, editedMarkdown, "utf8");
+
+      const bundle = JSON.parse(await readFile(proposalPath, "utf8"));
+      const artifactPath = bundle.paths[sideArtifact.pathKey];
+      const revision = bundle.artifactRevisions.find((entry) =>
+        entry.role === sideArtifact.role && entry.artifact.path === artifactPath
+      );
+      assert.ok(revision);
+      revision.artifact = markdownReference(artifactPath, editedMarkdown);
+      await writeFile(proposalPath, JSON.stringify(bundle), "utf8");
+
+      const loaded = await loadChangeBundle({ repositoryRoot, changeId: "chg_workflow-delta" });
+      assert.equal(loaded.ok, false);
+      assert.equal(loaded.status, "invalid");
+      assert.equal(loaded.diagnostics[0].code, sideArtifact.diagnosticCode);
+    });
+  }
 });
 
 test("P02-T04 rejects delta frontmatter that disagrees with the bundle entry", async () => {
