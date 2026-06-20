@@ -1,0 +1,26 @@
+{
+  "cases": [
+    {
+      "name": "command payload does not match command type",
+      "value": {
+        "schemaVersion": "0.1.0",
+        "id": "cmd_01jz8m2fj7q9k3vw5x6ybcdhns",
+        "type": "task.claim.v1",
+        "version": 1,
+        "projectId": "prj_legion-next",
+        "actor": {
+          "kind": "worker",
+          "id": "worker_protocol-event-worker"
+        },
+        "issuedAt": "2026-06-20T02:08:00.000Z",
+        "payload": {
+          "changeId": "chg_phase-01-protocol",
+          "environment": "staging",
+          "taskRefs": [
+            "tsk_p01-t06-events"
+          ]
+        }
+      }
+    }
+  ]
+}

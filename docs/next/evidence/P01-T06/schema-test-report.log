@@ -1,0 +1,58 @@
+$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+✔ P01-T04 valid entity fixture corpus parses and serializes identically (16.7339ms)
+✔ P01-T04 entity schemas reject mutable operational state and missing required fields (3.5655ms)
+✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.6216ms)
+✔ P01-T04 trace references bind entity kind to matching ID prefix (1.1706ms)
+✔ review feedback: project IDs must match project slugs (1.5173ms)
+✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.9765ms)
+✔ review feedback: risk overrides must be internally consistent (1.502ms)
+✔ review feedback: superseded requirements require replacement references (1.9508ms)
+✔ review feedback: decisions enforce audit fields and selected alternative consistency (2.9663ms)
+✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.7007ms)
+✔ review feedback: oracle type and execution mode must agree (1.6513ms)
+✔ P01-T04 oracle ownership and protection are explicit (2.8753ms)
+✔ P01-T04 decisions can be superseded without rewriting history (0.9347ms)
+✔ P01-T04 invalid entity fixture cases are rejected (1.7382ms)
+✔ P01-T04 generated entity JSON schemas match committed artifacts (7.7257ms)
+✔ P01-T06 event fixture corpus parses and serializes identically (14.5909ms)
+✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.7262ms)
+✔ P01-T06 event envelopes reject transport details and imperative payloads (2.3874ms)
+✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.7746ms)
+✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.952ms)
+✔ P01-T06 API fixture corpus parses commands, results, and queries (6.7317ms)
+✔ P01-T06 every state-changing command has success and typed rejection results (0.3171ms)
+✔ review feedback: API refinements reject inconsistent command semantics (2.1728ms)
+✔ review feedback: missing command catalog entries fail validation instead of throwing (1.4975ms)
+✔ review feedback: unknown event and command discriminants fail without throwing (2.9097ms)
+✔ P01-T06 API contracts reject transport-specific response fields (1.6699ms)
+✔ P01-T06 generated event and API JSON schemas match committed artifacts (12.0405ms)
+✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (1.3351ms)
+✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (15.7471ms)
+✔ P01-T05 keeps task contract, operational task, and run attempt separate (2.9737ms)
+✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.9215ms)
+✔ P01-T05 task run manifests are frozen after start (2.1211ms)
+✔ P01-T05 evidence and reviews can represent unknown or not verified results (1.7207ms)
+✔ P01-T05 review findings require evidence for blocking severity (3.1238ms)
+✔ P01-T05 approvals require explicit action scope and idempotency (1.4474ms)
+✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (1.328ms)
+✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.2947ms)
+✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.9342ms)
+✔ P01-T05 invalid lifecycle fixture cases are rejected (2.9364ms)
+✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (15.9285ms)
+✔ entity IDs are kind-prefixed and reject cross-kind parsing (4.2549ms)
+✔ canonical scalar primitives reject ambiguous representations (0.8434ms)
+✔ artifact, correlation, cursor, and idempotency primitives are deterministic (2.4479ms)
+✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (2.8568ms)
+✔ common protocol structures are strict and versioned (2.5156ms)
+✔ generated primitive JSON schemas match committed artifacts (7.8129ms)
+✔ fixture corpus captures valid and invalid primitive examples (2.7258ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 279.0816
+

@@ -1,0 +1,7 @@
+$ pnpm --filter @legion/protocol generate:schemas
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+--- generated event/api artifact hash comparison before vs after regeneration ---
+PASS: event/API schema and documentation hashes unchanged after regeneration.
+

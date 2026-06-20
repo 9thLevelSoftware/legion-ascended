@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "0.0.1",
+  "eventId": "evt_01jz8m2fj7q9k3vw5x6ybcdhns",
+  "eventType": "project.created.v1",
+  "projectId": "prj_legion-next",
+  "aggregate": {
+    "kind": "project",
+    "id": "prj_legion-next"
+  },
+  "generation": 1,
+  "sequence": 0,
+  "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+  "actor": {
+    "kind": "human",
+    "id": "dasbl"
+  },
+  "timestamp": "2026-06-20T01:59:00.000Z",
+  "payload": {
+    "projectId": "prj_legion-next",
+    "slug": "legion-next",
+    "name": "Legion Next"
+  }
+}

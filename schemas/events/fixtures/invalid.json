@@ -1,0 +1,30 @@
+{
+  "cases": [
+    {
+      "name": "event type and payload do not match",
+      "value": {
+        "schemaVersion": "0.1.0",
+        "id": "evt_01jz8m2fj7q9k3vw5x6ybcdhnt",
+        "type": "task.claimed.v1",
+        "version": 1,
+        "projectId": "prj_legion-next",
+        "changeId": "chg_phase-01-protocol",
+        "aggregate": {
+          "kind": "task",
+          "id": "tsk_p01-t06-events"
+        },
+        "generation": 1,
+        "sequence": 4,
+        "actor": {
+          "kind": "system",
+          "id": "system_dispatcher"
+        },
+        "occurredAt": "2026-06-20T02:03:00.000Z",
+        "payload": {
+          "releaseId": "rel_p01-t06-events",
+          "environment": "staging"
+        }
+      }
+    }
+  ]
+}
