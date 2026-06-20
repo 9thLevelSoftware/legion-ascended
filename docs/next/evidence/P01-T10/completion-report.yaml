@@ -1,0 +1,82 @@
+status: DONE
+phase: 1
+task: P01-T10
+summary: >
+  Preserved and isolated the v8 legacy installer and package surface inside the
+  root package while keeping the v9 workspace packages private. Added an explicit
+  package-content compatibility gate, restored the legacy command, skill, agent,
+  adapter, installer, settings, and documentation assets, documented the legacy
+  boundary, and hardened workspace package boundary checks so new core code cannot
+  import legacy prompt assets as domain dependencies. Review follow-up hardened
+  installer update/uninstall behavior, non-Claude prompt template references, and
+  Kilo skill ownership cleanup while preserving the published path contract.
+base_commit: c700314e272496ebb466aa8293ed7df8a5ad0e0b
+files_changed:
+  - .codex-plugin/plugin.json
+  - README.md
+  - adapters/**
+  - agents/**
+  - bin/install.js
+  - bin/runtime-metadata.js
+  - checksums.sha256
+  - commands/**
+  - docs/control-modes.md
+  - docs/runtime-audit.md
+  - docs/runtime-certification-checklists.md
+  - docs/security/install-integrity.md
+  - docs/settings.schema.json
+  - legacy/README.md
+  - package.json
+  - pnpm-lock.yaml
+  - scripts/check-package-boundaries.mjs
+  - scripts/check-package-contents.mjs
+  - settings.json
+  - skills/**
+  - tests/legacy/installer-smoke.test.cjs
+  - tests/legacy/legacy-package-contract.test.mjs
+  - tests/package-boundaries.test.mjs
+  - docs/next/evidence/P01-T10/**
+verification:
+  - command: node --test tests/legacy/legacy-package-contract.test.mjs tests/legacy/installer-smoke.test.cjs
+    result: PASS
+    evidence: docs/next/evidence/P01-T10/legacy-installer-matrix.log
+  - command: node scripts/check-package-contents.mjs
+    result: PASS
+    evidence: docs/next/evidence/P01-T10/package-content-check.json
+  - command: npm pack --dry-run --json
+    result: PASS
+    evidence: docs/next/evidence/P01-T10/npm-pack-dry-run.json
+  - command: pnpm pack --dry-run
+    result: PASS
+    evidence: docs/next/evidence/P01-T10/pnpm-pack-dry-run.log
+  - command: pnpm validate
+    result: PASS
+    evidence: docs/next/evidence/P01-T10/full-validation.log
+acceptance:
+  - criterion: Existing users see no default workflow change.
+    result: PASS
+  - criterion: Root npm package exposes the same legion bin path.
+    result: PASS
+  - criterion: Tarball package contents match the approved v8 path set.
+    result: PASS
+  - criterion: Installed-tree smoke coverage verifies the preserved installer matrix.
+    result: PASS
+  - criterion: New workspace package code cannot depend on legacy persona or prompt files.
+    result: PASS
+  - criterion: Reviewed installer changes are covered by regression tests and approved checksums.
+    result: PASS
+required_evidence:
+  - package_content_diff: docs/next/evidence/P01-T10/package-content-diff.md
+  - installer_matrix_output: docs/next/evidence/P01-T10/installer-matrix-output.md
+  - legacy_boundary_review: docs/next/evidence/P01-T10/legacy-boundary-review.md
+  - package_content_check: docs/next/evidence/P01-T10/package-content-check.json
+  - npm_pack_snapshot: docs/next/evidence/P01-T10/npm-pack-dry-run.json
+  - pnpm_pack_snapshot: docs/next/evidence/P01-T10/pnpm-pack-dry-run.log
+  - focused_legacy_test_output: docs/next/evidence/P01-T10/legacy-installer-matrix.log
+  - full_validation_output: docs/next/evidence/P01-T10/full-validation.log
+risks_or_followups:
+  - Legacy assets are intentionally frozen during Milestone A; future edits should go through an explicit compatibility decision and checksum update.
+  - The root npm package now publishes only the legacy compatibility surface; v9 workspace packages remain private until a later phase defines their public release contract.
+blocker:
+  condition: none
+  decision_needed: none

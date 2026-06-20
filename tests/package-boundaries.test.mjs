@@ -80,3 +80,23 @@ test('rejects provider and storage imports in protocol and core', async () => {
     }
   );
 });
+
+test('rejects workspace package imports of legacy prompt assets', async () => {
+  await withFixture(
+    {
+      'commands/start.md': '# legacy start command\n',
+      'agents/engineering-senior-developer.md': '# legacy persona\n',
+      'packages/protocol/src/index.ts': 'export const LEGION_PROTOCOL_VERSION = "0.1.0";\n',
+      'packages/core/src/command-loader.ts': 'import startCommand from "../../../commands/start.md";\nexport const command = startCommand;\n',
+      'packages/core/src/persona-loader.ts': 'import persona from "../../../agents/engineering-senior-developer.md";\nexport const senior = persona;\n'
+    },
+    async (root) => {
+      const result = await checkPackageBoundaries({ root });
+      assert.equal(result.ok, false);
+      assert.ok(
+        result.violations.some((violation) => violation.message.includes('cannot import legacy prompt asset')),
+        'expected legacy prompt import violation'
+      );
+    }
+  );
+});

@@ -25,6 +25,14 @@ const FORBIDDEN_PROVIDER_OR_STORAGE_IMPORTS = new Set([
   "sqlite3"
 ]);
 
+const LEGACY_PROMPT_ROOTS = [
+  ".codex-plugin",
+  "adapters",
+  "agents",
+  "commands",
+  "skills"
+];
+
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs"]);
 
 function toPosixPath(value) {
@@ -91,6 +99,19 @@ function isDeepWorkspaceImport(specifier, packageName) {
   return specifier !== packageName && specifier.startsWith(`${packageName}/`);
 }
 
+function resolvesToLegacyPromptAsset(specifier, relativeFile) {
+  if (!specifier.startsWith(".")) return null;
+
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(relativeFile), specifier));
+  if (resolved.startsWith("..")) return null;
+
+  const root = LEGACY_PROMPT_ROOTS.find((legacyRoot) => {
+    return resolved === legacyRoot || resolved.startsWith(`${legacyRoot}/`);
+  });
+
+  return root ? resolved : null;
+}
+
 function validateSpecifier({ specifier, packageConfig, relativeFile }) {
   const violations = [];
 
@@ -99,6 +120,15 @@ function validateSpecifier({ specifier, packageConfig, relativeFile }) {
       file: relativeFile,
       specifier,
       message: `${packageConfig.name} cannot use forbidden provider or storage import ${specifier}`
+    });
+  }
+
+  const legacyPromptAsset = resolvesToLegacyPromptAsset(specifier, relativeFile);
+  if (legacyPromptAsset) {
+    violations.push({
+      file: relativeFile,
+      specifier,
+      message: `${packageConfig.name} cannot import legacy prompt asset ${legacyPromptAsset}; legacy Markdown assets are package/install compatibility data only`
     });
   }
 
