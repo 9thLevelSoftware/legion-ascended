@@ -142,6 +142,64 @@ test("P01-T06 every state-changing command has success and typed rejection resul
   }
 });
 
+test("review feedback: API refinements reject inconsistent command semantics", async () => {
+  const valid = await readFixture("api", "valid.json");
+  const doctorRun = valid.commands.find((command) => command.type === "doctor.run.v1");
+
+  assert.ok(doctorRun, "valid fixtures must include doctor.run.v1");
+  assert.equal(
+    commandEnvelopeSchema.safeParse({
+      ...doctorRun,
+      payload: {
+        scope: "project",
+        targetId: "tsk_p01-t06-events"
+      }
+    }).success,
+    false
+  );
+
+  assert.equal(
+    commandEnvelopeSchema.safeParse({
+      ...doctorRun,
+      type: "council.request.v1",
+      payload: {
+        topic: "Review the event/API contract boundary.",
+        decisionRefs: []
+      }
+    }).success,
+    false
+  );
+});
+
+test("review feedback: missing command catalog entries fail validation instead of throwing", async () => {
+  const valid = await readFixture("api", "valid.json");
+  const result = valid.commandResults.find((entry) => entry.commandType === "task.claim.v1");
+
+  assert.ok(result, "valid fixtures must include a task.claim.v1 command result");
+
+  const originalEntry = COMMAND_CATALOG["task.claim.v1"];
+  assert.ok(originalEntry, "test setup requires a task.claim.v1 catalog entry");
+
+  try {
+    delete COMMAND_CATALOG["task.claim.v1"];
+    assert.doesNotThrow(() => commandResultSchema.safeParse(result));
+    assert.equal(commandResultSchema.safeParse(result).success, false);
+  } finally {
+    COMMAND_CATALOG["task.claim.v1"] = originalEntry;
+  }
+});
+
+test("review feedback: unknown event and command discriminants fail without throwing", async () => {
+  const validEvents = await readFixture("events", "valid.json");
+  const validApi = await readFixture("api", "valid.json");
+
+  assert.doesNotThrow(() => eventEnvelopeSchema.safeParse({ ...validEvents.events[0], type: "task.claim.v99" }));
+  assert.equal(eventEnvelopeSchema.safeParse({ ...validEvents.events[0], type: "task.claim.v99" }).success, false);
+
+  assert.doesNotThrow(() => commandEnvelopeSchema.safeParse({ ...validApi.commands[0], type: "task.claim.v99" }));
+  assert.equal(commandEnvelopeSchema.safeParse({ ...validApi.commands[0], type: "task.claim.v99" }).success, false);
+});
+
 test("P01-T06 API contracts reject transport-specific response fields", async () => {
   const valid = await readFixture("api", "valid.json");
   const command = valid.commands[0];

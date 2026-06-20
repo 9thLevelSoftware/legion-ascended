@@ -36,5 +36,8 @@ Architecture references:
 - Duplicate recognition is explicit by event ID and idempotency key.
 - Event ordering and replay-vs-reexecution semantics are documented in generated `schemas/events/README.md`.
 - State-changing commands have cataloged success result types, rejection result types, and non-empty typed rejection code sets.
+- Missing command catalog entries are reported as validation issues rather than uncaught runtime exceptions.
+- `doctor.run.v1` rejects project, change, or task scoped targets whose ID prefix does not match the selected scope.
+- `council.request.v1` requires at least one change or decision reference for deliberation.
 - Query responses use typed projection rows and protocol cursor pagination without HTTP/path/status fields.
 - Compatibility fixture `schemas/events/fixtures/compat-v0.0.json` normalizes to the current `0.1.0` envelope.

@@ -638,6 +638,7 @@
                     "maxLength": 256
                   },
                   "decisionRefs": {
+                    "minItems": 1,
                     "type": "array",
                     "items": {
                       "anyOf": [

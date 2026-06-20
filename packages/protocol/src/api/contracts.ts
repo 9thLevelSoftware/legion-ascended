@@ -225,13 +225,31 @@ const workerCreatePayloadSchema = z.strictObject({
 
 const councilRequestPayloadSchema = z.strictObject({
   topic: councilTopicSchema,
-  decisionRefs: z.array(z.union([changeIdSchema, decisionIdSchema]))
+  decisionRefs: z.array(z.union([changeIdSchema, decisionIdSchema])).min(1)
 });
 
-const doctorRunPayloadSchema = z.strictObject({
-  scope: z.enum(["project", "change", "task", "schema"]),
-  targetId: z.union([projectIdSchema, changeIdSchema, taskIdSchema]).optional()
-});
+const doctorRunPayloadSchema = z
+  .strictObject({
+    scope: z.enum(["project", "change", "task", "schema"]),
+    targetId: z.union([projectIdSchema, changeIdSchema, taskIdSchema]).optional()
+  })
+  .superRefine((payload, context) => {
+    if (!payload.targetId || payload.scope === "schema") return;
+
+    const expectedPrefix = {
+      project: "prj_",
+      change: "chg_",
+      task: "tsk_"
+    }[payload.scope];
+
+    if (!payload.targetId.startsWith(expectedPrefix)) {
+      context.addIssue({
+        code: "custom",
+        message: `targetId must match doctor scope ${payload.scope}`,
+        path: ["targetId"]
+      });
+    }
+  });
 
 const commandPayloadSchema = z.union([
   projectInitPayloadSchema,
@@ -462,7 +480,18 @@ export const commandEnvelopeSchema = z
     metadata: metadataSchema.optional()
   })
   .superRefine((command, context) => {
-    const payloadResult = commandPayloadSchemas[command.type].safeParse(command.payload);
+    const schema = commandPayloadSchemas[command.type];
+
+    if (!schema) {
+      context.addIssue({
+        code: "custom",
+        message: `command type ${command.type} is not cataloged`,
+        path: ["type"]
+      });
+      return;
+    }
+
+    const payloadResult = schema.safeParse(command.payload);
     if (!payloadResult.success) {
       context.addIssue({
         code: "custom",
@@ -520,7 +549,18 @@ const commandRejectionResultSchema = z.strictObject({
 export const commandResultSchema = z
   .discriminatedUnion("status", [commandSuccessResultSchema, commandRejectionResultSchema])
   .superRefine((result, context) => {
-    const expected = COMMAND_CATALOG[result.commandType].result;
+    const catalogEntry = COMMAND_CATALOG[result.commandType];
+
+    if (!catalogEntry) {
+      context.addIssue({
+        code: "custom",
+        message: `command type ${result.commandType} is not cataloged`,
+        path: ["commandType"]
+      });
+      return;
+    }
+
+    const expected = catalogEntry.result;
     const expectedType = result.status === "success" ? expected.successType : expected.rejectionType;
 
     if (result.resultType !== expectedType) {

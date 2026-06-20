@@ -422,7 +422,18 @@ export const eventEnvelopeSchema = z
     metadata: metadataSchema.optional()
   })
   .superRefine((event, context) => {
-    const payloadResult = eventPayloadSchemas[event.type].safeParse(event.payload);
+    const schema = eventPayloadSchemas[event.type];
+
+    if (!schema) {
+      context.addIssue({
+        code: "custom",
+        message: `event type ${event.type} is not cataloged`,
+        path: ["type"]
+      });
+      return;
+    }
+
+    const payloadResult = schema.safeParse(event.payload);
     if (!payloadResult.success) {
       context.addIssue({
         code: "custom",
@@ -432,6 +443,15 @@ export const eventEnvelopeSchema = z
     }
 
     const expectedAggregateKind = eventAggregateKinds[event.type];
+    if (!expectedAggregateKind) {
+      context.addIssue({
+        code: "custom",
+        message: `event type ${event.type} has no aggregate mapping`,
+        path: ["type"]
+      });
+      return;
+    }
+
     if (event.aggregate.kind !== expectedAggregateKind) {
       context.addIssue({
         code: "custom",

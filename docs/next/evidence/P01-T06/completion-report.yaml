@@ -6,7 +6,8 @@ summary: >
   artifacts, generated contract documentation snapshots, and compatibility fixtures for the Legion v9 workflow protocol.
   The event catalog models workflow state transitions as immutable facts with aggregate generation, sequence, causality,
   actor, timestamp, payload, and idempotency metadata. The API catalog keeps commands and queries transport-neutral while
-  requiring every state-changing command to publish typed success and rejection result contracts.
+  requiring every state-changing command to publish typed success and rejection result contracts. Review follow-up added
+  defensive catalog lookup handling plus stricter council and doctor command semantics.
 files_changed:
   - packages/protocol/src/events/envelope.ts
   - packages/protocol/src/events/schema-documents.ts
@@ -55,6 +56,12 @@ acceptance:
   - criterion: Every state-changing command has success and typed rejection result metadata.
     result: PASS
   - criterion: Prior minor event compatibility fixture normalizes to the current envelope.
+    result: PASS
+  - criterion: Missing command catalog entries fail validation instead of throwing.
+    result: PASS
+  - criterion: Doctor command target IDs match project/change/task scope when a scoped target is supplied.
+    result: PASS
+  - criterion: Council requests name at least one change or decision reference.
     result: PASS
 required_evidence:
   - event_catalog_review: docs/next/evidence/P01-T06/event-catalog-review.md
