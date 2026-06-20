@@ -1,10 +1,10 @@
 $ pnpm --filter @legion/protocol build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 $ tsc -p tsconfig.json
 $ tsc -p tsconfig.json
-✔ canonical project artifact paths reject ambiguous or escaping input (1.605ms)
-✔ repository discovery and path resolution stay beneath the real project root (7.9607ms)
-✔ JSON artifact reads return protocol validation diagnostics with source paths (9.6425ms)
-✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (12.3158ms)
+✔ canonical project artifact paths reject ambiguous or escaping input (1.6465ms)
+✔ repository discovery and path resolution stay beneath the real project root (8.1073ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (9.3525ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (13.2404ms)
 ℹ tests 4
 ℹ suites 0
 ℹ pass 4
@@ -12,4 +12,4 @@ $ tsc -p tsconfig.json
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 225.9336
+ℹ duration_ms 235.5136

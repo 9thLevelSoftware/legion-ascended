@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -65,16 +65,18 @@ test("canonical project artifact paths reject ambiguous or escaping input", () =
 
 test("repository discovery and path resolution stay beneath the real project root", async (t) => {
   await withRepository(async (repositoryRoot) => {
+    const realRepositoryRoot = await realpath(repositoryRoot);
     const nested = path.join(repositoryRoot, "packages", "tooling");
     await mkdir(nested, { recursive: true });
-    assert.equal(await discoverProjectRoot(nested), repositoryRoot);
+    assert.equal(await discoverProjectRoot(nested), realRepositoryRoot);
 
     const resolved = await resolveProjectArtifactPath({
       repositoryRoot,
       artifactPath: ".legion/project/specs/api.md"
     });
+    assert.equal(resolved.repositoryRoot, realRepositoryRoot);
     assert.equal(resolved.repositoryPath, ".legion/project/specs/api.md");
-    assert.equal(resolved.absolutePath, path.join(repositoryRoot, ".legion", "project", "specs", "api.md"));
+    assert.equal(resolved.absolutePath, path.join(realRepositoryRoot, ".legion", "project", "specs", "api.md"));
 
     const outside = await mkdtemp(path.join(tmpdir(), "legion-artifacts-outside-"));
     const symlinkPath = path.join(repositoryRoot, ".legion", "project", "specs");

@@ -6,15 +6,15 @@ $ pnpm -r build
 Scope: 3 of 4 workspace projects
 packages/protocol build$ tsc -p tsconfig.json
 packages/protocol build: Done
-packages/core build$ tsc -p tsconfig.json
 packages/artifacts build$ tsc -p tsconfig.json
+packages/core build$ tsc -p tsconfig.json
 packages/core build: Done
 packages/artifacts build: Done
 Scope: 3 of 4 workspace projects
 packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
 packages/protocol typecheck: Done
-packages/core typecheck$ tsc -p tsconfig.json --noEmit
 packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
 packages/core typecheck: Done
 packages/artifacts typecheck: Done
 
@@ -61,55 +61,55 @@ $ node scripts/check-package-contents.mjs
 
 [validate:next] tests: pnpm run test
 $ node --test "tests/**/*.test.mjs" "tests/**/*.test.cjs" && pnpm -r --if-present test
-✔ installer lazy-loads YAML support for Kilo Code mode merging (0.9252ms)
-✔ installer source keeps one update generator and rejects non-200 registry responses (0.4602ms)
-✔ Codex prompt installs concrete template context paths for runtimes without at-refs (138.6106ms)
-✔ Kilo uninstall preserves pre-existing user skill directories and files (232.9344ms)
-✔ uninstall tolerates older manifests without paths metadata (46.2156ms)
-✔ update removes stale artifacts from the previous manifest before reinstalling (628.8902ms)
+✔ installer lazy-loads YAML support for Kilo Code mode merging (0.9975ms)
+✔ installer source keeps one update generator and rejects non-200 registry responses (0.4173ms)
+✔ Codex prompt installs concrete template context paths for runtimes without at-refs (150.8978ms)
+✔ Kilo uninstall preserves pre-existing user skill directories and files (236.2884ms)
+✔ uninstall tolerates older manifests without paths metadata (77.1955ms)
+✔ update removes stale artifacts from the previous manifest before reinstalling (568.4031ms)
 ▶ installer local mode installs runtime-native artifacts for every supported runtime
-  ✔ claude local install + uninstall (184.3522ms)
-  ✔ codex local install + uninstall (195.2062ms)
-  ✔ cursor local install + uninstall (182.1602ms)
-  ✔ copilot local install + uninstall (192.831ms)
-  ✔ gemini local install + uninstall (188.1768ms)
-  ✔ antigravity local install + uninstall (258.3606ms)
-  ✔ kiro local install + uninstall (173.7369ms)
-  ✔ windsurf local install + uninstall (190.7241ms)
-  ✔ opencode local install + uninstall (218.7988ms)
-  ✔ kilo local install + uninstall (269.6612ms)
-  ✔ kilocode local install + uninstall (404.7964ms)
-✔ installer local mode installs runtime-native artifacts for every supported runtime (2462.8167ms)
+  ✔ claude local install + uninstall (215.1238ms)
+  ✔ codex local install + uninstall (203.2481ms)
+  ✔ cursor local install + uninstall (202.0054ms)
+  ✔ copilot local install + uninstall (201.8416ms)
+  ✔ gemini local install + uninstall (196.983ms)
+  ✔ antigravity local install + uninstall (312.4347ms)
+  ✔ kiro local install + uninstall (190.2582ms)
+  ✔ windsurf local install + uninstall (220.3567ms)
+  ✔ opencode local install + uninstall (225.4082ms)
+  ✔ kilo local install + uninstall (259.5637ms)
+  ✔ kilocode local install + uninstall (411.7154ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2646.2777ms)
 ▶ installer global mode installs runtime-native artifacts for every globally supported runtime
-  ✔ claude global install + uninstall (183.031ms)
-  ✔ codex global install + uninstall (179.3651ms)
-  ✔ copilot global install + uninstall (184.6073ms)
-  ✔ gemini global install + uninstall (177.1377ms)
-  ✔ antigravity global install + uninstall (254.2057ms)
-  ✔ kiro global install + uninstall (173.6002ms)
-  ✔ opencode global install + uninstall (185.697ms)
-  ✔ kilo global install + uninstall (231.6376ms)
-  ✔ kilocode global install + uninstall (383.5004ms)
-✔ installer global mode installs runtime-native artifacts for every globally supported runtime (1955.8028ms)
-✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (665.7592ms)
-✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (323.1267ms)
-✔ installer rejects unsupported scope and manual-only runtime installs (131.7642ms)
-✔ deprecated --amazon-q alias installs the Kiro runtime contract (183.4468ms)
-✔ installer --verify validates checksums in local source installs (217.2986ms)
-✔ P01-T10 package contents preserve the approved v8 legacy path set (935.018ms)
-✔ P01-T10 seeded package mutations fail the path contract (0.1603ms)
-✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.0915ms)
-✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.127ms)
-✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (255.9334ms)
-✔ accepts legal protocol, core, and artifacts imports (11.9906ms)
-✔ rejects protocol imports from core (6.1051ms)
-✔ rejects deep imports across workspace package exports (5.7407ms)
-✔ rejects provider and storage imports in protocol, core, and artifacts (7.1667ms)
-✔ rejects workspace package imports of legacy prompt assets (9.2842ms)
-✔ P01-T11 validate-next plan is the shared CI/local gate order (0.8882ms)
-✔ P01-T11 CI workflow blocks Phase 1 gates on all supported platforms (8.1843ms)
-✔ P01-T11 protocol compatibility workflow uses pinned actions and generated schema checks (2.5955ms)
-✔ P01-T11 generated protocol docs match the current schema and transition sources (3306.2097ms)
+  ✔ claude global install + uninstall (176.5299ms)
+  ✔ codex global install + uninstall (190.1717ms)
+  ✔ copilot global install + uninstall (192.0678ms)
+  ✔ gemini global install + uninstall (193.2465ms)
+  ✔ antigravity global install + uninstall (268.5434ms)
+  ✔ kiro global install + uninstall (178.3783ms)
+  ✔ opencode global install + uninstall (187.14ms)
+  ✔ kilo global install + uninstall (234.5859ms)
+  ✔ kilocode global install + uninstall (417.9589ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (2041.2492ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (672.6953ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (272.2603ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (126.5404ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (186.8526ms)
+✔ installer --verify validates checksums in local source installs (230.4207ms)
+✔ P01-T10 package contents preserve the approved v8 legacy path set (939.1515ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.2327ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.1235ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.1419ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (286.4877ms)
+✔ accepts legal protocol, core, and artifacts imports (13.8111ms)
+✔ rejects protocol imports from core (6.0865ms)
+✔ rejects deep imports across workspace package exports (5.5282ms)
+✔ rejects provider and storage imports in protocol, core, and artifacts (6.9701ms)
+✔ rejects workspace package imports of legacy prompt assets (9.6069ms)
+✔ P01-T11 validate-next plan is the shared CI/local gate order (0.9199ms)
+✔ P01-T11 CI workflow blocks Phase 1 gates on all supported platforms (8.1948ms)
+✔ P01-T11 protocol compatibility workflow uses pinned actions and generated schema checks (2.5291ms)
+✔ P01-T11 generated protocol docs match the current schema and transition sources (3475.0235ms)
 ℹ tests 47
 ℹ suites 0
 ℹ pass 47
@@ -117,64 +117,64 @@ $ node --test "tests/**/*.test.mjs" "tests/**/*.test.cjs" && pnpm -r --if-presen
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 7108.9399
+ℹ duration_ms 7329.9031
 Scope: 3 of 4 workspace projects
 packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 packages/protocol test: $ tsc -p tsconfig.json
-packages/protocol test: ✔ P01-T09 versioned records fail closed without a valid schemaVersion (1.5317ms)
-packages/protocol test: ✔ P01-T09 canonical compatibility fixtures remain readable (3.7168ms)
-packages/protocol test: ✔ P01-T09 protocol negotiation rejects unsupported old and future versions (0.5365ms)
-packages/protocol test: ✔ P01-T09 explicit migrations apply in order and are idempotent when repeated (1.4103ms)
-packages/protocol test: ✔ P01-T09 migration failures do not partially mutate caller input (0.8408ms)
-packages/protocol test: ✔ P01-T09 downcasts require explicit information-preservation evidence (0.1942ms)
-packages/protocol test: ✔ P01-T09 compatibility reports include matrix and evolution policy text (0.2964ms)
-packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (13.1089ms)
-packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (2.0392ms)
-packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.165ms)
-packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (1.4979ms)
-packages/protocol test: ✔ review feedback: project IDs must match project slugs (1.5568ms)
-packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.6937ms)
-packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (1.1878ms)
-packages/protocol test: ✔ review feedback: superseded requirements require replacement references (2.1625ms)
-packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.6206ms)
-packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.5691ms)
-packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (1.2436ms)
-packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.0224ms)
-packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (0.7753ms)
-packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (1.0282ms)
-packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (6.835ms)
-packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (11.893ms)
-packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.6756ms)
-packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (2.8509ms)
-packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.7149ms)
-packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.4516ms)
-packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (6.1724ms)
-packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.2854ms)
-packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (1.6859ms)
-packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (1.7265ms)
-packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (1.2794ms)
-packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (0.8575ms)
-packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (10.5774ms)
-packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (1.3093ms)
-packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (15.0304ms)
-packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (1.8198ms)
-packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.3967ms)
-packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (1.809ms)
-packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (1.8599ms)
-packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (1.2875ms)
-packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (0.949ms)
-packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (0.9177ms)
-packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.0375ms)
-packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.8949ms)
-packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (1.9735ms)
-packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (15.2448ms)
-packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.8674ms)
-packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.7906ms)
-packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.8294ms)
-packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (2.1642ms)
-packages/protocol test: ✔ common protocol structures are strict and versioned (1.3753ms)
-packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (5.5867ms)
-packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.3026ms)
+packages/protocol test: ✔ P01-T09 versioned records fail closed without a valid schemaVersion (1.3159ms)
+packages/protocol test: ✔ P01-T09 canonical compatibility fixtures remain readable (4.5974ms)
+packages/protocol test: ✔ P01-T09 protocol negotiation rejects unsupported old and future versions (0.5711ms)
+packages/protocol test: ✔ P01-T09 explicit migrations apply in order and are idempotent when repeated (1.8491ms)
+packages/protocol test: ✔ P01-T09 migration failures do not partially mutate caller input (1.4247ms)
+packages/protocol test: ✔ P01-T09 downcasts require explicit information-preservation evidence (0.3269ms)
+packages/protocol test: ✔ P01-T09 compatibility reports include matrix and evolution policy text (0.4587ms)
+packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (14.762ms)
+packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (2.5802ms)
+packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.1397ms)
+packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (1.1727ms)
+packages/protocol test: ✔ review feedback: project IDs must match project slugs (0.9497ms)
+packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (2.418ms)
+packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (1.2738ms)
+packages/protocol test: ✔ review feedback: superseded requirements require replacement references (1.2904ms)
+packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.8828ms)
+packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.7566ms)
+packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (2.8957ms)
+packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.1088ms)
+packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (0.9598ms)
+packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (1.027ms)
+packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (7.603ms)
+packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (12.0548ms)
+packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.929ms)
+packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (2.4921ms)
+packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.7115ms)
+packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.5627ms)
+packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (7.2092ms)
+packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.2657ms)
+packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (2.476ms)
+packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (1.1076ms)
+packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (1.694ms)
+packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (0.8446ms)
+packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (10.7505ms)
+packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (1.2557ms)
+packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (14.7257ms)
+packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (2.013ms)
+packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.4305ms)
+packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (1.9627ms)
+packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (0.9401ms)
+packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (0.9862ms)
+packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (0.975ms)
+packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (0.9988ms)
+packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.4338ms)
+packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (1.1157ms)
+packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (2.2176ms)
+packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (16.4589ms)
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (4.1739ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.7696ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.8631ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (2.5177ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (1.4795ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (6.056ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.8038ms)
 packages/protocol test: ℹ tests 54
 packages/protocol test: ℹ suites 0
 packages/protocol test: ℹ pass 54
@@ -182,38 +182,38 @@ packages/protocol test: ℹ fail 0
 packages/protocol test: ℹ cancelled 0
 packages/protocol test: ℹ skipped 0
 packages/protocol test: ℹ todo 0
-packages/protocol test: ℹ duration_ms 265.7068
+packages/protocol test: ℹ duration_ms 279.9599
 packages/protocol test: Done
 packages/artifacts test$ pnpm --filter @legion/protocol build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 packages/core test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 packages/core test: $ tsc -p tsconfig.json
 packages/artifacts test: $ tsc -p tsconfig.json
 packages/artifacts test: $ tsc -p tsconfig.json
-packages/core test: ✔ P01-T08 ADR-006 golden examples classify into expected tiers and gates (2.0068ms)
-packages/core test: ✔ P01-T08 adding a high-risk signal never lowers the derived tier (0.5321ms)
-packages/core test: ✔ P01-T08 lower-tier overrides require decision-owner approval and cannot undercut hard floors (1.52ms)
-packages/core test: ✔ P01-T08 explanations list normalized signals and overrides deterministically (0.1955ms)
-packages/core test: ✔ P01-T08 untrusted text cannot alter policy without an approved policy artifact (0.7234ms)
-packages/core test: ✔ P01-T08 gate derivation rejects malformed custom gate policy instead of emitting partial gates (0.2472ms)
-packages/core test: ✔ P01-T08 custom policy validation reports malformed policy objects without TypeErrors (0.4068ms)
-packages/core test: ✔ P01-T08 risk signal and override runtime validation rejects malformed JavaScript inputs (0.2127ms)
-packages/core test: ✔ P01-T08 lower-tier overrides enforce retained gates in the returned gate set (0.2152ms)
-packages/core test: ✔ P01-T08 risk profile reason strings stay within protocol limits (0.2004ms)
-packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.6479ms)
-packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.5251ms)
-packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (2.4615ms)
-packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.1363ms)
-packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1459ms)
-packages/core test: ✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.2484ms)
-packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.4411ms)
-packages/core test: ✔ P01-T07 integration completions must match the recorded side-effect intent (0.2089ms)
-packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.4295ms)
-packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.3192ms)
-packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.225ms)
-packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.3952ms)
-packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.1092ms)
-packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (0.0722ms)
-packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.3057ms)
+packages/core test: ✔ P01-T08 ADR-006 golden examples classify into expected tiers and gates (2.3599ms)
+packages/core test: ✔ P01-T08 adding a high-risk signal never lowers the derived tier (0.5961ms)
+packages/core test: ✔ P01-T08 lower-tier overrides require decision-owner approval and cannot undercut hard floors (1.7349ms)
+packages/core test: ✔ P01-T08 explanations list normalized signals and overrides deterministically (0.2171ms)
+packages/core test: ✔ P01-T08 untrusted text cannot alter policy without an approved policy artifact (0.8081ms)
+packages/core test: ✔ P01-T08 gate derivation rejects malformed custom gate policy instead of emitting partial gates (0.2978ms)
+packages/core test: ✔ P01-T08 custom policy validation reports malformed policy objects without TypeErrors (0.4824ms)
+packages/core test: ✔ P01-T08 risk signal and override runtime validation rejects malformed JavaScript inputs (0.2542ms)
+packages/core test: ✔ P01-T08 lower-tier overrides enforce retained gates in the returned gate set (0.2224ms)
+packages/core test: ✔ P01-T08 risk profile reason strings stay within protocol limits (0.2047ms)
+packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.6899ms)
+packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.5299ms)
+packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.9819ms)
+packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.1454ms)
+packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1958ms)
+packages/core test: ✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.2807ms)
+packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.4871ms)
+packages/core test: ✔ P01-T07 integration completions must match the recorded side-effect intent (0.1721ms)
+packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.4387ms)
+packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.3421ms)
+packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.2388ms)
+packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.4632ms)
+packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.1282ms)
+packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (0.0788ms)
+packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.43ms)
 packages/core test: ℹ tests 25
 packages/core test: ℹ suites 0
 packages/core test: ℹ pass 25
@@ -221,12 +221,12 @@ packages/core test: ℹ fail 0
 packages/core test: ℹ cancelled 0
 packages/core test: ℹ skipped 0
 packages/core test: ℹ todo 0
-packages/core test: ℹ duration_ms 217.8724
+packages/core test: ℹ duration_ms 232.0556
 packages/core test: Done
-packages/artifacts test: ✔ canonical project artifact paths reject ambiguous or escaping input (1.6818ms)
-packages/artifacts test: ✔ repository discovery and path resolution stay beneath the real project root (7.5101ms)
-packages/artifacts test: ✔ JSON artifact reads return protocol validation diagnostics with source paths (9.9098ms)
-packages/artifacts test: ✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (11.4942ms)
+packages/artifacts test: ✔ canonical project artifact paths reject ambiguous or escaping input (1.7814ms)
+packages/artifacts test: ✔ repository discovery and path resolution stay beneath the real project root (7.1517ms)
+packages/artifacts test: ✔ JSON artifact reads return protocol validation diagnostics with source paths (8.8699ms)
+packages/artifacts test: ✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (11.8663ms)
 packages/artifacts test: ℹ tests 4
 packages/artifacts test: ℹ suites 0
 packages/artifacts test: ℹ pass 4
@@ -234,7 +234,7 @@ packages/artifacts test: ℹ fail 0
 packages/artifacts test: ℹ cancelled 0
 packages/artifacts test: ℹ skipped 0
 packages/artifacts test: ℹ todo 0
-packages/artifacts test: ℹ duration_ms 218.4044
+packages/artifacts test: ℹ duration_ms 228.1552
 packages/artifacts test: Done
 
 [validate:next] npm-pack: npm pack --dry-run --json
