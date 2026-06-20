@@ -1,0 +1,50 @@
+status: DONE
+phase: 2
+task: P02-T03
+summary: >
+  Implemented the current-spec repository service for capability-scoped,
+  Git-diffable current truth under `.legion/project/specs/<requirement-id>.md`.
+  The service renders and parses JSON-frontmatter Markdown specs, validates
+  protocol requirements, stable anchors, required sections, unresolved
+  placeholders, contradictory status, orphan trace IDs, duplicate requirement
+  IDs across specs, and stale revision updates. It also derives a deterministic
+  in-memory spec index, computes semantic diffs, supports read/list/create/update
+  plus rename/deprecate operations, and publishes the generated spec-document
+  JSON Schema.
+files_changed:
+  - packages/artifacts/src/specs/**
+  - packages/artifacts/src/index.ts
+  - packages/artifacts/scripts/generate-artifacts-json-schema.mjs
+  - packages/artifacts/test/specs.test.mjs
+  - schemas/artifacts/spec-document.schema.json
+  - templates/specs/capability-spec.md
+  - docs/next/evidence/P02-T03/**
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/evidence-index.yaml
+verification:
+  - command: pnpm --filter @legion/artifacts test
+    result: PASS
+    evidence: docs/next/evidence/P02-T03/current-spec-service-test.log
+  - command: temporary initProject + createCurrentSpec + listCurrentSpecs
+    result: PASS
+    evidence: docs/next/evidence/P02-T03/golden-tree-and-index-hash.json
+  - command: semantic diff and stale-edit regression tests
+    result: PASS
+    evidence: docs/next/evidence/P02-T03/diff-calibration-report.md
+  - command: pnpm run validate:next
+    result: PASS
+    evidence: docs/next/evidence/P02-T03/full-validation.log
+acceptance:
+  - criterion: Current truth is capability-scoped and Git-diffable.
+    result: PASS
+  - criterion: Spec index is derived and reproducible, not independently mutable.
+    result: PASS
+  - criterion: Requirements retain stable identities across edits.
+    result: PASS
+commits:
+  - 748d9e9bb87085560b40b3e498c0b22936cb07ff
+risks_or_followups:
+  - P02-T04 and later change-bundle services must consume current specs through this artifact service rather than mutating spec Markdown directly.
+blocker:
+  condition: none
+  decision_needed: none

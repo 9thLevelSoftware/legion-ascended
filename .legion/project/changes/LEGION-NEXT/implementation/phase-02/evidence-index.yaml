@@ -19,7 +19,7 @@ source_documents:
 task_commits:
   P02-T01: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7"
   P02-T02: "93b17d7ec547cd46564144d3a406224cfadf0dd8"
-  P02-T03: null
+  P02-T03: "748d9e9bb87085560b40b3e498c0b22936cb07ff"
   P02-T04: null
   P02-T05: null
   P02-T06: null
@@ -116,3 +116,59 @@ entries:
     artifact: docs/next/evidence/P02-T02/completion-report.yaml
     description: Structured P02-T02 completion report
     sha256: 4D56E3556A42E4947CFB09A7AEF9B8469112340B72244F9C35CA1C024F89A259
+  - task: P02-T03
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger updated for P02-T03 completion
+    sha256: DFB9A6BD6E5F2CAF4467FBF38346D8E7ECF19996742A49EA459D5A9457C9C420
+  - task: P02-T03
+    artifact: packages/artifacts/src/specs/schema.ts
+    description: Current-spec document, capability, section, and derived-index schemas plus generated JSON Schema source
+    sha256: FB4A758FFD2622E246059AB352E390417E4603D3C52D4AAB6DD6256AE3163460
+  - task: P02-T03
+    artifact: packages/artifacts/src/specs/service.ts
+    description: Current-spec Markdown repository service, validation diagnostics, stale revision checks, derived index, and semantic diff helpers
+    sha256: A66AE983FF65D8C528A94C6C77DDB72EE3306C84C9D46BBE2D86EF1D09A9F71F
+  - task: P02-T03
+    artifact: packages/artifacts/src/specs/index.ts
+    description: Current-spec package exports
+    sha256: B5B1A3202E0850640A45B37883D801CC6330202DEE7E2D4298890151882460BA
+  - task: P02-T03
+    artifact: packages/artifacts/src/index.ts
+    description: Root artifacts package export for current-spec services
+    sha256: 6EDA3DFCED158712ABF37535A9A2CD3C62D64FE9C577C15E5E5DF1ED52EC5702
+  - task: P02-T03
+    artifact: packages/artifacts/scripts/generate-artifacts-json-schema.mjs
+    description: Artifact schema generator extended to emit current spec document schema
+    sha256: 4FC3D913AD107CF4000DBE149EF8D75B7F33E7ECFBA425B419FAEB3064D36033
+  - task: P02-T03
+    artifact: packages/artifacts/test/specs.test.mjs
+    description: P02-T03 regression tests for create/read/list/index, duplicates, semantic diffs, stale edits, rename/deprecate, and validation diagnostics
+    sha256: F4F76672026057519843BB14264F1F53E08CC6604C6D07D0A370B38725B4A064
+  - task: P02-T03
+    artifact: schemas/artifacts/spec-document.schema.json
+    description: Generated current-spec document JSON Schema
+    sha256: DDDF6D1C64CBDC625453D1F7BDBBE5FE2FA06206BD33ABC3F1B94799B5F7573D
+  - task: P02-T03
+    artifact: templates/specs/capability-spec.md
+    description: Human-reviewable capability current-spec Markdown template
+    sha256: 879A322BF1901134B7AC48AE7090CB568B3FEEB8E81E9E6AC2942B206BDE06A2
+  - task: P02-T03
+    artifact: docs/next/evidence/P02-T03/current-spec-service-test.log
+    description: Focused @legion/artifacts current-spec service test report
+    sha256: 5E38C1FBF289EEF16E34409B8FA2C8A2BB2069A8279DC3ADEE67141C2103C786
+  - task: P02-T03
+    artifact: docs/next/evidence/P02-T03/golden-tree-and-index-hash.json
+    description: Temporary project current-spec golden tree and deterministic derived index hash proof
+    sha256: E1DAFF27F1D5475994F46CFCA39C79E3E30C307B5F015732A06C5D468BBF21CF
+  - task: P02-T03
+    artifact: docs/next/evidence/P02-T03/diff-calibration-report.md
+    description: Human-readable semantic diff, stale-edit, and validation diagnostic proof summary
+    sha256: B86F2C63690BE07697513853AD2ABCDB38F66A48AB106FBF4262738CD9219BD8
+  - task: P02-T03
+    artifact: docs/next/evidence/P02-T03/full-validation.log
+    description: Full workspace validate-next log after P02-T03 implementation
+    sha256: 56247B9C52FEFEA07A7B09D2EAB163B50C180EB4F01BF7FDE848E463354E9BDF
+  - task: P02-T03
+    artifact: docs/next/evidence/P02-T03/completion-report.yaml
+    description: Structured P02-T03 completion report
+    sha256: 032419A67F3FF943855FC4B16FB06DD344450AB1BF2FC8E7F8AD9B4F58A4CF6F

@@ -1,0 +1,29 @@
+$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+✔ canonical project artifact paths reject ambiguous or escaping input (1.4162ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.1748ms)
+✔ repository discovery and path resolution stay beneath the real project root (7.9395ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (11.4936ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (13.5049ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (13.5303ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (123.8462ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (5.1026ms)
+✔ P02-T02 manifest schema reports malformed input without throwing (0.9086ms)
+✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (13.3393ms)
+✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (11.7129ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (62.9807ms)
+✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (34.9405ms)
+✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (17.8977ms)
+✔ P02-T03 classifies semantic spec index diffs (0.3098ms)
+✔ P02-T03 blocks stale edits and supports rename and deprecate operations (27.056ms)
+✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (9.0357ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 417.9645
