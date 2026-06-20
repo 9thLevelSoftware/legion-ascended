@@ -1,0 +1,13 @@
+✔ P01-T10 package contents preserve the approved v8 legacy path set (1001.669ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.1914ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.0995ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.1625ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (220.2806ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1283.4318

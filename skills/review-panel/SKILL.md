@@ -1,0 +1,689 @@
+---
+name: review-panel
+description: "Assembles a review panel of specialist agents matched to the code or artifact being reviewed, each evaluating against domain-specific rubrics, then synthesizes findings into a consolidated report. Called by review-loop for /legion:review. Use when the user needs multi-reviewer feedback, peer review simulation, rubric-based code evaluation, or expert critique from multiple perspectives."
+triggers: [review, panel, expert, opinion, advisory, evaluate, peer review, code review, multi-reviewer, critique, rubric evaluation, get feedback]
+token_cost: medium
+summary: "Assembles specialist review panels from the agent pool, each reviewer evaluating against domain-specific rubrics. Produces a synthesized consolidated report. Called by review-loop for /legion:review."
+---
+
+# Review Panel
+
+Composes context-aware multi-perspective review teams from the 48-agent pool (roster defined in CLAUDE.md Division table; count computed at runtime from `agents/` directory). Each reviewer evaluates through domain-specific weighted rubrics with non-overlapping criteria. Produces a synthesized consolidated report.
+
+Used by `/legion:review` when panel mode is selected. Replaces the static phase-type-to-agent mapping with dynamic selection via agent-registry recommendation algorithm.
+
+## Quick Start
+
+Three phases: **Compose** (Section 1) → **Review** (agents evaluate independently against rubrics from Section 2) → **Synthesize** (Section 3 deduplicates, filters, and produces consolidated report). Intent filtering narrows scope when flags like `--just-security` are passed.
+
+---
+
+## Section 1: Panel Composition Algorithm
+
+How to assemble a review panel dynamically based on what's being reviewed.
+
+### 1.2 Intent-Based Panel Filtering
+
+When review command specifies intent (e.g., --just-security):
+
+1. **Load Intent Domains**
+   - From intent-teams.yaml security-only template
+   - Domains: security, owasp, stride, authentication, authorization
+
+2. **Filter Agents by Domain**
+   - For each candidate agent:
+     - Check agent's primary domains in authority-matrix.yaml
+     - Include only if domains overlap with intent domains
+   - Example: engineering-security-engineer (security domain) → INCLUDE
+   - Example: engineering-frontend-developer (ui domain) → EXCLUDE
+
+3. **Override Recommendations**
+   - If intent mode: Use intent template agents, skip registry recommendation
+   - If full mode: Use existing recommendation algorithm
+
+4. **Domain-Only Review Scope**
+   - Agents review ONLY their intent-matching domains
+   - Non-security findings deferred or excluded
+   - Prevents out-of-domain opinions (already filtered by authority in Phase 37)
+
+```
+Input: Phase CONTEXT.md content, SUMMARY.md content, files_modified list
+Output: Ordered list of 2-4 reviewer agents with assigned rubrics
+
+Step 1: Extract review signals from phase artifacts
+  Read the phase CONTEXT.md and all SUMMARY.md files. Extract:
+  - Primary domains touched (engineering, design, marketing, testing, product, infrastructure)
+  - File types produced (.md, .ts, .js, .css, .py, config files, etc.)
+  - Keywords from phase goal and task descriptions
+  - Combine into a composite task description for the recommendation algorithm
+
+Step 1.0: Preconditions Verification (MANDATORY before composition)
+
+  Before running the scoring and filtering steps below, verify all preconditions. Missing
+  preconditions trigger documented degraded behavior, not silent success.
+
+  a) **agent-registry.md Section 3 structure** — read `skills/agent-registry/SKILL.md`.
+     Verify Sections 1 through 6 exist as named headings. If Section 6 (Memory Boost) is
+     absent: **skip the memory boost step below** and log WARN:
+     `"agent-registry Section 6 not found. Skipping memory-based agent score boost."`
+     Do not fail the review — proceed without the boost.
+
+  b) **OUTCOMES.md schema** — if `.planning/memory/OUTCOMES.md` exists, verify it conforms
+     to the memory-manager schema (required front-matter keys: `task_type`, `outcome`,
+     `agent_id`). If malformed: skip memory boost with WARN; do not fail.
+
+  c) **Agent frontmatter — `division` field** — every candidate agent .md file must have a
+     `division` key in its frontmatter. If absent on any candidate: log WARN and exclude
+     that candidate from the panel. Do not guess the division from the filename prefix.
+
+  d) **Review-capability declaration** — an agent is eligible for the panel iff its
+     frontmatter has a non-empty `review_strengths` array. This is the canonical marker;
+     do NOT infer eligibility from specialty substring matches. See Step 3 below.
+
+Step 2: Score agents using agent-registry Section 3
+  Pass the composite task description to the agent-registry recommendation algorithm:
+  - Step 1: Parse extracted keywords as task terms
+  - Step 2: Match agents — exact (3 pts), partial (1 pt), division (2 pts)
+  - Step 3: Rank by score, break ties by specificity
+  - Step 6 (optional, per precondition 1.0.a): Apply memory boost if OUTCOMES.md exists
+    AND agent-registry Section 6 is present AND OUTCOMES.md is schema-conformant.
+
+Step 3: Filter to review-capable agents
+  From the ranked list, keep only agents whose frontmatter declares a non-empty
+  `review_strengths` array (the declarative eligibility marker established in Step 1.0.d).
+
+  **Reference roster — current review-capable agents** (verify against agents/ directory
+  at runtime; this list is informational, not authoritative):
+
+  Testing division (6 agents — verified against CLAUDE.md):
+  - testing-qa-verification-specialist, testing-api-tester
+  - testing-workflow-optimizer, testing-performance-benchmarker
+  - testing-test-results-analyzer, testing-tool-evaluator
+
+  Design division (review-capable):
+  - design-brand-guardian, design-ux-architect, design-ux-researcher
+
+  Engineering division (review-capable):
+  - engineering-senior-developer, engineering-backend-architect
+  - engineering-frontend-developer, engineering-infrastructure-devops
+
+  Product division (review-capable):
+  - product-sprint-prioritizer, product-feedback-synthesizer
+
+  Project Management (review-capable):
+  - project-manager-senior, project-management-project-shepherd
+
+  **Note:** `testing-evidence-collector`, `engineering-devops-automator`, and
+  `marketing-content-creator` do NOT exist in the Legion 48-agent roster. They MUST NOT
+  appear in this list. If found in a prior version of this skill file, treat as a doc bug
+  and verify removal. Canonical agent IDs are in CLAUDE.md Division table.
+
+  If an agent from a non-review-capable role (e.g., a marketing-platform specialist without
+  review_strengths, or an XR-immersive role) scores highly, skip it and take the next
+  eligible agent.
+
+Step 4: Cap panel size and enforce diversity
+  - 2 reviewers: single-domain phase (only one division touched)
+  - 3 reviewers: standard phase (2 divisions involved)
+  - 4 reviewers: cross-domain phase (3+ divisions involved)
+
+  Diversity rule: no more than 2 reviewers from the same division.
+  If 3+ agents from Testing score highest, keep the top 2 and pull the
+  next-highest from a different division.
+
+  Mandatory: at least one Testing division agent on every panel.
+  This inherits from agent-registry Step 5 (Mandatory Roles) and from
+  the existing review-loop principle that testing-qa-verification-specialist is
+  always included.
+
+Step 5: Assign rubrics
+  For each selected reviewer, look up their domain rubric from Section 2.
+  The rubric is keyed by agent ID. If no specific rubric exists for an agent,
+  use the division default rubric.
+
+Step 6: Present panel to user for confirmation
+  Display the composed panel via AskUserQuestion:
+
+  ## Phase {N}: {phase_name} — Review Panel
+
+  **Panel Size**: {count} reviewers (based on {domain_count} domain(s) detected)
+  **Domains Detected**: {comma-separated domains}
+
+  | # | Agent | Division | Rubric Focus | Score |
+  |---|-------|----------|--------------|-------|
+  | 1 | {agent-id} | {division} | {rubric_name} | {score} pts |
+  | 2 | {agent-id} | {division} | {rubric_name} | {score} pts |
+
+  **Why this panel**: {1-sentence rationale linking detected domains to selected agents}
+
+  Options:
+  - "Use this panel" (Recommended)
+  - "Add a reviewer" — add one more agent from the ranked list (up to max 4)
+  - "Replace a reviewer" — swap one reviewer for an alternative
+  - "Other" — enter custom agent IDs
+
+  If user selects "Add a reviewer": show next-ranked eligible agent, confirm
+  If user selects "Replace a reviewer": show which reviewer to replace and alternatives
+  If user selects "Other": accept custom agent IDs, validate each exists, assign default rubric
+```
+
+### Panel Output Contract (consumed by review-loop dispatch)
+
+review-panel does NOT spawn agents. It emits a composition artifact that review-loop Section 2 consumes and review-loop Section 3/4 dispatches. The contract below is the ONLY surface review-loop reads.
+
+**Emitted artifact:** in-memory object with shape:
+```yaml
+panel:
+  reviewers:          # ordered list, length 2-4 per Step 4
+    - agent_id: {string — must match filename in agents/}
+      division: {string}
+      rubric_name: {string — matches Section 2 rubric key}
+      score: {integer}
+      rationale: {string}
+  domains_detected: [{string}, ...]
+  mode: "full" | "security-only" | "design-only" | "marketing-only"
+  confirmed_by_user: true
+```
+
+**Dispatch handoff to review-loop:**
+
+| Field | Value |
+|-------|-------|
+| **When** | AFTER Step 6 user confirmation succeeds (`confirmed_by_user: true`). If user declines all options: emit `<escalation severity=warning type=scope>` and return empty panel — do NOT fabricate a panel. |
+| **Why no dispatch here** | review-panel is pure composition. Spawning is the responsibility of review-loop Section 3 Step 4 (review agents) and Section 5 Step 4 (fix agents). Separation prevents double-dispatch bugs when panel is reused across cycles. |
+| **How many reviewers** | Exactly the count emitted in `panel.reviewers` (2-4 per Step 4 cap). review-loop must not add, drop, or reorder reviewers without re-invoking review-panel. |
+| **Mechanism** | Return value to review-loop caller. review-loop reads `panel.reviewers[*].agent_id` and treats each as input to Section 3 prompt construction, then Section 3 Step 4 dispatch spec. |
+
+**Preconditions (verify before emitting artifact):**
+1. Step 1.0 preconditions passed.
+2. Step 3 review-capability filter produced ≥ 1 eligible agent.
+3. Step 4 cap produced `count(reviewers) ∈ {2, 3, 4}`.
+4. Step 5 rubric assignment succeeded for every reviewer (no silent default).
+5. Step 6 user confirmation returned a closed-set option (never free text without validation).
+
+If any precondition fails: emit `<escalation severity=blocker type=quality>` and return empty panel. Do NOT return partial panel.
+
+---
+
+## Review Conduct Rules
+
+These rules are injected into every review agent's prompt to ensure rigorous, actionable feedback.
+
+### Mandatory Conduct
+
+1. **Verify before implementing** — Confirm feedback is technically correct for THIS codebase before acting on it. Grep for the function, read the file, check the dependency.
+2. **Pushback is expected** — Reviewers MUST challenge when: suggestion would break existing functionality, reviewer lacks context for the change, recommendation violates YAGNI, feedback is technically incorrect for the runtime/framework in use, or suggestion conflicts with prior architectural decisions.
+3. **No performative agreement** — Do NOT use phrases like "great point!", "you're absolutely right!", "excellent suggestion!". State agreement factually: "Confirmed: the null check is missing."
+4. **Specificity required** — Every finding MUST include: file path and line number, what is wrong, why it matters, and how to fix it. Findings without all four elements are rejected.
+5. **Severity accuracy** — Do NOT mark nitpicks (formatting, naming preferences) as BLOCKER. BLOCKER is reserved for: crashes, data loss, security vulnerabilities, broken builds. WARNING is for logic errors, missing edge cases, performance issues. INFO is for style, conventions, suggestions.
+6. **Clear verdict mandatory** — Every review MUST end with an explicit verdict: "Ready to merge? Yes / No / With fixes". No ambiguous conclusions.
+
+---
+
+## Section 2: Domain Rubric Registry
+
+Non-overlapping evaluation criteria for each reviewer specialty. Each rubric defines what that reviewer checks — and implicitly, what they do NOT check (that's another reviewer's rubric).
+
+### How Rubrics Work
+
+A rubric is a set of 3-5 evaluation criteria injected into the review prompt alongside the reviewer's personality. Each criterion has a name and description. The reviewer evaluates ONLY against their assigned criteria, producing findings scoped to their domain lens.
+
+Rubrics are injected into the review prompt as an additional section AFTER the standard review instructions from review-loop Section 3 and BEFORE the "Required Feedback Format" section:
+
+```
+## Your Domain Rubric — {rubric_name}
+
+Evaluate ONLY against these criteria. Other aspects are covered by fellow panel reviewers.
+
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | {name}    | {description} |
+| 2 | {name}    | {description} |
+...
+
+For each finding, tag it with the criterion number: "**Criterion**: {N} — {criterion_name}"
+
+## Confidence Requirement
+
+For EVERY finding, you MUST rate your confidence:
+- **HIGH (80-100%)**: Certain this is a real issue based on evidence in the code/content
+- **MEDIUM (50-79%)**: Suspect an issue but can't fully confirm — flag it but it may be deferred
+- **LOW (<50%)**: Uncertain — do NOT report this finding
+
+Only HIGH-confidence findings are actioned. Rate conservatively — a false positive wastes more time than a missed MEDIUM finding that surfaces in the next review.
+
+Include in each finding: `- **Confidence**: {HIGH | MEDIUM | LOW} — {percentage}%`
+```
+
+### Rubric Definitions
+
+#### Testing Division
+
+**testing-qa-verification-specialist** — Production Readiness
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Error handling | Edge cases covered, failures degrade gracefully, no silent swallowing |
+| 2 | Real-world usage | Works outside happy path — unexpected input, missing state, concurrent access |
+| 3 | Stability | No crashes, hangs, or resource leaks under normal operation |
+| 4 | Integration correctness | Cross-file references resolve, dependencies exist, imports work |
+
+**testing-test-results-analyzer** — Verification & Test Quality
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Proof artifacts | Test files, verification scripts, or documented test runs exist for claims |
+| 2 | Coverage breadth | All success criteria have corresponding verification, not just some |
+| 3 | Assertion quality | Tests check meaningful behavior, not just "no crash"; before/after documented |
+| 4 | Reproducibility | Verification steps can be repeated by someone else with same results |
+
+**testing-api-tester** — API Contract Compliance
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Endpoint correctness | Routes, methods, status codes match specification |
+| 2 | Request/response validation | Payloads conform to schema, required fields present, types correct |
+| 3 | Security boundaries | Auth required where expected, no unprotected sensitive endpoints |
+| 4 | Error responses | API returns structured errors, not stack traces or generic 500s |
+
+**testing-workflow-optimizer** — Process Efficiency
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Workflow correctness | Steps execute in right order, no dead ends or unreachable paths |
+| 2 | Redundancy | No duplicated logic, unnecessary steps, or circular dependencies |
+| 3 | Automation opportunity | Manual steps that could be automated are flagged |
+| 4 | Handoff clarity | Inputs and outputs between workflow steps are well-defined |
+
+**testing-performance-benchmarker** — Performance Characteristics
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Resource efficiency | No unnecessary file reads, API calls, or memory allocation |
+| 2 | Scalability indicators | Approach handles growth (more agents, larger files, more phases) |
+| 3 | Bottleneck risk | Sequential operations that could be parallelized |
+| 4 | Cost awareness | Agent spawn count, model tier usage aligned with cost profile convention |
+
+**testing-tool-evaluator** — Dependency & Tool Health
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Dependency health | Referenced tools, libraries, or services are current and maintained |
+| 2 | Compatibility | Dependencies work together, no version conflicts or breaking changes |
+| 3 | License compliance | No restrictive licenses that conflict with project distribution |
+| 4 | Alternatives considered | Better tools exist for the job and weren't evaluated |
+
+#### Design Division
+
+**design-brand-guardian** — Brand Consistency
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Visual identity | Colors, typography, spacing follow brand guidelines |
+| 2 | Voice and tone | Copy and messaging match brand personality |
+| 3 | Component consistency | UI elements use shared design tokens, not ad-hoc values |
+
+**design-ux-architect** — Accessibility & Structure
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | WCAG compliance | Contrast ratios, keyboard navigation, screen reader support |
+| 2 | Information architecture | Content is logically organized, navigation is intuitive |
+| 3 | Semantic structure | HTML is semantic, headings are hierarchical, landmarks are correct |
+
+**design-ux-researcher** — Usability
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Nielsen's heuristics | Visibility of status, user control, consistency, error prevention |
+| 2 | User flow completeness | Can users complete the intended task without getting stuck? |
+| 3 | Cognitive load | Interface doesn't overwhelm — progressive disclosure, clear hierarchy |
+
+#### Engineering Division
+
+**engineering-senior-developer** — Code Architecture
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Pattern consistency | New code follows established project patterns and conventions |
+| 2 | Abstraction quality | Right level of abstraction — not over-engineered, not duplicated |
+| 3 | Maintainability | Code is readable, changes are localized, dependencies are explicit |
+| 4 | Tech debt | New code doesn't introduce unnecessary technical debt |
+
+**engineering-backend-architect** — Backend Design
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Data modeling | Data structures are appropriate, relationships are clear |
+| 2 | API design | Endpoints are RESTful/consistent, versioning considered |
+| 3 | Infrastructure patterns | Deployment, scaling, and monitoring are addressed |
+
+**engineering-frontend-developer** — Frontend Quality
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Component structure | Components are reusable, props are typed, state is minimal |
+| 2 | Rendering correctness | No unnecessary re-renders, loading states handled, errors caught |
+| 3 | Responsive design | Layout works across viewport sizes, touch targets are adequate |
+
+**engineering-infrastructure-devops** — Operational Readiness
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | CI/CD integration | Changes are testable in pipeline, no manual deployment steps |
+| 2 | Configuration management | Secrets are not hardcoded, env-specific config is externalized |
+| 3 | Monitoring & logging | Errors are observable, metrics are available for alerting |
+
+#### Product Division
+
+**product-sprint-prioritizer** — Prioritization Alignment
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Business value | Implementation delivers the intended user/business value |
+| 2 | Scope discipline | No scope creep beyond what was planned |
+| 3 | Dependency management | Cross-phase and external dependencies are tracked and resolved |
+
+**product-feedback-synthesizer** — User Alignment
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | User need coverage | Implementation addresses the core user pain point or request |
+| 2 | Feedback incorporation | Known user feedback was considered in the implementation |
+| 3 | Satisfaction drivers | The output is likely to improve user satisfaction |
+
+#### Project Management Division
+
+**project-manager-senior** — Delivery Management
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Scope completeness | All planned deliverables are present |
+| 2 | Risk mitigation | Known risks were addressed or documented |
+| 3 | Documentation | Handoff documentation is sufficient for the next phase |
+
+**project-management-project-shepherd** — Process Compliance
+| # | Criterion | What to Check |
+|---|-----------|---------------|
+| 1 | Methodology adherence | Work followed the established workflow (plan → build → review) |
+| 2 | Artifact quality | State files, summaries, and plans are complete and accurate |
+| 3 | Handoff readiness | Next phase can start without ambiguity about what was done |
+
+#### Division Default Rubrics
+
+For agents not listed above, use the default rubric for their division:
+
+| Division | Default Rubric | Criteria |
+|----------|---------------|----------|
+| Testing | General QA | Correctness, completeness, consistency |
+| Design | General Design Review | Visual quality, usability, accessibility |
+| Engineering | General Code Review | Correctness, patterns, maintainability |
+| Product | General Product Review | Value delivery, scope, alignment |
+| Project Management | General Delivery Review | Completeness, documentation, handoff |
+
+---
+
+## Section 3: Panel Result Synthesis
+
+How to consolidate findings from multiple panel reviewers into a unified report.
+
+```
+After all panel reviewers submit findings (per adapter.collect_results):
+
+Step 1: Collect and parse
+  Same as review-loop Section 4 (Feedback Collection):
+  - Parse Finding blocks from each reviewer
+  - Record for each finding:
+    - Finding number
+    - File path
+    - Line/section reference
+    - Severity (BLOCKER, WARNING, or SUGGESTION)
+    - Confidence (HIGH, MEDIUM, or LOW with percentage)
+    - Issue (one-sentence description)
+    - Suggested fix
+    - Reviewer agent ID
+    - Criterion tag (from rubric)
+
+Step 2: Deduplicate findings by location and severity
+
+Location-based deduplication:
+1. Parse location from each finding:
+   - Format: "{file_path}:{line_number}" or "{file_path}:{start_line}-{end_line}"
+   - If no line number: use file_path only
+   
+2. Group findings by normalized location:
+   - Normalize: resolve relative paths, lowercase on case-insensitive FS
+   - Group key: "{normalized_path}:{line}"
+   
+3. For each location group with multiple findings:
+   a. Keep the finding with HIGHEST severity:
+      Priority: BLOCKER > WARNING > SUGGESTION
+   b. If same severity: keep HIGHEST confidence
+   c. If same severity and confidence: merge descriptions
+   d. Tag merged finding: "Consolidated from {N} reviewers"
+
+Severity escalation rules:
+- Same issue, different severity from reviewers → escalate to highest
+- Example: Reviewer A says WARNING, Reviewer B says BLOCKER → result: BLOCKER
+- Reason: Err on side of caution — if any reviewer considers it blocking, it is
+
+Line range overlap detection:
+- Finding 1: src/auth.ts:45-52
+- Finding 2: src/auth.ts:50-60
+- Overlap at lines 50-52 → treat as same location, merge
+
+Preservation rules:
+- ALWAYS preserve at least one finding per location
+- NEVER discard all findings for a location
+- When merging: concatenate reviewer IDs, keep all suggested fixes as options
+
+Step 2.5: Generate deduplication report
+  After deduplication, report statistics:
+  
+  ### Deduplication Summary
+  | Metric | Count |
+  |--------|-------|
+  | Raw findings (before dedup) | {N} |
+  | Unique locations | {M} |
+  | Findings merged | {N - M} |
+  | Severity escalations | {K} |
+  
+  ### Merged Findings
+  | Location | Original Severity | Final Severity | Reviewers |
+  |----------|-------------------|----------------|-----------|
+  | src/x.ts:45 | WARNING → BLOCKER | BLOCKER | A, B |
+  | src/y.ts:30 | SUGGESTION | SUGGESTION | C, D |
+
+Step 2.6: Filter by confidence
+  - HIGH-confidence findings (80%+): include in synthesis
+  - MEDIUM-confidence findings (50-79%): collect into "Deferred" section
+  - LOW-confidence findings: discard
+  - When deduplicating findings with different confidence levels from different
+    reviewers, keep the HIGHER confidence rating (if one reviewer is HIGH and
+    another is MEDIUM on the same finding, it's HIGH)
+
+Step 3: Filter out-of-domain critiques
+
+Input: Findings[] (after deduplication), Active panel agents[]
+Output: Filtered findings[] with out-of-domain critiques removed
+
+Algorithm:
+1. Build domain ownership map from active panel agents:
+   - For each agent in panel:
+     - Load exclusive_domains from authority matrix
+     - Create mapping: domain → owning_agent_id
+
+2. Detect domain for each finding:
+   - From finding.criterion tag (e.g., "security", "performance")
+   - From finding description keywords:
+     - Security keywords: "auth", "encrypt", "sanitize", "injection", "xss", "csrf"
+     - Performance keywords: "slow", "cache", "optimize", "memory", "cpu"
+     - API keywords: "endpoint", "route", "request", "response", "status code"
+     - Accessibility keywords: "aria", "screen reader", "contrast", "keyboard"
+   - Default: "general" (no domain owner)
+
+3. Apply filtering rules:
+   
+   Rule 1: Domain owner present → filter out-of-domain
+   - If finding.domain has an owner in active panel
+   - AND finding.reviewer != owner
+   - THEN: Discard finding
+   - Log: "Filtered: {reviewer} critique on {domain} — {owner} is domain authority"
+   
+   Rule 2: No domain owner → allow all critiques
+   - If finding.domain has no owner in active panel
+   - THEN: Keep finding
+   - Reason: No authority to defer to, general critique allowed
+   
+   Rule 3: Owner critiquing own domain → always allow
+   - If finding.reviewer == owner
+   - THEN: Keep finding
+   - Note: Owner's findings are authoritative
+
+4. Special cases:
+   - Multiple owners for overlapping domains: Use most specific match
+   - Finding spans multiple domains: Split into separate findings per domain
+   - Domain detection uncertain (confidence < 70%): Keep finding, flag as "uncertain domain"
+
+   Example:
+   ```
+   Panel: [engineering-security-engineer, engineering-senior-developer, design-ux-architect]
+   Findings:
+   - engineering-security-engineer: src/auth.ts:45 "Missing input sanitization" [BLOCKER, security]
+   - engineering-senior-developer: src/auth.ts:45 "Auth logic should use bcrypt" [WARNING, security]
+   - engineering-senior-developer: src/auth.ts:50 "Variable naming unclear" [SUGGESTION, general]
+   - design-ux-architect: src/auth.ts:45 "Form lacks aria-label" [WARNING, accessibility]
+
+   After filtering:
+   - Keep: engineering-security-engineer (owner of security domain)
+   - Filter: engineering-senior-developer on security domain (owner present)
+   - Keep: engineering-senior-developer on general domain (no owner)
+   - Keep: design-ux-architect on accessibility domain (owner present, is owner)
+   ```
+
+---
+
+## Step 2.7: INTENT FILTERING (conditional)
+
+If REVIEW_MODE === "security-only":
+
+1. **Filter Findings by Domain**
+   - For each finding from all agents:
+     - Check finding.category or finding.domain
+     - Include only if matches security domains:
+       - security, owasp, stride, authentication, authorization
+       - vulnerability, injection, xss, csrf, etc.
+   - Exclude: performance, accessibility, code-style, ui-ux findings
+
+2. **Apply Authority Filtering**
+   - Per AUTH-04 from Phase 37
+   - If engineering-security-engineer provided finding → KEEP
+   - If testing-api-tester provided security finding → KEEP
+   - If design-ui-designer provided security opinion → DISCARD (out-of-domain)
+
+3. **Generate Intent Filter Report**
+   ```markdown
+   ## Intent Filtering Report
+   
+   **Mode:** security-only
+   **Domains:** security, owasp, stride, authentication, authorization
+   
+   **Filtering Applied:**
+   - Raw findings: 47
+   - Security domain findings: 12
+   - After authority filtering: 10
+   - Excluded: 37 (non-security domains)
+   ```
+
+4. **Proceed with filtered findings to Step 3 (Deduplication)**
+
+---
+
+Step 4: Group by domain lens
+  Organize findings by each reviewer's rubric focus area.
+  
+  Note: Some findings may have been filtered in Step 3. The domain lens
+  grouping only includes findings that passed authority filtering.
+  
+  ### {Rubric Name} — {agent-id} (Domain Authority: {domains})
+  **Verdict**: {PASS | NEEDS WORK | FAIL}
+  **Authority Note**: {agent-id} is domain authority for {domains} — findings are authoritative
+
+  | # | Severity | File | Criterion | Issue |
+  |---|----------|------|-----------|-------|
+  | 1 | BLOCKER  | path | {criterion_name} | {issue} |
+
+Step 5: Identify cross-cutting themes
+  Scan across all domain groupings for patterns:
+  - Multiple reviewers flagging the same file (from different criteria) → "Hot spot"
+  - Findings clustering around the same success criterion → "Criterion at risk"
+  - All reviewers passing a particular area → "Strong area"
+
+  ### Cross-Cutting Themes
+  - **Hot spots**: Files flagged by 2+ reviewers: {file list with finding counts}
+  - **Criteria at risk**: Success criteria with 2+ findings against them: {list}
+  - **Strong areas**: Aspects with no findings from any reviewer: {list}
+
+Step 6: Compute aggregate verdict
+  - PASS: No BLOCKERs, no WARNINGs, all reviewers gave PASS
+  - NEEDS WORK: Has BLOCKERs or WARNINGs, at least one reviewer gave NEEDS WORK
+  - FAIL: Any reviewer gave FAIL, or 3+ BLOCKERs across reviewers
+
+Step 7: Produce consolidated report
+  Display the synthesis to the user:
+
+  ## Review Panel Synthesis — Phase {N}: {phase_name}
+
+  **Panel**: {count} reviewers across {domains} domain(s)
+  **Aggregate Verdict**: {PASS | NEEDS WORK | FAIL}
+
+  ### Summary
+  | Metric | Count |
+  |--------|-------|
+  | Total findings | {N} |
+  | Blockers | {N} |
+  | Warnings | {N} |
+  | Suggestions | {N} |
+
+  {Domain lens groupings from Step 4}
+
+  {Cross-cutting themes from Step 5}
+
+  ### Panel Verdicts
+  | Reviewer | Rubric Focus | Verdict | Key Finding |
+  |----------|-------------|---------|-------------|
+  | {agent-id} | {rubric_name} | {verdict} | {most critical finding or "No issues"} |
+
+  ### Deferred Findings (MEDIUM Confidence)
+  {count} findings were flagged at MEDIUM confidence (50-79%) and excluded from
+  the actionable report. These may warrant review if HIGH-confidence findings
+  are sparse or if the user requests the full report.
+
+  | # | Confidence | Reviewer | File | Issue |
+  |---|------------|----------|------|-------|
+  | 1 | MEDIUM (65%) | {agent-id} | path | {issue} |
+
+  ### Authority Filtering Report
+  | Metric | Count |
+  |--------|-------|
+  | Findings before filtering | {N} |
+  | Out-of-domain critiques filtered | {M} |
+  | Domain owner findings kept | {K} |
+  | General domain findings kept | {L} |
+  
+  ### Filtered Findings (for reference)
+  | Reviewer | File | Issue | Filtered Because |
+  |----------|------|-------|------------------|
+  | engineering-senior-developer | src/auth.ts:45 | "Auth logic" | engineering-security-engineer is domain owner |
+
+   The aggregate verdict and must-fix list then feed back into the standard
+   review-loop cycle (Section 5: Fix Cycle if NEEDS WORK, Section 7 if PASS,
+   Section 8 if escalated after 3 cycles).
+
+### 3.6 Security-Only Output Generation
+
+If REVIEW_MODE === "security-only":
+- Write: .planning/security-review-{timestamp}.md
+- Include: Security findings only, prioritized by severity
+- Format: Standard finding blocks with OWASP/STRIDE categorization
+- Cross-reference: Map each finding to OWASP Top 10 category and STRIDE threat type
+```
+
+---
+
+## References
+
+This skill extends patterns defined in:
+
+| Pattern | Source | Used In |
+|---------|--------|---------|
+| Recommendation Algorithm | agent-registry.md Section 3 | Section 1 (panel composition) |
+| Review Prompt Construction | review-loop.md Section 3 | Section 2 (rubric injection point) |
+| Feedback Collection | review-loop.md Section 4 | Section 3 (synthesis dedup) |
+| Mandatory Roles | agent-registry.md Section 3, Step 5 | Section 1, Step 4 (testing agent required) |
+| Memory Boost | agent-registry.md Section 3, Step 6 | Section 1, Step 2 (optional scoring boost) |
+

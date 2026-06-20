@@ -1,0 +1,43 @@
+✔ installer lazy-loads YAML support for Kilo Code mode merging (0.8669ms)
+▶ installer local mode installs runtime-native artifacts for every supported runtime
+  ✔ claude local install + uninstall (190.7362ms)
+  ✔ codex local install + uninstall (201.9886ms)
+  ✔ cursor local install + uninstall (200.5705ms)
+  ✔ copilot local install + uninstall (213.8087ms)
+  ✔ gemini local install + uninstall (188.9747ms)
+  ✔ antigravity local install + uninstall (301.6988ms)
+  ✔ kiro local install + uninstall (201.2366ms)
+  ✔ windsurf local install + uninstall (201.1645ms)
+  ✔ opencode local install + uninstall (201.4043ms)
+  ✔ kilo local install + uninstall (228.4624ms)
+  ✔ kilocode local install + uninstall (422.1651ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2556.7792ms)
+▶ installer global mode installs runtime-native artifacts for every globally supported runtime
+  ✔ claude global install + uninstall (171.7948ms)
+  ✔ codex global install + uninstall (180.9648ms)
+  ✔ copilot global install + uninstall (267.9158ms)
+  ✔ gemini global install + uninstall (201.8049ms)
+  ✔ antigravity global install + uninstall (276.4598ms)
+  ✔ kiro global install + uninstall (163.9918ms)
+  ✔ opencode global install + uninstall (175.6672ms)
+  ✔ kilo global install + uninstall (251.1944ms)
+  ✔ kilocode global install + uninstall (416.3408ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (2109.1826ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (764.6206ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (256.7729ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (124.2168ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (184.1639ms)
+✔ installer --verify validates checksums in local source installs (175.9906ms)
+✔ P01-T10 package contents preserve the approved v8 legacy path set (1013.9884ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.1522ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.0922ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.1489ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (230.3656ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6281.2896

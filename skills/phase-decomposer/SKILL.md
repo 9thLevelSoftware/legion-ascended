@@ -1,0 +1,1083 @@
+---
+name: phase-decomposer
+description: "Breaks down a roadmap phase into phased implementation plans grouped by dependency order, assigns specialist agents to each plan, and generates PLAN.md files. Core engine for /legion:plan. Use when the user wants to plan a project phase, create implementation plans, organize work into waves, or assign agents to tasks."
+triggers: [plan, decompose, phase, task, wave, breakdown, break down roadmap, create plans, sprint planning, organize work, assign agents]
+token_cost: high
+summary: "Breaks down roadmap phases into dependency-ordered implementation plans. Groups deliverables by dependency, recommends specialist agents, and generates PLAN.md files. Core engine for /legion:plan."
+---
+
+# Phase Decomposer
+
+Engine for `/legion:plan`. Takes a ROADMAP.md phase entry and transforms it into decision-complete implementation contracts with per-plan agent recommendations. The full flow: analyze phase, resolve design decisions, decompose into independently verifiable plans, recommend agents, present for confirmation, generate plan files.
+
+---
+
+## Section 1: Decomposition Principles
+
+1. **Per-plan task cap comes from settings** — read `settings.json` key `planning.max_tasks_per_plan` (default: 3). This only limits how many tasks go inside one plan; it does not limit how many plans a phase may contain. If a phase needs more work than that per-plan task cap, split it into as many additional plans as dependency, ownership, verification, and traceability boundaries require.
+2. **Wave-structured execution** — Wave 1 plans have no internal dependencies. Wave 2 plans depend on Wave 1 outputs. Parallel within waves, sequential between waves.
+3. **Per-plan agent assignment** — different plans in the same phase may use different agents. A frontend plan gets a frontend agent; a testing plan gets a testing agent.
+4. **Self-contained plans** — each plan must be executable with only its `<context>` and `<execution_contract>` references. An agent should never need to read a file not listed in the contract.
+5. **Concrete verification** — every task has BOTH:
+   - `> verification:` inline lines after the task description — machine-checkable commands that can be extracted and run automatically by the wave-executor
+   - A `<verify>` block with the same commands in executable form
+   No "manually check" or "visually inspect" instructions. If you cannot script the check, the task is too vague.
+6. **Smallest independently verifiable plan** — choose the smallest plan that can be executed and verified on its own. `planning.max_tasks_per_plan` is a per-plan task cap, not a phase plan-count cap or compression goal; do not combine work just to reduce plan count when it leaves the executor making design decisions.
+7. **No planned-work deferrals** — every planned task must be written so execution ends in one of three states: completed, blocked with evidence, or escalated through the blocker escalation protocol. Do not tell executors to leave planned work for later, move it to a future phase, or mark it deferred unless the task itself is to create a user-approved follow-up artifact.
+8. **Decision-complete implementation contracts** — every plan must name exact read targets, write targets, implementation sequence, required interfaces or content structure, edge/error cases, forbidden files, verification commands, and `BLOCKED` conditions. If a planner cannot decide an API, path, validation behavior, helper, or test location, planning is not done.
+
+---
+
+## Section 1.5: Settings Input
+
+Before decomposition, resolve the per-plan task cap from `settings.json`:
+- Try Read `settings.json`
+- If present, use `planning.max_tasks_per_plan` as the hard cap for tasks inside each plan
+- If missing or invalid, default to `3`
+- This value never caps the total number of plans in a phase
+- Carry this value as `{max_tasks_per_plan}` for all rules and templates below
+
+### Extended Thinking Mode
+
+If `settings.json` `models.planning_reasoning` is `true` AND the active adapter's `supports_extended_thinking` is `true`:
+- Use `adapter.model_planning` (e.g., `opus`) for the decomposition agent
+- Extended thinking provides deeper analysis of:
+  - Requirement dependencies and implicit constraints
+  - Wave ordering rationale (why plan A must precede plan B)
+  - Agent selection justification (why this agent over alternatives)
+- The decomposition output is identical in format; only the reasoning depth changes
+
+If `models.planning_reasoning` is `false`: use `adapter.model_execution` as normal
+
+---
+
+## Section 2: Phase Analysis
+
+How to extract and analyze phase information before decomposition.
+
+### Step-by-Step Extraction
+
+```
+Step 1: Read .planning/ROADMAP.md
+Step 2: Find the Phase Details section for the target phase number
+Step 3: Extract the following fields:
+  - phase_name: the descriptive name (e.g., "Plugin Foundation")
+  - phase_goal: the Goal field
+  - phase_requirements: the Requirements field (list of requirement IDs)
+  - success_criteria: the Success Criteria list
+  - estimated_plans: the Plans count
+Step 4: Read .planning/REQUIREMENTS.md
+Step 5: Cross-reference: for each requirement ID in phase_requirements,
+        get the full requirement description from REQUIREMENTS.md
+Step 6: Read .planning/PROJECT.md for broader project context
+        (value proposition, target users, constraints, architecture notes)
+Step 7: Read .planning/STATE.md for current progress and any completed
+        phases that this phase builds on
+```
+
+### What to Look For
+
+| Source | Extract | Used For |
+|--------|---------|----------|
+| ROADMAP.md Phase Details | Goal, requirements, success criteria | Scope boundaries |
+| ROADMAP.md Progress Table | Completed plans in prior phases | Dependency context |
+| REQUIREMENTS.md | Full requirement descriptions | Task-level detail |
+| PROJECT.md | Vision, constraints, architecture | Design decisions |
+| STATE.md | Phase results, decisions, issues | Build-on context |
+
+### Phase Slug Convention
+
+Derive the phase directory slug from the phase name:
+- Lowercase the name
+- Replace spaces with hyphens
+- Remove special characters
+- Example: "Plugin Foundation" becomes `plugin-foundation`
+- Full path: `.planning/phases/{NN}-{slug}/` (e.g., `.planning/phases/03-phase-planning/`)
+
+### Marketing Domain Detection
+
+After reading phase details, check if this is a marketing-focused phase:
+
+1. **Requirement check**: Any MKT-* requirement IDs in the phase requirements?
+2. **Keyword check**: Phase description contains marketing keywords?
+   Keywords: "campaign", "content calendar", "social media", "cross-channel",
+   "marketing", "brand awareness", "audience", "engagement strategy",
+   "content strategy", "channel strategy"
+3. **Agent signal**: Does agent-registry recommend majority marketing-division agents?
+
+If ANY signal is positive:
+  → Flag phase as marketing-focused
+  → Read marketing-workflows skill for domain-specific patterns
+  → Use marketing wave pattern in Section 3 decomposition
+  → Trigger campaign questioning (marketing-workflows Section 2.1)
+  → Generate campaign document (marketing-workflows Section 2.2)
+
+If no signals:
+  → Standard decomposition (no impact)
+
+### Design Domain Detection
+
+After reading phase details (and after marketing detection), check if this is a design-focused phase:
+
+1. **Requirement check**: Any DSN-* requirement IDs in the phase requirements?
+2. **Keyword check**: Phase description contains design keywords?
+   Keywords: "design system", "component library", "UX research", "usability testing",
+   "accessibility audit", "brand guidelines", "design tokens", "wireframes", "prototypes",
+   "user testing", "design review", "user persona", "user journey", "information architecture",
+   "visual design"
+3. **Agent signal**: Does agent-registry recommend majority design-division agents?
+
+If ANY signal is positive:
+  → Flag phase as design-focused
+  → Read design-workflows skill for domain-specific patterns
+  → Use design wave pattern in Section 3 decomposition
+  → Trigger design brief questioning (design-workflows Section 2.1)
+  → Generate design documents (design-workflows Section 2.2)
+
+If no signals:
+  → Standard decomposition (no impact)
+
+---
+
+## Section 2.5: Competing Architecture Proposals
+
+Before decomposing into plans, optionally generate competing architecture proposals. This ensures the planning approach isn't biased by a single perspective. Adapted from Feature-dev's 2-3 competing designs pattern.
+
+### When to Generate Proposals
+
+```
+Complexity check:
+- If phase has ≤2 requirements AND only modifies existing markdown files → Skip (too simple)
+- If phase has 3+ requirements AND involves architectural choices (new abstractions,
+  new patterns, structural decisions) → Offer proposals
+- If user explicitly requests → Always generate
+- Default is skip — proposals are opt-in, not opt-out
+- The orchestrator presents the option; user can always decline
+```
+
+### Philosophy Archetypes
+
+Define 3 labeled approaches that agents adopt:
+
+| Philosophy | Bias | Strengths | Risks |
+|-----------|------|-----------|-------|
+| **Minimal** | Least changes, smallest footprint | Low risk, easy to review, fast execution | May miss optimization opportunities, can accumulate tech debt |
+| **Clean Architecture** | Proper patterns, separation of concerns, future-proof | Maintainable, extensible, well-structured | Over-engineering risk, more files to modify, longer execution |
+| **Pragmatic** | Balanced trade-offs, ship fast but don't cut corners | Good enough for now, adaptable later | May not satisfy purists in either direction |
+
+### Proposal Generation Process
+
+```
+Step 1: Read phase context
+  Use the phase analysis output from Section 2: phase goal, requirements,
+  success criteria, existing assets, and constraints.
+
+Step 2: Spawn proposal agents
+  Spawn 2-3 agents using the read-only Explore subagent type (same pattern
+  as plan-critique Section 4). Each agent receives:
+  - The full phase context from Step 1
+  - Their assigned philosophy (Minimal, Clean, or Pragmatic)
+  - Instructions to produce a structured proposal
+
+  Agent selection:
+  - Use agent-registry to match agents with architectural or strategic expertise
+  - Preferred: engineering-senior-developer (Clean), engineering-rapid-prototyper (Minimal),
+    product-sprint-prioritizer (Pragmatic)
+  - For non-engineering phases: match to domain-appropriate agents with similar traits
+  - Each agent operates in full personality (personality injection pattern from workflow-common)
+
+  Prompt template for each agent:
+  "You are analyzing Phase {N}: {phase_name} from the perspective of the
+   {philosophy} philosophy. Given the requirements and context below,
+   propose how you would structure the implementation.
+
+   Your proposal must include:
+   1. Approach summary (2-3 sentences)
+   2. Key decisions and why (3-5 bullet points)
+   3. Files you would modify/create (list)
+   4. Estimated wave structure (how many waves, what in each)
+   5. Trade-offs (what this approach gains and what it sacrifices)
+   6. Risk assessment (1-2 main risks of this approach)"
+
+Step 3: Collect and format proposals
+  Wait for all agents to return. Format proposals side-by-side:
+
+  ## Architecture Proposals — Phase {N}: {phase_name}
+
+  ### Proposal A: Minimal ({agent_name})
+  **Approach:** {summary}
+  **Key decisions:**
+  - {decision 1}
+  - {decision 2}
+  **Files:** {list}
+  **Waves:** {wave structure}
+  **Trade-offs:** {gains vs sacrifices}
+  **Risk:** {main risk}
+
+  ### Proposal B: Clean Architecture ({agent_name})
+  {same structure}
+
+  ### Proposal C: Pragmatic ({agent_name})
+  {same structure}
+
+  ### Comparison
+  | Dimension | Minimal | Clean | Pragmatic |
+  |-----------|---------|-------|-----------|
+  | Files modified | {N} | {N} | {N} |
+  | Estimated waves | {N} | {N} | {N} |
+  | Risk level | {Low/Med/High} | {Low/Med/High} | {Low/Med/High} |
+  | Best for | {scenario} | {scenario} | {scenario} |
+
+Step 4: User selection
+  Use AskUserQuestion:
+
+  "Which architecture approach for Phase {N}?"
+  Options:
+  - "Proposal A: Minimal" — {1-line summary}
+  - "Proposal B: Clean Architecture" — {1-line summary}
+  - "Proposal C: Pragmatic" — {1-line summary}
+  - "Hybrid" — "I want to combine elements from multiple proposals"
+
+  If "Hybrid": ask user which elements from which proposals to combine,
+  then synthesize a merged approach.
+
+Step 5: Feed into decomposition
+  The selected approach (or hybrid) becomes the architectural direction
+  for Section 3 (Task Decomposition). Record the selection in the phase
+  CONTEXT.md under "Key Design Decisions":
+
+  "Architecture approach: {selected philosophy} — {rationale}"
+
+  If proposals were skipped, note: "Architecture proposals: skipped (simple phase)"
+```
+
+### Cost Profile
+
+Proposal agents use the Explore subagent type (read-only, no file modifications). Cost: 2-3 Sonnet-tier agent calls. For budget-conscious users, offer 2 proposals instead of 3, or skip entirely.
+
+### Relationship to Spec Pipeline
+
+If the spec pipeline (PLN-02) was run before planning, proposal agents receive the spec document as additional context. This produces better-informed proposals since requirements are already clarified.
+
+---
+
+## Section 3: Task Decomposition
+
+How to break a phase's requirements into plans and tasks.
+
+### Process
+
+```
+1. LIST all concrete deliverables implied by the phase requirements
+   - Each requirement may produce 1-3 deliverables (files, features, configs)
+   - Group deliverables by dependency: which ones need others to exist first?
+   - Carry forward any spec decisions: API/type contracts, file placement,
+     data/control flow, compatibility constraints, failure modes, and
+     acceptance checks. Do not re-open resolved spec choices during planning.
+
+2. IDENTIFY dependency layers
+   - Layer 0: Deliverables with no dependencies (new files, foundations)
+   - Layer 1: Deliverables that depend on Layer 0 outputs
+   - Layer 2: Deliverables that depend on Layer 1 outputs
+   - Rarely more than 3 layers needed
+
+3. MAP layers to waves
+   - Each dependency layer becomes a wave
+   - Within a wave, work can happen in parallel (no internal dependencies)
+
+4. GROUP deliverables into plans within each wave
+   - Max {max_tasks_per_plan} tasks per plan (from settings, default 3)
+   - Create as many plans as the phase needs; no maximum plan count exists for a phase
+   - Group by: same file being modified, same skill/pattern, same agent specialty
+   - Name plans by their primary output: "Create {X} skill", "Update {Y} command"
+   - Split plans whenever a combined plan would require the executor to choose
+     architecture, infer file paths, identify unnamed helpers, invent test
+     locations, or decide validation behavior.
+
+5. VALIDATE plan structure
+   - Every requirement from ROADMAP.md is covered by at least one task
+   - No circular dependencies between waves
+   - Each plan can be executed independently of other plans in the same wave
+   - Total plan count is justified by independent verification boundaries.
+     ROADMAP.md plan counts are estimates, not caps.
+   - Each plan has an execution harness contract:
+     read-before-write -> evidence-before-action -> minimal diff -> verify-before-report
+   - Each plan declares exact read targets, write targets, implementation
+     sequence, required interfaces/content structure, edge/error cases,
+     forbidden files, verification commands, and BLOCKED stop conditions.
+```
+
+### Grouping Heuristics
+
+| Signal | Action |
+|--------|--------|
+| Two deliverables modify the same file | Same plan |
+| Two deliverables use the same skill pattern | Same plan (if <= configured max tasks) |
+| One deliverable produces a file another reads | Different waves |
+| Two deliverables share no files or patterns | Can be separate plans in same wave |
+| Deliverable is a skill/markdown file only | Consider autonomous (no agent needed) |
+| Deliverable involves code + tests | Include testing agent |
+
+### Marketing-Specific Wave Pattern
+
+When phase is flagged as marketing-focused (Section 2 detection):
+
+Replace the generic wave mapping with marketing-specific waves:
+- **Wave 1: Strategy & Planning**
+  Tasks: Campaign strategy brief, audience analysis, success metrics definition
+  Agents: marketing-social-media-strategist (lead), marketing-growth-hacker
+  Output: Strategy brief in campaign document, core messaging (marketing-workflows Section 4.1)
+
+- **Wave 2: Content Creation**
+  Tasks: Core content production, channel-specific content adaptation
+  Agents: marketing-content-social-strategist + channel specialists based on campaign channels
+  Input: Wave 1 strategy brief + core messaging as context
+  Output: Content assets per channel, following adaptation guidelines
+
+- **Wave 3 (optional — only if phase scope includes distribution/execution)**:
+  Tasks: Content distribution, engagement, community management
+  Agents: All assigned channel agents in parallel
+  Input: Wave 2 content + campaign calendar
+  Output: Published content, engagement metrics
+
+Generate plan files following this wave structure instead of generic dependency-based waves.
+Each plan's context section references the campaign document:
+  @.planning/campaigns/{campaign-slug}.md
+
+### Design-Specific Wave Pattern
+
+When phase is flagged as design-focused (Section 2 detection):
+
+Replace the generic wave mapping with design-specific waves:
+- **Wave 1: Research & Foundation**
+  Tasks: User research, brand audit, design principles definition, token foundation
+  Agents: design-ux-researcher (research lead), design-brand-guardian (brand audit)
+  Output: Research brief, user insights, brand foundation, design principles in design document
+
+- **Wave 2: Design System & Creation**
+  Tasks: Component library, token system, layout framework, visual assets
+  Agents: design-ui-designer (design lead) + design-ux-architect + design-visual-storyteller
+  Input: Wave 1 research + brand guidelines as context
+  Output: Design system document, component specifications, visual language
+
+- **Wave 3 (optional — only if phase scope includes polish/validation)**:
+  Tasks: Micro-interactions, delight elements, accessibility audit, usability validation
+  Agents: design-whimsy-injector + review agents
+  Input: Wave 2 design system + components
+  Output: Enhanced specifications with delight, audit reports
+
+Generate plan files following this wave structure instead of generic dependency-based waves.
+Each plan's context section references the design documents:
+  @.planning/designs/{project-slug}-system.md
+
+### Naming Plans
+
+Plan names should describe the primary output, not the process:
+- Good: "Create phase-decomposer skill", "Update plan command with full implementation"
+- Bad: "Plan 1", "Do the first part", "Setup stuff"
+
+---
+
+## Section 4: Agent Recommendation
+
+How to select agents for each plan using the `agent-registry.md` recommendation algorithm.
+
+### Memory-Enhanced Recommendation (Optional)
+
+Before running the per-plan recommendation algorithm, check if cross-session memory can inform agent selection.
+
+```
+Step 0: Check memory availability
+  - If .planning/memory/OUTCOMES.md exists:
+    a. Extract task types from the current phase's requirements and deliverables
+    b. Call memory-manager Section 4 "Recall Agent Scores" with those task types
+    c. Receive agent_id → memory_score mapping
+    d. Pass this mapping to the per-plan selection below — it will be consumed
+       by agent-registry.md Step 6 (Memory Boost)
+    e. Display memory context to inform the recommendation:
+       "Memory: {count} past outcomes found for task types [{types}].
+        Agents with track record: {agent_id} ({memory_score}), ..."
+  - If .planning/memory/OUTCOMES.md does not exist:
+    a. Skip memory recall entirely
+    b. Proceed to Per-Plan Selection with no memory data
+    c. Do NOT display any message about missing memory
+```
+
+This step enriches the recommendation but does not change the algorithm. If memory is absent, Section 4 works identically to how it worked before Phase 9.
+
+### Per-Plan Selection
+
+```
+For each plan:
+
+1. ANALYZE the plan's tasks
+   - What type of work? (new skill, command update, test writing, config, etc.)
+   - What domains are involved? (frontend, backend, design, content, etc.)
+   - What files are being created/modified?
+
+2. MATCH against agent-registry
+   - Use Section 3 (Recommendation Algorithm) of agent-registry.md
+   - Extract task type terms from plan tasks
+   - Score agents by:
+     - Exact match on task type tag: 3 points
+     - Partial match (substring in specialty): 1 point
+     - Division alignment (task maps to division): 2 points
+   - Apply mandatory roles:
+     - Testing agent for any plan that writes or modifies code
+     - Coordinator agent for cross-division plans
+
+3. SELECT recommended agents
+   - Pick top 1-2 agents per plan (not per task — agents work at plan level)
+   - For skills/markdown-only plans: may not need agents (autonomous execution)
+   - For code-heavy plans: must include at least 1 engineering + 1 testing agent
+
+4. VALIDATE agent IDs before finalizing
+   For each recommended agent-id:
+   - Confirm it appears in agent-registry CATALOG.md Section 1 (Agent Catalog table)
+   - Confirm {AGENTS_DIR}/{agent-id}.md exists (use Bash `ls` for tilde paths, Glob for absolute paths)
+   - If an ID does NOT match any catalog entry: DO NOT use it.
+     Search the catalog for the closest match by role keyword and use that instead.
+   - Common mistake: abbreviating division prefixes (e.g., "dev-" instead of
+     "engineering-", "qa-" instead of "testing-"). Always use the FULL division prefix
+     as it appears in the catalog.
+
+5. FORMAT recommendation for user presentation
+   For each plan, prepare:
+   - Plan name and wave number
+   - Recommended agent(s) with ID, division, and 1-sentence rationale
+   - What the agent will do (brief scope)
+   - Whether the plan is autonomous or agent-delegated
+```
+
+### Score Data for Observability
+
+When recommending agents, the phase-decomposer triggers agent-registry's recommendation
+algorithm which produces a `score_export` structure (see agent-registry Section 3, Score Export).
+
+This data flows through the pipeline as follows:
+
+1. **phase-decomposer** — triggers agent-registry recommendation — displays score_export to user
+2. **User confirmation** — user sees top candidates with rationale, confirms or swaps
+3. **Plan file generation** — selected agent recorded in plan frontmatter `agents` field
+4. **wave-executor** — at execution time, the executing agent reconstructs the rationale
+   by re-deriving scores from the task description + agent-registry scoring rules (LLM-native
+   approach — no serialized data bus needed). The score_export structure defines WHAT to
+   populate; the agent computes HOW at SUMMARY.md generation time.
+
+The score_export includes per-candidate:
+- `semantic_score` (strong/moderate/weak)
+- `heuristic_score` (numeric from tiebreak rules)
+- `memory_boost` (numeric from OUTCOMES.md history)
+- `total_score` (heuristic + memory)
+- `confidence` (HIGH/MEDIUM/LOW)
+- `recommendation_source` (semantic/heuristic/memory/mandatory/override)
+
+Plus context fields: `task_type_detected`, `adapter`, `model_tier`.
+
+If the user overrides the recommendation, record `recommendation_source: "override"`.
+
+### Autonomous vs. Agent-Delegated
+
+| Plan Type | Autonomous? | Agents Needed |
+|-----------|-------------|---------------|
+| Skill/skill files (markdown only) | Yes | None — Claude executes directly |
+| Command wiring (light code) | Yes | None, unless complex logic |
+| Feature implementation (code) | No | 1 engineering + 1 testing |
+| Cross-division work | No | Domain agents + coordinator |
+| Config/template changes | Yes | None |
+| Test creation (standalone) | No | 1 testing agent |
+
+### Coordinator Rules
+
+When a phase spans multiple divisions (e.g., engineering + design), at least one plan must include a coordinator agent. Valid coordinators:
+- `project-manager-senior` — task breakdown and scope management
+- `project-management-project-shepherd` — cross-functional coordination
+- `agents-orchestrator` — pipeline management and agent coordination
+
+### Marketing Team Assembly
+
+When phase is marketing-focused, replace individual-agent-per-plan recommendation with team assembly:
+- Read agent-registry Section 4 "Marketing Campaign" team pattern
+- Read marketing-workflows Section 2.3 for role definitions
+- Assemble team based on campaign's channel selection:
+  Required: Strategy Lead (social-media-strategist) + Content Lead (content-creator)
+  Per-channel: one specialist per selected channel (from marketing-workflows Section 1 Channel-Agent Mapping)
+  Optional: growth-hacker (if acquisition/conversion focus), design-visual-storyteller (if visual-heavy)
+- Present team to user for confirmation (not individual agent per plan)
+
+### Design Team Assembly
+
+When phase is design-focused, replace individual-agent-per-plan recommendation with team assembly:
+- Read agent-registry Section 4 "Design Sprint" team pattern
+- Read design-workflows Section 2.3 for role definitions
+- Assemble team based on project's design scope:
+  Required: Design Lead (design-ui-designer) + Research Lead (design-ux-researcher)
+  Per-discipline: one specialist per relevant discipline (from design-workflows Section 1 Discipline-Agent Mapping)
+  Optional: design-brand-guardian (if established brand), design-ux-architect (if CSS/layout needed), engineering-frontend-developer (if design-to-code handoff)
+- Present team to user for confirmation (not individual agent per plan)
+
+---
+
+## Section 5: User Confirmation Gate
+
+Before writing any plan files, present the complete breakdown for user approval.
+
+### Presentation Format
+
+```markdown
+## Phase {N}: {name} -- Plan Breakdown
+
+### Wave 1
+**Plan {NN}-01: {plan_name}**
+- Tasks: {count} tasks
+- Agent: {agent_id} ({division}) -- {rationale}
+  OR: Autonomous (no agent needed -- skill/config work)
+- Delivers: {what it produces}
+
+### Wave 2
+**Plan {NN}-02: {plan_name}**
+- Tasks: {count} tasks
+- Agent: {agent_id} ({division}) -- {rationale}
+- Depends on: Plan {NN}-01 output
+- Delivers: {what it produces}
+
+### Agent Summary
+| Plan | Agent | Division | Role |
+|------|-------|----------|------|
+| {NN}-01 | {agent_id or "Autonomous"} | {division or "--"} | {what they do} |
+| {NN}-02 | {agent_id} | {division} | {what they do} |
+```
+
+### Confirmation Prompt
+
+Use AskUserQuestion to get user approval:
+
+```
+Question: "Does this plan breakdown and agent assignment look right?"
+Options:
+  - "Looks good, generate the plans" -- proceed to plan file generation
+  - "Swap an agent" -- ask which plan and which replacement agent
+  - "Adjust the plan structure" -- discuss and revise before generating
+```
+
+### Handling Agent Swaps
+
+If the user selects "Swap an agent":
+
+1. Ask which plan number they want to change
+2. Present 3-4 alternative agents from the same or related divisions, using the agent-registry catalog:
+   ```
+   Current: engineering-frontend-developer (Engineering)
+   Alternatives:
+   - engineering-senior-developer (Engineering) -- broader full-stack expertise
+   - engineering-rapid-prototyper (Engineering) -- faster iteration for MVPs
+   - design-ux-architect (Design) -- if the work is more CSS/layout focused
+   ```
+3. Let them pick by name or number
+4. Update the plan's agent assignment and re-present the summary
+
+### Handling Structure Adjustments
+
+If the user selects "Adjust the plan structure":
+
+1. Ask what they want to change (merge plans, split a plan, reorder waves, etc.)
+2. Discuss the impact on dependencies and agent assignments
+3. Revise the breakdown
+4. Re-present for confirmation using the same AskUserQuestion flow
+
+Only proceed to plan file generation after the user confirms "Looks good."
+
+---
+
+## Section 6: Plan File Template
+
+The exact format for generated plan files. Each plan produces one `{NN}-{PP}-PLAN.md` file.
+
+### Template
+
+````yaml
+---
+phase: {NN}-{phase-slug}
+plan: {PP}
+type: execute
+wave: {wave_number}
+depends_on: [{list of "NN-PP" plan IDs this depends on}]
+files_modified:
+  - {list of files this plan will create or modify}
+files_forbidden:
+  - {list of files/directories this plan MUST NOT modify}
+sequential_files:
+  - {files requiring single-agent sequential access within the wave}
+expected_artifacts:
+  # Contract — declares what outputs this plan produces (existence check)
+  # Distinct from must_haves.artifacts which declares quality checks on those outputs
+  - path: "{primary output file}"
+    provides: "{what it delivers}"
+    required: {true if plan fails without this artifact, false if optional}
+autonomous: {true if no agent needed, false if agent-delegated}
+agents: [{list of agent IDs — MUST match filenames in agents/ directory exactly}]
+requirements: [{list of requirement IDs covered}]
+user_setup: []
+verification_commands:
+  - "{bash command 1 that proves plan success — exit 0 on pass}"
+  - "{bash command 2}"
+
+must_haves:
+  truths:
+    - "{invariant 1 -- something that MUST be true about the output}"
+    - "{invariant 2}"
+    - "{invariant 3}"
+  artifacts:
+    - path: "{primary output file}"
+      provides: "{what it provides}"
+      min_lines: {expected minimum}
+      contains: "{key string that must be present}"
+  key_links:
+    - from: "{source file}"
+      to: "{target file}"
+      via: "{how they connect}"
+      pattern: "{grep-able pattern proving the link}"
+---
+
+<objective>
+{1-2 sentence description of what this plan accomplishes}
+
+Purpose: {why this plan exists in the larger phase context}
+Output: {primary file(s) produced}
+</objective>
+
+<context>
+@.planning/PROJECT.md
+@.planning/ROADMAP.md
+@.planning/phases/{NN}-{phase-slug}/{NN}-CONTEXT.md
+{@previous plan summaries if wave > 1}
+
+Relevant source files:
+{@files that need to be read for context}
+</context>
+
+<execution_contract>
+Harness: read-before-write -> evidence-before-action -> minimal diff -> verify-before-report
+
+Role: {primary executor role and any reviewer/coordinator role}
+Task: {exact deliverable and requirement IDs this plan satisfies}
+Scope:
+- Read targets: {exact files/directories the executor must inspect before editing}
+- Write targets: {exact files from files_modified that may be created or changed}
+- Forbidden targets: {exact files/directories from files_forbidden that must not change}
+Allowed tools/actions:
+- {allowed reads/searches/edits/test commands for this plan}
+Forbidden actions:
+- Do not modify files outside files_modified.
+- Do not add unplanned dependencies.
+- Do not change public APIs, schemas, migrations, auth, CI, or deployment unless explicitly listed in this plan.
+- Do not self-defer planned work.
+Implementation sequence:
+1. {read and confirm source context}
+2. {first exact edit}
+3. {second exact edit}
+Required interfaces/content structure:
+- {function signatures, exported types, markdown headings, config keys, output shape, or UI states}
+Edge/error cases:
+- {named boundary, failure, empty, permission, compatibility, or rollback cases}
+Verification criteria:
+- {task-level and plan-level commands that must pass}
+Final result format:
+- Status: Complete | Partial | Failed | BLOCKED
+- Files changed
+- Verification commands and outputs
+- Decisions made
+- Issues/errors
+</execution_contract>
+
+<stop_gates>
+Emit `BLOCKED` and stop instead of guessing when:
+- A read target listed in `<context>` or `<execution_contract>` is missing or unreadable.
+- Required source evidence contradicts the plan.
+- Completing the task requires a file not listed in `files_modified`.
+- Any instruction conflicts with `files_forbidden`, authority boundaries, control mode, or user_setup.
+- An API/type/schema/validation/architecture decision is not specified.
+- A required helper, pattern, or test location is named vaguely or cannot be found.
+- Verification commands are missing, non-deterministic, fail after one focused fix attempt, or cannot run in the environment.
+</stop_gates>
+
+<recovery>
+After compaction, interruption, or context loss:
+1. Re-read this PLAN.md, the phase CONTEXT.md, and any RESULT/SUMMARY artifact for this plan.
+2. Run `git diff --stat` and inspect `git diff` for every file already changed.
+3. Compare changed files against `files_modified` and `files_forbidden`; if any unapproved change exists, emit `BLOCKED`.
+4. Re-run completed task verification commands before continuing.
+5. Continue only from the next unverified task; do not rely on memory-only claims.
+</recovery>
+
+<tasks>
+
+<task type="auto">
+  <name>Task {N}: {descriptive name}</name>
+  <files>{files to create or modify}</files>
+  <action>
+{Decision-complete, unambiguous instructions for what to do.
+Include exact read targets, exact write targets, implementation sequence,
+format examples, required interfaces/content structure, edge/error cases,
+and enough detail that the executor does not need to guess.
+Do not include "leave for later", "future phase", or self-deferral instructions
+for any in-scope planned work. If permission or scope may block completion,
+instruct the executor to raise a blocker escalation instead.}
+
+> verification: {bash command that proves task 1 success — e.g., test -f path/to/file.md}
+> verification: {second check — e.g., grep -q "expected string" path/to/file.md}
+  </action>
+  <verify>
+{Same verification commands from above in executable form:}
+test -f path/to/file.md
+grep -q "expected string" path/to/file.md
+  </verify>
+  <done>{Single sentence describing the completed state.}</done>
+</task>
+
+</tasks>
+
+<verification>
+Before declaring plan complete:
+- [ ] {verification item 1}
+- [ ] {verification item 2}
+- [ ] Every planned task is completed, blocked with evidence, or escalated; no planned work is self-deferred.
+...
+</verification>
+
+<success_criteria>
+- {testable outcome 1}
+- {testable outcome 2}
+...
+</success_criteria>
+
+<output>
+After completion, create `.planning/phases/{NN}-{phase-slug}/{NN}-{PP}-SUMMARY.md`
+
+{Any state updates needed}
+</output>
+````
+
+### Template Field Guidance
+
+| Field | How to Fill |
+|-------|-------------|
+| `phase` | `{NN}-{phase-slug}` — e.g., `03-phase-planning` |
+| `plan` | Zero-padded plan number within the phase — e.g., `01`, `02` |
+| `wave` | Integer wave number — `1` for no-dependency plans, `2+` for dependent plans |
+| `depends_on` | List of `"NN-PP"` IDs from earlier waves — e.g., `["03-01"]` |
+| `files_modified` | Every file the plan will create or modify — be exhaustive |
+| `autonomous` | `true` for skill/config/markdown-only plans; `false` when agents are assigned |
+| `agents` | List of agent IDs assigned to this plan. **MUST be exact filenames from agent-registry CATALOG.md Section 1** (e.g., `["engineering-senior-developer"]`, NOT `["dev-senior-developer"]`). Always use the full `{division}-{role}` format. Validate each ID exists by checking `{AGENTS_DIR}/{agent-id}.md` before writing the plan file. |
+| `requirements` | Requirement IDs from REQUIREMENTS.md covered by this plan's tasks |
+| `must_haves.truths` | 3-5 invariants that MUST be true about the output. Testable statements. |
+| `must_haves.artifacts` | Primary output files with min_lines and contains checks |
+| `must_haves.key_links` | How this plan's output connects to other files (grep-able patterns) |
+| `<context>` | Always include PROJECT.md, ROADMAP.md, and the phase CONTEXT.md. Add source files relevant to the plan's tasks. For wave 2+ plans, include prior plan summaries. |
+| `<tasks>` | Max `{max_tasks_per_plan}` tasks inside this plan (default 3). This cap does not limit total plans in the phase. Each task has name, files, action, verify, done. |
+| `files_forbidden` | List of file paths and directory patterns this plan MUST NOT modify. Include files owned by other plans in the same wave (prevents parallel conflicts), shared config files not in scope, and any file the plan reads but should not write. Use glob patterns for directories (e.g., `agents/`, `commands/`). Empty array `[]` is valid if no restrictions apply, but prefer explicit declarations for code-modifying plans. |
+| `sequential_files` | Optional list of file paths that require single-agent sequential access within the wave. Use when multiple plans in the same wave read/write a shared file that isn't in `files_modified` (e.g., a shared config file read by all plans, a lock file, or a generated index file that multiple plans append to). Files in `sequential_files` must NOT also appear in `files_modified` -- if a plan modifies a file, declare it in `files_modified` and use `files_forbidden` in other plans to prevent conflicts. Empty array `[]` or omission means no sequential constraints. |
+| `expected_artifacts` | Structured list of output files this plan produces. Each entry has `path` (file path), `provides` (1-sentence description of what it delivers), and `required` (true/false — true means plan fails without this artifact). This is the **contract** — it declares what outputs exist after execution. Distinct from `must_haves.artifacts` which declares quality checks (min_lines, contains) on those outputs. |
+| `verification_commands` | **Mandatory** array of bash commands that prove plan-level success. Each command must return exit code 0 on success, be self-contained (no variables or prior setup), and run from repository root. These are plan-level aggregation checks — they may echo task-level `> verification:` lines but should also include integration checks (e.g., "all generated files exist", "no regressions in test suite"). Plan-critique flags plans missing this field as BLOCKER. |
+| `<verify>` inside tasks | Bash commands only — `wc -l`, `grep`, `test -f`, etc. |
+| `<execution_contract>` | Markdown-only harness contract consumed by executors. Must include role, task, scope, read targets, write targets, allowed tools/actions, forbidden actions, implementation sequence, required interfaces/content structure, edge/error cases, verification criteria, and final result format. |
+| `<stop_gates>` | Markdown-only list of conditions that force `BLOCKED` instead of guessing. Missing read targets, unlisted write targets, conflicting instructions, forbidden operations, unresolved decisions, vague helper/test references, and unverifiable success must appear here when relevant. |
+| `<recovery>` | Markdown-only compaction/interruption recovery protocol. Must tell the executor to re-read the plan/result artifact, inspect `git diff`, compare changed files against `files_modified`/`files_forbidden`, rerun verification, and continue only from unverified work. |
+| `<verification>` | Checklist of all conditions for plan completion |
+| `<success_criteria>` | Bulleted testable outcomes |
+
+### Schema Field Relationships
+
+| Field | Purpose | Enforced By |
+|-------|---------|-------------|
+| `files_modified` | What this plan WILL touch | Wave executor (scope check) |
+| `files_forbidden` | What this plan MUST NOT touch | Plan-critique (overlap detection) |
+| `expected_artifacts` | What this plan MUST produce (contract) | Plan-critique (existence check) |
+| `must_haves.artifacts` | How good outputs must be (quality) | Review agents (quality check) |
+| `verification_commands` | Bash commands proving success | Wave executor (automated run) |
+
+`expected_artifacts` and `must_haves.artifacts` are complementary:
+- `expected_artifacts` answers: "Does the output exist?"
+- `must_haves.artifacts` answers: "Is the output good enough?"
+
+Both should reference the same files, but serve different validation stages.
+
+### Writing Detailed Task Actions
+
+Task `<action>` blocks must be detailed enough for an executor (agent or autonomous) to complete without guessing. Include:
+
+- **What to create/modify** — exact file paths
+- **What to read first** — exact source, spec, test, schema, or pattern files
+- **Implementation sequence** — ordered steps with no hidden design choices
+- **Format/structure** — headings, sections, YAML frontmatter if applicable
+- **Interfaces/contracts** — function signatures, exported types, request/response shapes, content structure, config keys, or UI states
+- **Content guidance** — what each section should contain, with examples
+- **References** — which existing files to read for patterns or data; do not say "use existing helpers" unless the helper file, symbol, or grep-able pattern is named
+- **Edge/error cases** — null/empty/max/error/permission/compatibility behavior when applicable
+- **Constraints** — line counts, required strings, formatting rules
+- **Forbidden files** — explicit files/directories this task must not touch
+- **BLOCKED conditions** — exact missing evidence or unresolved decisions that halt execution
+- **Completion contract** — each planned task must end as completed, blocked with evidence, or escalated; never instruct the executor to defer planned work on its own authority
+
+Bad action: "Create the authentication module."
+Bad action: "Use existing helpers and add tests as appropriate."
+Good action: "Read `docs/auth-spec.md` Section 3 and `src/auth/session.ts`. Create `src/auth/jwt.ts`. Export `generateToken(userId: string): string` and `verifyToken(token: string): { userId: string } | null`. Use existing helper `readSecret()` from `src/auth/session.ts`; do not touch `src/auth/oauth.ts`. Tokens expire in 24 hours. Add tests in `tests/auth/jwt.test.ts` covering valid token, expired token, malformed token, and missing secret. If `readSecret()` is absent, emit `BLOCKED`."
+
+### Prohibited Deferral Language
+
+Generated plan tasks MUST NOT use phrases such as "leave for later", "future phase", "defer this work", "deferred by the agent", or "park this task" for in-scope planned work. If the work is intentionally outside this phase, exclude it from the task list or make the task explicitly create a user-approved follow-up artifact. If the executor discovers that a planned task needs human permission, additional scope, a dependency, or an API/schema/infrastructure decision, the task must instruct the executor to emit a blocker `<escalation>` block rather than self-deferring.
+
+### Writing Verification Lines
+
+Every task MUST include `> verification:` lines at the end of its `<action>` block. These are machine-readable commands that the wave-executor extracts and runs automatically after task execution.
+
+**Format**: `> verification: {bash command}`
+
+The command must:
+- Return exit code 0 on success, non-zero on failure
+- Be self-contained (no variables, no prior setup needed)
+- Run from the repository root directory
+
+**Good verification lines:**
+```
+> verification: test -f skills/new-skill/SKILL.md
+> verification: grep -q "Section 1:" skills/new-skill/SKILL.md
+> verification: wc -l < skills/new-skill/SKILL.md | xargs test 50 -le
+> verification: grep -c "## Section" skills/new-skill/SKILL.md | xargs test 3 -le
+```
+
+**Bad verification lines:**
+```
+> verification: echo "looks good"          # Always passes — tests nothing
+> verification: cat skills/new-skill/SKILL.md  # Reads but doesn't assert
+> verification: open http://localhost:3000  # Not scriptable, requires browser
+```
+
+**Relationship to `<verify>` blocks:**
+The `> verification:` lines and `<verify>` blocks contain the SAME commands. The difference:
+- `> verification:` lines are inline, grep-able (`grep '^> verification:' PLAN.md`), and parsed by wave-executor for automated checking
+- `<verify>` blocks are the human-readable executable form used during manual review
+
+Both exist for redundancy — inline format for automation, block format for readability.
+
+**Three-layer verification hierarchy:**
+
+| Layer | Location | Purpose | Consumed By |
+|-------|----------|---------|-------------|
+| `> verification:` lines | Inline in task `<action>` blocks | Task-level checks | Wave-executor (automated per-task) |
+| `<verify>` blocks | Per task | Same commands in executable form | Manual review |
+| `verification_commands` | Plan frontmatter | Plan-level aggregation for go/no-go | Wave-executor (automated plan-level) |
+
+All three layers should reference the same underlying checks but serve different automation stages. Task-level lines prove individual tasks succeeded; plan-level `verification_commands` prove the plan as a whole succeeded (and may include integration checks that span multiple tasks).
+
+### Writing files_forbidden Declarations
+
+Every plan that modifies code or skill files SHOULD declare `files_forbidden`. Guidelines:
+
+**What to include:**
+- Files owned by other plans in the same wave (prevents parallel write conflicts)
+- Shared config files not in this plan's scope (e.g., `package.json` if only modifying skills)
+- Agent personality files (unless this plan explicitly modifies agents)
+- Command entry points (unless this plan explicitly wires commands)
+
+**What NOT to include:**
+- Files that don't exist yet (only forbid existing files)
+- Entire repository root (`/`) — be specific
+- Files in `files_modified` (contradiction — a file can't be both modified and forbidden)
+
+**Validation rule:** Plan-critique checks that `files_modified` and `files_forbidden` have no overlap. Overlap triggers a BLOCKER.
+
+### Writing expected_artifacts Declarations
+
+Every plan SHOULD declare `expected_artifacts` for its primary outputs. Guidelines:
+
+- List every file that must exist after plan completion
+- Set `required: true` for files that are the plan's primary deliverable
+- Set `required: false` for auxiliary outputs (logs, temp files, optional docs)
+- Use the same paths as `files_modified` but with semantic annotations
+
+**Example:**
+```yaml
+expected_artifacts:
+  - path: "skills/new-skill/SKILL.md"
+    provides: "New skill definition with 3 sections"
+    required: true
+  - path: "commands/new-command.md"
+    provides: "Command entry point wiring the new skill"
+    required: true
+```
+
+**Validation rule:** Plan-critique checks that all `required: true` artifacts appear in `files_modified`. Missing entries trigger a WARNING.
+
+### Writing sequential_files Declarations
+
+Use `sequential_files` when multiple plans in the same wave need ordered access to a shared file that none of them owns (i.e., the file is not in any plan's `files_modified`).
+
+**When to use:**
+- A shared config file (e.g., `settings.json`) that multiple plans read and may append to
+- A lock file or generated index that multiple plans contribute to
+- Any file where concurrent reads/writes from parallel agents could produce race conditions
+
+**When NOT to use:**
+- If a plan modifies the file, declare it in `files_modified` and use `files_forbidden` in other plans to prevent conflicts -- that is the primary isolation mechanism
+- If plans only read a file without writing, no sequential constraint is needed
+- If plans are already in different waves (waves are inherently sequential)
+
+**Validation rules:**
+- Files in `sequential_files` must NOT also appear in the same plan's `files_modified` (contradiction -- if you modify it, own it)
+- The wave-executor uses `sequential_files` to detect overlap: if two plans in the same wave both declare the same sequential file, the entire wave falls back to fully sequential dispatch
+
+**Example:**
+```yaml
+sequential_files:
+  - ".planning/config/shared-registry.yaml"
+  - "CHANGELOG.md"
+```
+
+---
+
+## Section 7: Context File Generation
+
+Before writing plan files, generate the phase context file. This provides shared background that all plans in the phase reference.
+
+### Context File Path
+
+```
+.planning/phases/{NN}-{phase-slug}/{NN}-CONTEXT.md
+```
+
+### Context File Structure
+
+```markdown
+# Phase {N}: {phase_name} -- Context
+
+## Phase Goal
+{Goal from ROADMAP.md}
+
+## Requirements Covered
+- {REQ-ID}: {full description from REQUIREMENTS.md}
+- {REQ-ID}: {full description from REQUIREMENTS.md}
+...
+
+## What Already Exists (from prior phases)
+{List files, skills, commands, and state from completed phases
+that are relevant to this phase's work. Reference STATE.md
+for phase results and decisions.}
+
+## Key Design Decisions
+{Rationale for how the phase was decomposed:
+- Why these wave assignments?
+- Why these agent choices?
+- Any trade-offs or alternatives considered?}
+
+## Plan Structure
+- **Plan {NN}-01 (Wave 1)**: {plan name} -- {1-sentence scope}
+- **Plan {NN}-02 (Wave 2)**: {plan name} -- {1-sentence scope}
+...
+```
+
+### Generation Rules
+
+1. The context file is written FIRST, before any plan files
+2. All plan files in the phase reference this context file via `@.planning/phases/{NN}-{slug}/{NN}-CONTEXT.md`
+3. The "What Already Exists" section must be accurate — read STATE.md and verify prior phase outputs actually exist
+4. The "Plan Structure" section should match the confirmed breakdown from the user confirmation gate
+5. Create the phase directory if it does not already exist: `.planning/phases/{NN}-{phase-slug}/`
+
+---
+
+## Section 8: Edge Cases
+
+### Phase Already Planned
+
+Check if `.planning/phases/{NN}-{slug}/` already contains `*-PLAN.md` files before generating.
+
+If plan files exist, warn the user:
+
+```
+Use AskUserQuestion:
+  Question: "Phase {N} already has plan files in .planning/phases/{NN}-{slug}/.
+             Re-planning will overwrite them. Continue?"
+  Options:
+  - "Yes, overwrite" -- delete existing PLAN.md files and regenerate
+  - "No, keep existing" -- abort planning
+```
+
+Do NOT overwrite without confirmation.
+
+### No Phase Number Given
+
+Auto-detect the next unplanned phase:
+
+1. Read the ROADMAP.md progress table
+2. Find the first phase where:
+   - Status is not "Complete"
+   - No existing `*-PLAN.md` files in its phase directory
+3. Use that phase number
+4. Tell the user: "Auto-detected Phase {N}: {name} as the next phase to plan."
+
+If all phases are either complete or already have plan files, inform the user: "All phases are either complete or already planned. Use `/legion:plan N` with a specific phase number to re-plan."
+
+### Phase Does Not Exist
+
+If the given phase number exceeds the ROADMAP.md phase count:
+
+```
+Error: "Phase {N} doesn't exist in ROADMAP.md. The roadmap has {count} phases.
+        Available phases: {list phase numbers and names}."
+```
+
+Do not attempt to create a new phase — that requires updating the ROADMAP.md, which is outside `/legion:plan`'s scope.
+
+### Phase Already Complete
+
+If the ROADMAP.md progress table shows the phase as "Complete":
+
+```
+Use AskUserQuestion:
+  Question: "Phase {N} is already marked complete in ROADMAP.md.
+             Re-planning a complete phase is unusual. Continue anyway?"
+  Options:
+  - "Yes, re-plan it" -- proceed with decomposition (useful for rework)
+  - "No, pick a different phase" -- abort and suggest available phases
+```
+
+### Single-Task Phase
+
+Some phases genuinely need only 1 plan with 1-2 tasks. That is fine. Do not pad plans to hit an arbitrary count. If the ROADMAP.md estimated plan count says 2 but the work fits cleanly in 1 plan, use 1 plan and note the discrepancy.
+
+### Cross-Division Phase
+
+If a phase's requirements span multiple agent divisions (e.g., engineering + design, or marketing + product):
+
+1. Identify the divisions involved by matching requirement task types to agent-registry divisions
+2. Ensure at least one plan includes a coordinator agent:
+   - `project-manager-senior` — for task breakdown and scope management
+   - `project-management-project-shepherd` — for cross-functional coordination
+   - `agents-orchestrator` — for pipeline management and multi-agent orchestration
+3. The coordinator does not replace domain agents — they coordinate alongside them
+
+### Empty Requirements
+
+If a ROADMAP.md phase has no requirement IDs listed, or the IDs do not exist in REQUIREMENTS.md:
+
+1. Warn the user: "Phase {N} references requirements {IDs} but they were not found in REQUIREMENTS.md."
+2. Ask whether to proceed using the phase Goal and Success Criteria as guidance, or fix REQUIREMENTS.md first.
+
+## Completion Gate
+
+This skill completes when ALL conditions are met:
+1. `.planning/phases/{NN}/` directory exists for the target phase
+2. At least one plan file `NN-PP-{slug}.md` written to that directory, each with valid frontmatter (`phase`, `plan`, `wave`, `agents`, `expected_artifacts`, `verification_commands`, `files_modified`)
+3. Every plan has non-placeholder `verification_commands` that exit zero when the plan succeeds
+4. Every plan includes `<execution_contract>`, `<stop_gates>`, and `<recovery>` sections containing the harness terms `read-before-write`, `evidence-before-action`, `minimal diff`, `verify-before-report`, and `BLOCKED`
+5. Each task names exact read targets, write targets, implementation sequence, required interfaces/content structure, edge/error cases, forbidden files, verification commands, and BLOCKED conditions
+6. Plans are grouped into waves (`wave: 1`, `wave: 2`, ...); wave-level file-overlap detection has run and no unresolved overlaps remain
+7. User confirmation captured via `AskUserQuestion` (proceed / swap agent / adjust / cancel) with "proceed" recorded before any plan files are written
+8. If cancelled: no partial plan files on disk (clean rollback)
+9. No generated task delegates planned in-scope work to an agent-authored deferred state; any unresolved planned work is represented as blocked evidence or a blocker escalation path
+
+If ANY condition is unmet, the skill is NOT complete — continue working or escalate via `<escalation>` block.
+
+
+

@@ -2,37 +2,40 @@
   "name": "@9thlevelsoftware/legion",
   "version": "9.0.0-alpha.0",
   "description": "Durable workflow orchestration tool for Legion Next.",
-  "type": "module",
   "packageManager": "pnpm@11.4.0",
   "engines": {
     "node": ">=24.0.0 <26",
     "pnpm": ">=11.4.0 <12"
+  },
+  "bin": {
+    "legion": "bin/install.js"
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile --strict-peer-dependencies",
     "build": "pnpm -r build",
     "typecheck": "pnpm run build && pnpm -r typecheck",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
-    "test": "node --test \"tests/**/*.test.mjs\" && pnpm -r --if-present test",
-    "validate": "pnpm run typecheck && pnpm run check:boundaries && pnpm run test",
+    "check:package-contents": "node scripts/check-package-contents.mjs",
+    "test": "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
+    "validate": "pnpm run typecheck && pnpm run check:boundaries && pnpm run check:package-contents && pnpm run test",
     "validate:next": "pnpm run validate",
     "pack:dry-run": "npm pack --dry-run && pnpm pack --dry-run",
     "prepublishOnly": "pnpm run validate && pnpm pack --dry-run"
   },
   "files": [
-    "CHANGELOG.md",
-    "docs/legion-next-roadmap.md",
-    "docs/next/README.md",
-    "docs/next/PHASE-00-DECISION.md",
-    "docs/next/V8-MAINTENANCE-POLICY.md",
-    "docs/next/adr/",
-    "docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md",
-    "evals/baseline/",
-    "evals/fixtures/",
-    "packages/",
-    "schemas/",
-    "tsconfig.base.json",
-    "pnpm-workspace.yaml"
+    ".codex-plugin/",
+    "bin/",
+    "agents/",
+    "commands/",
+    "skills/",
+    "adapters/",
+    "settings.json",
+    "checksums.sha256",
+    "docs/control-modes.md",
+    "docs/runtime-audit.md",
+    "docs/runtime-certification-checklists.md",
+    "docs/security/",
+    "docs/settings.schema.json"
   ],
   "keywords": [
     "ai-agents",
@@ -50,6 +53,9 @@
     "url": "git+https://github.com/9thLevelSoftware/legion.git"
   },
   "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
   "devDependencies": {
     "typescript": "6.0.3"
   }
