@@ -1,0 +1,22 @@
+# P01-T03 protocol primitive test report
+
+Commit: 5b30427c442587d174bac9212590f64792751b2b
+
+>>> pnpm --filter @legion/protocol test
+$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+✔ entity IDs are kind-prefixed and reject cross-kind parsing (4.1858ms)
+✔ canonical scalar primitives reject ambiguous representations (0.712ms)
+✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.5259ms)
+✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.5845ms)
+✔ common protocol structures are strict and versioned (1.1316ms)
+✔ generated primitive JSON schemas match committed artifacts (4.5939ms)
+✔ fixture corpus captures valid and invalid primitive examples (2.8642ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 132.608

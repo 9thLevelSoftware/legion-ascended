@@ -16,7 +16,7 @@ source_documents:
 task_commits:
   P01-T01: "006d626da25f893b6d39f6bc4d68096c58f82e8d"
   P01-T02: "042a2135ba5789094b76114f1cb165ff4e6117bd"
-  P01-T03: null
+  P01-T03: "5b30427c442587d174bac9212590f64792751b2b"
   P01-T04: null
   P01-T05: null
   P01-T06: null
@@ -150,3 +150,79 @@ entries:
     artifact: docs/next/evidence/P01-T02/completion-report.yaml
     description: Structured P01-T02 completion report
     sha256: 0CEABD1E1E01E017D24F6DC21F80B948A1753917E704C6B08E0C9F3DCB4B6EEA
+  - task: P01-T03
+    artifact: packages/protocol/package.json
+    description: Protocol package manifest updated with Zod 4 dependency and schema-generation/test scripts
+    sha256: 79C9FD5FBD37CA5553BF4748BAE897DE141AAF1F01D6DD0F926FAF91C3CF701E
+  - task: P01-T03
+    artifact: pnpm-lock.yaml
+    description: Lockfile update pinning Zod for protocol runtime validation
+    sha256: 41DB50AFC383B84B5F4A7FCA87EC49E8FB574B5F7436E8B658DAA2D78693C02D
+  - task: P01-T03
+    artifact: packages/protocol/src/index.ts
+    description: Protocol package public barrel exporting primitive schemas, types, fixtures, and schema documents
+    sha256: FAF86A6131839A79277ECF864A831628CC7C5435044EE078BF904EBE7ABEB231
+  - task: P01-T03
+    artifact: packages/protocol/src/primitives/ids.ts
+    description: Branded entity-kind ID schemas and deterministic parse/format helpers for workflow entities and events
+    sha256: E8500C97FB7F0997C84AA639CFEF39FABEFC462241C43603AD672E5C5ABFBCD6
+  - task: P01-T03
+    artifact: packages/protocol/src/primitives/values.ts
+    description: Canonical UTC timestamp, schema version, hash, artifact path/reference, idempotency, cursor, correlation, JSON value, and metadata schemas
+    sha256: 3029F8C5EC314C9F2A1495D15102B6D4259649FBF81CC0A792A4106B0D12E002
+  - task: P01-T03
+    artifact: packages/protocol/src/primitives/common.ts
+    description: Strict actor, provenance, protocol error, blocker, validation issue, and validation result schemas
+    sha256: F4F00FB075EC0D145865A5B226E1378B359810F0A01D1727996AE931C8B43037
+  - task: P01-T03
+    artifact: packages/protocol/src/primitives/schema-documents.ts
+    description: Zod-authored primitive schema bundles, generated JSON Schema documents, and fixture corpus schema
+    sha256: 732A94DC240846BCA878E5211C00BBAE69A04806805C202FB62AEBAE82EE82F5
+  - task: P01-T03
+    artifact: packages/protocol/scripts/generate-primitives-json-schema.mjs
+    description: Deterministic primitive JSON Schema generator using Zod 4 native JSON Schema conversion
+    sha256: E94DC661A3D08D6C6D8093AA4BAD7E33FA59580781616128BD95E4F189FEF7A1
+  - task: P01-T03
+    artifact: packages/protocol/test/primitives.test.mjs
+    description: Protocol primitive tests covering ID round trips, malformed/cross-kind rejection, canonical scalar values, strict metadata/common structures, schema reproducibility, and fixtures
+    sha256: C0D68B9B59BF1E7034599DF45C50DB93619C20C73FBBF2938A65EC6CCFE9CA5F
+  - task: P01-T03
+    artifact: schemas/primitives/ids.schema.json
+    description: Generated JSON Schema document for primitive entity IDs
+    sha256: 4885193852E95FBFFE13F916C0769656E68A2EDF10961A8D59345D82379309AE
+  - task: P01-T03
+    artifact: schemas/primitives/values.schema.json
+    description: Generated JSON Schema document for primitive scalar, reference, idempotency, cursor, correlation, JSON value, and metadata structures
+    sha256: 47D8E07684A8A59D146E3A63BF239E7CCFF29E041F844ED487082C6772BBEB39
+  - task: P01-T03
+    artifact: schemas/primitives/common.schema.json
+    description: Generated JSON Schema document for actor, provenance, error, blocker, and validation structures
+    sha256: 923CF9C480DC1C06A61C8ED7F4AEF00BEB0F48149FB88684D82B9067EF685F7F
+  - task: P01-T03
+    artifact: schemas/primitives/fixtures/valid.json
+    description: Valid primitive fixture corpus for IDs, scalar values, references, metadata, actor, provenance, errors, blockers, and validation results
+    sha256: 296E45EADBB31EAF2556E61566ACF399722443198E5B9933476B22AAA16003CD
+  - task: P01-T03
+    artifact: schemas/primitives/fixtures/invalid.json
+    description: Invalid primitive fixture corpus covering cross-kind ID and non-canonical timestamp rejection
+    sha256: C7BC2F13F62FD1DE2E3EC396F9839BC79BA7489FC40534245AA3FAB59892ED17
+  - task: P01-T03
+    artifact: docs/next/evidence/P01-T03/protocol-test-report.log
+    description: Focused @legion/protocol primitive test report
+    sha256: 750C535D340A809B8C0BCE9BF77E2DA00CE427AE46E12AEEDE2F5B85A7E9388C
+  - task: P01-T03
+    artifact: docs/next/evidence/P01-T03/full-validation.log
+    description: Full workspace validation log after P01-T03 implementation
+    sha256: 1ECA8B58634933625748F5E40E5EF9DDDEFCF9D8F2E5467CE70E6B8803BD12F9
+  - task: P01-T03
+    artifact: docs/next/evidence/P01-T03/schema-reproducibility.log
+    description: Primitive schema regeneration and diff check log
+    sha256: 53C1196EA61516D8B151019B8E5F04905FCB8886AED4F25A536BDFDCEED2AF82
+  - task: P01-T03
+    artifact: docs/next/evidence/P01-T03/fixture-inventory.log
+    description: SHA256 inventory for generated primitive schemas and fixtures
+    sha256: 83ABC411DB19C58D0FF000106AF6C11FF50416B2D039BD4D38C5FF058F3F0D6C
+  - task: P01-T03
+    artifact: docs/next/evidence/P01-T03/completion-report.yaml
+    description: Structured P01-T03 completion report
+    sha256: E79D58A879DF911277345A7950D04AD2BEC1DA5B4E604CF6CECC0985AD4AEE51

@@ -1,0 +1,134 @@
+{
+  "cases": [
+    {
+      "name": "cross-kind project ID",
+      "value": {
+        "ids": {
+          "projectId": "tsk_wrong-kind",
+          "changeId": "chg_phase-01",
+          "requirementId": "req_protocol-primitives",
+          "decisionId": "dec_state-ownership",
+          "oracleId": "orc_protocol-roundtrip",
+          "contractId": "ctr_p01-t03",
+          "taskId": "tsk_p01-t03",
+          "runId": "run_01jz8m2fj7q9k3vw5x6ybcdhnp",
+          "evidenceId": "evd_protocol-test-report",
+          "reviewId": "rev_protocol-review",
+          "approvalId": "apv_phase-approval",
+          "releaseId": "rel_alpha-001",
+          "observationId": "obs_release-health",
+          "eventId": "evt_01jz8m2fj7q9k3vw5x6ybcdhnp"
+        },
+        "values": {
+          "utcTimestamp": "2026-06-19T19:33:27.123Z",
+          "schemaVersion": "1.0.0",
+          "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "gitSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "artifactPath": ".legion/project/changes/LEGION-NEXT/evidence-index.yaml",
+          "artifactReference": {
+            "path": ".legion/project/changes/LEGION-NEXT/evidence-index.yaml",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "idempotencyKey": "prj_legion-next:chg_phase-01:tsk_p01-t03:run_01jz8m2fj7q9k3vw5x6ybcdhnp:git.commit:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+          "paginationCursor": "cur_cGFnZS0x",
+          "metadata": {}
+        },
+        "common": {
+          "actor": {
+            "kind": "worker",
+            "id": "worker_protocol-schema-worker"
+          },
+          "provenance": {
+            "actor": {
+              "kind": "worker",
+              "id": "worker_protocol-schema-worker"
+            },
+            "createdAt": "2026-06-19T19:33:27.123Z",
+            "source": "task-contract",
+            "schemaVersion": "1.0.0"
+          },
+          "protocolError": {
+            "code": "invalid_schema",
+            "message": "Schema failed",
+            "retryable": false
+          },
+          "blocker": {
+            "code": "missing_input",
+            "reason": "Required artifact is absent",
+            "severity": "critical"
+          },
+          "validationResult": {
+            "ok": true,
+            "issues": []
+          }
+        }
+      }
+    },
+    {
+      "name": "non-canonical timestamp",
+      "value": {
+        "ids": {
+          "projectId": "prj_legion-next",
+          "changeId": "chg_phase-01",
+          "requirementId": "req_protocol-primitives",
+          "decisionId": "dec_state-ownership",
+          "oracleId": "orc_protocol-roundtrip",
+          "contractId": "ctr_p01-t03",
+          "taskId": "tsk_p01-t03",
+          "runId": "run_01jz8m2fj7q9k3vw5x6ybcdhnp",
+          "evidenceId": "evd_protocol-test-report",
+          "reviewId": "rev_protocol-review",
+          "approvalId": "apv_phase-approval",
+          "releaseId": "rel_alpha-001",
+          "observationId": "obs_release-health",
+          "eventId": "evt_01jz8m2fj7q9k3vw5x6ybcdhnp"
+        },
+        "values": {
+          "utcTimestamp": "2026-06-19T19:33:27Z",
+          "schemaVersion": "1.0.0",
+          "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "gitSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "artifactPath": ".legion/project/changes/LEGION-NEXT/evidence-index.yaml",
+          "artifactReference": {
+            "path": ".legion/project/changes/LEGION-NEXT/evidence-index.yaml",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "idempotencyKey": "prj_legion-next:chg_phase-01:tsk_p01-t03:run_01jz8m2fj7q9k3vw5x6ybcdhnp:git.commit:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "correlationId": "cor_01jz8m2fj7q9k3vw5x6ybcdhnp",
+          "paginationCursor": "cur_cGFnZS0x",
+          "metadata": {}
+        },
+        "common": {
+          "actor": {
+            "kind": "worker",
+            "id": "worker_protocol-schema-worker"
+          },
+          "provenance": {
+            "actor": {
+              "kind": "worker",
+              "id": "worker_protocol-schema-worker"
+            },
+            "createdAt": "2026-06-19T19:33:27.123Z",
+            "source": "task-contract",
+            "schemaVersion": "1.0.0"
+          },
+          "protocolError": {
+            "code": "invalid_schema",
+            "message": "Schema failed",
+            "retryable": false
+          },
+          "blocker": {
+            "code": "missing_input",
+            "reason": "Required artifact is absent",
+            "severity": "critical"
+          },
+          "validationResult": {
+            "ok": true,
+            "issues": []
+          }
+        }
+      }
+    }
+  ]
+}

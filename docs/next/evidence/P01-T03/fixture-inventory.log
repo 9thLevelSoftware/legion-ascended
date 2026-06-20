@@ -1,0 +1,10 @@
+# P01-T03 fixture inventory
+
+Commit: 5b30427c442587d174bac9212590f64792751b2b
+
+>>> Get-ChildItem schemas/primitives -Recurse -File | Get-FileHash -Algorithm SHA256
+923CF9C480DC1C06A61C8ED7F4AEF00BEB0F48149FB88684D82B9067EF685F7F  C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\common.schema.json
+C7BC2F13F62FD1DE2E3EC396F9839BC79BA7489FC40534245AA3FAB59892ED17  C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\fixtures\invalid.json
+296E45EADBB31EAF2556E61566ACF399722443198E5B9933476B22AAA16003CD  C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\fixtures\valid.json
+4885193852E95FBFFE13F916C0769656E68A2EDF10961A8D59345D82379309AE  C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\ids.schema.json
+47D8E07684A8A59D146E3A63BF239E7CCFF29E041F844ED487082C6772BBEB39  C:\Users\dasbl\Documents\Legion Retooled\schemas\primitives\values.schema.json

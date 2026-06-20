@@ -1,0 +1,12 @@
+# P01-T03 schema reproducibility
+
+Commit: 5b30427c442587d174bac9212590f64792751b2b
+
+>>> pnpm --filter @legion/protocol generate:schemas
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+>>> git diff --exit-code -- schemas/primitives packages/protocol/src/primitives packages/protocol/scripts/generate-primitives-json-schema.mjs
+warning: in the working copy of 'schemas/primitives/common.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'schemas/primitives/ids.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'schemas/primitives/values.schema.json', LF will be replaced by CRLF the next time Git touches it

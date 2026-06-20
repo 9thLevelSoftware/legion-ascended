@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.9thlevelsoftware.com/legion/primitives/ids.schema.json",
+  "title": "Legion protocol primitive ID schemas",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string",
+      "pattern": "^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Project ID"
+    },
+    "changeId": {
+      "type": "string",
+      "pattern": "^chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Change ID"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^req_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Requirement ID"
+    },
+    "decisionId": {
+      "type": "string",
+      "pattern": "^dec_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Decision ID"
+    },
+    "oracleId": {
+      "type": "string",
+      "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Oracle ID"
+    },
+    "contractId": {
+      "type": "string",
+      "pattern": "^ctr_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Task contract ID"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Task ID"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Run ID"
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^evd_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Evidence ID"
+    },
+    "reviewId": {
+      "type": "string",
+      "pattern": "^rev_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Review ID"
+    },
+    "approvalId": {
+      "type": "string",
+      "pattern": "^apv_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Approval ID"
+    },
+    "releaseId": {
+      "type": "string",
+      "pattern": "^rel_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Release ID"
+    },
+    "observationId": {
+      "type": "string",
+      "pattern": "^obs_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Observation ID"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^evt_[0-9a-hjkmnp-tv-z]{26}$",
+      "description": "Event ID"
+    }
+  },
+  "required": [
+    "projectId",
+    "changeId",
+    "requirementId",
+    "decisionId",
+    "oracleId",
+    "contractId",
+    "taskId",
+    "runId",
+    "evidenceId",
+    "reviewId",
+    "approvalId",
+    "releaseId",
+    "observationId",
+    "eventId"
+  ],
+  "additionalProperties": false
+}
