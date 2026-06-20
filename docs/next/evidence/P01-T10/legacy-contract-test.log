@@ -1,13 +1,48 @@
-✔ P01-T10 package contents preserve the approved v8 legacy path set (1001.669ms)
-✔ P01-T10 seeded package mutations fail the path contract (0.1914ms)
-✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.0995ms)
-✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.1625ms)
-✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (220.2806ms)
-ℹ tests 5
+✔ installer lazy-loads YAML support for Kilo Code mode merging (1.1508ms)
+✔ installer source keeps one update generator and rejects non-200 registry responses (0.6671ms)
+✔ Codex prompt installs concrete template context paths for runtimes without at-refs (150.3399ms)
+✔ Kilo uninstall preserves pre-existing user skill directories and files (236.928ms)
+✔ uninstall tolerates older manifests without paths metadata (48.53ms)
+✔ update removes stale artifacts from the previous manifest before reinstalling (524.3758ms)
+▶ installer local mode installs runtime-native artifacts for every supported runtime
+  ✔ claude local install + uninstall (174.0815ms)
+  ✔ codex local install + uninstall (177.8381ms)
+  ✔ cursor local install + uninstall (180.5204ms)
+  ✔ copilot local install + uninstall (193.3833ms)
+  ✔ gemini local install + uninstall (180.3616ms)
+  ✔ antigravity local install + uninstall (246.9525ms)
+  ✔ kiro local install + uninstall (169.372ms)
+  ✔ windsurf local install + uninstall (164.5605ms)
+  ✔ opencode local install + uninstall (175.1216ms)
+  ✔ kilo local install + uninstall (206.8414ms)
+  ✔ kilocode local install + uninstall (376.2374ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2249.1027ms)
+▶ installer global mode installs runtime-native artifacts for every globally supported runtime
+  ✔ claude global install + uninstall (162.9425ms)
+  ✔ codex global install + uninstall (170.3527ms)
+  ✔ copilot global install + uninstall (178.1972ms)
+  ✔ gemini global install + uninstall (173.7485ms)
+  ✔ antigravity global install + uninstall (246.1683ms)
+  ✔ kiro global install + uninstall (164.5427ms)
+  ✔ opencode global install + uninstall (176.2659ms)
+  ✔ kilo global install + uninstall (207.6432ms)
+  ✔ kilocode global install + uninstall (358.4451ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (1840.2868ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (623.0336ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (256.381ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (122.3321ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (166.1125ms)
+✔ installer --verify validates checksums in local source installs (149.1135ms)
+✔ P01-T10 package contents preserve the approved v8 legacy path set (967.139ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.158ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.0967ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.1332ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (214.2802ms)
+ℹ tests 38
 ℹ suites 0
-ℹ pass 5
+ℹ pass 38
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1283.4318
+ℹ duration_ms 6475.1306

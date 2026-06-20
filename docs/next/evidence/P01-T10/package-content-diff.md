@@ -23,4 +23,4 @@ The package version is intentionally `9.0.0-alpha.0`; the preserved contract is 
 
 ## Notes
 
-The dry-run tarball byte sizes differ from the LF-normalized P01 preflight baseline because this working tree is on Windows and because `package.json` now carries the v9 package version, validation scripts, and `yaml` dependency required by the legacy installer. The path-set and legacy asset checksum gates are the compatibility contract for P01-T10.
+The dry-run tarball byte sizes differ from the LF-normalized P01 preflight baseline because this working tree is on Windows, because `package.json` now carries the v9 package version, validation scripts, and `yaml` dependency required by the legacy installer, and because reviewed installer hardening changed `bin/install.js`. The path-set and approved legacy checksum gates are the compatibility contract for P01-T10.

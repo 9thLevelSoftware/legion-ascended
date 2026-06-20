@@ -298,6 +298,143 @@ test('installer lazy-loads YAML support for Kilo Code mode merging', () => {
   assert.match(source, /function loadYamlLibrary\(\)/, 'installer should keep YAML loading behind a Kilo Code helper');
 });
 
+test('installer source keeps one update generator and rejects non-200 registry responses', () => {
+  const source = fs.readFileSync(INSTALLER, 'utf8');
+  assert.equal(
+    (source.match(/function generateUpdateCommand/g) || []).length,
+    1,
+    'installer should define generateUpdateCommand once'
+  );
+  assert.match(
+    source,
+    /res\.statusCode\s*!==\s*200/,
+    'registry update checks should reject non-200 responses before parsing JSON'
+  );
+});
+
+test('Codex prompt installs concrete template context paths for runtimes without at-refs', () => {
+  const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'legion-codex-template-refs-'));
+  const homeDir = path.join(sandboxRoot, 'home');
+  const projectDir = path.join(sandboxRoot, 'project');
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  try {
+    const installResult = runInstaller(['--codex', '--local'], projectDir, homeDir);
+    assertRunOk(installResult, 'codex local install with template refs');
+
+    const startPrompt = path.join(projectDir, '.codex', 'prompts', 'legion-start.md');
+    const content = fs.readFileSync(startPrompt, 'utf8');
+    const templatesDir = normalizePath(path.join(projectDir, '.legion', 'skills', 'questioning-flow', 'templates'));
+    assert.match(content, new RegExp(`${templatesDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/project-template\\.md`));
+    assert.match(content, new RegExp(`${templatesDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/roadmap-template\\.md`));
+    assert.match(content, new RegExp(`${templatesDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/state-template\\.md`));
+    assert.doesNotMatch(content, /^@skills\/questioning-flow\/templates/m);
+  } finally {
+    fs.rmSync(sandboxRoot, { recursive: true, force: true });
+  }
+});
+
+test('Kilo uninstall preserves pre-existing user skill directories and files', () => {
+  const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'legion-kilo-user-skills-'));
+  const homeDir = path.join(sandboxRoot, 'home');
+  const projectDir = path.join(sandboxRoot, 'project');
+  const userSkillDir = path.join(projectDir, '.kilo', 'skills', 'code-polish');
+  const userSkillFile = path.join(userSkillDir, 'SKILL.md');
+  const userNotesFile = path.join(userSkillDir, 'notes.md');
+  fs.mkdirSync(userSkillDir, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(userSkillFile, 'name: code-polish\n\nUser-owned skill.\n');
+  fs.writeFileSync(userNotesFile, 'Keep this user note.\n');
+
+  try {
+    const installResult = runInstaller(['--kilo', '--local'], projectDir, homeDir);
+    assertRunOk(installResult, 'kilo local install over user skill');
+    assert.notEqual(fs.readFileSync(userSkillFile, 'utf8'), 'name: code-polish\n\nUser-owned skill.\n');
+    assert.equal(fs.existsSync(userNotesFile), true, 'install should preserve user notes inside matching skill dirs');
+
+    const uninstallResult = runInstaller(['--kilo', '--local', '--uninstall'], projectDir, homeDir);
+    assertRunOk(uninstallResult, 'kilo local uninstall after user skill backup');
+    assert.equal(fs.readFileSync(userSkillFile, 'utf8'), 'name: code-polish\n\nUser-owned skill.\n');
+    assert.equal(fs.existsSync(userNotesFile), true, 'uninstall should preserve user files in matching skill dirs');
+    assert.equal(
+      fs.existsSync(path.join(projectDir, '.kilo', 'skills', 'workflow-common')),
+      false,
+      'uninstall should still remove Legion-created empty skill dirs'
+    );
+  } finally {
+    fs.rmSync(sandboxRoot, { recursive: true, force: true });
+  }
+});
+
+test('uninstall tolerates older manifests without paths metadata', () => {
+  const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'legion-old-manifest-'));
+  const homeDir = path.join(sandboxRoot, 'home');
+  const projectDir = path.join(sandboxRoot, 'project');
+  const manifestFile = path.join(projectDir, '.legion', 'manifest.json');
+  const commandsDir = path.join(projectDir, '.legion', 'commands', 'legion');
+  const skillsDir = path.join(projectDir, '.legion', 'skills');
+  const adaptersDir = path.join(projectDir, '.legion', 'adapters');
+  fs.mkdirSync(commandsDir, { recursive: true });
+  fs.mkdirSync(skillsDir, { recursive: true });
+  fs.mkdirSync(adaptersDir, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(path.join(commandsDir, 'start.md'), 'legacy start\n');
+  fs.writeFileSync(path.join(skillsDir, 'legacy.md'), 'legacy skill\n');
+  fs.writeFileSync(path.join(adaptersDir, 'legacy.md'), 'legacy adapter\n');
+  fs.writeFileSync(
+    manifestFile,
+    JSON.stringify(
+      {
+        name: '@9thlevelsoftware/legion',
+        version: '0.0.0',
+        runtime: 'codex',
+        scope: 'local',
+        agents: [],
+        promptFiles: [],
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  try {
+    const uninstallResult = runInstaller(['--codex', '--local', '--uninstall'], projectDir, homeDir);
+    assertRunOk(uninstallResult, 'codex uninstall with older manifest shape');
+    assert.equal(fs.existsSync(manifestFile), false, 'uninstall should remove the older manifest');
+    assert.equal(fs.existsSync(commandsDir), false, 'uninstall should fall back to resolved command paths');
+  } finally {
+    fs.rmSync(sandboxRoot, { recursive: true, force: true });
+  }
+});
+
+test('update removes stale artifacts from the previous manifest before reinstalling', () => {
+  const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'legion-clean-update-'));
+  const homeDir = path.join(sandboxRoot, 'home');
+  const projectDir = path.join(sandboxRoot, 'project');
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  try {
+    const installResult = runInstaller(['--codex', '--local'], projectDir, homeDir);
+    assertRunOk(installResult, 'codex local install before update');
+    const manifestFile = expectedManifestPath('codex', 'local', projectDir, homeDir);
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    const stalePrompt = normalizePath(path.join(projectDir, '.codex', 'prompts', 'legion-old.md'));
+    fs.writeFileSync(stalePrompt, 'stale managed prompt\n');
+    manifest.version = '0.0.0';
+    manifest.nativeArtifacts.push({ path: stalePrompt });
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+
+    const updateResult = runInstaller(['--codex', '--local', '--update'], projectDir, homeDir);
+    assertRunOk(updateResult, 'codex local update');
+    assert.equal(fs.existsSync(stalePrompt), false, 'update should remove stale artifacts from the prior manifest');
+    assertManifest('codex', 'local', projectDir, homeDir);
+  } finally {
+    fs.rmSync(sandboxRoot, { recursive: true, force: true });
+  }
+});
+
 test('installer local mode installs runtime-native artifacts for every supported runtime', async (t) => {
   const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'legion-local-smoke-'));
   const homeDir = path.join(sandboxRoot, 'home');

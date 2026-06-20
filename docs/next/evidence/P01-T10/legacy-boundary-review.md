@@ -26,7 +26,8 @@ These paths were mechanically copied from the v8 reference checkout and are docu
 - `packages/protocol` and `packages/core` continue to be checked by `scripts/check-package-boundaries.mjs`; they must not import legacy prompt/persona Markdown as runtime domain logic.
 - `scripts/check-package-contents.mjs` gates the package path set, root `legion` bin, workspace package exclusion, and legacy checksum drift.
 - Root `package.json` no longer declares `"type": "module"` so the preserved CommonJS v8 `bin/install.js` executes at the same path without rewriting.
+- Reviewed compatibility fixes may change `bin/install.js` only with matching installer regression tests, refreshed `checksums.sha256`, and refreshed package-content evidence.
 
 ## Review Result
 
-PASS. The root package exposes `legion -> bin/install.js`, the package path set matches the frozen v8 snapshot, and the installer smoke matrix passes.
+PASS. The root package exposes `legion -> bin/install.js`, the package path set matches the frozen v8 snapshot, reviewed installer hardening is covered by regression tests, and the installer smoke matrix passes.

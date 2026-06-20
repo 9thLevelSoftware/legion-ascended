@@ -3,10 +3,10 @@
     "id": "@9thlevelsoftware/legion@9.0.0-alpha.0",
     "name": "@9thlevelsoftware/legion",
     "version": "9.0.0-alpha.0",
-    "size": 742277,
-    "unpackedSize": 2374318,
-    "shasum": "995ef960b97ec56ece82e56b5f8195d304b97f8a",
-    "integrity": "sha512-Dmc43o9Cf0Lm4+EcmCAvWZs9XmcErKQERzQfp0T1HYovY2dgZ+u7CJJmRJx18HmfJIGW4uNdac2OLy9rkF9dSg==",
+    "size": 742568,
+    "unpackedSize": 2375163,
+    "shasum": "149603fe458cb35e6430ceca8a3123f7c1e8515b",
+    "integrity": "sha512-bPub3mVVtrirCa4n/nTcj1hImP3sQfeFyKh9HomHHhnyu3TzvBro2esSnLf0j9k4rQjHCn/lL0cHXN+q6z8UZA==",
     "filename": "9thlevelsoftware-legion-9.0.0-alpha.0.tgz",
     "files": [
       {
@@ -331,7 +331,7 @@
       },
       {
         "path": "bin/install.js",
-        "size": 73557,
+        "size": 74402,
         "mode": 420
       },
       {

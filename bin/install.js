@@ -373,7 +373,8 @@ function rewriteSkillPaths(content, installedSkillsDir) {
  * @agents/... → @/absolute/path/to/agents/...
  * @.planning/... → unchanged (runtime project paths)
  *
- * If runtime doesn't support @-refs, strip @skills/ and @agents/ lines entirely.
+ * If runtime doesn't support @-refs, rewrite @skills/ and @agents/ lines to
+ * concrete installed paths without @ prefixes.
  */
 function rewriteContextRefs(content, installedSkillsDir, installedAgentsDir, supportsAtRefs) {
   return content.replace(
@@ -392,12 +393,15 @@ function rewriteContextRefs(content, installedSkillsDir, installedAgentsDir, sup
         );
         return open + rewritten + close;
       } else {
-        // Strip @skills/ and @agents/ lines for non-CC runtimes
-        const lines = body.split('\n').filter(line => {
-          const trimmed = line.trim();
-          return !trimmed.startsWith('@skills/') && !trimmed.startsWith('@agents/');
-        });
-        return open + lines.join('\n') + close;
+        let rewritten = body.replace(
+          /^@skills\//gm,
+          `${installedSkillsDir}/`
+        );
+        rewritten = rewritten.replace(
+          /^@agents\//gm,
+          `${installedAgentsDir}/`
+        );
+        return open + rewritten + close;
       }
     }
   );
@@ -1011,6 +1015,20 @@ function copyDirRecursive(src, dest) {
   }
 }
 
+function copyDirRecursiveManaged(src, dest, nativeArtifacts) {
+  ensureDirs([dest]);
+  for (const entry of fs.readdirSync(src)) {
+    const srcPath = joinPath(src, entry);
+    const destPath = joinPath(dest, entry);
+    if (fs.statSync(srcPath).isDirectory()) {
+      copyDirRecursiveManaged(srcPath, destPath, nativeArtifacts);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+      nativeArtifacts.push({ path: destPath });
+    }
+  }
+}
+
 function hasLegionFrontmatter(content) {
   return /^---[\s\S]*?\ndivision:\s*\S/m.test(content);
 }
@@ -1408,7 +1426,7 @@ function install(runtimeKey, scope, verify = false) {
             const srcPath = joinPath(skillSrc, entry);
             const destPath = joinPath(destSkillDir, entry);
             if (fs.statSync(srcPath).isDirectory()) {
-              copyDirRecursive(srcPath, destPath);
+              copyDirRecursiveManaged(srcPath, destPath, nativeArtifacts);
             } else if (entry === 'SKILL.md') {
               const raw = fs.readFileSync(srcPath, 'utf8');
               const rewritten = runtimeKey === 'kilocode' && skillName === 'legion'
@@ -1420,7 +1438,6 @@ function install(runtimeKey, scope, verify = false) {
               nativeArtifacts.push({ path: destPath });
             }
           }
-          nativeArtifacts.push({ path: destSkillDir, kind: 'dir' });
         }
         console.log(`  ${surface.key}: ${skillSrcDirs.length} skills -> ${surface.path}`);
         break;
@@ -1617,7 +1634,7 @@ function uninstall(runtimeKey, scope) {
   // Remove only Legion-owned agents (by filename from manifest)
   let removedAgents = 0;
   let restoredBackups = 0;
-  const agentsDir = manifest.paths.agents || paths.agentsDir;
+  const agentsDir = manifest.paths?.agents || paths.agentsDir;
 
   for (const agentFile of (manifest.agents || [])) {
     const agentPath = joinPath(agentsDir, agentFile);
@@ -1636,21 +1653,21 @@ function uninstall(runtimeKey, scope) {
   console.log(`  Removed ${removedAgents} agent files`);
 
   // Remove commands directory
-  const commandsDir = manifest.paths.commands || paths.commandsDir;
+  const commandsDir = manifest.paths?.commands || paths.commandsDir;
   if (fs.existsSync(commandsDir)) {
     fs.rmSync(commandsDir, { recursive: true, force: true });
     console.log('  Removed commands/legion/');
   }
 
   // Remove skills
-  const skillsDir = manifest.paths.skills || paths.skillsDir;
+  const skillsDir = manifest.paths?.skills || paths.skillsDir;
   if (fs.existsSync(skillsDir)) {
     fs.rmSync(skillsDir, { recursive: true, force: true });
     console.log('  Removed skills/');
   }
 
   // Remove adapters
-  const adaptersDir = manifest.paths.adapters || paths.adaptersDir;
+  const adaptersDir = manifest.paths?.adapters || paths.adaptersDir;
   if (fs.existsSync(adaptersDir)) {
     fs.rmSync(adaptersDir, { recursive: true, force: true });
     console.log('  Removed adapters/');
@@ -1664,11 +1681,11 @@ function uninstall(runtimeKey, scope) {
 
   // Backward compatibility for manifests written before nativeArtifacts existed.
   if (nativeArtifacts.length === 0) {
-    const promptsDir = manifest.paths.prompts || paths.promptsDir;
+    const promptsDir = manifest.paths?.prompts || paths.promptsDir;
     for (const promptFile of (manifest.promptFiles || [])) {
       nativeArtifacts.push({ path: joinPath(promptsDir, promptFile) });
     }
-    const bridgeSkillFile = manifest.paths.bridgeSkill || paths.bridgeSkillFile;
+    const bridgeSkillFile = manifest.paths?.bridgeSkill || paths.bridgeSkillFile;
     if (bridgeSkillFile) {
       nativeArtifacts.push({ path: bridgeSkillFile });
     }
@@ -1760,10 +1777,22 @@ async function fetchNpmLatest(packageName) {
   return new Promise((resolve, reject) => {
     const url = `https://registry.npmjs.org/${packageName}/latest`;
     https.get(url, { headers: { Accept: 'application/json' }, timeout: 10000 }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error('Request failed with status code ' + res.statusCode));
+        return;
+      }
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
-        try { resolve(JSON.parse(data).version); }
+        try {
+          const parsed = JSON.parse(data);
+          if (typeof parsed.version !== 'string' || parsed.version.length === 0) {
+            reject(new Error('Npm registry response did not include a version'));
+            return;
+          }
+          resolve(parsed.version);
+        }
         catch { reject(new Error('Failed to parse npm registry response')); }
       });
     }).on('timeout', function() { this.destroy(); reject(new Error('Registry request timed out')); }).on('error', reject);
@@ -1804,7 +1833,9 @@ async function update(runtimeKey, scope, verify = false) {
     }
 
     console.log(`Update available: v${installedVersion} -> v${targetVersion}`);
-    console.log('Re-installing...\n');
+    console.log('Cleaning previous managed installation...\n');
+    uninstall(runtimeKey, scope);
+    console.log('\nRe-installing...\n');
     install(runtimeKey, scope, verify);
   } catch (err) {
     console.error(`Update check failed: ${err.message}`);

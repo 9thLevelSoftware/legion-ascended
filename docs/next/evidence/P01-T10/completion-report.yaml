@@ -7,7 +7,9 @@ summary: >
   package-content compatibility gate, restored the legacy command, skill, agent,
   adapter, installer, settings, and documentation assets, documented the legacy
   boundary, and hardened workspace package boundary checks so new core code cannot
-  import legacy prompt assets as domain dependencies.
+  import legacy prompt assets as domain dependencies. Review follow-up hardened
+  installer update/uninstall behavior, non-Claude prompt template references, and
+  Kilo skill ownership cleanup while preserving the published path contract.
 base_commit: c700314e272496ebb466aa8293ed7df8a5ad0e0b
 files_changed:
   - .codex-plugin/plugin.json
@@ -60,6 +62,8 @@ acceptance:
   - criterion: Installed-tree smoke coverage verifies the preserved installer matrix.
     result: PASS
   - criterion: New workspace package code cannot depend on legacy persona or prompt files.
+    result: PASS
+  - criterion: Reviewed installer changes are covered by regression tests and approved checksums.
     result: PASS
 required_evidence:
   - package_content_diff: docs/next/evidence/P01-T10/package-content-diff.md
