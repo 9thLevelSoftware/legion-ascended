@@ -1,0 +1,57 @@
+status: DONE
+phase: 2
+task: P02-T02
+summary: >
+  Implemented the project initialization and constitution service on top of the
+  P02-T01 artifact API. The service initializes `.legion/project/project.json`,
+  `.legion/project/constitution.md`, and `.legion/var/`, validates the manifest
+  and constitution, supports dry-run/idempotent initialization, rejects unsafe
+  legacy `.legion/` collisions, updates the constitution with manifest revision
+  checks, and publishes a generated project-manifest JSON Schema.
+files_changed:
+  - .gitignore
+  - packages/artifacts/package.json
+  - packages/artifacts/scripts/generate-artifacts-json-schema.mjs
+  - packages/artifacts/src/index.ts
+  - packages/artifacts/src/paths.ts
+  - packages/artifacts/src/project/**
+  - packages/artifacts/src/revisions.ts
+  - packages/artifacts/test/project.test.mjs
+  - packages/protocol/src/entities/common.ts
+  - pnpm-lock.yaml
+  - schemas/artifacts/project-manifest.schema.json
+  - schemas/api/fixture-corpus.schema.json
+  - schemas/api/query-response.schema.json
+  - schemas/entities/change.schema.json
+  - schemas/events/compatibility-fixture.schema.json
+  - schemas/events/envelope.schema.json
+  - schemas/events/fixture-corpus.schema.json
+  - scripts/validate-next.mjs
+  - templates/project/constitution.md
+  - tests/validate-next.test.mjs
+  - docs/next/evidence/P02-T02/**
+verification:
+  - command: pnpm --filter @legion/artifacts test
+    result: PASS
+    evidence: docs/next/evidence/P02-T02/project-service-test.log
+  - command: temporary Git repository double-init and ownership proof
+    result: PASS
+    evidence: docs/next/evidence/P02-T02/golden-init-and-git-ownership.log
+  - command: pnpm run validate:next
+    result: PASS
+    evidence: docs/next/evidence/P02-T02/full-validation.log
+acceptance:
+  - criterion: Initialization never overwrites existing Legion/Codex data.
+    result: PASS
+  - criterion: Constitution is human-reviewable and versioned.
+    result: PASS
+  - criterion: Operational directories are clearly non-authoritative.
+    result: PASS
+commits:
+  - 93b17d7ec547cd46564144d3a406224cfadf0dd8
+risks_or_followups:
+  - P02-T02 intentionally uses `.legion/project/project.json` from the accepted P02-T01 path contract instead of the stale `.legion/project/project.yaml` wording in the phase prose.
+  - P02-T03 should consume the shared artifact path API and project manifest schema instead of re-declaring manifest paths.
+blocker:
+  condition: none
+  decision_needed: none

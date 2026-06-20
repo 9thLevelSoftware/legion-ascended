@@ -1,0 +1,21 @@
+$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+✔ canonical project artifact paths reject ambiguous or escaping input (1.3653ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.1649ms)
+✔ repository discovery and path resolution stay beneath the real project root (8.0791ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (8.7012ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (12.4867ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (13.8331ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (127.2789ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (5.1821ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (67.1062ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 397.5582
