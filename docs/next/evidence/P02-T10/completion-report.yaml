@@ -1,0 +1,54 @@
+task: P02-T10
+status: complete
+completed_at: "2026-06-21T12:00:00-04:00"
+summary:
+  - Added private `@legion/cli` as a thin noninteractive `legion next ...` command layer over Phase 2 services.
+  - Implemented `project init|validate|status`, `change create|validate|diff|archive`, and planning/Codex migration dry-run, apply, and rollback routing.
+  - Left the root package `legion` binary unchanged so current v8 installer/default behavior is not replaced by the v9 CLI surface.
+  - Added `apps/cli-e2e` process-level tests for JSON output, no-color/noninteractive usage, project setup, change lifecycle checks, archive accepted-state enforcement, and migration fixture apply/rollback flows.
+  - Documented CLI usage and captured help snapshots plus before/after fixture hash proof.
+artifacts:
+  - packages/cli/package.json
+  - packages/cli/tsconfig.json
+  - packages/cli/src/index.ts
+  - packages/cli/src/runtime.ts
+  - packages/cli/src/commands/project/index.ts
+  - packages/cli/src/commands/change/index.ts
+  - packages/cli/src/commands/migrate/index.ts
+  - apps/cli-e2e/package.json
+  - apps/cli-e2e/test/cli-e2e.test.mjs
+  - docs/next/cli/README.md
+  - docs/next/PACKAGE-AUTHORING.md
+  - scripts/check-package-boundaries.mjs
+  - pnpm-lock.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
+verification:
+  - command: pnpm --filter @legion/cli-e2e test
+    result: failed_expected
+    evidence: ERR_PNPM_WORKSPACE_PKG_NOT_FOUND before @legion/cli existed
+  - command: pnpm --filter @legion/cli build
+    result: passed
+  - command: pnpm --filter @legion/cli-e2e test
+    result: passed
+    log: docs/next/evidence/P02-T10/cli-e2e-test.log
+  - command: node packages/cli/dist/index.js next --help --no-color
+    result: passed
+    log: docs/next/evidence/P02-T10/help-snapshots.md
+  - command: node inline CLI fixture hash proof generator
+    result: passed
+    log: docs/next/evidence/P02-T10/cli-fixture-hash-proof.json
+  - command: pnpm run validate:next
+    result: passed
+    log: docs/next/evidence/P02-T10/full-validation.log
+evidence:
+  - docs/next/evidence/P02-T10/cli-e2e-test.log
+  - docs/next/evidence/P02-T10/help-snapshots.md
+  - docs/next/evidence/P02-T10/cli-fixture-hash-proof.json
+  - docs/next/evidence/P02-T10/full-validation.log
+  - docs/next/evidence/P02-T10/completion-report.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
+notes:
+  - CLI handlers parse arguments, read JSON input files, and format service results; artifact mutation and migration policy remain owned by `@legion/artifacts` and `@legion/legacy-bridge`.
+  - Failed service results preserve typed diagnostics in JSON output and return nonzero exit codes.
+  - `--no-color` is accepted for deterministic automation snapshots; the current CLI emits no ANSI styling.
+  - PR review follow-up hardens JSON input boundary errors, valueless flag parsing, subcommand help, and standalone CLI E2E build order.

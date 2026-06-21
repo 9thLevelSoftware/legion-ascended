@@ -10,6 +10,7 @@ Phase 1 workspace packages are private until the public API stabilizes.
 | `@legion/core` | Pure workflow state machines and policy-free transition helpers. | `@legion/protocol` |
 | `@legion/artifacts` | Git-tracked project artifact services, validation, hashing, revision writes, and archive/traceability helpers. | `@legion/protocol`, `@legion/core` |
 | `@legion/legacy-bridge` | Read-only legacy import and migration tooling that stages reviewed v9 artifacts from old workflow sources. | `@legion/protocol`, `@legion/artifacts` |
+| `@legion/cli` | Thin noninteractive `legion next ...` presentation layer over artifact and migration services. | `@legion/protocol`, `@legion/artifacts`, `@legion/legacy-bridge` |
 
 ## Adding A Package
 

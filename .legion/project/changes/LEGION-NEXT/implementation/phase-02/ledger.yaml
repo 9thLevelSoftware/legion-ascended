@@ -5,7 +5,7 @@ source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact
 base_commit: "55f1df5eab8a389d887abd02775b6fd53df32ca8"
 started_at: "2026-06-20T16:15:07-04:00"
 completed_at: null
-active_wave: 4
+active_wave: 5
 tasks:
   P02-T01: { status: DONE, run_id: "P02-T01-20260620-artifacts-contract", commit: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7" }
   P02-T02: { status: DONE, run_id: "P02-T02-20260620-project-constitution", commit: "93b17d7ec547cd46564144d3a406224cfadf0dd8" }
@@ -16,7 +16,7 @@ tasks:
   P02-T07: { status: DONE, run_id: "P02-T07-20260621-accepted-change-archive", commit: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861" }
   P02-T08: { status: DONE, run_id: "P02-T08-20260621-planning-importer", commit: "9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4" }
   P02-T09: { status: DONE, run_id: "P02-T09-20260621-codex-legion-migration", commit: "8ee7e94d0b4bfde1e55301829f8a5c04384ecb73" }
-  P02-T10: { status: NOT_STARTED, run_id: null, commit: null }
+  P02-T10: { status: DONE, run_id: "P02-T10-20260621-cli-e2e", commit: "1f39d42c73b934a078df61dfea2b443335197b4b" }
 decisions:
   - task: P02-T02
     decision: "Use `.legion/project/project.json` for the project manifest"
@@ -81,3 +81,9 @@ evidence:
   - docs/next/evidence/P02-T09/codex-legion-migration-proof.json
   - docs/next/evidence/P02-T09/full-validation.log
   - docs/next/evidence/P02-T09/completion-report.yaml
+  - docs/next/evidence/P02-T10/cli-e2e-test.log
+  - docs/next/evidence/P02-T10/help-snapshots.md
+  - docs/next/evidence/P02-T10/cli-fixture-hash-proof.json
+  - docs/next/evidence/P02-T10/full-validation.log
+  - docs/next/evidence/P02-T10/completion-report.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md

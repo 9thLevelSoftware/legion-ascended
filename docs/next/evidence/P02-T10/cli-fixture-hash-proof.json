@@ -1,0 +1,32 @@
+{
+  "task": "P02-T10",
+  "generatedAt": "2026-06-21T12:00:00.000Z",
+  "cli": "node packages/cli/dist/index.js next --json --no-color",
+  "planning": {
+    "fixture": "tests/fixtures/migration/planning/clean",
+    "dryRunStatus": "dry_run",
+    "applyStatus": "applied",
+    "rollbackStatus": "rolled_back",
+    "targetHashBefore": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sourceHashBefore": "sha256:8342bf55182fe9f9198db6a3525ad97349e0d6398365dd68a29aa02c593973bb",
+    "sourceHashAfterDryRun": "sha256:8342bf55182fe9f9198db6a3525ad97349e0d6398365dd68a29aa02c593973bb",
+    "sourcePreservedByDryRun": true,
+    "targetHashAfterApply": "sha256:5b7ba3603e51ed9d6ec6b424c48df8309e21587179d6f0dbef0c6447c61b6144",
+    "targetProjectManifestExistedAfterApply": true,
+    "targetHashAfterRollback": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rollbackRestoredPreImportTarget": true
+  },
+  "codexLegion": {
+    "fixture": "tests/fixtures/migration/codex/local-codex",
+    "dryRunStatus": "dry_run",
+    "applyStatus": "applied",
+    "rollbackStatus": "rolled_back",
+    "sourceHashBefore": "sha256:05bb1e20a26802a1a24bbe80218262af4b2c4dfd2eb547e20a633591d3984d4d",
+    "sourceHashAfterDryRun": "sha256:05bb1e20a26802a1a24bbe80218262af4b2c4dfd2eb547e20a633591d3984d4d",
+    "sourcePreservedByDryRun": true,
+    "sourceHashAfterApply": "sha256:cd1a01b6fc8dcf0bac6102ebc0801f0e2375743085247a91b8b767b701662f21",
+    "sourceHashAfterRollback": "sha256:05bb1e20a26802a1a24bbe80218262af4b2c4dfd2eb547e20a633591d3984d4d",
+    "rollbackRestoredOriginalBytes": true,
+    "stagedMoveCount": 6
+  }
+}
