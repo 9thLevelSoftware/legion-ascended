@@ -67,5 +67,15 @@
   "emptyRootCleanup": {
     "emptyAgentsRootRemoved": true,
     "initAfterCleanupOk": true
+  },
+  "legacyMigrationRoot": {
+    "movedToLegacyProtocol": true,
+    "oldMigrationRootRemoved": true,
+    "initAfterMigrationRootCleanupOk": true
+  },
+  "unsafeBackupRoot": {
+    "diagnosticCode": "unsafe_backup_root",
+    "rejectedBeforeCopy": true,
+    "sourceUnchanged": true
   }
 }
