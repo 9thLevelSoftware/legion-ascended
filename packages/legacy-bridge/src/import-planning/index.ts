@@ -1121,6 +1121,17 @@ export async function rollbackPlanningImport(input: PlanningImportRollbackInput)
         })
       ]);
     }
+    const realBackupPath = await resolveExistingPathComponents(manifest.backupPath);
+    const realLegionRoot = await resolveExistingPathComponents(legionRoot);
+    if (pathsOverlap(manifest.backupPath, legionRoot) || pathsOverlap(realBackupPath, realLegionRoot)) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest backupPath must not overlap the requested .legion directory.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
     if (!(await pathExists(manifest.backupPath))) {
       return failure("invalid", [
         diagnostic({

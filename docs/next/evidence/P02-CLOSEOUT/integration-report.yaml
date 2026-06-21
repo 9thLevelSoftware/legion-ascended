@@ -1,7 +1,7 @@
 phase: 2
 phase_id: P02
 status: PASS
-generated_at: "2026-06-21T15:02:05-04:00"
+generated_at: "2026-06-21T15:17:56-04:00"
 hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
 scope:
   source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
@@ -20,6 +20,7 @@ blocker_resolved:
     - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
     - "rollbackPlanningImport now hashes existing backups and rejects mismatches before deleting .legion."
     - "Planning dry-run reports now record a canonical planning source root so apply-time backup-root checks do not depend on the process cwd."
+    - "rollbackPlanningImport now rejects backupPath values that overlap the requested .legion directory before hashing or deleting."
   regression_tests:
     - "P02-T08 apply rejects backup roots that overlap .legion before copying"
     - "P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion"
@@ -30,6 +31,7 @@ blocker_resolved:
     - "P02-T08 rollback verifies backup hashes before replacing current .legion"
     - "P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs"
     - "P02-T08 rollback accepts backup manifests created through a symlinked repository root"
+    - "P02-T08 rollback rejects backup paths inside current .legion before deleting"
 pr_review_resolution:
   - comment_id: 3448855115
     finding: "A backup root outside the repo could be a symlink or junction into .legion/project and bypass lexical overlap checks."
@@ -54,12 +56,16 @@ pr_review_resolution:
     finding: "A backup manifest created through a symlinked repository path could later be rejected when rollback used the real checkout path."
     resolution: "Planning backup manifests now store canonical repository roots, and rollback compares canonical repository paths before rejecting repository mismatches."
     regression_test: "P02-T08 rollback accepts backup manifests created through a symlinked repository root"
+  - comment_id: 3448923956
+    finding: "A rollback manifest could point backupPath inside the current .legion tree, pass pre-delete validation, then lose the rollback source when .legion was removed."
+    resolution: "rollbackPlanningImport now rejects lexical and realpath-resolved backupPath overlap with the requested .legion directory before hashing or deleting."
+    regression_test: "P02-T08 rollback rejects backup paths inside current .legion before deleting"
 verification:
   - command: "pnpm --filter @legion/legacy-bridge test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
-    sha256: "fa06e4b486a014320f8300f7646041cda0d0ac891940c42ac37813215a3e5390"
-    summary: "33 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+    sha256: "6dc09e24b5637278d9154b7b80a235c6352106fca8bfe2c5c08faea92d5aa184"
+    summary: "34 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
   - command: "pnpm --filter @legion/artifacts test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
@@ -73,7 +79,7 @@ verification:
   - command: "pnpm run validate:next"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
-    sha256: "1fe33b0934702026278a71fedad139aa10eae8fc5093bc218f94ad2b6fca9c6b"
+    sha256: "da4736ff4d861e5450541936b58d9c45fe071a91e5e666ebb9a6acc3a04e4f4b"
     summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
 independent_review:
   result: PASS

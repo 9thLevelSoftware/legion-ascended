@@ -711,6 +711,47 @@ test("P02-T08 rollback accepts backup manifests created through a symlinked repo
   }
 });
 
+test("P02-T08 rollback rejects backup paths inside current .legion before deleting", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const manifestRoot = path.join(workspace, "manifest");
+    const backupPath = path.join(repositoryRoot, ".legion", "rollback-source");
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await mkdir(path.join(backupPath, "project"), { recursive: true });
+    await mkdir(manifestRoot, { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"current\":true}\n", "utf8");
+    await writeFile(path.join(backupPath, "project", "project.json"), "{\"backup\":true}\n", "utf8");
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    const manifestPath = path.join(manifestRoot, "backup-manifest.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: "0.1.0",
+        kind: "planning-import-backup",
+        createdAt: FIXED_TIME,
+        repositoryRoot,
+        backupPath,
+        preImportHash: await hashDirectory(backupPath),
+        sourceHash: legionBefore,
+        existingLegionRoot: true
+      }, null, 2),
+      "utf8"
+    );
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T08 rollback rejects relative manifest repository roots before deleting current .legion", async () => {
   const workspace = await tempRoot();
   const previousCwd = process.cwd();
