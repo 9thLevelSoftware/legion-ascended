@@ -26,7 +26,7 @@ task_commits:
   P02-T07: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861"
   P02-T08: "9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4"
   P02-T09: "8ee7e94d0b4bfde1e55301829f8a5c04384ecb73"
-  P02-T10: null
+  P02-T10: "4e2ffcdff379c71b8f8fac746fe26aff3bc1412b"
 entries:
   - task: P02-T01
     artifact: docs/next/evidence/P02-T01/path-security-and-atomic-write-test.log
@@ -527,7 +527,7 @@ entries:
   - task: P02-T10
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
     description: Phase 2 ledger updated for P02-T10 CLI E2E completion
-    sha256: 00f7964344943477baed0119800c02d23774017d1d31d3edafbb2cb46e191525
+    sha256: b55de20dcd51d2dc517e87f17b88f7337fbe1245469b1d4527ca5a6f5fdc035f
   - task: P02-T10
     artifact: packages/cli/package.json
     description: Private CLI package definition and workspace dependencies
@@ -603,4 +603,4 @@ entries:
   - task: P02-T10
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
     description: Phase 2 handoff note summarizing CLI closeout, evidence, and PR review state
-    sha256: f123482440c184950ee317cb6070d82b5b5ded92194e52e86eed78a08cc3c5fd
+    sha256: f56c28c097a9b23dc51e98597b31ae37c2fe6b8bf2fe460c449db4b634129d9a

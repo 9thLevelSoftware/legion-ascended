@@ -16,7 +16,7 @@ tasks:
   P02-T07: { status: DONE, run_id: "P02-T07-20260621-accepted-change-archive", commit: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861" }
   P02-T08: { status: DONE, run_id: "P02-T08-20260621-planning-importer", commit: "9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4" }
   P02-T09: { status: DONE, run_id: "P02-T09-20260621-codex-legion-migration", commit: "8ee7e94d0b4bfde1e55301829f8a5c04384ecb73" }
-  P02-T10: { status: DONE, run_id: "P02-T10-20260621-cli-e2e", commit: null }
+  P02-T10: { status: DONE, run_id: "P02-T10-20260621-cli-e2e", commit: "4e2ffcdff379c71b8f8fac746fe26aff3bc1412b" }
 decisions:
   - task: P02-T02
     decision: "Use `.legion/project/project.json` for the project manifest"
