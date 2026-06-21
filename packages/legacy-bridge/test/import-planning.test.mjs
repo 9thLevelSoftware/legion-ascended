@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -394,6 +394,171 @@ test("P02-T08 apply rejects tampered staging, bad reports, and invalid timestamp
   }
 });
 
+test("P02-T08 apply rejects backup roots that overlap .legion before copying", async () => {
+  const workspace = await tempRoot();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    const unsafeBackupRoot = path.join(targetRoot, ".legion", "project", "backups");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(path.join(targetRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: path.join(sourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-unsafe-backup-root",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    const applied = await applyPlanningImport({
+      repositoryRoot: targetRoot,
+      stagingRoot,
+      backupRoot: unsafeBackupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+    assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    const unsafeBackupTarget = path.join(targetRoot, ".legion", "project", "linked-backups");
+    const unsafeBackupRoot = path.join(workspace, "external-backup-link");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(unsafeBackupTarget, { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    await symlink(unsafeBackupTarget, unsafeBackupRoot, process.platform === "win32" ? "junction" : "dir");
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: path.join(sourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-symlinked-backup-root",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    const applied = await applyPlanningImport({
+      repositoryRoot: targetRoot,
+      stagingRoot,
+      backupRoot: unsafeBackupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+    assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 apply rejects backup roots that overlap planning source or staging roots", async () => {
+  const workspace = await tempRoot();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(path.join(targetRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const planningBefore = await hashDirectory(path.join(sourceRoot, ".planning"));
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: path.join(sourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-backup-root-source-overlap",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    for (const backupRoot of [
+      path.join(sourceRoot, ".planning", "backups"),
+      path.join(stagingRoot, "backups")
+    ]) {
+      const applied = await applyPlanningImport({
+        repositoryRoot: targetRoot,
+        stagingRoot,
+        backupRoot,
+        appliedAt: FIXED_TIME,
+        reviewAccepted: true,
+        allowReplaceExistingProject: true
+      });
+      assert.equal(applied.ok, false);
+      assert.equal(applied.status, "invalid");
+      assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+      assert.equal(await hashDirectory(path.join(sourceRoot, ".planning")), planningBefore);
+      assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+    }
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs", async () => {
+  const workspace = await tempRoot();
+  const previousCwd = process.cwd();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(path.join(targetRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const planningBefore = await hashDirectory(path.join(sourceRoot, ".planning"));
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    process.chdir(sourceRoot);
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: ".planning",
+      stagingRoot,
+      runId: "planning-import-relative-source-overlap",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    process.chdir(targetRoot);
+    const applied = await applyPlanningImport({
+      repositoryRoot: targetRoot,
+      stagingRoot,
+      backupRoot: path.join(sourceRoot, ".planning", "backups"),
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+    assert.equal(await hashDirectory(path.join(sourceRoot, ".planning")), planningBefore);
+    assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    process.chdir(previousCwd);
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T08 rollback rejects malformed backup manifests without deleting current .legion", async () => {
   const workspace = await tempRoot();
   try {
@@ -414,6 +579,260 @@ test("P02-T08 rollback rejects malformed backup manifests without deleting curre
     assert.equal(rolledBack.status, "invalid");
     assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
     assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 rollback rejects unusable backup manifests before deleting current .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const targetRoot = path.join(workspace, "target");
+    const backupRoot = path.join(workspace, "backups");
+    await mkdir(path.join(targetRoot, ".legion", "project"), { recursive: true });
+    await mkdir(backupRoot, { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+    const manifestPath = path.join(backupRoot, "missing-backup-manifest.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: "0.1.0",
+        kind: "planning-import-backup",
+        createdAt: FIXED_TIME,
+        repositoryRoot: targetRoot,
+        backupPath: path.join(backupRoot, "missing-legion-backup"),
+        preImportHash: legionBefore,
+        sourceHash: legionBefore,
+        existingLegionRoot: true
+      }, null, 2),
+      "utf8"
+    );
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot: targetRoot,
+      backupManifestPath: manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
+    assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 rollback rejects backup manifests from another repository before deleting current .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const planningSourceRoot = path.join(workspace, "planning-source");
+    const sourceRepositoryRoot = path.join(workspace, "source-repo");
+    const targetRepositoryRoot = path.join(workspace, "target-repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("clean", planningSourceRoot);
+    await mkdir(path.join(sourceRepositoryRoot, ".legion", "project"), { recursive: true });
+    await mkdir(path.join(targetRepositoryRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(sourceRepositoryRoot, ".legion", "project", "project.json"), "{\"source\":true}\n", "utf8");
+    await writeFile(path.join(targetRepositoryRoot, ".legion", "project", "project.json"), "{\"target\":true}\n", "utf8");
+    const targetBefore = await hashDirectory(path.join(targetRepositoryRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: sourceRepositoryRoot,
+      planningRoot: path.join(planningSourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-cross-repo-backup",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+    const applied = await applyPlanningImport({
+      repositoryRoot: sourceRepositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, true);
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot: targetRepositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "backup_repository_mismatch"));
+    assert.equal(await hashDirectory(path.join(targetRepositoryRoot, ".legion")), targetBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 rollback accepts backup manifests created through a symlinked repository root", async () => {
+  const workspace = await tempRoot();
+  try {
+    const planningSourceRoot = path.join(workspace, "planning-source");
+    const repositoryRoot = path.join(workspace, "repo");
+    const linkedRepositoryRoot = path.join(workspace, "linked-repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("clean", planningSourceRoot);
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    await symlink(repositoryRoot, linkedRepositoryRoot, process.platform === "win32" ? "junction" : "dir");
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: linkedRepositoryRoot,
+      planningRoot: path.join(planningSourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-symlinked-repo-root",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+    const applied = await applyPlanningImport({
+      repositoryRoot: linkedRepositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, true);
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, true);
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 rollback rejects backup paths inside current .legion before deleting", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const manifestRoot = path.join(workspace, "manifest");
+    const backupPath = path.join(repositoryRoot, ".legion", "rollback-source");
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await mkdir(path.join(backupPath, "project"), { recursive: true });
+    await mkdir(manifestRoot, { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"current\":true}\n", "utf8");
+    await writeFile(path.join(backupPath, "project", "project.json"), "{\"backup\":true}\n", "utf8");
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    const manifestPath = path.join(manifestRoot, "backup-manifest.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: "0.1.0",
+        kind: "planning-import-backup",
+        createdAt: FIXED_TIME,
+        repositoryRoot,
+        backupPath,
+        preImportHash: await hashDirectory(backupPath),
+        sourceHash: legionBefore,
+        existingLegionRoot: true
+      }, null, 2),
+      "utf8"
+    );
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 rollback rejects relative manifest repository roots before deleting current .legion", async () => {
+  const workspace = await tempRoot();
+  const previousCwd = process.cwd();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const backupRoot = path.join(workspace, "backups");
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await mkdir(backupRoot, { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    const manifestPath = path.join(backupRoot, "relative-repository-root-manifest.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: "0.1.0",
+        kind: "planning-import-backup",
+        createdAt: FIXED_TIME,
+        repositoryRoot: ".",
+        backupPath: path.join(backupRoot, "unused"),
+        preImportHash: "sha256:unused",
+        sourceHash: "sha256:unused",
+        existingLegionRoot: false
+      }),
+      "utf8"
+    );
+
+    process.chdir(repositoryRoot);
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    process.chdir(previousCwd);
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 rollback verifies backup hashes before replacing current .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const planningSourceRoot = path.join(workspace, "planning-source");
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("clean", planningSourceRoot);
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"before\":true}\n", "utf8");
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot,
+      planningRoot: path.join(planningSourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-corrupted-backup",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+    const applied = await applyPlanningImport({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, true);
+
+    const currentBeforeRollback = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    await writeFile(path.join(applied.backup.backupPath, "project", "project.json"), "{\"corrupted\":true}\n", "utf8");
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "backup_hash_mismatch"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), currentBeforeRollback);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

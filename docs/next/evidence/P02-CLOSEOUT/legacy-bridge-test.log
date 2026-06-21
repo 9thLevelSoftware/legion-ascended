@@ -1,0 +1,45 @@
+$ pnpm --filter @legion/artifacts build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ P02-T09 dry-run inventories local and global Codex .legion protocol installs deterministically (227.5322ms)
+✔ P02-T09 apply preserves customized bytes and unblocks v9 project initialization (122.3978ms)
+✔ P02-T09 rollback restores the exact pre-migration .legion layout (126.8331ms)
+✔ P02-T09 partial installs without manifests are preserved as customized legacy data (40.7474ms)
+✔ P02-T09 repeat migration is a no-op report without moving v9 project data (130.8855ms)
+✔ P02-T09 apply resumes an interrupted legacy-protocol move with matching existing files (168.5121ms)
+✔ P02-T09 apply removes empty legacy roots so v9 init is unblocked (58.5592ms)
+✔ P02-T09 apply moves legacy migration roots so v9 init is unblocked (122.4074ms)
+✔ P02-T09 rejects backup roots that overlap .legion before copying (51.7429ms)
+✔ P02-T09 rejects symlinked legacy entries instead of silently dropping them (23.0936ms)
+✔ P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source (56.2962ms)
+✔ P02-T09 backup manifests use absolute paths so rollback survives cwd changes (106.2429ms)
+✔ P02-T09 rollback rejects unusable backup manifests before deleting current .legion (30.7585ms)
+✔ P02-T09 rollback rejects backup manifests from another repository before deleting current .legion (102.506ms)
+✔ P02-T09 rollback verifies backup hashes before replacing current .legion (92.3076ms)
+✔ P02-T09 apply rejects tampered migration report moves before cleanup (57.9033ms)
+✔ P02-T08 dry-run stages deterministic v9 artifacts without mutating legacy .planning (136.6865ms)
+✔ P02-T08 dry-run reports stale state, contradictory plan summaries, and missing requirements (49.8731ms)
+✔ P02-T08 dry-run rejects staging paths that overlap repository or source roots (12.7837ms)
+✔ P02-T08 dry-run handles EOF summaries, malformed YAML, and invalid timestamps as diagnostics (81.0398ms)
+✔ P02-T08 apply backs up destination and rollback restores exact pre-import .legion bytes (86.3171ms)
+✔ P02-T08 apply rejects tampered staging, bad reports, and invalid timestamps without mutating destination (51.4705ms)
+✔ P02-T08 apply rejects backup roots that overlap .legion before copying (45.9975ms)
+✔ P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion (53.2577ms)
+✔ P02-T08 apply rejects backup roots that overlap planning source or staging roots (61.3648ms)
+✔ P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs (55.2791ms)
+✔ P02-T08 rollback rejects malformed backup manifests without deleting current .legion (5.6032ms)
+✔ P02-T08 rollback rejects unusable backup manifests before deleting current .legion (6.8593ms)
+✔ P02-T08 rollback rejects backup manifests from another repository before deleting current .legion (76.8848ms)
+✔ P02-T08 rollback accepts backup manifests created through a symlinked repository root (93.9592ms)
+✔ P02-T08 rollback rejects backup paths inside current .legion before deleting (11.0152ms)
+✔ P02-T08 rollback rejects relative manifest repository roots before deleting current .legion (6.9442ms)
+✔ P02-T08 rollback verifies backup hashes before replacing current .legion (70.5895ms)
+✔ P02-T08 repeated apply is rejected without changing destination (69.5188ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1840.3873

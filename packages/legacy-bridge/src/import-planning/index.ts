@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -585,6 +585,28 @@ function pathsOverlap(left: string, right: string): boolean {
   return containsPath(left, right) || containsPath(right, left);
 }
 
+async function resolveExistingPathComponents(inputPath: string): Promise<string> {
+  const resolved = path.resolve(inputPath);
+  const suffix: string[] = [];
+  let candidate = resolved;
+
+  while (!(await pathExists(candidate))) {
+    const parent = path.dirname(candidate);
+    if (parent === candidate) return path.resolve(candidate, ...suffix);
+    suffix.unshift(path.basename(candidate));
+    candidate = parent;
+  }
+
+  return path.resolve(await realpath(candidate), ...suffix);
+}
+
+async function sameCanonicalPath(left: string, right: string): Promise<boolean> {
+  const resolvedLeft = await resolveExistingPathComponents(left);
+  const resolvedRight = await resolveExistingPathComponents(right);
+  if (process.platform === "win32") return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
+  return resolvedLeft === resolvedRight;
+}
+
 function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | PlanningImportFailure {
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const planningRoot = path.resolve(input.planningRoot);
@@ -600,6 +622,45 @@ function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | Pla
   }
 
   return stagingRoot;
+}
+
+async function safeResolvedBackupRoot(input: {
+  readonly repositoryRoot: string;
+  readonly planningRoot: string;
+  readonly stagingRoot: string;
+  readonly backupRoot: string;
+}): Promise<string | PlanningImportFailure> {
+  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const backupRoot = path.resolve(input.backupRoot);
+  const legionRoot = path.join(repositoryRoot, ".legion");
+  const planningRoot = path.resolve(input.planningRoot);
+  const stagingRoot = path.resolve(input.stagingRoot);
+  const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
+  const realBackupRoot = await resolveExistingPathComponents(backupRoot);
+  const realLegionRoot = await resolveExistingPathComponents(legionRoot);
+  const realPlanningRoot = await resolveExistingPathComponents(planningRoot);
+  const realStagingRoot = await resolveExistingPathComponents(stagingRoot);
+
+  if (
+    pathsOverlap(backupRoot, repositoryRoot) ||
+    pathsOverlap(backupRoot, legionRoot) ||
+    pathsOverlap(backupRoot, planningRoot) ||
+    pathsOverlap(backupRoot, stagingRoot) ||
+    pathsOverlap(realBackupRoot, realRepositoryRoot) ||
+    pathsOverlap(realBackupRoot, realLegionRoot) ||
+    pathsOverlap(realBackupRoot, realPlanningRoot) ||
+    pathsOverlap(realBackupRoot, realStagingRoot)
+  ) {
+    return failure("invalid", [
+      diagnostic({
+        code: "unsafe_backup_root",
+        message: "Backup root must not overlap the repository root, .legion source, planning source, or staging root.",
+        sourcePath: input.backupRoot
+      })
+    ]);
+  }
+
+  return realBackupRoot;
 }
 
 function parseUtcTimestamp(input: {
@@ -630,6 +691,7 @@ export async function scanPlanningSource(input: {
 export async function createPlanningImportDryRun(input: PlanningImportDryRunInput): Promise<PlanningImportDryRunResult> {
   const stagingRoot = safeResolvedStagingRoot(input);
   if (typeof stagingRoot !== "string") return stagingRoot;
+  const planningRoot = await resolveExistingPathComponents(input.planningRoot);
 
   const createdAt = parseUtcTimestamp({
     value: input.project.createdAt,
@@ -638,10 +700,10 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
   });
   if (typeof createdAt !== "string") return createdAt;
 
-  const inventory = await sourceInventory(input.planningRoot);
+  const inventory = await sourceInventory(planningRoot);
   if ("diagnostics" in inventory) return inventory;
 
-  const projectMarkdown = await readUtf8IfExists(path.join(input.planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === undefined) {
     return failure("invalid", [
       diagnostic({
@@ -728,7 +790,7 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
     });
   }
 
-  const plans = await parsePlans(input.planningRoot, inventory);
+  const plans = await parsePlans(planningRoot, inventory);
   for (const plan of plans) {
     mappings.push({
       sourcePath: plan.sourcePath,
@@ -748,8 +810,8 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
     mappings: mappings.sort((left, right) =>
       compareStrings(`${left.sourcePath}\0${left.targetPath}`, `${right.sourcePath}\0${right.targetPath}`)
     ),
-    conflicts: await planSummaryConflicts(input.planningRoot, plans),
-    uncertainties: await stateUncertainties(input.planningRoot),
+    conflicts: await planSummaryConflicts(planningRoot, plans),
+    uncertainties: await stateUncertainties(planningRoot),
     policy: {
       planningReadOnlyAfterApply: true,
       legacySourceDeleted: false,
@@ -810,11 +872,12 @@ async function backupLegionRoot(input: {
   readonly appliedAt: UtcTimestamp;
   readonly report: PlanningImportReport;
 }): Promise<PlanningImportBackupRecord> {
-  const legionRoot = path.join(input.repositoryRoot, ".legion");
+  const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
+  const legionRoot = path.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path.join(input.backupRoot, id);
-  const backupPath = path.join(backupDirectory, "legion");
+  const backupDirectory = path.resolve(input.backupRoot, id);
+  const backupPath = path.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists(legionRoot);
 
   await rm(backupDirectory, { recursive: true, force: true });
@@ -828,12 +891,12 @@ async function backupLegionRoot(input: {
     kind: "planning-import-backup",
     createdAt: input.appliedAt,
     backupPath,
-    repositoryRoot: input.repositoryRoot,
+    repositoryRoot,
     preImportHash,
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path.join(backupDirectory, "backup-manifest.json");
+  const manifestPath = path.resolve(backupDirectory, "backup-manifest.json");
   await writeFile(manifestPath, stableProtocolJson(manifest), "utf8");
 
   return {
@@ -959,9 +1022,17 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
   });
   if (typeof appliedAt !== "string") return appliedAt;
 
+  const backupRoot = await safeResolvedBackupRoot({
+    repositoryRoot: input.repositoryRoot,
+    planningRoot: report.source.root,
+    stagingRoot: input.stagingRoot,
+    backupRoot: input.backupRoot
+  });
+  if (typeof backupRoot !== "string") return backupRoot;
+
   const backup = await backupLegionRoot({
     repositoryRoot: input.repositoryRoot,
-    backupRoot: input.backupRoot,
+    backupRoot,
     appliedAt,
     report
   });
@@ -1002,8 +1073,9 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
 
 export async function rollbackPlanningImport(input: PlanningImportRollbackInput): Promise<PlanningImportRollbackResult> {
   let manifest: BackupManifest;
+  const backupManifestPath = path.resolve(input.backupManifestPath);
   try {
-    const parsed = JSON.parse(await readFile(input.backupManifestPath, "utf8"));
+    const parsed = JSON.parse(await readFile(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
       throw new Error("Backup manifest is missing required planning import fields.");
     }
@@ -1013,12 +1085,74 @@ export async function rollbackPlanningImport(input: PlanningImportRollbackInput)
       diagnostic({
         code: "invalid_backup_manifest",
         message: error instanceof Error ? error.message : "Backup manifest could not be read.",
-        sourcePath: input.backupManifestPath
+        sourcePath: backupManifestPath
       })
     ]);
   }
 
-  const legionRoot = path.join(input.repositoryRoot, ".legion");
+  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const legionRoot = path.join(repositoryRoot, ".legion");
+  if (!path.isAbsolute(manifest.repositoryRoot)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "invalid_backup_manifest",
+        message: "Backup manifest repositoryRoot must be absolute.",
+        sourcePath: backupManifestPath
+      })
+    ]);
+  }
+  if (!(await sameCanonicalPath(manifest.repositoryRoot, repositoryRoot))) {
+    return failure("invalid", [
+      diagnostic({
+        code: "backup_repository_mismatch",
+        message: "Backup manifest repositoryRoot does not match the requested repository root.",
+        sourcePath: backupManifestPath
+      })
+    ]);
+  }
+
+  if (manifest.existingLegionRoot) {
+    if (!path.isAbsolute(manifest.backupPath)) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest backupPath must be absolute.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    const realBackupPath = await resolveExistingPathComponents(manifest.backupPath);
+    const realLegionRoot = await resolveExistingPathComponents(legionRoot);
+    if (pathsOverlap(manifest.backupPath, legionRoot) || pathsOverlap(realBackupPath, realLegionRoot)) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest backupPath must not overlap the requested .legion directory.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    if (!(await pathExists(manifest.backupPath))) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest references a missing .legion backup directory.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    const backupHash = await hashTree(manifest.backupPath);
+    if (backupHash !== manifest.preImportHash) {
+      return failure("invalid", [
+        diagnostic({
+          code: "backup_hash_mismatch",
+          message: "Backup bytes no longer match the manifest pre-import hash.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+  }
+
   await rm(legionRoot, { recursive: true, force: true });
   if (manifest.existingLegionRoot) {
     await cp(manifest.backupPath, legionRoot, { recursive: true });

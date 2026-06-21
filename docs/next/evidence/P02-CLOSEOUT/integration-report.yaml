@@ -1,0 +1,95 @@
+phase: 2
+phase_id: P02
+status: PASS
+generated_at: "2026-06-21T15:17:56-04:00"
+hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
+scope:
+  source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
+  roadmap_index: "docs/legion-next-roadmap.md"
+  note: "The long-running directive's absolute roadmap path does not exist; this closeout follows the checked-in roadmap index and the Phase 2 source document."
+blocker_resolved:
+  task: P02-T08
+  finding: "Planning import rollback removed .legion before validating backup manifest repository identity, backup existence, and backup hash."
+  resolution:
+    - "Planning backup manifests now record resolved repositoryRoot, backupPath, and manifestPath values."
+    - "Planning apply now rejects backup roots that overlap the repository, .legion, planning source, or staging root before copying."
+    - "Planning apply now resolves existing backup-root path components before accepting paths, rejecting symlink or junction targets that point back into the repository, .legion, planning source, or staging root."
+    - "Planning backup manifests now record canonical repository roots and rollback compares canonical paths so symlinked checkout spellings do not make valid backups unusable."
+    - "rollbackPlanningImport now rejects manifests for another repository before deleting .legion."
+    - "rollbackPlanningImport now rejects relative manifest repositoryRoot values before deleting .legion."
+    - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
+    - "rollbackPlanningImport now hashes existing backups and rejects mismatches before deleting .legion."
+    - "Planning dry-run reports now record a canonical planning source root so apply-time backup-root checks do not depend on the process cwd."
+    - "rollbackPlanningImport now rejects backupPath values that overlap the requested .legion directory before hashing or deleting."
+  regression_tests:
+    - "P02-T08 apply rejects backup roots that overlap .legion before copying"
+    - "P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion"
+    - "P02-T08 apply rejects backup roots that overlap planning source or staging roots"
+    - "P02-T08 rollback rejects unusable backup manifests before deleting current .legion"
+    - "P02-T08 rollback rejects backup manifests from another repository before deleting current .legion"
+    - "P02-T08 rollback rejects relative manifest repository roots before deleting current .legion"
+    - "P02-T08 rollback verifies backup hashes before replacing current .legion"
+    - "P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs"
+    - "P02-T08 rollback accepts backup manifests created through a symlinked repository root"
+    - "P02-T08 rollback rejects backup paths inside current .legion before deleting"
+pr_review_resolution:
+  - comment_id: 3448855115
+    finding: "A backup root outside the repo could be a symlink or junction into .legion/project and bypass lexical overlap checks."
+    resolution: "safeResolvedBackupRoot now resolves existing path components with realpath before overlap checks and returns the canonical safe backup root."
+    regression_test: "P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion"
+  - comment_id: 3448855117
+    finding: "Closeout evidence hashes were recorded from working-tree bytes instead of Git blob bytes, causing CRLF-normalization mismatches."
+    resolution: "Closeout evidence hashes were recomputed from staged Git blob bytes and the hash basis is recorded in this report."
+  - comment_id: 3448869836
+    finding: "Backup roots under the planning source or staging root could mutate reviewed input/output trees before backup creation."
+    resolution: "safeResolvedBackupRoot now rejects lexical and realpath-resolved overlaps with repository, .legion, planning source, and staging roots."
+    regression_test: "P02-T08 apply rejects backup roots that overlap planning source or staging roots"
+  - comment_id: 3448877567
+    finding: "A relative repositoryRoot in a rollback manifest could resolve against the process cwd and pass repository identity checks."
+    resolution: "rollbackPlanningImport now rejects non-absolute manifest repositoryRoot values before comparing identity or deleting .legion."
+    regression_test: "P02-T08 rollback rejects relative manifest repository roots before deleting current .legion"
+  - comment_id: 3448896037
+    finding: "A relative planning root in a dry-run report could be resolved against apply-time cwd and bypass planning-source backup-root overlap checks."
+    resolution: "createPlanningImportDryRun now canonicalizes the planning source root before inventory and report generation."
+    regression_test: "P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs"
+  - comment_id: 3448908364
+    finding: "A backup manifest created through a symlinked repository path could later be rejected when rollback used the real checkout path."
+    resolution: "Planning backup manifests now store canonical repository roots, and rollback compares canonical repository paths before rejecting repository mismatches."
+    regression_test: "P02-T08 rollback accepts backup manifests created through a symlinked repository root"
+  - comment_id: 3448923956
+    finding: "A rollback manifest could point backupPath inside the current .legion tree, pass pre-delete validation, then lose the rollback source when .legion was removed."
+    resolution: "rollbackPlanningImport now rejects lexical and realpath-resolved backupPath overlap with the requested .legion directory before hashing or deleting."
+    regression_test: "P02-T08 rollback rejects backup paths inside current .legion before deleting"
+verification:
+  - command: "pnpm --filter @legion/legacy-bridge test"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
+    sha256: "6dc09e24b5637278d9154b7b80a235c6352106fca8bfe2c5c08faea92d5aa184"
+    summary: "34 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+  - command: "pnpm --filter @legion/artifacts test"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
+    sha256: "9ab81f04bc0258929dec5582d4b7a6221434fdd87c7ff023a15d6468b5e86136"
+    summary: "59 artifact service tests passed across path security, current specs, change bundles, support artifacts, traceability, and archive."
+  - command: "pnpm --filter @legion/cli-e2e test"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log"
+    sha256: "d30fb640cc7b6575d7220f1e0a5cc6c01e97ec17e3e27a47c8ce68b648894031"
+    summary: "9 process-level CLI E2E tests passed across project, change, planning migration, and Codex migration commands."
+  - command: "pnpm run validate:next"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
+    sha256: "da4736ff4d861e5450541936b58d9c45fe071a91e5e666ebb9a6acc3a04e4f4b"
+    summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
+independent_review:
+  result: PASS
+  evidence: "docs/next/reviews/PHASE-02-INDEPENDENT-REVIEW.md"
+  sha256: "5167329de531192612599ab0690386aa79f9a7919e994e6d6dd1f84ec2045cf3"
+  verdicts:
+    requirement_coverage: PASS
+    architecture_compliance: PASS
+    implementation_quality: PASS
+    test_and_evidence_sufficiency: PASS
+    migration_safety: PASS
+    unresolved_risk: PASS
+  blocking_findings_remaining: 0

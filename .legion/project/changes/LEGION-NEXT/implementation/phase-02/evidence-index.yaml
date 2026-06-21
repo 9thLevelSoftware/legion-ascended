@@ -538,7 +538,7 @@ entries:
     sha256: 304c0beadf32a6de76737b9435b19b509df03e41f234789ca243067ea1173aea
   - task: P02-T10
     artifact: packages/cli/src/index.ts
-    description: `legion next` entrypoint, namespace routing, help, JSON output, and exit-code handling
+    description: "`legion next` entrypoint, namespace routing, help, JSON output, and exit-code handling"
     sha256: 5941fc547d01b47015d24e877964bad7db94da0e3da5d3a9b088b79a79f0502f
   - task: P02-T10
     artifact: packages/cli/src/runtime.ts
@@ -604,3 +604,43 @@ entries:
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
     description: Phase 2 handoff note summarizing CLI closeout, evidence, and PR review state
     sha256: 96ad36b74c3d9249792dd37a5a8c10996fb52d64fb003d0bece0331d5b6f27e6
+  - task: P02-CLOSEOUT
+    artifact: packages/legacy-bridge/src/import-planning/index.ts
+    description: Planning import migration-safety closeout hardening for canonical dry-run source roots, canonical backup manifest repository roots, safe backup roots across repository, `.legion`, planning source, and staging boundaries, plus rollback backupPath isolation from current `.legion`
+    sha256: 1cde02444d074713222cab888b115522239638fac10bbd6d7b15d8cb5249c51e
+  - task: P02-CLOSEOUT
+    artifact: packages/legacy-bridge/test/import-planning.test.mjs
+    description: P02-T08 closeout regressions for unsafe backup roots, relative planning-root dry-runs, symlinked repository roots, planning source and staging overlap, missing rollback backups, nested `.legion` rollback backups, cross-repository manifests, relative manifest roots, and corrupted backup hashes
+    sha256: 7b943b76debd7411f701d12f08a9565d52dacd8074d86a37c18b410f8d1fb2cd
+  - task: P02-CLOSEOUT
+    artifact: docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log
+    description: Focused @legion/legacy-bridge closeout verification with 34 passing migration tests
+    sha256: 6dc09e24b5637278d9154b7b80a235c6352106fca8bfe2c5c08faea92d5aa184
+  - task: P02-CLOSEOUT
+    artifact: docs/next/evidence/P02-CLOSEOUT/artifacts-test.log
+    description: Focused @legion/artifacts closeout verification with 59 passing artifact service tests
+    sha256: 9ab81f04bc0258929dec5582d4b7a6221434fdd87c7ff023a15d6468b5e86136
+  - task: P02-CLOSEOUT
+    artifact: docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log
+    description: Process-level CLI closeout verification with 9 passing E2E tests
+    sha256: d30fb640cc7b6575d7220f1e0a5cc6c01e97ec17e3e27a47c8ce68b648894031
+  - task: P02-CLOSEOUT
+    artifact: docs/next/evidence/P02-CLOSEOUT/validate-next.log
+    description: Full validate-next closeout transcript after nested `.legion` rollback-backup migration-safety fix
+    sha256: da4736ff4d861e5450541936b58d9c45fe071a91e5e666ebb9a6acc3a04e4f4b
+  - task: P02-CLOSEOUT
+    artifact: docs/next/evidence/P02-CLOSEOUT/integration-report.yaml
+    description: Structured Phase 2 integration report with closeout blocker resolution, verification commands, evidence hashes, and independent review verdicts
+    sha256: d20e74836c898cf3d025ae68e8559f75566a5ce8b48ccda015607e55a83ee1f8
+  - task: P02-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-02-INDEPENDENT-REVIEW.md
+    description: Independent Phase 2 closeout review with passing verdicts and no remaining critical or important findings
+    sha256: 5167329de531192612599ab0690386aa79f9a7919e994e6d6dd1f84ec2045cf3
+  - task: P02-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger marked DONE with closeout decision, nested `.legion` rollback-backup resolution, and evidence bundle
+    sha256: 3ffa8da6b968e461cb949be89132e448a298b9a57b64adeddebf639b0cb9685e
+  - task: P02-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
+    description: Phase 2 handoff expanded with rollback backup-path isolation, Phase 3 starting point, and `.legion/var` operational root guidance
+    sha256: 47ed2c6f0b54f74bede269ec27f7ca029758ce1aca21fad1dcef77fadd6df126
