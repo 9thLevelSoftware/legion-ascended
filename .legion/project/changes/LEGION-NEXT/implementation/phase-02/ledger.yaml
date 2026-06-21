@@ -5,7 +5,7 @@ source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact
 base_commit: "55f1df5eab8a389d887abd02775b6fd53df32ca8"
 started_at: "2026-06-20T16:15:07-04:00"
 completed_at: null
-active_wave: 3
+active_wave: 4
 tasks:
   P02-T01: { status: DONE, run_id: "P02-T01-20260620-artifacts-contract", commit: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7" }
   P02-T02: { status: DONE, run_id: "P02-T02-20260620-project-constitution", commit: "93b17d7ec547cd46564144d3a406224cfadf0dd8" }
@@ -14,7 +14,7 @@ tasks:
   P02-T05: { status: DONE, run_id: "P02-T05-20260620-change-support-artifacts", commit: "08d261017792e591db637d9a8b6a959a56141e84" }
   P02-T06: { status: DONE, run_id: "P02-T06-20260621-traceability-invalidation", commit: "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7" }
   P02-T07: { status: DONE, run_id: "P02-T07-20260621-accepted-change-archive", commit: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861" }
-  P02-T08: { status: NOT_STARTED, run_id: null, commit: null }
+  P02-T08: { status: DONE, run_id: "P02-T08-20260621-planning-importer", commit: "ca78b9352f58d24c5dcb3fffb5ed8b0db58b2b71" }
   P02-T09: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T10: { status: NOT_STARTED, run_id: null, commit: null }
 decisions:
@@ -30,6 +30,10 @@ decisions:
     decision: "Store oracle files as revisioned oracle-artifact envelopes"
     reason: "The protocol Oracle entity intentionally contains reviewable oracle metadata but no artifact revision counter. A thin artifact envelope preserves protocol purity while allowing stale oracle updates to be rejected by the artifacts service."
     decided_at: "2026-06-20T20:56:00-04:00"
+  - task: P02-T08
+    decision: "Create `@legion/legacy-bridge` for legacy source-format import policy"
+    reason: "Planning import depends on protocol/artifact validation but carries v8 `.planning/` source-format policy that should not live inside the core artifact services."
+    decided_at: "2026-06-21T12:00:00-04:00"
 blockers: []
 evidence:
   - docs/next/evidence/P02-T01/path-security-and-atomic-write-test.log
@@ -64,3 +68,7 @@ evidence:
   - docs/next/evidence/P02-T07/archive-idempotency-proof.json
   - docs/next/evidence/P02-T07/full-validation.log
   - docs/next/evidence/P02-T07/completion-report.yaml
+  - docs/next/evidence/P02-T08/planning-import-test.log
+  - docs/next/evidence/P02-T08/planning-import-proof.json
+  - docs/next/evidence/P02-T08/full-validation.log
+  - docs/next/evidence/P02-T08/completion-report.yaml
