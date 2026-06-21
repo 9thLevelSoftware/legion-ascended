@@ -50,6 +50,13 @@ acceptance:
     result: PASS
 commits:
   - ca78b9352f58d24c5dcb3fffb5ed8b0db58b2b71
+  - 9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4
+review_followups:
+  - commit: 9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4
+    summary: >
+      Hardened unsafe staging-root rejection, EOF summary parsing, malformed
+      timestamp/report/backup diagnostics, and reviewed staging-tree hash
+      verification before apply.
 risks_or_followups:
   - P02-T08 imports PROJECT.md requirements and preserves ROADMAP/phase files as historical context; P02-T09 remains responsible for migrating existing Codex `.legion/` protocol assets without namespace collision.
 blocker:
