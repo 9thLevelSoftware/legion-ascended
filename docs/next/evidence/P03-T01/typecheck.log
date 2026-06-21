@@ -9,8 +9,8 @@ packages/core build$ tsc -p tsconfig.json
 packages/board-store build: Done
 packages/core build: Done
 packages/artifacts build: Done
-packages/board build$ tsc -p tsconfig.json
 packages/legacy-bridge build$ tsc -p tsconfig.json
+packages/board build$ tsc -p tsconfig.json
 packages/store-sqlite build$ tsc -p tsconfig.json
 packages/board build: Done
 packages/store-sqlite build: Done
@@ -20,15 +20,15 @@ packages/cli build: Done
 Scope: 9 of 10 workspace projects
 packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
 packages/protocol typecheck: Done
-packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
 packages/core typecheck$ tsc -p tsconfig.json --noEmit
 packages/board-store typecheck$ tsc -p tsconfig.json --noEmit
+packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
 packages/board-store typecheck: Done
 packages/core typecheck: Done
 packages/artifacts typecheck: Done
 packages/board typecheck$ tsc -p tsconfig.json --noEmit
-packages/store-sqlite typecheck$ tsc -p tsconfig.json --noEmit
 packages/legacy-bridge typecheck$ tsc -p tsconfig.json --noEmit
+packages/store-sqlite typecheck$ tsc -p tsconfig.json --noEmit
 packages/board typecheck: Done
 packages/store-sqlite typecheck: Done
 packages/legacy-bridge typecheck: Done

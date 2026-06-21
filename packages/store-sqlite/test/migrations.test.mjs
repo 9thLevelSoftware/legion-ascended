@@ -102,6 +102,13 @@ test("P03-T01 schema enforces ownership, foreign-key, unique, and check constrai
         VALUES ('tsk_alpha', 'prj_alpha', 'chg_alpha', 'ctr_alpha', 1, ?, 1, 'ready', 500, '2026-06-21T00:00:00.000Z', '2026-06-21T00:00:00.000Z')
       `).run("a".repeat(64));
 
+      assert.doesNotThrow(() => {
+        database.prepare(`
+          INSERT INTO board_approvals (approval_id, task_id, status, scope_json, requested_by_json, decided_by_json, requested_at, decided_at)
+          VALUES ('apv_alpha', 'tsk_alpha', 'revoked', '{}', '{}', '{}', '2026-06-21T00:00:00.000Z', '2026-06-21T00:01:00.000Z')
+        `).run();
+      });
+
       assert.throws(() => {
         database.prepare(`
           INSERT INTO board_tasks (task_id, project_id, change_id, contract_id, contract_revision, contract_hash, generation, status, priority, created_at, updated_at)
@@ -149,6 +156,62 @@ test("P03-T01 migration runner rolls back interrupted migrations without advanci
       assert.equal(database.prepare("PRAGMA user_version").get().user_version, 1);
       assert.equal(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'surviving_table'").get().name, "surviving_table");
       assert.equal(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'should_rollback'").get(), undefined);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("P03-T01 migration runner honors explicit target versions", async () => {
+  await withTempDatabase((databasePath) => {
+    const database = openRaw(databasePath);
+    try {
+      const report = runSqliteMigrations(
+        database,
+        [
+          {
+            version: 1,
+            name: "first",
+            statements: ["CREATE TABLE target_one (id TEXT PRIMARY KEY)"]
+          },
+          {
+            version: 2,
+            name: "second",
+            statements: ["CREATE TABLE target_two (id TEXT PRIMARY KEY)"]
+          }
+        ],
+        { targetVersion: 1 }
+      );
+
+      assert.equal(report.fromVersion, 0);
+      assert.equal(report.toVersion, 1);
+      assert.deepEqual(report.appliedVersions, [1]);
+      assert.equal(database.prepare("PRAGMA user_version").get().user_version, 1);
+      assert.equal(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'target_one'").get().name, "target_one");
+      assert.equal(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'target_two'").get(), undefined);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("P03-T01 migration runner rejects unsupported target versions", async () => {
+  await withTempDatabase((databasePath) => {
+    const database = openRaw(databasePath);
+    try {
+      assert.throws(() => {
+        runSqliteMigrations(
+          database,
+          [
+            {
+              version: 1,
+              name: "first",
+              statements: ["CREATE TABLE target_one (id TEXT PRIMARY KEY)"]
+            }
+          ],
+          { targetVersion: 2 }
+        );
+      }, /unsupported target board schema version 2/i);
     } finally {
       database.close();
     }

@@ -1,5 +1,6 @@
 import type {
   ApprovalId,
+  ApprovalStatus,
   ChangeId,
   ContractId,
   EventId,
@@ -108,7 +109,7 @@ export interface BoardRunProjection {
 export interface BoardApprovalProjection {
   readonly approvalId: ApprovalId;
   readonly taskId: TaskId;
-  readonly status: "requested" | "granted" | "denied" | "expired";
+  readonly status: ApprovalStatus;
   readonly updatedAt: string;
 }
 

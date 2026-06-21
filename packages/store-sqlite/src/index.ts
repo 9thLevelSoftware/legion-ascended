@@ -162,7 +162,7 @@ export const SQLITE_BOARD_MIGRATIONS: readonly SqliteMigration[] = [
         approval_id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL,
         run_id TEXT,
-        status TEXT NOT NULL CHECK (status IN ('requested', 'granted', 'denied', 'expired')),
+        status TEXT NOT NULL CHECK (status IN ('requested', 'granted', 'denied', 'expired', 'revoked')),
         scope_json TEXT NOT NULL,
         requested_by_json TEXT NOT NULL,
         decided_by_json TEXT,
@@ -326,7 +326,16 @@ export function runSqliteMigrations(
 ): BoardMigrationReport {
   const ordered = sortedMigrations(migrations);
   assertContiguousMigrations(ordered);
-  const targetVersion = options.targetVersion ?? ordered.at(-1)?.version ?? 0;
+  const latestVersion = ordered.at(-1)?.version ?? 0;
+  const targetVersion = options.targetVersion ?? latestVersion;
+
+  if (!Number.isInteger(targetVersion) || targetVersion < 0) {
+    throw new Error("Target board schema version must be a non-negative integer.");
+  }
+  if (targetVersion > latestVersion) {
+    throw new Error("Unsupported target board schema version " + targetVersion + "; latest available migration is " + latestVersion + ".");
+  }
+
   const currentVersion = getUserVersion(database);
 
   if (currentVersion > targetVersion) {
@@ -340,6 +349,8 @@ export function runSqliteMigrations(
   let version = currentVersion;
 
   for (const migration of ordered) {
+    if (migration.version > targetVersion) break;
+
     const checksum = migrationChecksum(migration);
     checksums[migration.version] = checksum;
 

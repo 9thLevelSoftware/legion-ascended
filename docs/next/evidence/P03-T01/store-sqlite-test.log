@@ -1,19 +1,21 @@
 $ pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
 $ tsc -p tsconfig.json
 $ tsc -p tsconfig.json
-✔ P03-T01 migrates a real board database and reports schema diagnostics (12.8597ms)
-✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (10.2501ms)
-✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (5.5181ms)
-✔ P03-T01 migration runner treats missing scalar pragma rows as empty rows (0.1785ms)
-✔ P03-T01 migration rollback preserves the original migration failure (0.1727ms)
-✔ P03-T01 backup hashing avoids whole-file reads (1.0339ms)
-✔ P03-T01 migration runner fails closed for unknown future schema versions (6.0096ms)
-✔ P03-T01 migration checksums are deterministic over ordered SQL statements (5.1732ms)
-ℹ tests 8
+✔ P03-T01 migrates a real board database and reports schema diagnostics (13.2586ms)
+✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (11.8313ms)
+✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (5.6086ms)
+✔ P03-T01 migration runner honors explicit target versions (4.9307ms)
+✔ P03-T01 migration runner rejects unsupported target versions (1.4343ms)
+✔ P03-T01 migration runner treats missing scalar pragma rows as empty rows (0.1905ms)
+✔ P03-T01 migration rollback preserves the original migration failure (0.1928ms)
+✔ P03-T01 backup hashing avoids whole-file reads (1.1792ms)
+✔ P03-T01 migration runner fails closed for unknown future schema versions (5.6165ms)
+✔ P03-T01 migration checksums are deterministic over ordered SQL statements (4.7392ms)
+ℹ tests 10
 ℹ suites 0
-ℹ pass 8
+ℹ pass 10
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 99.7066
+ℹ duration_ms 118.2502

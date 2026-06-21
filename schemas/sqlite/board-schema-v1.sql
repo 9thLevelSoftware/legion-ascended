@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS board_approvals (
   approval_id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL,
   run_id TEXT,
-  status TEXT NOT NULL CHECK (status IN ('requested', 'granted', 'denied', 'expired')),
+  status TEXT NOT NULL CHECK (status IN ('requested', 'granted', 'denied', 'expired', 'revoked')),
   scope_json TEXT NOT NULL,
   requested_by_json TEXT NOT NULL,
   decided_by_json TEXT,
