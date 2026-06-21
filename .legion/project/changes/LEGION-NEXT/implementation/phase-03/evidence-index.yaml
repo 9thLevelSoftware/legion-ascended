@@ -1,0 +1,96 @@
+phase: 3
+phase_id: P03
+hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
+entries:
+  - task: P03-T01
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-03/ledger.yaml
+    description: Phase 3 ledger created and updated for P03-T01 board/store schema completion
+    sha256: 3c41e83dd8bad0c9844e6d2215ad9d175a00513d900df3c64f7902ec56f554b8
+  - task: P03-T01
+    artifact: packages/board/package.json
+    description: Board package shell for future control-plane command service APIs
+    sha256: 60e0b9f198cc366301b1f80dc8fdb62689e43b8e44f051dd18417a51dcd9d7d1
+  - task: P03-T01
+    artifact: packages/board/src/index.ts
+    description: Board package exports provider-neutral board store contracts
+    sha256: 89ae5d0c29269c61222539f512891bda39f815bb9e535713198550fb983b7687
+  - task: P03-T01
+    artifact: packages/board/tsconfig.json
+    description: Board package TypeScript configuration
+    sha256: 8b4235c828fd3905bb44d0a520e9047c493e7eb7ea47319d586d4c5d408ebdaa
+  - task: P03-T01
+    artifact: packages/board-store/package.json
+    description: Provider-neutral board store package manifest
+    sha256: 260fbb8b9453de0cbc8297d50f85905e380ed96ba705e058e541f3a6dd6419d4
+  - task: P03-T01
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral board schema constants, required index contract, diagnostics, and protocol-aligned projection contracts
+    sha256: f190ae6dbc6941c75f5d2e109c9c089028a301dfbc20ad1f42c43893facbaadb
+  - task: P03-T01
+    artifact: packages/board-store/tsconfig.json
+    description: Board store package TypeScript configuration
+    sha256: 24d890a1639e284fd1fa5d5e5c164fbacaed3ac7f9c4e98d434d14ef05bf0e4d
+  - task: P03-T01
+    artifact: packages/store-sqlite/package.json
+    description: SQLite provider package manifest and focused P03-T01 test command
+    sha256: 565c18d37ad0da061803bedb06aae9b3e2d7a628f5be32812bd886429b45db65
+  - task: P03-T01
+    artifact: packages/store-sqlite/src/index.ts
+    description: node:sqlite provider setup, schema v1 migrations, explicit target handling, zero-based protocol event sequences, missing migration-record rejection, defensive pragma reads, rollback preservation, protocol-aligned approval status, diagnostics, FK-supporting indexes, and chunked backup hashing
+    sha256: fcfe5343b40e3e9c74bbefaaf521361100eee134e6af6e951053ebd1580eec1c
+  - task: P03-T01
+    artifact: packages/store-sqlite/test/migrations.test.mjs
+    description: Real-file migration, constraint, zero-based event sequence, revoked approval, explicit target, missing migration-record, rollback, defensive pragma, backup hashing, future-version, and checksum tests for P03-T01
+    sha256: a1a03fcb8fea99a491a7850640fbfd2decb0887ee609288fb0addb7f8c7c86da
+  - task: P03-T01
+    artifact: packages/store-sqlite/tsconfig.json
+    description: SQLite provider TypeScript configuration
+    sha256: b0798a9eeb43dee58f5f838abf4a3feb40e53775a8e32fc4487fea5f75750e02
+  - task: P03-T01
+    artifact: schemas/sqlite/board-schema-v1.sql
+    description: Committed SQLite board schema v1 artifact with protocol-aligned approval status, zero-based aggregate event sequences, and operational/FK-supporting indexes
+    sha256: fcb25cdc310251ea64226f56412f62ce71ca4e9318cbace4ab02b4baee8c3f3e
+  - task: P03-T01
+    artifact: scripts/check-package-boundaries.mjs
+    description: Package-boundary policy updated so only @legion/store-sqlite may import node:sqlite
+    sha256: 99f3a7cd9c4a55695f8d34bac158a65cbbc0cb7577c223282d9d2345bdc407f6
+  - task: P03-T01
+    artifact: tests/package-boundaries.test.mjs
+    description: Boundary regressions for board/store packages and SQLite provider isolation
+    sha256: 3f6f396d698918d6b1910f16982d534f539de87066bceb23403d23cce5559904
+  - task: P03-T01
+    artifact: pnpm-lock.yaml
+    description: Workspace lockfile updated for board, board-store, and store-sqlite packages
+    sha256: 8fe37b381c23c8da7fe760ecb0b67844923c9a6498ff7d4fe1633eabfb901167
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/store-sqlite-test.log
+    description: Focused @legion/store-sqlite P03-T01 test log with 12 passing migration and review-regression tests
+    sha256: 8306c4f40e7d714c2931e9f10aa3b85c8b00825e76e5d5a917a21578a7c6d0c9
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/package-boundaries.log
+    description: Package-boundary verification log
+    sha256: d26c0a95dedee80d16527d1d5e79e0d249815cbf853539d968da1d8a48328bcc
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/typecheck.log
+    description: Workspace typecheck log after board/store package additions
+    sha256: 69b74845d2e7bd1e012744040bc29d6efaf1076669cf17e66c0fc65020dd59f8
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/full-validation.log
+    description: Full validate-next log after P03-T01 implementation
+    sha256: 97fd70ea1cf430e175e0f27bf3091ba89f720526875de35fbeed6465708ae892
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/schema-diagram.md
+    description: Board schema diagram and ownership notes
+    sha256: 564f68aa0a7d8674d197b3f9582a2692b0bdd2fb05bc6d4d5e77cf763e0f13e5
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/schema-diagnostics.json
+    description: Real-file migrated schema diagnostics showing WAL, foreign keys, required tables, FK-supporting indexes, and migration record
+    sha256: 9caea38eccdd033e13c9f455b66969185b3e916c2d11a6c91706142d3d47755f
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/query-plan-review.md
+    description: Query-plan review proving required task, link, event, outbox, cascade, and nullification indexes are used
+    sha256: b0e1b748447edd98ed35cdc9c347b60e266e50b17cc89b13af8214826c5242ee
+  - task: P03-T01
+    artifact: docs/next/evidence/P03-T01/completion-report.yaml
+    description: Structured P03-T01 completion report
+    sha256: 09644dc5c1f57c2cf87cdadf9869d34e1c980f35b020f39cb037f9b75e46b388

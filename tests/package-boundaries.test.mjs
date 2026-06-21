@@ -20,12 +20,15 @@ async function withFixture(files, callback) {
   }
 }
 
-test('accepts legal protocol, core, artifacts, and legacy bridge imports', async () => {
+test('accepts legal protocol, core, artifacts, board, store, and legacy bridge imports', async () => {
   await withFixture(
     {
       'packages/protocol/src/index.ts': 'export const LEGION_PROTOCOL_VERSION = "0.1.0";\n',
       'packages/core/src/index.ts': 'import { LEGION_PROTOCOL_VERSION } from "@legion/protocol";\nexport const version = LEGION_PROTOCOL_VERSION;\n',
       'packages/artifacts/src/index.ts': 'import { stableStateStringify } from "@legion/core";\nimport { artifactPathSchema } from "@legion/protocol";\nexport const value = stableStateStringify(artifactPathSchema.parse("a.txt"));\n',
+      'packages/board-store/src/index.ts': 'import type { TaskId } from "@legion/protocol";\nexport type BoardTaskId = TaskId;\n',
+      'packages/store-sqlite/src/index.ts': 'import { DatabaseSync } from "node:sqlite";\nimport { BOARD_SCHEMA_VERSION } from "@legion/board-store";\nexport const value = [DatabaseSync, BOARD_SCHEMA_VERSION];\n',
+      'packages/board/src/index.ts': 'import { BOARD_SCHEMA_VERSION } from "@legion/board-store";\nexport const version = BOARD_SCHEMA_VERSION;\n',
       'packages/legacy-bridge/src/index.ts': 'import { PROJECT_ARTIFACT_PATHS } from "@legion/artifacts";\nimport { LEGION_PROTOCOL_VERSION } from "@legion/protocol";\nexport const value = [PROJECT_ARTIFACT_PATHS.projectManifest, LEGION_PROTOCOL_VERSION];\n'
     },
     async (root) => {
@@ -67,18 +70,21 @@ test('rejects deep imports across workspace package exports', async () => {
   );
 });
 
-test('rejects provider and storage imports in protocol, core, and artifacts', async () => {
+test('rejects provider and storage imports outside the SQLite provider package', async () => {
   await withFixture(
     {
       'packages/protocol/src/index.ts': 'import { defineAgent } from "eve";\nexport const value = defineAgent;\n',
       'packages/core/src/index.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n',
-      'packages/artifacts/src/storage.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n'
+      'packages/artifacts/src/storage.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n',
+      'packages/board-store/src/storage.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n',
+      'packages/board/src/storage.ts': 'import sqlite from "node:sqlite";\nexport const db = sqlite;\n',
+      'packages/store-sqlite/src/index.ts': 'import { DatabaseSync } from "node:sqlite";\nexport const db = DatabaseSync;\n'
     },
     async (root) => {
       const result = await checkPackageBoundaries({ root });
 
       assert.equal(result.ok, false);
-      assert.equal(result.violations.length, 3);
+      assert.equal(result.violations.length, 5);
       assert.ok(result.violations.every((violation) => /forbidden provider or storage import/.test(violation.message)));
     }
   );
