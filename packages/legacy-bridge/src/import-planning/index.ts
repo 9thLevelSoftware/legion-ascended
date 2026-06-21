@@ -626,25 +626,35 @@ function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | Pla
 
 async function safeResolvedBackupRoot(input: {
   readonly repositoryRoot: string;
+  readonly planningRoot: string;
+  readonly stagingRoot: string;
   readonly backupRoot: string;
 }): Promise<string | PlanningImportFailure> {
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const backupRoot = path.resolve(input.backupRoot);
   const legionRoot = path.join(repositoryRoot, ".legion");
+  const planningRoot = path.resolve(input.planningRoot);
+  const stagingRoot = path.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
+  const realPlanningRoot = await resolveExistingPathComponents(planningRoot);
+  const realStagingRoot = await resolveExistingPathComponents(stagingRoot);
 
   if (
     pathsOverlap(backupRoot, repositoryRoot) ||
     pathsOverlap(backupRoot, legionRoot) ||
+    pathsOverlap(backupRoot, planningRoot) ||
+    pathsOverlap(backupRoot, stagingRoot) ||
     pathsOverlap(realBackupRoot, realRepositoryRoot) ||
-    pathsOverlap(realBackupRoot, realLegionRoot)
+    pathsOverlap(realBackupRoot, realLegionRoot) ||
+    pathsOverlap(realBackupRoot, realPlanningRoot) ||
+    pathsOverlap(realBackupRoot, realStagingRoot)
   ) {
     return failure("invalid", [
       diagnostic({
         code: "unsafe_backup_root",
-        message: "Backup root must not overlap the repository root or .legion source.",
+        message: "Backup root must not overlap the repository root, .legion source, planning source, or staging root.",
         sourcePath: input.backupRoot
       })
     ]);
@@ -1013,6 +1023,8 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
 
   const backupRoot = await safeResolvedBackupRoot({
     repositoryRoot: input.repositoryRoot,
+    planningRoot: report.source.root,
+    stagingRoot: input.stagingRoot,
     backupRoot: input.backupRoot
   });
   if (typeof backupRoot !== "string") return backupRoot;

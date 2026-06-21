@@ -606,16 +606,16 @@ entries:
     sha256: 96ad36b74c3d9249792dd37a5a8c10996fb52d64fb003d0bece0331d5b6f27e6
   - task: P02-CLOSEOUT
     artifact: packages/legacy-bridge/src/import-planning/index.ts
-    description: Planning import migration-safety closeout hardening for safe backup roots, resolved backup records, repository-bound rollback manifests, and backup hash verification before destructive rollback
-    sha256: 8e013069327233b10ebf1a3a24e185c1d3f8c98c2057f63a785dbcf8e160beab
+    description: Planning import migration-safety closeout hardening for safe backup roots across repository, `.legion`, planning source, and staging boundaries
+    sha256: 7f0ca2ff95481d3adf927775dbc9397124931904cb4c948d8d094eda643a64df
   - task: P02-CLOSEOUT
     artifact: packages/legacy-bridge/test/import-planning.test.mjs
-    description: P02-T08 closeout regressions for unsafe backup roots, missing rollback backups, cross-repository manifests, and corrupted backup hashes
-    sha256: 1a27b41178e5f2c3576080122fd978652153882e0e8027b5be6a5ae049ec1b25
+    description: P02-T08 closeout regressions for unsafe backup roots, planning source and staging overlap, missing rollback backups, cross-repository manifests, and corrupted backup hashes
+    sha256: 120c4423245b1d065571902e4f5dbb100e14a43a97ed413a142f926d90f2ad6d
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log
-    description: Focused @legion/legacy-bridge closeout verification with 29 passing migration tests
-    sha256: b23d0f8a116c0fa8b8b218f91f35871c9b69209dc8c9c87ad954af24ab4f97b8
+    description: Focused @legion/legacy-bridge closeout verification with 30 passing migration tests
+    sha256: 9c2121c157c9216b0ce99337dbb0e1f5cfb3044f356bc7dc511429170a7b9caf
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/artifacts-test.log
     description: Focused @legion/artifacts closeout verification with 59 passing artifact service tests
@@ -627,11 +627,11 @@ entries:
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/validate-next.log
     description: Full validate-next closeout transcript after migration-safety fixes
-    sha256: 4aa4c8f7eb4fa70ac80a13f55e0d098af7c6d2060315fc392477b048fd51a6ec
+    sha256: b4cb051815b6f3879981103f3bc4a482d7893e7d9ccf433722eb06281b2cfba9
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/integration-report.yaml
     description: Structured Phase 2 integration report with closeout blocker resolution, verification commands, evidence hashes, and independent review verdicts
-    sha256: d7174274581325b4858b3ea209f9131a578d02c4618af2c4dd2ea1a6af6a9078
+    sha256: 3dba09a7573b4d25c376387e6d8e981168ba5c6af4519198b8fdc8fdfff816f5
   - task: P02-CLOSEOUT
     artifact: docs/next/reviews/PHASE-02-INDEPENDENT-REVIEW.md
     description: Independent Phase 2 closeout review with passing verdicts and no remaining critical or important findings
@@ -639,8 +639,8 @@ entries:
   - task: P02-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
     description: Phase 2 ledger marked DONE with closeout decision and evidence bundle
-    sha256: dd63bc127a7254172ab4cb117292ac63ca4b264386cd1a4caf5074948c7f343a
+    sha256: 5f2de55b1a97da6dd631a9b35defcba6d82e28a9b85985c6be7132349b1f3ab4
   - task: P02-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
     description: Phase 2 handoff expanded to the source-document template with Phase 3 starting point and `.legion/var` operational root guidance
-    sha256: e04feff7dbb73d242840aa95ebf97d8cab5d9bd786ba72663e2af115bc53df9e
+    sha256: 21cdaa44901554178efc81a9a8590286b34f0425ec6c7774d7eaa96a66d1b12b

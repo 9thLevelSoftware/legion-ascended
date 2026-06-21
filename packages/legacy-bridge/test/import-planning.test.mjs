@@ -472,6 +472,50 @@ test("P02-T08 apply rejects symlinked backup roots whose real path overlaps .leg
   }
 });
 
+test("P02-T08 apply rejects backup roots that overlap planning source or staging roots", async () => {
+  const workspace = await tempRoot();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(path.join(targetRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const planningBefore = await hashDirectory(path.join(sourceRoot, ".planning"));
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: path.join(sourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-backup-root-source-overlap",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    for (const backupRoot of [
+      path.join(sourceRoot, ".planning", "backups"),
+      path.join(stagingRoot, "backups")
+    ]) {
+      const applied = await applyPlanningImport({
+        repositoryRoot: targetRoot,
+        stagingRoot,
+        backupRoot,
+        appliedAt: FIXED_TIME,
+        reviewAccepted: true,
+        allowReplaceExistingProject: true
+      });
+      assert.equal(applied.ok, false);
+      assert.equal(applied.status, "invalid");
+      assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+      assert.equal(await hashDirectory(path.join(sourceRoot, ".planning")), planningBefore);
+      assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+    }
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T08 rollback rejects malformed backup manifests without deleting current .legion", async () => {
   const workspace = await tempRoot();
   try {

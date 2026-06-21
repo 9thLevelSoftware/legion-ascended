@@ -1,7 +1,7 @@
 phase: 2
 phase_id: P02
 status: PASS
-generated_at: "2026-06-21T14:25:56-04:00"
+generated_at: "2026-06-21T14:34:06-04:00"
 hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
 scope:
   source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
@@ -12,14 +12,15 @@ blocker_resolved:
   finding: "Planning import rollback removed .legion before validating backup manifest repository identity, backup existence, and backup hash."
   resolution:
     - "Planning backup manifests now record resolved repositoryRoot, backupPath, and manifestPath values."
-    - "Planning apply now rejects backup roots that overlap the repository or .legion before copying."
-    - "Planning apply now resolves existing backup-root path components before accepting paths, rejecting symlink or junction targets that point back into the repository or .legion."
+    - "Planning apply now rejects backup roots that overlap the repository, .legion, planning source, or staging root before copying."
+    - "Planning apply now resolves existing backup-root path components before accepting paths, rejecting symlink or junction targets that point back into the repository, .legion, planning source, or staging root."
     - "rollbackPlanningImport now rejects manifests for another repository before deleting .legion."
     - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
     - "rollbackPlanningImport now hashes existing backups and rejects mismatches before deleting .legion."
   regression_tests:
     - "P02-T08 apply rejects backup roots that overlap .legion before copying"
     - "P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion"
+    - "P02-T08 apply rejects backup roots that overlap planning source or staging roots"
     - "P02-T08 rollback rejects unusable backup manifests before deleting current .legion"
     - "P02-T08 rollback rejects backup manifests from another repository before deleting current .legion"
     - "P02-T08 rollback verifies backup hashes before replacing current .legion"
@@ -31,12 +32,16 @@ pr_review_resolution:
   - comment_id: 3448855117
     finding: "Closeout evidence hashes were recorded from working-tree bytes instead of Git blob bytes, causing CRLF-normalization mismatches."
     resolution: "Closeout evidence hashes were recomputed from staged Git blob bytes and the hash basis is recorded in this report."
+  - comment_id: 3448869836
+    finding: "Backup roots under the planning source or staging root could mutate reviewed input/output trees before backup creation."
+    resolution: "safeResolvedBackupRoot now rejects lexical and realpath-resolved overlaps with repository, .legion, planning source, and staging roots."
+    regression_test: "P02-T08 apply rejects backup roots that overlap planning source or staging roots"
 verification:
   - command: "pnpm --filter @legion/legacy-bridge test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
-    sha256: "b23d0f8a116c0fa8b8b218f91f35871c9b69209dc8c9c87ad954af24ab4f97b8"
-    summary: "29 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+    sha256: "9c2121c157c9216b0ce99337dbb0e1f5cfb3044f356bc7dc511429170a7b9caf"
+    summary: "30 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
   - command: "pnpm --filter @legion/artifacts test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
@@ -50,7 +55,7 @@ verification:
   - command: "pnpm run validate:next"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
-    sha256: "4aa4c8f7eb4fa70ac80a13f55e0d098af7c6d2060315fc392477b048fd51a6ec"
+    sha256: "b4cb051815b6f3879981103f3bc4a482d7893e7d9ccf433722eb06281b2cfba9"
     summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
 independent_review:
   result: PASS
