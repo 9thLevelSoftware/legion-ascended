@@ -1,0 +1,16 @@
+$ pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (881.5826ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (1503.038ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (896.4627ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (976.389ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4507.3946
