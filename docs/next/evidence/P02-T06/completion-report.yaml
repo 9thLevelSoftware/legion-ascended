@@ -1,0 +1,38 @@
+status: DONE
+phase: 2
+task: P02-T06
+summary: >
+  Implemented a side-effect-free traceability validator and invalidation impact
+  analyzer over current specs, change bundles, oracle artifacts, taskgraphs,
+  evidence indexes, and review provenance. The graph validates required R2/R3
+  requirement chains, stale artifact input revisions, duplicate trace refs,
+  removed targets, cross-change refs, and cyclic refinement references.
+files_changed:
+  - packages/artifacts/src/traceability/service.ts
+  - packages/artifacts/src/traceability/index.ts
+  - packages/artifacts/src/invalidation/service.ts
+  - packages/artifacts/src/invalidation/index.ts
+  - packages/artifacts/src/index.ts
+  - packages/artifacts/test/traceability.test.mjs
+  - docs/next/artifacts/TRACEABILITY.md
+verification:
+  - command: pnpm --filter @legion/artifacts test
+    result: PASS
+    evidence: docs/next/evidence/P02-T06/traceability-test.log
+  - command: pnpm run validate:next
+    result: PASS
+    evidence: docs/next/evidence/P02-T06/full-validation.log
+acceptance:
+  - criterion: No R2/R3 requirement can appear complete without required oracle/task/evidence chain.
+    result: PASS
+  - criterion: Revision impact names only affected downstream artifacts.
+    result: PASS
+  - criterion: Diagnostics cite exact files/IDs.
+    result: PASS
+commits:
+  - a8e10ae3c155b07a8ad0350ad892717f9288d8ed
+risks_or_followups:
+  - P02-T07 owns archive-time mutation and persistent invalidation facts; P02-T06 intentionally remains a read-only projection.
+blocker:
+  condition: none
+  decision_needed: none

@@ -22,7 +22,7 @@ task_commits:
   P02-T03: "748d9e9bb87085560b40b3e498c0b22936cb07ff"
   P02-T04: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05"
   P02-T05: "08d261017792e591db637d9a8b6a959a56141e84"
-  P02-T06: null
+  P02-T06: "a8e10ae3c155b07a8ad0350ad892717f9288d8ed"
   P02-T07: null
   P02-T08: null
   P02-T09: null
@@ -320,3 +320,55 @@ entries:
     artifact: docs/next/evidence/P02-T05/completion-report.yaml
     description: Structured P02-T05 completion report
     sha256: d506641cf39e583818d71e2ee68dfec42e85752c3e0a7db12d8f7bd8e51a69de
+  - task: P02-T06
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger updated for P02-T06 completion
+    sha256: 5baf56e0daa1c929d220dc0f49ae280aac82205d1f805836de2e4cd4dc717513
+  - task: P02-T06
+    artifact: packages/artifacts/src/traceability/service.ts
+    description: Traceability graph validation and deterministic impact analysis service
+    sha256: f71a91f5faf7a72c7dc8fbbf5d0cb98565baf55d4ca0d0ef7b4391921ecd1e7c
+  - task: P02-T06
+    artifact: packages/artifacts/src/traceability/index.ts
+    description: Traceability package exports
+    sha256: f8070136187aa7e78b5189f68e3296d4f1bcfde1e8973145da17fe6efcb87136
+  - task: P02-T06
+    artifact: packages/artifacts/src/invalidation/service.ts
+    description: Invalidation analyzer API surface over the traceability graph
+    sha256: c4b05716895e2d588f61d635735d86daa76ff17eb9a4b1454e56de9ff0b16c83
+  - task: P02-T06
+    artifact: packages/artifacts/src/invalidation/index.ts
+    description: Invalidation package exports
+    sha256: f8070136187aa7e78b5189f68e3296d4f1bcfde1e8973145da17fe6efcb87136
+  - task: P02-T06
+    artifact: packages/artifacts/src/index.ts
+    description: Root artifacts package exports for traceability and invalidation services
+    sha256: 36031310f49c4e32cf5abdb2d366a7d1be1313b710cfb5815a7ed57eefcd5f14
+  - task: P02-T06
+    artifact: packages/artifacts/test/traceability.test.mjs
+    description: P02-T06 regression tests for valid coverage, broken chains, stale revisions, shared oracles, and invalidation impact
+    sha256: e774898066978632facb3f7930f4e9166badba800192c524e4d07ca4d169cb73
+  - task: P02-T06
+    artifact: docs/next/artifacts/TRACEABILITY.md
+    description: Human-readable traceability and invalidation artifact contract
+    sha256: 150f455eae20b465ee837b13cc6cd53249704646b249d97bc688f13b890655e7
+  - task: P02-T06
+    artifact: docs/next/evidence/P02-T06/traceability-test.log
+    description: Focused @legion/artifacts traceability and invalidation test report
+    sha256: 337b04820854de3a2b07c6ec24588fe1f3e12d5558ad68f0ad2bfb177793c759
+  - task: P02-T06
+    artifact: docs/next/evidence/P02-T06/traceability-matrix-report.json
+    description: Structured coverage fixture matrix, false-positive review, and determinism proof
+    sha256: 5bf6db8db921f00a99b728cca8e0a66635dba8a8b3e6e4099ddf2b5796289e6a
+  - task: P02-T06
+    artifact: docs/next/evidence/P02-T06/invalidation-impact-report.md
+    description: Human-readable invalidation impact proof for requirement and design changes
+    sha256: f4886be366139db1c604857dd938da82faaed8abb832722b465fb320ac02cd11
+  - task: P02-T06
+    artifact: docs/next/evidence/P02-T06/full-validation.log
+    description: Full workspace validate-next log after P02-T06 implementation
+    sha256: fe93f15c52083b76ecc5e26686c808b7c02f2ce833c4e938d038a20575f92df4
+  - task: P02-T06
+    artifact: docs/next/evidence/P02-T06/completion-report.yaml
+    description: Structured P02-T06 completion report
+    sha256: ebcd478942cc7f23206ecdceeaede7d5da6097b3d7ff0d80c35f4a8a30cbd11a

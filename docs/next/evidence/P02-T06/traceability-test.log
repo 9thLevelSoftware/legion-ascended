@@ -1,0 +1,59 @@
+$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+✔ canonical project artifact paths reject ambiguous or escaping input (1.6774ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.2439ms)
+✔ repository discovery and path resolution stay beneath the real project root (16.919ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (14.3587ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (19.1644ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (20.974ms)
+✔ P02-T05 creates revisioned oracle metadata and manifest hashes change after oracle revision (97.3568ms)
+✔ P02-T05 oracle manifest reports invalid oracle filenames at their actual artifact path (17.0676ms)
+✔ P02-T05 oracle reads reject artifacts whose embedded oracle ID disagrees with the requested path (50.612ms)
+✔ P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order (101.2755ms)
+✔ P02-T05 taskgraph rejects empty or duplicate artifact inputs with diagnostics (37.5555ms)
+✔ P02-T05 taskgraph rejects copied identities and stale manifest hashes on read (53.4312ms)
+✔ P02-T05 evidence index rejects incomplete provenance and records accepted evidence references (55.2131ms)
+✔ P02-T05 evidence index rejects empty inputs, copied identities, and stale manifest hashes (59.1796ms)
+✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (87.3119ms)
+✔ P02-T04 rejects conflicting delta operations before writing a bundle (21.6513ms)
+✔ P02-T04 detects stale current-spec bases during change validation (55.025ms)
+✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (43.5319ms)
+✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (15.7225ms)
+✔ P02-T04 preflights bundle artifact paths before writing partial deltas (20.8168ms)
+✔ P02-T04 validates add deltas against current truth (47.5641ms)
+✔ P02-T04 rejects add bundle creation when the target already exists in unlisted current truth (29.8463ms)
+✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (50.7915ms)
+✔ P02-T04 rejects side artifacts whose change IDs disagree with the bundle path (89.7662ms)
+✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (36.8515ms)
+✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (14.4164ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (161.067ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (5.9975ms)
+✔ P02-T02 manifest schema reports malformed input without throwing (1.788ms)
+✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (16.7277ms)
+✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (14.8861ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (70.3786ms)
+✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (49.5113ms)
+✔ P02-T03 ignores non-file .md entries when listing current specs (14.7527ms)
+✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (13.4935ms)
+✔ P02-T03 preserves non-structural markdown headings inside current spec sections (20.7242ms)
+✔ P02-T03 rejects reserved current spec section headings inside section content (12.7244ms)
+✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (20.5876ms)
+✔ P02-T03 classifies semantic spec index diffs (0.4038ms)
+✔ P02-T03 blocks stale edits and supports rename and deprecate operations (36.6414ms)
+✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (14.3734ms)
+✔ P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically (133.0228ms)
+✔ P02-T06 accepts shared oracle coverage without false orphan diagnostics (66.0923ms)
+✔ P02-T06 reports calibrated broken traceability chains with exact diagnostics (62.0462ms)
+✔ P02-T06 reports stale artifact input revisions after downstream sources change (88.016ms)
+✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (76.1967ms)
+✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (69.093ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 815.0248

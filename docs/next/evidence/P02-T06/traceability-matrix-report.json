@@ -1,0 +1,50 @@
+{
+  "task": "P02-T06",
+  "implementationCommit": "a8e10ae3c155b07a8ad0350ad892717f9288d8ed",
+  "coverageFixtureMatrix": [
+    {
+      "fixture": "valid many-to-many coverage",
+      "requirements": ["req_alpha", "req_beta"],
+      "oracles": ["orc_alpha-proof", "orc_beta-proof"],
+      "tasks": ["ctr_alpha-task", "ctr_beta-task"],
+      "evidence": ["evd_alpha-proof", "evd_beta-proof"],
+      "reviews": ["rev_alpha-review", "rev_beta-review"],
+      "expectedDiagnostics": []
+    },
+    {
+      "fixture": "shared oracle coverage",
+      "requirements": ["req_alpha", "req_beta"],
+      "oracles": ["orc_shared-proof"],
+      "tasks": ["ctr_alpha-task", "ctr_beta-task"],
+      "evidence": ["evd_alpha-proof", "evd_beta-proof"],
+      "reviews": ["rev_alpha-review", "rev_beta-review"],
+      "expectedDiagnostics": []
+    },
+    {
+      "fixture": "partial broken chain",
+      "requirements": ["req_alpha", "req_beta"],
+      "oracles": ["orc_alpha-proof", "orc_missing-proof"],
+      "expectedDiagnostics": [
+        "missing_accepted_evidence",
+        "missing_oracle_artifact",
+        "missing_requirement_task"
+      ]
+    },
+    {
+      "fixture": "stale downstream input",
+      "changedArtifact": ".legion/project/changes/chg_traceability-matrix/oracle/orc_beta-proof.yaml",
+      "expectedDiagnostics": ["stale_revision_reference"]
+    }
+  ],
+  "falsePositiveReview": {
+    "sharedOracleAccepted": true,
+    "splitRequirementsInOneCurrentSpecAccepted": true,
+    "deterministicOrderingChecked": true,
+    "sideEffects": "validator uses read services and in-memory graph construction only"
+  },
+  "determinismSnapshot": {
+    "assertion": "stableProtocolJson(first.report) equals stableProtocolJson(second.report)",
+    "test": "P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically",
+    "log": "docs/next/evidence/P02-T06/traceability-test.log"
+  }
+}
