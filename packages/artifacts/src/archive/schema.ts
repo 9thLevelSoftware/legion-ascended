@@ -14,14 +14,22 @@ import {
 
 export const ARCHIVE_SCHEMA_VERSION: SchemaVersion = schemaVersionSchema.parse("0.1.0");
 
-export const archiveCurrentSpecWriteSchema = z.strictObject({
-  operation: z.enum(["create", "update"]),
-  path: artifactPathSchema,
-  expectedRevision: z.number().int().nonnegative(),
-  nextRevision: z.number().int().positive(),
-  before: artifactReferenceSchema.optional(),
-  after: artifactReferenceSchema
-});
+export const archiveCurrentSpecWriteSchema = z.discriminatedUnion("operation", [
+  z.strictObject({
+    operation: z.enum(["create", "update"]),
+    path: artifactPathSchema,
+    expectedRevision: z.number().int().nonnegative(),
+    nextRevision: z.number().int().positive(),
+    before: artifactReferenceSchema.optional(),
+    after: artifactReferenceSchema
+  }),
+  z.strictObject({
+    operation: z.literal("delete"),
+    path: artifactPathSchema,
+    expectedRevision: z.number().int().positive(),
+    before: artifactReferenceSchema
+  })
+]);
 
 export type ArchiveCurrentSpecWrite = z.infer<typeof archiveCurrentSpecWriteSchema>;
 

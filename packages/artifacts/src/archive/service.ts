@@ -112,7 +112,7 @@ export type ArchivePlanResult = ArchivePlanSuccess | ArchiveFailure;
 export type ArchiveApplyResult = ArchiveApplySuccess | ArchiveFailure;
 export type ArchiveReadResult = ArchiveReadSuccess | ArchiveFailure;
 
-interface PlannedCurrentSpec {
+interface PlannedCurrentSpecWrite {
   readonly operation: "create" | "update";
   readonly path: ArtifactPath;
   readonly expectedRevision: number;
@@ -120,6 +120,15 @@ interface PlannedCurrentSpec {
   readonly before?: ArtifactReference;
   readonly after: ArtifactReference;
 }
+
+interface PlannedCurrentSpecDelete {
+  readonly operation: "delete";
+  readonly path: ArtifactPath;
+  readonly expectedRevision: number;
+  readonly before: ArtifactReference;
+}
+
+type PlannedCurrentSpec = PlannedCurrentSpecWrite | PlannedCurrentSpecDelete;
 
 interface InternalArchivePlan extends ArchivePlanSuccess {
   readonly change: ChangeBundleSuccess;
@@ -136,6 +145,10 @@ interface FileBackup {
   readonly existed: boolean;
   readonly bytes?: Uint8Array;
 }
+
+type RollbackGuard =
+  | { readonly kind: "content"; readonly sha256: ContentHash }
+  | { readonly kind: "missing" };
 
 const execFileAsync = promisify(execFile);
 const INVALID_ARCHIVE_PATH = ".legion/project/changes/invalid-change/archive.json" as ArtifactPath;
@@ -319,6 +332,22 @@ function cloneDocument(document: CurrentSpecDocument): CurrentSpecDocument {
   return structuredClone(document);
 }
 
+function isPlannedSpecWrite(spec: PlannedCurrentSpec): spec is PlannedCurrentSpecWrite {
+  return spec.operation !== "delete";
+}
+
+function retargetRequirementTraceRefs(requirement: Requirement, artifactPath: ArtifactPath): Requirement {
+  return {
+    ...requirement,
+    traceRefs: requirement.traceRefs.map((traceRef) => {
+      const definesSelf = traceRef.relation === "defines" &&
+        traceRef.entity?.kind === "requirement" &&
+        traceRef.entity.id === requirement.id;
+      return definesSelf ? { ...traceRef, path: artifactPath, anchor: requirement.id } : traceRef;
+    })
+  };
+}
+
 function applyProposedSections(input: {
   readonly document: CurrentSpecDocument;
   readonly sections: NonNullable<import("../changes/schema.js").ChangeDeltaSpec["sections"]>;
@@ -343,33 +372,61 @@ function updateRequirement(input: {
 }
 
 function archiveRemovedRequirement(input: {
+  readonly path: ArtifactPath;
   readonly document: CurrentSpecDocument;
   readonly requirementId: RequirementId;
   readonly acceptedAt: UtcTimestamp;
-}): CurrentSpecDocument {
+}): {
+  readonly path: ArtifactPath;
+  readonly document: CurrentSpecDocument;
+  readonly deletePath?: ArtifactPath;
+} {
   const remaining = input.document.requirements.filter((requirement) => requirement.id !== input.requirementId);
   if (remaining.length > 0) {
+    const firstRemaining = remaining[0];
+    if (firstRemaining === undefined) throw new Error("remaining requirement set cannot be empty");
+    const primaryRequirementId = input.document.primaryRequirementId === input.requirementId
+      ? firstRemaining.id
+      : input.document.primaryRequirementId;
+    const path = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path)) : remaining;
     return {
-      ...input.document,
-      requirements: remaining,
-      sections: {
-        ...input.document.sections,
-        traceIds: input.document.sections.traceIds.filter((requirementId) => requirementId !== input.requirementId)
+      path,
+      ...(moved ? { deletePath: input.path } : {}),
+      document: {
+        ...input.document,
+        primaryRequirementId,
+        capability: moved
+          ? {
+              ...input.document.capability,
+              id: capabilityIdForRequirement(primaryRequirementId),
+              title: `${capabilityIdForRequirement(primaryRequirementId)} capability`
+            }
+          : input.document.capability,
+        requirements,
+        sections: {
+          ...input.document.sections,
+          traceIds: input.document.sections.traceIds.filter((requirementId) => requirementId !== input.requirementId)
+        }
       }
     };
   }
 
   return {
-    ...input.document,
-    capability: {
-      ...input.document.capability,
-      status: "deprecated",
-      deprecatedAt: input.acceptedAt,
-      deprecationReason: `Requirement ${input.requirementId} was removed by accepted archive.`
-    },
-    requirements: input.document.requirements.map((requirement) =>
-      requirement.id === input.requirementId ? { ...requirement, status: "archived" as const } : requirement
-    )
+    path: input.path,
+    document: {
+      ...input.document,
+      capability: {
+        ...input.document.capability,
+        status: "deprecated",
+        deprecatedAt: input.acceptedAt,
+        deprecationReason: `Requirement ${input.requirementId} was removed by accepted archive.`
+      },
+      requirements: input.document.requirements.map((requirement) =>
+        requirement.id === input.requirementId ? { ...requirement, status: "archived" as const } : requirement
+      )
+    }
   };
 }
 
@@ -440,7 +497,8 @@ function buildPlannedSpecs(input: {
     [...docsByPath.entries()].map(([path, document]) => [path, cloneDocument(document)])
   );
   const touchedPaths = new Set<ArtifactPath>();
-  const acceptedAt = input.change.bundle.change.acceptance.status === "accepted"
+  const deletedPaths = new Set<ArtifactPath>();
+  const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted"
     ? input.change.bundle.change.acceptance.acceptedAt
     : undefined;
 
@@ -514,6 +572,7 @@ function buildPlannedSpecs(input: {
     }
 
     let nextDocument = currentDocument;
+    let targetPath = basePath;
     if (delta.operation === "modify") {
       if (delta.proposedRequirement === undefined || delta.sections === undefined) {
         return failure("invalid", [
@@ -530,22 +589,48 @@ function buildPlannedSpecs(input: {
         requirement: delta.proposedRequirement
       });
     } else {
-      nextDocument = archiveRemovedRequirement({
+      const removal = archiveRemovedRequirement({
+        path: basePath,
         document: nextDocument,
         requirementId: delta.requirementId,
         acceptedAt
       });
+      nextDocument = removal.document;
+      targetPath = removal.path;
+      if (removal.deletePath !== undefined) {
+        plannedDocs.delete(removal.deletePath);
+        deletedPaths.add(removal.deletePath);
+      }
     }
     const baseEntry = input.currentSpecs.index.entries.find((entry) => entry.path === basePath);
     const currentRevision = baseEntry?.revision ?? currentDocument.revision;
-    plannedDocs.set(basePath, {
+    plannedDocs.set(targetPath, {
       ...nextDocument,
-      revision: currentRevision + 1
+      revision: targetPath === basePath ? currentRevision + 1 : 1
     });
-    touchedPaths.add(basePath);
+    touchedPaths.add(targetPath);
   }
 
   const plannedSpecs: PlannedCurrentSpec[] = [];
+  for (const deletePath of [...deletedPaths].sort(compareStrings)) {
+    const beforeEntry = input.currentSpecs.index.entries.find((entry) => entry.path === deletePath);
+    if (beforeEntry === undefined) {
+      return failure("invalid", [
+        archiveDiagnostic({
+          code: "stale_change_base",
+          message: `Deleted current spec base ${deletePath} is not present in the current spec index.`,
+          path: deletePath
+        })
+      ]);
+    }
+    plannedSpecs.push({
+      operation: "delete",
+      path: deletePath,
+      expectedRevision: beforeEntry.revision,
+      before: beforeEntry.artifact
+    });
+  }
+
   for (const specPath of [...touchedPaths].sort(compareStrings)) {
     const document = plannedDocs.get(specPath);
     if (document === undefined) continue;
@@ -608,12 +693,13 @@ function previewFromPlan(input: {
   const unchangedEntries = input.currentSpecs.index.entries.filter((entry) =>
     !input.plannedSpecs.some((spec) => spec.path === entry.path)
   );
+  const writeSpecs = input.plannedSpecs.filter(isPlannedSpecWrite);
   const afterEntries = [
     ...unchangedEntries.map((entry) => ({
       path: entry.path,
       document: input.currentSpecs.documents.find((document) => document.primaryRequirementId === entry.primaryRequirementId)
     })),
-    ...input.plannedSpecs.map((spec) => ({ path: spec.path, document: spec.document }))
+    ...writeSpecs.map((spec) => ({ path: spec.path, document: spec.document }))
   ];
   const completeEntries = afterEntries.filter((entry): entry is { readonly path: ArtifactPath; readonly document: CurrentSpecDocument } =>
     entry.document !== undefined
@@ -622,6 +708,14 @@ function previewFromPlan(input: {
   if ("diagnostics" in afterIndex) return afterIndex;
 
   const currentSpecWrites: ArchiveCurrentSpecWrite[] = input.plannedSpecs.map((spec) => {
+    if (spec.operation === "delete") {
+      return {
+        operation: "delete",
+        path: spec.path,
+        expectedRevision: spec.expectedRevision,
+        before: spec.before
+      };
+    }
     const write = {
       operation: spec.operation,
       path: spec.path,
@@ -665,7 +759,7 @@ async function buildArchivePlan(input: PlanAcceptedChangeArchiveInput): Promise<
 
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
   if (!change.ok) return asArchiveFailure(change.status === "not_found" ? "not_found" : change.status, change.diagnostics);
-  if (change.bundle.change.status !== "accepted" || change.bundle.change.acceptance.status !== "accepted") {
+  if (change.bundle.change.status !== "accepted" || change.bundle.change.acceptance?.status !== "accepted") {
     return failure("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
@@ -759,8 +853,22 @@ async function backupFiles(input: {
   return backups;
 }
 
-async function rollbackFiles(backups: readonly FileBackup[]): Promise<void> {
+async function rollbackGuardMatches(backup: FileBackup, guard: RollbackGuard): Promise<boolean> {
+  try {
+    const bytes = await readFile(backup.absolutePath);
+    return guard.kind === "content" ? hashContent(bytes) === guard.sha256 : false;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return guard.kind === "missing";
+    }
+    throw error;
+  }
+}
+
+async function rollbackFiles(backups: readonly FileBackup[], guards: ReadonlyMap<ArtifactPath, RollbackGuard>): Promise<void> {
   for (const backup of [...backups].reverse()) {
+    const guard = guards.get(backup.path);
+    if (guard !== undefined && !(await rollbackGuardMatches(backup, guard))) continue;
     if (backup.existed) {
       if (backup.bytes !== undefined) await writeFile(backup.absolutePath, backup.bytes);
       continue;
@@ -769,12 +877,81 @@ async function rollbackFiles(backups: readonly FileBackup[]): Promise<void> {
   }
 }
 
+function rollbackGuardsForPlannedSpecs(plannedSpecs: readonly PlannedCurrentSpec[]): ReadonlyMap<ArtifactPath, RollbackGuard> {
+  const guards = new Map<ArtifactPath, RollbackGuard>();
+  for (const spec of plannedSpecs) {
+    guards.set(spec.path, spec.operation === "delete" ? { kind: "missing" } : { kind: "content", sha256: spec.after.sha256 });
+  }
+  return guards;
+}
+
+async function deletePlannedSpec(input: {
+  readonly repositoryRoot: string;
+  readonly spec: PlannedCurrentSpecDelete;
+}): Promise<ArchiveFailure | undefined> {
+  const resolved = await resolveProjectArtifactPath({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.spec.path
+  });
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(resolved.absolutePath);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return failure("invalid", [
+        archiveDiagnostic({
+          code: "stale_spec_revision",
+          message: `Expected current spec ${input.spec.path} to exist before archive removal.`,
+          path: input.spec.path
+        })
+      ]);
+    }
+    throw error;
+  }
+
+  if (hashContent(bytes) !== input.spec.before.sha256) {
+    return failure("invalid", [
+      archiveDiagnostic({
+        code: "stale_spec_revision",
+        message: `Current spec ${input.spec.path} no longer matches the archived base content.`,
+        path: input.spec.path
+      })
+    ]);
+  }
+
+  const parsed = parseCurrentSpecMarkdown({
+    artifactPath: input.spec.path,
+    content: Buffer.from(bytes).toString("utf8")
+  });
+  if (!parsed.ok) return asArchiveFailure(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
+  if (parsed.document.revision !== input.spec.expectedRevision) {
+    return failure("invalid", [
+      archiveDiagnostic({
+        code: "stale_spec_revision",
+        message: `Expected current spec revision ${input.spec.expectedRevision}, but current revision is ${parsed.document.revision}.`,
+        path: input.spec.path
+      })
+    ]);
+  }
+
+  await rm(resolved.absolutePath, { force: false });
+  return undefined;
+}
+
 async function writePlannedSpecs(input: {
   readonly repositoryRoot: string;
   readonly plannedSpecs: readonly PlannedCurrentSpec[];
 }): Promise<readonly ArtifactRevision[] | ArchiveFailure> {
   const revisions: ArtifactRevision[] = [];
   for (const spec of input.plannedSpecs) {
+    if (spec.operation === "delete") {
+      const deleted = await deletePlannedSpec({
+        repositoryRoot: input.repositoryRoot,
+        spec
+      });
+      if (deleted !== undefined) return deleted;
+      continue;
+    }
     const written = spec.operation === "create"
       ? await createCurrentSpec({
           repositoryRoot: input.repositoryRoot,
@@ -930,6 +1107,7 @@ export async function archiveAcceptedChange(input: ArchiveAcceptedChangeInput): 
     archivePath: archivePath(changeId)
   });
   if ("diagnostics" in backups) return backups;
+  const rollbackGuards = rollbackGuardsForPlannedSpecs(plan.plannedSpecs);
 
   try {
     const currentSpecRevisions = await writePlannedSpecs({
@@ -937,17 +1115,17 @@ export async function archiveAcceptedChange(input: ArchiveAcceptedChangeInput): 
       plannedSpecs: plan.plannedSpecs
     });
     if ("diagnostics" in currentSpecRevisions) {
-      await rollbackFiles(backups);
+      await rollbackFiles(backups, rollbackGuards);
       return currentSpecRevisions;
     }
 
     const currentAfterWrites = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
     if (!currentAfterWrites.ok) {
-      await rollbackFiles(backups);
+      await rollbackFiles(backups, rollbackGuards);
       return asArchiveFailure(currentAfterWrites.status, currentAfterWrites.diagnostics);
     }
     if (currentAfterWrites.indexHash !== plan.preview.afterSpecHash) {
-      await rollbackFiles(backups);
+      await rollbackFiles(backups, rollbackGuards);
       return failure("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
@@ -964,7 +1142,7 @@ export async function archiveAcceptedChange(input: ArchiveAcceptedChangeInput): 
       evidenceIndex: plan.evidenceIndex
     });
     if ("diagnostics" in retained) {
-      await rollbackFiles(backups);
+      await rollbackFiles(backups, rollbackGuards);
       return retained;
     }
 
@@ -980,7 +1158,7 @@ export async function archiveAcceptedChange(input: ArchiveAcceptedChangeInput): 
       currentSpecRevisions: [...currentSpecRevisions].sort((left, right) => compareStrings(left.artifact.path, right.artifact.path))
     });
     if ("diagnostics" in record) {
-      await rollbackFiles(backups);
+      await rollbackFiles(backups, rollbackGuards);
       return record;
     }
 
@@ -990,13 +1168,13 @@ export async function archiveAcceptedChange(input: ArchiveAcceptedChangeInput): 
       ...(input.beforeArchiveCommit === undefined ? {} : { beforeArchiveCommit: input.beforeArchiveCommit })
     });
     if (!write.ok) {
-      await rollbackFiles(backups);
+      await rollbackFiles(backups, rollbackGuards);
       return write;
     }
 
     return write;
   } catch (error) {
-    await rollbackFiles(backups);
+    await rollbackFiles(backups, rollbackGuards);
     return failure("conflict", [
       archiveDiagnostic({
         code: "archive_write_failed",

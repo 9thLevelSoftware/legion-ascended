@@ -98,6 +98,21 @@ function specDocument(requirements) {
   };
 }
 
+function requirementWithSourcePath(slug, oracleId, sourcePath, overrides = {}) {
+  const base = requirement(slug, oracleId, overrides);
+  return {
+    ...base,
+    traceRefs: [
+      {
+        path: sourcePath,
+        anchor: base.id,
+        relation: "defines",
+        entity: { kind: "requirement", id: base.id }
+      }
+    ]
+  };
+}
+
 function riskProfile() {
   return {
     tier: "R2",
@@ -387,6 +402,82 @@ async function createAcceptedArchiveFixture(repositoryRoot, options = {}) {
   return { currentSpec, acceptedChange, proposedRequirement };
 }
 
+async function createAcceptedPrimaryRemoveFixture(repositoryRoot) {
+  const oracleId = "orc_archive-alpha-proof";
+  const currentRequirement = requirement("archive-alpha", oracleId);
+  const currentSpecPath = `.legion/project/specs/${currentRequirement.id}.md`;
+  const remainingRequirement = requirementWithSourcePath("archive-beta", oracleId, currentSpecPath, {
+    statement: "archive-beta behavior remains after primary removal."
+  });
+  const currentSpec = await createCurrentSpec({
+    repositoryRoot,
+    document: specDocument([currentRequirement, remainingRequirement])
+  });
+  assert.equal(currentSpec.ok, true);
+
+  const createdChange = await createChangeBundle({
+    repositoryRoot,
+    changeId: CHANGE_ID,
+    projectId: PROJECT_ID,
+    title: "Archive primary removal",
+    summary: "Remove the primary requirement while preserving a secondary current requirement.",
+    owners: [OWNER],
+    baseGitSha: BASE_GIT_SHA,
+    risk: riskProfile(),
+    createdAt: FIXED_TIME,
+    currentSpecs: [{ requirementId: currentSpec.document.primaryRequirementId, expectedRevision: currentSpec.document.revision }],
+    deltaSpecs: [
+      {
+        operation: "remove",
+        requirementId: currentRequirement.id,
+        rationale: "The accepted change removes the old primary behavior."
+      }
+    ],
+    design: {
+      title: "Archive primary removal",
+      body: "The archive service moves remaining requirements when removing the primary requirement."
+    },
+    decisions: [acceptedDecision()]
+  });
+  assert.equal(createdChange.ok, true);
+
+  const acceptedChange = await markChangeAccepted(repositoryRoot);
+  const oracle = await createOracleArtifact({
+    repositoryRoot,
+    changeId: CHANGE_ID,
+    oracle: oracleDocument(currentRequirement.id, oracleId, currentSpec, acceptedChange),
+    baseGitSha: BASE_GIT_SHA
+  });
+  assert.equal(oracle.ok, true);
+
+  const artifactInputs = [acceptedChange.revision, oracle.revision];
+  const taskgraph = await writeTaskGraph({
+    repositoryRoot,
+    changeId: CHANGE_ID,
+    artifactInputs,
+    tasks: [taskContract(currentRequirement.id, oracleId, currentSpec, acceptedChange, artifactInputs)],
+    baseGitSha: BASE_GIT_SHA
+  });
+  assert.equal(taskgraph.ok, true);
+
+  const evidence = await writeEvidenceIndex({
+    repositoryRoot,
+    changeId: CHANGE_ID,
+    artifactInputs: [acceptedChange.revision, taskgraph.revision, oracle.revision],
+    entries: [
+      evidenceEntry(
+        currentRequirement.id,
+        "evd_archive-alpha-proof",
+        "rev_archive-alpha-review"
+      )
+    ],
+    baseGitSha: BASE_GIT_SHA
+  });
+  assert.equal(evidence.ok, true);
+
+  return { currentRequirement, remainingRequirement };
+}
+
 test("P02-T07 previews and archives an accepted change into current truth", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const { currentSpec, proposedRequirement } = await createAcceptedArchiveFixture(repositoryRoot);
@@ -431,6 +522,47 @@ test("P02-T07 previews and archives an accepted change into current truth", asyn
     const loadedArchive = await readArchiveRecord({ repositoryRoot, changeId: CHANGE_ID });
     assert.equal(loadedArchive.ok, true);
     assert.equal(loadedArchive.record.archiveHash, archived.record.archiveHash);
+  });
+});
+
+test("P02-T07 archives removal of a primary requirement while preserving remaining requirements", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const { currentRequirement, remainingRequirement } = await createAcceptedPrimaryRemoveFixture(repositoryRoot);
+
+    const preview = await planAcceptedChangeArchive({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      outputBranch: "codex/archive-test"
+    });
+
+    assert.equal(preview.ok, true);
+    assert.deepEqual(preview.preview.diff.removed, [currentRequirement.id]);
+    assert.deepEqual(preview.preview.diff.moved, [
+      {
+        id: remainingRequirement.id,
+        from: `.legion/project/specs/${currentRequirement.id}.md`,
+        to: `.legion/project/specs/${remainingRequirement.id}.md`
+      }
+    ]);
+
+    const archived = await archiveAcceptedChange({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      archivedAt: LATER_TIME,
+      archivedBy: OWNER.id,
+      outputBranch: "codex/archive-test"
+    });
+    assert.equal(archived.ok, true);
+
+    const removedPrimary = await readCurrentSpec({ repositoryRoot, requirementId: currentRequirement.id });
+    assert.equal(removedPrimary.ok, false);
+    assert.equal(removedPrimary.status, "not_found");
+
+    const remainingCurrent = await readCurrentSpec({ repositoryRoot, requirementId: remainingRequirement.id });
+    assert.equal(remainingCurrent.ok, true);
+    assert.equal(remainingCurrent.document.primaryRequirementId, remainingRequirement.id);
+    assert.deepEqual(remainingCurrent.document.requirements.map((entry) => entry.id), [remainingRequirement.id]);
+    assert.equal(remainingCurrent.document.requirements[0].traceRefs[0].path, `.legion/project/specs/${remainingRequirement.id}.md`);
   });
 });
 
@@ -479,6 +611,55 @@ test("P02-T07 refuses stale current-spec bases before mutating current truth", a
     assert.equal(result.ok, false);
     assert.equal(result.status, "invalid");
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "stale_change_base"));
+  });
+});
+
+test("P02-T07 rollback does not overwrite concurrent current truth updates", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    await createAcceptedArchiveFixture(repositoryRoot);
+
+    const result = await archiveAcceptedChange({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      archivedAt: LATER_TIME,
+      archivedBy: OWNER.id,
+      outputBranch: "codex/archive-test",
+      beforeArchiveCommit: async () => {
+        const currentDuringArchive = await readCurrentSpec({ repositoryRoot, requirementId: "req_archive-alpha" });
+        assert.equal(currentDuringArchive.ok, true);
+        assert.equal(currentDuringArchive.document.revision, 2);
+
+        const concurrent = await updateCurrentSpec({
+          repositoryRoot,
+          expectedRevision: currentDuringArchive.document.revision,
+          document: {
+            ...currentDuringArchive.document,
+            requirements: currentDuringArchive.document.requirements.map((entry) => ({
+              ...entry,
+              statement: "archive-alpha was concurrently updated after archive current write."
+            }))
+          }
+        });
+        assert.equal(concurrent.ok, true);
+        throw new Error("injected archive metadata failure after concurrent write");
+      }
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "conflict");
+    assert.equal(result.diagnostics[0].code, "archive_write_failed");
+
+    const currentAfterFailure = await readCurrentSpec({ repositoryRoot, requirementId: "req_archive-alpha" });
+    assert.equal(currentAfterFailure.ok, true);
+    assert.equal(currentAfterFailure.document.revision, 3);
+    assert.equal(
+      currentAfterFailure.document.requirements[0].statement,
+      "archive-alpha was concurrently updated after archive current write."
+    );
+
+    const archive = await readArchiveRecord({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(archive.ok, false);
+    assert.equal(archive.status, "not_found");
   });
 });
 
