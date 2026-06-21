@@ -245,6 +245,47 @@ async function listFiles(root: string): Promise<readonly string[]> {
   return files.sort(compareStrings);
 }
 
+async function listSymbolicLinks(root: string, displayedRoot: string): Promise<readonly string[]> {
+  const links: string[] = [];
+
+  async function visit(directory: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (isEnoent(error)) return;
+      throw error;
+    }
+
+    for (const entry of [...entries].sort((left, right) => compareStrings(left.name, right.name))) {
+      const absolutePath = path.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path.relative(root, absolutePath))}`;
+      if (entry.isSymbolicLink()) {
+        links.push(displayedPath);
+        continue;
+      }
+      if (entry.isDirectory()) await visit(absolutePath);
+    }
+  }
+
+  await visit(root);
+  return links.sort(compareStrings);
+}
+
+async function validateNoSymbolicLinks(input: {
+  readonly root: string;
+  readonly displayedRoot: string;
+}): Promise<CodexLegionMigrationFailure | undefined> {
+  const links = await listSymbolicLinks(input.root, input.displayedRoot);
+  if (links.length === 0) return undefined;
+
+  return failure("conflict", links.map((link) => diagnostic({
+    code: "unsupported_symbolic_link",
+    message: "Codex .legion migration cannot preserve symbolic links safely; replace the link with a regular file or migrate it manually.",
+    sourcePath: link
+  })));
+}
+
 async function hashFiles(root: string, files: readonly string[]): Promise<string> {
   if (files.length === 0) return EMPTY_TREE_HASH;
 
@@ -269,6 +310,13 @@ function containsPath(parent: string, child: string): boolean {
 
 function pathsOverlap(left: string, right: string): boolean {
   return containsPath(left, right) || containsPath(right, left);
+}
+
+function sameResolvedPath(left: string, right: string): boolean {
+  const resolvedLeft = path.resolve(left);
+  const resolvedRight = path.resolve(right);
+  if (process.platform === "win32") return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
+  return resolvedLeft === resolvedRight;
 }
 
 function safeResolvedStagingRoot(input: {
@@ -578,6 +626,40 @@ function migrationMoves(source: CodexLegionInventory): readonly CodexLegionMigra
     .sort((left, right) => compareStrings(left.sourcePath, right.sourcePath));
 }
 
+function sameMigrationMove(left: CodexLegionMigrationMove, right: CodexLegionMigrationMove): boolean {
+  return (
+    left.sourcePath === right.sourcePath &&
+    left.targetPath === right.targetPath &&
+    left.classification === right.classification &&
+    left.rationale === right.rationale
+  );
+}
+
+function validateReportMoves(report: CodexLegionMigrationReport): CodexLegionMigrationFailure | undefined {
+  const expectedMoves = migrationMoves(report.source);
+  let matchesExpectedMoves = report.moves.length === expectedMoves.length;
+  if (matchesExpectedMoves) {
+    for (let index = 0; index < report.moves.length; index += 1) {
+      const actualMove = report.moves[index];
+      const expectedMove = expectedMoves[index];
+      if (actualMove === undefined || expectedMove === undefined || !sameMigrationMove(actualMove, expectedMove)) {
+        matchesExpectedMoves = false;
+        break;
+      }
+    }
+  }
+
+  if (matchesExpectedMoves) return undefined;
+
+  return failure("invalid", [
+    diagnostic({
+      code: "invalid_migration_moves",
+      message: "Dry-run report moves no longer match the reviewed source inventory.",
+      sourcePath: REPORT_PATH
+    })
+  ]);
+}
+
 async function stageLegacyProtocol(input: {
   readonly repositoryRoot: string;
   readonly stagingRoot: string;
@@ -644,6 +726,12 @@ export async function scanCodexLegionSource(input: {
       })
     ]);
   }
+  const symlinkFailure = await validateNoSymbolicLinks({
+    root: legionRoot,
+    displayedRoot: LEGION_ROOT
+  });
+  if (symlinkFailure !== undefined) return symlinkFailure;
+
   const manifest = await parseCodexManifest(repositoryRoot, legionRoot);
   return sourceInventory({ repositoryRoot, legionRoot, generatedPaths: manifest.generatedPaths });
 }
@@ -672,6 +760,12 @@ export async function createCodexLegionMigrationDryRun(
       })
     ]);
   }
+
+  const symlinkFailure = await validateNoSymbolicLinks({
+    root: legionRoot,
+    displayedRoot: LEGION_ROOT
+  });
+  if (symlinkFailure !== undefined) return symlinkFailure;
 
   const manifest = await parseCodexManifest(repositoryRoot, legionRoot);
   const source = await sourceInventory({ repositoryRoot, legionRoot, generatedPaths: manifest.generatedPaths });
@@ -976,6 +1070,15 @@ export async function applyCodexLegionMigration(
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string") return backupRoot;
 
+  const symlinkFailure = await validateNoSymbolicLinks({
+    root: path.join(repositoryRoot, ".legion"),
+    displayedRoot: LEGION_ROOT
+  });
+  if (symlinkFailure !== undefined) return symlinkFailure;
+
+  const movesFailure = validateReportMoves(report);
+  if (movesFailure !== undefined) return movesFailure;
+
   const sourceHashFailure = await validateCurrentSourceHash({
     repositoryRoot,
     report
@@ -1045,6 +1148,16 @@ export async function rollbackCodexLegionMigration(
 
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const legionRoot = path.join(repositoryRoot, ".legion");
+  if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "backup_repository_mismatch",
+        message: "Backup manifest repositoryRoot does not match the requested repository root.",
+        sourcePath: backupManifestPath
+      })
+    ]);
+  }
+
   if (manifest.existingLegionRoot) {
     if (!path.isAbsolute(manifest.backupPath)) {
       return failure("invalid", [
@@ -1060,6 +1173,16 @@ export async function rollbackCodexLegionMigration(
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    const backupHash = await hashTree(manifest.backupPath);
+    if (backupHash !== manifest.preMigrationHash) {
+      return failure("invalid", [
+        diagnostic({
+          code: "backup_hash_mismatch",
+          message: "Backup bytes no longer match the manifest pre-migration hash.",
           sourcePath: backupManifestPath
         })
       ]);

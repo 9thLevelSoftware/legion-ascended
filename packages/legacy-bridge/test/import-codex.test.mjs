@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const FIXTURES = path.join(ROOT, "tests", "fixtures", "migration", "codex");
 const OWNER = { kind: "human", id: "human:owner", displayName: "Owner" };
 const FIXED_TIME = "2026-06-21T12:00:00.000Z";
+const CODEX_REPORT_PATH = path.join(".legion", "migration", "codex-legion-migration-report.json");
 
 async function tempRoot() {
   return mkdtemp(path.join(tmpdir(), "legion-codex-migration-"));
@@ -71,6 +72,19 @@ async function hashDirectory(root) {
     hash.update("\0");
   }
   return `sha256:${hash.digest("hex")}`;
+}
+
+async function createFileSymlinkOrSkip(t, targetPath, linkPath) {
+  try {
+    await symlink(targetPath, linkPath, "file");
+    return true;
+  } catch (error) {
+    if (["EACCES", "ENOSYS", "EPERM"].includes(error?.code)) {
+      t.skip("filesystem does not allow creating file symlinks in this environment");
+      return false;
+    }
+    throw error;
+  }
 }
 
 function initInput(repositoryRoot) {
@@ -477,6 +491,34 @@ test("P02-T09 rejects backup roots that overlap .legion before copying", async (
   }
 });
 
+test("P02-T09 rejects symlinked legacy entries instead of silently dropping them", async (t) => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    await copyFixture("local-codex", repositoryRoot);
+    const created = await createFileSymlinkOrSkip(
+      t,
+      path.join(repositoryRoot, ".legion", "commands", "legion", "start.md"),
+      path.join(repositoryRoot, ".legion", "commands", "legion", "linked-start.md")
+    );
+    if (!created) return;
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-symlink",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, false);
+    assert.equal(dryRun.status, "conflict");
+    assert.ok(dryRun.diagnostics.some((diagnostic) => diagnostic.code === "unsupported_symbolic_link"));
+    assert.ok(dryRun.diagnostics.some((diagnostic) => diagnostic.sourcePath === ".legion/commands/legion/linked-start.md"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source", async () => {
   const workspace = await tempRoot();
   try {
@@ -607,6 +649,131 @@ test("P02-T09 rollback rejects unusable backup manifests before deleting current
     assert.equal(rolledBack.status, "invalid");
     assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
     assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T09 rollback rejects backup manifests from another repository before deleting current .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const sourceRepositoryRoot = path.join(workspace, "source-repo");
+    const targetRepositoryRoot = path.join(workspace, "target-repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("local-codex", sourceRepositoryRoot);
+    await copyFixture("partial-codex", targetRepositoryRoot);
+    const targetBefore = await hashDirectory(path.join(targetRepositoryRoot, ".legion"));
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot: sourceRepositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-cross-repo-backup",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot: sourceRepositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, true);
+
+    const rolledBack = await rollbackCodexLegionMigration({
+      repositoryRoot: targetRepositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "backup_repository_mismatch"));
+    assert.equal(await hashDirectory(path.join(targetRepositoryRoot, ".legion")), targetBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T09 rollback verifies backup hashes before replacing current .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("local-codex", repositoryRoot);
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-corrupted-backup",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, true);
+
+    const currentBeforeRollback = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    await writeFile(path.join(applied.backup.backupPath, "commands", "legion", "start.md"), "corrupted backup\n", "utf8");
+
+    const rolledBack = await rollbackCodexLegionMigration({
+      repositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "backup_hash_mismatch"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), currentBeforeRollback);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T09 apply rejects tampered migration report moves before cleanup", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("local-codex", repositoryRoot);
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    const projectFile = path.join(repositoryRoot, ".legion", "project", "project.json");
+    await writeFile(projectFile, "{\"project\":true}\n", "utf8");
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-tampered-move",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+
+    const reportPath = path.join(stagingRoot, CODEX_REPORT_PATH);
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    report.moves.push({
+      sourcePath: ".legion/project/project.json",
+      targetPath: ".legion/legacy-protocol/project/project.json",
+      classification: "move-to-legacy-protocol",
+      rationale: "tampered report move"
+    });
+    await writeFile(reportPath, JSON.stringify(report, null, 2), "utf8");
+
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "invalid_migration_moves"));
+    assert.equal(await readFile(projectFile, "utf8"), "{\"project\":true}\n");
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
