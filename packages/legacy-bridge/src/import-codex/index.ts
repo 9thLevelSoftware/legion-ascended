@@ -799,8 +799,8 @@ async function backupLegionRoot(input: {
   const legionRoot = path.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path.join(input.backupRoot, id);
-  const backupPath = path.join(backupDirectory, "legion");
+  const backupDirectory = path.resolve(input.backupRoot, id);
+  const backupPath = path.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists(legionRoot);
 
   await rm(backupDirectory, { recursive: true, force: true });
@@ -819,7 +819,7 @@ async function backupLegionRoot(input: {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path.join(backupDirectory, "backup-manifest.json");
+  const manifestPath = path.resolve(backupDirectory, "backup-manifest.json");
   await writeFile(manifestPath, stableProtocolJson(manifest), "utf8");
 
   return {
@@ -941,8 +941,9 @@ export async function rollbackCodexLegionMigration(
   input: CodexLegionMigrationRollbackInput
 ): Promise<CodexLegionMigrationRollbackResult> {
   let manifest: BackupManifest;
+  const backupManifestPath = path.resolve(input.backupManifestPath);
   try {
-    const parsed = JSON.parse(await readFile(input.backupManifestPath, "utf8"));
+    const parsed = JSON.parse(await readFile(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
       throw new Error("Backup manifest is missing required Codex Legion migration fields.");
     }
@@ -952,13 +953,34 @@ export async function rollbackCodexLegionMigration(
       diagnostic({
         code: "invalid_backup_manifest",
         message: error instanceof Error ? error.message : "Backup manifest could not be read.",
-        sourcePath: input.backupManifestPath
+        sourcePath: backupManifestPath
       })
     ]);
   }
 
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const legionRoot = path.join(repositoryRoot, ".legion");
+  if (manifest.existingLegionRoot) {
+    if (!path.isAbsolute(manifest.backupPath)) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest backupPath must be absolute.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    if (!(await pathExists(manifest.backupPath))) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest references a missing .legion backup directory.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+  }
+
   await rm(legionRoot, { recursive: true, force: true });
   if (manifest.existingLegionRoot) {
     await cp(manifest.backupPath, legionRoot, { recursive: true });

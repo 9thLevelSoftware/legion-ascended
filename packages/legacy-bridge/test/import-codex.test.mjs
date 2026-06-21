@@ -376,3 +376,82 @@ test("P02-T09 rejects unsafe staging paths and invalid apply timestamps without 
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test("P02-T09 backup manifests use absolute paths so rollback survives cwd changes", async () => {
+  const workspace = await tempRoot();
+  const originalCwd = process.cwd();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const relativeBackupRoot = path.relative(originalCwd, path.join(workspace, "backups"));
+    await copyFixture("local-codex", repositoryRoot);
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-relative-backup",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot: relativeBackupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, true);
+    assert.equal(path.isAbsolute(applied.backup.manifestPath), true);
+    assert.equal(path.isAbsolute(applied.backup.backupPath), true);
+
+    process.chdir(tmpdir());
+    const rolledBack = await rollbackCodexLegionMigration({
+      repositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, true);
+    assert.equal(rolledBack.restoredHash, legionBefore);
+  } finally {
+    process.chdir(originalCwd);
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T09 rollback rejects unusable backup manifests before deleting current .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("local-codex", repositoryRoot);
+    await mkdir(backupRoot, { recursive: true });
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    const manifestPath = path.join(backupRoot, "missing-backup-manifest.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: "0.1.0",
+        kind: "codex-legion-migration-backup",
+        createdAt: FIXED_TIME,
+        repositoryRoot,
+        backupPath: path.join(backupRoot, "missing-legion-backup"),
+        preMigrationHash: legionBefore,
+        sourceHash: legionBefore,
+        existingLegionRoot: true
+      }, null, 2),
+      "utf8"
+    );
+
+    const rolledBack = await rollbackCodexLegionMigration({
+      repositoryRoot,
+      backupManifestPath: manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
