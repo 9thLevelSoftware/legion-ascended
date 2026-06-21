@@ -130,7 +130,7 @@ function acceptedDecision() {
 }
 
 async function createTraceabilityProject(repositoryRoot, options = {}) {
-  const alpha = requirement("alpha", options.alphaOracleId ?? "orc_alpha-proof");
+  const alpha = requirement("alpha", options.alphaOracleId ?? "orc_alpha-proof", options.alphaOverrides ?? {});
   const beta = requirement("beta", options.betaOracleId ?? "orc_beta-proof", {
     traceRefs: [
       {
@@ -139,22 +139,31 @@ async function createTraceabilityProject(repositoryRoot, options = {}) {
         relation: "defines",
         entity: { kind: "requirement", id: "req_beta" }
       }
-    ]
+    ],
+    ...(options.betaOverrides ?? {})
   });
+  const extraRequirements = options.extraRequirements ?? [];
   const currentSpec = await createCurrentSpec({
     repositoryRoot,
-    document: specDocument([alpha, beta])
+    document: specDocument([alpha, beta, ...extraRequirements])
   });
   assert.equal(currentSpec.ok, true);
 
   const updatedAlpha = {
     ...alpha,
-    statement: "alpha behavior is proposed with a validated downstream traceability chain."
+    statement: "alpha behavior is proposed with a validated downstream traceability chain.",
+    ...(options.updatedAlphaOverrides ?? {})
   };
   const updatedBeta = {
     ...beta,
-    statement: "beta behavior is proposed with an independent downstream traceability chain."
+    statement: "beta behavior is proposed with an independent downstream traceability chain.",
+    ...(options.updatedBetaOverrides ?? {})
   };
+  const updatedExtraRequirements = extraRequirements.map((entry) => ({
+    ...entry,
+    statement: `${entry.id} behavior is proposed with downstream traceability.`,
+    ...(options.updatedRequirementOverrides?.[entry.id] ?? {})
+  }));
 
   const change = await createChangeBundle({
     repositoryRoot,
@@ -172,22 +181,13 @@ async function createTraceabilityProject(repositoryRoot, options = {}) {
         expectedRevision: currentSpec.document.revision
       }
     ],
-    deltaSpecs: [
-      {
+    deltaSpecs: [updatedAlpha, updatedBeta, ...updatedExtraRequirements].map((entry) => ({
         operation: "modify",
-        requirementId: updatedAlpha.id,
-        proposedRequirement: updatedAlpha,
+        requirementId: entry.id,
+        proposedRequirement: entry,
         sections: currentSpec.document.sections,
-        rationale: "Alpha changes need a complete coverage chain."
-      },
-      {
-        operation: "modify",
-        requirementId: updatedBeta.id,
-        proposedRequirement: updatedBeta,
-        sections: currentSpec.document.sections,
-        rationale: "Beta changes need an independent coverage chain."
-      }
-    ],
+        rationale: `${entry.id} changes need complete coverage.`
+      })),
     design: {
       title: "Traceability validation",
       body: "Traceability validation remains a read-only projection over Git artifacts."
@@ -405,7 +405,7 @@ async function createCompleteTraceabilityArtifacts(repositoryRoot, options = {})
     artifactInputs: options.sharedOracle
       ? [change.revision, taskgraph.revision, alphaOracle.revision]
       : [change.revision, taskgraph.revision, alphaOracle.revision, betaOracle.revision],
-    entries: [
+    entries: options.evidenceEntries ?? [
       evidenceEntry("req_alpha", "evd_alpha-proof", "rev_alpha-review"),
       evidenceEntry("req_beta", "evd_beta-proof", "rev_beta-review")
     ],
@@ -491,6 +491,36 @@ test("P02-T06 reports calibrated broken traceability chains with exact diagnosti
   });
 });
 
+test("P02-T06 applies trace integrity checks to evidence references", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const crossChangeRef = {
+      path: ".legion/project/changes/chg_other/evidence-index.json",
+      relation: "verifies",
+      entity: { kind: "requirement", id: "req_alpha" }
+    };
+    const alphaEvidence = evidenceEntry("req_alpha", "evd_alpha-proof", "rev_alpha-review");
+    await createCompleteTraceabilityArtifacts(repositoryRoot, {
+      evidenceEntries: [
+        {
+          ...alphaEvidence,
+          evidence: {
+            ...alphaEvidence.evidence,
+            traceRefs: [crossChangeRef, crossChangeRef]
+          }
+        },
+        evidenceEntry("req_beta", "evd_beta-proof", "rev_beta-review")
+      ]
+    });
+
+    const result = await validateChangeTraceability({ repositoryRoot, changeId: CHANGE_ID });
+
+    assert.equal(result.ok, false);
+    const codes = result.diagnostics.map((diagnostic) => diagnostic.code).sort();
+    assert.ok(codes.includes("cross_change_reference"));
+    assert.ok(codes.includes("duplicate_trace_reference"));
+  });
+});
+
 test("P02-T06 reports stale artifact input revisions after downstream sources change", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const { currentSpec, change, betaOracle } = await createCompleteTraceabilityArtifacts(repositoryRoot);
@@ -514,6 +544,105 @@ test("P02-T06 reports stale artifact input revisions after downstream sources ch
   });
 });
 
+test("P02-T06 cycle diagnostics name only nodes participating in the cycle", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const upstream = requirement("aardvark", "orc_aardvark-proof");
+    const { currentSpec, change } = await createTraceabilityProject(repositoryRoot, {
+      updatedAlphaOverrides: {
+        traceRefs: [
+          {
+            path: ".legion/project/specs/req_alpha.md",
+            anchor: "req_alpha",
+            relation: "refines",
+            entity: { kind: "requirement", id: "req_beta" }
+          }
+        ]
+      },
+      updatedBetaOverrides: {
+        traceRefs: [
+          {
+            path: ".legion/project/specs/req_alpha.md",
+            anchor: "req_beta",
+            relation: "refines",
+            entity: { kind: "requirement", id: "req_alpha" }
+          }
+        ]
+      },
+      updatedRequirementOverrides: {
+        req_aardvark: {
+          traceRefs: [
+            {
+              path: ".legion/project/specs/req_alpha.md",
+              anchor: "req_aardvark",
+              relation: "refines",
+              entity: { kind: "requirement", id: "req_alpha" }
+            }
+          ]
+        }
+      },
+      extraRequirements: [upstream]
+    });
+
+    const alphaOracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument("req_alpha", "orc_alpha-proof", currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(alphaOracle.ok, true);
+    const betaOracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument("req_beta", "orc_beta-proof", currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(betaOracle.ok, true);
+    const upstreamOracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument("req_aardvark", "orc_aardvark-proof", currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(upstreamOracle.ok, true);
+
+    const artifactInputs = [change.revision, upstreamOracle.revision, alphaOracle.revision, betaOracle.revision];
+    const taskgraph = await writeTaskGraph({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      artifactInputs,
+      tasks: [
+        taskContract("ctr_aardvark-task", "req_aardvark", "orc_aardvark-proof", currentSpec, change, artifactInputs),
+        taskContract("ctr_alpha-task", "req_alpha", "orc_alpha-proof", currentSpec, change, artifactInputs),
+        taskContract("ctr_beta-task", "req_beta", "orc_beta-proof", currentSpec, change, artifactInputs)
+      ],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(taskgraph.ok, true);
+
+    const evidence = await writeEvidenceIndex({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      artifactInputs: [change.revision, taskgraph.revision, upstreamOracle.revision, alphaOracle.revision, betaOracle.revision],
+      entries: [
+        evidenceEntry("req_aardvark", "evd_aardvark-proof", "rev_aardvark-review"),
+        evidenceEntry("req_alpha", "evd_alpha-proof", "rev_alpha-review"),
+        evidenceEntry("req_beta", "evd_beta-proof", "rev_beta-review")
+      ],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(evidence.ok, true);
+
+    const result = await validateChangeTraceability({ repositoryRoot, changeId: CHANGE_ID });
+
+    assert.equal(result.ok, false);
+    const cycleDiagnostic = result.diagnostics.find((diagnostic) => diagnostic.code === "cyclic_reference");
+    assert.ok(cycleDiagnostic);
+    assert.match(cycleDiagnostic.message, /requirement:req_alpha/);
+    assert.match(cycleDiagnostic.message, /requirement:req_beta/);
+    assert.doesNotMatch(cycleDiagnostic.message, /requirement:req_aardvark/);
+  });
+});
+
 test("P02-T06 impact analysis names only downstream artifacts affected by the changed source", async () => {
   await withTempRepository(async (repositoryRoot) => {
     const { currentSpec } = await createCompleteTraceabilityArtifacts(repositoryRoot);
@@ -531,6 +660,13 @@ test("P02-T06 impact analysis names only downstream artifacts affected by the ch
     assert.deepEqual(impact.affectedTasks, ["ctr_alpha-task"]);
     assert.deepEqual(impact.affectedEvidence, ["evd_alpha-proof"]);
     assert.deepEqual(impact.affectedReviews, ["rev_alpha-review"]);
+    assert.deepEqual(impact.affectedArtifacts, [
+      ".legion/project/changes/chg_traceability-matrix/delta-specs/req_alpha.md",
+      ".legion/project/changes/chg_traceability-matrix/evidence-index.json",
+      ".legion/project/changes/chg_traceability-matrix/oracle/orc_alpha-proof.yaml",
+      ".legion/project/changes/chg_traceability-matrix/taskgraph.json",
+      ".legion/project/specs/req_alpha.md"
+    ]);
     assert.equal(impact.affectedTasks.includes("ctr_beta-task"), false);
     assert.equal(impact.affectedEvidence.includes("evd_beta-proof"), false);
   });
@@ -550,5 +686,10 @@ test("P02-T06 impact analysis carries changed design artifacts through tasks, ev
     assert.deepEqual(impact.affectedTasks, ["ctr_alpha-task", "ctr_beta-task"]);
     assert.deepEqual(impact.affectedEvidence, ["evd_alpha-proof", "evd_beta-proof"]);
     assert.deepEqual(impact.affectedReviews, ["rev_alpha-review", "rev_beta-review"]);
+    assert.deepEqual(impact.affectedArtifacts, [
+      ".legion/project/changes/chg_traceability-matrix/design.md",
+      ".legion/project/changes/chg_traceability-matrix/evidence-index.json",
+      ".legion/project/changes/chg_traceability-matrix/taskgraph.json"
+    ]);
   });
 });

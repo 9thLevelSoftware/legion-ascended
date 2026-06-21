@@ -378,22 +378,31 @@ function detectTraceCycles(state: GraphState): void {
   const visiting = new Set<string>();
   const visited = new Set<string>();
   const cyclic = new Set<string>();
+  const path: string[] = [];
 
-  function visit(node: string): boolean {
+  function visit(node: string): void {
     if (visiting.has(node)) {
-      cyclic.add(node);
-      return true;
+      const cycleStartIndex = path.indexOf(node);
+      if (cycleStartIndex !== -1) {
+        for (let index = cycleStartIndex; index < path.length; index++) {
+          const cyclicNode = path[index];
+          if (cyclicNode !== undefined) cyclic.add(cyclicNode);
+        }
+      }
+      return;
     }
-    if (visited.has(node)) return false;
+    if (visited.has(node)) return;
+
     visiting.add(node);
-    let found = false;
+    path.push(node);
+
     for (const next of adjacency.get(node) ?? []) {
-      found = visit(next) || found;
+      visit(next);
     }
+
+    path.pop();
     visiting.delete(node);
     visited.add(node);
-    if (found) cyclic.add(node);
-    return found;
   }
 
   for (const node of adjacency.keys()) {
@@ -891,6 +900,20 @@ function validateCoverage(state: GraphState, input: LoadedTraceabilityArtifacts)
 
   for (const entry of state.evidence.values()) {
     const traceRefs = allEvidenceTraceRefs(entry);
+    validateTraceRefs({
+      state,
+      from: evidenceNodeId(entry.evidence.id),
+      refs: entry.evidence.traceRefs,
+      sourcePath: input.evidenceIndex.artifactPath
+    });
+    for (const item of entry.evidence.items) {
+      validateTraceRefs({
+        state,
+        from: evidenceNodeId(entry.evidence.id),
+        refs: item.traceRefs,
+        sourcePath: input.evidenceIndex.artifactPath
+      });
+    }
     validateEvidenceTraceTargets({
       state,
       evidence: entry.evidence,
@@ -1102,10 +1125,16 @@ export function analyzeTraceabilityImpact(input: TraceabilityImpactInput): Trace
     for (const next of downstream.get(current) ?? []) {
       if (!visited.has(next)) queue.push(next);
     }
-    queue.sort(compareStrings);
   }
 
   const affectedNodes = [...visited].map((id) => nodesById.get(id)).filter((node): node is TraceabilityNode => node !== undefined);
+  const affectedArtifactPaths = new Set<ArtifactPath>();
+  affectedArtifactPaths.add(input.changedArtifactPath as ArtifactPath);
+  for (const node of affectedNodes) {
+    affectedArtifactPaths.add(node.source.path);
+    if (node.artifact !== undefined) affectedArtifactPaths.add(node.artifact.path);
+  }
+
   return {
     changedArtifactPath: input.changedArtifactPath,
     affectedRequirements: sortedIds(affectedNodes.filter((node) => node.kind === "requirement").map((node) => externalId(node) as RequirementId)),
@@ -1113,7 +1142,7 @@ export function analyzeTraceabilityImpact(input: TraceabilityImpactInput): Trace
     affectedTasks: sortedIds(affectedNodes.filter((node) => node.kind === "task").map((node) => externalId(node) as ContractId)),
     affectedEvidence: sortedIds(affectedNodes.filter((node) => node.kind === "evidence").map((node) => externalId(node) as EvidenceId)),
     affectedReviews: sortedIds(affectedNodes.filter((node) => node.kind === "review").map((node) => externalId(node) as ReviewId)),
-    affectedArtifacts: sortedIds(affectedNodes.filter((node) => node.kind === "artifact").map((node) => node.source.path))
+    affectedArtifacts: sortedIds(affectedArtifactPaths)
   };
 }
 
