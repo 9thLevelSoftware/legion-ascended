@@ -328,6 +328,8 @@ test("P02-T09 apply resumes an interrupted legacy-protocol move with matching ex
     const stagingRoot = path.join(workspace, "stage");
     const backupRoot = path.join(workspace, "backups");
     await copyFixture("local-codex", repositoryRoot);
+    const commandPath = path.join(repositoryRoot, ".legion", "commands", "legion", "start.md");
+    const originalCommandBytes = await readFile(commandPath);
 
     const legacyProtocolRoot = path.join(repositoryRoot, ".legion", "legacy-protocol");
     for (const relativePath of await listFiles(path.join(repositoryRoot, ".legion"))) {
@@ -358,9 +360,9 @@ test("P02-T09 apply resumes an interrupted legacy-protocol move with matching ex
     assert.equal(applied.ok, true);
     assert.equal(await exists(path.join(repositoryRoot, ".legion", "commands")), false);
     assert.equal(await exists(path.join(repositoryRoot, ".legion", "agents")), false);
-    assert.equal(
-      await readFile(path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion", "start.md"), "utf8"),
-      "# /legion:start\n\nLegacy generated Codex command.\n"
+    assert.deepEqual(
+      await readFile(path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion", "start.md")),
+      originalCommandBytes
     );
 
     const initialized = await initProject(initInput(repositoryRoot));
