@@ -40,6 +40,7 @@ import {
 } from "./schema.js";
 
 export const PROJECT_MANIFEST_PATH = PROJECT_ARTIFACT_PATHS.projectManifest;
+export const LEGION_LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol" as const;
 export const LEGION_VAR_ROOT = ".legion/var" as const;
 export const LEGION_VAR_GITIGNORE_ENTRY = ".legion/var/" as const;
 
@@ -197,7 +198,7 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   const entries = await readdir(legionRoot, { withFileTypes: true });
   const unknownEntries = entries
     .map((entry) => entry.name)
-    .filter((name) => name !== "project" && name !== "var" && !isIgnorableLegionRootEntry(name))
+    .filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry(name))
     .sort();
 
   if (unknownEntries.length > 0) {

@@ -166,6 +166,35 @@ test("P02-T02 init ignores hidden .legion metadata without hiding visible legacy
   });
 });
 
+test("P02-T09 init allows migrated legacy protocol namespace while preserving collision checks", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    await mkdir(path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion"), { recursive: true });
+    await writeFile(
+      path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion", "start.md"),
+      "legacy command bytes\n",
+      "utf8"
+    );
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+    assert.equal(initialized.status, "initialized");
+    assert.equal(
+      await readFile(path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion", "start.md"), "utf8"),
+      "legacy command bytes\n"
+    );
+  });
+
+  await withTempRepository(async (repositoryRoot) => {
+    await mkdir(path.join(repositoryRoot, ".legion", "legacy-protocol"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "SKILL.md"), "legacy codex protocol\n", "utf8");
+
+    const collided = await initProject(initInput(repositoryRoot));
+    assert.equal(collided.ok, false);
+    assert.equal(collided.status, "migration_required");
+    assert.equal(collided.diagnostics[0].code, "migration_required");
+  });
+});
+
 test("P02-T02 accepts common .legion var ignore patterns without appending duplicates", async () => {
   await withTempRepository(async (repositoryRoot) => {
     await writeFile(path.join(repositoryRoot, ".gitignore"), "/.legion/var\n", "utf8");
