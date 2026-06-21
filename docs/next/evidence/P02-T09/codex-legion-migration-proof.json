@@ -77,5 +77,25 @@
     "diagnosticCode": "unsafe_backup_root",
     "rejectedBeforeCopy": true,
     "sourceUnchanged": true
+  },
+  "reviewFollowUp": {
+    "symlinkedLegacyEntries": {
+      "diagnosticCode": "unsupported_symbolic_link",
+      "rejectedBeforeInventory": true,
+      "sourcePath": ".legion/commands/legion/linked-start.md"
+    },
+    "rollbackRepositoryMismatch": {
+      "diagnosticCode": "backup_repository_mismatch",
+      "rejectedBeforeDeletingCurrentLegion": true
+    },
+    "rollbackBackupHash": {
+      "diagnosticCode": "backup_hash_mismatch",
+      "rejectedBeforeDeletingCurrentLegion": true
+    },
+    "tamperedReportMoves": {
+      "diagnosticCode": "invalid_migration_moves",
+      "rejectedBeforeBackupOrCleanup": true,
+      "protectedPath": ".legion/project/project.json"
+    }
   }
 }
