@@ -539,6 +539,13 @@ export async function readEvidenceIndex(input: ReadEvidenceIndexInput): Promise<
   });
   if (manifestDiagnostics.length > 0) return failure("invalid", manifestDiagnostics);
 
+  const entryDiagnostics = validateEntries({
+    entries: read.value.entries,
+    changeId,
+    artifactPath
+  });
+  if (entryDiagnostics.length > 0) return failure("invalid", entryDiagnostics);
+
   return {
     ok: true,
     status: "read",

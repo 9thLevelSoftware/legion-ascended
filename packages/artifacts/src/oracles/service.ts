@@ -409,6 +409,16 @@ export async function readOracleArtifact(input: ReadOracleArtifactInput): Promis
     return failure(status, read.diagnostics);
   }
 
+  if (read.value.oracle.id !== oracleId) {
+    return failure("invalid", [
+      oracleDiagnostic({
+        code: "oracle_id_mismatch",
+        message: `Oracle artifact contains ${read.value.oracle.id}, not requested oracle ${oracleId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+
   return {
     ok: true,
     status: "read",

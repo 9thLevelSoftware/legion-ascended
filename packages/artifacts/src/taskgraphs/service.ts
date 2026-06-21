@@ -261,6 +261,23 @@ function manifestHashDiagnostics(input: {
   ];
 }
 
+function manifestInputDiagnostics(input: {
+  readonly document: TaskGraphDocument;
+  readonly artifactPath: ArtifactPath;
+}): readonly ArtifactDiagnostic[] {
+  const artifactInputs = [...input.document.artifactInputs].sort(compareArtifactRevisions);
+  const manifestInputs = [...input.document.artifactManifest.inputs].sort(compareArtifactRevisions);
+  if (stableProtocolJson(artifactInputs) === stableProtocolJson(manifestInputs)) return [];
+
+  return [
+    taskGraphDiagnostic({
+      code: "taskgraph_manifest_inputs_mismatch",
+      message: "Taskgraph artifactInputs must match artifactManifest.inputs.",
+      path: input.artifactPath
+    })
+  ];
+}
+
 function normalizeTaskGraph(input: {
   readonly changeId: ChangeId;
   readonly revision: number;
@@ -401,6 +418,18 @@ export async function readTaskGraph(input: ReadTaskGraphInput): Promise<TaskGrap
       })
     ]);
   }
+
+  const artifactInputIssues = artifactInputDiagnostics({
+    artifactInputs: read.value.artifactInputs,
+    artifactPath
+  });
+  if (artifactInputIssues.length > 0) return failure("invalid", artifactInputIssues);
+
+  const manifestInputIssues = manifestInputDiagnostics({
+    document: read.value,
+    artifactPath
+  });
+  if (manifestInputIssues.length > 0) return failure("invalid", manifestInputIssues);
 
   const manifestDiagnostics = manifestHashDiagnostics({
     manifest: read.value.artifactManifest,

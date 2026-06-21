@@ -12,6 +12,7 @@ import {
   deriveOracleManifest,
   initProject,
   readEvidenceIndex,
+  readOracleArtifact,
   readTaskGraph,
   stableProtocolJson,
   updateOracleArtifact,
@@ -435,6 +436,49 @@ test("P02-T05 oracle manifest reports invalid oracle filenames at their actual a
   });
 });
 
+test("P02-T05 oracle reads reject artifacts whose embedded oracle ID disagrees with the requested path", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const { currentSpec, change } = await createBaselineChange(repositoryRoot);
+    const createdOracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument(currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(createdOracle.ok, true);
+
+    await writeProjectJson(repositoryRoot, createdOracle.artifactPath, {
+      ...createdOracle.artifactDocument,
+      oracle: {
+        ...createdOracle.document,
+        id: "orc_other-proof",
+        traceRefs: [
+          {
+            path: `.legion/project/changes/${CHANGE_ID}/oracle/orc_other-proof.yaml`,
+            anchor: "orc_other-proof",
+            relation: "verifies",
+            entity: { kind: "requirement", id: currentSpec.document.primaryRequirementId }
+          }
+        ]
+      }
+    });
+
+    const read = await readOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracleId: createdOracle.document.id
+    });
+    assert.equal(read.ok, false);
+    assert.equal(read.status, "invalid");
+    assert.equal(read.diagnostics[0].code, "oracle_id_mismatch");
+
+    const manifest = await deriveOracleManifest({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(manifest.ok, false);
+    assert.equal(manifest.status, "invalid");
+    assert.equal(manifest.diagnostics[0].code, "oracle_id_mismatch");
+  });
+});
+
 test("P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order", async () => {
   const serializedTaskgraphs = [];
 
@@ -553,6 +597,15 @@ test("P02-T05 taskgraph rejects copied identities and stale manifest hashes on r
     assert.equal(staleHash.ok, false);
     assert.equal(staleHash.status, "invalid");
     assert.equal(staleHash.diagnostics[0].code, "manifest_hash_mismatch");
+
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${CHANGE_ID}/taskgraph.json`, {
+      ...taskgraph.document,
+      artifactInputs: [artifactInputs[0]]
+    });
+    const mismatchedInputs = await readTaskGraph({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(mismatchedInputs.ok, false);
+    assert.equal(mismatchedInputs.status, "invalid");
+    assert.equal(mismatchedInputs.diagnostics[0].code, "taskgraph_manifest_inputs_mismatch");
   });
 });
 
@@ -763,5 +816,38 @@ test("P02-T05 evidence index rejects empty inputs, copied identities, and stale 
     assert.equal(staleHash.ok, false);
     assert.equal(staleHash.status, "invalid");
     assert.equal(staleHash.diagnostics[0].code, "manifest_hash_mismatch");
+
+    const { runId: _runId, ...evidenceWithoutRun } = entry.evidence;
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${CHANGE_ID}/evidence-index.json`, {
+      ...written.document,
+      entries: [
+        {
+          ...entry,
+          evidence: evidenceWithoutRun
+        }
+      ]
+    });
+    const missingRun = await readEvidenceIndex({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(missingRun.ok, false);
+    assert.equal(missingRun.status, "invalid");
+    assert.equal(missingRun.diagnostics[0].code, "missing_evidence_run");
+
+    const { artifact: _artifact, command: _command, ...itemWithoutSource } = entry.evidence.items[0];
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${CHANGE_ID}/evidence-index.json`, {
+      ...written.document,
+      entries: [
+        {
+          ...entry,
+          evidence: {
+            ...entry.evidence,
+            items: [itemWithoutSource]
+          }
+        }
+      ]
+    });
+    const missingSource = await readEvidenceIndex({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(missingSource.ok, false);
+    assert.equal(missingSource.status, "invalid");
+    assert.equal(missingSource.diagnostics[0].code, "missing_evidence_hash");
   });
 });
