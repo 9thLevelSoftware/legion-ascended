@@ -36,6 +36,12 @@
     "nativePromptAfterHash": "sha256:54d79bf7bb580179809a85f9efadadccf7b940d48a37df94fa2f94fb598c20dd",
     "nativePromptUntouched": true
   },
+  "backup": {
+    "inputWasRelative": true,
+    "manifestPathIsAbsolute": true,
+    "backupPathIsAbsolute": true,
+    "manifestBackupPathIsAbsolute": true
+  },
   "apply": {
     "preMigrationHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
     "afterApplyHash": "sha256:f4691b5053d685a32601d4282e6431455bb380e9e89ca72745bd6e480b7e7844",
@@ -49,6 +55,7 @@
     ]
   },
   "rollback": {
+    "performedAfterCwdChange": true,
     "restoredHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
     "restoredMatchesPreMigration": true
   }

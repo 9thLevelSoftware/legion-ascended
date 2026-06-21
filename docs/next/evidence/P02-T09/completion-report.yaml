@@ -5,6 +5,7 @@ summary:
   - Added a Codex `.legion/` migration bridge that inventories legacy protocol files, stages deterministic dry-run reports, applies only after review, backs up the pre-migration tree, and rolls back exact bytes.
   - Preserved current v8 installer behavior while documenting the migration path to `.legion/legacy-protocol/`.
   - Updated v9 project initialization to accept `.legion/legacy-protocol/` as a migrated legacy namespace without allowing arbitrary visible `.legion/` collisions.
+  - Hardened rollback backups so backup manifests record absolute paths and rollback validates the backup directory before deleting current `.legion` bytes.
 artifacts:
   - packages/legacy-bridge/src/import-codex/index.ts
   - packages/legacy-bridge/src/index.ts
