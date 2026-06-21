@@ -321,6 +321,89 @@ test("P02-T09 repeat migration is a no-op report without moving v9 project data"
   }
 });
 
+test("P02-T09 apply resumes an interrupted legacy-protocol move with matching existing files", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("local-codex", repositoryRoot);
+
+    const legacyProtocolRoot = path.join(repositoryRoot, ".legion", "legacy-protocol");
+    for (const relativePath of await listFiles(path.join(repositoryRoot, ".legion"))) {
+      const sourcePath = path.join(repositoryRoot, ".legion", ...relativePath.split("/"));
+      const destinationPath = path.join(legacyProtocolRoot, ...relativePath.split("/"));
+      await mkdir(path.dirname(destinationPath), { recursive: true });
+      await cp(sourcePath, destinationPath);
+    }
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "commands", "legion", "start.md")), true);
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion", "start.md")), true);
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-resume",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+    assert.ok(dryRun.report.moves.some((move) => move.sourcePath === ".legion/commands/legion/start.md"));
+
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, true);
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "commands")), false);
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "agents")), false);
+    assert.equal(
+      await readFile(path.join(repositoryRoot, ".legion", "legacy-protocol", "commands", "legion", "start.md"), "utf8"),
+      "# /legion:start\n\nLegacy generated Codex command.\n"
+    );
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T09 apply removes empty legacy roots so v9 init is unblocked", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("partial-codex", repositoryRoot);
+    await mkdir(path.join(repositoryRoot, ".legion", "agents", "empty-placeholder"), { recursive: true });
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-empty-roots",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, true);
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "agents")), false);
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source", async () => {
   const workspace = await tempRoot();
   try {

@@ -496,6 +496,14 @@ function shouldMoveLegacyFile(legionRelativeFile: string): boolean {
   return root !== "project" && root !== "var" && root !== "legacy-protocol" && root !== "migration";
 }
 
+function isIgnorableLegionRootEntry(name: string): boolean {
+  return name === ".DS_Store" || name === "Thumbs.db" || name === "desktop.ini" || name.startsWith("._");
+}
+
+function isReservedLegionRootEntry(name: string): boolean {
+  return name === "project" || name === "var" || name === "legacy-protocol" || name === "migration" || isIgnorableLegionRootEntry(name);
+}
+
 function classifySourceFile(relativePath: string, generatedPaths: ReadonlySet<string>): CodexLegionSourceClassification {
   const legionRelativeFile = relativePath.slice(".legion/".length);
   const root = topLevelLegionEntry(legionRelativeFile);
@@ -835,25 +843,78 @@ async function installStagedLegacyProtocol(input: {
   readonly stagingRoot: string;
   readonly report: CodexLegionMigrationReport;
 }): Promise<void> {
-  if (input.report.moves.length === 0) return;
-
   const legionRoot = path.join(input.repositoryRoot, ".legion");
   const destination = path.join(legionRoot, "legacy-protocol");
-  if (await pathExists(destination)) {
-    throw new Error(".legion/legacy-protocol already exists; rerun dry-run and review the no-op report.");
+  const stagedLegacyProtocolRoot = path.join(input.stagingRoot, ".legion", "legacy-protocol");
+
+  if (input.report.moves.length > 0) {
+    if (await pathExists(destination)) {
+      await mergeStagedLegacyProtocol({
+        stagedRoot: stagedLegacyProtocolRoot,
+        destinationRoot: destination
+      });
+    } else {
+      const temporary = path.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      await rm(temporary, { recursive: true, force: true });
+      await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
+      await rename(temporary, destination);
+    }
   }
 
-  const temporary = path.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
-  await rm(temporary, { recursive: true, force: true });
-  await cp(path.join(input.stagingRoot, ".legion", "legacy-protocol"), temporary, { recursive: true });
-  await rename(temporary, destination);
-
-  const roots = [...new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))))]
-    .filter((entry) => entry.length > 0)
-    .sort(compareStrings);
+  const roots = await cleanupRoots({
+    repositoryRoot: input.repositoryRoot,
+    report: input.report
+  });
   for (const root of roots) {
     await rm(path.join(legionRoot, root), { recursive: true, force: true });
   }
+}
+
+async function mergeStagedLegacyProtocol(input: {
+  readonly stagedRoot: string;
+  readonly destinationRoot: string;
+}): Promise<void> {
+  for (const file of await listFiles(input.stagedRoot)) {
+    const stagedPath = path.join(input.stagedRoot, ...file.split("/"));
+    const destinationPath = path.join(input.destinationRoot, ...file.split("/"));
+    const stagedBytes = await readFile(stagedPath);
+    let destinationStat;
+    try {
+      destinationStat = await stat(destinationPath);
+    } catch (error) {
+      if (!isEnoent(error)) throw error;
+    }
+
+    if (destinationStat !== undefined) {
+      if (!destinationStat.isFile()) {
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path.relative(input.destinationRoot, destinationPath))}.`);
+      }
+      const destinationBytes = await readFile(destinationPath);
+      if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path.relative(input.destinationRoot, destinationPath))}.`);
+      }
+      continue;
+    }
+
+    await mkdir(path.dirname(destinationPath), { recursive: true });
+    await cp(stagedPath, destinationPath);
+  }
+}
+
+async function cleanupRoots(input: {
+  readonly repositoryRoot: string;
+  readonly report: CodexLegionMigrationReport;
+}): Promise<readonly string[]> {
+  const legionRoot = path.join(input.repositoryRoot, ".legion");
+  const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
+
+  for (const entry of await readdir(legionRoot, { withFileTypes: true })) {
+    if (!isReservedLegionRootEntry(entry.name)) roots.add(entry.name);
+  }
+
+  return [...roots]
+    .filter((entry) => entry.length > 0)
+    .sort(compareStrings);
 }
 
 async function installedLegacyProtocolFiles(repositoryRoot: string): Promise<readonly string[]> {
