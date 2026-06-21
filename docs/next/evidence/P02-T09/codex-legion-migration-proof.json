@@ -1,0 +1,55 @@
+{
+  "task": "P02-T09",
+  "generatedAt": "2026-06-21T12:00:00.000Z",
+  "fixture": "tests/fixtures/migration/codex/local-codex",
+  "dryRun": {
+    "sourceTreeHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
+    "targetTreeHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
+    "moveCount": 6,
+    "generatedProtocolFiles": [
+      ".legion/adapters/codex-cli.md",
+      ".legion/agents/engineering-senior-developer.md",
+      ".legion/commands/legion/start.md",
+      ".legion/skills/legion/SKILL.md"
+    ],
+    "customizedFiles": [
+      ".legion/custom/notes.md"
+    ],
+    "nativeSurfaces": [
+      ".agents/skills/legion/SKILL.md",
+      ".codex/prompts",
+      ".codex/prompts/legion-start.md"
+    ]
+  },
+  "beforeAfterManifests": {
+    "beforeRuntime": "codex",
+    "beforeScope": "local",
+    "afterRuntime": "codex",
+    "afterScope": "local",
+    "movedTo": ".legion/legacy-protocol/manifest.json"
+  },
+  "preservation": {
+    "customBeforeHash": "sha256:1d2c9be81020da0255da6674bd9b138d510bec23218ad286676c06cbe7ae4e06",
+    "customAfterHash": "sha256:1d2c9be81020da0255da6674bd9b138d510bec23218ad286676c06cbe7ae4e06",
+    "customPreserved": true,
+    "nativePromptBeforeHash": "sha256:54d79bf7bb580179809a85f9efadadccf7b940d48a37df94fa2f94fb598c20dd",
+    "nativePromptAfterHash": "sha256:54d79bf7bb580179809a85f9efadadccf7b940d48a37df94fa2f94fb598c20dd",
+    "nativePromptUntouched": true
+  },
+  "apply": {
+    "preMigrationHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
+    "afterApplyHash": "sha256:f4691b5053d685a32601d4282e6431455bb380e9e89ca72745bd6e480b7e7844",
+    "installedFiles": [
+      ".legion/legacy-protocol/adapters/codex-cli.md",
+      ".legion/legacy-protocol/agents/engineering-senior-developer.md",
+      ".legion/legacy-protocol/commands/legion/start.md",
+      ".legion/legacy-protocol/custom/notes.md",
+      ".legion/legacy-protocol/manifest.json",
+      ".legion/legacy-protocol/skills/legion/SKILL.md"
+    ]
+  },
+  "rollback": {
+    "restoredHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
+    "restoredMatchesPreMigration": true
+  }
+}
