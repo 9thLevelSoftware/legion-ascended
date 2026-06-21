@@ -1,10 +1,10 @@
 phase: 2
 phase_id: P02
-status: RUNNING
+status: DONE
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
 base_commit: "55f1df5eab8a389d887abd02775b6fd53df32ca8"
 started_at: "2026-06-20T16:15:07-04:00"
-completed_at: null
+completed_at: "2026-06-21T14:06:53-04:00"
 active_wave: 5
 tasks:
   P02-T01: { status: DONE, run_id: "P02-T01-20260620-artifacts-contract", commit: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7" }
@@ -38,6 +38,10 @@ decisions:
     decision: "Preserve legacy Codex protocol under `.legion/legacy-protocol/`"
     reason: "The v8 Codex installer owns generated `.legion/` protocol files while v9 reserves `.legion/project/` for committed project truth; moving legacy protocol bytes under a named legacy owner prevents namespace collision without changing the current v8 install default."
     decided_at: "2026-06-21T12:00:00-04:00"
+  - task: P02-CLOSEOUT
+    decision: "Apply migration-safety closeout hardening before marking Phase 2 complete"
+    reason: "Independent review found planning rollback and backup-root paths that could cause silent data loss during migration recovery. The closeout branch adds regression coverage and aligns planning migration safety with the Codex migration guard pattern before phase completion."
+    decided_at: "2026-06-21T14:06:53-04:00"
 blockers: []
 evidence:
   - docs/next/evidence/P02-T01/path-security-and-atomic-write-test.log
@@ -86,4 +90,10 @@ evidence:
   - docs/next/evidence/P02-T10/cli-fixture-hash-proof.json
   - docs/next/evidence/P02-T10/full-validation.log
   - docs/next/evidence/P02-T10/completion-report.yaml
+  - docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log
+  - docs/next/evidence/P02-CLOSEOUT/artifacts-test.log
+  - docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log
+  - docs/next/evidence/P02-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P02-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-02-INDEPENDENT-REVIEW.md
   - .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md

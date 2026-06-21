@@ -585,6 +585,13 @@ function pathsOverlap(left: string, right: string): boolean {
   return containsPath(left, right) || containsPath(right, left);
 }
 
+function sameResolvedPath(left: string, right: string): boolean {
+  const resolvedLeft = path.resolve(left);
+  const resolvedRight = path.resolve(right);
+  if (process.platform === "win32") return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
+  return resolvedLeft === resolvedRight;
+}
+
 function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | PlanningImportFailure {
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const planningRoot = path.resolve(input.planningRoot);
@@ -600,6 +607,27 @@ function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | Pla
   }
 
   return stagingRoot;
+}
+
+function safeResolvedBackupRoot(input: {
+  readonly repositoryRoot: string;
+  readonly backupRoot: string;
+}): string | PlanningImportFailure {
+  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const backupRoot = path.resolve(input.backupRoot);
+  const legionRoot = path.join(repositoryRoot, ".legion");
+
+  if (pathsOverlap(backupRoot, repositoryRoot) || pathsOverlap(backupRoot, legionRoot)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "unsafe_backup_root",
+        message: "Backup root must not overlap the repository root or .legion source.",
+        sourcePath: input.backupRoot
+      })
+    ]);
+  }
+
+  return backupRoot;
 }
 
 function parseUtcTimestamp(input: {
@@ -810,11 +838,12 @@ async function backupLegionRoot(input: {
   readonly appliedAt: UtcTimestamp;
   readonly report: PlanningImportReport;
 }): Promise<PlanningImportBackupRecord> {
-  const legionRoot = path.join(input.repositoryRoot, ".legion");
+  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const legionRoot = path.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path.join(input.backupRoot, id);
-  const backupPath = path.join(backupDirectory, "legion");
+  const backupDirectory = path.resolve(input.backupRoot, id);
+  const backupPath = path.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists(legionRoot);
 
   await rm(backupDirectory, { recursive: true, force: true });
@@ -828,12 +857,12 @@ async function backupLegionRoot(input: {
     kind: "planning-import-backup",
     createdAt: input.appliedAt,
     backupPath,
-    repositoryRoot: input.repositoryRoot,
+    repositoryRoot,
     preImportHash,
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path.join(backupDirectory, "backup-manifest.json");
+  const manifestPath = path.resolve(backupDirectory, "backup-manifest.json");
   await writeFile(manifestPath, stableProtocolJson(manifest), "utf8");
 
   return {
@@ -959,9 +988,15 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
   });
   if (typeof appliedAt !== "string") return appliedAt;
 
+  const backupRoot = safeResolvedBackupRoot({
+    repositoryRoot: input.repositoryRoot,
+    backupRoot: input.backupRoot
+  });
+  if (typeof backupRoot !== "string") return backupRoot;
+
   const backup = await backupLegionRoot({
     repositoryRoot: input.repositoryRoot,
-    backupRoot: input.backupRoot,
+    backupRoot,
     appliedAt,
     report
   });
@@ -1002,8 +1037,9 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
 
 export async function rollbackPlanningImport(input: PlanningImportRollbackInput): Promise<PlanningImportRollbackResult> {
   let manifest: BackupManifest;
+  const backupManifestPath = path.resolve(input.backupManifestPath);
   try {
-    const parsed = JSON.parse(await readFile(input.backupManifestPath, "utf8"));
+    const parsed = JSON.parse(await readFile(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
       throw new Error("Backup manifest is missing required planning import fields.");
     }
@@ -1013,12 +1049,54 @@ export async function rollbackPlanningImport(input: PlanningImportRollbackInput)
       diagnostic({
         code: "invalid_backup_manifest",
         message: error instanceof Error ? error.message : "Backup manifest could not be read.",
-        sourcePath: input.backupManifestPath
+        sourcePath: backupManifestPath
       })
     ]);
   }
 
-  const legionRoot = path.join(input.repositoryRoot, ".legion");
+  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const legionRoot = path.join(repositoryRoot, ".legion");
+  if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "backup_repository_mismatch",
+        message: "Backup manifest repositoryRoot does not match the requested repository root.",
+        sourcePath: backupManifestPath
+      })
+    ]);
+  }
+
+  if (manifest.existingLegionRoot) {
+    if (!path.isAbsolute(manifest.backupPath)) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest backupPath must be absolute.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    if (!(await pathExists(manifest.backupPath))) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_backup_manifest",
+          message: "Backup manifest references a missing .legion backup directory.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+    const backupHash = await hashTree(manifest.backupPath);
+    if (backupHash !== manifest.preImportHash) {
+      return failure("invalid", [
+        diagnostic({
+          code: "backup_hash_mismatch",
+          message: "Backup bytes no longer match the manifest pre-import hash.",
+          sourcePath: backupManifestPath
+        })
+      ]);
+    }
+  }
+
   await rm(legionRoot, { recursive: true, force: true });
   if (manifest.existingLegionRoot) {
     await cp(manifest.backupPath, legionRoot, { recursive: true });

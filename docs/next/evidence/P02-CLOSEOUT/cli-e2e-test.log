@@ -1,0 +1,22 @@
+$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (3.5929ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (594.3631ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (884.7572ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (540.8472ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (859.0231ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (904.9695ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (1496.6391ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (915.2977ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (981.5112ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7416.9219

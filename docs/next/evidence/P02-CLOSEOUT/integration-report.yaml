@@ -1,0 +1,55 @@
+phase: 2
+phase_id: P02
+status: PASS
+generated_at: "2026-06-21T14:06:53-04:00"
+scope:
+  source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
+  roadmap_index: "docs/legion-next-roadmap.md"
+  note: "The long-running directive's absolute roadmap path does not exist; this closeout follows the checked-in roadmap index and the Phase 2 source document."
+blocker_resolved:
+  task: P02-T08
+  finding: "Planning import rollback removed .legion before validating backup manifest repository identity, backup existence, and backup hash."
+  resolution:
+    - "Planning backup manifests now record resolved repositoryRoot, backupPath, and manifestPath values."
+    - "Planning apply now rejects backup roots that overlap the repository or .legion before copying."
+    - "rollbackPlanningImport now rejects manifests for another repository before deleting .legion."
+    - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
+    - "rollbackPlanningImport now hashes existing backups and rejects mismatches before deleting .legion."
+  regression_tests:
+    - "P02-T08 apply rejects backup roots that overlap .legion before copying"
+    - "P02-T08 rollback rejects unusable backup manifests before deleting current .legion"
+    - "P02-T08 rollback rejects backup manifests from another repository before deleting current .legion"
+    - "P02-T08 rollback verifies backup hashes before replacing current .legion"
+verification:
+  - command: "pnpm --filter @legion/legacy-bridge test"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
+    sha256: "f851ef90aa999b21f336d2a9c16bb52854038fc9c801447d0aff7d2ede341c4e"
+    summary: "28 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+  - command: "pnpm --filter @legion/artifacts test"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
+    sha256: "698c541b9139e1ccb6e0beead74d135a7f9c1ce110be638b8741542d83e60327"
+    summary: "59 artifact service tests passed across path security, current specs, change bundles, support artifacts, traceability, and archive."
+  - command: "pnpm --filter @legion/cli-e2e test"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log"
+    sha256: "eba98fe699ea42830a5e627794495882889c8d81796a715a882a3f08d8c001cf"
+    summary: "9 process-level CLI E2E tests passed across project, change, planning migration, and Codex migration commands."
+  - command: "pnpm run validate:next"
+    result: PASS
+    evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
+    sha256: "6e0fa8473c60087456c128c6b5fd3cb7cae27fb2183132a519445f0d51c2989b"
+    summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
+independent_review:
+  result: PASS
+  evidence: "docs/next/reviews/PHASE-02-INDEPENDENT-REVIEW.md"
+  sha256: "5167329de531192612599ab0690386aa79f9a7919e994e6d6dd1f84ec2045cf3"
+  verdicts:
+    requirement_coverage: PASS
+    architecture_compliance: PASS
+    implementation_quality: PASS
+    test_and_evidence_sufficiency: PASS
+    migration_safety: PASS
+    unresolved_risk: PASS
+  blocking_findings_remaining: 0
