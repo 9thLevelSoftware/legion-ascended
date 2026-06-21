@@ -13,6 +13,7 @@ import {
   fromServiceResult,
   hasFlag,
   helpResult,
+  isCliResult,
   readJsonInput,
   requiredStringOption,
   stringOption,
@@ -38,7 +39,7 @@ Archive options:
 
 export async function handleChangeCommand(context: CliContext): Promise<CliResult> {
   const [command] = context.args.positionals;
-  if (command === undefined || command === "help") return helpResult(CHANGE_HELP);
+  if (hasFlag(context, "help") || command === undefined || command === "help") return helpResult(CHANGE_HELP);
 
   const commandContext = stripCommand(context, 1);
   switch (command) {
@@ -60,6 +61,8 @@ async function create(context: CliContext): Promise<CliResult> {
   if (typeof inputPath !== "string") return inputPath;
 
   const input = await readJsonInput(inputPath);
+  if (isCliResult(input)) return input;
+
   const result = await createChangeBundle({
     ...input,
     repositoryRoot: context.repositoryRoot

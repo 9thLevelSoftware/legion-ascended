@@ -21,6 +21,19 @@ export interface CliResult {
 
 export type CommandHandler = (context: CliContext) => Promise<CliResult>;
 
+const VALUELESS_OPTIONS = new Set([
+  "allow-replace-existing-project",
+  "apply",
+  "dry-run",
+  "from-codex-legion",
+  "from-planning",
+  "help",
+  "json",
+  "no-color",
+  "review-accepted",
+  "rollback"
+]);
+
 export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
   const positionals: string[] = [];
   const options = new Map<string, string | true>();
@@ -39,6 +52,11 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
       const key = withoutPrefix.slice(0, equalsIndex);
       const value = withoutPrefix.slice(equalsIndex + 1);
       options.set(key, value);
+      continue;
+    }
+
+    if (VALUELESS_OPTIONS.has(withoutPrefix)) {
+      options.set(withoutPrefix, true);
       continue;
     }
 
@@ -70,13 +88,27 @@ export function requiredStringOption(context: CliContext, key: string): string |
   return usageError(`Missing required option --${key}.`);
 }
 
-export async function readJsonInput(filePath: string): Promise<Record<string, unknown>> {
-  const text = await readFile(filePath, "utf8");
-  const parsed: unknown = JSON.parse(text);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`JSON input must be an object: ${filePath}`);
+export async function readJsonInput(filePath: string): Promise<Record<string, unknown> | CliResult> {
+  try {
+    const text = await readFile(filePath, "utf8");
+    const parsed: unknown = JSON.parse(text);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return usageError(`JSON input must be an object: ${filePath}`);
+    }
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return usageError(`Failed to read or parse JSON input at ${filePath}: ${message}`);
   }
-  return parsed as Record<string, unknown>;
+}
+
+export function isCliResult(value: Record<string, unknown> | CliResult): value is CliResult {
+  return (
+    typeof (value as CliResult).exitCode === "number" &&
+    typeof (value as CliResult).human === "string" &&
+    typeof (value as CliResult).payload === "object" &&
+    (value as CliResult).payload !== null
+  );
 }
 
 export function success(payload: Record<string, unknown>, human: string): CliResult {

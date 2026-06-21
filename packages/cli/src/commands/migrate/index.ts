@@ -12,6 +12,7 @@ import {
   fromServiceResult,
   hasFlag,
   helpResult,
+  isCliResult,
   readJsonInput,
   requiredStringOption,
   stringOption,
@@ -59,13 +60,15 @@ async function handlePlanning(context: CliContext, action: MigrationAction): Pro
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
 
-    const project = await readJsonInput(projectPath) as unknown as PlanningImportProjectInput;
+    const project = await readJsonInput(projectPath);
+    if (isCliResult(project)) return project;
+
     const result = await createPlanningImportDryRun({
       repositoryRoot: context.repositoryRoot,
       planningRoot,
       stagingRoot,
       runId,
-      project
+      project: project as unknown as PlanningImportProjectInput
     });
     return fromServiceResult(result as unknown as Record<string, unknown>, result.ok ? "Planning import dry-run created." : "Planning import dry-run failed.");
   }

@@ -8,7 +8,9 @@ import {
 
 import {
   fromServiceResult,
+  hasFlag,
   helpResult,
+  isCliResult,
   readJsonInput,
   requiredStringOption,
   stripCommand,
@@ -31,7 +33,7 @@ Global:
 
 export async function handleProjectCommand(context: CliContext): Promise<CliResult> {
   const [command] = context.args.positionals;
-  if (command === undefined || command === "help" || command === "--help") return helpResult(PROJECT_HELP);
+  if (hasFlag(context, "help") || command === undefined || command === "help") return helpResult(PROJECT_HELP);
 
   const commandContext = stripCommand(context, 1);
   switch (command) {
@@ -51,6 +53,8 @@ async function init(context: CliContext): Promise<CliResult> {
   if (typeof inputPath !== "string") return inputPath;
 
   const input = await readJsonInput(inputPath);
+  if (isCliResult(input)) return input;
+
   const result = await initProject({
     ...input,
     repositoryRoot: context.repositoryRoot

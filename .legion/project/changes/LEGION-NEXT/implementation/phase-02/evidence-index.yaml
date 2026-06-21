@@ -543,27 +543,27 @@ entries:
   - task: P02-T10
     artifact: packages/cli/src/runtime.ts
     description: Shared CLI argument parsing, JSON input reading, result shaping, and diagnostics
-    sha256: 5bb0e5145f69db3f53e7dd2c7b6579dccffea6597471e07b86154d0fd9ee5d19
+    sha256: 2c5ab4c9d46c0e460791d0263610f11c51396d300883156f72b1246e6221f93f
   - task: P02-T10
     artifact: packages/cli/src/commands/project/index.ts
     description: Thin project init, validate, and status command handlers over artifact services
-    sha256: f28192b3a043a88e8062d4c5c4a650c62e029dedeb99296dcfb97fe75a0ea5b0
+    sha256: a3c5c697941c2b58678caebd5701ab44125dc4edcbbed7ad044ddc40bec8cfde
   - task: P02-T10
     artifact: packages/cli/src/commands/change/index.ts
     description: Thin change create, validate, diff, and archive command handlers over artifact services
-    sha256: d59d954503866a31103b937de7ba0bf92934916353518c21d97a7e26c2bb5600
+    sha256: 65ad297b70dc20e320722d7574487bf90ca645b16f780ab1031efb0bbf29c3f7
   - task: P02-T10
     artifact: packages/cli/src/commands/migrate/index.ts
     description: Thin planning and Codex Legion migration dry-run, apply, and rollback command handlers over legacy bridge services
-    sha256: 5077a8b9fac398bfe1afdb75c42f14e5de8930a1891bf1abcfa804543de9d2e9
+    sha256: 3a55376ddcf49c1170be797fa4e7d3eb7d15a2e4c8806fcf0f79f109fd6cb0a9
   - task: P02-T10
     artifact: apps/cli-e2e/package.json
     description: CLI E2E workspace app and focused process-level test script
-    sha256: 077b0e6317db281720b5a10dc32fe7b510c37a9e8f009afb26e35c78994f1aee
+    sha256: 1c7819a180da20ca87e6b9e94eded9b8ce288433903f3e7249a024485cc880e6
   - task: P02-T10
     artifact: apps/cli-e2e/test/cli-e2e.test.mjs
-    description: Process-level CLI E2E tests for project, change, archive gate, planning migration, and Codex Legion migration commands
-    sha256: 2162cd5f611ee9c08de30d46d1f0aaca342826da496036755899fbb45a19c60b
+    description: Process-level CLI E2E tests for project, change, archive gate, planning migration, Codex Legion migration, and PR review regressions
+    sha256: 53cb10800510dfe841180889d8367c48c6f71b3f97277a293b1e6ee5d193d148
   - task: P02-T10
     artifact: docs/next/cli/README.md
     description: CLI usage guide and recovery-oriented migration command examples
@@ -583,7 +583,7 @@ entries:
   - task: P02-T10
     artifact: docs/next/evidence/P02-T10/cli-e2e-test.log
     description: Focused process-level CLI E2E test report
-    sha256: 2dece2f5cf639023eb3a8fa62e4a32b4827a6bfb162fdb5e39d7bec22103010b
+    sha256: 9582c6e56e7b3482a02ce3892eecb2ecf06d07445e901c6e4043b51fd7a3ca3e
   - task: P02-T10
     artifact: docs/next/evidence/P02-T10/help-snapshots.md
     description: Command help snapshots for root, project, change, and migrate CLI families
@@ -595,12 +595,12 @@ entries:
   - task: P02-T10
     artifact: docs/next/evidence/P02-T10/full-validation.log
     description: Full workspace validate-next log after P02-T10 implementation
-    sha256: e4948eb49cf091898c465b4169527a574538a5ddae13e6a30223bbd29b0ac210
+    sha256: 11b7248c8a761e03415709f9e126f6ab88d3ff33e79d38708fcf7b6f6b8780b6
   - task: P02-T10
     artifact: docs/next/evidence/P02-T10/completion-report.yaml
     description: Structured P02-T10 completion report
-    sha256: 554e511c77c8df5773009e4391b5d9cc2037d756f3544b6b14ddd7a4065d0c1b
+    sha256: 5039f99d6a28eaf0b02fca31227a93b86ee2b4ca6d1a96774765f9fcf92d14fb
   - task: P02-T10
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
     description: Phase 2 handoff note summarizing CLI closeout, evidence, and PR review state
-    sha256: f56c28c097a9b23dc51e98597b31ae37c2fe6b8bf2fe460c449db4b634129d9a
+    sha256: 431a1a1a1c6a00888b8244f51218c7b78e8c288944e7612804c05ebb4089f69a

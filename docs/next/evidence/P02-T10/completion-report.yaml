@@ -51,3 +51,4 @@ notes:
   - CLI handlers parse arguments, read JSON input files, and format service results; artifact mutation and migration policy remain owned by `@legion/artifacts` and `@legion/legacy-bridge`.
   - Failed service results preserve typed diagnostics in JSON output and return nonzero exit codes.
   - `--no-color` is accepted for deterministic automation snapshots; the current CLI emits no ANSI styling.
+  - PR review follow-up hardens JSON input boundary errors, valueless flag parsing, subcommand help, and standalone CLI E2E build order.

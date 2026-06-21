@@ -34,3 +34,4 @@ Both passed after the final package metadata cleanup.
 
 - `@legion/cli` intentionally does not publish a package bin yet. The current executable path is `node packages/cli/dist/index.js next ...`, which preserves the v8 root installer contract.
 - Phase ledger `P02-T10.commit` records implementation commit `4e2ffcdff379c71b8f8fac746fe26aff3bc1412b`.
+- PR review follow-up hardens JSON input boundary errors, valueless flag parsing, subcommand help, and standalone CLI E2E build order.

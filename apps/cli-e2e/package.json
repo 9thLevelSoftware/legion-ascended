@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec \"test/**/*.test.mjs\""
+    "test": "pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec \"test/**/*.test.mjs\""
   },
   "dependencies": {
     "@legion/artifacts": "workspace:*",

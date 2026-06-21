@@ -53,6 +53,11 @@ async function writeJson(filePath, value) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+async function writeText(filePath, value) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, value, "utf8");
+}
+
 async function exists(absolutePath) {
   try {
     await stat(absolutePath);
@@ -243,6 +248,131 @@ function changeInput(repositoryRoot, currentSpec) {
     repositoryRoot
   };
 }
+
+test("P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(ROOT, "apps", "cli-e2e", "package.json"), "utf8"));
+  const script = packageJson.scripts.test;
+  assert.equal(typeof script, "string");
+  assert.match(script, /pnpm --filter @legion\/protocol build/);
+  assert.ok(
+    script.indexOf("@legion/protocol build") < script.indexOf("@legion/artifacts build"),
+    script
+  );
+});
+
+test("P02-T10 valueless global flags remain flags before positional commands", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const inputPath = path.join(workspace, "init.json");
+    await mkdir(repositoryRoot, { recursive: true });
+    await writeJson(inputPath, initInput());
+
+    assert.equal((await runCli(["--repository-root", repositoryRoot, "project", "init", "--input", inputPath])).exitCode, 0);
+
+    const status = await runCli(["project", "status"], { cwd: repositoryRoot });
+    assert.equal(status.exitCode, 0, status.stderr);
+    assert.equal(status.json.ok, true);
+    assert.equal(status.json.project.id, PROJECT_ID);
+    assert.equal(status.json.currentSpecCount, 0);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T10 valueless command flags remain flags before positional arguments", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const initPath = path.join(workspace, "init.json");
+    await mkdir(repositoryRoot, { recursive: true });
+    await writeJson(initPath, initInput());
+    assert.equal((await runCli(["--repository-root", repositoryRoot, "project", "init", "--input", initPath])).exitCode, 0);
+
+    const currentSpec = await createBaselineSpec(repositoryRoot);
+    const changePath = path.join(workspace, "change.json");
+    await writeJson(changePath, changeInput(repositoryRoot, currentSpec));
+    assert.equal((await runCli(["--repository-root", repositoryRoot, "change", "create", "--input", changePath])).exitCode, 0);
+
+    const dryRunArchive = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "change",
+      "archive",
+      "--dry-run",
+      "chg_cli-e2e",
+      "--output-branch",
+      "codex/cli-e2e-archive"
+    ]);
+    assert.notEqual(dryRunArchive.exitCode, 0);
+    assert.equal(dryRunArchive.json.ok, false);
+    assert.equal(dryRunArchive.json.status, "invalid");
+    assert.ok(
+      dryRunArchive.json.diagnostics.some((diagnostic) => diagnostic.code === "change_not_accepted"),
+      JSON.stringify(dryRunArchive.json, null, 2)
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T10 command subcommands honor help flags without requiring inputs", async () => {
+  const projectInit = await runCli(["--repository-root", ROOT, "project", "init", "--help"]);
+  assert.equal(projectInit.exitCode, 0, projectInit.stderr);
+  assert.equal(projectInit.json.status, "help");
+  assert.match(projectInit.json.help, /legion next project/);
+
+  const changeCreate = await runCli(["--repository-root", ROOT, "change", "create", "--help"]);
+  assert.equal(changeCreate.exitCode, 0, changeCreate.stderr);
+  assert.equal(changeCreate.json.status, "help");
+  assert.match(changeCreate.json.help, /legion next change/);
+});
+
+test("P02-T10 JSON input boundary failures return usage diagnostics", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const malformedPath = path.join(workspace, "malformed.json");
+    const scalarPath = path.join(workspace, "scalar.json");
+    await mkdir(repositoryRoot, { recursive: true });
+    await writeText(malformedPath, "{not json");
+    await writeText(scalarPath, "\"not an object\"\n");
+
+    const projectMalformed = await runCli(["--repository-root", repositoryRoot, "project", "init", "--input", malformedPath]);
+    assert.notEqual(projectMalformed.exitCode, 0);
+    assert.equal(projectMalformed.json.status, "usage_error");
+    assert.equal(projectMalformed.json.diagnostics[0].code, "usage_error");
+    assert.match(projectMalformed.json.diagnostics[0].message, /Failed to read or parse JSON input/);
+
+    const changeMissing = await runCli(["--repository-root", repositoryRoot, "change", "create", "--input", path.join(workspace, "missing.json")]);
+    assert.notEqual(changeMissing.exitCode, 0);
+    assert.equal(changeMissing.json.status, "usage_error");
+    assert.equal(changeMissing.json.diagnostics[0].code, "usage_error");
+    assert.match(changeMissing.json.diagnostics[0].message, /Failed to read or parse JSON input/);
+
+    const planningScalar = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "migrate",
+      "--from-planning",
+      "--dry-run",
+      "--planning-root",
+      path.join(workspace, ".planning"),
+      "--staging-root",
+      path.join(workspace, "stage"),
+      "--run-id",
+      "bad-json",
+      "--project",
+      scalarPath
+    ]);
+    assert.notEqual(planningScalar.exitCode, 0);
+    assert.equal(planningScalar.json.status, "usage_error");
+    assert.equal(planningScalar.json.diagnostics[0].code, "usage_error");
+    assert.match(planningScalar.json.diagnostics[0].message, /JSON input must be an object/);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
 
 test("P02-T10 project commands initialize, validate, and report status as JSON without prompts", async () => {
   const workspace = await tempRoot();
