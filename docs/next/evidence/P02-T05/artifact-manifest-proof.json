@@ -5,9 +5,14 @@
     "staleOracleRevisionRejected": true,
     "taskgraphCanonicalSerializationIsByteStable": true,
     "taskgraphRecordsExactArtifactInputRevisions": true,
+    "taskgraphRejectsEmptyAndDuplicateArtifactInputs": true,
+    "taskgraphRejectsCopiedChangeIdsAndStaleManifestHashes": true,
     "evidenceIndexRequiresCollectedRunProvenance": true,
     "evidenceIndexRequiresAcceptedReviewProvenance": true,
+    "evidenceIndexAcceptanceIsStatusDiscriminated": true,
     "evidenceIndexRequiresItemHashOrArtifactReference": true,
+    "evidenceIndexRejectsEmptyInputsCopiedChangeIdsAndStaleManifestHashes": true,
+    "oracleManifestReportsInvalidFilenamesAtActualArtifactPath": true,
     "acceptedEvidenceReferencesRemainDurableWithoutCommittingBulkLogs": true
   },
   "implementedArtifacts": [
