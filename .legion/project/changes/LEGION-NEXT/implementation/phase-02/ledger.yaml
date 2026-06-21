@@ -15,7 +15,7 @@ tasks:
   P02-T06: { status: DONE, run_id: "P02-T06-20260621-traceability-invalidation", commit: "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7" }
   P02-T07: { status: DONE, run_id: "P02-T07-20260621-accepted-change-archive", commit: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861" }
   P02-T08: { status: DONE, run_id: "P02-T08-20260621-planning-importer", commit: "9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4" }
-  P02-T09: { status: DONE, run_id: "P02-T09-20260621-codex-legion-migration", commit: "8b05b00cd840cc138c5ada0fe70133c7fe2e0c95" }
+  P02-T09: { status: DONE, run_id: "P02-T09-20260621-codex-legion-migration", commit: "0c91963ad2853b51f643226068c1fbb8e4c7f0d8" }
   P02-T10: { status: NOT_STARTED, run_id: null, commit: null }
 decisions:
   - task: P02-T02
