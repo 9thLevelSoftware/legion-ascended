@@ -1,0 +1,68 @@
+{
+  "task": "P02-T04",
+  "repositoryRoot": "<temp>",
+  "changeId": "chg_workflow-delta",
+  "proposalPath": ".legion/project/changes/chg_workflow-delta/change.yaml",
+  "proposalHash": "sha256:36dad4158b6d6f7fb11eeb9885d834407bf9c8077f37b18ae07d6396c2109cda",
+  "baseCurrentSpec": {
+    "path": ".legion/project/specs/req_workflow-control.md",
+    "sha256": "sha256:4eb4a35628e0919ba9beeb7b0636ca8743bac3130261a81df1652433895dc593",
+    "mediaType": "text/markdown"
+  },
+  "deltaSpecRefs": [
+    {
+      "path": ".legion/project/changes/chg_workflow-delta/delta-specs/req_workflow-control.md",
+      "sha256": "sha256:0a9d19ce53269cf8789bcd6bc527b15262673c6432153916a34e2f8e99f6eb04",
+      "mediaType": "text/markdown"
+    }
+  ],
+  "decisionRefs": [
+    "dec_workflow-delta-separation"
+  ],
+  "semanticDiff": {
+    "added": [],
+    "modified": [
+      "req_workflow-control"
+    ],
+    "removed": []
+  },
+  "loadedMatchesCreated": true,
+  "validation": "PASS",
+  "files": [
+    {
+      "path": "changes/chg_workflow-delta/change.yaml",
+      "sha256": "sha256:36dad4158b6d6f7fb11eeb9885d834407bf9c8077f37b18ae07d6396c2109cda",
+      "bytes": 4151
+    },
+    {
+      "path": "changes/chg_workflow-delta/decisions.md",
+      "sha256": "sha256:3b9c36c537fd89b8f5842d19fbd255899454d1f07a9d55a7ee975c1f92cf6ed9",
+      "bytes": 1748
+    },
+    {
+      "path": "changes/chg_workflow-delta/delta-specs/req_workflow-control.md",
+      "sha256": "sha256:0a9d19ce53269cf8789bcd6bc527b15262673c6432153916a34e2f8e99f6eb04",
+      "bytes": 2771
+    },
+    {
+      "path": "changes/chg_workflow-delta/design.md",
+      "sha256": "sha256:fa8374d22006ddfab05ae0d7d0b0c867959fcfc254b3a984efc4bbbc5eee5d47",
+      "bytes": 537
+    },
+    {
+      "path": "constitution.md",
+      "sha256": "sha256:8ed4ffde7d1107c7b4c926965dc7b5bbcd06f7877e602f21e0b127d87b3d993f",
+      "bytes": 1572
+    },
+    {
+      "path": "project.json",
+      "sha256": "sha256:a344353d113e70d8a7e1b1e3330449528ee13bec7c1c201da0dc9db87e60f8ff",
+      "bytes": 900
+    },
+    {
+      "path": "specs/req_workflow-control.md",
+      "sha256": "sha256:4eb4a35628e0919ba9beeb7b0636ca8743bac3130261a81df1652433895dc593",
+      "bytes": 1458
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+status: DONE
+phase: 2
+task: P02-T04
+summary: >
+  Implemented the change-bundle artifact service for proposed change work under
+  `.legion/project/changes/<change-id>/`. The service creates, loads, validates,
+  and diffs reviewable change bundles with proposal metadata, delta specs,
+  design notes, and decision logs while leaving current specs unchanged until a
+  later archive step.
+files_changed:
+  - packages/artifacts/src/changes/**
+  - packages/artifacts/src/index.ts
+  - packages/artifacts/scripts/generate-artifacts-json-schema.mjs
+  - packages/artifacts/test/changes.test.mjs
+  - schemas/artifacts/change-bundle.schema.json
+  - templates/change/change-bundle.md
+  - docs/next/evidence/P02-T04/**
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-02/evidence-index.yaml
+verification:
+  - command: pnpm --filter @legion/artifacts test
+    result: PASS
+    evidence: docs/next/evidence/P02-T04/change-bundle-service-test.log
+  - command: temporary initProject + createCurrentSpec + createChangeBundle + loadChangeBundle + validateChangeBundle
+    result: PASS
+    evidence: docs/next/evidence/P02-T04/sample-change-tree.json
+  - command: conflicting delta and stale current-spec base regression tests
+    result: PASS
+    evidence: docs/next/evidence/P02-T04/stale-conflict-diff-report.md
+  - command: pnpm run validate:next
+    result: PASS
+    evidence: docs/next/evidence/P02-T04/full-validation.log
+acceptance:
+  - criterion: Proposed behavior is not written directly to current specs.
+    result: PASS
+  - criterion: Every delta identifies the base/current target it is changing.
+    result: PASS
+  - criterion: Decisions are reviewable and linked to affected artifacts.
+    result: PASS
+commits:
+  - 999becbaa27dcff046b61359d29747fd24ea9d6d
+  - 825b65f0956342562dd67cd66ed28e0505f3c970
+  - fe8ab0835820ecf0a3e062ea3ed46541856de898
+  - 6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05
+risks_or_followups:
+  - P02-T05 should consume change-bundle proposal and delta artifacts rather than re-reading current specs directly for planning inputs.
+  - P02-T07 owns archive-time mutation of current truth; P02-T04 intentionally keeps change creation separate from current-spec updates.
+blocker:
+  condition: none
+  decision_needed: none

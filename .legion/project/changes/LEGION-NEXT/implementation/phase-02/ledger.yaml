@@ -10,7 +10,7 @@ tasks:
   P02-T01: { status: DONE, run_id: "P02-T01-20260620-artifacts-contract", commit: "d081c15fcc4927ae8917bdd92e2a6e08fa22eac7" }
   P02-T02: { status: DONE, run_id: "P02-T02-20260620-project-constitution", commit: "93b17d7ec547cd46564144d3a406224cfadf0dd8" }
   P02-T03: { status: DONE, run_id: "P02-T03-20260620-current-spec-service", commit: "748d9e9bb87085560b40b3e498c0b22936cb07ff" }
-  P02-T04: { status: READY, run_id: null, commit: null }
+  P02-T04: { status: DONE, run_id: "P02-T04-20260620-change-bundle-services", commit: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05" }
   P02-T05: { status: READY, run_id: null, commit: null }
   P02-T06: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T07: { status: NOT_STARTED, run_id: null, commit: null }
@@ -42,3 +42,8 @@ evidence:
   - docs/next/evidence/P02-T03/diff-calibration-report.md
   - docs/next/evidence/P02-T03/full-validation.log
   - docs/next/evidence/P02-T03/completion-report.yaml
+  - docs/next/evidence/P02-T04/change-bundle-service-test.log
+  - docs/next/evidence/P02-T04/sample-change-tree.json
+  - docs/next/evidence/P02-T04/stale-conflict-diff-report.md
+  - docs/next/evidence/P02-T04/full-validation.log
+  - docs/next/evidence/P02-T04/completion-report.yaml
