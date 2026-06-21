@@ -1,0 +1,21 @@
+task: P02-T05
+status: done
+summary: >
+  Implemented revisioned oracle artifact services, deterministic taskgraph
+  services, evidence-index services, generated artifact schemas, and the
+  change oracle template for Phase 2 change-support artifacts.
+acceptance:
+  bulk_logs_outside_git: true
+  accepted_evidence_references_durable: true
+  oracle_ownership_and_protection_reviewable: true
+  taskgraph_records_exact_input_revisions: true
+verification:
+  - command: pnpm --filter @legion/artifacts test
+    log: docs/next/evidence/P02-T05/oracle-taskgraph-evidence-test.log
+    result: pass
+  - command: pnpm run validate:next
+    log: docs/next/evidence/P02-T05/full-validation.log
+    result: pass
+notes:
+  - Oracle files are stored as revisioned oracle-artifact envelopes so stale updates can be rejected without adding revision state to the protocol Oracle entity.
+  - Evidence index entries store artifact references and command output hashes, not bulk operational log contents.

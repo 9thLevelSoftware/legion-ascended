@@ -1,0 +1,27 @@
+{
+  "task": "P02-T05",
+  "proofs": {
+    "oracleManifestHashChangesOnRevision": true,
+    "staleOracleRevisionRejected": true,
+    "taskgraphCanonicalSerializationIsByteStable": true,
+    "taskgraphRecordsExactArtifactInputRevisions": true,
+    "evidenceIndexRequiresCollectedRunProvenance": true,
+    "evidenceIndexRequiresAcceptedReviewProvenance": true,
+    "evidenceIndexRequiresItemHashOrArtifactReference": true,
+    "acceptedEvidenceReferencesRemainDurableWithoutCommittingBulkLogs": true
+  },
+  "implementedArtifacts": [
+    "packages/artifacts/src/oracles/schema.ts",
+    "packages/artifacts/src/oracles/service.ts",
+    "packages/artifacts/src/taskgraphs/schema.ts",
+    "packages/artifacts/src/taskgraphs/service.ts",
+    "packages/artifacts/src/evidence-index/schema.ts",
+    "packages/artifacts/src/evidence-index/service.ts",
+    "schemas/artifacts/oracle-artifact.schema.json",
+    "schemas/artifacts/oracle-manifest.schema.json",
+    "schemas/artifacts/taskgraph.schema.json",
+    "schemas/artifacts/evidence-index.schema.json",
+    "schemas/artifacts/change-artifact-manifest.schema.json"
+  ],
+  "regressionCoverage": "packages/artifacts/test/change-support.test.mjs"
+}

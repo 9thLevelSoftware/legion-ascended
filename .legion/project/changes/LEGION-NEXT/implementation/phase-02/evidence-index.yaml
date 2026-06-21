@@ -228,3 +228,95 @@ entries:
     artifact: docs/next/evidence/P02-T04/completion-report.yaml
     description: Structured P02-T04 completion report
     sha256: 42c1c233030c4282eba74a7e24f4d3b181ffdf81d0136d287bd938b608ccc1b5
+  - task: P02-T05
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger updated for P02-T05 completion
+    sha256: c6db3709c72dc9a2c2ef45a1b3911b57a5373ba3033e1d88c97149af7f520414
+  - task: P02-T05
+    artifact: packages/artifacts/src/oracles/schema.ts
+    description: Revisioned oracle artifact and derived oracle manifest schemas plus generated JSON Schema source
+    sha256: 8525a85abeec0f22b26665988fd0ae1c8e8c1819891277e8dc8242c59a1a8bb6
+  - task: P02-T05
+    artifact: packages/artifacts/src/oracles/service.ts
+    description: Oracle artifact create/read/update service with stale revision checks and manifest hashing
+    sha256: e2c416586cb76b90d851b6df85dea39e707ac5b7b0d23798f2776ee0c7b26e84
+  - task: P02-T05
+    artifact: packages/artifacts/src/oracles/index.ts
+    description: Oracle artifact package exports
+    sha256: b5b1a3202e0850640a45b37883d801cc6330202dee7e2d4298890151882460ba
+  - task: P02-T05
+    artifact: packages/artifacts/src/taskgraphs/schema.ts
+    description: Taskgraph and change artifact manifest schemas plus generated JSON Schema source
+    sha256: e322b6f3cd3aac6e5a7932bec3bcd1ce4d400b45ebaccc45336e837d2e574a97
+  - task: P02-T05
+    artifact: packages/artifacts/src/taskgraphs/service.ts
+    description: Taskgraph read/write service with canonical sorting and exact artifact revision inputs
+    sha256: 0825c06698628a9629637784a2658ff5242aa52e2ddd993ea5dee210abc23da3
+  - task: P02-T05
+    artifact: packages/artifacts/src/taskgraphs/index.ts
+    description: Taskgraph package exports
+    sha256: b5b1a3202e0850640a45b37883d801cc6330202dee7e2d4298890151882460ba
+  - task: P02-T05
+    artifact: packages/artifacts/src/evidence-index/schema.ts
+    description: Evidence-index artifact schemas and accepted evidence status metadata
+    sha256: 69893e1aa88a68e2f3c73ae4a8b86c1ce673d15a91a45dd5e5f2d1f1db884fdf
+  - task: P02-T05
+    artifact: packages/artifacts/src/evidence-index/service.ts
+    description: Evidence-index read/write service requiring run provenance, review provenance, and evidence hashes
+    sha256: b473908339b0788c00426e3ccdcc75dc5e2c0bf3cd1646419942f4368db37c09
+  - task: P02-T05
+    artifact: packages/artifacts/src/evidence-index/index.ts
+    description: Evidence-index package exports
+    sha256: b5b1a3202e0850640a45b37883d801cc6330202dee7e2d4298890151882460ba
+  - task: P02-T05
+    artifact: packages/artifacts/src/index.ts
+    description: Root artifacts package exports for oracle, taskgraph, and evidence-index services
+    sha256: 669d5ea17e5e5d6d6c4d7956bdf5a636afd1d065b9b69962d6cf68979a24b642
+  - task: P02-T05
+    artifact: packages/artifacts/scripts/generate-artifacts-json-schema.mjs
+    description: Artifact schema generator extended to emit oracle, taskgraph, evidence-index, and manifest schemas
+    sha256: 471fa3a08ef5c95bde2886476eaa5d8d1b9778ff515825030caff6b8dd227941
+  - task: P02-T05
+    artifact: packages/artifacts/test/change-support.test.mjs
+    description: P02-T05 regression tests for oracle revisions, taskgraph canonical serialization, and evidence-index provenance checks
+    sha256: 200c14d5bb905e2c5800f5eac4b7c625c9a4c2fe1059305c5a3bb9ebe06ccfa7
+  - task: P02-T05
+    artifact: schemas/artifacts/change-artifact-manifest.schema.json
+    description: Generated change artifact manifest JSON Schema
+    sha256: bdb9d3693fbe571965b96275c0ff315e5294e51ddcccf65cdb6fd10f18bec287
+  - task: P02-T05
+    artifact: schemas/artifacts/evidence-index.schema.json
+    description: Generated evidence-index JSON Schema
+    sha256: 35db458cc62fd20679575ea6268effc5f31194c12853132c1f714944b48a0736
+  - task: P02-T05
+    artifact: schemas/artifacts/oracle-artifact.schema.json
+    description: Generated oracle artifact JSON Schema
+    sha256: aab9b44611bd86167e312c2789e73d16fad55614f82764e6ef35989885d1520a
+  - task: P02-T05
+    artifact: schemas/artifacts/oracle-manifest.schema.json
+    description: Generated oracle manifest JSON Schema
+    sha256: 2f0c5da3ba22ba060f149672865940fa16bc234e0e268be096e46328cf3ea090
+  - task: P02-T05
+    artifact: schemas/artifacts/taskgraph.schema.json
+    description: Generated taskgraph JSON Schema
+    sha256: 00e275b51cfd248c87c7c0c3bb906e8396bb4e6805ac66f746742edba9bf8eac
+  - task: P02-T05
+    artifact: templates/change/oracle/oracle-artifact.md
+    description: Human-reviewable oracle artifact template
+    sha256: dfb8090a227d6224a8f40c5667d5738d4745a4a2c3ff33b7b13f7d7c1d31c7ff
+  - task: P02-T05
+    artifact: docs/next/evidence/P02-T05/oracle-taskgraph-evidence-test.log
+    description: Focused @legion/artifacts oracle, taskgraph, and evidence-index service test report
+    sha256: 4cffe053102e728a016057c919af5852b2ba5d0685b511638415f1a2f5e8d16d
+  - task: P02-T05
+    artifact: docs/next/evidence/P02-T05/artifact-manifest-proof.json
+    description: Structured P02-T05 artifact manifest and behavior proof summary
+    sha256: 55a554ad560a7cc978a005aa6d567c1552a56ed1a38f118baccc5489d8d9d2d2
+  - task: P02-T05
+    artifact: docs/next/evidence/P02-T05/full-validation.log
+    description: Full workspace validate-next log after P02-T05 implementation
+    sha256: 267dd052ee76526b8e8ec8d7013ba71be751fff6d00b4c11002c45574509041a
+  - task: P02-T05
+    artifact: docs/next/evidence/P02-T05/completion-report.yaml
+    description: Structured P02-T05 completion report
+    sha256: 434d0cf6de616b5a2cf6bcd7a56ddcb735569bc696167638eb20ac030a77faf8

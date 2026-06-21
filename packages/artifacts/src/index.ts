@@ -4,3 +4,6 @@ export * from "./atomic-write.js";
 export * from "./project/index.js";
 export * from "./specs/index.js";
 export * from "./changes/index.js";
+export * from "./oracles/index.js";
+export * from "./taskgraphs/index.js";
+export * from "./evidence-index/index.js";
