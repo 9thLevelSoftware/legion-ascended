@@ -452,7 +452,8 @@ export async function deriveOracleManifest(input: DeriveOracleManifestInput): Pr
     .filter((entry) => entry.isFile() && entry.name.endsWith(".yaml"))
     .map((entry) => entry.name)
     .sort(compareStrings)) {
-    const oracleId = parseOracleId(fileName.slice(0, -".yaml".length), INVALID_ORACLE_PATH);
+    const oracleArtifactPath = `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/oracle/${fileName}` as ArtifactPath;
+    const oracleId = parseOracleId(fileName.slice(0, -".yaml".length), oracleArtifactPath);
     if (typeof oracleId !== "string") return oracleId;
 
     const oracle = await readOracleArtifact({

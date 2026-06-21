@@ -1,4 +1,5 @@
 import {
+  artifactRevisionSchema,
   changeIdSchema,
   gitShaSchema,
   type ArtifactPath,
@@ -6,6 +7,7 @@ import {
   type ArtifactRevision,
   type ChangeId,
   type GitSha,
+  type ContentHash,
   type TaskContract
 } from "@legion/protocol";
 
@@ -82,6 +84,53 @@ function compareReferences(left: ArtifactReference, right: ArtifactReference): n
 
 export function compareArtifactRevisions(left: ArtifactRevision, right: ArtifactRevision): number {
   return compareStrings(left.role, right.role) || compareReferences(left.artifact, right.artifact);
+}
+
+function artifactInputDiagnostics(input: {
+  readonly artifactInputs: readonly unknown[];
+  readonly artifactPath: ArtifactPath;
+}): readonly ArtifactDiagnostic[] {
+  if (input.artifactInputs.length === 0) {
+    return [
+      taskGraphDiagnostic({
+        code: "invalid_artifact_inputs",
+        message: "At least one artifact input revision is required.",
+        path: input.artifactPath
+      })
+    ];
+  }
+
+  const diagnostics: ArtifactDiagnostic[] = [];
+  const artifactPaths = new Set<string>();
+  for (const [index, artifactInput] of input.artifactInputs.entries()) {
+    const parsed = artifactRevisionSchema.safeParse(artifactInput);
+    if (!parsed.success) {
+      diagnostics.push(
+        ...schemaDiagnostics({
+          code: "invalid_artifact_inputs",
+          path: input.artifactPath,
+          issues: parsed.error.issues.map((issue) => ({
+            ...issue,
+            path: ["artifactInputs", index, ...(issue.path ?? [])]
+          }))
+        })
+      );
+      continue;
+    }
+
+    if (artifactPaths.has(parsed.data.artifact.path)) {
+      diagnostics.push(
+        taskGraphDiagnostic({
+          code: "duplicate_artifact_input",
+          message: `Duplicate artifact input path: ${parsed.data.artifact.path}.`,
+          path: input.artifactPath
+        })
+      );
+    }
+    artifactPaths.add(parsed.data.artifact.path);
+  }
+
+  return diagnostics;
 }
 
 function failure(status: TaskGraphFailure["status"], diagnostics: readonly ArtifactDiagnostic[]): TaskGraphFailure {
@@ -187,6 +236,31 @@ export function deriveChangeArtifactManifest(input: DeriveChangeArtifactManifest
   });
 }
 
+export function expectedChangeArtifactManifestHash(manifest: ChangeArtifactManifest): ContentHash {
+  return hashContent(stableProtocolJson({
+    schemaVersion: manifest.schemaVersion,
+    kind: manifest.kind,
+    changeId: manifest.changeId,
+    inputs: manifest.inputs,
+    evidenceRefs: manifest.evidenceRefs
+  }));
+}
+
+function manifestHashDiagnostics(input: {
+  readonly manifest: ChangeArtifactManifest;
+  readonly artifactPath: ArtifactPath;
+}): readonly ArtifactDiagnostic[] {
+  const expectedHash = expectedChangeArtifactManifestHash(input.manifest);
+  if (input.manifest.manifestHash === expectedHash) return [];
+  return [
+    taskGraphDiagnostic({
+      code: "manifest_hash_mismatch",
+      message: `Artifact manifest hash ${input.manifest.manifestHash} does not match expected ${expectedHash}.`,
+      path: input.artifactPath
+    })
+  ];
+}
+
 function normalizeTaskGraph(input: {
   readonly changeId: ChangeId;
   readonly revision: number;
@@ -195,6 +269,12 @@ function normalizeTaskGraph(input: {
   readonly artifactPath: ArtifactPath;
 }): TaskGraphDocument | TaskGraphFailure {
   const artifactInputs = [...input.artifactInputs].sort(compareArtifactRevisions);
+  const artifactInputIssues = artifactInputDiagnostics({
+    artifactInputs,
+    artifactPath: input.artifactPath
+  });
+  if (artifactInputIssues.length > 0) return failure("invalid", artifactInputIssues);
+
   const tasks = [...input.tasks].sort((left, right) => compareStrings(left.id, right.id));
   const documentInput = {
     schemaVersion: TASKGRAPH_SCHEMA_VERSION,
@@ -311,6 +391,22 @@ export async function readTaskGraph(input: ReadTaskGraphInput): Promise<TaskGrap
     const status = read.diagnostics.some((diagnostic) => diagnostic.code === "not_found") ? "not_found" : "invalid";
     return failure(status, read.diagnostics);
   }
+
+  if (read.value.changeId !== changeId) {
+    return failure("invalid", [
+      taskGraphDiagnostic({
+        code: "taskgraph_change_mismatch",
+        message: `Taskgraph change ID ${read.value.changeId} does not match requested change ${changeId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+
+  const manifestDiagnostics = manifestHashDiagnostics({
+    manifest: read.value.artifactManifest,
+    artifactPath
+  });
+  if (manifestDiagnostics.length > 0) return failure("invalid", manifestDiagnostics);
 
   return {
     ok: true,

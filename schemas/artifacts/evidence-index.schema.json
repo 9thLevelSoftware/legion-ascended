@@ -6894,36 +6894,80 @@
             ]
           },
           "acceptance": {
-            "type": "object",
-            "properties": {
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "accepted",
-                  "rejected"
-                ]
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "const": "pending"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
               },
-              "reviewId": {
-                "type": "string",
-                "pattern": "^rev_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
-                "description": "Review ID"
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "const": "accepted"
+                  },
+                  "reviewId": {
+                    "type": "string",
+                    "pattern": "^rev_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Review ID"
+                  },
+                  "acceptedAt": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+                    "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "status",
+                  "reviewId",
+                  "acceptedAt"
+                ],
+                "additionalProperties": false
               },
-              "acceptedAt": {
-                "type": "string",
-                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
-                "description": "Canonical UTC timestamp formatted as YYYY-MM-DDTHH:mm:ss.SSSZ."
-              },
-              "reason": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "const": "rejected"
+                  },
+                  "reviewId": {
+                    "type": "string",
+                    "pattern": "^rev_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Review ID"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "status"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "required": [

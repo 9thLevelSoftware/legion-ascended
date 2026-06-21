@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -24,8 +24,10 @@ const LATER_TIME = "2026-06-20T01:00:00.000Z";
 const OWNER = { kind: "human", id: "dasbl" };
 const PROJECT_ID = "prj_legion-next";
 const CHANGE_ID = "chg_workflow-delta";
+const OTHER_CHANGE_ID = "chg_other-change";
 const BASE_GIT_SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OUTPUT_HASH = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+const STALE_HASH = "sha256:2222222222222222222222222222222222222222222222222222222222222222";
 
 async function withTempRepository(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-change-support-"));
@@ -197,6 +199,12 @@ function findRevision(bundle, role) {
   const revision = bundle.artifactRevisions.find((entry) => entry.role === role);
   assert.ok(revision, `missing ${role} revision`);
   return revision;
+}
+
+async function writeProjectJson(repositoryRoot, artifactPath, value) {
+  const absolutePath = path.join(repositoryRoot, ...artifactPath.split("/"));
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, stableProtocolJson(value), "utf8");
 }
 
 function oracleDocument(currentSpec, change, overrides = {}) {
@@ -409,6 +417,24 @@ test("P02-T05 creates revisioned oracle metadata and manifest hashes change afte
   });
 });
 
+test("P02-T05 oracle manifest reports invalid oracle filenames at their actual artifact path", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const invalidOraclePath = `.legion/project/changes/${CHANGE_ID}/oracle/bad_name.yaml`;
+    await writeProjectJson(repositoryRoot, invalidOraclePath, {
+      schemaVersion: "0.1.0",
+      kind: "oracle-artifact",
+      revision: 1,
+      oracle: {}
+    });
+
+    const manifest = await deriveOracleManifest({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(manifest.ok, false);
+    assert.equal(manifest.status, "invalid");
+    assert.equal(manifest.diagnostics[0].code, "invalid_oracle_id");
+    assert.equal(manifest.diagnostics[0].source.path, invalidOraclePath);
+  });
+});
+
 test("P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order", async () => {
   const serializedTaskgraphs = [];
 
@@ -451,6 +477,83 @@ test("P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stabl
   }
 
   assert.equal(serializedTaskgraphs[0], serializedTaskgraphs[1]);
+});
+
+test("P02-T05 taskgraph rejects empty or duplicate artifact inputs with diagnostics", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const { currentSpec, change } = await createBaselineChange(repositoryRoot);
+    const oracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument(currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(oracle.ok, true);
+    const proposal = findRevision(change.bundle, "proposal");
+    const tasks = [taskContract("ctr_plan-change", currentSpec, change, oracle, [proposal])];
+
+    const emptyInputs = await writeTaskGraph({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      tasks,
+      artifactInputs: [],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(emptyInputs.ok, false);
+    assert.equal(emptyInputs.status, "invalid");
+    assert.equal(emptyInputs.diagnostics[0].code, "invalid_artifact_inputs");
+
+    const duplicateInputs = await writeTaskGraph({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      tasks,
+      artifactInputs: [proposal, { ...proposal, revision: proposal.revision + 1 }],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(duplicateInputs.ok, false);
+    assert.equal(duplicateInputs.status, "invalid");
+    assert.equal(duplicateInputs.diagnostics[0].code, "duplicate_artifact_input");
+  });
+});
+
+test("P02-T05 taskgraph rejects copied identities and stale manifest hashes on read", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const { currentSpec, change } = await createBaselineChange(repositoryRoot);
+    const oracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument(currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(oracle.ok, true);
+    const artifactInputs = [findRevision(change.bundle, "proposal"), oracle.revision];
+    const taskgraph = await writeTaskGraph({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      tasks: [taskContract("ctr_plan-change", currentSpec, change, oracle, artifactInputs)],
+      artifactInputs,
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(taskgraph.ok, true);
+
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${OTHER_CHANGE_ID}/taskgraph.json`, taskgraph.document);
+    const copied = await readTaskGraph({ repositoryRoot, changeId: OTHER_CHANGE_ID });
+    assert.equal(copied.ok, false);
+    assert.equal(copied.status, "invalid");
+    assert.equal(copied.diagnostics[0].code, "taskgraph_change_mismatch");
+
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${CHANGE_ID}/taskgraph.json`, {
+      ...taskgraph.document,
+      artifactManifest: {
+        ...taskgraph.document.artifactManifest,
+        manifestHash: STALE_HASH
+      }
+    });
+    const staleHash = await readTaskGraph({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(staleHash.ok, false);
+    assert.equal(staleHash.status, "invalid");
+    assert.equal(staleHash.diagnostics[0].code, "manifest_hash_mismatch");
+  });
 });
 
 test("P02-T05 evidence index rejects incomplete provenance and records accepted evidence references", async () => {
@@ -506,6 +609,42 @@ test("P02-T05 evidence index rejects incomplete provenance and records accepted 
     });
     assert.equal(missingReview.ok, false);
     assert.equal(missingReview.diagnostics[0].code, "missing_review_id");
+
+    const missingAcceptedAt = await writeEvidenceIndex({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      entries: [
+        {
+          evidence: evidenceBundle(currentSpec),
+          acceptance: {
+            status: "accepted",
+            reviewId: "rev_acceptance",
+            reason: "Validation output was reviewed."
+          }
+        }
+      ],
+      artifactInputs: [findRevision(change.bundle, "proposal"), oracle.revision],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(missingAcceptedAt.ok, false);
+    assert.equal(missingAcceptedAt.diagnostics[0].code, "missing_accepted_at");
+
+    const missingRejectionReason = await writeEvidenceIndex({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      entries: [
+        {
+          evidence: evidenceBundle(currentSpec),
+          acceptance: {
+            status: "rejected"
+          }
+        }
+      ],
+      artifactInputs: [findRevision(change.bundle, "proposal"), oracle.revision],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(missingRejectionReason.ok, false);
+    assert.equal(missingRejectionReason.diagnostics[0].code, "missing_rejection_reason");
 
     const missingHash = await writeEvidenceIndex({
       repositoryRoot,
@@ -563,5 +702,66 @@ test("P02-T05 evidence index rejects incomplete provenance and records accepted 
     const loaded = await readEvidenceIndex({ repositoryRoot, changeId: CHANGE_ID });
     assert.equal(loaded.ok, true);
     assert.equal(stableProtocolJson(loaded.document), stableProtocolJson(written.document));
+  });
+});
+
+test("P02-T05 evidence index rejects empty inputs, copied identities, and stale manifest hashes", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const { currentSpec, change } = await createBaselineChange(repositoryRoot);
+    const oracle = await createOracleArtifact({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      oracle: oracleDocument(currentSpec, change),
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(oracle.ok, true);
+    const proposal = findRevision(change.bundle, "proposal");
+    const entry = {
+      evidence: evidenceBundle(currentSpec),
+      acceptance: {
+        status: "accepted",
+        reviewId: "rev_acceptance",
+        acceptedAt: LATER_TIME,
+        reason: "Validation output was reviewed."
+      }
+    };
+
+    const emptyInputs = await writeEvidenceIndex({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      entries: [entry],
+      artifactInputs: [],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(emptyInputs.ok, false);
+    assert.equal(emptyInputs.status, "invalid");
+    assert.equal(emptyInputs.diagnostics[0].code, "invalid_artifact_inputs");
+
+    const written = await writeEvidenceIndex({
+      repositoryRoot,
+      changeId: CHANGE_ID,
+      entries: [entry],
+      artifactInputs: [proposal, oracle.revision],
+      baseGitSha: BASE_GIT_SHA
+    });
+    assert.equal(written.ok, true);
+
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${OTHER_CHANGE_ID}/evidence-index.json`, written.document);
+    const copied = await readEvidenceIndex({ repositoryRoot, changeId: OTHER_CHANGE_ID });
+    assert.equal(copied.ok, false);
+    assert.equal(copied.status, "invalid");
+    assert.equal(copied.diagnostics[0].code, "evidence_index_change_mismatch");
+
+    await writeProjectJson(repositoryRoot, `.legion/project/changes/${CHANGE_ID}/evidence-index.json`, {
+      ...written.document,
+      artifactManifest: {
+        ...written.document.artifactManifest,
+        manifestHash: STALE_HASH
+      }
+    });
+    const staleHash = await readEvidenceIndex({ repositoryRoot, changeId: CHANGE_ID });
+    assert.equal(staleHash.ok, false);
+    assert.equal(staleHash.status, "invalid");
+    assert.equal(staleHash.diagnostics[0].code, "manifest_hash_mismatch");
   });
 });

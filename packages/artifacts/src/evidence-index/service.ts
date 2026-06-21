@@ -1,4 +1,5 @@
 import {
+  artifactRevisionSchema,
   changeIdSchema,
   gitShaSchema,
   type ArtifactPath,
@@ -25,7 +26,8 @@ import {
 } from "../revisions.js";
 import {
   compareArtifactRevisions,
-  deriveChangeArtifactManifest
+  deriveChangeArtifactManifest,
+  expectedChangeArtifactManifestHash
 } from "../taskgraphs/service.js";
 import {
   EVIDENCE_INDEX_SCHEMA_VERSION,
@@ -162,6 +164,116 @@ function evidenceIndexPath(changeId: ChangeId): ArtifactPath {
   return artifactPathForRole({ role: "evidence-index", changeId });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function artifactInputDiagnostics(input: {
+  readonly artifactInputs: readonly unknown[];
+  readonly artifactPath: ArtifactPath;
+}): readonly ArtifactDiagnostic[] {
+  if (input.artifactInputs.length === 0) {
+    return [
+      evidenceDiagnostic({
+        code: "invalid_artifact_inputs",
+        message: "At least one artifact input revision is required.",
+        path: input.artifactPath
+      })
+    ];
+  }
+
+  const diagnostics: ArtifactDiagnostic[] = [];
+  const artifactPaths = new Set<string>();
+  for (const [index, artifactInput] of input.artifactInputs.entries()) {
+    const parsed = artifactRevisionSchema.safeParse(artifactInput);
+    if (!parsed.success) {
+      diagnostics.push(
+        ...schemaDiagnostics({
+          code: "invalid_artifact_inputs",
+          path: input.artifactPath,
+          issues: parsed.error.issues.map((issue) => ({
+            ...issue,
+            path: ["artifactInputs", index, ...(issue.path ?? [])]
+          }))
+        })
+      );
+      continue;
+    }
+
+    if (artifactPaths.has(parsed.data.artifact.path)) {
+      diagnostics.push(
+        evidenceDiagnostic({
+          code: "duplicate_artifact_input",
+          message: `Duplicate artifact input path: ${parsed.data.artifact.path}.`,
+          path: input.artifactPath
+        })
+      );
+    }
+    artifactPaths.add(parsed.data.artifact.path);
+  }
+
+  return diagnostics;
+}
+
+function rawAcceptanceDiagnostics(input: {
+  readonly entry: unknown;
+  readonly artifactPath: ArtifactPath;
+}): readonly ArtifactDiagnostic[] {
+  if (!isRecord(input.entry) || !isRecord(input.entry["acceptance"])) return [];
+
+  const acceptance = input.entry["acceptance"];
+  if (acceptance["status"] === "accepted") {
+    if (acceptance["reviewId"] === undefined) {
+      return [
+        evidenceDiagnostic({
+          code: "missing_review_id",
+          message: "Accepted evidence requires a reviewId.",
+          path: input.artifactPath
+        })
+      ];
+    }
+    if (acceptance["acceptedAt"] === undefined) {
+      return [
+        evidenceDiagnostic({
+          code: "missing_accepted_at",
+          message: "Accepted evidence requires acceptedAt.",
+          path: input.artifactPath
+        })
+      ];
+    }
+  }
+
+  if (
+    acceptance["status"] === "rejected" &&
+    (typeof acceptance["reason"] !== "string" || acceptance["reason"].length === 0)
+  ) {
+    return [
+      evidenceDiagnostic({
+        code: "missing_rejection_reason",
+        message: "Rejected evidence requires a reason.",
+        path: input.artifactPath
+      })
+    ];
+  }
+
+  return [];
+}
+
+function manifestHashDiagnostics(input: {
+  readonly document: EvidenceIndexDocument;
+  readonly artifactPath: ArtifactPath;
+}): readonly ArtifactDiagnostic[] {
+  const expectedHash = expectedChangeArtifactManifestHash(input.document.artifactManifest);
+  if (input.document.artifactManifest.manifestHash === expectedHash) return [];
+  return [
+    evidenceDiagnostic({
+      code: "manifest_hash_mismatch",
+      message: `Artifact manifest hash ${input.document.artifactManifest.manifestHash} does not match expected ${expectedHash}.`,
+      path: input.artifactPath
+    })
+  ];
+}
+
 function validateEntries(input: {
   readonly entries: readonly EvidenceIndexEntry[];
   readonly changeId: ChangeId;
@@ -200,6 +312,26 @@ function validateEntries(input: {
       );
     }
 
+    if (entry.acceptance.status === "accepted" && entry.acceptance.acceptedAt === undefined) {
+      diagnostics.push(
+        evidenceDiagnostic({
+          code: "missing_accepted_at",
+          message: `Accepted evidence bundle ${entry.evidence.id} requires acceptedAt.`,
+          path: input.artifactPath
+        })
+      );
+    }
+
+    if (entry.acceptance.status === "rejected" && entry.acceptance.reason.length === 0) {
+      diagnostics.push(
+        evidenceDiagnostic({
+          code: "missing_rejection_reason",
+          message: `Rejected evidence bundle ${entry.evidence.id} requires a reason.`,
+          path: input.artifactPath
+        })
+      );
+    }
+
     for (const [itemIndex, item] of entry.evidence.items.entries()) {
       if (item.artifact === undefined && item.command === undefined) {
         diagnostics.push(
@@ -223,6 +355,12 @@ function normalizeEntries(input: {
 }): readonly EvidenceIndexEntry[] | EvidenceIndexFailure {
   const entries: EvidenceIndexEntry[] = [];
   for (const entry of input.entries) {
+    const acceptanceDiagnostics = rawAcceptanceDiagnostics({
+      entry,
+      artifactPath: input.artifactPath
+    });
+    if (acceptanceDiagnostics.length > 0) return failure("invalid", acceptanceDiagnostics);
+
     const parsed = evidenceIndexEntrySchema.safeParse(entry);
     if (!parsed.success) {
       return failure("invalid", schemaDiagnostics({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
@@ -258,6 +396,12 @@ function normalizeEvidenceIndex(input: {
   readonly artifactInputs: readonly ArtifactRevision[];
   readonly artifactPath: ArtifactPath;
 }): EvidenceIndexDocument | EvidenceIndexFailure {
+  const artifactInputIssues = artifactInputDiagnostics({
+    artifactInputs: input.artifactInputs,
+    artifactPath: input.artifactPath
+  });
+  if (artifactInputIssues.length > 0) return failure("invalid", artifactInputIssues);
+
   const entries = normalizeEntries({
     entries: input.entries,
     changeId: input.changeId,
@@ -378,6 +522,22 @@ export async function readEvidenceIndex(input: ReadEvidenceIndexInput): Promise<
     const status = read.diagnostics.some((diagnostic) => diagnostic.code === "not_found") ? "not_found" : "invalid";
     return failure(status, read.diagnostics);
   }
+
+  if (read.value.changeId !== changeId) {
+    return failure("invalid", [
+      evidenceDiagnostic({
+        code: "evidence_index_change_mismatch",
+        message: `Evidence index change ID ${read.value.changeId} does not match requested change ${changeId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+
+  const manifestDiagnostics = manifestHashDiagnostics({
+    document: read.value,
+    artifactPath
+  });
+  if (manifestDiagnostics.length > 0) return failure("invalid", manifestDiagnostics);
 
   return {
     ok: true,

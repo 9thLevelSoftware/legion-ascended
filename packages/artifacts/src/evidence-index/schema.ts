@@ -13,12 +13,23 @@ import { changeArtifactManifestSchema } from "../taskgraphs/schema.js";
 
 export const EVIDENCE_INDEX_SCHEMA_VERSION: SchemaVersion = schemaVersionSchema.parse("0.1.0");
 
-export const evidenceAcceptanceSchema = z.strictObject({
-  status: z.enum(["pending", "accepted", "rejected"]),
-  reviewId: reviewIdSchema.optional(),
-  acceptedAt: utcTimestampSchema.optional(),
-  reason: z.string().min(1).max(1_024).optional()
-});
+export const evidenceAcceptanceSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("pending"),
+    reason: z.string().min(1).max(1_024).optional()
+  }),
+  z.strictObject({
+    status: z.literal("accepted"),
+    reviewId: reviewIdSchema,
+    acceptedAt: utcTimestampSchema,
+    reason: z.string().min(1).max(1_024).optional()
+  }),
+  z.strictObject({
+    status: z.literal("rejected"),
+    reviewId: reviewIdSchema.optional(),
+    reason: z.string().min(1).max(1_024)
+  })
+]);
 
 export type EvidenceAcceptance = z.infer<typeof evidenceAcceptanceSchema>;
 

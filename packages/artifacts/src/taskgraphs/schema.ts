@@ -20,6 +20,19 @@ export const changeArtifactManifestSchema = z
     inputs: z.array(artifactRevisionSchema).min(1),
     evidenceRefs: z.array(artifactReferenceSchema),
     manifestHash: contentHashSchema
+  })
+  .superRefine((manifest, context) => {
+    const inputPaths = new Set<string>();
+    for (const [index, input] of manifest.inputs.entries()) {
+      if (inputPaths.has(input.artifact.path)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate artifact input path: ${input.artifact.path}.`,
+          path: ["inputs", index, "artifact", "path"]
+        });
+      }
+      inputPaths.add(input.artifact.path);
+    }
   });
 
 export type ChangeArtifactManifest = z.infer<typeof changeArtifactManifestSchema>;
