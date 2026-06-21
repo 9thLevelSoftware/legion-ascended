@@ -226,6 +226,21 @@ function bytesHash(bytes: Uint8Array): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
+function hashFiles(root: string, files: readonly string[]): Promise<string> {
+  if (files.length === 0) return Promise.resolve(EMPTY_TREE_HASH);
+
+  const hash = createHash("sha256");
+  return (async () => {
+    for (const file of files) {
+      hash.update(file);
+      hash.update("\0");
+      hash.update(await readFile(path.join(root, ...file.split("/"))));
+      hash.update("\0");
+    }
+    return `sha256:${hash.digest("hex")}`;
+  })();
+}
+
 async function pathExists(absolutePath: string): Promise<boolean> {
   try {
     await stat(absolutePath);
@@ -263,17 +278,12 @@ async function listFiles(root: string): Promise<readonly string[]> {
 }
 
 async function hashTree(root: string): Promise<string> {
-  const files = await listFiles(root);
-  if (files.length === 0) return EMPTY_TREE_HASH;
+  return hashFiles(root, await listFiles(root));
+}
 
-  const hash = createHash("sha256");
-  for (const file of files) {
-    hash.update(file);
-    hash.update("\0");
-    hash.update(await readFile(path.join(root, ...file.split("/"))));
-    hash.update("\0");
-  }
-  return `sha256:${hash.digest("hex")}`;
+async function hashTreeExcluding(root: string, excludedFiles: readonly string[]): Promise<string> {
+  const excluded = new Set(excludedFiles);
+  return hashFiles(root, (await listFiles(root)).filter((file) => !excluded.has(file)));
 }
 
 function classifyPlanningFile(relativePath: string): PlanningSourceClassification {
@@ -335,7 +345,7 @@ function truncate(value: string, maxLength: number): string {
   return value.slice(0, maxLength - 1).trimEnd() + ".";
 }
 
-function extractRequirements(projectMarkdown: string): readonly LegacyRequirement[] {
+function extractRequirements(projectMarkdown: string): readonly LegacyRequirement[] | PlanningImportFailure {
   const requirements: LegacyRequirement[] = [];
   const seen = new Set<string>();
   const pattern = /^-\s+\[([ xX])\]\s+([A-Za-z][A-Za-z0-9_-]{1,31}):\s+(.+?)\s*$/gm;
@@ -345,12 +355,21 @@ function extractRequirements(projectMarkdown: string): readonly LegacyRequiremen
     const statement = match[3];
     if (code === undefined || statement === undefined) continue;
     const suffix = requirementSuffix(code);
-    const id = requirementIdSchema.parse(`req_${suffix}`);
-    if (seen.has(id)) continue;
-    seen.add(id);
+    const id = requirementIdSchema.safeParse(`req_${suffix}`);
+    if (!id.success) {
+      return failure("invalid", [
+        diagnostic({
+          code: "invalid_requirement_id",
+          message: `Legacy requirement code ${code} cannot be converted to a v9 requirement ID.`,
+          sourcePath: ".planning/PROJECT.md"
+        })
+      ]);
+    }
+    if (seen.has(id.data)) continue;
+    seen.add(id.data);
     requirements.push({
       code,
-      id,
+      id: id.data,
       sourcePath: ".planning/PROJECT.md",
       statement: truncate(statement.trim(), 2_048),
       checked: match[1]?.toLowerCase() === "x"
@@ -375,12 +394,16 @@ function parsePlanFrontmatter(content: string): Record<string, unknown> | undefi
   if (!normalized.startsWith("---\n")) return undefined;
   const closeIndex = normalized.indexOf("\n---\n", 4);
   if (closeIndex < 0) return undefined;
-  return readObject(parseYaml(normalized.slice(4, closeIndex)));
+  try {
+    return readObject(parseYaml(normalized.slice(4, closeIndex)));
+  } catch {
+    return undefined;
+  }
 }
 
 function summaryFilesModified(content: string): readonly string[] {
   const normalized = content.replace(/\r\n/g, "\n");
-  const match = /^## Files Modified\s*$(?<body>.*?)(?:^## |\z)/ms.exec(normalized);
+  const match = /^## Files Modified\s*$(?<body>.*?)(?=^## |$(?![\s\S]))/ms.exec(normalized);
   const body = match?.groups?.["body"];
   if (body === undefined) return [];
 
@@ -548,9 +571,18 @@ async function targetInventory(stagingRoot: string): Promise<PlanningImportRepor
 
   return {
     root: ".legion/project",
-    treeHash: await hashTree(projectRoot),
+    treeHash: await hashTreeExcluding(projectRoot, ["migration/planning-import-report.json"]),
     files: files.sort((left, right) => compareStrings(left.path, right.path))
   };
+}
+
+function containsPath(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return relative === "" || (relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  return containsPath(left, right) || containsPath(right, left);
 }
 
 function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | PlanningImportFailure {
@@ -558,16 +590,35 @@ function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | Pla
   const planningRoot = path.resolve(input.planningRoot);
   const stagingRoot = path.resolve(input.stagingRoot);
 
-  if (stagingRoot === repositoryRoot || stagingRoot === planningRoot) {
+  if (pathsOverlap(stagingRoot, repositoryRoot) || pathsOverlap(stagingRoot, planningRoot)) {
     return failure("invalid", [
       diagnostic({
         code: "unsafe_staging_root",
-        message: "Staging root must be separate from the repository root and .planning source."
+        message: "Staging root must not overlap the repository root or .planning source."
       })
     ]);
   }
 
   return stagingRoot;
+}
+
+function parseUtcTimestamp(input: {
+  readonly value: UtcTimestamp | string | undefined;
+  readonly code: string;
+  readonly sourcePath: string;
+}): UtcTimestamp | PlanningImportFailure {
+  const value = input.value ?? new Date().toISOString();
+  try {
+    return utcTimestampSchema.parse(value);
+  } catch (error) {
+    return failure("invalid", [
+      diagnostic({
+        code: input.code,
+        message: error instanceof Error ? error.message : "Value is not a valid UTC timestamp.",
+        sourcePath: input.sourcePath
+      })
+    ]);
+  }
 }
 
 export async function scanPlanningSource(input: {
@@ -580,7 +631,13 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
   const stagingRoot = safeResolvedStagingRoot(input);
   if (typeof stagingRoot !== "string") return stagingRoot;
 
-  const createdAt = utcTimestampSchema.parse(input.project.createdAt ?? new Date().toISOString());
+  const createdAt = parseUtcTimestamp({
+    value: input.project.createdAt,
+    code: "invalid_project_created_at",
+    sourcePath: "project.createdAt"
+  });
+  if (typeof createdAt !== "string") return createdAt;
+
   const inventory = await sourceInventory(input.planningRoot);
   if ("diagnostics" in inventory) return inventory;
 
@@ -596,6 +653,7 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
   }
 
   const requirements = extractRequirements(projectMarkdown);
+  if ("diagnostics" in requirements) return requirements;
   if (requirements.length === 0) {
     return failure("invalid", [
       diagnostic({
@@ -715,8 +773,9 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
 
 async function readReport(stagingRoot: string): Promise<PlanningImportReport | PlanningImportFailure> {
   const reportPath = path.join(stagingRoot, ...REPORT_PATH.split("/"));
+  let parsed: unknown;
   try {
-    return JSON.parse(await readFile(reportPath, "utf8")) as PlanningImportReport;
+    parsed = JSON.parse(await readFile(reportPath, "utf8"));
   } catch (error) {
     return failure("invalid", [
       diagnostic({
@@ -726,6 +785,18 @@ async function readReport(stagingRoot: string): Promise<PlanningImportReport | P
       })
     ]);
   }
+
+  if (!isPlanningImportReport(parsed)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "invalid_dry_run_report",
+        message: "Dry-run report is missing required planning import fields.",
+        sourcePath: REPORT_PATH
+      })
+    ]);
+  }
+
+  return parsed;
 }
 
 function backupId(appliedAt: UtcTimestamp, sourceHash: string): string {
@@ -784,6 +855,72 @@ async function installStagedProject(input: {
   await cp(stagedProject, destinationProject, { recursive: true });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isInventory(value: unknown): value is PlanningSourceInventory {
+  return (
+    isRecord(value) &&
+    typeof value["root"] === "string" &&
+    typeof value["treeHash"] === "string" &&
+    Array.isArray(value["files"])
+  );
+}
+
+function isPlanningImportReport(value: unknown): value is PlanningImportReport {
+  if (!isRecord(value)) return false;
+  const policy = value["policy"];
+  const target = value["target"];
+  return (
+    value["schemaVersion"] === "0.1.0" &&
+    value["kind"] === "planning-import-report" &&
+    typeof value["runId"] === "string" &&
+    typeof value["createdAt"] === "string" &&
+    value["requiresReview"] === true &&
+    isInventory(value["source"]) &&
+    isInventory(target) &&
+    Array.isArray(value["mappings"]) &&
+    Array.isArray(value["conflicts"]) &&
+    Array.isArray(value["uncertainties"]) &&
+    isRecord(policy) &&
+    policy["planningReadOnlyAfterApply"] === true &&
+    policy["legacySourceDeleted"] === false &&
+    policy["mutableStateImportedAsCurrentTruth"] === false
+  );
+}
+
+function isBackupManifest(value: unknown): value is BackupManifest {
+  return (
+    isRecord(value) &&
+    value["schemaVersion"] === "0.1.0" &&
+    value["kind"] === "planning-import-backup" &&
+    typeof value["createdAt"] === "string" &&
+    typeof value["backupPath"] === "string" &&
+    typeof value["repositoryRoot"] === "string" &&
+    typeof value["preImportHash"] === "string" &&
+    typeof value["sourceHash"] === "string" &&
+    typeof value["existingLegionRoot"] === "boolean"
+  );
+}
+
+async function validateStagedProjectHash(input: {
+  readonly stagingRoot: string;
+  readonly report: PlanningImportReport;
+}): Promise<PlanningImportFailure | undefined> {
+  const stagedProject = path.join(input.stagingRoot, ".legion", "project");
+  const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
+  if (actualHash === input.report.target.treeHash) return undefined;
+
+  return failure("invalid", [
+    diagnostic({
+      code: "staged_project_hash_mismatch",
+      message: "Staged project bytes no longer match the reviewed dry-run report.",
+      sourcePath: ".legion/project"
+    })
+  ]);
+}
+
 export async function applyPlanningImport(input: PlanningImportApplyInput): Promise<PlanningImportApplyResult> {
   const report = await readReport(input.stagingRoot);
   if ("diagnostics" in report) return report;
@@ -798,6 +935,12 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
     ]);
   }
 
+  const stagedHashFailure = await validateStagedProjectHash({
+    stagingRoot: input.stagingRoot,
+    report
+  });
+  if (stagedHashFailure !== undefined) return stagedHashFailure;
+
   const destinationProject = path.join(input.repositoryRoot, ".legion", "project");
   if ((await pathExists(destinationProject)) && input.allowReplaceExistingProject !== true) {
     return failure("conflict", [
@@ -809,7 +952,13 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
     ]);
   }
 
-  const appliedAt = utcTimestampSchema.parse(input.appliedAt ?? new Date().toISOString());
+  const appliedAt = parseUtcTimestamp({
+    value: input.appliedAt,
+    code: "invalid_applied_at",
+    sourcePath: "appliedAt"
+  });
+  if (typeof appliedAt !== "string") return appliedAt;
+
   const backup = await backupLegionRoot({
     repositoryRoot: input.repositoryRoot,
     backupRoot: input.backupRoot,
@@ -823,11 +972,21 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
       stagingRoot: input.stagingRoot
     });
   } catch (error) {
-    await rollbackPlanningImport({
-      repositoryRoot: input.repositoryRoot,
-      backupManifestPath: backup.manifestPath
-    });
-    throw error;
+    try {
+      await rollbackPlanningImport({
+        repositoryRoot: input.repositoryRoot,
+        backupManifestPath: backup.manifestPath
+      });
+    } catch {
+      // Preserve the original installation failure; rollback is best-effort here.
+    }
+    return failure("invalid", [
+      diagnostic({
+        code: "apply_failed",
+        message: error instanceof Error ? error.message : "Staged project installation failed.",
+        sourcePath: ".legion/project"
+      })
+    ]);
   }
 
   return {
@@ -844,7 +1003,11 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
 export async function rollbackPlanningImport(input: PlanningImportRollbackInput): Promise<PlanningImportRollbackResult> {
   let manifest: BackupManifest;
   try {
-    manifest = JSON.parse(await readFile(input.backupManifestPath, "utf8")) as BackupManifest;
+    const parsed = JSON.parse(await readFile(input.backupManifestPath, "utf8"));
+    if (!isBackupManifest(parsed)) {
+      throw new Error("Backup manifest is missing required planning import fields.");
+    }
+    manifest = parsed;
   } catch (error) {
     return failure("invalid", [
       diagnostic({
