@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS board_task_events (
   event_id TEXT PRIMARY KEY,
   aggregate_kind TEXT NOT NULL CHECK (length(aggregate_kind) > 0),
   aggregate_id TEXT NOT NULL CHECK (length(aggregate_id) > 0),
-  aggregate_sequence INTEGER NOT NULL CHECK (aggregate_sequence > 0),
+  aggregate_sequence INTEGER NOT NULL CHECK (aggregate_sequence >= 0),
   global_sequence INTEGER NOT NULL UNIQUE,
   event_type TEXT NOT NULL CHECK (length(event_type) > 0),
   event_version TEXT NOT NULL CHECK (length(event_version) > 0),

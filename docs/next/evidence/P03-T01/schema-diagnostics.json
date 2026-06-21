@@ -38,8 +38,8 @@
     {
       "version": 1,
       "name": "create-board-control-plane-schema",
-      "checksum": "21507f73fe12be11e4e49c747267aa5b50aa63de049d400ab1ef072363cdb429",
-      "appliedAt": "2026-06-21T19:53:50.906Z"
+      "checksum": "b313493e134e538bcf8570a3a102b30e302c9824a0defb7c801ea0ee40ddb3ef",
+      "appliedAt": "2026-06-21T20:14:28.926Z"
     }
   ]
 }

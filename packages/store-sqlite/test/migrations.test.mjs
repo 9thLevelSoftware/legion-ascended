@@ -121,6 +121,28 @@ test("P03-T01 schema enforces ownership, foreign-key, unique, and check constrai
   });
 });
 
+test("P03-T01 schema accepts zero-based protocol event sequences", async () => {
+  await withTempDatabase((databasePath) => {
+    const store = openSqliteBoardStore({ databasePath });
+    store.migrate();
+    store.close();
+
+    const database = openRaw(databasePath);
+    try {
+      assert.doesNotThrow(() => {
+        database.prepare(`
+          INSERT INTO board_task_events (event_id, aggregate_kind, aggregate_id, aggregate_sequence, global_sequence, event_type, event_version, payload_json, payload_hash, occurred_at)
+          VALUES ('evt_zero', 'task', 'tsk_alpha', 0, 0, 'task.created.v1', '1', '{}', ?, '2026-06-21T00:00:00.000Z')
+        `).run("b".repeat(64));
+      });
+
+      assert.equal(database.prepare("SELECT aggregate_sequence FROM board_task_events WHERE event_id = 'evt_zero'").get().aggregate_sequence, 0);
+    } finally {
+      database.close();
+    }
+  });
+});
+
 test("P03-T01 migration runner rolls back interrupted migrations without advancing schema version", async () => {
   await withTempDatabase((databasePath) => {
     const database = openRaw(databasePath);
@@ -156,6 +178,27 @@ test("P03-T01 migration runner rolls back interrupted migrations without advanci
       assert.equal(database.prepare("PRAGMA user_version").get().user_version, 1);
       assert.equal(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'surviving_table'").get().name, "surviving_table");
       assert.equal(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'should_rollback'").get(), undefined);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("P03-T01 migration runner rejects applied versions without migration records", async () => {
+  await withTempDatabase((databasePath) => {
+    const database = openRaw(databasePath);
+    try {
+      database.exec("PRAGMA user_version = 1");
+
+      assert.throws(() => {
+        runSqliteMigrations(database, [
+          {
+            version: 1,
+            name: "first",
+            statements: ["CREATE TABLE first_table (id TEXT PRIMARY KEY)"]
+          }
+        ]);
+      }, /missing board schema migration record for applied version 1/i);
     } finally {
       database.close();
     }

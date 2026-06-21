@@ -36,20 +36,20 @@ entries:
     sha256: 565c18d37ad0da061803bedb06aae9b3e2d7a628f5be32812bd886429b45db65
   - task: P03-T01
     artifact: packages/store-sqlite/src/index.ts
-    description: node:sqlite provider setup, schema v1 migrations, explicit target handling, defensive pragma reads, rollback preservation, protocol-aligned approval status, diagnostics, FK-supporting indexes, and chunked backup hashing
-    sha256: 2168941c5c755b406a0b5c7a18f5e2ad483f049617d3c89d4d479835ae270f33
+    description: node:sqlite provider setup, schema v1 migrations, explicit target handling, zero-based protocol event sequences, missing migration-record rejection, defensive pragma reads, rollback preservation, protocol-aligned approval status, diagnostics, FK-supporting indexes, and chunked backup hashing
+    sha256: fcfe5343b40e3e9c74bbefaaf521361100eee134e6af6e951053ebd1580eec1c
   - task: P03-T01
     artifact: packages/store-sqlite/test/migrations.test.mjs
-    description: Real-file migration, constraint, revoked approval, explicit target, rollback, defensive pragma, backup hashing, future-version, and checksum tests for P03-T01
-    sha256: 5d3e05394602c240d9c4787ff9014508925566bbd738e0d342b2c545b7422ace
+    description: Real-file migration, constraint, zero-based event sequence, revoked approval, explicit target, missing migration-record, rollback, defensive pragma, backup hashing, future-version, and checksum tests for P03-T01
+    sha256: a1a03fcb8fea99a491a7850640fbfd2decb0887ee609288fb0addb7f8c7c86da
   - task: P03-T01
     artifact: packages/store-sqlite/tsconfig.json
     description: SQLite provider TypeScript configuration
     sha256: b0798a9eeb43dee58f5f838abf4a3feb40e53775a8e32fc4487fea5f75750e02
   - task: P03-T01
     artifact: schemas/sqlite/board-schema-v1.sql
-    description: Committed SQLite board schema v1 artifact with protocol-aligned approval status plus operational and FK-supporting indexes
-    sha256: 5d80df5e80166f091c2417ba004ef5cf32d426c652292b93151067e80cc4a479
+    description: Committed SQLite board schema v1 artifact with protocol-aligned approval status, zero-based aggregate event sequences, and operational/FK-supporting indexes
+    sha256: fcb25cdc310251ea64226f56412f62ce71ca4e9318cbace4ab02b4baee8c3f3e
   - task: P03-T01
     artifact: scripts/check-package-boundaries.mjs
     description: Package-boundary policy updated so only @legion/store-sqlite may import node:sqlite
@@ -64,8 +64,8 @@ entries:
     sha256: 8fe37b381c23c8da7fe760ecb0b67844923c9a6498ff7d4fe1633eabfb901167
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/store-sqlite-test.log
-    description: Focused @legion/store-sqlite P03-T01 test log with 10 passing migration and review-regression tests
-    sha256: 68b6db40084f3eeaaebc976185f3c33af6035fa90ab927c50d8e56c4d83c33f7
+    description: Focused @legion/store-sqlite P03-T01 test log with 12 passing migration and review-regression tests
+    sha256: 8306c4f40e7d714c2931e9f10aa3b85c8b00825e76e5d5a917a21578a7c6d0c9
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/package-boundaries.log
     description: Package-boundary verification log
@@ -73,11 +73,11 @@ entries:
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/typecheck.log
     description: Workspace typecheck log after board/store package additions
-    sha256: f474df24dc2515598e742de74458151cbf2f2d379662a482f278209b4e6181cf
+    sha256: 69b74845d2e7bd1e012744040bc29d6efaf1076669cf17e66c0fc65020dd59f8
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/full-validation.log
     description: Full validate-next log after P03-T01 implementation
-    sha256: dcd98d25c689559afb4fd8e5d18103b77dd6b17ad2dccf796864872a4819e9fa
+    sha256: 97fd70ea1cf430e175e0f27bf3091ba89f720526875de35fbeed6465708ae892
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/schema-diagram.md
     description: Board schema diagram and ownership notes
@@ -85,7 +85,7 @@ entries:
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/schema-diagnostics.json
     description: Real-file migrated schema diagnostics showing WAL, foreign keys, required tables, FK-supporting indexes, and migration record
-    sha256: 882081b02fffd095c9aa0c01ac25bf8189ef61a0f79c49b26b616e93bc9fef99
+    sha256: 9caea38eccdd033e13c9f455b66969185b3e916c2d11a6c91706142d3d47755f
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/query-plan-review.md
     description: Query-plan review proving required task, link, event, outbox, cascade, and nullification indexes are used
@@ -93,4 +93,4 @@ entries:
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/completion-report.yaml
     description: Structured P03-T01 completion report
-    sha256: add47ad7acae28ec6901a85080503e6c070ada9663f52742060f788e58fabeef
+    sha256: 09644dc5c1f57c2cf87cdadf9869d34e1c980f35b020f39cb037f9b75e46b388

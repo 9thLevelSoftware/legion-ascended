@@ -20,9 +20,9 @@ packages/cli build: Done
 Scope: 9 of 10 workspace projects
 packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
 packages/protocol typecheck: Done
+packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
 packages/core typecheck$ tsc -p tsconfig.json --noEmit
 packages/board-store typecheck$ tsc -p tsconfig.json --noEmit
-packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
 packages/board-store typecheck: Done
 packages/core typecheck: Done
 packages/artifacts typecheck: Done
