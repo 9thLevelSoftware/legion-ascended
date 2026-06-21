@@ -23,7 +23,7 @@ task_commits:
   P02-T04: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05"
   P02-T05: "08d261017792e591db637d9a8b6a959a56141e84"
   P02-T06: "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7"
-  P02-T07: "67d17e143cc3a73ed67e8f1abb636d6fce9536d0"
+  P02-T07: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861"
   P02-T08: null
   P02-T09: null
   P02-T10: null
@@ -375,15 +375,15 @@ entries:
   - task: P02-T07
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
     description: Phase 2 ledger updated for P02-T07 completion
-    sha256: dd686e528c8dcf21d6312ae02055416aa862ffc69260a649f11174ab4605c13a
+    sha256: e5bcfa02063f65d7e0e45902cf63a32f2490962d639ce24609112b0d3d7dd05e
   - task: P02-T07
     artifact: packages/artifacts/src/archive/schema.ts
     description: Archive preview and archive record schema definitions
-    sha256: dcac77c562e0fac50b370fe07da90b7ac329407d64fdba73a2144679fd55e96c
+    sha256: 35477e8041e7b160538b3d54938ca8ef62716e3dcdee2465a436136e3077d6e2
   - task: P02-T07
     artifact: packages/artifacts/src/archive/service.ts
     description: Accepted-change archive planning, validation, current-truth merge, rollback, and idempotent retry service
-    sha256: 0264498afd1b8793e812bb8313439e2cc5b30d45d13c68af79e35dab55428fba
+    sha256: 2c3f359c5dc83464b689d8f9c71c6a8666ce7f6c8a55bcfd6dcc2b12b52d88f2
   - task: P02-T07
     artifact: packages/artifacts/src/archive/index.ts
     description: Archive package exports
@@ -403,7 +403,7 @@ entries:
   - task: P02-T07
     artifact: packages/artifacts/test/archive.test.mjs
     description: P02-T07 regression tests for preview, preconditions, rollback, idempotent retry, and current-truth drift detection
-    sha256: 6b3c51b92565e29c412d1bae06794fb72a0b020eaa3be96916c71f22e86fc539
+    sha256: 78d702940c3c9aee1af97d7a80418f72d6df708a25016cbb91e6b9910fd3abc6
   - task: P02-T07
     artifact: packages/artifacts/scripts/generate-artifacts-json-schema.mjs
     description: Artifact JSON Schema generation support for archive records
@@ -419,11 +419,11 @@ entries:
   - task: P02-T07
     artifact: schemas/artifacts/archive-record.schema.json
     description: Generated archive record JSON Schema
-    sha256: bbb951add8340b3861e42f273ef776f16140e7ec87831ad4c94d56bd214bd129
+    sha256: 242a2b0d5bfa27c9e1fbbc9732d77fb84daed0a356723560770e003e1fbd6f6d
   - task: P02-T07
     artifact: docs/next/evidence/P02-T07/archive-test.log
     description: Focused @legion/artifacts archive service test report
-    sha256: f707923c61eb26b0263258a663b52fe621aba61c09a5c42c10fd3f5281e17bfc
+    sha256: 98d891713aa71e57b1fdfdc08a9ea7cedd3c47a4611d35f77068b7b8626cef67
   - task: P02-T07
     artifact: docs/next/evidence/P02-T07/archive-idempotency-proof.json
     description: Structured archive before/after spec hash, idempotency, and rollback proof
@@ -431,8 +431,8 @@ entries:
   - task: P02-T07
     artifact: docs/next/evidence/P02-T07/full-validation.log
     description: Full workspace validate-next log after P02-T07 implementation
-    sha256: bac5fb42fa9db41734cb744200e6580dfc0bed45e20945fe517ea3e4ad5aca20
+    sha256: 21b3cd970951788f44ab1085ea2016064c13f56b1bc0f6c6c18b16004558db95
   - task: P02-T07
     artifact: docs/next/evidence/P02-T07/completion-report.yaml
     description: Structured P02-T07 completion report
-    sha256: 928f111f5e65a96a5103330c2378cf80f69f968112f7db5c368215e8637c4607
+    sha256: 6efed6d872cf86e2e34138472a5113785fc3d66422f5f436e2544006784ff7dc

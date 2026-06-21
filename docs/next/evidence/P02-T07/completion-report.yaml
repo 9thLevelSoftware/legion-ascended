@@ -38,10 +38,15 @@ acceptance:
     result: PASS
   - criterion: Retry after a recorded archive is idempotent and rejects current-truth drift.
     result: PASS
+  - criterion: Removing the primary requirement from a multi-requirement spec moves remaining truth to the new primary path and deletes the old current-spec artifact.
+    result: PASS
+  - criterion: Rollback skips current-spec files that no longer match archive-owned post-write bytes, preserving concurrent writer updates.
+    result: PASS
 commits:
   - 67d17e143cc3a73ed67e8f1abb636d6fce9536d0
+  - d45af2c91ba3a7bfbc79a9b04f6ee927ad471861
 risks_or_followups:
-  - P02-T07 adds current-truth mutation for modify deltas with regression coverage; broader add/remove archive scenarios are implemented but should receive more scenario coverage as later phases exercise them.
+  - P02-T07 now covers modify deltas, primary-requirement remove deltas, rollback faults, idempotent retry, and current-truth drift; later phases should add broader multi-change scenario coverage as CLI workflows exercise archive end to end.
 blocker:
   condition: none
   decision_needed: none
