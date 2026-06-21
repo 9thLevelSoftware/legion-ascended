@@ -6,6 +6,7 @@ summary:
   - Preserved current v8 installer behavior while documenting the migration path to `.legion/legacy-protocol/`.
   - Updated v9 project initialization to accept `.legion/legacy-protocol/` as a migrated legacy namespace without allowing arbitrary visible `.legion/` collisions.
   - Hardened rollback backups so backup manifests record absolute paths and rollback validates the backup directory before deleting current `.legion` bytes.
+  - Hardened apply recovery so interrupted legacy-protocol moves can be resumed when staged bytes already match, and empty legacy roots are removed so v9 initialization is unblocked.
 artifacts:
   - packages/legacy-bridge/src/import-codex/index.ts
   - packages/legacy-bridge/src/index.ts
@@ -35,3 +36,4 @@ evidence:
 notes:
   - The migration API reports native Codex prompt/bridge surfaces but leaves them untouched.
   - Partial installs without `.legion/manifest.json` are treated as user-authored or customized legacy data.
+  - Existing `.legion/legacy-protocol/` files must byte-match staged files before apply resumes; mismatches remain conflicts.

@@ -58,5 +58,14 @@
     "performedAfterCwdChange": true,
     "restoredHash": "sha256:dc24930a99c3c870f9884946c01b9148e1dd991f8546ece0e7d5ba66a913a7b4",
     "restoredMatchesPreMigration": true
+  },
+  "interruptedResume": {
+    "oldCommandRootRemoved": true,
+    "existingLegacyProtocolPreserved": true,
+    "initAfterResumeOk": true
+  },
+  "emptyRootCleanup": {
+    "emptyAgentsRootRemoved": true,
+    "initAfterCleanupOk": true
   }
 }
