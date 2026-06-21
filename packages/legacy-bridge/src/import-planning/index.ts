@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -585,6 +585,21 @@ function pathsOverlap(left: string, right: string): boolean {
   return containsPath(left, right) || containsPath(right, left);
 }
 
+async function resolveExistingPathComponents(inputPath: string): Promise<string> {
+  const resolved = path.resolve(inputPath);
+  const suffix: string[] = [];
+  let candidate = resolved;
+
+  while (!(await pathExists(candidate))) {
+    const parent = path.dirname(candidate);
+    if (parent === candidate) return path.resolve(candidate, ...suffix);
+    suffix.unshift(path.basename(candidate));
+    candidate = parent;
+  }
+
+  return path.resolve(await realpath(candidate), ...suffix);
+}
+
 function sameResolvedPath(left: string, right: string): boolean {
   const resolvedLeft = path.resolve(left);
   const resolvedRight = path.resolve(right);
@@ -609,15 +624,23 @@ function safeResolvedStagingRoot(input: PlanningImportDryRunInput): string | Pla
   return stagingRoot;
 }
 
-function safeResolvedBackupRoot(input: {
+async function safeResolvedBackupRoot(input: {
   readonly repositoryRoot: string;
   readonly backupRoot: string;
-}): string | PlanningImportFailure {
+}): Promise<string | PlanningImportFailure> {
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const backupRoot = path.resolve(input.backupRoot);
   const legionRoot = path.join(repositoryRoot, ".legion");
+  const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
+  const realBackupRoot = await resolveExistingPathComponents(backupRoot);
+  const realLegionRoot = await resolveExistingPathComponents(legionRoot);
 
-  if (pathsOverlap(backupRoot, repositoryRoot) || pathsOverlap(backupRoot, legionRoot)) {
+  if (
+    pathsOverlap(backupRoot, repositoryRoot) ||
+    pathsOverlap(backupRoot, legionRoot) ||
+    pathsOverlap(realBackupRoot, realRepositoryRoot) ||
+    pathsOverlap(realBackupRoot, realLegionRoot)
+  ) {
     return failure("invalid", [
       diagnostic({
         code: "unsafe_backup_root",
@@ -627,7 +650,7 @@ function safeResolvedBackupRoot(input: {
     ]);
   }
 
-  return backupRoot;
+  return realBackupRoot;
 }
 
 function parseUtcTimestamp(input: {
@@ -988,7 +1011,7 @@ export async function applyPlanningImport(input: PlanningImportApplyInput): Prom
   });
   if (typeof appliedAt !== "string") return appliedAt;
 
-  const backupRoot = safeResolvedBackupRoot({
+  const backupRoot = await safeResolvedBackupRoot({
     repositoryRoot: input.repositoryRoot,
     backupRoot: input.backupRoot
   });

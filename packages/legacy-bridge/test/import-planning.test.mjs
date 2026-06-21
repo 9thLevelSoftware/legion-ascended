@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -411,6 +411,46 @@ test("P02-T08 apply rejects backup roots that overlap .legion before copying", a
       planningRoot: path.join(sourceRoot, ".planning"),
       stagingRoot,
       runId: "planning-import-unsafe-backup-root",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    const applied = await applyPlanningImport({
+      repositoryRoot: targetRoot,
+      stagingRoot,
+      backupRoot: unsafeBackupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+    assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion", async () => {
+  const workspace = await tempRoot();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    const unsafeBackupTarget = path.join(targetRoot, ".legion", "project", "linked-backups");
+    const unsafeBackupRoot = path.join(workspace, "external-backup-link");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(unsafeBackupTarget, { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    await symlink(unsafeBackupTarget, unsafeBackupRoot, process.platform === "win32" ? "junction" : "dir");
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: path.join(sourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-symlinked-backup-root",
       project: importProject()
     });
     assert.equal(dryRun.ok, true);

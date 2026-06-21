@@ -3,15 +3,15 @@ $ tsc -p tsconfig.json
 $ tsc -p tsconfig.json
 $ tsc -p tsconfig.json
 $ tsc -p tsconfig.json
-✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (3.5929ms)
-✔ P02-T10 valueless global flags remain flags before positional commands (594.3631ms)
-✔ P02-T10 valueless command flags remain flags before positional arguments (884.7572ms)
-✔ P02-T10 command subcommands honor help flags without requiring inputs (540.8472ms)
-✔ P02-T10 JSON input boundary failures return usage diagnostics (859.0231ms)
-✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (904.9695ms)
-✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (1496.6391ms)
-✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (915.2977ms)
-✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (981.5112ms)
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (3.8049ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (543.8575ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (871.0019ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (515.6009ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (895.8966ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (836.5159ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (1469.9976ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (922.7966ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (948.3946ms)
 ℹ tests 9
 ℹ suites 0
 ℹ pass 9
@@ -19,4 +19,4 @@ $ tsc -p tsconfig.json
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 7416.9219
+ℹ duration_ms 7241.8081

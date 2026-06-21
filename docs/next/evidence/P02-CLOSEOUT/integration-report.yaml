@@ -1,7 +1,8 @@
 phase: 2
 phase_id: P02
 status: PASS
-generated_at: "2026-06-21T14:06:53-04:00"
+generated_at: "2026-06-21T14:25:56-04:00"
+hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
 scope:
   source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
   roadmap_index: "docs/legion-next-roadmap.md"
@@ -12,34 +13,44 @@ blocker_resolved:
   resolution:
     - "Planning backup manifests now record resolved repositoryRoot, backupPath, and manifestPath values."
     - "Planning apply now rejects backup roots that overlap the repository or .legion before copying."
+    - "Planning apply now resolves existing backup-root path components before accepting paths, rejecting symlink or junction targets that point back into the repository or .legion."
     - "rollbackPlanningImport now rejects manifests for another repository before deleting .legion."
     - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
     - "rollbackPlanningImport now hashes existing backups and rejects mismatches before deleting .legion."
   regression_tests:
     - "P02-T08 apply rejects backup roots that overlap .legion before copying"
+    - "P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion"
     - "P02-T08 rollback rejects unusable backup manifests before deleting current .legion"
     - "P02-T08 rollback rejects backup manifests from another repository before deleting current .legion"
     - "P02-T08 rollback verifies backup hashes before replacing current .legion"
+pr_review_resolution:
+  - comment_id: 3448855115
+    finding: "A backup root outside the repo could be a symlink or junction into .legion/project and bypass lexical overlap checks."
+    resolution: "safeResolvedBackupRoot now resolves existing path components with realpath before overlap checks and returns the canonical safe backup root."
+    regression_test: "P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion"
+  - comment_id: 3448855117
+    finding: "Closeout evidence hashes were recorded from working-tree bytes instead of Git blob bytes, causing CRLF-normalization mismatches."
+    resolution: "Closeout evidence hashes were recomputed from staged Git blob bytes and the hash basis is recorded in this report."
 verification:
   - command: "pnpm --filter @legion/legacy-bridge test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
-    sha256: "f851ef90aa999b21f336d2a9c16bb52854038fc9c801447d0aff7d2ede341c4e"
-    summary: "28 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+    sha256: "b23d0f8a116c0fa8b8b218f91f35871c9b69209dc8c9c87ad954af24ab4f97b8"
+    summary: "29 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
   - command: "pnpm --filter @legion/artifacts test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
-    sha256: "698c541b9139e1ccb6e0beead74d135a7f9c1ce110be638b8741542d83e60327"
+    sha256: "9ab81f04bc0258929dec5582d4b7a6221434fdd87c7ff023a15d6468b5e86136"
     summary: "59 artifact service tests passed across path security, current specs, change bundles, support artifacts, traceability, and archive."
   - command: "pnpm --filter @legion/cli-e2e test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log"
-    sha256: "eba98fe699ea42830a5e627794495882889c8d81796a715a882a3f08d8c001cf"
+    sha256: "d30fb640cc7b6575d7220f1e0a5cc6c01e97ec17e3e27a47c8ce68b648894031"
     summary: "9 process-level CLI E2E tests passed across project, change, planning migration, and Codex migration commands."
   - command: "pnpm run validate:next"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
-    sha256: "6e0fa8473c60087456c128c6b5fd3cb7cae27fb2183132a519445f0d51c2989b"
+    sha256: "4aa4c8f7eb4fa70ac80a13f55e0d098af7c6d2060315fc392477b048fd51a6ec"
     summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
 independent_review:
   result: PASS

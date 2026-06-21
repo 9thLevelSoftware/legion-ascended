@@ -538,7 +538,7 @@ entries:
     sha256: 304c0beadf32a6de76737b9435b19b509df03e41f234789ca243067ea1173aea
   - task: P02-T10
     artifact: packages/cli/src/index.ts
-    description: `legion next` entrypoint, namespace routing, help, JSON output, and exit-code handling
+    description: "`legion next` entrypoint, namespace routing, help, JSON output, and exit-code handling"
     sha256: 5941fc547d01b47015d24e877964bad7db94da0e3da5d3a9b088b79a79f0502f
   - task: P02-T10
     artifact: packages/cli/src/runtime.ts
@@ -607,31 +607,31 @@ entries:
   - task: P02-CLOSEOUT
     artifact: packages/legacy-bridge/src/import-planning/index.ts
     description: Planning import migration-safety closeout hardening for safe backup roots, resolved backup records, repository-bound rollback manifests, and backup hash verification before destructive rollback
-    sha256: 853b756b29327a9fddf1625d901028a0534cbe1899f9a03a85de266b47de05d4
+    sha256: 8e013069327233b10ebf1a3a24e185c1d3f8c98c2057f63a785dbcf8e160beab
   - task: P02-CLOSEOUT
     artifact: packages/legacy-bridge/test/import-planning.test.mjs
     description: P02-T08 closeout regressions for unsafe backup roots, missing rollback backups, cross-repository manifests, and corrupted backup hashes
-    sha256: 0bc0ea61d0b1c99974ca09d6a335554783573e65d76b54e01b67308650152513
+    sha256: 1a27b41178e5f2c3576080122fd978652153882e0e8027b5be6a5ae049ec1b25
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log
-    description: Focused @legion/legacy-bridge closeout verification with 28 passing migration tests
-    sha256: f851ef90aa999b21f336d2a9c16bb52854038fc9c801447d0aff7d2ede341c4e
+    description: Focused @legion/legacy-bridge closeout verification with 29 passing migration tests
+    sha256: b23d0f8a116c0fa8b8b218f91f35871c9b69209dc8c9c87ad954af24ab4f97b8
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/artifacts-test.log
     description: Focused @legion/artifacts closeout verification with 59 passing artifact service tests
-    sha256: 698c541b9139e1ccb6e0beead74d135a7f9c1ce110be638b8741542d83e60327
+    sha256: 9ab81f04bc0258929dec5582d4b7a6221434fdd87c7ff023a15d6468b5e86136
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log
     description: Process-level CLI closeout verification with 9 passing E2E tests
-    sha256: eba98fe699ea42830a5e627794495882889c8d81796a715a882a3f08d8c001cf
+    sha256: d30fb640cc7b6575d7220f1e0a5cc6c01e97ec17e3e27a47c8ce68b648894031
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/validate-next.log
     description: Full validate-next closeout transcript after migration-safety fixes
-    sha256: 6e0fa8473c60087456c128c6b5fd3cb7cae27fb2183132a519445f0d51c2989b
+    sha256: 4aa4c8f7eb4fa70ac80a13f55e0d098af7c6d2060315fc392477b048fd51a6ec
   - task: P02-CLOSEOUT
     artifact: docs/next/evidence/P02-CLOSEOUT/integration-report.yaml
     description: Structured Phase 2 integration report with closeout blocker resolution, verification commands, evidence hashes, and independent review verdicts
-    sha256: 8a97c6adaaa31ac5151e37e090eaf38f7ae1dd507abae11a1f9876168fddd017
+    sha256: d7174274581325b4858b3ea209f9131a578d02c4618af2c4dd2ea1a6af6a9078
   - task: P02-CLOSEOUT
     artifact: docs/next/reviews/PHASE-02-INDEPENDENT-REVIEW.md
     description: Independent Phase 2 closeout review with passing verdicts and no remaining critical or important findings
@@ -639,8 +639,8 @@ entries:
   - task: P02-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
     description: Phase 2 ledger marked DONE with closeout decision and evidence bundle
-    sha256: 2ec2ac9bff3e6c9f522c332cdebcd9630988352e635dd76b431d26b94dfe29a1
+    sha256: dd63bc127a7254172ab4cb117292ac63ca4b264386cd1a4caf5074948c7f343a
   - task: P02-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/HANDOFF.md
     description: Phase 2 handoff expanded to the source-document template with Phase 3 starting point and `.legion/var` operational root guidance
-    sha256: 20f166c7692d18d81754a1ae207952a98546c23c444e53b7513644a85dfc5b3b
+    sha256: e04feff7dbb73d242840aa95ebf97d8cab5d9bd786ba72663e2af115bc53df9e
