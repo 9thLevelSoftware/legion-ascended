@@ -25,7 +25,7 @@ task_commits:
   P02-T06: "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7"
   P02-T07: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861"
   P02-T08: "9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4"
-  P02-T09: null
+  P02-T09: "8ee7e94d0b4bfde1e55301829f8a5c04384ecb73"
   P02-T10: null
 entries:
   - task: P02-T01
@@ -476,3 +476,51 @@ entries:
     artifact: docs/next/evidence/P02-T08/completion-report.yaml
     description: Structured P02-T08 completion report
     sha256: 9b25ba97b6690b3b55ed4748ee4fa0d321c56e94d459619507cd96bd6693cad1
+  - task: P02-T09
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger updated for P02-T09 completion
+    sha256: c18cdba54cea2d2e8007e3aac235c0462395786ffc7fd7d31bf209127bc5a8dd
+  - task: P02-T09
+    artifact: packages/legacy-bridge/src/import-codex/index.ts
+    description: Codex `.legion/` migration bridge for inventory, deterministic dry-run staging, reviewed apply, backup, rollback, symlink rejection, and destructive rollback preflight
+    sha256: 38274e48558e247ff6b3a3e3b66fa2fa1b081bb15f0c499f82f28265d493b6a2
+  - task: P02-T09
+    artifact: packages/legacy-bridge/src/index.ts
+    description: Legacy bridge root exports for Codex migration APIs
+    sha256: 4cb0fb077d0bcf8479555768a606d7afd796a9fe9374b83fc1b155144cae70af
+  - task: P02-T09
+    artifact: packages/legacy-bridge/test/import-codex.test.mjs
+    description: P02-T09 regression tests for local/global Codex fixtures, customized files, partial installs, review gating, repeat migration, interrupted resume, empty-root cleanup, legacy migration roots, unsafe backup roots, rollback, symlink rejection, tampered report moves, cross-repo backups, and backup hash mismatches
+    sha256: ba61d1aa68afd672696df0fe1f354afb7a61d11163868f788b4b4de080e6b7cf
+  - task: P02-T09
+    artifact: packages/artifacts/src/project/service.ts
+    description: Project init collision rule allowing `.legion/legacy-protocol/` while preserving visible legacy collision diagnostics
+    sha256: de25381724a408cc0b8f11fe65297aede37392b2f2657c73c17afc8ad0780727
+  - task: P02-T09
+    artifact: packages/artifacts/test/project.test.mjs
+    description: Project-service regression for migrated legacy protocol namespace and continued collision blocking
+    sha256: 1e2f780dcebf026d4c5e48bd48e9d60fc5d0f80a2567e8711fd60373f3c24820
+  - task: P02-T09
+    artifact: docs/next/migration/CODEX-LEGION-COLLISION.md
+    description: Migration documentation for Codex `.legion/` namespace collision handling and installer guidance
+    sha256: ee59cf378511cc182d1704aa8fafc1c43a7419af29353b3a0d9de8660eb13743
+  - task: P02-T09
+    artifact: docs/next/evidence/P02-T09/codex-legion-migration-test.log
+    description: Focused @legion/legacy-bridge Codex migration test report
+    sha256: 222fb707f0a559c48753a68813a8d7c32782c39e2daa3d90a1b50872f0923a57
+  - task: P02-T09
+    artifact: docs/next/evidence/P02-T09/project-legacy-protocol-test.log
+    description: Focused @legion/artifacts project collision regression test report
+    sha256: 8a7f9c87279527a8d73e2c22ceeaccf26b7c8a08ca51a1f6927dc030b917b953
+  - task: P02-T09
+    artifact: docs/next/evidence/P02-T09/codex-legion-migration-proof.json
+    description: Structured before/after manifest, customization preservation, native surface, apply, resume, cleanup, rollback, symlink rejection, tampered report, cross-repo backup, and backup hash proof
+    sha256: 367e2598915cd4f663db8bc369e0f1664e128355e25322b946fcb6c2954b8dda
+  - task: P02-T09
+    artifact: docs/next/evidence/P02-T09/full-validation.log
+    description: Full workspace validate-next log after P02-T09 implementation
+    sha256: 5b1971968f70ca2c6c7bdf1e73078ca420eda454b46a9f1d687125b1a919ceb9
+  - task: P02-T09
+    artifact: docs/next/evidence/P02-T09/completion-report.yaml
+    description: Structured P02-T09 completion report
+    sha256: 41d1baacb4a56b59febc094f0ab5406aac1245daae013ffc2028ae423adbe86a

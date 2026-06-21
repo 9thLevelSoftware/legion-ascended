@@ -1,0 +1,39 @@
+{
+  "name": "legion",
+  "version": "8.0.0",
+  "installedAt": "2026-06-21T00:00:00.000Z",
+  "runtime": "codex",
+  "scope": "local",
+  "source": "local-git",
+  "verified": false,
+  "supportTier": "first-class",
+  "disposition": "native",
+  "installSurface": "codex",
+  "paths": {
+    "agents": ".legion/agents",
+    "commands": ".legion/commands/legion",
+    "skills": ".legion/skills",
+    "adapters": ".legion/adapters",
+    "manifest": ".legion/manifest.json",
+    "native": {
+      "codex-prompts": ".codex/prompts",
+      "codex-bridge": ".agents/skills/legion/SKILL.md"
+    },
+    "prompts": ".codex/prompts",
+    "bridgeSkill": ".agents/skills/legion/SKILL.md"
+  },
+  "agents": [
+    "engineering-senior-developer.md"
+  ],
+  "nativeArtifacts": [
+    {
+      "path": ".codex/prompts/legion-start.md"
+    },
+    {
+      "path": ".agents/skills/legion/SKILL.md"
+    }
+  ],
+  "promptFiles": [
+    "legion-start.md"
+  ]
+}

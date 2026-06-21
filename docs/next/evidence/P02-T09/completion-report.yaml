@@ -1,0 +1,43 @@
+task: P02-T09
+status: complete
+completed_at: "2026-06-21T12:00:00-04:00"
+summary:
+  - Added a Codex `.legion/` migration bridge that inventories legacy protocol files, stages deterministic dry-run reports, applies only after review, backs up the pre-migration tree, and rolls back exact bytes.
+  - Preserved current v8 installer behavior while documenting the migration path to `.legion/legacy-protocol/`.
+  - Updated v9 project initialization to accept `.legion/legacy-protocol/` as a migrated legacy namespace without allowing arbitrary visible `.legion/` collisions.
+  - Hardened rollback backups so backup manifests record absolute paths and rollback validates the backup directory before deleting current `.legion` bytes.
+  - Hardened apply recovery so interrupted legacy-protocol moves can be resumed when staged bytes already match, and empty legacy roots are removed so v9 initialization is unblocked.
+  - Moved legacy `.legion/migration/` files consistently with other protocol roots and rejected backup roots that overlap `.legion/` before any backup copy can mutate source bytes.
+  - Rejected symlinked legacy entries, tampered dry-run move lists, cross-repository rollback manifests, and corrupted backups before apply or rollback can delete `.legion` bytes.
+artifacts:
+  - packages/legacy-bridge/src/import-codex/index.ts
+  - packages/legacy-bridge/src/index.ts
+  - packages/legacy-bridge/test/import-codex.test.mjs
+  - tests/fixtures/migration/codex/local-codex
+  - tests/fixtures/migration/codex/global-codex
+  - tests/fixtures/migration/codex/partial-codex
+  - packages/artifacts/src/project/service.ts
+  - packages/artifacts/test/project.test.mjs
+  - docs/next/migration/CODEX-LEGION-COLLISION.md
+verification:
+  - command: pnpm --filter @legion/legacy-bridge test
+    result: passed
+    log: docs/next/evidence/P02-T09/codex-legion-migration-test.log
+  - command: pnpm --filter @legion/artifacts test
+    result: passed
+    log: docs/next/evidence/P02-T09/project-legacy-protocol-test.log
+  - command: pnpm run validate:next
+    result: passed
+    log: docs/next/evidence/P02-T09/full-validation.log
+evidence:
+  - docs/next/evidence/P02-T09/codex-legion-migration-test.log
+  - docs/next/evidence/P02-T09/project-legacy-protocol-test.log
+  - docs/next/evidence/P02-T09/codex-legion-migration-proof.json
+  - docs/next/evidence/P02-T09/full-validation.log
+  - docs/next/evidence/P02-T09/completion-report.yaml
+notes:
+  - The migration API reports native Codex prompt/bridge surfaces but leaves them untouched.
+  - Partial installs without `.legion/manifest.json` are treated as user-authored or customized legacy data.
+  - Existing `.legion/legacy-protocol/` files must byte-match staged files before apply resumes; mismatches remain conflicts.
+  - Backup roots must sit outside the repository tree; rollback manifests remain absolute for cwd-independent recovery.
+  - Rollback now also binds backup manifests to their original repository root and verifies backup bytes against the recorded pre-migration hash before restoring.
