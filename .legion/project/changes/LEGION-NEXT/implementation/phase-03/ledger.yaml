@@ -7,7 +7,7 @@ started_at: "2026-06-21T15:32:19-04:00"
 completed_at: null
 active_wave: 1
 tasks:
-  P03-T01: { status: RUNNING, run_id: "P03-T01-20260621-board-store-schema", commit: null }
+  P03-T01: { status: DONE, run_id: "P03-T01-20260621-board-store-schema", commit: "1c2b17bc0bbfb7c0f9bf695c7c4f01c1efb1b7ed" }
   P03-T02: { status: NOT_STARTED, run_id: null, commit: null }
   P03-T03: { status: NOT_STARTED, run_id: null, commit: null }
   P03-T04: { status: NOT_STARTED, run_id: null, commit: null }
@@ -24,4 +24,12 @@ decisions:
     reason: "ADR-008 selects node:sqlite for the local provider but forbids SQLite-specific handles, statements, row IDs, pragmas, and file paths from protocol/core contracts. P03-T01 therefore introduces @legion/board-store for provider-neutral board contracts and @legion/store-sqlite for concrete node:sqlite setup, schema, migrations, diagnostics, and tests."
     decided_at: "2026-06-21T15:32:19-04:00"
 blockers: []
-evidence: []
+evidence:
+  - docs/next/evidence/P03-T01/store-sqlite-test.log
+  - docs/next/evidence/P03-T01/package-boundaries.log
+  - docs/next/evidence/P03-T01/typecheck.log
+  - docs/next/evidence/P03-T01/full-validation.log
+  - docs/next/evidence/P03-T01/schema-diagram.md
+  - docs/next/evidence/P03-T01/schema-diagnostics.json
+  - docs/next/evidence/P03-T01/query-plan-review.md
+  - docs/next/evidence/P03-T01/completion-report.yaml
