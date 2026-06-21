@@ -3,17 +3,27 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  changeArtifactManifestJsonSchema,
   changeBundleJsonSchema,
   currentSpecDocumentJsonSchema,
-  projectManifestJsonSchema
+  evidenceIndexJsonSchema,
+  oracleArtifactJsonSchema,
+  oracleManifestJsonSchema,
+  projectManifestJsonSchema,
+  taskGraphJsonSchema
 } from "../dist/index.js";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const outputDirectory = join(scriptDirectory, "..", "..", "..", "schemas", "artifacts");
 const outputSchemas = {
+  "change-artifact-manifest.schema.json": changeArtifactManifestJsonSchema,
   "change-bundle.schema.json": changeBundleJsonSchema,
+  "evidence-index.schema.json": evidenceIndexJsonSchema,
+  "oracle-artifact.schema.json": oracleArtifactJsonSchema,
+  "oracle-manifest.schema.json": oracleManifestJsonSchema,
   "project-manifest.schema.json": projectManifestJsonSchema,
-  "spec-document.schema.json": currentSpecDocumentJsonSchema
+  "spec-document.schema.json": currentSpecDocumentJsonSchema,
+  "taskgraph.schema.json": taskGraphJsonSchema
 };
 
 async function readExistingLineEnding(filePath) {

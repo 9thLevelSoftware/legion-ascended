@@ -11,7 +11,7 @@ tasks:
   P02-T02: { status: DONE, run_id: "P02-T02-20260620-project-constitution", commit: "93b17d7ec547cd46564144d3a406224cfadf0dd8" }
   P02-T03: { status: DONE, run_id: "P02-T03-20260620-current-spec-service", commit: "748d9e9bb87085560b40b3e498c0b22936cb07ff" }
   P02-T04: { status: DONE, run_id: "P02-T04-20260620-change-bundle-services", commit: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05" }
-  P02-T05: { status: READY, run_id: null, commit: null }
+  P02-T05: { status: DONE, run_id: "P02-T05-20260620-change-support-artifacts", commit: "08d261017792e591db637d9a8b6a959a56141e84" }
   P02-T06: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T07: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T08: { status: NOT_STARTED, run_id: null, commit: null }
@@ -26,6 +26,10 @@ decisions:
     decision: "Create the missing Phase 2 ledger after P02-T01"
     reason: "The Phase 2 source document required this ledger before work started, but main only contained Phase 0 and Phase 1 ledgers after P02-T01 merge. This ledger reconciles P02-T01 from its completion report and accepted main history, then records P02-T02."
     decided_at: "2026-06-20T17:13:19-04:00"
+  - task: P02-T05
+    decision: "Store oracle files as revisioned oracle-artifact envelopes"
+    reason: "The protocol Oracle entity intentionally contains reviewable oracle metadata but no artifact revision counter. A thin artifact envelope preserves protocol purity while allowing stale oracle updates to be rejected by the artifacts service."
+    decided_at: "2026-06-20T20:56:00-04:00"
 blockers: []
 evidence:
   - docs/next/evidence/P02-T01/path-security-and-atomic-write-test.log
@@ -47,3 +51,7 @@ evidence:
   - docs/next/evidence/P02-T04/stale-conflict-diff-report.md
   - docs/next/evidence/P02-T04/full-validation.log
   - docs/next/evidence/P02-T04/completion-report.yaml
+  - docs/next/evidence/P02-T05/oracle-taskgraph-evidence-test.log
+  - docs/next/evidence/P02-T05/artifact-manifest-proof.json
+  - docs/next/evidence/P02-T05/full-validation.log
+  - docs/next/evidence/P02-T05/completion-report.yaml
