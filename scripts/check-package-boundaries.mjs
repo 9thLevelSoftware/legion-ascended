@@ -21,6 +21,12 @@ const DEFAULT_PACKAGES = [
     root: "packages/artifacts",
     src: "packages/artifacts/src",
     allowedWorkspaceImports: ["@legion/protocol", "@legion/core"]
+  },
+  {
+    name: "@legion/legacy-bridge",
+    root: "packages/legacy-bridge",
+    src: "packages/legacy-bridge/src",
+    allowedWorkspaceImports: ["@legion/protocol", "@legion/artifacts"]
   }
 ];
 

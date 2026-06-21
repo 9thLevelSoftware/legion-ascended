@@ -20,12 +20,13 @@ async function withFixture(files, callback) {
   }
 }
 
-test('accepts legal protocol, core, and artifacts imports', async () => {
+test('accepts legal protocol, core, artifacts, and legacy bridge imports', async () => {
   await withFixture(
     {
       'packages/protocol/src/index.ts': 'export const LEGION_PROTOCOL_VERSION = "0.1.0";\n',
       'packages/core/src/index.ts': 'import { LEGION_PROTOCOL_VERSION } from "@legion/protocol";\nexport const version = LEGION_PROTOCOL_VERSION;\n',
-      'packages/artifacts/src/index.ts': 'import { stableStateStringify } from "@legion/core";\nimport { artifactPathSchema } from "@legion/protocol";\nexport const value = stableStateStringify(artifactPathSchema.parse("a.txt"));\n'
+      'packages/artifacts/src/index.ts': 'import { stableStateStringify } from "@legion/core";\nimport { artifactPathSchema } from "@legion/protocol";\nexport const value = stableStateStringify(artifactPathSchema.parse("a.txt"));\n',
+      'packages/legacy-bridge/src/index.ts': 'import { PROJECT_ARTIFACT_PATHS } from "@legion/artifacts";\nimport { LEGION_PROTOCOL_VERSION } from "@legion/protocol";\nexport const value = [PROJECT_ARTIFACT_PATHS.projectManifest, LEGION_PROTOCOL_VERSION];\n'
     },
     async (root) => {
       const result = await checkPackageBoundaries({ root });
