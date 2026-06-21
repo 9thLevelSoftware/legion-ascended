@@ -1,0 +1,1238 @@
+$ node scripts/validate-next.mjs
+
+[validate:next] typecheck: pnpm run typecheck
+$ pnpm run build && pnpm -r typecheck
+$ pnpm -r build
+Scope: 9 of 10 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/artifacts build$ tsc -p tsconfig.json
+packages/board-store build$ tsc -p tsconfig.json
+packages/core build$ tsc -p tsconfig.json
+packages/board-store build: Done
+packages/core build: Done
+packages/artifacts build: Done
+packages/board build$ tsc -p tsconfig.json
+packages/store-sqlite build$ tsc -p tsconfig.json
+packages/legacy-bridge build$ tsc -p tsconfig.json
+packages/board build: Done
+packages/store-sqlite build: Done
+packages/legacy-bridge build: Done
+packages/cli build$ tsc -p tsconfig.json
+packages/cli build: Done
+Scope: 9 of 10 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
+packages/board-store typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/board-store typecheck: Done
+packages/core typecheck: Done
+packages/artifacts typecheck: Done
+packages/board typecheck$ tsc -p tsconfig.json --noEmit
+packages/store-sqlite typecheck$ tsc -p tsconfig.json --noEmit
+packages/legacy-bridge typecheck$ tsc -p tsconfig.json --noEmit
+packages/board typecheck: Done
+packages/store-sqlite typecheck: Done
+packages/legacy-bridge typecheck: Done
+packages/cli typecheck$ tsc -p tsconfig.json --noEmit
+packages/cli typecheck: Done
+
+[validate:next] package-boundaries: pnpm run check:boundaries
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+
+[validate:next] schema-generation: pnpm --filter @legion/protocol generate:schemas
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+[validate:next] artifact-schema-generation: pnpm --filter @legion/artifacts generate:schemas
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+
+[validate:next] protocol-docs: node scripts/validate-next.mjs --generate-protocol-docs
+
+[validate:next] schema-doc-drift: node scripts/validate-next.mjs --check-generated-drift
+warning: in the working copy of 'docs/next/protocol/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/next/protocol/api.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/next/protocol/events.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/next/protocol/schemas.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/next/protocol/state-machines.md', LF will be replaced by CRLF the next time Git touches it
+
+[validate:next] package-contents: pnpm run check:package-contents
+$ node scripts/check-package-contents.mjs
+{
+  "ok": true,
+  "baselinePackage": {
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "fileCount": 135
+  },
+  "currentPackage": {
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "fileCount": 135
+  },
+  "bin": {
+    "legion": "bin/install.js"
+  },
+  "missingLegacyPaths": [],
+  "extraPackagePaths": [],
+  "workspacePackagePaths": [],
+  "missingChecksumPaths": [],
+  "legacyChecksumMismatches": []
+}
+
+[validate:next] tests: pnpm run test
+$ node --test "tests/**/*.test.mjs" "tests/**/*.test.cjs" && pnpm -r --if-present test
+✔ installer lazy-loads YAML support for Kilo Code mode merging (1.3159ms)
+✔ installer source keeps one update generator and rejects non-200 registry responses (0.7874ms)
+✔ Codex prompt installs concrete template context paths for runtimes without at-refs (154.4991ms)
+✔ Kilo uninstall preserves pre-existing user skill directories and files (261.3251ms)
+✔ uninstall tolerates older manifests without paths metadata (85.901ms)
+✔ update removes stale artifacts from the previous manifest before reinstalling (708.0545ms)
+▶ installer local mode installs runtime-native artifacts for every supported runtime
+  ✔ claude local install + uninstall (235.0427ms)
+  ✔ codex local install + uninstall (233.438ms)
+  ✔ cursor local install + uninstall (251.9851ms)
+  ✔ copilot local install + uninstall (247.6546ms)
+  ✔ gemini local install + uninstall (202.3418ms)
+  ✔ antigravity local install + uninstall (340.404ms)
+  ✔ kiro local install + uninstall (218.8696ms)
+  ✔ windsurf local install + uninstall (220.6974ms)
+  ✔ opencode local install + uninstall (256.1587ms)
+  ✔ kilo local install + uninstall (250.1834ms)
+  ✔ kilocode local install + uninstall (451.9069ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2916.1332ms)
+▶ installer global mode installs runtime-native artifacts for every globally supported runtime
+  ✔ claude global install + uninstall (206.979ms)
+  ✔ codex global install + uninstall (218.4989ms)
+  ✔ copilot global install + uninstall (307.207ms)
+  ✔ gemini global install + uninstall (230.0314ms)
+  ✔ antigravity global install + uninstall (373.9618ms)
+  ✔ kiro global install + uninstall (278.1131ms)
+  ✔ opencode global install + uninstall (264.0211ms)
+  ✔ kilo global install + uninstall (366.862ms)
+  ✔ kilocode global install + uninstall (480.7824ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (2730.5563ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (713.2287ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (327.4913ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (174.0959ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (193.0824ms)
+✔ installer --verify validates checksums in local source installs (239.5033ms)
+✔ P01-T10 package contents preserve the approved v8 legacy path set (1052.4168ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.1498ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.0845ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.1481ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (318.238ms)
+✔ accepts legal protocol, core, artifacts, board, store, and legacy bridge imports (21.5072ms)
+✔ rejects protocol imports from core (6.8622ms)
+✔ rejects deep imports across workspace package exports (6.9741ms)
+✔ rejects provider and storage imports outside the SQLite provider package (12.2016ms)
+✔ rejects workspace package imports of legacy prompt assets (11.3144ms)
+✔ P01-T11 validate-next plan is the shared CI/local gate order (1.0134ms)
+✔ P01-T11 CI workflow blocks Phase 1 gates on all supported platforms (9.1362ms)
+✔ P01-T11 protocol compatibility workflow uses pinned actions and generated schema checks (2.5507ms)
+✔ P01-T11 generated protocol docs match the current schema and transition sources (6965.699ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8631.0026
+Scope: 9 of 10 workspace projects
+packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/protocol test: $ tsc -p tsconfig.json
+packages/protocol test: ✔ P01-T09 versioned records fail closed without a valid schemaVersion (1.3042ms)
+packages/protocol test: ✔ P01-T09 canonical compatibility fixtures remain readable (4.5536ms)
+packages/protocol test: ✔ P01-T09 protocol negotiation rejects unsupported old and future versions (0.8861ms)
+packages/protocol test: ✔ P01-T09 explicit migrations apply in order and are idempotent when repeated (2.3114ms)
+packages/protocol test: ✔ P01-T09 migration failures do not partially mutate caller input (0.8398ms)
+packages/protocol test: ✔ P01-T09 downcasts require explicit information-preservation evidence (0.177ms)
+packages/protocol test: ✔ P01-T09 compatibility reports include matrix and evolution policy text (0.2579ms)
+packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (12.1712ms)
+packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (3.5281ms)
+packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.1672ms)
+packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (1.3506ms)
+packages/protocol test: ✔ review feedback: project IDs must match project slugs (1.0361ms)
+packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (2.023ms)
+packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (2.5313ms)
+packages/protocol test: ✔ review feedback: superseded requirements require replacement references (1.3139ms)
+packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (2.342ms)
+packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.6419ms)
+packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (1.8804ms)
+packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.4581ms)
+packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (1.1567ms)
+packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (1.4997ms)
+packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (7.2517ms)
+packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (12.0513ms)
+packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.6788ms)
+packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (2.721ms)
+packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.7271ms)
+packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.5589ms)
+packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (6.6378ms)
+packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.3786ms)
+packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (2.2032ms)
+packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (1.0416ms)
+packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (2.5327ms)
+packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (1.0319ms)
+packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (11.2663ms)
+packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (1.0518ms)
+packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (16.1387ms)
+packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (2.7812ms)
+packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.6731ms)
+packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (3.0663ms)
+packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (1.2164ms)
+packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (1.3429ms)
+packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (1.2496ms)
+packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (1.0993ms)
+packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.2031ms)
+packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.9849ms)
+packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (2.2199ms)
+packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (15.0171ms)
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (5.5689ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (0.7686ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.8922ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (2.0411ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (1.4042ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (6.8937ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (2.8983ms)
+packages/protocol test: ℹ tests 54
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 54
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 285.3969
+packages/protocol test: Done
+packages/core test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/artifacts test$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/core test: $ tsc -p tsconfig.json
+packages/artifacts test: $ tsc -p tsconfig.json
+packages/artifacts test: $ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+packages/core test: ✔ P01-T08 ADR-006 golden examples classify into expected tiers and gates (2.2177ms)
+packages/core test: ✔ P01-T08 adding a high-risk signal never lowers the derived tier (0.5316ms)
+packages/core test: ✔ P01-T08 lower-tier overrides require decision-owner approval and cannot undercut hard floors (1.5699ms)
+packages/core test: ✔ P01-T08 explanations list normalized signals and overrides deterministically (0.1954ms)
+packages/core test: ✔ P01-T08 untrusted text cannot alter policy without an approved policy artifact (0.7768ms)
+packages/core test: ✔ P01-T08 gate derivation rejects malformed custom gate policy instead of emitting partial gates (0.239ms)
+packages/core test: ✔ P01-T08 custom policy validation reports malformed policy objects without TypeErrors (0.4808ms)
+packages/core test: ✔ P01-T08 risk signal and override runtime validation rejects malformed JavaScript inputs (0.2215ms)
+packages/core test: ✔ P01-T08 lower-tier overrides enforce retained gates in the returned gate set (0.2122ms)
+packages/core test: ✔ P01-T08 risk profile reason strings stay within protocol limits (0.2416ms)
+packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.7476ms)
+packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.5589ms)
+packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (2.0974ms)
+packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.1466ms)
+packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.1543ms)
+packages/core test: ✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.274ms)
+packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.5469ms)
+packages/core test: ✔ P01-T07 integration completions must match the recorded side-effect intent (0.1767ms)
+packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.7824ms)
+packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.3823ms)
+packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.1973ms)
+packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.4939ms)
+packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.1464ms)
+packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (0.0873ms)
+packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.3182ms)
+packages/core test: ℹ tests 25
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 25
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 237.6668
+packages/core test: Done
+packages/artifacts test: $ tsc -p tsconfig.json
+packages/artifacts test: ✔ P02-T07 previews and archives an accepted change into current truth (232.161ms)
+packages/artifacts test: ✔ P02-T07 archives removal of a primary requirement while preserving remaining requirements (152.013ms)
+packages/artifacts test: ✔ P02-T07 refuses to archive changes that are not accepted (59.9893ms)
+packages/artifacts test: ✔ P02-T07 refuses stale current-spec bases before mutating current truth (70.1117ms)
+packages/artifacts test: ✔ P02-T07 rollback does not overwrite concurrent current truth updates (97.1005ms)
+packages/artifacts test: ✔ P02-T07 refuses missing accepted evidence (65.4167ms)
+packages/artifacts test: ✔ P02-T07 rolls back current truth when archive metadata write fails (80.664ms)
+packages/artifacts test: ✔ P02-T07 retry after a recorded archive is idempotent (71.6811ms)
+packages/artifacts test: ✔ P02-T07 refuses idempotent archive retry when current truth drifted (82.9762ms)
+packages/artifacts test: ✔ canonical project artifact paths reject ambiguous or escaping input (1.6958ms)
+packages/artifacts test: ✔ stable protocol JSON sorts keys without locale-dependent ordering (0.218ms)
+packages/artifacts test: ✔ repository discovery and path resolution stay beneath the real project root (14.9842ms)
+packages/artifacts test: ✔ JSON artifact reads return protocol validation diagnostics with source paths (16.2761ms)
+packages/artifacts test: ✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (24.2241ms)
+packages/artifacts test: ✔ revisioned writes reject concurrent writers and stale superseded content (25.4047ms)
+packages/artifacts test: ✔ P02-T05 creates revisioned oracle metadata and manifest hashes change after oracle revision (114.5149ms)
+packages/artifacts test: ✔ P02-T05 oracle manifest reports invalid oracle filenames at their actual artifact path (19.6927ms)
+packages/artifacts test: ✔ P02-T05 oracle reads reject artifacts whose embedded oracle ID disagrees with the requested path (70.4034ms)
+packages/artifacts test: ✔ P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order (125.1301ms)
+packages/artifacts test: ✔ P02-T05 taskgraph rejects empty or duplicate artifact inputs with diagnostics (56.0667ms)
+packages/artifacts test: ✔ P02-T05 taskgraph rejects copied identities and stale manifest hashes on read (57.8852ms)
+packages/artifacts test: ✔ P02-T05 evidence index rejects incomplete provenance and records accepted evidence references (48.1378ms)
+packages/artifacts test: ✔ P02-T05 evidence index rejects empty inputs, copied identities, and stale manifest hashes (52.2139ms)
+packages/artifacts test: ✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (106.8283ms)
+packages/artifacts test: ✔ P02-T04 rejects conflicting delta operations before writing a bundle (25.3043ms)
+packages/artifacts test: ✔ P02-T04 detects stale current-spec bases during change validation (76.6541ms)
+packages/artifacts test: ✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (59.0744ms)
+packages/artifacts test: ✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (20.0454ms)
+packages/artifacts test: ✔ P02-T04 preflights bundle artifact paths before writing partial deltas (24.8773ms)
+packages/artifacts test: ✔ P02-T04 validates add deltas against current truth (67.4032ms)
+packages/artifacts test: ✔ P02-T04 rejects add bundle creation when the target already exists in unlisted current truth (28.344ms)
+packages/artifacts test: ✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (45.6095ms)
+packages/artifacts test: ✔ P02-T04 rejects side artifacts whose change IDs disagree with the bundle path (84.9662ms)
+packages/artifacts test: ✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (37.7832ms)
+packages/artifacts test: ✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (14.0852ms)
+packages/artifacts test: ✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (185.6715ms)
+packages/artifacts test: ✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (7.9541ms)
+packages/artifacts test: ✔ P02-T02 manifest schema reports malformed input without throwing (1.0812ms)
+packages/artifacts test: ✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (19.9081ms)
+packages/artifacts test: ✔ P02-T09 init allows migrated legacy protocol namespace while preserving collision checks (22.9915ms)
+packages/artifacts test: ✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (18.8119ms)
+packages/artifacts test: ✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (105.8125ms)
+packages/artifacts test: ✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (55.3486ms)
+packages/artifacts test: ✔ P02-T03 ignores non-file .md entries when listing current specs (19.8462ms)
+packages/artifacts test: ✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (15.9313ms)
+packages/artifacts test: ✔ P02-T03 preserves non-structural markdown headings inside current spec sections (25.9464ms)
+packages/artifacts test: ✔ P02-T03 rejects reserved current spec section headings inside section content (18.5773ms)
+packages/artifacts test: ✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (28.9949ms)
+packages/artifacts test: ✔ P02-T03 classifies semantic spec index diffs (0.44ms)
+packages/artifacts test: ✔ P02-T03 blocks stale edits and supports rename and deprecate operations (47.3749ms)
+packages/artifacts test: ✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (17.2866ms)
+packages/artifacts test: ✔ P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically (160.3857ms)
+packages/artifacts test: ✔ P02-T06 accepts shared oracle coverage without false orphan diagnostics (78.3044ms)
+packages/artifacts test: ✔ P02-T06 reports calibrated broken traceability chains with exact diagnostics (81.4683ms)
+packages/artifacts test: ✔ P02-T06 applies trace integrity checks to evidence references (76.0355ms)
+packages/artifacts test: ✔ P02-T06 reports stale artifact input revisions after downstream sources change (73.6723ms)
+packages/artifacts test: ✔ P02-T06 cycle diagnostics name only nodes participating in the cycle (77.6136ms)
+packages/artifacts test: ✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (62.3575ms)
+packages/artifacts test: ✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (60.8678ms)
+packages/artifacts test: ℹ tests 59
+packages/artifacts test: ℹ suites 0
+packages/artifacts test: ℹ pass 59
+packages/artifacts test: ℹ fail 0
+packages/artifacts test: ℹ cancelled 0
+packages/artifacts test: ℹ skipped 0
+packages/artifacts test: ℹ todo 0
+packages/artifacts test: ℹ duration_ms 1204.6938
+packages/artifacts test: Done
+packages/legacy-bridge test$ pnpm --filter @legion/artifacts build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/store-sqlite test$ pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/legacy-bridge test: $ tsc -p tsconfig.json
+packages/store-sqlite test: $ tsc -p tsconfig.json
+packages/store-sqlite test: $ tsc -p tsconfig.json
+packages/legacy-bridge test: $ tsc -p tsconfig.json
+packages/store-sqlite test: ✔ P03-T01 migrates a real board database and reports schema diagnostics (14.9243ms)
+packages/store-sqlite test: ✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (12.0313ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (6.5559ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner fails closed for unknown future schema versions (6.3041ms)
+packages/store-sqlite test: ✔ P03-T01 migration checksums are deterministic over ordered SQL statements (6.5147ms)
+packages/store-sqlite test: ℹ tests 5
+packages/store-sqlite test: ℹ suites 0
+packages/store-sqlite test: ℹ pass 5
+packages/store-sqlite test: ℹ fail 0
+packages/store-sqlite test: ℹ cancelled 0
+packages/store-sqlite test: ℹ skipped 0
+packages/store-sqlite test: ℹ todo 0
+packages/store-sqlite test: ℹ duration_ms 116.4032
+packages/store-sqlite test: Done
+packages/legacy-bridge test: ✔ P02-T09 dry-run inventories local and global Codex .legion protocol installs deterministically (185.4723ms)
+packages/legacy-bridge test: ✔ P02-T09 apply preserves customized bytes and unblocks v9 project initialization (116.4923ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback restores the exact pre-migration .legion layout (122.6066ms)
+packages/legacy-bridge test: ✔ P02-T09 partial installs without manifests are preserved as customized legacy data (42.3368ms)
+packages/legacy-bridge test: ✔ P02-T09 repeat migration is a no-op report without moving v9 project data (153.599ms)
+packages/legacy-bridge test: ✔ P02-T09 apply resumes an interrupted legacy-protocol move with matching existing files (149.9874ms)
+packages/legacy-bridge test: ✔ P02-T09 apply removes empty legacy roots so v9 init is unblocked (51.5951ms)
+packages/legacy-bridge test: ✔ P02-T09 apply moves legacy migration roots so v9 init is unblocked (109.0469ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects backup roots that overlap .legion before copying (58.4654ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects symlinked legacy entries instead of silently dropping them (23.6586ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source (54.8675ms)
+packages/legacy-bridge test: ✔ P02-T09 backup manifests use absolute paths so rollback survives cwd changes (110.685ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback rejects unusable backup manifests before deleting current .legion (29.9065ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback rejects backup manifests from another repository before deleting current .legion (103.8692ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback verifies backup hashes before replacing current .legion (100.9134ms)
+packages/legacy-bridge test: ✔ P02-T09 apply rejects tampered migration report moves before cleanup (55.5901ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run stages deterministic v9 artifacts without mutating legacy .planning (112.3986ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run reports stale state, contradictory plan summaries, and missing requirements (46.6044ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run rejects staging paths that overlap repository or source roots (11.3681ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run handles EOF summaries, malformed YAML, and invalid timestamps as diagnostics (74.9703ms)
+packages/legacy-bridge test: ✔ P02-T08 apply backs up destination and rollback restores exact pre-import .legion bytes (81.2923ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects tampered staging, bad reports, and invalid timestamps without mutating destination (48.814ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects backup roots that overlap .legion before copying (47.7021ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion (58.5761ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects backup roots that overlap planning source or staging roots (87.0233ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs (55.9957ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects malformed backup manifests without deleting current .legion (6.0491ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects unusable backup manifests before deleting current .legion (7.1143ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects backup manifests from another repository before deleting current .legion (69.2787ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback accepts backup manifests created through a symlinked repository root (79.3004ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects backup paths inside current .legion before deleting (9.5867ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects relative manifest repository roots before deleting current .legion (5.397ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback verifies backup hashes before replacing current .legion (65.8173ms)
+packages/legacy-bridge test: ✔ P02-T08 repeated apply is rejected without changing destination (61.6552ms)
+packages/legacy-bridge test: ℹ tests 34
+packages/legacy-bridge test: ℹ suites 0
+packages/legacy-bridge test: ℹ pass 34
+packages/legacy-bridge test: ℹ fail 0
+packages/legacy-bridge test: ℹ cancelled 0
+packages/legacy-bridge test: ℹ skipped 0
+packages/legacy-bridge test: ℹ todo 0
+packages/legacy-bridge test: ℹ duration_ms 1763.3059
+packages/legacy-bridge test: Done
+apps/cli-e2e test$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (4.0936ms)
+apps/cli-e2e test: ✔ P02-T10 valueless global flags remain flags before positional commands (581.3297ms)
+apps/cli-e2e test: ✔ P02-T10 valueless command flags remain flags before positional arguments (998.1505ms)
+apps/cli-e2e test: ✔ P02-T10 command subcommands honor help flags without requiring inputs (583.9713ms)
+apps/cli-e2e test: ✔ P02-T10 JSON input boundary failures return usage diagnostics (881.2562ms)
+apps/cli-e2e test: ✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (964.8827ms)
+apps/cli-e2e test: ✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (1601.0479ms)
+apps/cli-e2e test: ✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (1025.4376ms)
+apps/cli-e2e test: ✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (1086.8575ms)
+apps/cli-e2e test: ℹ tests 9
+apps/cli-e2e test: ℹ suites 0
+apps/cli-e2e test: ℹ pass 9
+apps/cli-e2e test: ℹ fail 0
+apps/cli-e2e test: ℹ cancelled 0
+apps/cli-e2e test: ℹ skipped 0
+apps/cli-e2e test: ℹ todo 0
+apps/cli-e2e test: ℹ duration_ms 7962.7828
+apps/cli-e2e test: Done
+
+[validate:next] npm-pack: npm pack --dry-run --json
+[
+  {
+    "id": "@9thlevelsoftware/legion@9.0.0-alpha.0",
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "size": 740604,
+    "unpackedSize": 2388215,
+    "shasum": "4557f7d87475007e6d0596f6de20f2dd6f6e272d",
+    "integrity": "sha512-ncW58qg9KrLFZU6bg5zBpKbfe+oJSWViW3mbZUqBsp0GQyFXhTD9YxCTKea+8afBfMU5Cym68pjWOWYT7IB+Mg==",
+    "filename": "9thlevelsoftware-legion-9.0.0-alpha.0.tgz",
+    "files": [
+      {
+        "path": ".codex-plugin/plugin.json",
+        "size": 1451,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 82689,
+        "mode": 420
+      },
+      {
+        "path": "adapters/ADAPTER.md",
+        "size": 7070,
+        "mode": 420
+      },
+      {
+        "path": "adapters/aider.md",
+        "size": 9574,
+        "mode": 420
+      },
+      {
+        "path": "adapters/antigravity-cli.md",
+        "size": 4143,
+        "mode": 420
+      },
+      {
+        "path": "adapters/claude-code.md",
+        "size": 6166,
+        "mode": 420
+      },
+      {
+        "path": "adapters/codex-cli.md",
+        "size": 6001,
+        "mode": 420
+      },
+      {
+        "path": "adapters/copilot-cli.md",
+        "size": 4884,
+        "mode": 420
+      },
+      {
+        "path": "adapters/cursor.md",
+        "size": 3797,
+        "mode": 420
+      },
+      {
+        "path": "adapters/gemini-cli.md",
+        "size": 5388,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-cli.md",
+        "size": 11584,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-code.md",
+        "size": 5580,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kiro-cli.md",
+        "size": 5189,
+        "mode": 420
+      },
+      {
+        "path": "adapters/opencode.md",
+        "size": 9516,
+        "mode": 420
+      },
+      {
+        "path": "adapters/windsurf.md",
+        "size": 3690,
+        "mode": 420
+      },
+      {
+        "path": "agents/agents-orchestrator.md",
+        "size": 14386,
+        "mode": 420
+      },
+      {
+        "path": "agents/data-analytics-engineer.md",
+        "size": 22530,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-brand-guardian.md",
+        "size": 12555,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ui-designer.md",
+        "size": 8898,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-architect.md",
+        "size": 9861,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-researcher.md",
+        "size": 14902,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-visual-storyteller.md",
+        "size": 8174,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-whimsy-injector.md",
+        "size": 6814,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-ai-engineer.md",
+        "size": 8213,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-backend-architect.md",
+        "size": 10376,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-frontend-developer.md",
+        "size": 10083,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-infrastructure-devops.md",
+        "size": 19526,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-laravel-specialist.md",
+        "size": 19715,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-mobile-app-builder.md",
+        "size": 7962,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-rapid-prototyper.md",
+        "size": 7847,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-security-engineer.md",
+        "size": 17550,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-senior-developer.md",
+        "size": 23663,
+        "mode": 420
+      },
+      {
+        "path": "agents/lsp-index-engineer.md",
+        "size": 12207,
+        "mode": 420
+      },
+      {
+        "path": "agents/macos-spatial-metal-engineer.md",
+        "size": 13214,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-app-store-optimizer.md",
+        "size": 14068,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-content-social-strategist.md",
+        "size": 15315,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-growth-hacker.md",
+        "size": 17940,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-social-platform-specialist.md",
+        "size": 12108,
+        "mode": 420
+      },
+      {
+        "path": "agents/polymath.md",
+        "size": 9366,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-feedback-synthesizer.md",
+        "size": 19936,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-sprint-prioritizer.md",
+        "size": 11864,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-technical-writer.md",
+        "size": 17992,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-trend-researcher.md",
+        "size": 11487,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-experiment-tracker.md",
+        "size": 10434,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-project-shepherd.md",
+        "size": 10730,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-operations.md",
+        "size": 10740,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-producer.md",
+        "size": 11743,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-manager-senior.md",
+        "size": 10777,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-executive-summary-generator.md",
+        "size": 10022,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-finance-tracker.md",
+        "size": 9594,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-legal-compliance-checker.md",
+        "size": 16875,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-support-responder.md",
+        "size": 16359,
+        "mode": 420
+      },
+      {
+        "path": "agents/terminal-integration-specialist.md",
+        "size": 26475,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-api-tester.md",
+        "size": 13503,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-code-polisher.md",
+        "size": 19389,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-performance-benchmarker.md",
+        "size": 13114,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-qa-verification-specialist.md",
+        "size": 16945,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-test-results-analyzer.md",
+        "size": 15571,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-tool-evaluator.md",
+        "size": 8290,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-workflow-optimizer.md",
+        "size": 11799,
+        "mode": 420
+      },
+      {
+        "path": "agents/visionos-spatial-engineer.md",
+        "size": 22563,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-cockpit-interaction-specialist.md",
+        "size": 24263,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-immersive-developer.md",
+        "size": 25842,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-interface-architect.md",
+        "size": 22845,
+        "mode": 420
+      },
+      {
+        "path": "bin/install.js",
+        "size": 74504,
+        "mode": 420
+      },
+      {
+        "path": "bin/runtime-metadata.js",
+        "size": 19568,
+        "mode": 420
+      },
+      {
+        "path": "checksums.sha256",
+        "size": 13147,
+        "mode": 420
+      },
+      {
+        "path": "commands/advise.md",
+        "size": 10936,
+        "mode": 420
+      },
+      {
+        "path": "commands/agent.md",
+        "size": 5316,
+        "mode": 420
+      },
+      {
+        "path": "commands/board.md",
+        "size": 12260,
+        "mode": 420
+      },
+      {
+        "path": "commands/build.md",
+        "size": 32636,
+        "mode": 420
+      },
+      {
+        "path": "commands/explore.md",
+        "size": 6525,
+        "mode": 420
+      },
+      {
+        "path": "commands/learn.md",
+        "size": 9175,
+        "mode": 420
+      },
+      {
+        "path": "commands/map.md",
+        "size": 6788,
+        "mode": 420
+      },
+      {
+        "path": "commands/milestone.md",
+        "size": 10553,
+        "mode": 420
+      },
+      {
+        "path": "commands/plan.md",
+        "size": 28865,
+        "mode": 420
+      },
+      {
+        "path": "commands/polish.md",
+        "size": 17941,
+        "mode": 420
+      },
+      {
+        "path": "commands/portfolio.md",
+        "size": 10443,
+        "mode": 420
+      },
+      {
+        "path": "commands/quick.md",
+        "size": 14980,
+        "mode": 420
+      },
+      {
+        "path": "commands/retro.md",
+        "size": 8911,
+        "mode": 420
+      },
+      {
+        "path": "commands/review.md",
+        "size": 43433,
+        "mode": 420
+      },
+      {
+        "path": "commands/ship.md",
+        "size": 12578,
+        "mode": 420
+      },
+      {
+        "path": "commands/start.md",
+        "size": 9477,
+        "mode": 420
+      },
+      {
+        "path": "commands/status.md",
+        "size": 13783,
+        "mode": 420
+      },
+      {
+        "path": "commands/update.md",
+        "size": 4285,
+        "mode": 420
+      },
+      {
+        "path": "commands/validate.md",
+        "size": 14223,
+        "mode": 420
+      },
+      {
+        "path": "docs/control-modes.md",
+        "size": 7039,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-audit.md",
+        "size": 6237,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-certification-checklists.md",
+        "size": 7551,
+        "mode": 420
+      },
+      {
+        "path": "docs/security/install-integrity.md",
+        "size": 1188,
+        "mode": 420
+      },
+      {
+        "path": "docs/settings.schema.json",
+        "size": 5767,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1884,
+        "mode": 420
+      },
+      {
+        "path": "settings.json",
+        "size": 1258,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-creator/SKILL.md",
+        "size": 16439,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/CATALOG.md",
+        "size": 22617,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/DOMAINS.md",
+        "size": 16545,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/GAP_ANALYSIS.md",
+        "size": 27630,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md",
+        "size": 1492,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/SKILL.md",
+        "size": 11431,
+        "mode": 420
+      },
+      {
+        "path": "skills/authority-enforcer/SKILL.md",
+        "size": 32689,
+        "mode": 420
+      },
+      {
+        "path": "skills/board-of-directors/SKILL.md",
+        "size": 33451,
+        "mode": 420
+      },
+      {
+        "path": "skills/cli-dispatch/SKILL.md",
+        "size": 24085,
+        "mode": 420
+      },
+      {
+        "path": "skills/code-polish/SKILL.md",
+        "size": 29382,
+        "mode": 420
+      },
+      {
+        "path": "skills/codebase-mapper/SKILL.md",
+        "size": 89049,
+        "mode": 420
+      },
+      {
+        "path": "skills/design-workflows/SKILL.md",
+        "size": 57645,
+        "mode": 420
+      },
+      {
+        "path": "skills/execution-tracker/SKILL.md",
+        "size": 14366,
+        "mode": 420
+      },
+      {
+        "path": "skills/github-sync/SKILL.md",
+        "size": 25094,
+        "mode": 420
+      },
+      {
+        "path": "skills/hooks-integration/SKILL.md",
+        "size": 5778,
+        "mode": 420
+      },
+      {
+        "path": "skills/intent-router/SKILL.md",
+        "size": 53790,
+        "mode": 420
+      },
+      {
+        "path": "skills/legion/SKILL.md",
+        "size": 2469,
+        "mode": 420
+      },
+      {
+        "path": "skills/marketing-workflows/SKILL.md",
+        "size": 28329,
+        "mode": 420
+      },
+      {
+        "path": "skills/memory-manager/SKILL.md",
+        "size": 53604,
+        "mode": 420
+      },
+      {
+        "path": "skills/milestone-tracker/SKILL.md",
+        "size": 17643,
+        "mode": 420
+      },
+      {
+        "path": "skills/phase-decomposer/SKILL.md",
+        "size": 54398,
+        "mode": 420
+      },
+      {
+        "path": "skills/plan-critique/SKILL.md",
+        "size": 26864,
+        "mode": 420
+      },
+      {
+        "path": "skills/polymath-engine/SKILL.md",
+        "size": 5860,
+        "mode": 420
+      },
+      {
+        "path": "skills/portfolio-manager/SKILL.md",
+        "size": 14075,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/SKILL.md",
+        "size": 18262,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/project-template.md",
+        "size": 749,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/roadmap-template.md",
+        "size": 752,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/state-template.md",
+        "size": 645,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-evaluators/SKILL.md",
+        "size": 67308,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-loop/SKILL.md",
+        "size": 63521,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-panel/SKILL.md",
+        "size": 33535,
+        "mode": 420
+      },
+      {
+        "path": "skills/security-review/SKILL.md",
+        "size": 27894,
+        "mode": 420
+      },
+      {
+        "path": "skills/ship-pipeline/SKILL.md",
+        "size": 13798,
+        "mode": 420
+      },
+      {
+        "path": "skills/spec-pipeline/SKILL.md",
+        "size": 35353,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/SKILL.md",
+        "size": 96973,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-A.md",
+        "size": 4807,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-B.md",
+        "size": 6392,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-core/SKILL.md",
+        "size": 13992,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-domains/SKILL.md",
+        "size": 1498,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-github/SKILL.md",
+        "size": 1624,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-memory/SKILL.md",
+        "size": 1422,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common/SKILL.md",
+        "size": 50567,
+        "mode": 420
+      }
+    ],
+    "entryCount": 135,
+    "bundled": []
+  }
+]
+
+[validate:next] pnpm-pack: pnpm pack --dry-run
+package: @9thlevelsoftware/legion@9.0.0-alpha.0
+Tarball Contents
+.codex-plugin/plugin.json
+adapters/ADAPTER.md
+adapters/aider.md
+adapters/antigravity-cli.md
+adapters/claude-code.md
+adapters/codex-cli.md
+adapters/copilot-cli.md
+adapters/cursor.md
+adapters/gemini-cli.md
+adapters/kilo-cli.md
+adapters/kilo-code.md
+adapters/kiro-cli.md
+adapters/opencode.md
+adapters/windsurf.md
+agents/agents-orchestrator.md
+agents/data-analytics-engineer.md
+agents/design-brand-guardian.md
+agents/design-ui-designer.md
+agents/design-ux-architect.md
+agents/design-ux-researcher.md
+agents/design-visual-storyteller.md
+agents/design-whimsy-injector.md
+agents/engineering-ai-engineer.md
+agents/engineering-backend-architect.md
+agents/engineering-frontend-developer.md
+agents/engineering-infrastructure-devops.md
+agents/engineering-laravel-specialist.md
+agents/engineering-mobile-app-builder.md
+agents/engineering-rapid-prototyper.md
+agents/engineering-security-engineer.md
+agents/engineering-senior-developer.md
+agents/lsp-index-engineer.md
+agents/macos-spatial-metal-engineer.md
+agents/marketing-app-store-optimizer.md
+agents/marketing-content-social-strategist.md
+agents/marketing-growth-hacker.md
+agents/marketing-social-platform-specialist.md
+agents/polymath.md
+agents/product-feedback-synthesizer.md
+agents/product-sprint-prioritizer.md
+agents/product-technical-writer.md
+agents/product-trend-researcher.md
+agents/project-management-experiment-tracker.md
+agents/project-management-project-shepherd.md
+agents/project-management-studio-operations.md
+agents/project-management-studio-producer.md
+agents/project-manager-senior.md
+agents/support-executive-summary-generator.md
+agents/support-finance-tracker.md
+agents/support-legal-compliance-checker.md
+agents/support-support-responder.md
+agents/terminal-integration-specialist.md
+agents/testing-api-tester.md
+agents/testing-code-polisher.md
+agents/testing-performance-benchmarker.md
+agents/testing-qa-verification-specialist.md
+agents/testing-test-results-analyzer.md
+agents/testing-tool-evaluator.md
+agents/testing-workflow-optimizer.md
+agents/visionos-spatial-engineer.md
+agents/xr-cockpit-interaction-specialist.md
+agents/xr-immersive-developer.md
+agents/xr-interface-architect.md
+bin/install.js
+bin/runtime-metadata.js
+checksums.sha256
+commands/advise.md
+commands/agent.md
+commands/board.md
+commands/build.md
+commands/explore.md
+commands/learn.md
+commands/map.md
+commands/milestone.md
+commands/plan.md
+commands/polish.md
+commands/portfolio.md
+commands/quick.md
+commands/retro.md
+commands/review.md
+commands/ship.md
+commands/start.md
+commands/status.md
+commands/update.md
+commands/validate.md
+docs/control-modes.md
+docs/runtime-audit.md
+docs/runtime-certification-checklists.md
+docs/security/install-integrity.md
+docs/settings.schema.json
+package.json
+README.md
+settings.json
+skills/agent-creator/SKILL.md
+skills/agent-registry/CATALOG.md
+skills/agent-registry/DOMAINS.md
+skills/agent-registry/GAP_ANALYSIS.md
+skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md
+skills/agent-registry/SKILL.md
+skills/authority-enforcer/SKILL.md
+skills/board-of-directors/SKILL.md
+skills/cli-dispatch/SKILL.md
+skills/code-polish/SKILL.md
+skills/codebase-mapper/SKILL.md
+skills/design-workflows/SKILL.md
+skills/execution-tracker/SKILL.md
+skills/github-sync/SKILL.md
+skills/hooks-integration/SKILL.md
+skills/intent-router/SKILL.md
+skills/legion/SKILL.md
+skills/marketing-workflows/SKILL.md
+skills/memory-manager/SKILL.md
+skills/milestone-tracker/SKILL.md
+skills/phase-decomposer/SKILL.md
+skills/plan-critique/SKILL.md
+skills/polymath-engine/SKILL.md
+skills/portfolio-manager/SKILL.md
+skills/questioning-flow/SKILL.md
+skills/questioning-flow/templates/project-template.md
+skills/questioning-flow/templates/roadmap-template.md
+skills/questioning-flow/templates/state-template.md
+skills/review-evaluators/SKILL.md
+skills/review-loop/SKILL.md
+skills/review-panel/SKILL.md
+skills/security-review/SKILL.md
+skills/ship-pipeline/SKILL.md
+skills/spec-pipeline/SKILL.md
+skills/wave-executor/SKILL.md
+skills/wave-executor/WAVE-A.md
+skills/wave-executor/WAVE-B.md
+skills/workflow-common-core/SKILL.md
+skills/workflow-common-domains/SKILL.md
+skills/workflow-common-github/SKILL.md
+skills/workflow-common-memory/SKILL.md
+skills/workflow-common/SKILL.md
+Tarball Details
+9thlevelsoftware-legion-9.0.0-alpha.0.tgz

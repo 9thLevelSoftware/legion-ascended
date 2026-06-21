@@ -1,0 +1,16 @@
+$ pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ P03-T01 migrates a real board database and reports schema diagnostics (12.5282ms)
+✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (10.3835ms)
+✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (5.5537ms)
+✔ P03-T01 migration runner fails closed for unknown future schema versions (6.0323ms)
+✔ P03-T01 migration checksums are deterministic over ordered SQL statements (5.0955ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 98.5223

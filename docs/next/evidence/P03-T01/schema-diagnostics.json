@@ -1,0 +1,41 @@
+{
+  "databasePath": "docs/next/evidence/P03-T01/board-diagnostics.sqlite",
+  "userVersion": 1,
+  "journalMode": "wal",
+  "foreignKeys": true,
+  "busyTimeoutMs": 5000,
+  "tables": [
+    "board_approvals",
+    "board_claims",
+    "board_idempotency_records",
+    "board_metadata",
+    "board_outbox",
+    "board_projections",
+    "board_schema_migrations",
+    "board_task_comments",
+    "board_task_events",
+    "board_task_links",
+    "board_task_runs",
+    "board_tasks"
+  ],
+  "indexes": [
+    "idx_board_claims_live_task_generation",
+    "idx_board_idempotency_scope_key",
+    "idx_board_outbox_status",
+    "idx_board_task_events_aggregate_sequence",
+    "idx_board_task_events_global_sequence",
+    "idx_board_task_links_depends_on",
+    "idx_board_task_runs_task",
+    "idx_board_tasks_status_priority"
+  ],
+  "missingTables": [],
+  "missingIndexes": [],
+  "migrations": [
+    {
+      "version": 1,
+      "name": "create-board-control-plane-schema",
+      "checksum": "db4ff9c7f4a88800bf3880ce2a2cdec85b109f77303d4011188e62c3a0037f34",
+      "appliedAt": "2026-06-21T19:33:55.945Z"
+    }
+  ]
+}

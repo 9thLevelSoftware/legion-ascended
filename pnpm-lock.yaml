@@ -45,6 +45,18 @@ importers:
         specifier: ^24.0.0
         version: 24.13.2
 
+  packages/board:
+    dependencies:
+      '@legion/board-store':
+        specifier: workspace:*
+        version: link:../board-store
+
+  packages/board-store:
+    dependencies:
+      '@legion/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/cli:
     dependencies:
       '@legion/artifacts':
@@ -88,6 +100,16 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  packages/store-sqlite:
+    dependencies:
+      '@legion/board-store':
+        specifier: workspace:*
+        version: link:../board-store
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
 
 packages:
 

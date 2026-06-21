@@ -23,6 +23,25 @@ const DEFAULT_PACKAGES = [
     allowedWorkspaceImports: ["@legion/protocol", "@legion/core"]
   },
   {
+    name: "@legion/board-store",
+    root: "packages/board-store",
+    src: "packages/board-store/src",
+    allowedWorkspaceImports: ["@legion/protocol"]
+  },
+  {
+    name: "@legion/store-sqlite",
+    root: "packages/store-sqlite",
+    src: "packages/store-sqlite/src",
+    allowedWorkspaceImports: ["@legion/board-store"],
+    allowedProviderOrStorageImports: ["node:sqlite"]
+  },
+  {
+    name: "@legion/board",
+    root: "packages/board",
+    src: "packages/board/src",
+    allowedWorkspaceImports: ["@legion/board-store", "@legion/protocol", "@legion/core"]
+  },
+  {
     name: "@legion/legacy-bridge",
     root: "packages/legacy-bridge",
     src: "packages/legacy-bridge/src",
@@ -133,7 +152,8 @@ function resolvesToLegacyPromptAsset(specifier, relativeFile) {
 function validateSpecifier({ specifier, packageConfig, relativeFile }) {
   const violations = [];
 
-  if (FORBIDDEN_PROVIDER_OR_STORAGE_IMPORTS.has(specifier)) {
+  const allowedProviderOrStorageImports = new Set(packageConfig.allowedProviderOrStorageImports ?? []);
+  if (FORBIDDEN_PROVIDER_OR_STORAGE_IMPORTS.has(specifier) && !allowedProviderOrStorageImports.has(specifier)) {
     violations.push({
       file: relativeFile,
       specifier,
