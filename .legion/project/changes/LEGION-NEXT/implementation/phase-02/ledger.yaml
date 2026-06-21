@@ -13,7 +13,7 @@ tasks:
   P02-T04: { status: DONE, run_id: "P02-T04-20260620-change-bundle-services", commit: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05" }
   P02-T05: { status: DONE, run_id: "P02-T05-20260620-change-support-artifacts", commit: "08d261017792e591db637d9a8b6a959a56141e84" }
   P02-T06: { status: DONE, run_id: "P02-T06-20260621-traceability-invalidation", commit: "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7" }
-  P02-T07: { status: NOT_STARTED, run_id: null, commit: null }
+  P02-T07: { status: DONE, run_id: "P02-T07-20260621-accepted-change-archive", commit: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861" }
   P02-T08: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T09: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T10: { status: NOT_STARTED, run_id: null, commit: null }
@@ -60,3 +60,7 @@ evidence:
   - docs/next/evidence/P02-T06/invalidation-impact-report.md
   - docs/next/evidence/P02-T06/full-validation.log
   - docs/next/evidence/P02-T06/completion-report.yaml
+  - docs/next/evidence/P02-T07/archive-test.log
+  - docs/next/evidence/P02-T07/archive-idempotency-proof.json
+  - docs/next/evidence/P02-T07/full-validation.log
+  - docs/next/evidence/P02-T07/completion-report.yaml

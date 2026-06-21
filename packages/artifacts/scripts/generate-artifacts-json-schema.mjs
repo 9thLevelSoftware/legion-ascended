@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   changeArtifactManifestJsonSchema,
+  archiveRecordJsonSchema,
   changeBundleJsonSchema,
   currentSpecDocumentJsonSchema,
   evidenceIndexJsonSchema,
@@ -16,6 +17,7 @@ import {
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const outputDirectory = join(scriptDirectory, "..", "..", "..", "schemas", "artifacts");
 const outputSchemas = {
+  "archive-record.schema.json": archiveRecordJsonSchema,
   "change-artifact-manifest.schema.json": changeArtifactManifestJsonSchema,
   "change-bundle.schema.json": changeBundleJsonSchema,
   "evidence-index.schema.json": evidenceIndexJsonSchema,

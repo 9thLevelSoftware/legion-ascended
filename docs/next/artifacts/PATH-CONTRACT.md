@@ -22,6 +22,7 @@ The resolver persists only POSIX-style repository paths. Absolute paths, backsla
 | Oracle | `.legion/project/changes/<change-id>/oracle/<oracle-id>.yaml` |
 | Task graph | `.legion/project/changes/<change-id>/taskgraph.json` |
 | Evidence index | `.legion/project/changes/<change-id>/evidence-index.json` |
+| Archive record | `.legion/project/changes/<change-id>/archive.json` |
 | ADRs | `.legion/project/adr/**` |
 
 `<change-id>`, `<requirement-id>`, and `<oracle-id>` are protocol IDs from `@legion/protocol`, such as `chg_legion-next`, `req_workflow-contract`, and `orc_acceptance-proof`.

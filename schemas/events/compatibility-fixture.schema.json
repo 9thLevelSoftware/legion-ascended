@@ -443,7 +443,8 @@
                 "decision-log",
                 "oracle",
                 "taskgraph",
-                "evidence-index"
+                "evidence-index",
+                "archive"
               ]
             },
             "artifact": {

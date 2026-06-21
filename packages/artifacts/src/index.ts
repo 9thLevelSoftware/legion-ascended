@@ -9,3 +9,4 @@ export * from "./taskgraphs/index.js";
 export * from "./evidence-index/index.js";
 export * from "./traceability/index.js";
 export * from "./invalidation/index.js";
+export * from "./archive/index.js";
