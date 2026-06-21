@@ -21,7 +21,7 @@ task_commits:
   P02-T02: "93b17d7ec547cd46564144d3a406224cfadf0dd8"
   P02-T03: "748d9e9bb87085560b40b3e498c0b22936cb07ff"
   P02-T04: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05"
-  P02-T05: null
+  P02-T05: "3aab66becad71c00f6d57e25baa22abbff10fdcb"
   P02-T06: null
   P02-T07: null
   P02-T08: null
@@ -231,7 +231,7 @@ entries:
   - task: P02-T05
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
     description: Phase 2 ledger updated for P02-T05 completion
-    sha256: c6db3709c72dc9a2c2ef45a1b3911b57a5373ba3033e1d88c97149af7f520414
+    sha256: 86e65e62376ee3560d8025f80d0739b0cfe8f90935ab96112e37e5fd3ae3c6fb
   - task: P02-T05
     artifact: packages/artifacts/src/oracles/schema.ts
     description: Revisioned oracle artifact and derived oracle manifest schemas plus generated JSON Schema source
