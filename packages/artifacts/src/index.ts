@@ -7,3 +7,5 @@ export * from "./changes/index.js";
 export * from "./oracles/index.js";
 export * from "./taskgraphs/index.js";
 export * from "./evidence-index/index.js";
+export * from "./traceability/index.js";
+export * from "./invalidation/index.js";
