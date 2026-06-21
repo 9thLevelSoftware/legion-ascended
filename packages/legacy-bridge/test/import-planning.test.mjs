@@ -516,6 +516,49 @@ test("P02-T08 apply rejects backup roots that overlap planning source or staging
   }
 });
 
+test("P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs", async () => {
+  const workspace = await tempRoot();
+  const previousCwd = process.cwd();
+  try {
+    const sourceRoot = path.join(workspace, "source");
+    const targetRoot = path.join(workspace, "target");
+    const stagingRoot = path.join(workspace, "stage");
+    await copyFixture("clean", sourceRoot);
+    await mkdir(path.join(targetRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(targetRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const planningBefore = await hashDirectory(path.join(sourceRoot, ".planning"));
+    const legionBefore = await hashDirectory(path.join(targetRoot, ".legion"));
+
+    process.chdir(sourceRoot);
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: targetRoot,
+      planningRoot: ".planning",
+      stagingRoot,
+      runId: "planning-import-relative-source-overlap",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+
+    process.chdir(targetRoot);
+    const applied = await applyPlanningImport({
+      repositoryRoot: targetRoot,
+      stagingRoot,
+      backupRoot: path.join(sourceRoot, ".planning", "backups"),
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+    assert.equal(await hashDirectory(path.join(sourceRoot, ".planning")), planningBefore);
+    assert.equal(await hashDirectory(path.join(targetRoot, ".legion")), legionBefore);
+  } finally {
+    process.chdir(previousCwd);
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T08 rollback rejects malformed backup manifests without deleting current .legion", async () => {
   const workspace = await tempRoot();
   try {

@@ -691,6 +691,7 @@ export async function scanPlanningSource(input: {
 export async function createPlanningImportDryRun(input: PlanningImportDryRunInput): Promise<PlanningImportDryRunResult> {
   const stagingRoot = safeResolvedStagingRoot(input);
   if (typeof stagingRoot !== "string") return stagingRoot;
+  const planningRoot = await resolveExistingPathComponents(input.planningRoot);
 
   const createdAt = parseUtcTimestamp({
     value: input.project.createdAt,
@@ -699,10 +700,10 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
   });
   if (typeof createdAt !== "string") return createdAt;
 
-  const inventory = await sourceInventory(input.planningRoot);
+  const inventory = await sourceInventory(planningRoot);
   if ("diagnostics" in inventory) return inventory;
 
-  const projectMarkdown = await readUtf8IfExists(path.join(input.planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === undefined) {
     return failure("invalid", [
       diagnostic({
@@ -789,7 +790,7 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
     });
   }
 
-  const plans = await parsePlans(input.planningRoot, inventory);
+  const plans = await parsePlans(planningRoot, inventory);
   for (const plan of plans) {
     mappings.push({
       sourcePath: plan.sourcePath,
@@ -809,8 +810,8 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
     mappings: mappings.sort((left, right) =>
       compareStrings(`${left.sourcePath}\0${left.targetPath}`, `${right.sourcePath}\0${right.targetPath}`)
     ),
-    conflicts: await planSummaryConflicts(input.planningRoot, plans),
-    uncertainties: await stateUncertainties(input.planningRoot),
+    conflicts: await planSummaryConflicts(planningRoot, plans),
+    uncertainties: await stateUncertainties(planningRoot),
     policy: {
       planningReadOnlyAfterApply: true,
       legacySourceDeleted: false,
