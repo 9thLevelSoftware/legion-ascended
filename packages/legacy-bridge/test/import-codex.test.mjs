@@ -406,6 +406,77 @@ test("P02-T09 apply removes empty legacy roots so v9 init is unblocked", async (
   }
 });
 
+test("P02-T09 apply moves legacy migration roots so v9 init is unblocked", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("local-codex", repositoryRoot);
+    await mkdir(path.join(repositoryRoot, ".legion", "migration"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "migration", "previous-report.json"), "{\"legacy\":true}\n", "utf8");
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-migration-root",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+    assert.ok(dryRun.report.moves.some((move) => move.sourcePath === ".legion/migration/previous-report.json"));
+
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, true);
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "migration")), false);
+    assert.equal(await exists(path.join(repositoryRoot, ".legion", "legacy-protocol", "migration", "previous-report.json")), true);
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P02-T09 rejects backup roots that overlap .legion before copying", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const stagingRoot = path.join(workspace, "stage");
+    await copyFixture("local-codex", repositoryRoot);
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    const unsafeBackupRoot = path.join(repositoryRoot, ".legion", "backups");
+
+    const dryRun = await createCodexLegionMigrationDryRun({
+      repositoryRoot,
+      stagingRoot,
+      runId: "codex-legion-unsafe-backup",
+      createdAt: FIXED_TIME
+    });
+    assert.equal(dryRun.ok, true);
+
+    const applied = await applyCodexLegionMigration({
+      repositoryRoot,
+      stagingRoot,
+      backupRoot: unsafeBackupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true
+    });
+    assert.equal(applied.ok, false);
+    assert.equal(applied.status, "invalid");
+    assert.ok(applied.diagnostics.some((diagnostic) => diagnostic.code === "unsafe_backup_root"));
+    assert.equal(await exists(unsafeBackupRoot), false);
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source", async () => {
   const workspace = await tempRoot();
   try {

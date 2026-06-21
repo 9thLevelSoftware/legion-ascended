@@ -292,6 +292,27 @@ function safeResolvedStagingRoot(input: {
   return stagingRoot;
 }
 
+function safeResolvedBackupRoot(input: {
+  readonly repositoryRoot: string;
+  readonly backupRoot: string;
+}): string | CodexLegionMigrationFailure {
+  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const backupRoot = path.resolve(input.backupRoot);
+  const legacyRoot = path.join(repositoryRoot, ".legion");
+
+  if (pathsOverlap(backupRoot, repositoryRoot) || pathsOverlap(backupRoot, legacyRoot)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "unsafe_backup_root",
+        message: "Backup root must not overlap the repository root or .legion source.",
+        sourcePath: input.backupRoot
+      })
+    ]);
+  }
+
+  return backupRoot;
+}
+
 function parseUtcTimestamp(input: {
   readonly value: UtcTimestamp | string | undefined;
   readonly code: string;
@@ -493,7 +514,7 @@ function topLevelLegionEntry(legionRelativeFile: string): string {
 
 function shouldMoveLegacyFile(legionRelativeFile: string): boolean {
   const root = topLevelLegionEntry(legionRelativeFile);
-  return root !== "project" && root !== "var" && root !== "legacy-protocol" && root !== "migration";
+  return root !== "project" && root !== "var" && root !== "legacy-protocol";
 }
 
 function isIgnorableLegionRootEntry(name: string): boolean {
@@ -501,7 +522,7 @@ function isIgnorableLegionRootEntry(name: string): boolean {
 }
 
 function isReservedLegionRootEntry(name: string): boolean {
-  return name === "project" || name === "var" || name === "legacy-protocol" || name === "migration" || isIgnorableLegionRootEntry(name);
+  return name === "project" || name === "var" || name === "legacy-protocol" || isIgnorableLegionRootEntry(name);
 }
 
 function classifySourceFile(relativePath: string, generatedPaths: ReadonlySet<string>): CodexLegionSourceClassification {
@@ -952,6 +973,9 @@ export async function applyCodexLegionMigration(
   if (stagedHashFailure !== undefined) return stagedHashFailure;
 
   const repositoryRoot = path.resolve(input.repositoryRoot);
+  const backupRoot = safeResolvedBackupRoot(input);
+  if (typeof backupRoot !== "string") return backupRoot;
+
   const sourceHashFailure = await validateCurrentSourceHash({
     repositoryRoot,
     report
@@ -960,7 +984,7 @@ export async function applyCodexLegionMigration(
 
   const backup = await backupLegionRoot({
     repositoryRoot,
-    backupRoot: input.backupRoot,
+    backupRoot,
     appliedAt,
     report
   });
