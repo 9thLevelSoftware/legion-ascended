@@ -1,0 +1,68 @@
+{
+  "task": "P02-T07",
+  "generatedAt": "2026-06-20T01:00:00.000Z",
+  "command": "node inline proof generator importing packages/artifacts/dist/index.js",
+  "happyPath": {
+    "beforeSpecHash": "sha256:74ee4c9c0a167ebdf3e6c8d23a2aa2c13904894757bc464b01847158c08fba5c",
+    "afterSpecHash": "sha256:48faf7f5868e27c389316a4c93d8867feca3ce1fe6a052b5b278e2e57d0da73a",
+    "diff": {
+      "added": [],
+      "modified": [
+        "req_archive-proof"
+      ],
+      "removed": [],
+      "moved": []
+    },
+    "currentSpecWrites": [
+      {
+        "operation": "update",
+        "path": ".legion/project/specs/req_archive-proof.md",
+        "expectedRevision": 1,
+        "nextRevision": 2,
+        "before": {
+          "path": ".legion/project/specs/req_archive-proof.md",
+          "sha256": "sha256:d188060004ae3ad037e2c2a4068822104b87474e0c714c00123da38c667b8553",
+          "mediaType": "text/markdown"
+        },
+        "after": {
+          "path": ".legion/project/specs/req_archive-proof.md",
+          "sha256": "sha256:eb0a8fc5ae9929a2f4f25759fdee65e9b1ceb68b118c8055a5abb98648bc1861",
+          "mediaType": "text/markdown"
+        }
+      }
+    ],
+    "archiveStatus": "archived",
+    "archiveHash": "sha256:fc79a136ee81d057b2c9a3e3e23105a0c207ebfd2ed3ce598a06aec5f8ab5371",
+    "archiveReference": {
+      "path": ".legion/project/changes/chg_archive-proof/archive.json",
+      "sha256": "sha256:daafb8fe30dbae9fb861ee0d484190c4565bacc9bb66945b2a43b16558680ac0",
+      "mediaType": "application/json"
+    },
+    "archiveRevision": {
+      "role": "archive",
+      "artifact": {
+        "path": ".legion/project/changes/chg_archive-proof/archive.json",
+        "sha256": "sha256:daafb8fe30dbae9fb861ee0d484190c4565bacc9bb66945b2a43b16558680ac0",
+        "mediaType": "application/json"
+      },
+      "revision": 1
+    },
+    "readBackHashMatches": true,
+    "retryStatus": "already_archived",
+    "retryHashMatches": true,
+    "currentSpecRevisionAfterArchive": 2,
+    "currentStatementAfterArchive": "archive-proof behavior is merged from an accepted change."
+  },
+  "rollbackFault": {
+    "status": "conflict",
+    "diagnosticCode": "archive_write_failed",
+    "currentSpecRevisionRestored": true,
+    "archiveRecordStatusAfterFailure": "not_found"
+  },
+  "conclusions": {
+    "dryRunPreviewMatchesAppliedTarget": true,
+    "archiveRecordHashVerifiedOnRead": true,
+    "idempotentRetryReturnedExistingArchive": true,
+    "rollbackRestoredCurrentTruthAndSkippedArchiveRecord": true
+  }
+}
