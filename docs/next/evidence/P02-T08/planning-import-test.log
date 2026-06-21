@@ -1,0 +1,19 @@
+$ pnpm --filter @legion/artifacts build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ P02-T08 dry-run stages deterministic v9 artifacts without mutating legacy .planning (97.564ms)
+✔ P02-T08 dry-run reports stale state, contradictory plan summaries, and missing requirements (36.9317ms)
+✔ P02-T08 dry-run rejects staging paths that overlap repository or source roots (9.2701ms)
+✔ P02-T08 dry-run handles EOF summaries, malformed YAML, and invalid timestamps as diagnostics (62.726ms)
+✔ P02-T08 apply backs up destination and rollback restores exact pre-import .legion bytes (71.4863ms)
+✔ P02-T08 apply rejects tampered staging, bad reports, and invalid timestamps without mutating destination (48.203ms)
+✔ P02-T08 rollback rejects malformed backup manifests without deleting current .legion (5.1268ms)
+✔ P02-T08 repeated apply is rejected without changing destination (53.5956ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 654.257

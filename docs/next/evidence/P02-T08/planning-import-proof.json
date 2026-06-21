@@ -1,0 +1,20 @@
+{
+  "dryRunStatus": "dry_run",
+  "sourceHashBefore": "sha256:860e89d5dfde0a4a990c03650454007db7472b6e538aeece72cc7aa4df18eca9",
+  "sourceHashAfter": "sha256:860e89d5dfde0a4a990c03650454007db7472b6e538aeece72cc7aa4df18eca9",
+  "stageHashA": "sha256:c53d5e8b6845345f52b97391bca19e794eaa2762e107f66bc7708cede9a658bd",
+  "stageHashB": "sha256:c53d5e8b6845345f52b97391bca19e794eaa2762e107f66bc7708cede9a658bd",
+  "deterministicStage": true,
+  "reportRequiresReview": true,
+  "reportUncertaintyCodes": [
+    "operational_state_not_authoritative"
+  ],
+  "blockedApplyStatus": "blocked",
+  "preImportLegionHash": "sha256:b38047b8fe228ea81555d77d92d7a8b6e2a7fe52b840c471e6d1c6206ac9ed24",
+  "postApplyLegionHash": "sha256:2b3f1cd73dbf97f6ff73111ce485ccae1dcb01d77760779a91ece56e384c9410",
+  "backupManifestPath": "C:\\Users\\dasbl\\AppData\\Local\\Temp\\legion-p02-t08-proof-fi1bjr\\backups\\planning-import-20260621120000-2609c22032981cfb\\backup-manifest.json",
+  "backupPreImportHash": "sha256:b38047b8fe228ea81555d77d92d7a8b6e2a7fe52b840c471e6d1c6206ac9ed24",
+  "rollbackStatus": "rolled_back",
+  "rollbackHash": "sha256:b38047b8fe228ea81555d77d92d7a8b6e2a7fe52b840c471e6d1c6206ac9ed24",
+  "rollbackRestoredPreImport": true
+}

@@ -24,7 +24,7 @@ task_commits:
   P02-T05: "08d261017792e591db637d9a8b6a959a56141e84"
   P02-T06: "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7"
   P02-T07: "d45af2c91ba3a7bfbc79a9b04f6ee927ad471861"
-  P02-T08: null
+  P02-T08: "9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4"
   P02-T09: null
   P02-T10: null
 entries:
@@ -436,3 +436,43 @@ entries:
     artifact: docs/next/evidence/P02-T07/completion-report.yaml
     description: Structured P02-T07 completion report
     sha256: 6efed6d872cf86e2e34138472a5113785fc3d66422f5f436e2544006784ff7dc
+  - task: P02-T08
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-02/ledger.yaml
+    description: Phase 2 ledger updated for P02-T08 completion
+    sha256: ec7b45cedc78eec4ae7f8fa4a0d859aa5cc324cd3f9ec322eee3b614d35dd4b2
+  - task: P02-T08
+    artifact: packages/legacy-bridge/package.json
+    description: Legacy bridge package definition and test/build scripts
+    sha256: 3f574d45281cd4118ddbdd069c617a23850c98c8881e3dc84d48e68cbe937c38
+  - task: P02-T08
+    artifact: packages/legacy-bridge/src/import-planning/index.ts
+    description: Read-only `.planning` scanner, deterministic dry-run staging, reviewed apply, backup, and rollback service
+    sha256: 272e608f72bcbca1ed74c537ab46cbcd494df6c904034fa566faafa08c6755f6
+  - task: P02-T08
+    artifact: packages/legacy-bridge/test/import-planning.test.mjs
+    description: P02-T08 regression tests for clean import, stale state, contradictory summaries, missing requirements, repeated import, and rollback
+    sha256: ff9c2aa277bed9d3e54e8282209dffa69cd78703023a8481ed459182ca79cc43
+  - task: P02-T08
+    artifact: docs/next/migration/PLANNING-IMPORT.md
+    description: Migration documentation for dry-run review, apply, backup, rollback, and read-only source policy
+    sha256: b70cabaa66828f1d75901ce45f209bf882bc6e76efa33b210965106b20762694
+  - task: P02-T08
+    artifact: scripts/check-package-boundaries.mjs
+    description: Package boundary configuration allowing legacy bridge imports from protocol and artifacts only
+    sha256: 3d948416be43a26811a34c1eb6df2bbe89e41e7c846c702220f894044fac39d4
+  - task: P02-T08
+    artifact: docs/next/evidence/P02-T08/planning-import-test.log
+    description: Focused @legion/legacy-bridge planning importer test report
+    sha256: 2f338918f1b2dcfd1bedc850413546ed98c6735d58ffefadd7fb6f75a109183b
+  - task: P02-T08
+    artifact: docs/next/evidence/P02-T08/planning-import-proof.json
+    description: Structured dry-run determinism, source preservation, reviewed apply, backup, and rollback hash proof
+    sha256: ef01569234012d75bd2f3028914a8c5046b7284540578267a81415d39b7ef315
+  - task: P02-T08
+    artifact: docs/next/evidence/P02-T08/full-validation.log
+    description: Full workspace validate-next log after P02-T08 implementation
+    sha256: 263774a96dd50b1672a2e5813a9357f534fa1bc093042aae8f38d74e8bf1793e
+  - task: P02-T08
+    artifact: docs/next/evidence/P02-T08/completion-report.yaml
+    description: Structured P02-T08 completion report
+    sha256: 9b25ba97b6690b3b55ed4748ee4fa0d321c56e94d459619507cd96bd6693cad1

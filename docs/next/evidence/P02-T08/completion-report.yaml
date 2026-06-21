@@ -1,0 +1,64 @@
+status: DONE
+phase: 2
+task: P02-T08
+summary: >
+  Implemented the legacy `.planning/` import bridge as a read-only scanner,
+  deterministic dry-run staging service, reviewed apply flow, checksummed
+  backup, and rollback API. The importer maps PROJECT.md requirements into
+  validated v9 current-spec artifacts, preserves roadmap and phase files as
+  historical migration context instead of live queue state, and surfaces stale
+  or contradictory legacy sources in a reviewable import report.
+files_changed:
+  - packages/legacy-bridge/package.json
+  - packages/legacy-bridge/tsconfig.json
+  - packages/legacy-bridge/src/index.ts
+  - packages/legacy-bridge/src/import-planning/index.ts
+  - packages/legacy-bridge/test/import-planning.test.mjs
+  - tests/fixtures/migration/planning/**
+  - docs/next/migration/PLANNING-IMPORT.md
+  - docs/next/PACKAGE-AUTHORING.md
+  - scripts/check-package-boundaries.mjs
+  - tests/package-boundaries.test.mjs
+  - pnpm-lock.yaml
+verification:
+  - command: node --test --test-reporter=spec "packages/legacy-bridge/test/import-planning.test.mjs"
+    result: FAIL
+    evidence: ERR_MODULE_NOT_FOUND before @legion/legacy-bridge existed
+  - command: pnpm --filter @legion/legacy-bridge test
+    result: PASS
+    evidence: docs/next/evidence/P02-T08/planning-import-test.log
+  - command: node inline proof generator importing packages/legacy-bridge/dist/index.js
+    result: PASS
+    evidence: docs/next/evidence/P02-T08/planning-import-proof.json
+  - command: pnpm run validate:next
+    result: PASS
+    evidence: docs/next/evidence/P02-T08/full-validation.log
+acceptance:
+  - criterion: Identical source/options produce identical staged tree and report.
+    result: PASS
+  - criterion: Apply never mutates `.planning/` bytes.
+    result: PASS
+  - criterion: Rollback restores exact pre-import `.legion/` state.
+    result: PASS
+  - criterion: Uncertain mappings are visible and block automatic acceptance where required.
+    result: PASS
+  - criterion: No silent data loss or fabricated operational completion occurs.
+    result: PASS
+  - criterion: User reviews a dry-run before apply.
+    result: PASS
+  - criterion: Successful import leaves one writable v9 intent source.
+    result: PASS
+commits:
+  - ca78b9352f58d24c5dcb3fffb5ed8b0db58b2b71
+  - 9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4
+review_followups:
+  - commit: 9ecc32f6cb76faa84a1d29cdd1ec99206824bcf4
+    summary: >
+      Hardened unsafe staging-root rejection, EOF summary parsing, malformed
+      timestamp/report/backup diagnostics, and reviewed staging-tree hash
+      verification before apply.
+risks_or_followups:
+  - P02-T08 imports PROJECT.md requirements and preserves ROADMAP/phase files as historical context; P02-T09 remains responsible for migrating existing Codex `.legion/` protocol assets without namespace collision.
+blocker:
+  condition: none
+  decision_needed: none
