@@ -1091,6 +1091,15 @@ export async function rollbackPlanningImport(input: PlanningImportRollbackInput)
 
   const repositoryRoot = path.resolve(input.repositoryRoot);
   const legionRoot = path.join(repositoryRoot, ".legion");
+  if (!path.isAbsolute(manifest.repositoryRoot)) {
+    return failure("invalid", [
+      diagnostic({
+        code: "invalid_backup_manifest",
+        message: "Backup manifest repositoryRoot must be absolute.",
+        sourcePath: backupManifestPath
+      })
+    ]);
+  }
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
     return failure("invalid", [
       diagnostic({

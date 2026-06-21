@@ -14,7 +14,7 @@ PASS
 - Reviewable oracle artifacts, taskgraphs, evidence indexes, artifact manifest hashing, and provenance validation.
 - Traceability graph validation and invalidation/impact analysis across requirements, oracles, tasks, evidence, reviews, and artifacts.
 - Accepted-change archive planning/apply service with evidence gates, stale-base checks, idempotency, and rollback safety.
-- Legacy `.planning` import dry-run/apply/rollback with checksummed backups, explicit review requirement, source preservation, lexical and symlink-resolved backup-root safety across repository, `.legion`, planning source, and staging boundaries, and rollback manifest integrity checks.
+- Legacy `.planning` import dry-run/apply/rollback with checksummed backups, explicit review requirement, source preservation, lexical and symlink-resolved backup-root safety across repository, `.legion`, planning source, and staging boundaries, plus rollback manifest identity and integrity checks.
 - Codex `.legion` migration dry-run/apply/rollback that preserves legacy protocol bytes under `.legion/legacy-protocol`.
 - Noninteractive `legion next ...` CLI surface over Phase 2 services and process-level E2E coverage.
 
@@ -40,7 +40,7 @@ Phase 3 should consume Phase 2 through the exported package APIs, not by rewriti
 
 ## Verification Summary
 
-- `pnpm --filter @legion/legacy-bridge test`: PASS, 30 tests. Evidence: `docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log`.
+- `pnpm --filter @legion/legacy-bridge test`: PASS, 31 tests. Evidence: `docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log`.
 - `pnpm --filter @legion/artifacts test`: PASS, 59 tests. Evidence: `docs/next/evidence/P02-CLOSEOUT/artifacts-test.log`.
 - `pnpm --filter @legion/cli-e2e test`: PASS, 9 tests. Evidence: `docs/next/evidence/P02-CLOSEOUT/cli-e2e-test.log`.
 - `pnpm run validate:next`: PASS. Evidence: `docs/next/evidence/P02-CLOSEOUT/validate-next.log`.

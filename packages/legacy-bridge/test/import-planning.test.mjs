@@ -625,6 +625,47 @@ test("P02-T08 rollback rejects backup manifests from another repository before d
   }
 });
 
+test("P02-T08 rollback rejects relative manifest repository roots before deleting current .legion", async () => {
+  const workspace = await tempRoot();
+  const previousCwd = process.cwd();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const backupRoot = path.join(workspace, "backups");
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await mkdir(backupRoot, { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+    const manifestPath = path.join(backupRoot, "relative-repository-root-manifest.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        schemaVersion: "0.1.0",
+        kind: "planning-import-backup",
+        createdAt: FIXED_TIME,
+        repositoryRoot: ".",
+        backupPath: path.join(backupRoot, "unused"),
+        preImportHash: "sha256:unused",
+        sourceHash: "sha256:unused",
+        existingLegionRoot: false
+      }),
+      "utf8"
+    );
+
+    process.chdir(repositoryRoot);
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: manifestPath
+    });
+    assert.equal(rolledBack.ok, false);
+    assert.equal(rolledBack.status, "invalid");
+    assert.ok(rolledBack.diagnostics.some((diagnostic) => diagnostic.code === "invalid_backup_manifest"));
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    process.chdir(previousCwd);
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T08 rollback verifies backup hashes before replacing current .legion", async () => {
   const workspace = await tempRoot();
   try {

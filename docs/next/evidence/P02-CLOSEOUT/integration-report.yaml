@@ -1,7 +1,7 @@
 phase: 2
 phase_id: P02
 status: PASS
-generated_at: "2026-06-21T14:34:06-04:00"
+generated_at: "2026-06-21T14:40:23-04:00"
 hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
 scope:
   source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
@@ -15,6 +15,7 @@ blocker_resolved:
     - "Planning apply now rejects backup roots that overlap the repository, .legion, planning source, or staging root before copying."
     - "Planning apply now resolves existing backup-root path components before accepting paths, rejecting symlink or junction targets that point back into the repository, .legion, planning source, or staging root."
     - "rollbackPlanningImport now rejects manifests for another repository before deleting .legion."
+    - "rollbackPlanningImport now rejects relative manifest repositoryRoot values before deleting .legion."
     - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
     - "rollbackPlanningImport now hashes existing backups and rejects mismatches before deleting .legion."
   regression_tests:
@@ -23,6 +24,7 @@ blocker_resolved:
     - "P02-T08 apply rejects backup roots that overlap planning source or staging roots"
     - "P02-T08 rollback rejects unusable backup manifests before deleting current .legion"
     - "P02-T08 rollback rejects backup manifests from another repository before deleting current .legion"
+    - "P02-T08 rollback rejects relative manifest repository roots before deleting current .legion"
     - "P02-T08 rollback verifies backup hashes before replacing current .legion"
 pr_review_resolution:
   - comment_id: 3448855115
@@ -36,12 +38,16 @@ pr_review_resolution:
     finding: "Backup roots under the planning source or staging root could mutate reviewed input/output trees before backup creation."
     resolution: "safeResolvedBackupRoot now rejects lexical and realpath-resolved overlaps with repository, .legion, planning source, and staging roots."
     regression_test: "P02-T08 apply rejects backup roots that overlap planning source or staging roots"
+  - comment_id: 3448877567
+    finding: "A relative repositoryRoot in a rollback manifest could resolve against the process cwd and pass repository identity checks."
+    resolution: "rollbackPlanningImport now rejects non-absolute manifest repositoryRoot values before comparing identity or deleting .legion."
+    regression_test: "P02-T08 rollback rejects relative manifest repository roots before deleting current .legion"
 verification:
   - command: "pnpm --filter @legion/legacy-bridge test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
-    sha256: "9c2121c157c9216b0ce99337dbb0e1f5cfb3044f356bc7dc511429170a7b9caf"
-    summary: "30 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+    sha256: "e0994481f51c0fe7147de099b218dd277bdb2eb338146eb1667435ed18e61629"
+    summary: "31 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
   - command: "pnpm --filter @legion/artifacts test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
@@ -55,7 +61,7 @@ verification:
   - command: "pnpm run validate:next"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
-    sha256: "b4cb051815b6f3879981103f3bc4a482d7893e7d9ccf433722eb06281b2cfba9"
+    sha256: "d227e8cda71b2050bb4dc64202576fea24744b8f3ed0c0bf579e1ea3fd353d2b"
     summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
 independent_review:
   result: PASS
