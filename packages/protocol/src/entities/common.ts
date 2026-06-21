@@ -92,7 +92,8 @@ export const artifactRoleSchema = z.enum([
   "decision-log",
   "oracle",
   "taskgraph",
-  "evidence-index"
+  "evidence-index",
+  "archive"
 ]);
 
 export type ArtifactRole = z.infer<typeof artifactRoleSchema>;

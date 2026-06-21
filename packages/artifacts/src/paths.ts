@@ -206,6 +206,10 @@ export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPa
       const changeId = parseChangeId(input.changeId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/evidence-index.json`);
     }
+    case "archive": {
+      const changeId = parseChangeId(input.changeId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/archive.json`);
+    }
   }
 }
 
