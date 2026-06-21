@@ -1,7 +1,7 @@
 phase: 2
 phase_id: P02
 status: PASS
-generated_at: "2026-06-21T14:52:00-04:00"
+generated_at: "2026-06-21T15:02:05-04:00"
 hash_basis: "SHA-256 over Git blob bytes for committed artifacts."
 scope:
   source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/02-phase-artifact-model-and-project-migration.md"
@@ -14,6 +14,7 @@ blocker_resolved:
     - "Planning backup manifests now record resolved repositoryRoot, backupPath, and manifestPath values."
     - "Planning apply now rejects backup roots that overlap the repository, .legion, planning source, or staging root before copying."
     - "Planning apply now resolves existing backup-root path components before accepting paths, rejecting symlink or junction targets that point back into the repository, .legion, planning source, or staging root."
+    - "Planning backup manifests now record canonical repository roots and rollback compares canonical paths so symlinked checkout spellings do not make valid backups unusable."
     - "rollbackPlanningImport now rejects manifests for another repository before deleting .legion."
     - "rollbackPlanningImport now rejects relative manifest repositoryRoot values before deleting .legion."
     - "rollbackPlanningImport now rejects missing or relative backup paths before deleting .legion."
@@ -28,6 +29,7 @@ blocker_resolved:
     - "P02-T08 rollback rejects relative manifest repository roots before deleting current .legion"
     - "P02-T08 rollback verifies backup hashes before replacing current .legion"
     - "P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs"
+    - "P02-T08 rollback accepts backup manifests created through a symlinked repository root"
 pr_review_resolution:
   - comment_id: 3448855115
     finding: "A backup root outside the repo could be a symlink or junction into .legion/project and bypass lexical overlap checks."
@@ -48,12 +50,16 @@ pr_review_resolution:
     finding: "A relative planning root in a dry-run report could be resolved against apply-time cwd and bypass planning-source backup-root overlap checks."
     resolution: "createPlanningImportDryRun now canonicalizes the planning source root before inventory and report generation."
     regression_test: "P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs"
+  - comment_id: 3448908364
+    finding: "A backup manifest created through a symlinked repository path could later be rejected when rollback used the real checkout path."
+    resolution: "Planning backup manifests now store canonical repository roots, and rollback compares canonical repository paths before rejecting repository mismatches."
+    regression_test: "P02-T08 rollback accepts backup manifests created through a symlinked repository root"
 verification:
   - command: "pnpm --filter @legion/legacy-bridge test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/legacy-bridge-test.log"
-    sha256: "07c09c540a518d730f770cd643c4877b786f55712861622a218f8eb953532832"
-    summary: "32 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
+    sha256: "fa06e4b486a014320f8300f7646041cda0d0ac891940c42ac37813215a3e5390"
+    summary: "33 legacy bridge tests passed, including P02-T08 and P02-T09 migration apply/rollback safety coverage."
   - command: "pnpm --filter @legion/artifacts test"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/artifacts-test.log"
@@ -67,7 +73,7 @@ verification:
   - command: "pnpm run validate:next"
     result: PASS
     evidence: "docs/next/evidence/P02-CLOSEOUT/validate-next.log"
-    sha256: "cc12ac38e7a4ee9b9174be1755d7f667b8236d0a3a8e837ba43287dc8b96c84b"
+    sha256: "1fe33b0934702026278a71fedad139aa10eae8fc5093bc218f94ad2b6fca9c6b"
     summary: "Full repo validation passed: typecheck, package boundaries, generated schemas/docs drift checks, tests, package content checks, package manifest validation, and pnpm pack dry-run."
 independent_review:
   result: PASS

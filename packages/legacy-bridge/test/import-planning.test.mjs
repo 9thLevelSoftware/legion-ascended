@@ -668,6 +668,49 @@ test("P02-T08 rollback rejects backup manifests from another repository before d
   }
 });
 
+test("P02-T08 rollback accepts backup manifests created through a symlinked repository root", async () => {
+  const workspace = await tempRoot();
+  try {
+    const planningSourceRoot = path.join(workspace, "planning-source");
+    const repositoryRoot = path.join(workspace, "repo");
+    const linkedRepositoryRoot = path.join(workspace, "linked-repo");
+    const stagingRoot = path.join(workspace, "stage");
+    const backupRoot = path.join(workspace, "backups");
+    await copyFixture("clean", planningSourceRoot);
+    await mkdir(path.join(repositoryRoot, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(repositoryRoot, ".legion", "project", "project.json"), "{\"keep\":true}\n", "utf8");
+    await symlink(repositoryRoot, linkedRepositoryRoot, process.platform === "win32" ? "junction" : "dir");
+    const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
+
+    const dryRun = await createPlanningImportDryRun({
+      repositoryRoot: linkedRepositoryRoot,
+      planningRoot: path.join(planningSourceRoot, ".planning"),
+      stagingRoot,
+      runId: "planning-import-symlinked-repo-root",
+      project: importProject()
+    });
+    assert.equal(dryRun.ok, true);
+    const applied = await applyPlanningImport({
+      repositoryRoot: linkedRepositoryRoot,
+      stagingRoot,
+      backupRoot,
+      appliedAt: FIXED_TIME,
+      reviewAccepted: true,
+      allowReplaceExistingProject: true
+    });
+    assert.equal(applied.ok, true);
+
+    const rolledBack = await rollbackPlanningImport({
+      repositoryRoot,
+      backupManifestPath: applied.backup.manifestPath
+    });
+    assert.equal(rolledBack.ok, true);
+    assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("P02-T08 rollback rejects relative manifest repository roots before deleting current .legion", async () => {
   const workspace = await tempRoot();
   const previousCwd = process.cwd();

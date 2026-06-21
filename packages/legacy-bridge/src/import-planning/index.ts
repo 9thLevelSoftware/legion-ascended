@@ -600,9 +600,9 @@ async function resolveExistingPathComponents(inputPath: string): Promise<string>
   return path.resolve(await realpath(candidate), ...suffix);
 }
 
-function sameResolvedPath(left: string, right: string): boolean {
-  const resolvedLeft = path.resolve(left);
-  const resolvedRight = path.resolve(right);
+async function sameCanonicalPath(left: string, right: string): Promise<boolean> {
+  const resolvedLeft = await resolveExistingPathComponents(left);
+  const resolvedRight = await resolveExistingPathComponents(right);
   if (process.platform === "win32") return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
@@ -872,7 +872,7 @@ async function backupLegionRoot(input: {
   readonly appliedAt: UtcTimestamp;
   readonly report: PlanningImportReport;
 }): Promise<PlanningImportBackupRecord> {
-  const repositoryRoot = path.resolve(input.repositoryRoot);
+  const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
   const legionRoot = path.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
@@ -1101,7 +1101,7 @@ export async function rollbackPlanningImport(input: PlanningImportRollbackInput)
       })
     ]);
   }
-  if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
+  if (!(await sameCanonicalPath(manifest.repositoryRoot, repositoryRoot))) {
     return failure("invalid", [
       diagnostic({
         code: "backup_repository_mismatch",
