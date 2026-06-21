@@ -1,0 +1,116 @@
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && pnpm -r typecheck
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm -r build
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 9 of 10 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/board-store build$ tsc -p tsconfig.json
+packages/artifacts build$ tsc -p tsconfig.json
+packages/core build$ tsc -p tsconfig.json
+packages/board-store build: Done
+packages/core build: Done
+packages/artifacts build: Done
+packages/board build$ tsc -p tsconfig.json
+packages/legacy-bridge build$ tsc -p tsconfig.json
+packages/store-sqlite build$ tsc -p tsconfig.json
+packages/board build: Done
+packages/legacy-bridge build: Done
+packages/store-sqlite build: src/index.ts(1559,51): error TS2304: Cannot find name 'BoardEventAggregateKind'.
+packages/store-sqlite build: src/index.ts(1560,3): error TS2552: Cannot find name 'BOARD_EVENT_AGGREGATE_KINDS'. Did you mean 'BOARD_EVENT_AGGREGATE_KIND_SET'?
+packages/store-sqlite build: src/index.ts(1560,43): error TS2304: Cannot find name 'BoardEventAggregateKind'.
+packages/store-sqlite build: src/index.ts(1563,41): error TS2304: Cannot find name 'BoardEventType'.
+packages/store-sqlite build: src/index.ts(1564,3): error TS2552: Cannot find name 'BOARD_EVENT_TYPES'. Did you mean 'BOARD_EVENT_TYPE_SET'?
+packages/store-sqlite build: src/index.ts(1564,33): error TS2304: Cannot find name 'BoardEventType'.
+packages/store-sqlite build: src/index.ts(1584,66): error TS2304: Cannot find name 'BoardEventAggregateKind'.
+packages/store-sqlite build: src/index.ts(1585,51): error TS2304: Cannot find name 'BoardEventAggregateKind'.
+packages/store-sqlite build: src/index.ts(1586,15): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(1593,72): error TS2304: Cannot find name 'BoardEventType'.
+packages/store-sqlite build: src/index.ts(1594,46): error TS2304: Cannot find name 'BoardEventType'.
+packages/store-sqlite build: src/index.ts(1595,15): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(1604,15): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(1632,36): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(1640,47): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1655,20): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(1656,30): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1665,38): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1673,29): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(1679,15): error TS2304: Cannot find name 'randomBytes'.
+packages/store-sqlite build: src/index.ts(1688,21): error TS2304: Cannot find name 'randomBytes'.
+packages/store-sqlite build: src/index.ts(1690,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(1693,52): error TS2304: Cannot find name 'BoardEventRepository'.
+packages/store-sqlite build: src/index.ts(1706,22): error TS2304: Cannot find name 'AppendBoardEventInput'.
+packages/store-sqlite build: src/index.ts(1706,46): error TS2304: Cannot find name 'BoardEventAppendResult'.
+packages/store-sqlite build: src/index.ts(1710,23): error TS2304: Cannot find name 'AppendBoardEventsInput'.
+packages/store-sqlite build: src/index.ts(1710,48): error TS2304: Cannot find name 'BoardEventAppendBatchResult'.
+packages/store-sqlite build: src/index.ts(1715,21): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1723,21): error TS2304: Cannot find name 'BoardEventQuery'.
+packages/store-sqlite build: src/index.ts(1723,53): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1773,21): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(1773,31): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1780,53): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1790,22): error TS2304: Cannot find name 'BoardEventQuery'.
+packages/store-sqlite build: src/index.ts(1824,33): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1842,21): error TS2304: Cannot find name 'AppendBoardEventInput'.
+packages/store-sqlite build: src/index.ts(1842,45): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(1851,48): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(1870,19): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(1872,47): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(1882,23): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(1904,19): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(1929,19): error TS2304: Cannot find name 'BoardEventAppendError'.
+packages/store-sqlite build: src/index.ts(2007,67): error TS2304: Cannot find name 'BOARD_PROJECTION_KEY_MAX_LENGTH'.
+packages/store-sqlite build: src/index.ts(2010,9): error TS2304: Cannot find name 'BOARD_PROJECTION_KEY_MAX_LENGTH'.
+packages/store-sqlite build: src/index.ts(2016,8): error TS2304: Cannot find name 'BOARD_PROJECTION_KEY_PATTERN'.
+packages/store-sqlite build: src/index.ts(2021,57): error TS2304: Cannot find name 'BoardProjectionRecord'.
+packages/store-sqlite build: src/index.ts(2022,20): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2028,29): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2043,57): error TS2304: Cannot find name 'BoardProjectionRepository'.
+packages/store-sqlite build: src/index.ts(2056,25): error TS2304: Cannot find name 'SaveBoardProjectionInput'.
+packages/store-sqlite build: src/index.ts(2056,52): error TS2304: Cannot find name 'BoardProjectionRecord'.
+packages/store-sqlite build: src/index.ts(2109,21): error TS2304: Cannot find name 'BoardProjectionDriftError'.
+packages/store-sqlite build: src/index.ts(2132,21): error TS2304: Cannot find name 'BoardProjectionDriftError'.
+packages/store-sqlite build: src/index.ts(2151,42): error TS2304: Cannot find name 'BoardProjectionRecord'.
+packages/store-sqlite build: src/index.ts(2176,19): error TS2304: Cannot find name 'BoardProjectionDriftError'.
+packages/store-sqlite build: src/index.ts(2191,63): error TS2304: Cannot find name 'BoardProjectionRecord'.
+packages/store-sqlite build: src/index.ts(2212,46): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2212,69): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2214,10): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2217,66): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2217,89): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2222,29): error TS2304: Cannot find name 'BoardEventRepository'.
+packages/store-sqlite build: src/index.ts(2223,34): error TS2304: Cannot find name 'BoardProjectionRepository'.
+packages/store-sqlite build: src/index.ts(2227,55): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2227,78): error TS2304: Cannot find name 'BoardProjectionState'.
+packages/store-sqlite build: src/index.ts(2232,30): error TS2304: Cannot find name 'BoardEventRepository'.
+packages/store-sqlite build: src/index.ts(2233,35): error TS2304: Cannot find name 'BoardProjectionRepository'.
+packages/store-sqlite build: src/index.ts(2253,68): error TS2304: Cannot find name 'BoardProjectionRebuildReport'.
+packages/store-sqlite build: src/index.ts(2280,121): error TS2304: Cannot find name 'BoardProjectionRebuildReport'.
+packages/store-sqlite build: src/index.ts(2298,68): error TS2304: Cannot find name 'BoardProjectionRebuildReport'.
+packages/store-sqlite build: src/index.ts(2312,17): error TS2304: Cannot find name 'BoardProjectionDriftError'.
+packages/store-sqlite build: src/index.ts(2477,67): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2483,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2487,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(2493,67): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2499,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2502,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(2511,6): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2517,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2520,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(2525,57): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2531,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2534,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(2539,79): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2545,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2548,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: src/index.ts(2558,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2567,35): error TS2304: Cannot find name 'BoardEvent'.
+packages/store-sqlite build: src/index.ts(2573,21): error TS2304: Cannot find name 'BOARD_EVENT_SCHEMA_VERSION'.
+packages/store-sqlite build: src/index.ts(2576,41): error TS2304: Cannot find name 'EventId'.
+packages/store-sqlite build: Failed
+/Users/christopherwilloughby/legion-ascended/packages/store-sqlite:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @legion/store-sqlite@0.1.0 build: `tsc -p tsconfig.json`
+Exit status 1
+[ELIFECYCLE] Command failed with exit code 1.
+[ELIFECYCLE] Command failed with exit code 1.

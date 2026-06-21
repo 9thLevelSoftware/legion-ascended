@@ -19,7 +19,8 @@
   "dependencies": {
     "@legion/artifacts": "workspace:*",
     "@legion/legacy-bridge": "workspace:*",
-    "@legion/protocol": "workspace:*"
+    "@legion/protocol": "workspace:*",
+    "@legion/store-sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"

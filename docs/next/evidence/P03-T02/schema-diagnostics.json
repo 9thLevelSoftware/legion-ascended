@@ -1,0 +1,45 @@
+{
+  "databasePath": "/var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/legion-p03-t02-2FFrIC/board.sqlite",
+  "userVersion": 1,
+  "journalMode": "wal",
+  "foreignKeys": true,
+  "busyTimeoutMs": 7500,
+  "tables": [
+    "board_approvals",
+    "board_claims",
+    "board_idempotency_records",
+    "board_metadata",
+    "board_outbox",
+    "board_projections",
+    "board_schema_migrations",
+    "board_task_comments",
+    "board_task_events",
+    "board_task_links",
+    "board_task_runs",
+    "board_tasks"
+  ],
+  "indexes": [
+    "idx_board_approvals_run_id",
+    "idx_board_approvals_task_id",
+    "idx_board_claims_live_task_generation",
+    "idx_board_claims_task_id",
+    "idx_board_idempotency_scope_key",
+    "idx_board_outbox_status",
+    "idx_board_task_comments_task_id",
+    "idx_board_task_events_aggregate_sequence",
+    "idx_board_task_events_global_sequence",
+    "idx_board_task_links_depends_on",
+    "idx_board_task_runs_task",
+    "idx_board_tasks_status_priority"
+  ],
+  "missingTables": [],
+  "missingIndexes": [],
+  "migrations": [
+    {
+      "version": 1,
+      "name": "create-board-control-plane-schema",
+      "checksum": "b313493e134e538bcf8570a3a102b30e302c9824a0defb7c801ea0ee40ddb3ef",
+      "appliedAt": "2026-06-21T21:00:07.456Z"
+    }
+  ]
+}

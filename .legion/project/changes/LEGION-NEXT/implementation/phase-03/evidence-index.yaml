@@ -5,7 +5,7 @@ entries:
   - task: P03-T01
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-03/ledger.yaml
     description: Phase 3 ledger created and updated for P03-T01 board/store schema completion
-    sha256: 3c41e83dd8bad0c9844e6d2215ad9d175a00513d900df3c64f7902ec56f554b8
+    sha256: e66b1116b9cc520d7a0868a7c9c373bc6e82a511a93e0b34c5450d8c8a53abf7
   - task: P03-T01
     artifact: packages/board/package.json
     description: Board package shell for future control-plane command service APIs
@@ -13,7 +13,7 @@ entries:
   - task: P03-T01
     artifact: packages/board/src/index.ts
     description: Board package exports provider-neutral board store contracts
-    sha256: 89ae5d0c29269c61222539f512891bda39f815bb9e535713198550fb983b7687
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
   - task: P03-T01
     artifact: packages/board/tsconfig.json
     description: Board package TypeScript configuration
@@ -25,7 +25,7 @@ entries:
   - task: P03-T01
     artifact: packages/board-store/src/index.ts
     description: Provider-neutral board schema constants, required index contract, diagnostics, and protocol-aligned projection contracts
-    sha256: f190ae6dbc6941c75f5d2e109c9c089028a301dfbc20ad1f42c43893facbaadb
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
   - task: P03-T01
     artifact: packages/board-store/tsconfig.json
     description: Board store package TypeScript configuration
@@ -37,11 +37,11 @@ entries:
   - task: P03-T01
     artifact: packages/store-sqlite/src/index.ts
     description: node:sqlite provider setup, schema v1 migrations, explicit target handling, zero-based protocol event sequences, missing migration-record rejection, defensive pragma reads, rollback preservation, protocol-aligned approval status, diagnostics, FK-supporting indexes, and chunked backup hashing
-    sha256: fcfe5343b40e3e9c74bbefaaf521361100eee134e6af6e951053ebd1580eec1c
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
   - task: P03-T01
     artifact: packages/store-sqlite/test/migrations.test.mjs
     description: Real-file migration, constraint, zero-based event sequence, revoked approval, explicit target, missing migration-record, rollback, defensive pragma, backup hashing, future-version, and checksum tests for P03-T01
-    sha256: a1a03fcb8fea99a491a7850640fbfd2decb0887ee609288fb0addb7f8c7c86da
+    sha256: 888019054dd9e6503f4e00ee0d3dbf9724b852cfe4d0800883580ca591453390
   - task: P03-T01
     artifact: packages/store-sqlite/tsconfig.json
     description: SQLite provider TypeScript configuration
@@ -49,11 +49,11 @@ entries:
   - task: P03-T01
     artifact: schemas/sqlite/board-schema-v1.sql
     description: Committed SQLite board schema v1 artifact with protocol-aligned approval status, zero-based aggregate event sequences, and operational/FK-supporting indexes
-    sha256: fcb25cdc310251ea64226f56412f62ce71ca4e9318cbace4ab02b4baee8c3f3e
+    sha256: 4645e196258408c1469db9ced90f06d5288f82242a58b83fab1f13684796b5bc
   - task: P03-T01
     artifact: scripts/check-package-boundaries.mjs
     description: Package-boundary policy updated so only @legion/store-sqlite may import node:sqlite
-    sha256: 99f3a7cd9c4a55695f8d34bac158a65cbbc0cb7577c223282d9d2345bdc407f6
+    sha256: d4a14486978a9b16d880959527f3b2c3f1513c97551f5c4b317c9da1b5439337
   - task: P03-T01
     artifact: tests/package-boundaries.test.mjs
     description: Boundary regressions for board/store packages and SQLite provider isolation
@@ -61,7 +61,7 @@ entries:
   - task: P03-T01
     artifact: pnpm-lock.yaml
     description: Workspace lockfile updated for board, board-store, and store-sqlite packages
-    sha256: 8fe37b381c23c8da7fe760ecb0b67844923c9a6498ff7d4fe1633eabfb901167
+    sha256: 3ebc99106e15fc17ac28f6c74f48e2b98dd48bd1bcd7c8ea78bc55382a0dc507
   - task: P03-T01
     artifact: docs/next/evidence/P03-T01/store-sqlite-test.log
     description: Focused @legion/store-sqlite P03-T01 test log with 12 passing migration and review-regression tests
@@ -94,3 +94,323 @@ entries:
     artifact: docs/next/evidence/P03-T01/completion-report.yaml
     description: Structured P03-T01 completion report
     sha256: 09644dc5c1f57c2cf87cdadf9869d34e1c980f35b020f39cb037f9b75e46b388
+  - task: P03-T02
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral board task repository contract, status transition table, priority/generation constants, and CRUD input types
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T02
+    artifact: packages/board/src/index.ts
+    description: Re-exports of the provider-neutral board task repository contract surface for downstream consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T02
+    artifact: packages/store-sqlite/src/index.ts
+    description: "SQLite provider implementation of board task repository: atomic create/get/list/priority/transition/bumpGeneration/supersede/delete with optimistic-concurrency generation checks"
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T02
+    artifact: packages/store-sqlite/test/tasks.test.mjs
+    description: Focused P03-T02 test suite covering CRUD, status FSM, priority, generation tracking, bumpGeneration, supersede, list, delete, and concurrency guard regressions
+    sha256: 3bc1b022144007a8f616df3ca44b1843b4185872ea775829409b094a4668713f
+  - task: P03-T02
+    artifact: docs/next/evidence/P03-T02/store-sqlite-test.log
+    description: Focused @legion/store-sqlite P03-T02 test log with 38 passing tests (12 P03-T01 + 26 P03-T02)
+    sha256: 01e6dea443fc41201a1281f40a1713d7165ac7dc62cdc78631dbcaa5d01f9a65
+  - task: P03-T02
+    artifact: docs/next/evidence/P03-T02/package-boundaries.log
+    description: Package-boundary verification log confirming only @legion/store-sqlite imports node:sqlite
+    sha256: bd798983e50e69201501bda183391d76bcb1c57b71f2aeaa9185f5376f5e5883
+  - task: P03-T02
+    artifact: docs/next/evidence/P03-T02/typecheck.log
+    description: Workspace typecheck log after P03-T02 board task repository implementation
+    sha256: b46d241c20db43cefc5d17290f965740289f14ebc8f96b6b9dcccb2de4c204b5
+  - task: P03-T02
+    artifact: docs/next/evidence/P03-T02/full-test-suite.log
+    description: Full recursive package test suite log after P03-T02 implementation
+    sha256: 8138ca53416bede949da5155b6086fc6c69a4a870ffbacf1195487617f63d409
+  - task: P03-T02
+    artifact: docs/next/evidence/P03-T02/full-validation.log
+    description: Full validate-next log after P03-T02 implementation
+    sha256: fedb2c36e24d1b025897b170a558a108cca87da3bb28697159bdb7fe80520a7b
+  - task: P03-T02
+    artifact: docs/next/evidence/P03-T02/completion-report.yaml
+    description: Structured P03-T02 completion report
+    sha256: 176bf6a03b4c4e8375798bc5180d65089fc91a32c95030f949bd3fe81ff19c7c
+  - task: P03-T02
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-03/ledger.yaml
+    description: Phase 3 ledger updated to mark P03-T02 DONE and record the contract-vs-supersede generation decision
+    sha256: e66b1116b9cc520d7a0868a7c9c373bc6e82a511a93e0b34c5450d8c8a53abf7
+  - task: P03-T04
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral board claim contract, BoardClaim types, BOARD_LEASE_RELEASE_REASONS, lease-token minimum, BoardClaimContendedError/BoardClaimGenerationError/BoardClaimNotFoundError sentinels, and BoardClaimRepository interface
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T04
+    artifact: packages/board/src/index.ts
+    description: Re-exports of the new board claim surface for downstream consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T04
+    artifact: packages/store-sqlite/src/index.ts
+    description: "SQLite provider implementation of board claims: atomic tryClaim/getClaim/getActiveClaimForTask/heartbeat/release/reclaimExpiredLeases with partial-UNIQUE-index contention, generation CAS, and idempotent release"
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T04
+    artifact: schemas/sqlite/board-schema-v1.sql
+    description: Committed SQLite board schema v1 artifact with widened release_reason CHECK constraint to include 'superseded'
+    sha256: 4645e196258408c1469db9ced90f06d5288f82242a58b83fab1f13684796b5bc
+  - task: P03-T04
+    artifact: packages/store-sqlite/test/claims.test.mjs
+    description: Focused P03-T04 test suite covering atomic claim, contention, generation CAS, heartbeat, idempotent release, expired-lease reclaim, superseded generation handoff, and migration diagnostics
+    sha256: 0ab7ef56431bbeb9c21277c537531db8aec15a873d203f268b7c8506ee21757e
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/store-sqlite-test.log
+    description: Focused @legion/store-sqlite P03-T04 test log with 55 passing tests (12 P03-T01 + 26 P03-T02 + 17 P03-T04)
+    sha256: 9020743e6bd300e175b23a06890ba92599aedc92bd9501b209d6e469fc46283e
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/package-boundaries.log
+    description: Package-boundary verification log confirming only @legion/store-sqlite imports node:sqlite
+    sha256: bd798983e50e69201501bda183391d76bcb1c57b71f2aeaa9185f5376f5e5883
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/board-store-typecheck.log
+    description: Board-store package typecheck log after P03-T04 claim contract additions
+    sha256: 923bbbeaa821660716849b1f5d2352a9d276c939b8f536a53d84028904fd7ff4
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/store-sqlite-typecheck.log
+    description: SQLite provider typecheck log after P03-T04 claim implementation
+    sha256: 923bbbeaa821660716849b1f5d2352a9d276c939b8f536a53d84028904fd7ff4
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/board-typecheck.log
+    description: Board package typecheck log after P03-T04 claim re-export additions
+    sha256: 923bbbeaa821660716849b1f5d2352a9d276c939b8f536a53d84028904fd7ff4
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/typecheck.log
+    description: Workspace typecheck log after P03-T04 board claim implementation
+    sha256: f929a65f1d5ef85d53eca4bdcb17230c340eceea0c8554be3227471e0ab87f19
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/full-test-suite.log
+    description: Full recursive package test suite log after P03-T04 implementation
+    sha256: 1ca476bade0396c956a6e6c1fe80668e367fb0abd39cf0f5e6a895e6fd26d828
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/schema-diagram.md
+    description: Board claim schema diagram and ownership notes
+    sha256: 2cc744c0b3bb3f816aa37e4b7fc2c972406f8de1b2e0109012ad181486afdd80
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/schema-diagnostics.json
+    description: Real-file migrated schema diagnostics showing WAL, foreign keys, required tables, FK-supporting indexes, and the board_claims row count after claim code path execution
+    sha256: aea44da834baa1dc480062355a022179c181702bcbc055cf1b6c71299448a6bd
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/board-diagnostics.sqlite
+    description: Real-file board database populated by the claim repository and saved for inspection
+    sha256: da63a52bdf62b3fc863995d79f497584be3ba97c1de4c55d1d301afbafab6cfc
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/query-plan-review.md
+    description: Query-plan review proving board_claims hot paths ride the lease_token PK and the partial UNIQUE index
+    sha256: 31f636071d8605020c8a597ac4de5edb66c8085260e999def0138bc1505fdfd3
+  - task: P03-T04
+    artifact: docs/next/evidence/P03-T04/completion-report.yaml
+    description: Structured P03-T04 completion report
+    sha256: 8b395c1cb0f44b6457ea817fe15d5ad08f668b81d73f77e9b5cbed0d407ab31a
+  - task: P03-T04
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-03/ledger.yaml
+    description: Phase 3 ledger updated to mark P03-T04 DONE and record the partial-UNIQUE-index claim decision
+    sha256: e66b1116b9cc520d7a0868a7c9c373bc6e82a511a93e0b34c5450d8c8a53abf7
+  - task: P03-T03
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral board event/projection hook contracts and BoardTaskRepositoryWithHooks surface
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T03
+    artifact: packages/board/src/index.ts
+    description: Board package re-exports for event and projection rebuild consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T03
+    artifact: packages/store-sqlite/src/index.ts
+    description: SQLite board event repository, task mutation event hooks, projection repository, and deterministic projection rebuilder
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T03
+    artifact: packages/store-sqlite/test/events.test.mjs
+    description: P03-T03 event append/idempotency/event-hook regression suite
+    sha256: d8fc4cab43217644023e964f94b31843f2e02c87f4931a6ad0e94e663a8f7314
+  - task: P03-T03
+    artifact: packages/store-sqlite/test/projections.test.mjs
+    description: P03-T03 projection save/load/stale/drift/rebuild regression suite
+    sha256: 31a5ae61746127ad6ae0d81d579af2b95998f7de912ffb1c54380d9730ec49c4
+  - task: P03-T03
+    artifact: docs/next/evidence/P03-T03/store-sqlite-test.log
+    description: P03-T03 focused store-sqlite verification transcript
+    sha256: 88519ff9d5dc5dd718daa81dd25837cd7d902e7825ef72e2d6e2ceaa54b637bb
+  - task: P03-T03
+    artifact: docs/next/evidence/P03-T03/typecheck.log
+    description: P03-T03 workspace typecheck transcript
+    sha256: 826705c46dd811939786c50ee9fbdbefd7c24c8d21e8b033235c4c6713798d7d
+  - task: P03-T03
+    artifact: docs/next/evidence/P03-T03/package-boundaries.log
+    description: P03-T03 package-boundary transcript
+    sha256: bd798983e50e69201501bda183391d76bcb1c57b71f2aeaa9185f5376f5e5883
+  - task: P03-T03
+    artifact: docs/next/evidence/P03-T03/full-test-suite.log
+    description: P03-T03 full package test transcript
+    sha256: 5cb4a86aa98388069e4881ffd7c9a5e46fe9f545602ca7cf284b6d40e1076790
+  - task: P03-T03
+    artifact: docs/next/evidence/P03-T03/full-validation.log
+    description: P03-T03 validate-next transcript
+    sha256: d6b60c10312fcd6af41e9ac6ea794d0c40909afb852bdfb197041eb40cf38932
+  - task: P03-T03
+    artifact: docs/next/evidence/P03-T03/completion-report.yaml
+    description: Structured P03-T03 completion report
+    sha256: 4b4732f23d8af60fb31bb5334219cbbcc9705ad6f436ec0ada8845223dfd792b
+  - task: P03-T05
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral board outbox contract and status/input/error surface
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T05
+    artifact: packages/board/src/index.ts
+    description: Board package re-exports for outbox consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T05
+    artifact: packages/store-sqlite/src/index.ts
+    description: SQLite board outbox repository with canonical payloads, idempotency, claim attempts, and terminal statuses
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T05
+    artifact: packages/store-sqlite/test/outbox.test.mjs
+    description: P03-T05 outbox enqueue/idempotency/claim/attempt regression suite
+    sha256: c17d810d18e0fd6f8636af8c3a91e9f6b862259c31b211ea5db85111cd3f5aec
+  - task: P03-T06
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral board task comment contract, actor/body validation constants, and not-found errors
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T06
+    artifact: packages/board/src/index.ts
+    description: Board package re-exports for task comment consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T06
+    artifact: packages/store-sqlite/src/index.ts
+    description: SQLite task comment repository, migration v2 handling, timestamp updates, and cascade behavior
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T06
+    artifact: packages/store-sqlite/test/comments.test.mjs
+    description: P03-T06 task comment CRUD and validation regression suite
+    sha256: eb91c045db57bd9675182e7934b3cffd48e83ec79d1653f04d1f084109ce6d2f
+  - task: P03-T07
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral approval contract, lifecycle-phase mapping, expectedStatus guards, and approval errors
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T07
+    artifact: packages/board/src/index.ts
+    description: Board package re-exports for approval consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T07
+    artifact: packages/store-sqlite/src/index.ts
+    description: SQLite approval repository with requested/granted/denied/expired/revoked transitions and run association
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T07
+    artifact: packages/store-sqlite/test/approvals.test.mjs
+    description: P03-T07 approval lifecycle regression suite
+    sha256: 9da63fdf4232771722471964d26205448235f9b58bb41c883b289ba9c7745cf1
+  - task: P03-T07
+    artifact: docs/next/evidence/P03-T07/store-sqlite-test.log
+    description: P03-T07 focused store-sqlite verification transcript
+    sha256: 40cdec665ce6131c3c80913a4459f18da806f461f7fa87fe7053c947d1f10ec6
+  - task: P03-T07
+    artifact: docs/next/evidence/P03-T07/typecheck.log
+    description: P03-T07 typecheck transcript
+    sha256: 74732cdddd0ed71f5b3af65d587660d798db03c3f752fa95a242778ae99ef74e
+  - task: P03-T07
+    artifact: docs/next/evidence/P03-T07/package-boundaries.log
+    description: P03-T07 package-boundary transcript
+    sha256: 6ea81173910511fb83d14792adef023153ba16d7beb048f08b663d8a09de8ce2
+  - task: P03-T07
+    artifact: docs/next/evidence/P03-T07/full-test-suite.log
+    description: P03-T07 full package test transcript
+    sha256: 224540334ddefeb2d4eb4f20f0ea383074bc8f1b9c8f8573e0c9630ecdc8e096
+  - task: P03-T07
+    artifact: docs/next/evidence/P03-T07/full-validation.log
+    description: P03-T07 validate-next transcript
+    sha256: e88534392c62193809c7eaa3dd9a8477da7a99a1ee9b24611358ef4df3c57902
+  - task: P03-T07
+    artifact: docs/next/evidence/P03-T07/completion-report.yaml
+    description: Structured P03-T07 completion report
+    sha256: 47bac8532bce2d486ec34b912f97c520d301b4ab881177a368fc2044f5e3f49a
+  - task: P03-T08
+    artifact: packages/board-store/src/index.ts
+    description: Provider-neutral task-link contract, DAG relation semantics, cycle errors, and topological ordering types
+    sha256: 3cf7652476a66098cd7ab2488a8841ad08f668d1095517f00cadbd71bd1eaeed
+  - task: P03-T08
+    artifact: packages/board/src/index.ts
+    description: Board package re-exports for task link consumers
+    sha256: 685305adfcd1dbebf9d256bb3ca656f4513fb1923795f36afb82b7a3de955669
+  - task: P03-T08
+    artifact: packages/store-sqlite/src/index.ts
+    description: SQLite task link repository with cycle detection, stored-link orientation, and topological ordering helpers
+    sha256: 02f9b5637f53b69a9b2be1c678c0a05f53556d08d96151f810711cadb6916ab6
+  - task: P03-T08
+    artifact: packages/store-sqlite/test/links.test.mjs
+    description: P03-T08 dependency link cycle/topological-order regression suite
+    sha256: 1542df758a6aea69aa01a6e8f3e1dac9a0cf7da54e33445f115016fdcc0c9ee7
+  - task: P03-T09
+    artifact: packages/cli/src/commands/board/index.ts
+    description: Noninteractive legion next board command handlers for task/event/claim/approval domains
+    sha256: f56ad63ad58bb4fcb67d63157015ba0ddc933c8c00e96d332f9b0b9f64798aed
+  - task: P03-T09
+    artifact: packages/cli/src/index.ts
+    description: Root CLI dispatcher wired to the board command namespace
+    sha256: 52c4c3cd8fdce1b80fd3b4cdd5a21ff2122a632cfb17f80381e14c6ff6f31c8f
+  - task: P03-T09
+    artifact: packages/cli/package.json
+    description: CLI package dependency update for @legion/store-sqlite board operations
+    sha256: 9a27e2b145c8cb654c3ba12971dca8fafbbb7a8e9e8ea1f3bd7fd60c9bba7055
+  - task: P03-T09
+    artifact: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: P03-T09 process-level board CLI E2E coverage
+    sha256: ff5a3909f84f9b96f5540c4f859ff4f62f9b8a2c5f9f7e5d422b8cd41e786813
+  - task: P03-T09
+    artifact: scripts/check-package-boundaries.mjs
+    description: Package-boundary allowlist for CLI use of @legion/store-sqlite
+    sha256: d4a14486978a9b16d880959527f3b2c3f1513c97551f5c4b317c9da1b5439337
+  - task: P03-T09
+    artifact: pnpm-lock.yaml
+    description: Workspace lockfile update for CLI board dependency
+    sha256: 3ebc99106e15fc17ac28f6c74f48e2b98dd48bd1bcd7c8ea78bc55382a0dc507
+  - task: P03-T10
+    artifact: packages/store-sqlite/test/integration.test.mjs
+    description: P03-T10 restore/recovery integration tests for claims, event replay, and outbox delivery state
+    sha256: 0a0a758d165541b4a25cfbcdd012ca75eee3e7387345372876bad4b4dd278e7e
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/store-sqlite-test.log
+    description: Closeout @legion/store-sqlite transcript with 130 passing tests
+    sha256: 3c830d104e5192dd0ae85907b261c4f01467a65d1ef67d29996532140906a9e6
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/cli-e2e-test.log
+    description: Closeout @legion/cli-e2e transcript with 10 passing tests
+    sha256: 732665679b82fe845b663fc6e095af2076b52cb1d4101ecca57fd4b1d9079a68
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/typecheck.log
+    description: Closeout workspace typecheck transcript
+    sha256: 909d52fb20b965b360c68fad69b313848d1fce54deff75c9bd0ea4e7ba6e7f24
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/package-boundaries.log
+    description: Closeout package-boundary transcript
+    sha256: 09b4e402cf8feed566c8c6097d1d3285e168d476dd3c82f613b5fa7826cfab2e
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/validate-next.log
+    description: Closeout full validate-next transcript
+    sha256: fb941af3acae4a2f84cf06a43213d7ce5eb8503af36968e89eb18591e553cadf
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/command-summary.env
+    description: Closeout command exit-code summary
+    sha256: f6b4a3e3e6c29fb14153b2a211e80fbafe354548a1e6b33dba779f6428762b2a
+  - task: P03-CLOSEOUT
+    artifact: docs/next/evidence/P03-CLOSEOUT/integration-report.yaml
+    description: Structured Phase 3 closeout integration report
+    sha256: 45a6b5fd96178eca7c79824dae1cbe6bc46fc9f5c8c294f88394b2f5f5c92eb4
+  - task: P03-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-03-INDEPENDENT-REVIEW.md
+    description: Independent Phase 3 review with final PASS verdict
+    sha256: 520420e6c48f4d7a9474bfe4b91c1a59f52841231e661b2b5100a92d416b92f4
+  - task: P03-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-03/ledger.yaml
+    description: Phase 3 ledger marked DONE with task commits, decisions, evidence bundle, and blockers cleared
+    sha256: e66b1116b9cc520d7a0868a7c9c373bc6e82a511a93e0b34c5450d8c8a53abf7
+  - task: P03-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-03/HANDOFF.md
+    description: Phase 3 handoff to Phase 4 with operational assumptions and verification evidence
+    sha256: fdad45dfea0f6f8535892ae0e52eaea1f7c6ce5fae3986c1ca2234b8640f7285
+  - task: P03-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: Kanban manifest updated to mark Phase 3 complete and point at P04-T01 as next work
+    sha256: cceb2dd98d2d33f5a2ffe6fa4b5d7c4e3a9ce33405547baab07cfc614a0aacf9

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
@@ -56,6 +57,78 @@ async function writeJson(filePath, value) {
 async function writeText(filePath, value) {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, value, "utf8");
+}
+
+function boardDatabasePath(repositoryRoot) {
+  return path.join(repositoryRoot, ".legion", "var", "board.sqlite");
+}
+
+function taskCreateInput(overrides = {}) {
+  return {
+    projectId: "prj_cli_board",
+    changeId: "chg_cli_board",
+    taskId: "tsk_cli_board",
+    contractId: "ctr_cli_board",
+    contractRevision: 1,
+    contractHash: "a".repeat(64),
+    initialStatus: "ready",
+    initialPriority: 500,
+    ...overrides
+  };
+}
+
+function claimCreateInput(overrides = {}) {
+  return {
+    taskId: "tsk_cli_board",
+    expectedGeneration: 1,
+    ownerId: "worker_cli_board",
+    leaseDurationMs: 30_000,
+    ...overrides
+  };
+}
+
+function eventAppendInput(overrides = {}) {
+  return {
+    aggregateKind: "task",
+    aggregateId: "tsk_cli_board",
+    eventType: "task.transitioned",
+    payload: { taskId: "tsk_cli_board" },
+    ...overrides
+  };
+}
+
+function approvalCreateInput(overrides = {}) {
+  return {
+    taskId: "tsk_cli_board",
+    runId: "run_cli_board",
+    scope: {
+      effectClass: "S2",
+      action: "promote.release",
+      targetsJson: JSON.stringify([{ kind: "task", id: "tsk_cli_board" }]),
+      justification: "Promoting task tsk_cli_board"
+    },
+    requestedBy: {
+      id: "user_cli_board",
+      displayName: "CLI Board User",
+      kind: "human"
+    },
+    ...overrides
+  };
+}
+
+function seedTaskRun(databasePath, taskId, runId) {
+  const database = new DatabaseSync(databasePath);
+  try {
+    const now = "2026-06-21T12:00:00.000Z";
+    database
+      .prepare(
+        "INSERT INTO board_task_runs (run_id, task_id, generation, attempt, status, manifest_json, started_at, finished_at, created_at, updated_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      )
+      .run(runId, taskId, 1, 1, "started", JSON.stringify({ seeded: true }), now, null, now, now);
+  } finally {
+    database.close();
+  }
 }
 
 async function exists(absolutePath) {
@@ -596,6 +669,57 @@ test("P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy 
     assert.equal(rolledBack.json.ok, true);
     assert.equal(rolledBack.json.status, "rolled_back");
     assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P03-T09 board CLI routes task, claim, event, and approval operations without prompts", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const taskInputPath = path.join(workspace, "task-create.json");
+    const claimInputPath = path.join(workspace, "claim-create.json");
+    const eventInputPath = path.join(workspace, "event-append.json");
+    const approvalInputPath = path.join(workspace, "approval-create.json");
+    await mkdir(repositoryRoot, { recursive: true });
+    await writeJson(taskInputPath, taskCreateInput());
+    await writeJson(claimInputPath, claimCreateInput());
+    await writeJson(eventInputPath, eventAppendInput());
+    await writeJson(approvalInputPath, approvalCreateInput());
+
+    const created = await runCli(["--repository-root", repositoryRoot, "board", "task", "create", "--input", taskInputPath]);
+    assert.equal(created.exitCode, 0, created.stderr);
+    assert.equal(created.json.ok, true);
+    assert.equal(created.json.status, "created");
+    assert.equal(created.json.task.taskId, "tsk_cli_board");
+    assert.equal(created.json.task.status, "ready");
+    assert.equal(await exists(boardDatabasePath(repositoryRoot)), true);
+
+    seedTaskRun(boardDatabasePath(repositoryRoot), created.json.task.taskId, "run_cli_board");
+
+    const claimed = await runCli(["--repository-root", repositoryRoot, "board", "claim", "try", "--input", claimInputPath]);
+    assert.equal(claimed.exitCode, 0, claimed.stderr);
+    assert.equal(claimed.json.ok, true);
+    assert.equal(claimed.json.status, "claimed");
+    assert.equal(claimed.json.claim.taskId, "tsk_cli_board");
+    assert.equal(claimed.json.claim.ownerId, "worker_cli_board");
+    assert.ok(claimed.json.claim.leaseToken.length >= 16);
+
+    const appended = await runCli(["--repository-root", repositoryRoot, "board", "event", "append", "--input", eventInputPath]);
+    assert.equal(appended.exitCode, 0, appended.stderr);
+    assert.equal(appended.json.ok, true);
+    assert.equal(appended.json.status, "appended");
+    assert.equal(appended.json.event.aggregateId, "tsk_cli_board");
+    assert.equal(appended.json.event.eventType, "task.transitioned");
+
+    const approved = await runCli(["--repository-root", repositoryRoot, "board", "approval", "create", "--input", approvalInputPath]);
+    assert.equal(approved.exitCode, 0, approved.stderr);
+    assert.equal(approved.json.ok, true);
+    assert.equal(approved.json.status, "created");
+    assert.equal(approved.json.approval.taskId, "tsk_cli_board");
+    assert.equal(approved.json.approval.runId, "run_cli_board");
+    assert.equal(approved.json.approval.status, "requested");
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

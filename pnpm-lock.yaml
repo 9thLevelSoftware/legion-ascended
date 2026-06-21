@@ -68,6 +68,9 @@ importers:
       '@legion/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@legion/store-sqlite':
+        specifier: workspace:*
+        version: link:../store-sqlite
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

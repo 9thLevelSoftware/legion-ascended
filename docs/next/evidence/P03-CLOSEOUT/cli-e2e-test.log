@@ -1,0 +1,32 @@
+# command: pnpm --filter @legion/cli-e2e test
+# started_at: 2026-06-21T19:28:25-04:00
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.108875ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (275.477625ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (442.60425ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (229.019334ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (373.141958ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (376.77275ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (678.547375ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (405.533959ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (386.058041ms)
+✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (487.214042ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3775.738333
+# exit_code: 0
+# ended_at: 2026-06-21T19:28:31-04:00

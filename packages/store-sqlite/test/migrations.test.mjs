@@ -22,7 +22,7 @@ async function withTempDatabase(fn) {
   try {
     return await fn(path.join(root, "board.sqlite"), root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 }
 
@@ -40,7 +40,7 @@ test("P03-T01 migrates a real board database and reports schema diagnostics", as
 
       assert.equal(report.fromVersion, 0);
       assert.equal(report.toVersion, BOARD_SCHEMA_VERSION);
-      assert.deepEqual(report.appliedVersions, [1]);
+      assert.deepEqual(report.appliedVersions, [1, 2]);
 
       const diagnostics = store.inspect();
       assert.equal(diagnostics.userVersion, BOARD_SCHEMA_VERSION);
