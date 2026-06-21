@@ -1,6 +1,6 @@
 {
   "task": "P02-T06",
-  "implementationCommit": "a8e10ae3c155b07a8ad0350ad892717f9288d8ed",
+  "implementationCommit": "aa21e7c761f10dd2fd1251dce76b6006ea7aa1f7",
   "coverageFixtureMatrix": [
     {
       "fixture": "valid many-to-many coverage",
@@ -40,6 +40,8 @@
     "sharedOracleAccepted": true,
     "splitRequirementsInOneCurrentSpecAccepted": true,
     "deterministicOrderingChecked": true,
+    "preciseCycleMembershipChecked": true,
+    "evidenceTraceIntegrityChecked": true,
     "sideEffects": "validator uses read services and in-memory graph construction only"
   },
   "determinismSnapshot": {
