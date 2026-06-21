@@ -5,7 +5,8 @@ summary: >
   services, evidence-index services, generated artifact schemas, and the
   change oracle template for Phase 2 change-support artifacts. Review follow-up
   hardened typed diagnostics, manifest integrity checks, copied-change identity
-  rejection, and status-specific evidence acceptance validation.
+  rejection, persisted artifact identity binding, and status-specific evidence
+  acceptance validation.
 acceptance:
   bulk_logs_outside_git: true
   accepted_evidence_references_durable: true
@@ -13,6 +14,8 @@ acceptance:
   taskgraph_records_exact_input_revisions: true
   manifest_hashes_verified_on_read: true
   copied_change_artifacts_rejected: true
+  persisted_artifact_identity_revalidated: true
+  persisted_evidence_provenance_revalidated: true
 verification:
   - command: pnpm --filter @legion/artifacts test
     log: docs/next/evidence/P02-T05/oracle-taskgraph-evidence-test.log

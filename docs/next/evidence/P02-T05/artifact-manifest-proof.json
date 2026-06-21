@@ -13,6 +13,9 @@
     "evidenceIndexRequiresItemHashOrArtifactReference": true,
     "evidenceIndexRejectsEmptyInputsCopiedChangeIdsAndStaleManifestHashes": true,
     "oracleManifestReportsInvalidFilenamesAtActualArtifactPath": true,
+    "oracleReadsRejectMismatchedEmbeddedIds": true,
+    "taskgraphBindsTopLevelInputsToManifestInputs": true,
+    "evidenceIndexRevalidatesProvenanceOnRead": true,
     "acceptedEvidenceReferencesRemainDurableWithoutCommittingBulkLogs": true
   },
   "implementedArtifacts": [

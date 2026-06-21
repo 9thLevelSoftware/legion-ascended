@@ -11,7 +11,7 @@ tasks:
   P02-T02: { status: DONE, run_id: "P02-T02-20260620-project-constitution", commit: "93b17d7ec547cd46564144d3a406224cfadf0dd8" }
   P02-T03: { status: DONE, run_id: "P02-T03-20260620-current-spec-service", commit: "748d9e9bb87085560b40b3e498c0b22936cb07ff" }
   P02-T04: { status: DONE, run_id: "P02-T04-20260620-change-bundle-services", commit: "6925e9e7c1bd28519cc6b3890dfd0e80bacc3c05" }
-  P02-T05: { status: DONE, run_id: "P02-T05-20260620-change-support-artifacts", commit: "b5355186d8a4d79d0958f15e2d83c77d34bb9fb9" }
+  P02-T05: { status: DONE, run_id: "P02-T05-20260620-change-support-artifacts", commit: "08d261017792e591db637d9a8b6a959a56141e84" }
   P02-T06: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T07: { status: NOT_STARTED, run_id: null, commit: null }
   P02-T08: { status: NOT_STARTED, run_id: null, commit: null }
