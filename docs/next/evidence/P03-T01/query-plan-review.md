@@ -67,3 +67,67 @@ SEARCH board_outbox USING INDEX idx_board_outbox_status (status=? AND available_
 ```
 
 Result: PASS
+
+## task comment cascade lookup
+
+Expected index: `idx_board_task_comments_task_id`
+
+```sql
+SELECT comment_id FROM board_task_comments WHERE task_id = 'tsk_alpha';
+```
+
+Plan:
+
+```text
+SEARCH board_task_comments USING COVERING INDEX idx_board_task_comments_task_id (task_id=?)
+```
+
+Result: PASS
+
+## claim cascade lookup
+
+Expected index: `idx_board_claims_task_id`
+
+```sql
+SELECT lease_token FROM board_claims WHERE task_id = 'tsk_alpha';
+```
+
+Plan:
+
+```text
+SEARCH board_claims USING INDEX idx_board_claims_task_id (task_id=?)
+```
+
+Result: PASS
+
+## approval task cascade lookup
+
+Expected index: `idx_board_approvals_task_id`
+
+```sql
+SELECT approval_id FROM board_approvals WHERE task_id = 'tsk_alpha';
+```
+
+Plan:
+
+```text
+SEARCH board_approvals USING INDEX idx_board_approvals_task_id (task_id=?)
+```
+
+Result: PASS
+
+## approval run nullification lookup
+
+Expected index: `idx_board_approvals_run_id`
+
+```sql
+SELECT approval_id FROM board_approvals WHERE run_id = 'run_alpha';
+```
+
+Plan:
+
+```text
+SEARCH board_approvals USING INDEX idx_board_approvals_run_id (run_id=?)
+```
+
+Result: PASS

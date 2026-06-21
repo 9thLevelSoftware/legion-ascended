@@ -1,7 +1,7 @@
 status: DONE
 phase: 3
 task: P03-T01
-summary: "Established the Phase 3 board/store foundation with provider-neutral board contracts, a SQLite provider package isolated behind @legion/store-sqlite, schema v1 migrations, real-file diagnostics, boundary enforcement, and evidence for migration rollback, constraints, future-version fail-closed behavior, and query plans."
+summary: "Established the Phase 3 board/store foundation with provider-neutral board contracts, a SQLite provider package isolated behind @legion/store-sqlite, schema v1 migrations, real-file diagnostics, boundary enforcement, and evidence for migration rollback, constraints, future-version fail-closed behavior, backup hashing, foreign-key support indexes, and query plans."
 files_changed:
   - packages/board/package.json
   - packages/board/src/index.ts
@@ -44,6 +44,7 @@ commits:
   - "1c2b17bc0bbfb7c0f9bf695c7c4f01c1efb1b7ed"
 risks_or_followups:
   - "P03-T02/P03-T03 still need repository implementations on top of the schema; P03-T01 intentionally stops at contracts, schema, migrations, diagnostics, and package boundaries."
+  - "PR review follow-up hardened scalar pragma reads, preserved original migration errors when rollback fails, added foreign-key support indexes for cascade/nullification paths, and changed backup hashing to chunked file reads."
 blocker:
   condition: none
   decision_needed: none

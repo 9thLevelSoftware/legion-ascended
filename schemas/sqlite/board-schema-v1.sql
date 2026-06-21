@@ -152,3 +152,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_board_claims_live_task_generation ON board
 CREATE INDEX IF NOT EXISTS idx_board_task_runs_task ON board_task_runs(task_id, generation, attempt);
 CREATE INDEX IF NOT EXISTS idx_board_outbox_status ON board_outbox(status, available_at);
 CREATE INDEX IF NOT EXISTS idx_board_idempotency_scope_key ON board_idempotency_records(scope, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_board_task_comments_task_id ON board_task_comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_board_claims_task_id ON board_claims(task_id);
+CREATE INDEX IF NOT EXISTS idx_board_approvals_task_id ON board_approvals(task_id);
+CREATE INDEX IF NOT EXISTS idx_board_approvals_run_id ON board_approvals(run_id);

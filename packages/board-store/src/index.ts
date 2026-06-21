@@ -35,7 +35,11 @@ export const BOARD_REQUIRED_INDEXES = [
   "idx_board_claims_live_task_generation",
   "idx_board_task_runs_task",
   "idx_board_outbox_status",
-  "idx_board_idempotency_scope_key"
+  "idx_board_idempotency_scope_key",
+  "idx_board_task_comments_task_id",
+  "idx_board_claims_task_id",
+  "idx_board_approvals_task_id",
+  "idx_board_approvals_run_id"
 ] as const;
 
 export type BoardTableName = (typeof BOARD_REQUIRED_TABLES)[number];

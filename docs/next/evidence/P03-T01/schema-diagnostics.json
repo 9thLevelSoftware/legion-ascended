@@ -19,9 +19,13 @@
     "board_tasks"
   ],
   "indexes": [
+    "idx_board_approvals_run_id",
+    "idx_board_approvals_task_id",
     "idx_board_claims_live_task_generation",
+    "idx_board_claims_task_id",
     "idx_board_idempotency_scope_key",
     "idx_board_outbox_status",
+    "idx_board_task_comments_task_id",
     "idx_board_task_events_aggregate_sequence",
     "idx_board_task_events_global_sequence",
     "idx_board_task_links_depends_on",
@@ -34,8 +38,8 @@
     {
       "version": 1,
       "name": "create-board-control-plane-schema",
-      "checksum": "db4ff9c7f4a88800bf3880ce2a2cdec85b109f77303d4011188e62c3a0037f34",
-      "appliedAt": "2026-06-21T19:33:55.945Z"
+      "checksum": "5ccca361eae75340c26d472488694ac1893e8ba8d2e9c89776ea352fbc9a977c",
+      "appliedAt": "2026-06-21T19:47:55.049Z"
     }
   ]
 }

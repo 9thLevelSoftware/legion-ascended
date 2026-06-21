@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   BOARD_REQUIRED_INDEXES,
@@ -13,6 +14,8 @@ import {
   openSqliteBoardStore,
   runSqliteMigrations
 } from "../dist/index.js";
+
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 async function withTempDatabase(fn) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-p03-t01-"));
@@ -52,6 +55,14 @@ test("P03-T01 migrates a real board database and reports schema diagnostics", as
       }
       for (const index of BOARD_REQUIRED_INDEXES) {
         assert.ok(diagnostics.indexes.includes(index), "missing index " + index);
+      }
+      for (const index of [
+        "idx_board_task_comments_task_id",
+        "idx_board_claims_task_id",
+        "idx_board_approvals_task_id",
+        "idx_board_approvals_run_id"
+      ]) {
+        assert.ok(diagnostics.indexes.includes(index), "missing foreign-key support index " + index);
       }
 
       const repeat = store.migrate();
@@ -142,6 +153,64 @@ test("P03-T01 migration runner rolls back interrupted migrations without advanci
       database.close();
     }
   });
+});
+
+test("P03-T01 migration runner treats missing scalar pragma rows as empty rows", () => {
+  const database = {
+    exec() {},
+    prepare() {
+      return {
+        get() {
+          return undefined;
+        },
+        all() {
+          return [];
+        }
+      };
+    }
+  };
+
+  const report = runSqliteMigrations(database, []);
+
+  assert.equal(report.fromVersion, 0);
+  assert.equal(report.toVersion, 0);
+  assert.deepEqual(report.appliedVersions, []);
+});
+
+test("P03-T01 migration rollback preserves the original migration failure", () => {
+  const originalError = new Error("original migration failure");
+  const rollbackError = new Error("rollback failure");
+  const database = {
+    exec(sql) {
+      if (sql === "BEGIN IMMEDIATE" || sql.includes("board_schema_migrations")) return;
+      if (sql === "ROLLBACK") throw rollbackError;
+      throw originalError;
+    },
+    prepare(sql) {
+      return {
+        get() {
+          if (sql === "PRAGMA user_version") return { user_version: 0 };
+          return undefined;
+        },
+        all() {
+          return [];
+        },
+        run() {}
+      };
+    }
+  };
+
+  assert.throws(
+    () => runSqliteMigrations(database, [{ version: 1, name: "boom", statements: ["CREATE TABLE boom (id TEXT PRIMARY KEY)"] }]),
+    (error) => error === originalError
+  );
+});
+
+test("P03-T01 backup hashing avoids whole-file reads", async () => {
+  const source = await readFile(path.join(TEST_DIR, "../src/index.ts"), "utf8");
+
+  assert.doesNotMatch(source, /\breadFileSync\b/);
+  assert.match(source, /\breadSync\b/);
 });
 
 test("P03-T01 migration runner fails closed for unknown future schema versions", async () => {

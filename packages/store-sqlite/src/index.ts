@@ -10,7 +10,7 @@ import {
   type BoardTableName
 } from "@legion/board-store";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -194,7 +194,11 @@ export const SQLITE_BOARD_MIGRATIONS: readonly SqliteMigration[] = [
       "CREATE UNIQUE INDEX idx_board_claims_live_task_generation ON board_claims(task_id, generation) WHERE released_at IS NULL",
       "CREATE INDEX idx_board_task_runs_task ON board_task_runs(task_id, generation, attempt)",
       "CREATE INDEX idx_board_outbox_status ON board_outbox(status, available_at)",
-      "CREATE INDEX idx_board_idempotency_scope_key ON board_idempotency_records(scope, idempotency_key)"
+      "CREATE INDEX idx_board_idempotency_scope_key ON board_idempotency_records(scope, idempotency_key)",
+      "CREATE INDEX idx_board_task_comments_task_id ON board_task_comments(task_id)",
+      "CREATE INDEX idx_board_claims_task_id ON board_claims(task_id)",
+      "CREATE INDEX idx_board_approvals_task_id ON board_approvals(task_id)",
+      "CREATE INDEX idx_board_approvals_run_id ON board_approvals(run_id)"
     ]
   }
 ] as const;
@@ -208,7 +212,7 @@ function quoteString(value: string): string {
 }
 
 function scalarPragma(database: DatabaseSync, sql: string): SqlitePragmaRow {
-  return database.prepare(sql).get() as SqlitePragmaRow;
+  return (database.prepare(sql).get() ?? {}) as SqlitePragmaRow;
 }
 
 function rowString(row: Record<string, unknown>, key: string): string {
@@ -284,9 +288,29 @@ function runImmediateTransaction<T>(database: DatabaseSync, callback: () => T): 
     database.exec("COMMIT");
     return result;
   } catch (error) {
-    database.exec("ROLLBACK");
+    try {
+      database.exec("ROLLBACK");
+    } catch {
+      // Preserve the migration failure; rollback is best-effort after a failed transaction body.
+    }
     throw error;
   }
+}
+
+function sha256File(filePath: string): string {
+  const hash = createHash("sha256");
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const fd = openSync(filePath, "r");
+  try {
+    let bytesRead = readSync(fd, buffer, 0, buffer.length, null);
+    while (bytesRead > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+      bytesRead = readSync(fd, buffer, 0, buffer.length, null);
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return hash.digest("hex");
 }
 
 export function configureSqliteBoardConnection(database: DatabaseSync, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS): void {
@@ -438,7 +462,7 @@ export class SqliteBoardStore implements BoardStore {
     }
     this.#database.exec("VACUUM INTO " + quoteString(resolvedBackupPath));
     return {
-      sha256: createHash("sha256").update(readFileSync(resolvedBackupPath)).digest("hex")
+      sha256: sha256File(resolvedBackupPath)
     };
   }
 }
