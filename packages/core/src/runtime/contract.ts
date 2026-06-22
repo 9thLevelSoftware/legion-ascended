@@ -87,11 +87,22 @@ export interface RuntimeDriver {
   approve(approvalRef: RuntimeApprovalRef): Promise<RuntimeApprovalOutcome>;
 
   /**
-   * Fetch or register provider-neutral artifact metadata. The driver
-   * must not interpret the bytes; it only resolves references to and
-   * from provider storage.
+   * Fetch or register provider-neutral artifact metadata, OR — when
+   * called with no `artifactRef` argument — return the final
+   * structured output bundle for a run that is already in a terminal
+   * state. The driver must not interpret the bytes; it only resolves
+   * references to and from provider storage.
+   *
+   * Two-mode contract:
+   *  - `artifact(runId, artifactRef)`: register (or fetch) a single
+   *    artifact reference. Returns a `RuntimeArtifactHandle`.
+   *  - `artifact(runId)` (no `artifactRef`): return the final output
+   *    bundle for the run. Returns a `RuntimeArtifactHandle` enriched
+   *    with `status`, `files`, and `metadata` fields. If the run is
+   *    not yet in a terminal state, the driver rejects with a
+   *    structured failure carrying the current state.
    */
-  artifact(runId: RunId, artifactRef: RuntimeArtifactRef): Promise<RuntimeArtifactHandle>;
+  artifact(runId: RunId, artifactRef?: RuntimeArtifactRef): Promise<RuntimeArtifactHandle>;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +322,21 @@ export interface RuntimeApprovalOutcome {
   readonly events: readonly EventEnvelope[];
 }
 
+/**
+ * Handle returned by `RuntimeDriver.artifact`.
+ *
+ * Three call shapes share this type so the driver surface stays
+ * single-return:
+ *  - `kind: "register"` after `artifact(runId, { kind: "register" })`.
+ *    `reference`, `resolvedAt`, optional `evidenceId` are populated.
+ *  - `kind: "fetch"` after `artifact(runId, { kind: "fetch" })`.
+ *    `reference`, `resolvedAt`, optional `evidenceId` are populated.
+ *  - Final-output mode after `artifact(runId)` (no `artifactRef`):
+ *    `kind: "fetch"`; `status`, `files`, `metadata`, `startedAt`,
+ *    `finishedAt`, and `checkpoint` describe the terminal bundle.
+ *    `reference` is the bundle's synthetic reference (path
+ *    `<runId>/final-output`).
+ */
 export interface RuntimeArtifactHandle {
   readonly runId: RunId;
   readonly reference: ArtifactReference;
@@ -318,4 +344,28 @@ export interface RuntimeArtifactHandle {
   readonly resolvedAt: UtcTimestamp;
   readonly evidenceId?: EvidenceId;
   readonly events: readonly EventEnvelope[];
+  /**
+   * Present in final-output mode. The terminal status of the run
+   * (`succeeded` | `failed` | `blocked` | `canceled`).
+   */
+  readonly status?: "succeeded" | "failed" | "blocked" | "canceled";
+  /**
+   * Present in final-output mode. The full set of artifact references
+   * the driver has recorded for the run (in registration order).
+   */
+  readonly files?: readonly ArtifactReference[];
+  /**
+   * Present in final-output mode. Driver-defined bundle metadata
+   * (for example, attempt number, checkpoint generation, sandbox
+   * driver name). Reserved as a `Record<string, unknown>` so providers
+   * can attach provider-neutral facts without leaking them through
+   * the protocol.
+   */
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  /** Present in final-output mode when the run has started. */
+  readonly startedAt?: UtcTimestamp;
+  /** Present in final-output mode when the run has finished. */
+  readonly finishedAt?: UtcTimestamp;
+  /** Present in final-output mode. */
+  readonly checkpoint?: RuntimeCheckpointRef;
 }

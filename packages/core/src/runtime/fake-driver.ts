@@ -29,8 +29,12 @@
  *  - `approve` advances a run in `awaiting_approval` to `running`,
  *    rejects a run not waiting on approval, and records a `deny:`
  *    decision by transitioning to `canceled`.
- *  - `artifact` registers or fetches a reference, returning a
- *    structured failure when the run is unknown.
+ *  - `artifact` has two modes: register/fetch when called with an
+ *    `artifactRef` argument, and final-output when called with only
+ *    a runId. Final-output returns the full bundle (status, files,
+ *    metadata, startedAt, finishedAt, checkpoint) for terminal
+ *    runs and surfaces a structured `not_terminal` failure with the
+ *    current state for non-terminal runs.
  *
  * The Fake never throws from its public API except for programmer
  * errors (invalid request shape). All protocol-level failures come
@@ -453,18 +457,85 @@ export class FakeRuntimeDriver extends RuntimeDriverSkeleton {
   // artifact
   // -------------------------------------------------------------------------
 
-  override async artifact(runId: RunId, artifactRef: RuntimeArtifactRef): Promise<RuntimeArtifactHandle> {
+  override async artifact(
+    runId: RunId,
+    artifactRef?: RuntimeArtifactRef
+  ): Promise<RuntimeArtifactHandle> {
     const run = this.runs.get(runId);
     if (!run) {
       throw new FakeDriverValidationError("unknown_run", `Run ${runId} is not registered with FakeRuntimeDriver`);
     }
+    const resolvedAt = this.clock.now();
+
+    // Final-output mode: no artifactRef provided.
+    //
+    // Per ADR-004, `artifact(runId)` (no second argument) is the
+    // "give me the final structured output" call. It succeeds only
+    // when the run is in a terminal state; otherwise the driver
+    // surfaces a structured `not_terminal` failure that includes the
+    // current state so the caller can react accordingly.
+    if (artifactRef === undefined) {
+      if (!isTerminal(run.status)) {
+        throw new FakeDriverValidationError(
+          "not_terminal",
+          `Run ${runId} is ${run.status} and not yet terminal; artifact(handle) requires a terminal run`,
+          false,
+          { state: run.status, startedAt: run.startedAt, checkpoint: run.checkpoint }
+        );
+      }
+      const terminalStatus =
+        run.status === "succeeded" || run.status === "failed" || run.status === "canceled"
+          ? run.status
+          : "canceled";
+      const finishedAt = run.finishedAt ?? resolvedAt;
+      const files = [...run.artifacts];
+      const metadata: Record<string, unknown> = {
+        attempt: run.request.attempt,
+        contractId: run.request.contractId,
+        contractRevision: run.request.contractRevision,
+        generation: run.generation,
+        workerBundleId: run.request.workerBundle.id,
+        sandboxDriver: run.request.workspace.sandboxDriver,
+        worktreePath: run.request.workspace.worktreePath,
+        terminalStatus: run.status
+      };
+      const finalOutputRef: ArtifactReference = {
+        path: `.fake/${runId}/final-output.json` as ArtifactReference["path"],
+        sha256: fakeContentHash(`${runId}|${terminalStatus}|${finishedAt}|${files.length}`)
+      };
+      // Record an artifact_registered stream event so downstream
+      // consumers that subscribed to the stream see the final-output
+      // fetch, mirroring the register-mode behaviour.
+      this.appendStream(run, {
+        kind: "artifact_registered",
+        runId,
+        at: resolvedAt,
+        sequence: this.nextSequence(run),
+        reference: finalOutputRef
+      } as RuntimeStreamEvent);
+
+      return {
+        runId,
+        reference: finalOutputRef,
+        kind: "fetch",
+        resolvedAt,
+        status: terminalStatus,
+        files,
+        metadata,
+        startedAt: run.startedAt,
+        finishedAt,
+        checkpoint: run.checkpoint,
+        events: [] as readonly EventEnvelope[]
+      };
+    }
+
+    // Register / fetch mode: an artifactRef was provided.
     const reference = artifactRef.reference;
     if (artifactRef.kind === "register") {
       if (!run.artifacts.some((existing) => existing.path === reference.path)) {
         run.artifacts.push(reference);
       }
     }
-    const resolvedAt = this.clock.now();
     this.appendStream(run, {
       kind: "artifact_registered",
       runId,
@@ -518,6 +589,44 @@ export class FakeRuntimeDriver extends RuntimeDriverSkeleton {
     run.status = "awaiting_approval";
   }
 
+  /**
+   * Visible for tests only. Promote a running (or awaiting-approval)
+   * run to a terminal `succeeded` | `failed` | `canceled` status so
+   * the new `artifact(handle)` final-output path can be exercised
+   * without going through a real provider completion. Appends a
+   * matching `terminal` stream event so downstream consumers see
+   * the transition the same way they would for a real
+   * provider-driven completion.
+   */
+  __terminate(runId: RunId, terminalStatus: "succeeded" | "failed" | "canceled" = "succeeded"): void {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new FakeDriverValidationError("unknown_run", `Run ${runId} is not registered with FakeRuntimeDriver`);
+    }
+    if (isTerminal(run.status)) {
+      throw new FakeDriverValidationError(
+        "invalid_state",
+        `Cannot terminate run ${runId} that is already ${run.status}`
+      );
+    }
+    if (terminalStatus !== "succeeded" && terminalStatus !== "failed" && terminalStatus !== "canceled") {
+      throw new FakeDriverValidationError(
+        "invalid_state",
+        `__terminate only accepts succeeded|failed|canceled, got ${terminalStatus}`
+      );
+    }
+    run.status = terminalStatus;
+    run.finishedAt = this.clock.now();
+    this.appendStream(run, {
+      kind: "terminal",
+      runId: run.runId,
+      at: run.finishedAt,
+      sequence: this.nextSequence(run),
+      status: terminalStatus,
+      evidenceRefs: []
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
@@ -548,14 +657,28 @@ export class FakeRuntimeDriver extends RuntimeDriverSkeleton {
  * failures. Mirrors the shape used by `RuntimeLocalDriverError` but
  * is independent so test assertions do not have to import the
  * production error class.
+ *
+ * Optional `state` carries a provider-neutral snapshot of the run
+ * state at the moment of the failure (used by `artifact(handle)`
+ * non-terminal rejections so callers can branch on the current
+ * status without re-issuing an `inspect` call).
  */
 export class FakeDriverValidationError extends Error {
   readonly code: string;
   readonly retryable: boolean;
-  constructor(code: string, message: string, retryable: boolean = false) {
+  readonly state?: Readonly<Record<string, unknown>>;
+  constructor(
+    code: string,
+    message: string,
+    retryable: boolean = false,
+    state?: Readonly<Record<string, unknown>>
+  ) {
     super(message);
     this.code = code;
     this.retryable = retryable;
+    if (state) {
+      this.state = state;
+    }
     this.name = "FakeDriverValidationError";
   }
 }

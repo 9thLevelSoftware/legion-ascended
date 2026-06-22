@@ -285,11 +285,75 @@ export class RuntimeLocalDriver implements RuntimeDriver {
     };
   }
 
-  async artifact(runId: RunId, artifactRef: RuntimeArtifactRef): Promise<RuntimeArtifactHandle> {
+  async artifact(runId: RunId, artifactRef?: RuntimeArtifactRef): Promise<RuntimeArtifactHandle> {
     const state = this.requireRun(runId);
-    const reference = artifactRef.reference;
     const resolvedAt = this.clock.now();
 
+    // Final-output mode (no artifactRef): only valid when the run is
+    // in a terminal state. Surface a structured failure that carries
+    // the current state for non-terminal runs so callers can react
+    // without re-querying via `inspect`.
+    if (artifactRef === undefined) {
+      const isTerminal =
+        state.status === "succeeded" ||
+        state.status === "failed" ||
+        state.status === "canceled" ||
+        state.status === "superseded" ||
+        state.status === "blocked";
+      if (!isTerminal) {
+        throw new RuntimeLocalDriverError(
+          "not_terminal",
+          `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run`
+        );
+      }
+      const terminalStatus: "succeeded" | "failed" | "blocked" | "canceled" =
+        state.status === "succeeded" ||
+        state.status === "failed" ||
+        state.status === "blocked" ||
+        state.status === "canceled"
+          ? state.status
+          : "canceled";
+      const finishedAt = resolvedAt;
+      const files = [...state.artifacts];
+      const metadata: Record<string, unknown> = {
+        attempt: state.request.attempt,
+        contractId: state.request.contractId,
+        contractRevision: state.request.contractRevision,
+        generation: state.generation,
+        workerBundleId: state.request.workerBundle.id,
+        sandboxDriver: state.request.workspace.sandboxDriver,
+        worktreePath: state.request.workspace.worktreePath,
+        terminalStatus: state.status
+      };
+      const finalOutputRef: ArtifactReference = {
+        path: `.runtime-local/${runId}/final-output.json` as ArtifactReference["path"],
+        sha256: sha256ContentHash(`${runId}|${terminalStatus}|${finishedAt}|${files.length}`)
+      };
+      this.appendStream(state.runId, {
+        kind: "artifact_registered",
+        runId,
+        at: resolvedAt,
+        sequence: this.nextSequence(runId),
+        reference: finalOutputRef
+      });
+
+      return {
+        runId,
+        reference: finalOutputRef,
+        kind: "fetch",
+        resolvedAt,
+        status: terminalStatus,
+        files,
+        metadata,
+        startedAt: state.startedAt,
+        finishedAt,
+        checkpoint: state.checkpoint,
+        events: []
+      };
+    }
+
+    // Register / fetch mode: an artifactRef was provided.
+    const reference = artifactRef.reference;
     if (artifactRef.kind === "register") {
       state.artifacts.push(reference);
     }

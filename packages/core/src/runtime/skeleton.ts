@@ -69,6 +69,24 @@ export class NotImplementedError extends Error {
  * unless the concrete subclass overrides it. Subclasses receive the
  * declared `driverId` via the constructor so error messages are
  * always attributable to the right runtime.
+ *
+ * The seven provider-neutral lifecycle methods declared here (per
+ * ADR-004 `runtime-driver`, in the order they appear in the ADR):
+ *
+ *   1. `start(request)`             — create one version-pinned execution attempt.
+ *   2. `resume(runId, checkpoint)`  — continue a paused or interrupted run.
+ *   3. `cancel(runId, reason)`      — request termination; record, do not delete.
+ *   4. `inspect(runId)`             — return provider-neutral status, checkpoint,
+ *                                      sandbox, and artifact references.
+ *   5. `stream(runId)`              — emit provider-neutral run events.
+ *   6. `approve(approvalRef)`       — deliver a durable human authorization.
+ *   7. `artifact(runId, ref?)`      — register/fetch a single artifact OR return
+ *                                      the final structured output bundle for a
+ *                                      terminal run when called with no `ref`.
+ *
+ * See ADR-004 (docs/next/adr/ADR-004-runtime-driver.md) for the
+ * full provider-neutral contract and the rationale for the seven-method
+ * shape.
  */
 export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
   readonly driverId: RuntimeDriverId;
@@ -81,7 +99,7 @@ export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
    * Create one version-pinned execution attempt for an approved
    * task contract. The driver must return a deterministic run id
    * and a frozen manifest that downstream state machines can rely
-   * on.
+   * on. (ADR-004 §start.)
    */
   async start(_request: RuntimeStartRequest): Promise<RuntimeStartResult> {
     throw new NotImplementedError(this.driverId, "start");
@@ -91,7 +109,7 @@ export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
    * Continue a paused or interrupted run after reconciling board
    * state and idempotency records. The checkpoint reference is
    * provider-neutral; the driver must translate it to whatever its
-   * provider supports.
+   * provider supports. (ADR-004 §resume.)
    */
   async resume(_runId: RunId, _checkpointRef: RuntimeCheckpointRef): Promise<RuntimeResumeResult> {
     throw new NotImplementedError(this.driverId, "resume");
@@ -101,6 +119,7 @@ export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
    * Request termination and record the result without deleting
    * run history. The reason is preserved as a driver-neutral
    * protocol error so the board can emit a `run.finished.v1` event.
+   * (ADR-004 §cancel.)
    */
   async cancel(_runId: RunId, _reason: RuntimeCancelReason): Promise<RuntimeCancelResult> {
     throw new NotImplementedError(this.driverId, "cancel");
@@ -109,7 +128,7 @@ export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
   /**
    * Return provider-neutral status, checkpoint, sandbox, and
    * artifact references for the run. Inspect is a read-only query
-   * and MUST NOT mutate driver state.
+   * and MUST NOT mutate driver state. (ADR-004 §inspect.)
    */
   async inspect(_runId: RunId): Promise<RuntimeInspection> {
     throw new NotImplementedError(this.driverId, "inspect");
@@ -119,7 +138,7 @@ export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
    * Emit provider-neutral run events for progress, tool calls,
    * approvals, artifacts, and terminal state. The driver owns
    * ordering and at-least-once delivery to the consumer; the
-   * consumer owns persistence into the event store.
+   * consumer owns persistence into the event store. (ADR-004 §stream.)
    *
    * The skeleton throws on the first iterator pull so an unfinished
    * driver fails loudly when a caller tries to consume its stream.
@@ -135,18 +154,22 @@ export abstract class RuntimeDriverSkeleton implements RuntimeDriver {
    * Deliver a durable human authorization to a paused run when
    * policy permits. The driver translates the approval into a
    * provider-native resume signal but returns a provider-neutral
-   * outcome.
+   * outcome. (ADR-004 §approve.)
    */
   async approve(_approvalRef: RuntimeApprovalRef): Promise<RuntimeApprovalOutcome> {
     throw new NotImplementedError(this.driverId, "approve");
   }
 
   /**
-   * Fetch or register provider-neutral artifact metadata. The
-   * driver must not interpret the bytes; it only resolves
+   * Fetch or register provider-neutral artifact metadata, OR — when
+   * called with no `artifactRef` argument — return the final
+   * structured output bundle for a run that is already in a terminal
+   * state. (ADR-004 §artifact.)
+   *
+   * The driver must not interpret the bytes; it only resolves
    * references to and from provider storage.
    */
-  async artifact(_runId: RunId, _artifactRef: RuntimeArtifactRef): Promise<RuntimeArtifactHandle> {
+  async artifact(_runId: RunId, _artifactRef?: RuntimeArtifactRef): Promise<RuntimeArtifactHandle> {
     throw new NotImplementedError(this.driverId, "artifact");
   }
 }
