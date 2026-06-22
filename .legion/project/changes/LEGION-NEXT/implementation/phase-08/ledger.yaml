@@ -7,7 +7,7 @@ started_at: "2026-06-22T05:30:00-04:00"
 active_wave: 2
 tasks:
   P08-T01: { status: DONE, run_id: "P08-T01-20260622-fresh-context-dispatcher", commit: "3096d5f" }
-  P08-T02: { status: DONE, run_id: "P08-T02-20260622-per-task-review-pipeline", commit: "P08-T02-closeout-commit", depends_on: ["P08-T01"] }
+  P08-T02: { status: DONE, run_id: "P08-T02-20260622-per-task-review-pipeline", commit: "8f549c9537967b1129f1b686ed4ec4d937482377", depends_on: ["P08-T01"] }
   P08-T03: { status: TODO, run_id: null, commit: null, depends_on: ["P08-T02"], assignee: otrlead }
 decisions:
   - task: P08-T01
