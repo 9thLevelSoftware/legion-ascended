@@ -3,7 +3,7 @@ status: PASS
 title: runtime-eve adapter certification — public-contract start/resume/cancel/inspect/stream/approve/artifact/subagent/sandbox/eval
 branch: codex/p03-t02-board-task-repository
 base_sha: 43d059902f5dc35fc2604e2bd22b076186d8f5d7
-head_sha: null
+head_sha: 4b77330
 reviewer: GPT-5.5 / otrlead
 assignee: legionworker
 completed_at: "2026-06-22T03:24:50Z"

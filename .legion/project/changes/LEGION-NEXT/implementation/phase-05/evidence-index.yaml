@@ -109,7 +109,7 @@ entries:
   - task: P05-T02
     artifact: docs/next/evidence/P05-T02/integration-report.yaml
     description: "P05-T02 integration report with PASS summary, verification notes, and artifact manifest"
-    sha256: 0ada43f38528dc00aa272e3e6adb52a7275c7dbae03d1bf70f5a1ffc9c54a38a
+    sha256: c9b348f5b6c7a5fec2e8de8344eadbe2d5636bd6cefd5055d8e32e0da828b5d5
   - task: P05-T02
     artifact: docs/next/evidence/P05-T02/runtime-eve-test.log
     description: "Public-contract package test log showing 29/29 runtime-eve tests green"

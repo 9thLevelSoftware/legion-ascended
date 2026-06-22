@@ -8,7 +8,7 @@ completed_at: null
 active_wave: 1
 tasks:
   P05-T01: { status: DONE, run_id: "P05-T01-20260621-runtime-driver-contract", commit: "1a44cef" }
-  P05-T02: { status: DONE, run_id: "P05-T02-20260621-runtime-eve", commit: "pending" }
+  P05-T02: { status: DONE, run_id: "P05-T02-20260621-runtime-eve", commit: "4b77330" }
   P05-T03: { status: TODO, depends_on: ["P05-T01"] }
   P05-T04: { status: TODO, depends_on: ["P05-T01","P05-T02","P05-T03"] }
 decisions:
