@@ -61,8 +61,12 @@ decisions:
     decided_at: "2026-06-22T06:49:50Z"
   - task: P08-T03
     decision: "Closeout reruns a full Phase 8 diff gitleaks scan instead of relying only on the P08-T02 task-level gitleaks transcript."
-    reason: "The P08-T02 task transcript recorded a mis-specified file-as-source invocation that scanned 0 bytes. The closeout gate compensates with `git diff --binary ef0581f...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe`, scanning 432.28 KB of Phase 8 diff with no leaks found while excluding this self-referential hash index."
+    reason: "The P08-T02 task transcript recorded a mis-specified file-as-source invocation that scanned 0 bytes. The closeout gate compensates with `git diff --binary ef0581f...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe`, scanning 663.95 KB of Phase 8 diff with no leaks found while excluding this self-referential hash index."
     decided_at: "2026-06-22T06:49:50Z"
+  - task: P08-T03
+    decision: "Provider-neutral source-scan tests resolve source paths through fileURLToPath for Windows CI portability."
+    reason: "GitHub Windows Phase 1 exposed that URL.pathname can render drive-letter paths as /D:/..., which path.join turns into D:\\D:\\... on Windows. The closeout follow-up switches the P08-T01 static source scan to fileURLToPath(new URL(...)) and reruns core/validate evidence."
+    decided_at: "2026-06-22T07:02:00Z"
 blockers: []
 evidence:
   - packages/core/src/dispatch/contract.ts

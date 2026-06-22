@@ -32,7 +32,7 @@ The closeout review checked the dispatch and review source surfaces, the P08 uni
 
 No critical or important findings remain that should block Phase 8 technical closeout.
 
-The reviewer verified that fresh worker contexts are isolated and immutable, structured P07 preflight failures remain visible to the board layer, independent review cannot be performed by the implementer, blocking findings must cite evidence, R3 per-task decisions escalate instead of masquerading as accepted/rejected, and dispatch/review code stays provider-neutral. Phase 9 can now rely on deterministic task-level review records for merge-queue and whole-change acceptance aggregation.
+The reviewer verified that fresh worker contexts are isolated and immutable, structured P07 preflight failures remain visible to the board layer, independent review cannot be performed by the implementer, blocking findings must cite evidence, R3 per-task decisions escalate instead of masquerading as accepted/rejected, and dispatch/review code stays provider-neutral. A Windows CI path-resolution failure in the dispatch source-scan test was fixed with `fileURLToPath(new URL(...))` and reverified. Phase 9 can now rely on deterministic task-level review records for merge-queue and whole-change acceptance aggregation.
 
 ## Evidence Reviewed
 

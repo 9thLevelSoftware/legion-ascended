@@ -48,6 +48,7 @@ acceptance:
       - "P07 preflight remains the protocol-level readiness gate; Phase 8 consumes it rather than duplicating it."
       - "Phase 6 hidden-oracle boundary is preserved because worker/review contexts reference only protocol artifact references and deterministic WorkerContext data."
       - "Phase 5 RuntimeDriver neutrality is preserved by static scans that reject runtime driver, Eve, board-store, or process.env imports in dispatch/review source."
+      - "The P08-T01 static source scan resolves dispatcher.ts with fileURLToPath(new URL(...)) so the provider-neutrality test passes on Windows as well as POSIX runners."
   verification_gates:
     status: PASS
     evidence:
@@ -65,6 +66,7 @@ acceptance:
       - "Workspace tests passed: root 94 plus package suites through cli-e2e 10, with no failures."
       - "validate-next passed all project gates."
       - "Full Phase 8 diff gitleaks pipe scan found no leaks."
+      - "After a Windows CI path-resolution failure, closeout reran @legion/core and validate-next with the fileURLToPath test fix; both passed."
   phase_closeout_artifacts:
     status: PASS
     evidence:
@@ -111,7 +113,7 @@ commands:
     command: "git diff --binary ef0581f8803dc13e1975a8f049515afff21cec28...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact"
     exit_code: 0
     evidence: docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log
-    result: "No leaks found in 432.28 KB Phase 8 diff scan; phase-08/evidence-index.yaml excluded to avoid self-referential scan"
+    result: "No leaks found in 663.95 KB Phase 8 diff scan; phase-08/evidence-index.yaml excluded to avoid self-referential scan"
 blockers: []
 phase_9_handoff:
   next_task: P09-T01

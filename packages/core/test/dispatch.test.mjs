@@ -383,17 +383,10 @@ test("P08-T01 dispatcher source never imports runtime drivers, the board persist
   // strips JSDoc comment blocks first so prose mentions of
   // `process.env`, `board persistence`, and similar terms do not
   // cause false positives.
-  const fs = await import("node:fs/promises");
-  const path = await import("node:path");
-  const url = new URL(import.meta.url);
-  const raw = await fs.readFile(
-    path.join(
-      path.dirname(url.pathname),
-      "..",
-      "src",
-      "dispatch",
-      "dispatcher.ts"
-    ),
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const raw = await readFile(
+    fileURLToPath(new URL("../src/dispatch/dispatcher.ts", import.meta.url)),
     "utf8"
   );
   const codeOnly = raw

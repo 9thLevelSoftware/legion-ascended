@@ -1,7 +1,7 @@
 command=git diff --binary ef0581f8803dc13e1975a8f049515afff21cec28...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact
-started_at=2026-06-22T06:52:06Z
+started_at=2026-06-22T07:07:11Z
 branch=codex/p03-t02-board-task-repository
-head=d459252353b4b06abb2a871c41c6d0affc844bb8
+head=c4a3fe9aec4de440a4c2f9e00d6f755f11ccafb9
 node_version=v26.0.0
 pnpm_version=11.4.0
 
@@ -12,8 +12,8 @@ pnpm_version=11.4.0
     ○ ░
     ░    gitleaks
 
-2:52AM INF scanned ~432279 bytes (432.28 KB) in 196ms
-2:52AM INF no leaks found
+3:07AM INF scanned ~663948 bytes (663.95 KB) in 288ms
+3:07AM INF no leaks found
 
 exit_code=0
-finished_at=2026-06-22T06:52:07Z
+finished_at=2026-06-22T07:07:11Z

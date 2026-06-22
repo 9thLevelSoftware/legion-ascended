@@ -40,6 +40,7 @@ Phase 8 establishes these stable assumptions for downstream phases:
 5. Independent review is enforced by actor identity; implementers cannot approve their own task output, and blocking findings must cite evidence refs.
 6. Per-task acceptance has three outcomes: `accepted`, `rejected`, and `escalated`; R3 gates intentionally escalate for explicit approval rather than being silently accepted or rejected.
 7. Phase 6 hidden-oracle boundaries still apply: worker/reviewer-visible data must be public task/evidence/artifact references, not evaluator-only oracle assertions.
+8. Source-scan tests that inspect TypeScript files must use `fileURLToPath(new URL(...))` rather than URL.pathname so Windows CI does not synthesize duplicate drive-letter paths.
 
 ## Phase 9 Starting Point
 

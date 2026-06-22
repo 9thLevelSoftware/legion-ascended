@@ -29,7 +29,7 @@ entries:
   - task: P08-T01
     artifact: packages/core/test/dispatch.test.mjs
     description: "25 unit tests covering ready dispatch, preflight/resource/scope failure paths, isolation invariants, determinism, provider neutrality, WorkerContext shape, and render helpers."
-    sha256: 3268f8690b7cd3de4b9fffa8d4fab0a43da93e5091c960bc5a801a05720cec67
+    sha256: 904c7a7915fbbae0dad288eae6917304ac56ba8853ce8b9630df949372678db7
   - task: P08-T01
     artifact: packages/core/test/dispatch-fixture.mjs
     description: "Fixture builders for TaskContract, WorkerBundle, and ready context used by the dispatch tests."
@@ -185,7 +185,7 @@ entries:
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/core-test.log
     description: "@legion/core closeout transcript showing 185 pass / 0 fail."
-    sha256: 867a697a9ac2c191db606699800ae541e23998f282f01998a87ba92c86c3c829
+    sha256: 9f1a2a22fdbc858bb9a2741b81e74fda20cc5f010a20969d4bc71d40102c1167
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/protocol-test.log
     description: "@legion/protocol closeout transcript showing 55 pass / 0 fail."
@@ -205,35 +205,35 @@ entries:
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/validate-next.log
     description: "Final closeout validate-next transcript after ledger, handoff, review, and manifest updates."
-    sha256: 47242a035db6514f1fe77892fc0b4361a01786f75b49aa467cc33eb8d737090b
+    sha256: a2624926830e851552ff14938dd0323fe243e0e923b107e6e0aa35c414174fb3
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log
     description: "Final closeout Phase 8 diff gitleaks pipe scan excluding this self-referential evidence index; no leaks found."
-    sha256: d2eed387773cff161102c1370b76c914b5928a58e065d8102a576bdd45e429df
+    sha256: dd4560f1c45c429b6fc4846a8edd2fa5e5ecae6b6b98d10b3c0658955df51b4c
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/command-summary.env
     description: "Final closeout command exit-code, version, branch, and scan-scope summary."
-    sha256: 61c73865701fb7d2db79f1eb3b051215bfca0f9c2c5f93af7cb6ccb98f13ed41
+    sha256: 59ba5aa3fe8b7ae0596339df20ebf00529678a838bd9566d029010f69ef50e87
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/git-status.log
     description: "Final closeout git status/diff capture; diff stat excludes this evidence index to avoid self-reference."
-    sha256: 3ef3deb594e57d76572c70f37f661fb773fdebd608f91c31ef93378a22b901d1
+    sha256: d610c75cdf667b87c91a5990dad945df703daa13dd22faa6b450ff04c8a262f2
   - task: P08-CLOSEOUT
     artifact: docs/next/evidence/P08-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 8 closeout integration report."
-    sha256: eabfce3cc1a4a46b3390b4c049b37311d10720e9c8c885abcd6b90e10e4a8bfa
+    sha256: 8d1fdb204d617c3b501e1192a2855aeb4c17fd11977ece4fd34beeae911b0239
   - task: P08-CLOSEOUT
     artifact: docs/next/reviews/PHASE-08-INDEPENDENT-REVIEW.md
     description: "Independent Phase 8 review with final PASS verdict."
-    sha256: 0ff4b12e6a2fd696febf08d93224e5328bf56224384d19d7f38763f514427f4d
+    sha256: de2a57ef2c1920fe11596302b71411bb6127348459863c688ec5fe8ea39ca84a
   - task: P08-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-08/ledger.yaml
     description: "Phase 8 ledger marked DONE with decisions, task statuses, evidence bundle, and blockers cleared."
-    sha256: 5b1d2733e7734f3788f932fb702d30d57b3d68b55b7b7add25263f92da8d292f
+    sha256: 3ac68de6820bb0f5ea7aa6680716356a909f19dbb90bdc196a2f56a14d0410fa
   - task: P08-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-08/HANDOFF.md
     description: "Phase 8 handoff to Phase 9 with CLI-first MVP cut-line assumptions."
-    sha256: 040d00c7a634f6ab9d57e0bf8c873c396bf91db8c010341ac6aee3403b63774e
+    sha256: 7929eb8ea6982a668dd1b0e53055de0da1b9b82433d123a3351b1c9b222669df
   - task: P08-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 8 complete, CLI-first MVP reached, and P09-T01 as current next work."
