@@ -1,0 +1,136 @@
+phase: 13
+phase_id: P13
+hash_basis: "SHA-256 over artifact bytes after P13-T01 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
+entries:
+  - task: P13-T01
+    artifact: scripts/baseline/capture-run.mjs
+    description: "Node port of capture-run.ps1 with macOS-friendly execFile tokenization and --corpus-root support."
+    sha256: ea9b6befe64fbc2ec1b5b8f195cae8c0c020b7ed39153a1161564791c8d5b161
+  - task: P13-T01
+    artifact: scripts/baseline/grade-run.mjs
+    description: "Deterministic 7-dimension grading with sibling run_id collision detection and score.json schema validation."
+    sha256: 3553169875a1d7412c126b85ce6128b48f0a01f53467696717b399923d4ce411
+  - task: P13-T01
+    artifact: scripts/baseline/redact-output.mjs
+    description: "Node port of redact-output.ps1 with importable redactFile() helper."
+    sha256: cec12b0550a342a06d00f494549b25cfab7d9808be44fe74c6002a3ec3fbacec
+  - task: P13-T01
+    artifact: scripts/baseline/compare-runs.mjs
+    description: "v8/v9 A/B aggregator emitting cost/duration/intervention/recovery/defect metrics; fail-closed on missing v8 evidence."
+    sha256: 722541b6ca3cf7bc2836e16c61aad3bd8fe31b7532d07833be7ee064ee74642f
+  - task: P13-T01
+    artifact: packages/cli/src/commands/evals/index.ts
+    description: "`legion next evals {capture|grade|compare}` CLI adapter routing through scripts/baseline/."
+    sha256: 4f21eb16ea6739b614e4254784839cab54c4891efc07649db97a2ae0e4dce1b3
+  - task: P13-T01
+    artifact: packages/cli/src/index.ts
+    description: "Root CLI dispatch + help text advertising the new `evals` command."
+    sha256: 0e7b3b42c965a2fb20d39ab22df3a714334a1fb9d9c5b87196be47b442f1d6f5
+  - task: P13-T01
+    artifact: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: "Four new P13-T01 cli-e2e tests covering capture/grade/compare/usage_error round-trip."
+    sha256: 49e7f321ba2051edbf626da892060bf82d1818fb3e9e5d2717d3f9b6ed6f76f3
+  - task: P13-T01
+    artifact: tests/evals-baseline.test.mjs
+    description: "Root-level regression test pinning the sealed Phase 0 corpus against drift."
+    sha256: 5d78eb004ec5b4f111e517267c716a45535e89d2df13562d5e4fa5526f31d055
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/integration-report.yaml
+    description: "Structured P13-T01 integration report."
+    sha256: 1dd104dccfbf68eb061880002f0d5f3f965766e217f6e258dfa4f0941ef5d56d
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/ab-comparison/ab-comparison.json
+    description: "v8/v9 A/B comparison aggregator JSON output (v8=null, v9 captured)."
+    sha256: c1cf819a9e4d5ddc36b6aac33a5aebb85222551543930530d81874206c03522e
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/ab-comparison/ab-comparison.md
+    description: "v8/v9 A/B comparison aggregator Markdown output."
+    sha256: 9ef92ae7f35a217fa79763dd8b2b6a469c81e3f13c7f453289744af636b90fe9
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/typecheck.log
+    description: "P13-T01 typecheck transcript: 10 workspace projects typecheck clean."
+    sha256: 9ee367b5490fba9b255bbba7cdbff179a876289f9d34c0cf6a12a129a8f5d46c
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/workspace-tests.log
+    description: "P13-T01 workspace test transcript: 100/100 root tests pass (5 new evals-baseline tests)."
+    sha256: 8fe844802018dd21e19d0c4d6c6d17f9409ba6b07c11a7211bc6ce15add8aa16
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/cli-e2e-test.log
+    description: "P13-T01 cli-e2e transcript: 25/25 pass (4 new evals CLI tests)."
+    sha256: c04fb8fac198d198c471e01b0a39d0c0ef753c9fd4cd39edf6da75edb795ccbf
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/core-test.log
+    description: "P13-T01 @legion/core transcript: 245/245 pass."
+    sha256: da3bc36a942832bf56dade706dd1049a12213285cfc4a50e819888a7b4d00670
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/board-test.log
+    description: "P13-T01 @legion/board transcript: 113/113 pass."
+    sha256: 45ad3cf327d76fc1e4c35d861ae884a9608e9024ecb7b7f52bf701b53080a488
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/protocol-test.log
+    description: "P13-T01 @legion/protocol transcript: 55/55 pass."
+    sha256: 1a2584d289edfb450c19c5b5a3e7da5896993836b7ec2f8941ea0cc0850e0520
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/store-sqlite-test.log
+    description: "P13-T01 @legion/store-sqlite transcript: 171/171 pass."
+    sha256: 11d45f7e3f5fc47723f151d5501a30d6c6e7c33ad1ad975330b92cf58ae934cd
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/artifacts-test.log
+    description: "P13-T01 @legion/artifacts transcript: 59/59 pass."
+    sha256: 20e251ccd4bf06a4e375cc08289ac5440fc408c34bec354b7f4d16b70e7b974a
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/validate-next.log
+    description: "P13-T01 validate-next transcript: PASS (boundaries, worker bundles, runtime scans, schemas, tests, npm/pnpm pack)."
+    sha256: aa42782694ad6a98e563141062da1693138723db1528038837bbf7cadc9b2808
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-noop-calibration.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+    description: "Sealed noop-calibration run manifest (dry-run, terminal_status=dry-run)."
+    sha256: 1da1dc24f81f157214683d7f79357ab52845b425e66ae6fd3e2174c180f1d734
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-noop-calibration.v1-dry-run-r1-20260622T153040Z/score.json
+    description: "Sealed noop-calibration score.json: deterministic_total=70, terminal_status=dry-run."
+    sha256: 31e052031c9f9719e0c6b14ea40bb82dca926b678ad93f1b2f243b98fdea1bd4
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-noop-calibration.v1-dry-run-r1-20260622T153040Z/transcript.redacted.log
+    description: "Sealed noop-calibration redacted transcript (canary masked)."
+    sha256: e285b3e2da738c12602efd8fecd02884d2677d154c2b3168d9823cfc1b34e93b
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-noop-calibration.v1-dry-run-r1-20260622T153040Z/fixture-hashes.sha256
+    description: "Sealed noop-calibration fixture hashes (lowercase SHA-256, POSIX paths)."
+    sha256: 5014205a3fc744f7d785fcb5d950ee7b57de29660da934bef3d4597f06688845
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-bug-fix.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+    description: "Sealed bug-fix run manifest (dry-run, terminal_status=dry-run)."
+    sha256: 55e590a702bc0fb9d435fae0324844548a3f8894e1268f2a981481bbbca26697
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-bug-fix.v1-dry-run-r1-20260622T153040Z/score.json
+    description: "Sealed bug-fix score.json: deterministic_total=70, terminal_status=dry-run."
+    sha256: 2c19f582550e8a9e53f269b2c4eb12be99cdd835e36a6b76e587987bddd31be6
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-greenfield-feature.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+    description: "Sealed greenfield-feature run manifest (dry-run, terminal_status=dry-run)."
+    sha256: bdac8b39c10eef2bf1b8b0d95efd47e335e8e6eca67d54ecde08979bf168a10b
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-greenfield-feature.v1-dry-run-r1-20260622T153040Z/score.json
+    description: "Sealed greenfield-feature score.json: deterministic_total=70, terminal_status=dry-run."
+    sha256: dc79274636cc7b629e683624e0bb7d7ee7cb6b1f70c1f5cb2671eacb26a63eeb
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-security-sensitive.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+    description: "Sealed security-sensitive run manifest (dry-run, terminal_status=dry-run)."
+    sha256: 95742fc892d6d86f80ae99d62f1573470683c5ab75fd4ee2704221cf029ab580
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/runs/v9/p13-security-sensitive.v1-dry-run-r1-20260622T153040Z/score.json
+    description: "Sealed security-sensitive score.json: deterministic_total=70, terminal_status=dry-run."
+    sha256: 2a0f0bed176134df6b9bac85f03afa2a047a4d3a37e6b3d069773fd68773fcfd
+  - task: P13-T01
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-13/ledger.yaml
+    description: "Phase 13 ledger (P13-T01 DONE; P13-T02..T04 todo)."
+    sha256: f8f0f5aa464e906a25cbcf57d303775b7f87ccfd8ee687c04b42020b967239d4
+  - task: P13-T01
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-13/HANDOFF.md
+    description: "Phase 13 handoff to P13-T02 (security hardening)."
+    sha256: b23e62da1b86de813011677ad419a42b07ca146fe7be75740594461feaeceaf0
+  - task: P13-T01
+    artifact: docs/next/evidence/P13-T01/gitleaks-p13-diff.log
+    description: "P13-T01 final diff gitleaks scan: no leaks found across the captured scripts, CLI, tests, evidence, and ledger."
+    sha256: ef49bd2467357e03dbcfeb333d6c0e7e11c73fdc6c231321cd8ae9840d56ca75

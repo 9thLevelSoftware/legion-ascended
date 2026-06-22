@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { handleBoardCommand } from "./commands/board/index.js";
 import { handleChangeCommand } from "./commands/change/index.js";
+import { handleEvalsCommand } from "./commands/evals/index.js";
 import { handleMigrateCommand } from "./commands/migrate/index.js";
 import { handleProjectCommand } from "./commands/project/index.js";
 import {
@@ -23,6 +24,7 @@ Commands:
   change    Create, validate, diff, and archive v9 change bundles.
   board     Create, inspect, and mutate board tasks, events, claims, and approvals.
   migrate   Verify, dry-run, apply, and roll back legacy migration flows.
+  evals     Capture, grade, and compare sealed v8/v9 behavioral eval runs.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.
@@ -78,6 +80,8 @@ async function dispatch(context: CliContext): Promise<CliResult> {
       return handleBoardCommand(commandContext);
     case "migrate":
       return handleMigrateCommand(commandContext);
+    case "evals":
+      return handleEvalsCommand(commandContext);
     default:
       return usageError(`Unknown legion next command: ${command}.`);
   }

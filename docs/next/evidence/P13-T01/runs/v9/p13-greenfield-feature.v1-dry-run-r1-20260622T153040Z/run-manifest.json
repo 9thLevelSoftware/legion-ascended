@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "run_id": "p13-greenfield-feature.v1-dry-run-r1-20260622T153040Z",
+  "scenario_id": "greenfield-feature.v1",
+  "host": "dry-run",
+  "model": "unavailable",
+  "adapter": "v9-cli-surface",
+  "repeat": 1,
+  "baseline_commit": "855e975beec3bac6dc06db598081b6ac11ea8e14",
+  "fixture_hashes": "fixture-hashes.sha256",
+  "timestamps": {
+    "started_at": "2026-06-22T15:30:40.615Z",
+    "ended_at": "2026-06-22T15:30:40.616Z"
+  },
+  "telemetry": {
+    "tokens": {
+      "status": "unavailable",
+      "value": null,
+      "reason": "host did not expose telemetry"
+    },
+    "cost": {
+      "status": "unavailable",
+      "value": null,
+      "reason": "host did not expose telemetry"
+    }
+  },
+  "interventions": [],
+  "events": [
+    {
+      "type": "run_started",
+      "at": "2026-06-22T15:30:40.615Z",
+      "scenario": "greenfield-feature.v1",
+      "host": "dry-run",
+      "dry_run": true
+    },
+    {
+      "type": "dry_run_completed",
+      "at": "2026-06-22T15:30:40.615Z"
+    },
+    {
+      "type": "run_completed",
+      "at": "2026-06-22T15:30:40.616Z",
+      "terminal_status": "dry-run"
+    }
+  ],
+  "terminal_status": "dry-run",
+  "artifacts": {
+    "transcript": "transcript.redacted.log",
+    "git_before": "git-before.txt",
+    "git_after": "git-after.txt",
+    "score": "score.json"
+  }
+}
