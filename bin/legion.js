@@ -31,15 +31,22 @@ function shouldRouteToInstaller(args) {
   const [first] = args;
   if (first === 'install') return true;
   if (first === 'uninstall') return true;
-  if (first === 'update' && args.some((arg) => INSTALLER_FLAGS.has(arg))) return true;
+  if (first === 'update') return true;
   return args.some((arg) => INSTALLER_FLAGS.has(arg));
+}
+
+function installerArgsFor(args) {
+  const [first, ...rest] = args;
+  if (first === 'install') return rest;
+  if (first === 'uninstall') return ['--uninstall', ...rest];
+  if (first === 'update') return ['--update', ...rest];
+  return args;
 }
 
 async function main(args = process.argv.slice(2)) {
   if (shouldRouteToInstaller(args)) {
-    const installerArgs = args[0] === 'install' ? args.slice(1) : args;
     const installer = require('./install.js');
-    return installer.main(installerArgs);
+    return installer.main(installerArgsFor(args));
   }
 
   const bundledCli = path.resolve(__dirname, '..', 'dist', 'legion-cli.mjs');
