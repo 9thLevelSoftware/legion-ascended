@@ -36,7 +36,7 @@
 | Typed foundation | After Phase 2 ✓ |
 | Durable operational kernel | After Phase 5 ✓ |
 | CLI-first MVP | After Phase 8 ✓ |
-| Accepted change lifecycle | After Phase 9 |
+| Accepted change lifecycle | After Phase 9 ✓ |
 | Production lifecycle | After Phase 10 |
 | Operator/UI beta | After Phase 11 |
 | Migration/host beta | After Phase 12 |
@@ -125,13 +125,13 @@ When implementing, compare against original Legion (v8) at:
 | P08-T03 | t_be46700c | **otrlead** | DONE | T02 |
 
 ### Phase 9: Merge Queue and Whole Change Acceptance
-**Status:** IN PROGRESS — P09-T01 merge queue done; P09-T02 + P09-T03 remaining.
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead; Accepted Change Lifecycle cut line reached)
 
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
 | P09-T01 | t_cf3bdb25 | legionworker | DONE | P08-T03 |
-| P09-T02 | t_13698b40 | legionworker | todo | T01 |
-| P09-T03 | t_095363c6 | **otrlead** | todo | T02 |
+| P09-T02 | t_13698b40 | legionworker | DONE | T01 |
+| P09-T03 | t_095363c6 | **otrlead** | DONE | T02 |
 
 ### Phase 10: Release Observation and Rollback
 | Task | ID | Assignee | Status | Dependencies |
@@ -164,7 +164,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 9:** 32 tasks (P03-T01 through P09-T01)
-- **Remaining tasks:** 15 (10 worker tasks, 5 review/closeout tasks)
-- **Current:** P09-T01 is DONE; P09-T02 is next (whole-change acceptance aggregator, dependency-gated on T01)
+- **Completed through Phase 9:** 34 tasks (P03-T01 through P09-T03)
+- **Remaining tasks:** 13 (9 worker tasks, 4 review/closeout tasks)
+- **Current:** P09 is DONE; P10-T01 is next (release observation, dependency-gated on P09-T03)
 - **Final:** P13-T04 (GA decision)

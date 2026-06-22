@@ -1,102 +1,304 @@
-schema_version: 1
-phase: P09
-task: P09-T01+P09-T02
-generated_at: "2026-06-22T07:50:00Z"
-generator: "legion-ascended/legionworker P09-T02"
-purpose: "SHA-256 evidence index for the P09-T01 merge queue + P09-T02 whole-change acceptance aggregator closeout bundle. Consumers should re-verify these hashes against the on-disk evidence before treating the bundle as authentic."
-hash_algorithm: "sha256"
-hash_format: "lowercase hex"
-prefix: "sha256:"
-artifacts:
-  - path: docs/next/evidence/P09-T01/merge-queue-snapshot.json
-    sha256: "sha256:45dde3c9c8e09e39dfefc058fbdd6ab1ff7df432c83b384bb34e787965330c61"
-    description: "Canonical serialized MergeQueueOrchestratorResult for three disjoint accepted task runs."
-  - path: docs/next/evidence/P09-T01/integration-report.yaml
-    sha256: "sha256:c7f2bb6e704a16adb689478c3c612d72fe3662f581160c26f66f93ce8ebd81ca"
-    description: "Structured closeout report describing the P09-T01 acceptance surface."
-  - path: docs/next/evidence/P09-T01/core-test.log
-    sha256: "sha256:076aad0da50e8f1e1758655a7fd69d25940a5e8b76cf5efb63ef7dc3417befe5"
-    description: "pnpm --filter @legion/core test transcript — 226 pass / 0 fail."
-  - path: docs/next/evidence/P09-T01/protocol-test.log
-    sha256: "sha256:af2b375179794075d2e7db3d3781cab032b55f019eb2ef34def5a0762a74fa0e"
-    description: "pnpm --filter @legion/protocol test transcript."
-  - path: docs/next/evidence/P09-T01/artifacts-test.log
-    sha256: "sha256:1adb1ce20bc911a7b82c6335a248c283e4af6ee30a3066776b05208a1cd44c1f"
-    description: "pnpm --filter @legion/artifacts test transcript."
-  - path: docs/next/evidence/P09-T01/typecheck.log
-    sha256: "sha256:acb86b256191f589f42702efc5dfe9529b03de9320b51370a983de0052cd2424"
-    description: "pnpm run typecheck transcript across 10 workspace projects."
-  - path: docs/next/evidence/P09-T01/workspace-tests.log
-    sha256: "sha256:53249dc3815927bf0b81dc3bb92c60cd94097e36b34014be7eb956167b6e01ee"
-    description: "pnpm run test workspace + cli-e2e transcript."
-  - path: docs/next/evidence/P09-T01/validate-next.log
-    sha256: "sha256:2f6ca3ae964f43f84b70a32269d3c936584960df1e688887a4c20f66d090bc6a"
-    description: "pnpm run validate:next closeout gate transcript."
-  - path: docs/next/evidence/P09-T01/gitleaks-p09-diff.log
-    sha256: "sha256:0b207dce969b9c23d4ed756b44306bc2252036a2184b622a8c341e1064d1dc98"
-    description: "Full P09-T01 diff gitleaks pipe scan; no leaks found."
-  - path: docs/next/evidence/P09-T01/command-summary.env
-    sha256: "sha256:ffb3fafde7d9ae11b0b53ee6d18175ce40ecc881e599d1ef1b812f2f7978de37"
-    description: "Local toolchain summary (node, pnpm, git head, branch, UTC timestamp)."
-  - path: docs/next/evidence/P09-T01/git-status.log
-    sha256: "sha256:c3d1f3285d46f0b996206dde733404ce6bc44d6cd113b5d471d226d1d9d43fe5"
-    description: "git status snapshot before the P09-T01 commit."
-  - path: docs/next/evidence/P09-T01/git-diff-stat.log
-    sha256: "sha256:a49cf71d154975b08beeb2717cd979566afcca95a5c0100330a90a823d41d211"
-    description: "git diff --stat HEAD summary of staged P09-T01 changes."
-  - path: docs/next/evidence/P09-T02/whole-change-snapshot.json
-    sha256: "sha256:b322b6ad17cd95140c05a6d925d7e5ccacd4ae1ba82813339fabf826e07cc206"
-    description: "Canonical serialized WholeChangeAcceptanceAggregatorSuccess for an integrated merge queue."
-  - path: docs/next/evidence/P09-T02/integration-report.yaml
-    sha256: "sha256:b791eff8794727029f13cc9b85d1117fa8b59d7c4e52183b0f937ff444ca1467"
-    description: "Structured closeout report describing the P09-T02 whole-change acceptance aggregator surface."
-  - path: docs/next/evidence/P09-T02/core-test.log
-    sha256: "sha256:8bde999d7e4309dfe20256f95a93a901b16b8f9fea2cc25f1d50f7343e501809"
-    description: "pnpm --filter @legion/core test transcript — 226 pass / 0 fail (P09-T02 re-run)."
-  - path: docs/next/evidence/P09-T02/protocol-test.log
-    sha256: "sha256:4f123e28df7e4260caae9fce8911326fbac82180fcf3e0ae25a833cad36d2bfc"
-    description: "pnpm --filter @legion/protocol test transcript (P09-T02 re-run)."
-  - path: docs/next/evidence/P09-T02/artifacts-test.log
-    sha256: "sha256:bdc165e56fd192a453ccab3e1097f10a3fbb8a835bc9f11a16da537115dff6d4"
-    description: "pnpm --filter @legion/artifacts test transcript (P09-T02 re-run)."
-  - path: docs/next/evidence/P09-T02/board-test.log
-    sha256: "sha256:d7ad279ee79cc72f69fad4d7e067adbabb7ad108db449b5d45fae1b759ae2489"
-    description: "pnpm --filter @legion/board test transcript — 32 pass / 0 fail."
-  - path: docs/next/evidence/P09-T02/store-sqlite-test.log
-    sha256: "sha256:5ef628b0774e0f75a296d1a530217efa0541711d31831af86ea9a09a7aaf56e4"
-    description: "pnpm --filter @legion/store-sqlite test transcript — 135 pass / 0 fail."
-  - path: docs/next/evidence/P09-T02/typecheck.log
-    sha256: "sha256:01adf707921877bdd00524db354469ec8072a1c2e047c60325969bc0cee029d6"
-    description: "pnpm run typecheck transcript across 10 workspace projects (P09-T02)."
-  - path: docs/next/evidence/P09-T02/workspace-tests.log
-    sha256: "sha256:e93ae68de80bcb9d999a86fee4f38dff02632060c8177def6a032d3dd8860069"
-    description: "pnpm run test workspace + cli-e2e transcript (P09-T02)."
-  - path: docs/next/evidence/P09-T02/validate-next.log
-    sha256: "sha256:6929704e25c865ec29682b4a4322efde56323aeeda95a78908a06d9486475e91"
-    description: "pnpm run validate:next closeout gate transcript (P09-T02)."
-  - path: docs/next/evidence/P09-T02/gitleaks-p09-diff.log
-    sha256: "sha256:6b389962decb4d558f7314ac357f9d596f249ea0f4cff0a9f64ca1ccf21618ea"
-    description: "Full P09-T02 diff gitleaks pipe scan; no leaks found."
-  - path: docs/next/evidence/P09-T02/command-summary.env
-    sha256: "sha256:6cc4e86ad111e0190bb129c3659dee15e5878426173c9d55c416a78ebb7d7fd3"
-    description: "Local toolchain summary (node, pnpm, branch, UTC timestamp)."
-  - path: docs/next/evidence/P09-T02/git-status.log
-    sha256: "sha256:d551e92df4ad2f72547205dec1b0768403c0d6948860e9b3e60f49080cee5c7a"
-    description: "git status snapshot before the P09-T02 commit."
-  - path: docs/next/evidence/P09-T02/git-diff-stat.log
-    sha256: "sha256:70dd19709c4bf28b26dff6d5777858cd44ba7989e1514e5691f19cc7d3019157"
-    description: "git diff --stat HEAD summary of staged P09-T02 changes."
-  - path: .legion/project/changes/LEGION-NEXT/implementation/phase-09/ledger.yaml
-    sha256: "sha256:16484258dd522cb5b130a70d802c62159bea1cb8c5c7db6d112357b781dd41a9"
-    description: "Phase 9 ledger tracking P09-T01 + P09-T02 status, decisions, and evidence pointers."
-  - path: .legion/project/changes/LEGION-NEXT/implementation/phase-09/HANDOFF.md
-    sha256: "sha256:e734a11e499979cd434dc30363db53f770e7b1aa90b5be08a4ec54c660ae5964"
-    description: "Phase 9 HANDOFF documenting the merge queue + whole-change acceptance surface."
-verifier_instructions:
-  - "Run `shasum -a 256 <path>` for each entry above."
-  - "Compare the lowercased hex digest against the `sha256:` value."
-  - "Any mismatch invalidates the bundle; stop and escalate to the Phase 9 reviewer."
-self_hash:
-  algorithm: "sha256"
-  computed_after_write: true
-  sha256: "sha256:will-be-recomputed-on-commit"
+phase: 9
+phase_id: P09
+hash_basis: "SHA-256 over artifact bytes after P09-T03 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index for the same reason."
+entries:
+  - task: P09-T01
+    artifact: packages/core/src/merge/contract.ts
+    description: "Merge queue contract types and allowlists."
+    sha256: ab03c0009c21bc6f3ec8e9bbc65d74e3ffdc7fbee1bf32507353bedbd07b2427
+  - task: P09-T01
+    artifact: packages/core/src/merge/hash.ts
+    description: "Deterministic SHA-256 helpers for merge queue step/snapshot/decision evidence."
+    sha256: f51294fcead7da35512f7f9e8e8d1c6755c923454085a50bcd3267e2d656fd69
+  - task: P09-T01
+    artifact: packages/core/src/merge/conflict.ts
+    description: "Deterministic path-level conflict detector for overlapping_write and sequential_violation."
+    sha256: ea900905a6e6f870fe733359e9e665ab87347f9154930bac1b9bcf8bc23fe382
+  - task: P09-T01
+    artifact: packages/core/src/merge/rebase.ts
+    description: "Provider-neutral rebase sequencer with injected RebaseRunner and previousOutcome propagation."
+    sha256: 5292a7532b2aa5e09f429bf89f7348fa53f60212740f94350d6799f2a9af310b
+  - task: P09-T01
+    artifact: packages/core/src/merge/gate.ts
+    description: "Fail-closed whole-change integration gate."
+    sha256: 09cb9e5a194f5437163cca32490f5f1d20c72411841c6bfc23c6bc3e915a93d3
+  - task: P09-T01
+    artifact: packages/core/src/merge/orchestrator.ts
+    description: "MergeQueueOrchestrator wiring ordering, conflicts, sequencer, gate, blockers, and hashes."
+    sha256: fd5f55e021d39db06b5d5d38620550a7ce2160093d0a97b2cd69d72955571e33
+  - task: P09-T01
+    artifact: packages/core/src/merge/index.ts
+    description: "Public merge queue barrel export."
+    sha256: 1013e43c95d46b879bb26999d3850364ae728dc0ffc9f6a6fef742bae708c0f3
+  - task: P09-T01
+    artifact: packages/core/src/index.ts
+    description: "@legion/core public index including merge queue exports."
+    sha256: 8ed3f0dfe4d085ba8371fe7d7921d5e03b6fc14eb11ad58f49ac1f8ccb24d85e
+  - task: P09-T01
+    artifact: packages/core/test/merge.test.mjs
+    description: "P09-T01 merge queue unit test suite."
+    sha256: 9fd4c963657780110830a354e3999b1e6845ac55dad6a0110eeccf2a7d9a5b76
+  - task: P09-T01
+    artifact: packages/core/test/merge-fixture.mjs
+    description: "Merge queue deterministic fixture builders."
+    sha256: 035b306bc8520e228263d2a4273a66bfd4f8e69f0274b45a626abe97d69083eb
+  - task: P09-T01
+    artifact: packages/core/test/merge-evidence-snapshot.mjs
+    description: "Script producing canonical merge queue evidence snapshot."
+    sha256: 16096af244581947e9e2ee89119006e4fb54fa9cb20fe767232b097c4d28b4e2
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/merge-queue-snapshot.json
+    description: "Canonical serialized MergeQueueOrchestratorResult evidence."
+    sha256: 45dde3c9c8e09e39dfefc058fbdd6ab1ff7df432c83b384bb34e787965330c61
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/integration-report.yaml
+    description: "Structured P09-T01 integration report."
+    sha256: c7f2bb6e704a16adb689478c3c612d72fe3662f581160c26f66f93ce8ebd81ca
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/core-test.log
+    description: "P09-T01 @legion/core test transcript."
+    sha256: 076aad0da50e8f1e1758655a7fd69d25940a5e8b76cf5efb63ef7dc3417befe5
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/protocol-test.log
+    description: "P09-T01 @legion/protocol regression transcript."
+    sha256: af2b375179794075d2e7db3d3781cab032b55f019eb2ef34def5a0762a74fa0e
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/artifacts-test.log
+    description: "P09-T01 @legion/artifacts regression transcript."
+    sha256: 1adb1ce20bc911a7b82c6335a248c283e4af6ee30a3066776b05208a1cd44c1f
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/typecheck.log
+    description: "P09-T01 workspace typecheck transcript."
+    sha256: acb86b256191f589f42702efc5dfe9529b03de9320b51370a983de0052cd2424
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/workspace-tests.log
+    description: "P09-T01 full workspace test transcript."
+    sha256: 53249dc3815927bf0b81dc3bb92c60cd94097e36b34014be7eb956167b6e01ee
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/validate-next.log
+    description: "P09-T01 validate-next transcript."
+    sha256: 2f6ca3ae964f43f84b70a32269d3c936584960df1e688887a4c20f66d090bc6a
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/gitleaks-p09-diff.log
+    description: "P09-T01 diff gitleaks pipe scan transcript."
+    sha256: 0b207dce969b9c23d4ed756b44306bc2252036a2184b622a8c341e1064d1dc98
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/command-summary.env
+    description: "P09-T01 command/version summary."
+    sha256: ffb3fafde7d9ae11b0b53ee6d18175ce40ecc881e599d1ef1b812f2f7978de37
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/git-status.log
+    description: "P09-T01 git status evidence."
+    sha256: c3d1f3285d46f0b996206dde733404ce6bc44d6cd113b5d471d226d1d9d43fe5
+  - task: P09-T01
+    artifact: docs/next/evidence/P09-T01/git-diff-stat.log
+    description: "P09-T01 git diff stat evidence."
+    sha256: a49cf71d154975b08beeb2717cd979566afcca95a5c0100330a90a823d41d211
+  - task: P09-T02
+    artifact: packages/board-store/src/index.ts
+    description: "Board event type and aggregate-kind allowlists extended for whole-change events."
+    sha256: f94f462c2d289332354f7d13ad369ea3cf433cd29dc0adbc07542f0159846d75
+  - task: P09-T02
+    artifact: packages/board/package.json
+    description: "@legion/board package metadata/dependency updates."
+    sha256: aaab5e77637d994e3fa087b6f42cdb229bc61e00fc94375dd339631f2f0bdd12
+  - task: P09-T02
+    artifact: packages/board/src/index.ts
+    description: "@legion/board public index including whole-change exports."
+    sha256: dc7c54958471fd956405c3589a6124d5244b79db440a9c142aa06bf7e5e1158e
+  - task: P09-T02
+    artifact: packages/board/src/whole-change/contract.ts
+    description: "Whole-change acceptance contract, state, event, issue, and projection types."
+    sha256: 361183a9df2d77a3aa83ebcb591c17cd56e7aa0d74454f8b188c399093cac5b0
+  - task: P09-T02
+    artifact: packages/board/src/whole-change/hash.ts
+    description: "Whole-change deterministic hash helpers."
+    sha256: 933bba7ee22f7b5406a5f35b5d656f17876c28e139e45bb672e3646ec657b325
+  - task: P09-T02
+    artifact: packages/board/src/whole-change/aggregator.ts
+    description: "WholeChangeAcceptanceAggregator and outcome-to-status/event emission logic."
+    sha256: fb8fb445d195eb10dfd8f73619109d1540d368553c6295c0247334c49f44dcc2
+  - task: P09-T02
+    artifact: packages/board/src/whole-change/reducer.ts
+    description: "Pure whole-change acceptance projection reducer and replay helpers."
+    sha256: 836b74e5c464f456c6d7eff3e83248c8c76776e7c77f5d52511d4a5a6874393b
+  - task: P09-T02
+    artifact: packages/board/src/whole-change/projector.ts
+    description: "Logical whole-change projection descriptor."
+    sha256: 20d234faca97a5b2c3924a3ca782891824cb314ce98ad37c856cabdf68cd987e
+  - task: P09-T02
+    artifact: packages/board/src/whole-change/index.ts
+    description: "Whole-change public barrel export."
+    sha256: 203cb454b1e2737f1603512401ea8c207a3210a22d94f7ae9d9c118589c52d84
+  - task: P09-T02
+    artifact: packages/board/test/whole-change-aggregator.test.mjs
+    description: "P09-T02 board whole-change unit test suite."
+    sha256: 19428c818a61f68ec8051f255c29ac68c3652138480044157a922c2b6bd8b682
+  - task: P09-T02
+    artifact: packages/board/test/whole-change-fixture.mjs
+    description: "Whole-change board fixture builders."
+    sha256: 6558163289062337533b8582f04be1502503d80714f1089e52a17954213ded0b
+  - task: P09-T02
+    artifact: packages/board/tsconfig.json
+    description: "Board package TypeScript configuration update."
+    sha256: 1d8b481f2963b00b3c48eb8b5e0f797cde54b41bca321bfce6fe6b4e2171df26
+  - task: P09-T02
+    artifact: packages/store-sqlite/package.json
+    description: "@legion/store-sqlite package metadata/dependency updates."
+    sha256: b26a51dca7ff965a49dd6f106d3ac6cdf3e798186bb1eac5bbfcd803aac57f52
+  - task: P09-T02
+    artifact: packages/store-sqlite/src/index.ts
+    description: "@legion/store-sqlite public index including whole-change projector export."
+    sha256: 754dc45056461683f799c31f00978aa258329d85ad8ff67d9fb9f787152accad
+  - task: P09-T02
+    artifact: packages/store-sqlite/src/whole-change-projector.ts
+    description: "SQLite adapter for whole-change acceptance projection replay/persistence/verification."
+    sha256: ac3d566ca03e72370fa763f770b0cdb4c0ab085e01fdc998e56c26def150b3d4
+  - task: P09-T02
+    artifact: packages/store-sqlite/test/whole-change-projector.test.mjs
+    description: "P09-T02 SQLite projector test suite."
+    sha256: 3ed2561a3c13c3d97270bdf5b8214052cab0135b63c7effa8c3be50932d169bd
+  - task: P09-T02
+    artifact: packages/store-sqlite/test/whole-change-fixture.mjs
+    description: "Whole-change store-sqlite fixture builders."
+    sha256: 6558163289062337533b8582f04be1502503d80714f1089e52a17954213ded0b
+  - task: P09-T02
+    artifact: packages/store-sqlite/tsconfig.json
+    description: "Store-sqlite TypeScript configuration update."
+    sha256: f1581add78c999e8a32a8e05a39801d8b598f2af75a35e95685669f3daf6d086
+  - task: P09-T02
+    artifact: scripts/check-package-boundaries.mjs
+    description: "Package-boundary rule update for store-sqlite -> board adapter dependency."
+    sha256: af6e42c24c0a7109f70e3ae2cf5e756db0622ca1eb24ffacdf289bb69cdac578
+  - task: P09-T02
+    artifact: pnpm-lock.yaml
+    description: "Workspace lockfile update for P09-T02 package graph."
+    sha256: 45daa2ff33b6f86bfebd1a4a8148a7600bcf5760238589dc6e3d291ad996dc14
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/whole-change-snapshot.json
+    description: "Canonical serialized WholeChangeAcceptanceAggregatorSuccess evidence."
+    sha256: b322b6ad17cd95140c05a6d925d7e5ccacd4ae1ba82813339fabf826e07cc206
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/integration-report.yaml
+    description: "Structured P09-T02 integration report."
+    sha256: b791eff8794727029f13cc9b85d1117fa8b59d7c4e52183b0f937ff444ca1467
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/core-test.log
+    description: "P09-T02 @legion/core regression transcript."
+    sha256: 8bde999d7e4309dfe20256f95a93a901b16b8f9fea2cc25f1d50f7343e501809
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/protocol-test.log
+    description: "P09-T02 @legion/protocol regression transcript."
+    sha256: 4f123e28df7e4260caae9fce8911326fbac82180fcf3e0ae25a833cad36d2bfc
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/artifacts-test.log
+    description: "P09-T02 @legion/artifacts regression transcript."
+    sha256: bdc165e56fd192a453ccab3e1097f10a3fbb8a835bc9f11a16da537115dff6d4
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/board-test.log
+    description: "P09-T02 @legion/board test transcript."
+    sha256: d7ad279ee79cc72f69fad4d7e067adbabb7ad108db449b5d45fae1b759ae2489
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/store-sqlite-test.log
+    description: "P09-T02 @legion/store-sqlite test transcript."
+    sha256: 5ef628b0774e0f75a296d1a530217efa0541711d31831af86ea9a09a7aaf56e4
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/typecheck.log
+    description: "P09-T02 workspace typecheck transcript."
+    sha256: 01adf707921877bdd00524db354469ec8072a1c2e047c60325969bc0cee029d6
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/workspace-tests.log
+    description: "P09-T02 full workspace test transcript."
+    sha256: e93ae68de80bcb9d999a86fee4f38dff02632060c8177def6a032d3dd8860069
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/validate-next.log
+    description: "P09-T02 validate-next transcript."
+    sha256: 6929704e25c865ec29682b4a4322efde56323aeeda95a78908a06d9486475e91
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/gitleaks-p09-diff.log
+    description: "P09-T02 diff gitleaks pipe scan transcript."
+    sha256: 6b389962decb4d558f7314ac357f9d596f249ea0f4cff0a9f64ca1ccf21618ea
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/command-summary.env
+    description: "P09-T02 command/version summary."
+    sha256: 6cc4e86ad111e0190bb129c3659dee15e5878426173c9d55c416a78ebb7d7fd3
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/git-status.log
+    description: "P09-T02 git status evidence."
+    sha256: d551e92df4ad2f72547205dec1b0768403c0d6948860e9b3e60f49080cee5c7a
+  - task: P09-T02
+    artifact: docs/next/evidence/P09-T02/git-diff-stat.log
+    description: "P09-T02 git diff stat evidence."
+    sha256: 70dd19709c4bf28b26dff6d5777858cd44ba7989e1514e5691f19cc7d3019157
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/core-test.log
+    description: "P09 closeout @legion/core test transcript."
+    sha256: bf9129390d3bc745c76547f63d32390a0c53537e0847924570816a49b35c60fa
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/protocol-test.log
+    description: "P09 closeout @legion/protocol test transcript."
+    sha256: adffbd4dd598c256183e475cd8be23e1193fbc6d5fbf2c86bd060e5ac526cba9
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/artifacts-test.log
+    description: "P09 closeout @legion/artifacts test transcript."
+    sha256: 1f39d73c96a1c2ffd46805feb8dbb5e73042522fdadc747cb4d6b56d315efbc1
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/board-test.log
+    description: "P09 closeout @legion/board test transcript."
+    sha256: e1976880add702c5422c0f18835a9eea6c6959f92f779f61a0ffec767a559793
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/store-sqlite-test.log
+    description: "P09 closeout @legion/store-sqlite test transcript."
+    sha256: f5dbd758be2c3d7ef712b6f4811fa4c5fd796bb9089488f9801e1e896a3ca87a
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/typecheck.log
+    description: "P09 closeout workspace typecheck transcript."
+    sha256: a61b6f4ddfd7862b82f7054c520a8d382fc1169fb3ff82f3e469e19182a7b63e
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/workspace-tests.log
+    description: "P09 closeout full workspace test transcript."
+    sha256: 313df04e4976594e54610644276533bbda6c99e87f002805ee5e55982541be2a
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/validate-next.log
+    description: "P09 closeout final validate-next transcript."
+    sha256: 3fc205ec0060cd97d998e09455feea8d00283259912a1848e0cdd3ac7ac2a844
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/gitleaks-p09-diff.log
+    description: "P09 closeout final Phase 9 diff gitleaks pipe scan transcript."
+    sha256: 69d681e216e922d6499bf11385af258524c42e5905cb8c082c673132fd361365
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/command-summary.env
+    description: "P09 closeout command/version/scope summary."
+    sha256: bb7a512f554db9675dfb71680a4d5aa72b1a18c494a1018d22a01e9d58dbf76e
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/command-results.tsv
+    description: "P09 closeout command exit-code table."
+    sha256: b8e60a9e83357dd3f4b9f663af5625b2b7bcee9994b4640741d4f055d72ef816
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/git-status.log
+    description: "P09 closeout pre-commit git status evidence."
+    sha256: 3110813cb7d4c478215ae223fe682b965ecbff87a1d1921add8326fe12bbd9c6
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/git-diff-stat.log
+    description: "P09 closeout staged diff stat evidence."
+    sha256: cccebd78a65f3b8a2cbe2cfa7f703f5b1064493309e65364111b61c477a1706a
+  - task: P09-CLOSEOUT
+    artifact: docs/next/evidence/P09-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 9 closeout integration report."
+    sha256: 1b0c1595147ab0cb475e13f74d4798fd201bec1e5eb33a18efcae31cdee2f6ba
+  - task: P09-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 9 closeout review with PASS verdict."
+    sha256: 6ddec079a2373b77cbe82c1cba4cb09a55f27bc8a8041b6f8715bc5dbaeaea1c
+  - task: P09-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-09/ledger.yaml
+    description: "Final Phase 9 ledger marked DONE with decisions, evidence, and blockers cleared."
+    sha256: c3f6f5c558e5042198d8b820ada802fcf50b4963c14d209f94716b41482f2572
+  - task: P09-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-09/HANDOFF.md
+    description: "Final Phase 9 handoff to Phase 10 and Accepted Change Lifecycle cut-line assumptions."
+    sha256: a5698313e1f398bba07648de43896a35b14fbbf329a91f1db3822c9580e33610
+  - task: P09-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 9 complete and P10-T01 current."
+    sha256: c5f6515770ab50e6cf39764122774eda3cc5b0eac73862fcac588c0f7fbcb33e
