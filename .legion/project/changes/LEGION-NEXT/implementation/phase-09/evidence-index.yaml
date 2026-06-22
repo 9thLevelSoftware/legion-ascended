@@ -1,9 +1,9 @@
 schema_version: 1
 phase: P09
-task: P09-T01
-generated_at: "2026-06-22T07:36:40Z"
-generator: "legion-ascended/legionworker P09-T01"
-purpose: "SHA-256 evidence index for the P09-T01 merge queue closeout bundle. Consumers should re-verify these hashes against the on-disk evidence before treating the bundle as authentic."
+task: P09-T01+P09-T02
+generated_at: "2026-06-22T07:50:00Z"
+generator: "legion-ascended/legionworker P09-T02"
+purpose: "SHA-256 evidence index for the P09-T01 merge queue + P09-T02 whole-change acceptance aggregator closeout bundle. Consumers should re-verify these hashes against the on-disk evidence before treating the bundle as authentic."
 hash_algorithm: "sha256"
 hash_format: "lowercase hex"
 prefix: "sha256:"
@@ -12,7 +12,7 @@ artifacts:
     sha256: "sha256:45dde3c9c8e09e39dfefc058fbdd6ab1ff7df432c83b384bb34e787965330c61"
     description: "Canonical serialized MergeQueueOrchestratorResult for three disjoint accepted task runs."
   - path: docs/next/evidence/P09-T01/integration-report.yaml
-    sha256: "sha256:2e96f87f6cd7cf4c49e2c261701b6096a18a8b9bfac16481a43812718a5f61d8"
+    sha256: "sha256:c7f2bb6e704a16adb689478c3c612d72fe3662f581160c26f66f93ce8ebd81ca"
     description: "Structured closeout report describing the P09-T01 acceptance surface."
   - path: docs/next/evidence/P09-T01/core-test.log
     sha256: "sha256:076aad0da50e8f1e1758655a7fd69d25940a5e8b76cf5efb63ef7dc3417befe5"
@@ -44,8 +44,56 @@ artifacts:
   - path: docs/next/evidence/P09-T01/git-diff-stat.log
     sha256: "sha256:a49cf71d154975b08beeb2717cd979566afcca95a5c0100330a90a823d41d211"
     description: "git diff --stat HEAD summary of staged P09-T01 changes."
+  - path: docs/next/evidence/P09-T02/whole-change-snapshot.json
+    sha256: "sha256:b322b6ad17cd95140c05a6d925d7e5ccacd4ae1ba82813339fabf826e07cc206"
+    description: "Canonical serialized WholeChangeAcceptanceAggregatorSuccess for an integrated merge queue."
+  - path: docs/next/evidence/P09-T02/integration-report.yaml
+    sha256: "sha256:b791eff8794727029f13cc9b85d1117fa8b59d7c4e52183b0f937ff444ca1467"
+    description: "Structured closeout report describing the P09-T02 whole-change acceptance aggregator surface."
+  - path: docs/next/evidence/P09-T02/core-test.log
+    sha256: "sha256:8bde999d7e4309dfe20256f95a93a901b16b8f9fea2cc25f1d50f7343e501809"
+    description: "pnpm --filter @legion/core test transcript — 226 pass / 0 fail (P09-T02 re-run)."
+  - path: docs/next/evidence/P09-T02/protocol-test.log
+    sha256: "sha256:4f123e28df7e4260caae9fce8911326fbac82180fcf3e0ae25a833cad36d2bfc"
+    description: "pnpm --filter @legion/protocol test transcript (P09-T02 re-run)."
+  - path: docs/next/evidence/P09-T02/artifacts-test.log
+    sha256: "sha256:bdc165e56fd192a453ccab3e1097f10a3fbb8a835bc9f11a16da537115dff6d4"
+    description: "pnpm --filter @legion/artifacts test transcript (P09-T02 re-run)."
+  - path: docs/next/evidence/P09-T02/board-test.log
+    sha256: "sha256:d7ad279ee79cc72f69fad4d7e067adbabb7ad108db449b5d45fae1b759ae2489"
+    description: "pnpm --filter @legion/board test transcript — 32 pass / 0 fail."
+  - path: docs/next/evidence/P09-T02/store-sqlite-test.log
+    sha256: "sha256:5ef628b0774e0f75a296d1a530217efa0541711d31831af86ea9a09a7aaf56e4"
+    description: "pnpm --filter @legion/store-sqlite test transcript — 135 pass / 0 fail."
+  - path: docs/next/evidence/P09-T02/typecheck.log
+    sha256: "sha256:01adf707921877bdd00524db354469ec8072a1c2e047c60325969bc0cee029d6"
+    description: "pnpm run typecheck transcript across 10 workspace projects (P09-T02)."
+  - path: docs/next/evidence/P09-T02/workspace-tests.log
+    sha256: "sha256:e93ae68de80bcb9d999a86fee4f38dff02632060c8177def6a032d3dd8860069"
+    description: "pnpm run test workspace + cli-e2e transcript (P09-T02)."
+  - path: docs/next/evidence/P09-T02/validate-next.log
+    sha256: "sha256:6929704e25c865ec29682b4a4322efde56323aeeda95a78908a06d9486475e91"
+    description: "pnpm run validate:next closeout gate transcript (P09-T02)."
+  - path: docs/next/evidence/P09-T02/gitleaks-p09-diff.log
+    sha256: "sha256:6b389962decb4d558f7314ac357f9d596f249ea0f4cff0a9f64ca1ccf21618ea"
+    description: "Full P09-T02 diff gitleaks pipe scan; no leaks found."
+  - path: docs/next/evidence/P09-T02/command-summary.env
+    sha256: "sha256:6cc4e86ad111e0190bb129c3659dee15e5878426173c9d55c416a78ebb7d7fd3"
+    description: "Local toolchain summary (node, pnpm, branch, UTC timestamp)."
+  - path: docs/next/evidence/P09-T02/git-status.log
+    sha256: "sha256:d551e92df4ad2f72547205dec1b0768403c0d6948860e9b3e60f49080cee5c7a"
+    description: "git status snapshot before the P09-T02 commit."
+  - path: docs/next/evidence/P09-T02/git-diff-stat.log
+    sha256: "sha256:70dd19709c4bf28b26dff6d5777858cd44ba7989e1514e5691f19cc7d3019157"
+    description: "git diff --stat HEAD summary of staged P09-T02 changes."
+  - path: .legion/project/changes/LEGION-NEXT/implementation/phase-09/ledger.yaml
+    sha256: "sha256:16484258dd522cb5b130a70d802c62159bea1cb8c5c7db6d112357b781dd41a9"
+    description: "Phase 9 ledger tracking P09-T01 + P09-T02 status, decisions, and evidence pointers."
+  - path: .legion/project/changes/LEGION-NEXT/implementation/phase-09/HANDOFF.md
+    sha256: "sha256:e734a11e499979cd434dc30363db53f770e7b1aa90b5be08a4ec54c660ae5964"
+    description: "Phase 9 HANDOFF documenting the merge queue + whole-change acceptance surface."
 verifier_instructions:
-  - "Run `shasum -a 256 docs/next/evidence/P09-T01/<file>` for each entry above."
+  - "Run `shasum -a 256 <path>` for each entry above."
   - "Compare the lowercased hex digest against the `sha256:` value."
   - "Any mismatch invalidates the bundle; stop and escalate to the Phase 9 reviewer."
 self_hash:

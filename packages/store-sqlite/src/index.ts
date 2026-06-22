@@ -4988,3 +4988,22 @@ export class SqliteBoardStoreWithTaskLinkRepository implements BoardStore {
     return this.#store.backupTo(backupPath);
   }
 }
+
+// =====================================================================
+// P09-T02 — Whole-change acceptance projector adapter.
+// SQLite-backed projector that wires the board's pure
+// `reduceWholeChangeAcceptance` reducer into the standard
+// projection-store flow. Lives here so `@legion/board` does
+// NOT have to import `@legion/store-sqlite`.
+// =====================================================================
+
+export {
+  SqliteWholeChangeAcceptanceProjector,
+  deriveWholeChangeProjectionStateHash,
+  reduceWholeChangeAcceptance,
+  wholeChangeAcceptanceProjectionKey,
+  WHOLE_CHANGE_PROJECTION_VERSION
+} from "./whole-change-projector.js";
+export type {
+  SqliteWholeChangeAcceptanceProjectorReplayResult
+} from "./whole-change-projector.js";

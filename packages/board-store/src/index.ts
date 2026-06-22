@@ -659,7 +659,15 @@ export const BOARD_EVENT_TYPES = [
   "task.bumped",
   "task.superseded",
   "task.linked",
-  "task.deleted"
+  "task.deleted",
+  // P09-T02 — Whole-change acceptance aggregator (board adapter
+  // layer). Persisted as TEXT by the SQLite repository; the
+  // allowlist is the source of truth for consumers.
+  "change.aggregated",
+  "change.accepted",
+  "change.rejected",
+  "change.escalated",
+  "change.blocked"
 ] as const;
 
 export type BoardEventType = (typeof BOARD_EVENT_TYPES)[number];
@@ -676,7 +684,9 @@ export const BOARD_EVENT_AGGREGATE_KINDS = [
   "claim",
   "approval",
   "outbox",
-  "projection"
+  "projection",
+  // P09-T02 — Whole-change aggregate (board adapter layer).
+  "whole_change"
 ] as const;
 
 export type BoardEventAggregateKind = (typeof BOARD_EVENT_AGGREGATE_KINDS)[number];

@@ -148,3 +148,59 @@ export {
   type ListBoardTaskCommentsQuery,
   type UpdateBoardTaskCommentInput
 } from "@legion/board-store";
+
+// =====================================================================
+// P09-T02 — Whole-change acceptance aggregator (board adapter layer).
+// Bridges the merge queue's `MergeIntegrationDecision` to the board's
+// event log + projection store. Re-exports the typed contract, the
+// pure reducer, the aggregator, the projector, and the deterministic
+// hashing helpers.
+// =====================================================================
+
+export {
+  buildWholeChangeAcceptance,
+  deriveWholeChangeAggregateId,
+  deriveWholeChangeAggregatorHash,
+  deriveWholeChangeEventPayloadHash,
+  deriveWholeChangeProjectionState,
+  deriveWholeChangeProjectionStateHash,
+  isWholeChangeAcceptanceProjectionKey,
+  mapOutcomeToStatus,
+  parseWholeChangeAcceptanceProjectionKey,
+  parseWholeChangeAggregatedPayload,
+  reduceWholeChangeAcceptance,
+  replayWholeChangeAcceptance,
+  sha256OfCanonical,
+  verifyWholeChangeAcceptanceState,
+  wholeChangeAcceptanceProjectionDescriptor,
+  wholeChangeAcceptanceProjectionKey,
+  WholeChangeAcceptanceAggregator,
+  WHOLE_CHANGE_ACCEPTANCE_KIND,
+  WHOLE_CHANGE_ACCEPTANCE_SCHEMA_VERSION,
+  WHOLE_CHANGE_AGGREGATE_KIND_LITERAL,
+  WHOLE_CHANGE_AGGREGATE_KINDS,
+  WHOLE_CHANGE_EVENT_TYPES,
+  WHOLE_CHANGE_HASH_VERSION,
+  WHOLE_CHANGE_PROJECTION_KEY_PREFIX,
+  WHOLE_CHANGE_PROJECTION_VERSION,
+  type ChangeId
+} from "./whole-change/index.js";
+
+export type {
+  WholeChangeAcceptanceAggregatorFailure,
+  WholeChangeAcceptanceAggregatorInput,
+  WholeChangeAcceptanceAggregatorOptions,
+  WholeChangeAcceptanceAggregatorResult,
+  WholeChangeAcceptanceAggregatorSuccess,
+  WholeChangeAcceptanceProjectionDescriptor,
+  WholeChangeAcceptanceReducer,
+  WholeChangeAcceptanceState,
+  WholeChangeAcceptanceStatus,
+  WholeChangeAggregateId,
+  WholeChangeAggregateKind,
+  WholeChangeAggregatedPayload,
+  WholeChangeAggregatorIssue,
+  WholeChangeAggregatorIssueCode,
+  WholeChangeEventPayload,
+  WholeChangeEventType
+} from "./whole-change/index.js";

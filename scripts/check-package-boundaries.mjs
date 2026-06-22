@@ -32,7 +32,7 @@ const DEFAULT_PACKAGES = [
     name: "@legion/store-sqlite",
     root: "packages/store-sqlite",
     src: "packages/store-sqlite/src",
-    allowedWorkspaceImports: ["@legion/board-store"],
+    allowedWorkspaceImports: ["@legion/board-store", "@legion/board"],
     allowedProviderOrStorageImports: ["node:sqlite"]
   },
   {

@@ -1,0 +1,47 @@
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/board-store build && pnpm --filter @legion/core build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ mapOutcomeToStatus covers the canonical non-invertible map (0.612333ms)
+✔ aggregator emits one event with the matching event type per outcome (0.69175ms)
+✔ aggregator carries the per-task decision breakdown into the state (0.61175ms)
+✔ aggregator produces a content-addressed aggregatorHash that is stable across calls (0.156375ms)
+✔ aggregator uses deterministic, content-addressed audit hashes for payload and state (0.419917ms)
+✔ aggregator emits idempotencyKey that uniquely identifies (changeId, mergeQueueHash, eventType) (0.114792ms)
+✔ aggregator result is deeply frozen (0.123958ms)
+✔ aggregator propagates correlationId to the emitted event (0.083125ms)
+✔ aggregator hashes the merge queue through both mergeQueueHash and decisionSha256 (0.089917ms)
+✔ aggregator rejects invalid acceptedBy (0.131417ms)
+✔ aggregator rejects orchestrator result with missing decision (0.077834ms)
+✔ aggregator rejects orchestrator result with missing snapshot (0.062416ms)
+✔ aggregator rejects orchestrator result with mismatched decision.mergeQueueHash (0.059542ms)
+✔ aggregator rejects empty queue (0.053208ms)
+✔ aggregator reports both attemptedOutcome and attemptedMergeQueueHash on failure (0.052375ms)
+✔ reducer replays the aggregator's emitted event into the same state (0.203542ms)
+✔ reducer ignores foreign events (different aggregateKind) (0.095917ms)
+✔ reducer ignores foreign events (same aggregateKind but different aggregateId) (0.099541ms)
+✔ reducer ignores malformed payloads and returns the prior state (0.028208ms)
+✔ reducer is idempotent under duplicate event emission (0.096708ms)
+✔ reducer accepts events from the change.* family (change.rejected, change.blocked) (0.073708ms)
+✔ parseWholeChangeAggregatedPayload rejects missing fields (0.021375ms)
+✔ parseWholeChangeAggregatedPayload rejects non-content-hash mergeQueueHash (0.046583ms)
+✔ parseWholeChangeAggregatedPayload roundtrips the aggregator-emitted payload (0.050125ms)
+✔ deriveWholeChangeAggregateId pins the (changeId, mergeQueueHash) shape (0.019959ms)
+✔ wholeChangeAcceptanceProjectionKey follows the whole_change.acceptance: prefix (0.129334ms)
+✔ parseWholeChangeAcceptanceProjectionKey round-trips the projection key (0.02ms)
+✔ verifyWholeChangeAcceptanceState passes for aggregator-emitted state (0.063125ms)
+✔ verifyWholeChangeAcceptanceState fails for tampered state (0.049625ms)
+✔ WHOLE_CHANGE_ACCEPTANCE_KIND, WHOLE_CHANGE_EVENT_TYPES, and WHOLE_CHANGE_HASH_VERSION are exported (0.031708ms)
+✔ WholeChangeAcceptanceAggregator class is equivalent to buildWholeChangeAcceptance (0.066375ms)
+✔ sha256OfCanonical is order-independent (0.02925ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 71.857583

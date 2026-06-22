@@ -14,7 +14,9 @@ tasks:
     evidence: docs/next/evidence/P09-T01/integration-report.yaml
     depends_on: ["P08-T03"]
   P09-T02:
-    status: TODO
+    status: DONE
+    run_id: "P09-T02-20260622-whole-change-acceptance"
+    evidence: docs/next/evidence/P09-T02/integration-report.yaml
     depends_on: ["P09-T01"]
   P09-T03:
     status: TODO
@@ -49,6 +51,22 @@ decisions:
     decision: "Merge queue snapshot carries `mergeQueueHash`; per-step hashes are `stepSha256`; whole-change decision hash is `decisionSha256`. The hash inputs are stable across replays so audit consumers can prove 'same queue ⇒ same decision'."
     reason: "Phase 8 set the precedent with `workerContextHash`, `reviewPipelineHash`, and `decisionSha256`; the merge queue extends that content-addressed audit trail to the whole-change layer."
     decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T02
+    decision: "Whole-change acceptance aggregator lives in @legion/board (the board adapter layer), NOT in @legion/core. Core stays provider-neutral; only the merge queue's frozen MergeQueueOrchestratorResult crosses the core → board boundary."
+    reason: "Mirrors the P08-T02 placement rule: core owns the orchestrators that consume protocol entities, and the board adapter surfaces per-aggregate events to operators. Keeping the aggregator in board preserves the protocol → core → board → store-sqlite layering."
+    decided_at: "2026-06-22T07:50:00Z"
+  - task: P09-T02
+    decision: "SQLite-backed whole-change projector lives in @legion/store-sqlite, not @legion/board. Board exposes the logical projection descriptor and pure reducer; the SQLite adapter wraps it into the standard SqliteBoardProjectionRebuilder flow."
+    reason: "Package-boundary invariant (scripts/check-package-boundaries.mjs): @legion/board does NOT import @legion/store-sqlite. This mirrors how SqliteBoardProjectionRebuilder (store-sqlite) wraps BoardProjectionRebuilder (board-store)."
+    decided_at: "2026-06-22T07:50:00Z"
+  - task: P09-T02
+    decision: "Outcome → status map is non-invertible by design: integrated → accepted, rejected → rejected, escalated → blocked, blocked → blocked. A blocked whole-change may later resolve to accepted via a follow-up event with a different mergeQueueHash, never by mutating a frozen state."
+    reason: "Mirrors the Phase 9 HANDOFF invariant: protocol 'accepted' is terminal at the state layer, so the aggregator only emits a terminal transition through a new event keyed on a new (changeId, mergeQueueHash) pair. The original frozen state is preserved for audit."
+    decided_at: "2026-06-22T07:50:00Z"
+  - task: P09-T02
+    decision: "Extended @legion/board-store's BOARD_EVENT_TYPES and BOARD_EVENT_AGGREGATE_KINDS allowlists with the change.* event types and the whole_change aggregate kind. These are board-layer extensions documented in the whole-change contract module."
+    reason: "The board-store allowlists are the source of truth for what the SQLite repository will persist. Extending them at the board layer (rather than inventing a parallel audit table) keeps the event-log replay flow consistent with the existing task/approval/link surfaces."
+    decided_at: "2026-06-22T07:50:00Z"
 evidence:
   - packages/core/src/merge/contract.ts
   - packages/core/src/merge/hash.ts
@@ -61,6 +79,21 @@ evidence:
   - packages/core/test/merge.test.mjs
   - packages/core/test/merge-fixture.mjs
   - packages/core/test/merge-evidence-snapshot.mjs
+  - packages/board-store/src/index.ts
+  - packages/board/src/whole-change/contract.ts
+  - packages/board/src/whole-change/hash.ts
+  - packages/board/src/whole-change/aggregator.ts
+  - packages/board/src/whole-change/reducer.ts
+  - packages/board/src/whole-change/projector.ts
+  - packages/board/src/whole-change/index.ts
+  - packages/board/src/index.ts
+  - packages/board/test/whole-change-aggregator.test.mjs
+  - packages/board/test/whole-change-fixture.mjs
+  - packages/store-sqlite/src/whole-change-projector.ts
+  - packages/store-sqlite/src/index.ts
+  - packages/store-sqlite/test/whole-change-projector.test.mjs
+  - packages/store-sqlite/test/whole-change-fixture.mjs
+  - scripts/check-package-boundaries.mjs
   - docs/next/evidence/P09-T01/merge-queue-snapshot.json
   - docs/next/evidence/P09-T01/integration-report.yaml
   - docs/next/evidence/P09-T01/core-test.log
@@ -73,3 +106,17 @@ evidence:
   - docs/next/evidence/P09-T01/command-summary.env
   - docs/next/evidence/P09-T01/git-status.log
   - docs/next/evidence/P09-T01/git-diff-stat.log
+  - docs/next/evidence/P09-T02/whole-change-snapshot.json
+  - docs/next/evidence/P09-T02/integration-report.yaml
+  - docs/next/evidence/P09-T02/core-test.log
+  - docs/next/evidence/P09-T02/protocol-test.log
+  - docs/next/evidence/P09-T02/artifacts-test.log
+  - docs/next/evidence/P09-T02/board-test.log
+  - docs/next/evidence/P09-T02/store-sqlite-test.log
+  - docs/next/evidence/P09-T02/typecheck.log
+  - docs/next/evidence/P09-T02/workspace-tests.log
+  - docs/next/evidence/P09-T02/validate-next.log
+  - docs/next/evidence/P09-T02/gitleaks-p09-diff.log
+  - docs/next/evidence/P09-T02/command-summary.env
+  - docs/next/evidence/P09-T02/git-status.log
+  - docs/next/evidence/P09-T02/git-diff-stat.log
