@@ -20,7 +20,7 @@ Implementation batch: Phase 4 changes on `codex/p03-t02-board-task-repository` a
 
 - `pnpm --filter @legion/protocol test` — PASS, 54/54 tests.
 - `node --test tests/workflow-common-packs.test.mjs` — PASS, 1/1 tests.
-- `node --test tests/worker-bundles.test.mjs` — PASS, 15/15 tests.
+- `node --test tests/worker-bundles.test.mjs` — PASS, 16/16 tests.
 - `node --test tests/default-runtime-scan.test.mjs` — PASS, 8/8 tests.
 - `node --test tests/persona-purge.test.mjs` — PASS, 6/6 tests.
 - `pnpm run check:worker-bundles` — PASS, 0 schema/capability/domain-pack violations.
@@ -29,7 +29,7 @@ Implementation batch: Phase 4 changes on `codex/p03-t02-board-task-repository` a
 - `pnpm run check:package-contents` — PASS.
 - `pnpm run typecheck` — PASS.
 - `pnpm -r --if-present test` — PASS, 312/312 workspace-package tests.
-- `pnpm run validate:next` — PASS, 389/389 combined root/workspace tests and all validate-next gates.
+- `pnpm run validate:next` — PASS, 390/390 combined root/workspace tests and all validate-next gates.
 - `gitleaks detect --source . --log-opts=28b83d4..HEAD --redact --no-banner` — PASS.
 
 Full transcripts are under `docs/next/evidence/P04-CLOSEOUT/`.
@@ -44,13 +44,18 @@ Phase 5 can implement the RuntimeDriver/Eve adapter against these stable assumpt
 4. `promptContentContract.forbiddenSections` must continue to include biography, tone, and personality; runtime prompt assembly must not add those sections from adapter-specific templates.
 5. `workflow-common-core` is the always-load shared pack; the github, memory, and domains packs are available as extracted v1.0.0 packs for opt-in bundle/domain routing.
 6. Legacy persona IDs may be used only to interpret imported v8 plans, outcomes, and evidence; they are not a v9 default runtime router.
-7. `validate:next` now runs worker-bundle validation and the default-runtime persona scan before schema generation and drift checks.
+7. Bundle prompt Markdown is pinned to LF checkout semantics via `.gitattributes`; this keeps `promptContentContract.instructionsHash` stable on Windows/macOS/Linux.
+8. `validate:next` now runs worker-bundle validation and the default-runtime persona scan before schema generation and drift checks.
 
 ## Accepted Warning
 
 Local closeout verification ran on Node v26.0.0 and emitted pnpm engine warnings because the packages declare `>=24.0.0 <26`. The warning is not a Phase 4 source blocker because all local gates passed; CI/release runners should continue to use the declared Node range.
 
 A pre-stage `validate:next` run failed only at generated schema/doc drift because the P04-T01 generated schema/fixture changes were not yet staged. After staging the generated schema artifacts, the final `validate:next` run passed. The diagnostic failure log is preserved as `docs/next/evidence/P04-CLOSEOUT/validate-next-prestage-failure.log`.
+
+## CI Remediation Notes
+
+Windows CI initially exposed CRLF checkout drift for `bundles/*.md`: the declared `promptContentContract.instructionsHash` values were computed over LF prompt bytes while Windows checked the Markdown files out with CRLF. The closeout branch now pins `bundles/*.md text eol=lf` in `.gitattributes` and tests that rule in `tests/worker-bundles.test.mjs` so prompt hashes remain stable across operating systems.
 
 ## Handoff Recommendation
 

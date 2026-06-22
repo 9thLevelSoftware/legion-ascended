@@ -57,6 +57,7 @@ acceptance:
     notes:
       - "Nine ADR-002 default roles are registered one-to-one with bundle IDs."
       - "Bundle prompt hashes are verified against on-disk prompt bytes."
+      - "`.gitattributes` pins `bundles/*.md` to LF checkout semantics so those hashes stay stable on Windows/macOS/Linux."
   prompt_content_scan:
     status: PASS
     evidence:
@@ -80,7 +81,7 @@ commands:
     command: "node --test tests/worker-bundles.test.mjs"
     exit_code: 0
     evidence: docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log
-    result: "15 pass / 0 fail"
+    result: "16 pass / 0 fail"
   - name: default-runtime-scan-test
     command: "node --test tests/default-runtime-scan.test.mjs"
     exit_code: 0
@@ -125,7 +126,7 @@ commands:
     command: "pnpm run validate:next"
     exit_code: 0
     evidence: docs/next/evidence/P04-CLOSEOUT/validate-next.log
-    result: "389 pass / 0 fail plus validate-next gates"
+    result: "390 pass / 0 fail plus validate-next gates"
   - name: gitleaks-branch
     command: "gitleaks detect --source . --log-opts=28b83d4bee3c003992f5af002b3916a05ddce4bd..HEAD --redact --no-banner"
     exit_code: 0

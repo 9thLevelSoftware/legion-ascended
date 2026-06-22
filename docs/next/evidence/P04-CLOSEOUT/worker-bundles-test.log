@@ -1,25 +1,26 @@
 $ node --test tests/worker-bundles.test.mjs
 
-✔ P04-T05 real-repo worker bundles pass schema, capability, and domain-pack checks (5.102875ms)
-✔ P04-T05 real-repo registry covers every v9 default worker role exactly once (0.815917ms)
-✔ P04-T05 real-repo registry marks biography, tone, personality as forbidden on every bundle (0.367959ms)
-✔ P04-T05 rejects empty capabilities array (3.3615ms)
-✔ P04-T05 rejects unknown role (2.485042ms)
-✔ P04-T05 rejects duplicate capability within a bundle (1.899125ms)
-✔ P04-T05 rejects mismatched instructionsHash (1.882084ms)
-✔ P04-T05 rejects prompt file that renders a forbidden heading (1.892917ms)
-✔ P04-T05 rejects empty forbiddenSections (1.827584ms)
-✔ P04-T05 rejects bundle that omits workflow-common-core pack reference (2.195083ms)
-✔ P04-T05 rejects pack file with pack_version below v1.0.0 (2.231417ms)
-✔ P04-T05 rejects pack file with pack_status other than extracted (1.742792ms)
-✔ P04-T05 rejects mandatory workflow-common pack file missing from disk (1.673334ms)
-✔ P04-T05 exposes the canonical v9 default role set (0.052875ms)
-✔ P04-T05 pins the mandatory workflow-common pack set (0.038334ms)
-ℹ tests 15
+✔ P04-T05 real-repo worker bundles pass schema, capability, and domain-pack checks (5.050875ms)
+✔ P04-T05 real-repo registry covers every v9 default worker role exactly once (0.77575ms)
+✔ P04-T05 real-repo registry marks biography, tone, personality as forbidden on every bundle (0.310792ms)
+✔ P04-T05 bundle prompt hashes are protected from Windows CRLF checkout drift (0.308959ms)
+✔ P04-T05 rejects empty capabilities array (3.27075ms)
+✔ P04-T05 rejects unknown role (2.1465ms)
+✔ P04-T05 rejects duplicate capability within a bundle (2.082709ms)
+✔ P04-T05 rejects mismatched instructionsHash (1.962875ms)
+✔ P04-T05 rejects prompt file that renders a forbidden heading (2.453375ms)
+✔ P04-T05 rejects empty forbiddenSections (1.827ms)
+✔ P04-T05 rejects bundle that omits workflow-common-core pack reference (1.927042ms)
+✔ P04-T05 rejects pack file with pack_version below v1.0.0 (1.857875ms)
+✔ P04-T05 rejects pack file with pack_status other than extracted (1.841709ms)
+✔ P04-T05 rejects mandatory workflow-common pack file missing from disk (2.323417ms)
+✔ P04-T05 exposes the canonical v9 default role set (0.05775ms)
+✔ P04-T05 pins the mandatory workflow-common pack set (0.029917ms)
+ℹ tests 16
 ℹ suites 0
-ℹ pass 15
+ℹ pass 16
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 89.776541
+ℹ duration_ms 89.762875

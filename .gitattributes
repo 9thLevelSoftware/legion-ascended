@@ -1,1 +1,2 @@
 schemas/**/*.md text eol=lf
+bundles/*.md text eol=lf

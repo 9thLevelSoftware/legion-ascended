@@ -2,6 +2,10 @@ phase: 4
 phase_id: P04
 hash_basis: "SHA-256 over artifact bytes as staged for the Phase 4 closeout; identical to Git blob content bytes after commit."
 entries:
+  - task: P04-T05
+    artifact: .gitattributes
+    description: "Line-ending policy pinning bundle prompt Markdown to LF so promptContentContract hashes are stable across Windows/macOS/Linux"
+    sha256: fd2bb14613f4d958d51bd6f1173abca73e82d09b8449b923bab3453e9b515b8e
   - task: P04-T01
     artifact: packages/protocol/src/entities/task-run.ts
     description: "TaskRun protocol source expanded with functional WorkerBundle manifest role/domain/capabilities and nested prompt-content contract"
@@ -108,8 +112,8 @@ entries:
     sha256: 7a5b12b2f0036298ec596fe866d8797f841effd2664c934cefe917710f0e61df
   - task: P04-T05
     artifact: tests/worker-bundles.test.mjs
-    description: "Regression tests for worker bundle validation positive and negative paths"
-    sha256: dd38b8327e269bb394b80f8f52bdd2203649afa7c71b85aadc261ba30f74901b
+    description: "Regression tests for worker bundle validation positive/negative paths and LF checkout policy"
+    sha256: 64efc449d7bc7f5302a4611ae67502b3429ad9186a5b0004c26f08cf38268b3c
   - task: P04-T06
     artifact: tests/default-runtime-scan.test.mjs
     description: "Regression tests for default runtime scanner surface and violation reporting"
@@ -136,8 +140,8 @@ entries:
     sha256: 173ec2f46cfd93e5ea609b39ba93bbd55cfc0ff4742d5dbf897668cc821b7af6
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log
-    description: "Closeout worker bundle validation unit-test transcript (15 pass)"
-    sha256: 9ed82bc547e0058e2cff27c241cd0e7500400240f29213d808448f1eb8fd59a6
+    description: "Closeout worker bundle validation unit-test transcript (16 pass)"
+    sha256: 2c37c52b86cbfd9b3552ab9ca9b5cdbcd5241981e6da936d5b80758c4c859100
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/default-runtime-scan-test.log
     description: "Closeout default runtime scanner unit-test transcript (8 pass)"
@@ -172,8 +176,8 @@ entries:
     sha256: 7960b36a95c22fee2097abd3eb090b164fe12615ada7452abbb7b25475c735af
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/validate-next.log
-    description: "Closeout full validate-next transcript (389 combined tests pass)"
-    sha256: 2e0b855c04e442dd5d5489caede037acd846c450d6034c233c5b9e940735a42e
+    description: "Closeout full validate-next transcript (390 combined tests pass)"
+    sha256: 2c90f336211b092b471f689fba1d7d12d2c10e34032876fd928b488fcdc67298
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/validate-next-prestage-failure.log
     description: "Preserved diagnostic validate-next failure caused by unstaged generated schema drift before final staging"
@@ -185,23 +189,23 @@ entries:
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/command-summary.env
     description: "Closeout command exit-code and test-count summary"
-    sha256: da6b209d418c682b7906ae14231f3eca900e3c115fc979b8d15b69726c8f30dd
+    sha256: 4df36831597c32bca468a017a68d7578a806eafa6bd4f5eef19a32cb45c5b8c6
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 4 closeout integration report"
-    sha256: 452553b35e3efa186cceeb6d2cfedd6c3550fcd12415220f070e8539d9f9f052
+    sha256: 3d860447af544f99648ac8e00aa272732766afe129674fbac154279c7729d8eb
   - task: P04-CLOSEOUT
     artifact: docs/next/reviews/PHASE-04-INDEPENDENT-REVIEW.md
     description: "Independent Phase 4 review with final PASS verdict"
-    sha256: b16b5304129e7606f7377e4305971f1e264fbd4258753dfe838756e08a963904
+    sha256: 0addd7f07c0ba4fae6cf0ae857d115c86e4c19e0cb73c66af0b02614f350512f
   - task: P04-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-04/ledger.yaml
     description: "Phase 4 ledger marked DONE with task decisions, commits, evidence bundle, and blockers cleared"
-    sha256: bf065c02e10d0b7cc757d20fef78b550b773012ad534c220a8f764240fbc1f3e
+    sha256: 9f8def03c9d25995a6d31820f85b8b2d1d8b2b3419a28483c3cdf79d65cca21f
   - task: P04-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-04/HANDOFF.md
     description: "Phase 4 handoff to Phase 5 with runtime-driver starting assumptions"
-    sha256: 2041a0d5e9d87d18baa19d7fd8416c413266dc4fe31304ca5ee0045322de5cdf
+    sha256: f6a57940e499af5f21798969bc3cd7bac2662bb436aa2a800aaf79e396ea39a9
   - task: P04-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 4 complete and point at P05-T01 as next work"

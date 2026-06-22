@@ -38,20 +38,22 @@ The reviewer verified that the default v9 runtime path no longer depends on biog
 
 - `docs/next/evidence/P04-CLOSEOUT/protocol-test.log`: `pnpm --filter @legion/protocol test`, 54 tests passed.
 - `docs/next/evidence/P04-CLOSEOUT/workflow-common-packs-test.log`: `node --test tests/workflow-common-packs.test.mjs`, 1 test passed.
-- `docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log`: `node --test tests/worker-bundles.test.mjs`, 15 tests passed.
+- `docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log`: `node --test tests/worker-bundles.test.mjs`, 16 tests passed.
 - `docs/next/evidence/P04-CLOSEOUT/default-runtime-scan-test.log`: `node --test tests/default-runtime-scan.test.mjs`, 8 tests passed.
 - `docs/next/evidence/P04-CLOSEOUT/persona-purge-test.log`: `node --test tests/persona-purge.test.mjs`, 6 tests passed.
 - `docs/next/evidence/P04-CLOSEOUT/check-worker-bundles.log`: bundle schema, capability, role, prompt-hash, forbidden-section, and domain-pack checks passed with 0 violations.
 - `docs/next/evidence/P04-CLOSEOUT/check-default-runtime.log`: default runtime scan covered 15 files with 0 violations.
 - `docs/next/evidence/P04-CLOSEOUT/typecheck.log`: `pnpm run typecheck`, passed.
 - `docs/next/evidence/P04-CLOSEOUT/workspace-tests.log`: `pnpm -r --if-present test`, 312 tests passed.
-- `docs/next/evidence/P04-CLOSEOUT/validate-next.log`: `pnpm run validate:next`, passed with 389 combined tests and all validate-next gates.
+- `docs/next/evidence/P04-CLOSEOUT/validate-next.log`: `pnpm run validate:next`, passed with 390 combined tests and all validate-next gates.
 - `docs/next/evidence/P04-CLOSEOUT/gitleaks-branch.log`: branch secret scan passed.
 - Kanban parent handoffs for P04-T01 through P04-T06, including worker verification metadata and completion summaries.
 
 ## Notes and Accepted Warnings
 
 The local machine emitted pnpm engine warnings because Node v26.0.0 is outside the declared `>=24.0.0 <26` range. The warning is not a Phase 4 source blocker because all local gates passed; CI should continue to run on the declared Node range.
+
+Windows CI initially exposed line-ending drift in bundle prompt hashes: Markdown prompt files checked out with CRLF, while `promptContentContract.instructionsHash` was computed over LF bytes. The closeout batch now pins `bundles/*.md text eol=lf` in `.gitattributes` and adds a regression assertion in `tests/worker-bundles.test.mjs` so bundle hashes remain stable across OSes.
 
 The preserved diagnostic log `docs/next/evidence/P04-CLOSEOUT/validate-next-prestage-failure.log` records an intermediate generated-drift failure caused by P04-T01 schema artifacts being unstaged during the first closeout pass. After staging the generated schema and lifecycle fixture, the final closeout `validate:next` run passed.
 

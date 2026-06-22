@@ -33,7 +33,7 @@ decisions:
     decided_at: "2026-06-21T20:28:45-04:00"
   - task: P04-T05
     decision: "A canonical nine-role worker bundle registry is the v9 default runtime bundle surface"
-    reason: "bundles/index.json registers one v1.0.0 bundle for each ADR-002 default role. scripts/validate-worker-bundles.mjs enforces manifest schema shape, role/id uniqueness, prompt hash integrity, forbidden-section completeness, and workflow-common domain-pack integrity."
+    reason: "bundles/index.json registers one v1.0.0 bundle for each ADR-002 default role. scripts/validate-worker-bundles.mjs enforces manifest schema shape, role/id uniqueness, prompt hash integrity, forbidden-section completeness, and workflow-common domain-pack integrity. .gitattributes pins bundle Markdown to LF checkout semantics so those prompt hashes remain stable across Windows/macOS/Linux."
     decided_at: "2026-06-21T20:39:35-04:00"
   - task: P04-T06
     decision: "Default runtime persona regressions are blocked by a dedicated scanner wired into validate:next"
@@ -45,6 +45,7 @@ decisions:
     decided_at: "2026-06-21T20:55:54-04:00"
 blockers: []
 evidence:
+  - .gitattributes
   - docs/next/evidence/P04-CLOSEOUT/git-status.log
   - docs/next/evidence/P04-CLOSEOUT/protocol-test.log
   - docs/next/evidence/P04-CLOSEOUT/workflow-common-packs-test.log

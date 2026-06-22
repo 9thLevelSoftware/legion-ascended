@@ -50,6 +50,16 @@ test("P04-T05 real-repo registry marks biography, tone, personality as forbidden
   }
 });
 
+test("P04-T05 bundle prompt hashes are protected from Windows CRLF checkout drift", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const attributes = await readFile(path.join(ROOT, ".gitattributes"), "utf8");
+  assert.match(
+    attributes,
+    /^bundles\/\*\.md\s+text\s+eol=lf$/m,
+    "bundle prompt markdown must check out with LF line endings so promptContentContract.instructionsHash is stable across OSes"
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Negative-path coverage. Build a synthetic fixture, mutate one byte, and
 // assert the corresponding check rejects it.
