@@ -9,7 +9,7 @@ tasks:
   P10-T01:
     status: DONE
     run_id: "P10-T01-20260622-release-observation"
-    commit: "PENDING-COMMIT"
+    commit: "20fc8f0"
     evidence: docs/next/evidence/P10-T01/integration-report.yaml
     depends_on: ["P09-T03"]
 decisions:
