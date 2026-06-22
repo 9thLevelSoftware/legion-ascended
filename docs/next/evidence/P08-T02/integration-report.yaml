@@ -1,0 +1,135 @@
+phase: 8
+phase_id: P08
+task: P08-T02
+title: "Per-task review pipeline: deterministic verification, independent task review, and acceptance gate per ADR-006"
+status: COMPLETE
+branch: "codex/p03-t02-board-task-repository"
+base_commit: "3096d5f"
+evidence_dir: "docs/next/evidence/P08-T02"
+files_changed:
+  added:
+    - "packages/core/src/review/contract.ts"
+    - "packages/core/src/review/hash.ts"
+    - "packages/core/src/review/verification.ts"
+    - "packages/core/src/review/reviewer.ts"
+    - "packages/core/src/review/gate.ts"
+    - "packages/core/src/review/pipeline.ts"
+    - "packages/core/src/review/index.ts"
+    - "packages/core/test/review.test.mjs"
+    - "packages/core/test/review-fixture.mjs"
+    - "scripts/serialize-p08-t02-review.mjs"
+  modified:
+    - "packages/core/src/index.ts"
+test_results:
+  core_package: "PASS 185/185 (delta +33 P08-T02)"
+  protocol_package: "PASS 55/55 (no regression)"
+  artifacts_package: "PASS 59/59 (no regression)"
+  workspace_total: "PASS 596/596 across 9 packages (delta +33)"
+  typecheck: "PASS 10/10 workspace projects"
+  validate_next: "PASS all 13 validate-next steps"
+  gitleaks: "PASS no leaks on staged diff"
+implementation_summary: |
+  P08-T02 ships the per-task review pipeline in @legion/core:
+
+  - review/contract.ts — typed pipeline surface (REVIEW_PIPELINE_KEYS allowlist,
+    ReviewPipelineIssue codes, PerTaskReviewPolicy + DEFAULT_REVIEW_GATE_POLICY,
+    ReviewGateId union, ReviewerVerdicts, AcceptanceDecision outcome).
+  - review/hash.ts — deterministic SHA-256 derivation for verification
+    reports, review records, acceptance decisions, and the top-level
+    pipeline hash. Same canonicalization rules as dispatch/hash.ts so
+    P08-T01/P08-T02 outputs are greppable across the evidence index.
+  - review/verification.ts — deterministic verification runner.
+    Walks TaskContract.verification[] in order, delegates each command
+    to an injected VerificationRunner, captures exit code / stdout /
+    stderr / duration / timeout, computes a deterministic
+    VerificationReport with `passed` + `failingIndices` + `reportSha256`.
+  - review/reviewer.ts — independent reviewer surface. Enforces
+    reviewer ≠ implementer, blocks blocking findings without evidence
+    refs, surfaces `review_verdict_inconsistent` when verdicts pass but
+    blocking findings exist, derives a default summary from findings.
+    Returns a frozen ReviewRecord with `independent` flag.
+  - review/gate.ts — ADR-006 acceptance gate evaluator. Maps the
+    contract's risk tier to the per-task-review gate set
+    (R0: none; R1: deterministic_verification +
+    lightweight_independent_review + evidence_bundle_or_log;
+    R2: + task_level_independent_review + task_contract;
+    R3: + escalation to explicit_human_approval). Emits a typed
+    AcceptanceDecision with outcome `accepted` / `rejected` /
+    `escalated`.
+  - review/pipeline.ts — orchestrator. Wires verification →
+    review → acceptance gate; derives the top-level reviewPipelineHash;
+    surfaces structured issues from each stage; deeply freezes every
+    output shape.
+  - review/index.ts + packages/core/src/index.ts — barrel re-exports.
+
+  33 unit tests pin the Phase 8 cut line: happy paths, all
+  failure modes, R0-R3 tier handling, deterministic verification,
+  reviewer independence, evidence anchoring, provider-neutrality
+  static scan, output shape allowlist, deep-freeze invariants,
+  hash determinism, and renderer stability.
+
+phase_boundaries_preserved:
+  - "Phase 8 fresh-context: PerTaskReviewPipeline consumes the frozen
+    WorkerContext from P08-T01 unchanged (no mutation, no extra fields)."
+  - "Phase 7 preflight: gate evaluator reads taskContract.risk.tier
+    produced by P07-T01 schema; no preflight duplication."
+  - "Phase 7 dispatcher: review surface never imports
+    @legion/runtime-eve, @legion/board-store, or process.env
+    (verified by static scan in review.test.mjs)."
+  - "Phase 5 RuntimeDriver: pipeline is pure-function; CLI and runtime
+    drivers wrap it downstream."
+  - "Phase 6 hidden-oracle: pipeline references only protocol-level
+    entity types and the deterministic WorkerContext produced upstream."
+decisions:
+  - task: P08-T02
+    decision: "Per-task review pipeline lives in @legion/core (not @legion/protocol)
+      because the pipeline orchestrates protocol-level contracts AND
+      core-level dispatcher outputs (WorkerContext)."
+    reason: "Mirrors the P08-T01 placement rule: dispatch = core-internal,
+      WorkerContext = core-internal execution surface; review consumes
+      both and produces an AcceptanceDecision that lives next to its inputs."
+  - task: P08-T02
+    decision: "Reviewer surface enforces hard independence: same-actor
+      reviews are flagged `independent: false` on the ReviewRecord and
+      surface a `reviewer_is_implementer` issue."
+    reason: "ADR-006 mandates independent review at R1+. A worker cannot
+      review its own work. The pipeline records the attempted review
+      so audit consumers can see the rejection without losing context."
+  - task: P08-T02
+    decision: "Per-task loop emits `escalated` (not `rejected`) for R3
+      because R3 requires explicit human approval which is out of scope
+      for the loop."
+    reason: "The orchestrator uses `escalated` to route R3 tasks to a
+      human owner; the per-task loop records the gate as
+      `not_evaluable` so the operator can see why."
+  - task: P08-T02
+    decision: "Deterministic verification runner is injected; the
+      pipeline never spawns a child process."
+    reason: "Provider neutrality (ADR-004): the CLI adapter and runtime
+      driver supply the actual command execution; core owns the
+      deterministic record shape."
+  - task: P08-T02
+    decision: "Acceptance decision outcome is one of three values:
+      `accepted`, `rejected`, `escalated`."
+    reason: "Three-valued outcome preserves the difference between
+      \"gate failed ⇒ task must redo\" and \"gate requires human ⇒ task
+      must escalate\" without conflating them."
+handoff_to_p08_t03:
+  consumer: "P08-T03 (Phase 8 closeout, otrlead)"
+  contract_inputs:
+    - "PerTaskReviewPipeline.run() returns a deeply-frozen
+      PerTaskReviewPipelineResult with deterministic reviewPipelineHash."
+    - "AcceptanceDecision carries the gate list, outcome, decisionSha256,
+      and rationale; ready for ledger and evidence-index publication."
+    - "VerificationReport, ReviewRecord, AcceptanceDecision are all
+      provider-neutral and deeply frozen."
+    - "DEFAULT_REVIEW_GATE_POLICY encodes the per-task-loop subset of
+      ADR-006; closeout can override per project via PerTaskReviewPolicy."
+  non_goals:
+    - "The pipeline does NOT spawn a runtime driver, run an actual CLI
+      command, or persist results. Those concerns belong to P08-T03
+      closeout and Phase 9 (whole-change acceptance)."
+  acceptance_artifacts:
+    - "docs/next/evidence/P08-T02/review-pipeline-result.json"
+    - "docs/next/evidence/P08-T02/integration-report.yaml (this file)"
+    - "docs/next/evidence/P08-T02/evidence-index.yaml"

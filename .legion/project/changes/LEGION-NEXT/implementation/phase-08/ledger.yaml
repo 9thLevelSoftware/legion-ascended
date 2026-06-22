@@ -4,10 +4,10 @@ status: IN_PROGRESS
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/08-phase-fresh-context-task-execution-and-per-task-review.md"
 base_commit: "ef0581f8803dc13e1975a8f049515afff21cec28"
 started_at: "2026-06-22T05:30:00-04:00"
-active_wave: 1
+active_wave: 2
 tasks:
-  P08-T01: { status: DONE, run_id: "P08-T01-20260622-fresh-context-dispatcher", commit: "P08-T01-closeout-commit" }
-  P08-T02: { status: TODO, run_id: null, commit: null, depends_on: ["P08-T01"] }
+  P08-T01: { status: DONE, run_id: "P08-T01-20260622-fresh-context-dispatcher", commit: "3096d5f" }
+  P08-T02: { status: DONE, run_id: "P08-T02-20260622-per-task-review-pipeline", commit: "P08-T02-closeout-commit", depends_on: ["P08-T01"] }
   P08-T03: { status: TODO, run_id: null, commit: null, depends_on: ["P08-T02"], assignee: otrlead }
 decisions:
   - task: P08-T01
@@ -34,6 +34,26 @@ decisions:
     decision: "Dispatcher adds a context_reference_out_of_scope issue code (separate from P07-T02 preflight codes) for specRefs/designRefs that are not in the ready artifact set."
     reason: "P07-T02 preflight only checks predecessorArtifacts. specRefs and designRefs must also be resolvable for the worker to read them; the dispatcher enforces this with its own structured code so operators can distinguish 'dependency missing' from 'context reference missing'."
     decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T02
+    decision: "Per-task review pipeline lives in @legion/core (not @legion/protocol) because the pipeline orchestrates protocol-level contracts AND core-level dispatcher outputs (WorkerContext)."
+    reason: "Mirrors the P08-T01 placement rule: dispatch = core-internal, WorkerContext = core-internal execution surface; review consumes both and produces an AcceptanceDecision that lives next to its inputs."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Reviewer surface enforces hard independence: same-actor reviews are flagged `independent: false` on the ReviewRecord and surface a `reviewer_is_implementer` issue."
+    reason: "ADR-006 mandates independent review at R1+. A worker cannot review its own work. The pipeline records the attempted review so audit consumers can see the rejection without losing context."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Per-task loop emits `escalated` (not `rejected`) for R3 because R3 requires explicit human approval which is out of scope for the loop."
+    reason: "The orchestrator uses `escalated` to route R3 tasks to a human owner; the per-task loop records the gate as `not_evaluable` so the operator can see why."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Deterministic verification runner is injected; the pipeline never spawns a child process."
+    reason: "Provider neutrality (ADR-004): the CLI adapter and runtime driver supply the actual command execution; core owns the deterministic record shape."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Acceptance decision outcome is one of three values: `accepted`, `rejected`, `escalated`."
+    reason: "Three-valued outcome preserves the difference between 'gate failed ⇒ task must redo' and 'gate requires human ⇒ task must escalate' without conflating them."
+    decided_at: "2026-06-22T05:48:00Z"
 blockers: []
 evidence:
   - packages/core/src/dispatch/contract.ts
@@ -59,3 +79,26 @@ evidence:
   - docs/next/evidence/P08-T01/worker-context.json
   - docs/next/evidence/P08-T01/integration-report.yaml
   - docs/next/evidence/P08-T01/evidence-index.yaml
+  - packages/core/src/review/contract.ts
+  - packages/core/src/review/hash.ts
+  - packages/core/src/review/verification.ts
+  - packages/core/src/review/reviewer.ts
+  - packages/core/src/review/gate.ts
+  - packages/core/src/review/pipeline.ts
+  - packages/core/src/review/index.ts
+  - packages/core/test/review.test.mjs
+  - packages/core/test/review-fixture.mjs
+  - scripts/serialize-p08-t02-review.mjs
+  - docs/next/evidence/P08-T02/review-pipeline-result.json
+  - docs/next/evidence/P08-T02/git-status.log
+  - docs/next/evidence/P08-T02/git-diff-stat.log
+  - docs/next/evidence/P08-T02/core-test.log
+  - docs/next/evidence/P08-T02/protocol-test.log
+  - docs/next/evidence/P08-T02/artifacts-test.log
+  - docs/next/evidence/P08-T02/typecheck.log
+  - docs/next/evidence/P08-T02/workspace-tests.log
+  - docs/next/evidence/P08-T02/validate-next.log
+  - docs/next/evidence/P08-T02/gitleaks-p08-t02.log
+  - docs/next/evidence/P08-T02/command-summary.env
+  - docs/next/evidence/P08-T02/integration-report.yaml
+  - docs/next/evidence/P08-T02/evidence-index.yaml

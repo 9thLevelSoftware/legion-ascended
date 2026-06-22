@@ -1,0 +1,10 @@
+apps/cli-e2e test: ✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (494.093417ms)
+apps/cli-e2e test: ℹ tests 10
+apps/cli-e2e test: ℹ suites 0
+apps/cli-e2e test: ℹ pass 10
+apps/cli-e2e test: ℹ fail 0
+apps/cli-e2e test: ℹ cancelled 0
+apps/cli-e2e test: ℹ skipped 0
+apps/cli-e2e test: ℹ todo 0
+apps/cli-e2e test: ℹ duration_ms 3829.430208
+apps/cli-e2e test: Done

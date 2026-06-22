@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "task-review-pipeline",
+  "taskContractId": "ctr_p08-t01-fresh-context",
+  "contractRevision": 1,
+  "workerContextHash": "sha256:8abe72b7e07f5b3f90d993857fc3099acc4b78abeede104f7e8d91592084b91e",
+  "isolationTag": "fresh-context:v1:8abe72b7e07f",
+  "verification": {
+    "kind": "verification-report",
+    "schemaVersion": "1.0.0",
+    "taskContractId": "ctr_p08-t01-fresh-context",
+    "contractRevision": 1,
+    "workerContextHash": "sha256:8abe72b7e07f5b3f90d993857fc3099acc4b78abeede104f7e8d91592084b91e",
+    "commands": [
+      {
+        "index": 0,
+        "command": "pnpm",
+        "args": [
+          "--filter",
+          "@legion/core",
+          "test"
+        ],
+        "exitCode": 0,
+        "expectedExitCode": 0,
+        "stdoutSha256": "sha256:5bccec1672fa5858483dfe720bca6e8902aebdda09525c0beb304a613bb8eebb",
+        "stderrSha256": "sha256:9f68f3df1125212999085245fe06c47a69f4fcc917d135a8780dbc96e0fcb010",
+        "combinedSha256": "sha256:523c619c381190615f51534b2e0bfba6ff9a8da78a99d74cd0843a731ac3c55f",
+        "durationMs": 12,
+        "timedOut": false,
+        "startedAt": "2026-06-22T02:00:00.000Z",
+        "finishedAt": "2026-06-22T02:00:01.000Z"
+      }
+    ],
+    "passed": true,
+    "failingIndices": [],
+    "reportSha256": "sha256:39b7ad46243b936b4fdddbfde369fb6621012402ffd586dd98bce317e18256fe",
+    "createdAt": "2026-06-22T02:30:00.000Z"
+  },
+  "review": {
+    "kind": "review-record",
+    "schemaVersion": "1.0.0",
+    "taskContractId": "ctr_p08-t01-fresh-context",
+    "contractRevision": 1,
+    "workerContextHash": "sha256:8abe72b7e07f5b3f90d993857fc3099acc4b78abeede104f7e8d91592084b91e",
+    "reviewer": {
+      "kind": "human",
+      "id": "reviewer.dasbl",
+      "displayName": "Independent Reviewer"
+    },
+    "implementer": {
+      "kind": "worker",
+      "id": "legion-worker",
+      "displayName": "Legion Worker"
+    },
+    "verdicts": {
+      "specification": "pass",
+      "integration": "pass",
+      "evidence": "pass"
+    },
+    "findings": [
+      {
+        "id": "fnd_p08-t02_minor",
+        "title": "minor coverage gap",
+        "body": "Coverage report shows one branch under-tested in the gate evaluator.",
+        "severity": "minor",
+        "evidenceRefs": [
+          "ev_p08-t02_coverage"
+        ]
+      }
+    ],
+    "confidence": "high",
+    "summary": "Independent review: passing R2 task with one minor coverage finding.",
+    "independent": true,
+    "reviewHash": "sha256:6f3961a6561941394f85ab0de4d828af5d9d7a291b4da6d03a270c3db80fac36",
+    "createdAt": "2026-06-22T02:00:00.000Z",
+    "submittedAt": "2026-06-22T02:30:00.000Z"
+  },
+  "decision": {
+    "kind": "acceptance-decision",
+    "schemaVersion": "1.0.0",
+    "taskContractId": "ctr_p08-t01-fresh-context",
+    "contractRevision": 1,
+    "workerContextHash": "sha256:8abe72b7e07f5b3f90d993857fc3099acc4b78abeede104f7e8d91592084b91e",
+    "tier": "R2",
+    "outcome": "accepted",
+    "gates": [
+      {
+        "gate": "deterministic_verification",
+        "state": "satisfied",
+        "reason": "Verification passed for 1 command(s).",
+        "source": "tier",
+        "tier": "R2"
+      },
+      {
+        "gate": "evidence_bundle_or_log",
+        "state": "satisfied",
+        "reason": "Verification report sha256=sha256:39b7ad46243b936b4fdddbfde369fb6621012402ffd586dd98bce317e18256fe preserved as evidence.",
+        "source": "tier",
+        "tier": "R2"
+      },
+      {
+        "gate": "task_level_independent_review",
+        "state": "satisfied",
+        "reason": "Reviewer reviewer.dasbl returned pass verdicts on all three legs.",
+        "source": "tier",
+        "tier": "R2"
+      },
+      {
+        "gate": "task_contract",
+        "state": "satisfied",
+        "reason": "Task contract ctr_p08-t01-fresh-context@1 cleared dispatcher preflight.",
+        "source": "tier",
+        "tier": "R2"
+      }
+    ],
+    "failingGates": [],
+    "decisionSha256": "sha256:2e78a1a47075f4a7240e0580ab28215cbc6d5edb9fbfbed26ef40f5259924412",
+    "createdAt": "2026-06-22T02:30:00.000Z",
+    "rationale": "All required gates satisfied (4 evaluated)."
+  },
+  "reviewPipelineHash": "sha256:1bdf5e699da1243b2356f05ede976521c14d3b738e9ff5829451fac63a18b2a0",
+  "createdAt": "2026-06-22T02:30:00.000Z",
+  "ok": true
+}

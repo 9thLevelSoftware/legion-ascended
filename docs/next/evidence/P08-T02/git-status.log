@@ -1,0 +1,70 @@
+## git status (pre-commit)
+On branch codex/p03-t02-board-task-repository
+Your branch is up to date with 'origin/codex/p03-t02-board-task-repository'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   packages/core/src/index.ts
+	new file:   packages/core/src/review/contract.ts
+	new file:   packages/core/src/review/gate.ts
+	new file:   packages/core/src/review/hash.ts
+	new file:   packages/core/src/review/index.ts
+	new file:   packages/core/src/review/pipeline.ts
+	new file:   packages/core/src/review/reviewer.ts
+	new file:   packages/core/src/review/verification.ts
+	new file:   packages/core/test/review-fixture.mjs
+	new file:   packages/core/test/review.test.mjs
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	docs/next/evidence/P08-T02/
+	scripts/serialize-p08-t02-review.mjs
+
+## git diff --stat
+ packages/core/src/index.ts               |    1 +
+ packages/core/src/review/contract.ts     |  307 +++++++++
+ packages/core/src/review/gate.ts         |  368 +++++++++++
+ packages/core/src/review/hash.ts         |  261 ++++++++
+ packages/core/src/review/index.ts        |   20 +
+ packages/core/src/review/pipeline.ts     |  290 +++++++++
+ packages/core/src/review/reviewer.ts     |  269 ++++++++
+ packages/core/src/review/verification.ts |  270 ++++++++
+ packages/core/test/review-fixture.mjs    |  137 ++++
+ packages/core/test/review.test.mjs       | 1021 ++++++++++++++++++++++++++++++
+ 10 files changed, 2944 insertions(+)
+## git diff --stat against base commit
+ .../implementation/phase-08/evidence-index.yaml    |   88 ++
+ .../implementation/phase-08/ledger.yaml            |   61 +
+ docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md       |   13 +-
+ docs/next/evidence/P08-T01/artifacts-test.log      |   69 +
+ docs/next/evidence/P08-T01/command-summary.env     |    9 +
+ docs/next/evidence/P08-T01/core-test.log           |  161 ++
+ docs/next/evidence/P08-T01/git-diff-stat.log       |    2 +
+ docs/next/evidence/P08-T01/git-status.log          |    6 +
+ docs/next/evidence/P08-T01/gitleaks-p08.log        |    3 +
+ docs/next/evidence/P08-T01/integration-report.yaml |  148 ++
+ docs/next/evidence/P08-T01/protocol-test.log       |   64 +
+ docs/next/evidence/P08-T01/typecheck.log           |   42 +
+ docs/next/evidence/P08-T01/validate-next.log       | 1608 ++++++++++++++++++++
+ docs/next/evidence/P08-T01/worker-context.json     |   97 ++
+ docs/next/evidence/P08-T01/workspace-tests.log     |  669 ++++++++
+ packages/core/src/dispatch/blocker.ts              |  126 ++
+ packages/core/src/dispatch/contract.ts             |  257 ++++
+ packages/core/src/dispatch/dispatcher.ts           |  471 ++++++
+ packages/core/src/dispatch/hash.ts                 |   97 ++
+ packages/core/src/dispatch/index.ts                |   20 +
+ packages/core/src/dispatch/selector.ts             |  107 ++
+ packages/core/src/index.ts                         |    2 +
+ packages/core/src/review/contract.ts               |  307 ++++
+ packages/core/src/review/gate.ts                   |  368 +++++
+ packages/core/src/review/hash.ts                   |  261 ++++
+ packages/core/src/review/index.ts                  |   20 +
+ packages/core/src/review/pipeline.ts               |  290 ++++
+ packages/core/src/review/reviewer.ts               |  269 ++++
+ packages/core/src/review/verification.ts           |  270 ++++
+ packages/core/test/dispatch-fixture.mjs            |  167 ++
+ packages/core/test/dispatch.test.mjs               |  564 +++++++
+ packages/core/test/review-fixture.mjs              |  137 ++
+ packages/core/test/review.test.mjs                 | 1021 +++++++++++++
+ scripts/serialize-p08-worker-context.mjs           |   86 ++
+ 34 files changed, 7875 insertions(+), 5 deletions(-)
