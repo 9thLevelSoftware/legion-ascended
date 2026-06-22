@@ -166,14 +166,14 @@ When implementing, compare against original Legion (v8) at:
 ### Phase 13: Behavioral Evals, Security Hardening, and GA
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P13-T01 | t_12f977b4 | legionworker | todo | P12-T03 |
+| P13-T01 | t_12f977b4 | legionworker | **DONE** | P12-T03 |
 | P13-T02 | t_6712c51d | legionworker | todo | T01 |
 | P13-T03 | t_21e41997 | legionworker | todo | T02 |
 | P13-T04 | t_50860be4 | **otrlead** | todo | T03 |
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 12:** 43 tasks (P03-T01 through P12-T03)
-- **Remaining tasks:** 4 (3 worker tasks, 1 review/closeout task)
-- **Current:** Phase 12 is DONE; P13-T01 (Behavioral evals) is next
+- **Completed through Phase 13 task 1:** 44 tasks (P03-T01 through P13-T01)
+- **Remaining tasks:** 3 (2 worker tasks, 1 review/closeout task)
+- **Current:** P13-T01 (Behavioral evals) is DONE; P13-T02 (Security hardening) is next
 - **Final:** P13-T04 (GA decision)

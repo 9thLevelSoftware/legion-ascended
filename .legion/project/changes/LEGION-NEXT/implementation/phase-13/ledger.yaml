@@ -1,0 +1,175 @@
+phase: 13
+phase_id: P13
+status: IN_PROGRESS
+active_wave: 1
+started_at: "2026-06-22T15:14:00Z"
+base_commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
+tasks:
+  P13-T01:
+    status: DONE
+    run_id: "P13-T01-20260622-behavioral-evals"
+    commit: "267d5f0a8b1e4a2e0a6ac9343e1d100ad787ab85"
+    evidence: docs/next/evidence/P13-T01/integration-report.yaml
+    depends_on: ["P12-T03"]
+    assignee: legionworker
+  P13-T02:
+    status: DONE
+    run_id: "P13-T02-20260622-security-hardening"
+    commit: "P13-T02-head"
+    evidence: docs/next/evidence/P13-T02/integration-report.yaml
+    depends_on: ["P13-T01"]
+    assignee: legionworker
+  P13-T03:
+    status: DONE
+    run_id: "P13-T03-20260622-ga-release-preparation"
+    commit: "c45f508+f8f555a+post-amend"
+    evidence: docs/next/evidence/P13-T03/integration-report.yaml
+    depends_on: ["P13-T02"]
+    assignee: legionworker
+  P13-T04:
+    status: todo
+    depends_on: ["P13-T03"]
+    assignee: otrlead
+decisions:
+  - task: P13-T01
+    decision: "Phase 0 PowerShell capture/grade/redact scaffolds were ported to Node (scripts/baseline/*.mjs) rather than requiring PowerShell on macOS."
+    reason: "The Phase 0 .ps1 scripts were dependency-free PowerShell; porting to Node keeps the same behavior (lowercase SHA-256 digests over LF-normalized UTF-8 text with POSIX-relative paths, secret canary redaction) while letting the Phase 13 CLI subcommand invoke the helpers from the same runtime."
+    decided_at: "2026-06-22T15:14:00Z"
+  - task: P13-T01
+    decision: "Eval execution lives under scripts/baseline/ and the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral and deterministic."
+    reason: "The Phase 13 task description requires release-grade workflow evals; keeping the eval harness out of @legion/core and @legion/board preserves the deterministic, host-agnostic invariants those packages already satisfy."
+    decided_at: "2026-06-22T15:14:00Z"
+  - task: P13-T01
+    decision: "v8 evidence is fail-closed: missing v8 manifests surface as null cells in ab-comparison.{json,md} rather than being invented."
+    reason: "P00-T06 v8 baseline execution remains blocked; the Phase 13 contract requires that absent, stale, or drifted evidence does not pass as green."
+    decided_at: "2026-06-22T15:14:00Z"
+  - task: P13-T01
+    decision: "Token and cost are recorded as { status: 'unavailable', value: null, reason: 'host did not expose telemetry' } unless the host surfaces them; the compare aggregator never estimates values from transcript length."
+    reason: "Phase 0 SCORING-RUBRIC.md explicitly forbids backfilling telemetry; the v9 eval pipeline enforces that policy by writing only host-supplied telemetry values."
+    decided_at: "2026-06-22T15:14:00Z"
+  - task: P13-T01
+    decision: "Held-out evaluator assertions and judged dimensions are intentionally not_scored_by_scaffold / judge_not_run; deterministic_total caps at 95 to leave headroom for a downstream judge."
+    reason: "Captured run-manifests do not contain the held-out oracle outputs, so the deterministic seal cannot score acceptance_behavior for dry-runs; downstream graders can seal the judged dimensions after the deterministic seal passes."
+    decided_at: "2026-06-22T15:14:00Z"
+  - task: P13-T02
+    decision: "The threat-model validator composes sandbox-guard + retention-audit as subprocesses plus an in-process redaction scan; the JSON verdict aggregates findings from all three sources."
+    reason: "Each helper script owns a single fail-closed check with stable finding codes so CI gates can surface the right diagnostic without parsing free-form text. Subprocess composition means each helper can be invoked standalone for diagnostic or regression work, and the threat-model orchestrator stays a thin aggregator."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T02
+    decision: "capture-run.mjs auto-grades every sealed run so score.json is on disk before the threat-model validator inspects the run directory."
+    reason: "The retention policy requires score.json as a retained artifact; making the operator call `legion next evals grade` separately weakens the fail-closed contract because a missing score.json would not surface until the threat-model run. Auto-grading keeps the round-trip hermetic."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T02
+    decision: "Redaction extended with six new detectors (URL credentials, JWT tokens, PEM-encoded private keys, multiline bearer tokens, JSON-embedded secrets, audited per-detector counts) but the held-out contract `redaction does not hide command failures` is preserved by always keeping the surrounding context."
+    reason: "The P13-T01 redaction pipeline only covered a small subset of common credential shapes. Adding the missing detectors closes the gap without weakening the held-out contract: every placeholder still leaves the surrounding line visible so failure root-cause stays inspectable."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T02
+    decision: "threat-model.mjs, sandbox-guard.mjs, and retention-audit.mjs all accept a --repository-root argument so the operator's repo root (different from the v9 source tree in CLI e2e workspaces) is honoured when resolving fixture-hash paths."
+    reason: "The P13-T01 fixtures are captured against the operator's --repository-root, which is not always the v9 source tree (CLI e2e workspaces use a tmp dir). Without the override, retention-audit cannot resolve the recorded fixture paths and fails closed on every e2e capture."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T03
+    decision: "GA gating lives in scripts/release/ + the @legion/cli release subcommand; @legion/core and @legion/board remain provider-neutral."
+    reason: "The release checklist and rollback verifier are operator-facing governance gates, not core workflow logic. Keeping them out of @legion/core and @legion/board preserves the deterministic, host-agnostic invariants those packages already satisfy."
+    decided_at: "2026-06-22T17:00:00Z"
+  - task: P13-T03
+    decision: "The release checklist and rollback-policy verifier emit stable finding codes (changelog_missing_ga_entry, manifest_backup_hash_match, etc.) so CI gates and operator dashboards can grep without parsing free-form text."
+    reason: "Phase 12 established the finding-code convention for the migration verify alias and P13-T02 reused it for the threat-model verdict. P13-T03 extends the same convention to the GA cut-over so all three fail-closed gates share a single diagnostic surface."
+    decided_at: "2026-06-22T17:00:00Z"
+  - task: P13-T03
+    decision: "The GA decision package pins four companion documents (MIGRATION-POLICY, ROLLBACK-POLICY, V8-HANDOFF, STABLE-CHANNEL-APPROVAL) and links them from the consolidated RELEASE-RECORD.md so reviewers find every artefact from a single entry point."
+    reason: "The REWRITE-CHARTER rule for GA promotion requires the decision owner to approve the release record, migration policy, rollback policy, and v8 handoff. Cross-linking them in the release record prevents drift between the consolidated record and the underlying artefacts."
+    decided_at: "2026-06-22T17:00:00Z"
+  - task: P13-T03
+    decision: "v8 evidence remains fail-closed (null cells in the A/B comparison) and the GA promotion is approved without v8 baseline execution because P00-T06 v8 baseline remains blocked."
+    reason: "The Phase 13 fail-closed contract specifies that absent, stale, or drifted evidence must not pass as green. The GA approval documents the absent v8 evidence in the outstanding-items list of RELEASE-RECORD.md so the decision owner signs the GA promotion with full visibility."
+    decided_at: "2026-06-22T17:00:00Z"
+blockers: []
+preserved_boundaries:
+  - "Eval execution stays in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral and deterministic."
+  - "Held-out oracle assertions remain in evals/fixtures/evaluator/ and are not copied into worker prompts or public task context."
+  - "Token/cost values are never inferred from transcript length; only the host-supplied telemetry is recorded."
+  - "v8 capture still requires the operator-approved --command flag; --dry-run is the only path that runs without invoking the host CLI."
+  - "Threat-model validation lives in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral."
+  - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
+  - "GA gating lives in scripts/release/ + the @legion/cli release subcommand; @legion/core and @legion/board remain provider-neutral. The release checklist and rollback-policy verifier are governance gates, not core workflow logic."
+evidence:
+  - scripts/baseline/capture-run.mjs
+  - scripts/baseline/grade-run.mjs
+  - scripts/baseline/redact-output.mjs
+  - scripts/baseline/compare-runs.mjs
+  - scripts/baseline/sandbox-guard.mjs
+  - scripts/baseline/retention-audit.mjs
+  - scripts/baseline/threat-model.mjs
+  - scripts/release/release-checklist.mjs
+  - scripts/release/rollback-policy.mjs
+  - packages/cli/src/commands/evals/index.ts
+  - packages/cli/src/index.ts
+  - apps/cli-e2e/test/cli-e2e.test.mjs
+  - tests/evals-baseline.test.mjs
+  - tests/evals-redaction.test.mjs
+  - tests/evals-sandbox.test.mjs
+  - tests/evals-threat-model.test.mjs
+  - tests/release-checklist.test.mjs
+  - tests/rollback-policy.test.mjs
+  - docs/next/baseline/SECURITY-MODEL.md
+  - docs/next/ga/RELEASE-RECORD.md
+  - docs/next/ga/MIGRATION-POLICY.md
+  - docs/next/ga/ROLLBACK-POLICY.md
+  - docs/next/ga/V8-HANDOFF.md
+  - docs/next/ga/STABLE-CHANNEL-APPROVAL.md
+  - docs/next/evidence/P13-T01/integration-report.yaml
+  - docs/next/evidence/P13-T01/ab-comparison/ab-comparison.json
+  - docs/next/evidence/P13-T01/ab-comparison/ab-comparison.md
+  - docs/next/evidence/P13-T01/runs/v9/p13-noop-calibration.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-noop-calibration.v1-dry-run-r1-20260622T153040Z/score.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-bug-fix.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-bug-fix.v1-dry-run-r1-20260622T153040Z/score.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-greenfield-feature.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-greenfield-feature.v1-dry-run-r1-20260622T153040Z/score.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-security-sensitive.v1-dry-run-r1-20260622T153040Z/run-manifest.json
+  - docs/next/evidence/P13-T01/runs/v9/p13-security-sensitive.v1-dry-run-r1-20260622T153040Z/score.json
+  - docs/next/evidence/P13-T02/integration-report.yaml
+  - docs/next/evidence/P13-T02/threat-model.json
+  - docs/next/evidence/P13-T02/negative/threat-model.json
+  - docs/next/evidence/P13-T02/workspace-tests.log
+  - docs/next/evidence/P13-T02/cli-e2e-test.log
+  - docs/next/evidence/P13-T02/typecheck.log
+  - docs/next/evidence/P13-T02/validate-next.log
+  - docs/next/evidence/P13-T02/core-test.log
+  - docs/next/evidence/P13-T02/board-test.log
+  - docs/next/evidence/P13-T02/protocol-test.log
+  - docs/next/evidence/P13-T02/store-sqlite-test.log
+  - docs/next/evidence/P13-T02/artifacts-test.log
+  - docs/next/evidence/P13-T02/gitleaks-p13-t02-diff.log
+  - docs/next/evidence/P13-T03/integration-report.yaml
+  - docs/next/evidence/P13-T03/release-checklist.json
+  - docs/next/evidence/P13-T03/rollback-policy.json
+  - docs/next/evidence/P13-T03/workspace-tests.log
+  - docs/next/evidence/P13-T03/cli-e2e-test.log
+  - docs/next/evidence/P13-T03/typecheck.log
+  - docs/next/evidence/P13-T03/validate-next.log
+  - docs/next/evidence/P13-T03/core-test.log
+  - docs/next/evidence/P13-T03/board-test.log
+  - docs/next/evidence/P13-T03/protocol-test.log
+  - docs/next/evidence/P13-T03/store-sqlite-test.log
+  - docs/next/evidence/P13-T03/artifacts-test.log
+  - docs/next/evidence/P13-T03/gitleaks-p13-t03-diff.log
+phase_13_handoff:
+  next_task: P13-T04
+  next_task_id: t_50860be4
+  summary: |
+    Begin Phase 13 task 4 (closeout) on top of the P13-T01 behavioral
+    eval surface, the P13-T02 security hardening, and the P13-T03 GA
+    decision package. The release checklist and rollback-policy
+    verifier are the highest-level fail-closed gates for Phase 13
+    acceptance.
+  contract_inputs_for_p13_t04:
+    - "`legion next release checklist` composes ten preconditions into a single JSON verdict; treat non-zero exit as a hard fail in CI."
+    - "`legion next release rollback-verify` confirms the most recent apply step is restorable; treat non-zero exit as a hard fail."
+    - "`legion next evals threat-model` continues to gate v9 evidence; the held-out security-sensitive.v1 contract is pinned by tests/evals-baseline.test.mjs."
+    - "P00-T06 v8 baseline execution remains blocked. The release checklist does not gate v8 — it gates the v9 evidence. The GA promotion is approved with full visibility into the absent v8 evidence (RELEASE-RECORD.md outstanding-items list)."
+  preserved_boundaries:
+    - "Eval harness scripts live under scripts/baseline/ and the @legion/cli evals subcommand; do not move eval execution into @legion/core or @legion/board."
+    - "GA gating lives in scripts/release/ and the @legion/cli release subcommand; do not move GA gating into @legion/core or @legion/board."
+    - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
+    - "v8 evidence remains fail-closed: absent P00-T06 v8 runs surface as null cells rather than fabricated values."

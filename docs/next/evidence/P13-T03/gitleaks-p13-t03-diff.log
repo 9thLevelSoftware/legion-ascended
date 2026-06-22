@@ -1,0 +1,33 @@
+started_at=2026-06-22T18:25:33Z
+$ git diff --cached --binary 267d5f0a8b1e4a2e0a6ac9343e1d100ad787ab85 -- ... | gitleaks detect --pipe --no-color
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+Finding:     JWT_TOKEN = "eyJPLACEHOLDER01.eyJPLACEHOLDER02.PLACEHOLDER03"
+Secret:      eyJPLACEHOLDER01.eyJPLACEHOLDER02.PLACEHOLDER03
+RuleID:      generic-api-key
+Entropy:     3.915043
+
+Finding:     -----BEGIN FAKE EXAMPLE PRIVATE KEY-----",
++  "MIIEPLACEHOLDERPLACEHOLDERPLACEHOLDERPLACEHOLDER",
++  "MIIEPLACEHOLDERPLACEHOLDERPLACEHOLDERPLACEHOLDER",
++  "-----END FAKE EXAMPLE PRIVATE KEY-----
+Secret:      -----BEGIN FAKE EXAMPLE PRIVATE KEY-----",
++  "MIIEPLACEHOLDERPLACEHOLDERPLACEHOLDERPLACEHOLDER",
++  "MIIEPLACEHOLDERPLACEHOLDERPLACEHOLDERPLACEHOLDER",
++  "-----END FAKE EXAMPLE PRIVATE KEY-----
+RuleID:      private-key
+Entropy:     4.173977
+
+2:25PM INF scanned ~967870 bytes (967.87 KB) in 349ms
+2:25PM WRN leaks found: 2
+exit_code=0
+
+Findings summary:
+  - 2 findings (JWT_TOKEN and FAKE EXAMPLE private key in tests/evals-redaction.test.mjs) are pre-existing from P13-T02 (commit e1c66cc), part of the 6 pre-existing P03-T04/P13-T02 findings already documented in docs/next/evidence/P13-T02/integration-report.yaml.
+  - 0 new findings introduced by P13-T03.
+finished_at=2026-06-22T18:25:34Z

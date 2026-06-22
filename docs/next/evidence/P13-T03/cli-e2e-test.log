@@ -1,0 +1,62 @@
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/board-store build && pnpm --filter @legion/core build && pnpm --filter @legion/board build && pnpm --filter @legion/store-sqlite build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.919583ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (318.619625ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (491.165375ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (269.650541ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (419.693542ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (471.769458ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (766.970417ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (472.1465ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (447.060584ms)
+✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (556.414458ms)
+✔ P03-T09 board CLI returns usage diagnostics for malformed board input and repository errors (424.649708ms)
+✔ P10-T02 board CLI routes release-observation aggregate/status/rebuild/verify idempotently (710.345959ms)
+✔ P10-T02 board CLI release-observation aggregate surfaces validation failures (142.773417ms)
+✔ P10-T02 board CLI release-observation verify fails closed on missing projection (139.343917ms)
+✔ P11-T01 board CLI dashboard status/rebuild/verify round-trip a task event log (707.554083ms)
+✔ P11-T01 board CLI dashboard verify fails closed on missing projection (145.092833ms)
+✔ P11-T01 board CLI approval-gate status/rebuild/verify surface an approved verdict (738.247833ms)
+✔ P11-T01 board CLI approval-gate status surfaces pending on no events (141.510875ms)
+✔ P11-T02 board CLI portfolio status/rebuild/verify round-trip a multi-project event log (850.079792ms)
+✔ P11-T02 board CLI portfolio verify fails closed on missing projection (141.275ms)
+✔ P11-T02 board CLI portfolio status surfaces tenant-wide rollup on no events (141.878416ms)
+✔ P11-T02 board CLI portfolio status surfaces scoped sub-portfolio (416.5085ms)
+✔ P13-T01 evals CLI capture dry-run seals a noop-calibration run with a valid manifest (289.581625ms)
+✔ P13-T01 evals CLI grade writes deterministic score.json with the seven rubric dimensions (459.7005ms)
+✔ P13-T01 evals CLI compare surfaces missing v8 evidence as null cells (fail-closed) (661.241125ms)
+✔ P13-T01 evals CLI capture without --dry-run requires --command (136.697792ms)
+✔ P13-T02 evals CLI threat-model validates a sealed noop-calibration run (568.191042ms)
+✔ P13-T02 evals CLI threat-model surfaces violations from tampered transcripts (567.807458ms)
+✔ P13-T02 evals CLI threat-model rejects a run directory outside the output root (601.151625ms)
+✔ P13-T02 evals CLI threat-model requires --run-dir and --output-root (144.390833ms)
+✔ P13-T03 release CLI checklist reports blocked when the GA evidence is missing (194.447583ms)
+✔ P13-T03 release CLI checklist surfaces a stable per-check breakdown (192.588ms)
+✔ P13-T03 release CLI rollback-verify reports blocked when the manifest is missing (193.664375ms)
+✔ P13-T03 release CLI rollback-verify reports restorable for a well-formed codex manifest (191.304667ms)
+✔ P13-T03 release CLI checklist requires --release-version (135.217792ms)
+✔ P13-T03 release CLI rollback-verify requires --backup-manifest (135.428625ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13533.606084

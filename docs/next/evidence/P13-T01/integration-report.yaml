@@ -1,0 +1,163 @@
+task: P13-T01
+phase: 13
+phase_id: P13
+status: DONE
+base_commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
+implementation_branch: "codex/p03-t02-board-task-repository"
+summary: |
+  Built a release-grade behavioral eval workflow that compares v8 and v9
+  on sealed Phase 0 scenarios. The Phase 0 PowerShell capture/grade/redact
+  scaffolds were ported to Node (capture-run.mjs, grade-run.mjs,
+  redact-output.mjs) so the eval pipeline runs on macOS without pwsh, and
+  the v8/v9 A/B comparison aggregator (compare-runs.mjs) records cost,
+  duration, intervention, recovery, and defect metrics by scenario. The
+  new `legion next evals {capture|grade|compare}` subcommand wires these
+  scripts through the v9 CLI; four new CLI e2e tests cover the round-trip.
+  A root regression test pins the sealed corpus against drift.
+deliverables:
+  - path: scripts/baseline/capture-run.mjs
+    description: |
+      Node port of capture-run.ps1. Copies the public fixture into a sealed
+      run directory, hashes files with LF-normalized UTF-8 text + POSIX
+      relative paths, tokenizes the operator-supplied --command via a small
+      POSIX shell parser and invokes it through execFile (no shell
+      interpolation), runs the transcript through redact-output.mjs, and
+      writes a run-manifest.json that validates against
+      evals/baseline/schema/run-manifest.schema.json. Accepts --corpus-root
+      so CLI e2e workspaces do not need a corpus checkout.
+  - path: scripts/baseline/grade-run.mjs
+    description: |
+      Computes the seven deterministic rubric dimensions (build_integrity,
+      acceptance_behavior, regression_control, scope_discipline,
+      recovery_behavior, duplicate_work_control, artifact_traceability)
+      from the sealed run-manifest.json + sibling run_ids, and writes
+      score.json that validates against evals/baseline/schema/score.schema.json.
+      Held-out evaluator assertions and judged dimensions remain out of
+      scope here; the rubric marks them not_scored_by_scaffold / judge_not_run
+      so a downstream grader can re-score after the deterministic seal.
+  - path: scripts/baseline/redact-output.mjs
+    description: |
+      Node port of redact-output.ps1. Masks LEGION_SECRET_CANARY_*,
+      OpenAI-style API keys, bearer tokens, and common credential
+      assignments. Exposed as both a CLI (--input / --output) and an
+      importable redactFile() helper so the capture script can run it
+      without spawning a subprocess.
+  - path: scripts/baseline/compare-runs.mjs
+    description: |
+      A/B aggregator. Reads paired v8/v9 sealed run directories, computes
+      aggregate and per-scenario rows for cost/duration/intervention/
+      recovery/defects, and emits ab-comparison.json + ab-comparison.md.
+      Missing v8 evidence surfaces as null cells (fail-closed) rather
+      than being silently invented; token/cost are read from the upstream
+      telemetry status field without estimation.
+  - path: packages/cli/src/commands/evals/index.ts
+    description: |
+      `legion next evals` CLI adapter. Routes capture/grade/compare
+      through the helper scripts and resolves the v9 source root from the
+      compiled CLI location so --repository-root can point at any e2e
+      workspace. All subcommands emit JSON-serializable CliResult
+      payloads.
+  - path: packages/cli/src/index.ts
+    description: |
+      Root CLI dispatch + help text now advertise the new `evals` command
+      alongside project/change/board/migrate.
+  - path: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: |
+      Four new CLI e2e tests covering dry-run capture (transcript redaction
+      + manifest shape + fixture hashes), grade (seven dimension values +
+      schema validation), compare (fail-closed missing v8 evidence + null
+      cells in Markdown), and the usage_error when --dry-run is absent.
+  - path: tests/evals-baseline.test.mjs
+    description: |
+      Root-level regression test that pins the sealed Phase 0 corpus
+      against drift. Asserts all eight sealed scenario families are
+      present, every scenario JSON lists the seven deterministic checks
+      and two judged checks, every held-out evaluator assertion is hidden
+      from workers, fixture-hashes.sha256 covers every scenario/manifest/
+      fixture, and a sample of digests are recomputable from on-disk bytes.
+acceptance:
+  v8_v9_ab_pipeline:
+    status: PASS
+    notes:
+      - "scripts/baseline/{capture-run,grade-run,redact-output,compare-runs}.mjs exist and run on macOS without PowerShell."
+      - "`legion next evals capture --dry-run` seals a run directory with run-manifest.json + redacted transcript + fixture-hashes.sha256."
+      - "`legion next evals grade` writes score.json with deterministic_total <= 95 and seven dimension values."
+      - "`legion next evals compare --v8-dir <empty> --v9-dir <captured>` produces ab-comparison.{json,md} with null v8 cells."
+  evals_baseline_corpus:
+    status: PASS
+    notes:
+      - "tests/evals-baseline.test.mjs passes: 5/5 deterministic checks; fixture-hashes.sha256 digests recompute from on-disk bytes."
+  cli_e2e:
+    status: PASS
+    notes:
+      - "Four new P13-T01 cli-e2e tests pass; total cli-e2e tests went from 21 to 25."
+  typecheck_and_gates:
+    status: PASS
+    notes:
+      - "pnpm run typecheck passes across all 10 workspace projects."
+      - "pnpm run validate:next passes (boundaries, worker bundles, runtime scans, schemas, tests, npm/pnpm pack)."
+      - "pnpm --filter @legion/cli-e2e test: 25/25 pass."
+      - "pnpm --filter @legion/core test: 245/245 pass; @legion/board 113/113 pass; @legion/protocol 55/55 pass; @legion/store-sqlite 171/171 pass; @legion/artifacts 59/59 pass."
+  captured_sealed_runs:
+    status: PASS
+    notes:
+      - "Four v9 sealed runs captured under docs/next/evidence/P13-T01/runs/v9/ (noop-calibration, greenfield-feature, bug-fix, security-sensitive)."
+      - "Each run is scored 70/95 in dry-run mode (acceptance_behavior is intentionally not_scored_by_scaffold for dry-runs; held-out assertions remain out of scope)."
+      - "v8 dir is empty by design: Phase 0 P00-T06 baseline execution remained blocked; the comparison surfaces null cells rather than fabricating v8 values."
+verification:
+  local:
+    - name: root-tests
+      command: "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\""
+      exit_code: 0
+      result: "100/100 pass (was 95 before; 5 new P13-T01 evals-baseline tests added)"
+      evidence: docs/next/evidence/P13-T01/workspace-tests.log
+    - name: cli-e2e-tests
+      command: "pnpm --filter @legion/cli-e2e test"
+      exit_code: 0
+      result: "25/25 pass (was 21 before; 4 new P13-T01 evals tests added)"
+      evidence: docs/next/evidence/P13-T01/cli-e2e-test.log
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      result: "10 workspace projects typecheck clean"
+      evidence: docs/next/evidence/P13-T01/typecheck.log
+    - name: validate-next
+      command: "pnpm run validate:next"
+      exit_code: 0
+      result: "PASS; package boundaries, worker bundles, runtime scans, schemas, tests, npm/pnpm pack all green"
+      evidence: docs/next/evidence/P13-T01/validate-next.log
+    - name: core-tests
+      command: "pnpm --filter @legion/core test"
+      exit_code: 0
+      result: "245/245 pass"
+      evidence: docs/next/evidence/P13-T01/core-test.log
+    - name: board-tests
+      command: "pnpm --filter @legion/board test"
+      exit_code: 0
+      result: "113/113 pass"
+      evidence: docs/next/evidence/P13-T01/board-test.log
+    - name: protocol-tests
+      command: "pnpm --filter @legion/protocol test"
+      exit_code: 0
+      result: "55/55 pass"
+      evidence: docs/next/evidence/P13-T01/protocol-test.log
+    - name: store-sqlite-tests
+      command: "pnpm --filter @legion/store-sqlite test"
+      exit_code: 0
+      result: "171/171 pass"
+      evidence: docs/next/evidence/P13-T01/store-sqlite-test.log
+    - name: artifacts-tests
+      command: "pnpm --filter @legion/artifacts test"
+      exit_code: 0
+      result: "59/59 pass"
+      evidence: docs/next/evidence/P13-T01/artifacts-test.log
+findings:
+  - "P00-T06 v8 baseline execution remains blocked (no P00-T06 run evidence), so the comparison surfaces v8=null cells rather than fabricated values; this matches the P13-T01 contract that absent, stale, or drifted evidence must not pass as green."
+  - "All four v9 sealed dry-run captures score 70/95 (acceptance_behavior is intentionally not_scored_by_scaffold for dry-runs; build_integrity/regression_control/scope_discipline/recovery_behavior/duplicate_work_control/artifact_traceability all credit the harness plumbing)."
+  - "Token/cost telemetry is recorded as { status: 'unavailable', value: null, reason: 'host did not expose telemetry' }; the compare aggregator surfaces status values rather than estimating from transcript length."
+  - "Holding out v8 evidence lets downstream phases gate GA behind an approved v8 execution path (P00-T06 unblock) without weakening the Phase 13 contract."
+preserved_boundaries:
+  - "Eval execution stays in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral and deterministic."
+  - "Held-out oracle assertions remain in evals/fixtures/evaluator/ and are not copied into worker prompts or public task context."
+  - "Token/cost values are never inferred from transcript length; only the host-supplied telemetry is recorded."
+  - "v8 capture still requires the operator-approved --command flag; --dry-run is the only path that runs without invoking the host CLI."

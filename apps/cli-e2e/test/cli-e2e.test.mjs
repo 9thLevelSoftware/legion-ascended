@@ -1777,3 +1777,601 @@ test("P11-T02 board CLI portfolio status surfaces scoped sub-portfolio", async (
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test("P13-T01 evals CLI capture dry-run seals a noop-calibration run with a valid manifest", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.ok, true);
+    assert.equal(result.json.status, "captured");
+    assert.ok(typeof result.json.runDirectory === "string" && result.json.runDirectory.length > 0);
+    const manifest = result.json.manifest;
+    assert.equal(manifest.schema_version, 1);
+    assert.equal(manifest.scenario_id, "noop-calibration.v1");
+    assert.equal(manifest.host, "test-host");
+    assert.equal(manifest.terminal_status, "dry-run");
+    assert.equal(manifest.telemetry.tokens.status, "unavailable");
+    assert.equal(manifest.telemetry.cost.status, "unavailable");
+    assert.ok(Array.isArray(manifest.events));
+    assert.ok(manifest.events.some((event) => event.type === "dry_run_completed"));
+    // Redaction must remove the canary from the on-disk transcript.
+    const transcriptPath = path.join(repositoryRoot, result.json.runDirectory, manifest.artifacts.transcript);
+    const transcript = await readFile(transcriptPath, "utf8");
+    assert.equal(transcript.includes("LEGION_SECRET_CANARY_SHOULD_BE_REDACTED"), false);
+    assert.ok(transcript.includes("[REDACTED_SECRET_CANARY]"));
+    // Fixture hashes file uses lowercase SHA-256 + POSIX paths.
+    const hashesPath = path.join(repositoryRoot, result.json.runDirectory, manifest.fixture_hashes);
+    const hashes = await readFile(hashesPath, "utf8");
+    assert.match(hashes, /^[a-f0-9]{64}\s+\S+/m);
+    // Raw transcript must not survive redaction.
+    const rawPath = path.join(repositoryRoot, result.json.runDirectory, "transcript.raw.log");
+    assert.equal(await exists(rawPath), false);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T01 evals CLI grade writes deterministic score.json with the seven rubric dimensions", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const gradeResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "grade",
+      "--run-directory",
+      path.join(repositoryRoot, captureResult.json.runDirectory)
+    ]);
+    assert.equal(gradeResult.exitCode, 0, gradeResult.stderr);
+    assert.equal(gradeResult.json.ok, true);
+    assert.equal(gradeResult.json.status, "graded");
+    assert.ok(typeof gradeResult.json.score === "string");
+
+    const scorePath = path.join(repositoryRoot, captureResult.json.runDirectory, "score.json");
+    const score = JSON.parse(await readFile(scorePath, "utf8"));
+    assert.equal(score.schema_version, 1);
+    assert.equal(score.run_id, captureResult.json.manifest.run_id);
+    assert.equal(score.scenario_id, "noop-calibration.v1");
+    assert.equal(score.critical_failure, false);
+    assert.equal(score.terminal_status, "dry-run");
+    // Deterministic seal must not exceed 95 (the cap before judged scores).
+    assert.ok(score.deterministic_total >= 0 && score.deterministic_total <= 95);
+    // Acceptance behavior is intentionally not_scored_by_scaffold for dry-runs.
+    assert.equal(score.dimensions.acceptance_behavior, "not_scored_by_scaffold");
+    assert.equal(score.dimensions.maintainability, "judge_not_run");
+    assert.equal(score.dimensions.requirement_fidelity, "judge_not_run");
+    // Build integrity, regression control, recovery, duplicate work, and
+    // artifact traceability must credit a calibration that wrote all artifacts.
+    assert.equal(score.dimensions.build_integrity, 15);
+    assert.equal(score.dimensions.regression_control, 15);
+    assert.equal(score.dimensions.recovery_behavior, 10);
+    assert.equal(score.dimensions.duplicate_work_control, 10);
+    assert.equal(score.dimensions.artifact_traceability, 10);
+    // Scope discipline is scored from git_before == git_after (dry-run guarantee).
+    assert.equal(score.dimensions.scope_discipline, 10);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T01 evals CLI compare surfaces missing v8 evidence as null cells (fail-closed)", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const runsDir = path.join(workspace, "runs");
+    const v8Dir = path.join(workspace, "v8-empty");
+    const outputDir = path.join(workspace, "ab-comparison");
+    await mkdir(v8Dir, { recursive: true });
+
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      runsDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    // The compare aggregator reads deterministic_total from score.json.
+    // Grade the sealed run before invoking compare so v9 has a populated
+    // deterministic_total to compare against the empty v8 side.
+    const gradeResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "grade",
+      "--run-directory",
+      path.join(repositoryRoot, captureResult.json.runDirectory)
+    ]);
+    assert.equal(gradeResult.exitCode, 0, gradeResult.stderr);
+
+    const compareResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "compare",
+      "--v8-dir",
+      v8Dir,
+      "--v9-dir",
+      runsDir,
+      "--output",
+      outputDir
+    ]);
+    assert.equal(compareResult.exitCode, 0, compareResult.stderr);
+    assert.equal(compareResult.json.ok, true);
+    assert.equal(compareResult.json.status, "compared");
+
+    const abPath = path.join(repositoryRoot, compareResult.json.abComparisonJson);
+    const ab = JSON.parse(await readFile(abPath, "utf8"));
+    assert.equal(ab.v8_summary.run_count, 0);
+    assert.equal(ab.v9_summary.run_count, 1);
+    assert.equal(ab.scenarios.length, 1);
+    const row = ab.scenarios[0];
+    assert.equal(row.scenario_id, "noop-calibration.v1");
+    assert.equal(row.v8_present, false);
+    assert.equal(row.v9_present, true);
+    assert.equal(row.v8_terminal, null);
+    assert.equal(row.v9_terminal, "dry-run");
+    assert.equal(row.v8_deterministic_total, null);
+    assert.equal(row.v9_deterministic_total, 70);
+
+    // The Markdown report must surface the same null cells rather than
+    // inventing a v8 value.
+    const md = await readFile(path.join(repositoryRoot, compareResult.json.abComparisonMarkdown), "utf8");
+    assert.ok(md.includes("v8/v9 sealed scenario A/B comparison"));
+    assert.match(md, /\| noop-calibration\.v1 \| — \| dry-run \| — \| 70 \|/);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T01 evals CLI capture without --dry-run requires --command", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      path.join(workspace, "runs")
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model validates a sealed noop-calibration run", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    // Capture a sealed run via the CLI.
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const runDirectory = path.join(repositoryRoot, captureResult.json.runDirectory);
+    const reportPath = path.join(workspace, "threat-model-report.json");
+
+    const threatResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model",
+      "--run-dir",
+      runDirectory,
+      "--output-root",
+      outputDir,
+      "--report",
+      reportPath
+    ]);
+    assert.equal(threatResult.exitCode, 0, threatResult.stderr);
+    assert.equal(threatResult.json.ok, true);
+    assert.equal(threatResult.json.status, "verified");
+    assert.equal(threatResult.json.verdict.ok, true);
+    assert.equal(threatResult.json.verdict.checks.sandbox.ok, true);
+    assert.equal(threatResult.json.verdict.checks.retention.ok, true);
+    assert.equal(threatResult.json.verdict.checks.redaction.ok, true);
+    assert.equal(threatResult.json.verdict.findings.length, 0);
+
+    // The threat-model script must have written the report to --report.
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    assert.equal(report.ok, true);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model surfaces violations from tampered transcripts", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const runDirectory = path.join(repositoryRoot, captureResult.json.runDirectory);
+    const transcriptPath = path.join(runDirectory, "transcript.redacted.log");
+
+    // Tamper with the redacted transcript to re-introduce the canary.
+    await writeFile(
+      transcriptPath,
+      "LEGION_SECRET_CANARY_LEAKED_AAAA_BBBB\nexit_code=1\nstderr: tampered\n"
+    );
+
+    const threatResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model",
+      "--run-dir",
+      runDirectory,
+      "--output-root",
+      outputDir
+    ]);
+    assert.equal(threatResult.exitCode, 1, threatResult.stderr);
+    assert.equal(threatResult.json.ok, false);
+    assert.equal(threatResult.json.status, "violation");
+    const codes = threatResult.json.verdict.findings.map((f) => f.code);
+    assert.ok(codes.includes("canary_present_in_redacted_transcript"));
+    assert.ok(codes.includes("canary_present_after_redaction"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model rejects a run directory outside the output root", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const runDirectory = path.join(repositoryRoot, captureResult.json.runDirectory);
+
+    // Point the output-root at a sibling directory that does not contain
+    // the run directory. The validator must flag the boundary escape.
+    const altRoot = path.join(workspace, "alt-runs");
+    await mkdir(altRoot, { recursive: true });
+
+    const threatResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model",
+      "--run-dir",
+      runDirectory,
+      "--output-root",
+      altRoot
+    ]);
+    assert.equal(threatResult.exitCode, 1, threatResult.stderr);
+    assert.equal(threatResult.json.ok, false);
+    assert.equal(threatResult.json.status, "violation");
+    const codes = threatResult.json.verdict.findings.map((f) => f.code);
+    assert.ok(codes.includes("run_dir_escapes_output_root"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model requires --run-dir and --output-root", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI checklist reports blocked when the GA evidence is missing", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "checklist",
+      "--release-version",
+      "9.0.0"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.equal(result.json.status, "blocked");
+    assert.ok(result.json.verdict, "verdict should be parsed");
+    assert.ok(Array.isArray(result.json.verdict.findings));
+    // The empty repo must surface at least the changelog and the
+    // companion-document findings.
+    const codes = result.json.verdict.findings.map((f) => f.code);
+    assert.ok(
+      codes.includes("changelog_missing") || codes.includes("changelog_missing_ga_entry"),
+      "expected a changelog_missing* finding"
+    );
+    assert.ok(codes.includes("release_record_missing"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI checklist surfaces a stable per-check breakdown", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "checklist",
+      "--release-version",
+      "9.0.0"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    // Each precondition is exposed as a sub-check under verdict.checks
+    // so CI dashboards can render the per-gate status without parsing
+    // the findings list.
+    const checks = result.json.verdict.checks;
+    for (const name of [
+      "changelog",
+      "release_record",
+      "migration_policy",
+      "rollback_policy",
+      "v8_handoff",
+      "stable_channel_approval",
+      "ledger",
+      "threat_model_verdict",
+      "ab_comparison"
+    ]) {
+      assert.ok(checks[name], `missing check ${name}`);
+      assert.equal(typeof checks[name].ok, "boolean");
+    }
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI rollback-verify reports blocked when the manifest is missing", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "rollback-verify",
+      "--backup-manifest",
+      "/no/such/path/backup-manifest.json"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.equal(result.json.status, "blocked");
+    assert.ok(result.json.verdict, "verdict should be parsed");
+    const codes = result.json.verdict.findings.map((f) => f.code);
+    assert.ok(codes.includes("manifest_present"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI rollback-verify reports restorable for a well-formed codex manifest", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const backupPath = path.join(workspace, "backup");
+    await mkdir(path.join(backupPath, "legacy-protocol"), { recursive: true });
+    await writeFile(path.join(backupPath, "legacy-protocol", "agents.json"), "{}", "utf8");
+    await writeFile(path.join(backupPath, "manifest.json"), "{\"version\":\"8.0.5\"}", "utf8");
+
+    // Recompute the pre-migration hash using the same algorithm the
+    // verifier expects (sorted POSIX paths, sha256 path\0bytes\0).
+    const { createHash } = await import("node:crypto");
+    const fileList = [];
+    async function walk(dir) {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (entry.isFile()) fileList.push({ rel: path.relative(backupPath, full).split(path.sep).join("/"), full });
+      }
+    }
+    await walk(backupPath);
+    fileList.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+    const hash = createHash("sha256");
+    for (const entry of fileList) {
+      hash.update(entry.rel);
+      hash.update("\0");
+      hash.update(await readFile(entry.full));
+      hash.update("\0");
+    }
+    const preMigrationHash = `sha256:${hash.digest("hex")}`;
+
+    const manifest = {
+      schemaVersion: "0.1.0",
+      kind: "codex-legion-migration-backup",
+      createdAt: "2026-06-22T15:00:00.000Z",
+      repositoryRoot,
+      backupPath,
+      preMigrationHash,
+      sourceHash: "PLACEHOLDER-SOURCE-HASH",
+      existingLegionRoot: true
+    };
+    const manifestPath = path.join(workspace, "backup-manifest.json");
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "rollback-verify",
+      "--backup-manifest",
+      manifestPath,
+      "--source",
+      "codex-legion"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.ok, true);
+    assert.equal(result.json.status, "restorable");
+    assert.equal(result.json.verdict.kind, "codex-legion-migration-backup");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI checklist requires --release-version", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "checklist"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI rollback-verify requires --backup-manifest", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "rollback-verify"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

@@ -1,0 +1,11 @@
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository
+ M apps/cli-e2e/test/cli-e2e.test.mjs
+ M packages/cli/src/index.ts
+?? docs/next/evidence/P13-T01/
+?? packages/cli/src/commands/evals/
+?? scripts/baseline/capture-run.mjs
+?? scripts/baseline/compare-runs.mjs
+?? scripts/baseline/grade-run.mjs
+?? scripts/baseline/redact-output.mjs
+?? tests/evals-baseline.test.mjs
+?? var/

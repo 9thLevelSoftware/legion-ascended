@@ -1,0 +1,5 @@
+P13-T01 dry-run calibration
+Scenario: noop-calibration.v1
+Host: dry-run
+Model: unavailable
+[REDACTED_SECRET_CANARY]
