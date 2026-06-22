@@ -1,0 +1,88 @@
+phase: 8
+phase_id: P08
+hash_basis: "SHA-256 over artifact bytes after P08-T01 closeout finalization; this index is excluded to avoid self-referential hashing."
+entries:
+  - task: P08-T01
+    artifact: packages/core/src/dispatch/contract.ts
+    description: "Fresh-context dispatcher contract types: WorkerContext allowlist, DispatchIssue, DispatchBoardBlocker, WorkerBundleRegistry, dispatch input/result shapes."
+    sha256: a1927b83cb00c73e3589ec712f44fcdec205cbc6b7fad2bd4c84992c407ac896
+  - task: P08-T01
+    artifact: packages/core/src/dispatch/hash.ts
+    description: "Deterministic SHA-256 workerContextHash over contract id/revision/sorted refs/scope/bundle/model and stable isolationTag derivation."
+    sha256: 932da35e5c369afab0c385126e87406228af2b6c27da858552e16a45875c64bd
+  - task: P08-T01
+    artifact: packages/core/src/dispatch/selector.ts
+    description: "Worker bundle selection from a registry (first registered bundle wins; ambiguity surfaces a typed failure)."
+    sha256: b834ed88e8b762ec9ebb48d25a807942df973372c723579f1db5e6a27fc6827f
+  - task: P08-T01
+    artifact: packages/core/src/dispatch/blocker.ts
+    description: "Map structured DispatchIssue to board-shaped blocker with code + path encoded in reason."
+    sha256: cac59486da6bd09fafba2af938b705695c71716ad2b3507e1a161f8172705943
+  - task: P08-T01
+    artifact: packages/core/src/dispatch/dispatcher.ts
+    description: "FreshContextDispatcher: preflight + scope check + bundle selection + deep-freeze WorkerContext + isolation invariant assertion."
+    sha256: 2e7147dbbbf92547c935e3c9f60496544c59b8f6e6788ce7f5e5efb2d02f476d
+  - task: P08-T01
+    artifact: packages/core/src/dispatch/index.ts
+    description: "Barrel re-exports for the fresh-context dispatcher surface."
+    sha256: fb91169fbf3285da7dc1fe82badb44ef8964bf8a51c1c20747ac8c068a296595
+  - task: P08-T01
+    artifact: packages/core/src/index.ts
+    description: "@legion/core index now re-exports ./dispatch/index.js alongside runtime, gates, risk, state-machines, and transition."
+    sha256: 64cd488e046b830bacd6e975027d9fa935ceff15401c5a0d79b96b336533f5fa
+  - task: P08-T01
+    artifact: packages/core/test/dispatch.test.mjs
+    description: "25 unit tests covering happy path, all 4 preflight failure modes, worker bundle ambiguity, context reference leak, isolation invariants, determinism, provider neutrality, WorkerContext shape, and render helpers."
+    sha256: 3268f8690b7cd3de4b9fffa8d4fab0a43da93e5091c960bc5a801a05720cec67
+  - task: P08-T01
+    artifact: packages/core/test/dispatch-fixture.mjs
+    description: "Fixture builders for TaskContract, WorkerBundle, and ready context used by the dispatch tests."
+    sha256: 23d97b567d15e558d9f0c313cf381a6c3bd391c4d0556593b9334a4aa9ca244a
+  - task: P08-T01
+    artifact: scripts/serialize-p08-worker-context.mjs
+    description: "Reproducible script that serializes a real WorkerContext into docs/next/evidence/P08-T01/worker-context.json from a freshly-built @legion/core dist."
+    sha256: ee863894711cf6340e0bfd1fae08797fc6a3d479feac0803df289c1227d11755
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/worker-context.json
+    description: "Canonical WorkerContext snapshot showing the schemaVersion, kind, protocolVersion, workerContextHash, isolationTag, contextRefs, scope, workerBundle, model, and frozen contract fields."
+    sha256: 6a73b9407a4b4ca8118c7af2bdfe27bed07be352a33784cab1b66fe0f0d55659
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/core-test.log
+    description: "@legion/core test transcript showing 152 pass / 0 fail (25 new P08-T01 tests added)."
+    sha256: c7d5ed2e0507baf91ba94a213faa96202ebc324b2c46d4df024def2de557e71b
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/protocol-test.log
+    description: "@legion/protocol test transcript showing 55 pass / 0 fail (no regression)."
+    sha256: cae1ebb2f580f040761b74b610586597bc65a19523b51653a384f1091afad452
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/artifacts-test.log
+    description: "@legion/artifacts test transcript showing 59 pass / 0 fail (no regression)."
+    sha256: d224fc84a514324b250393d2211f478f53a4bc2f433a613e8581f3f6cc7f5f37
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/typecheck.log
+    description: "Workspace typecheck transcript — 10 projects PASS."
+    sha256: 27d04bad9d74bab62da7546ad3e898cf1ffc3b33e642bcc434a5b3e858fae93d
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/workspace-tests.log
+    description: "Full workspace test transcript — 563 pass / 0 fail across 8 packages."
+    sha256: ac1bff507b58665d1ce08c152e27bc057bb5a5fb9a4b57baedf390dba912a7fd
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/validate-next.log
+    description: "validate-next closeout transcript — typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run all PASS."
+    sha256: 064520bdc511165f737ace6e2be08c51995bf691c2cd341bfd2baa34a4912aec
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/gitleaks-p08.log
+    description: "Targeted P08 worktree secret scan transcript — no leaks found."
+    sha256: 90d0763571e177da75cb2012ec9bc126d841031134c00586e97e5373e3fe55e1
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/command-summary.env
+    description: "Per-step exit-code and version summary for the closeout verification commands."
+    sha256: 4b7488eb7a07a0ffc4a22e208536f4d2edecc8465bd2cc3020837ced9fa95c26
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/git-status.log
+    description: "Pre-commit git status and untracked file capture for the P08 worktree."
+    sha256: 6ef6e8791251df04113866e0de95c481d4c07fe95f3de8f481bce65fc1af5942
+  - task: P08-T01
+    artifact: docs/next/evidence/P08-T01/git-diff-stat.log
+    description: "Pre-commit git diff stat against base commit."
+    sha256: a49cf71d154975b08beeb2717cd979566afcca95a5c0100330a90a823d41d211

@@ -8,3 +8,4 @@ export * from "./state-machines/index.js";
 export * from "./gates/index.js";
 export * from "./risk/index.js";
 export * from "./runtime/index.js";
+export * from "./dispatch/index.js";

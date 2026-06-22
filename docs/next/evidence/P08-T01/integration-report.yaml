@@ -1,0 +1,148 @@
+phase: P08
+status: PASS
+title: Fresh-context execution closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: ef0581f8803dc13e1975a8f049515afff21cec28
+head_before_closeout: ef0581f8803dc13e1975a8f049515afff21cec28
+task: P08-T01
+task_id: t_1111b940
+completed_at: "2026-06-22T05:35:00Z"
+assignee: legionworker
+node_version: v26.0.0
+pnpm_version: 11.4.0
+reviewer_pending: "GPT-5.5 / otrlead (P08-T03)"
+acceptance:
+  fresh_context_dispatcher:
+    status: PASS
+    evidence:
+      - packages/core/src/dispatch/contract.ts
+      - packages/core/src/dispatch/hash.ts
+      - packages/core/src/dispatch/selector.ts
+      - packages/core/src/dispatch/blocker.ts
+      - packages/core/src/dispatch/dispatcher.ts
+      - packages/core/src/dispatch/index.ts
+      - packages/core/src/index.ts
+      - packages/core/test/dispatch.test.mjs
+      - packages/core/test/dispatch-fixture.mjs
+      - docs/next/evidence/P08-T01/worker-context.json
+    notes:
+      - "FreshContextDispatcher.preflight + selection + freeze pipeline implemented; isolates worker context from session and contract history."
+      - "WorkerContext exposes only WORKER_CONTEXT_KEYS allowlist; deep-frozen; content-addressed workerContextHash; audit-friendly isolationTag."
+      - "Structured preflight issues are mapped to board blockers with code + path encoded in reason, preserving auditability."
+      - "Provider neutrality verified by static source scan: no runtime driver, board persistence, or process.env imports inside dispatcher.ts."
+  preflight_wiring:
+    status: PASS
+    evidence:
+      - packages/protocol/src/entities/task-contract.ts
+      - packages/core/src/dispatch/dispatcher.ts
+    notes:
+      - "Dispatcher calls preflightTaskContract before constructing a WorkerContext, then re-checks spec/design references against the ready artifact set."
+      - "context_reference_out_of_scope issue code added for specRefs/designRefs that are not in the ready artifact set."
+  isolation_invariants:
+    status: PASS
+    evidence:
+      - packages/core/test/dispatch.test.mjs
+    notes:
+      - "assertIsolatedWorkerContext accepts a real WorkerContext and rejects contexts with forbidden keys (scratch, parentRunIds, history), missing freeze, or extra fields."
+      - "WorkerContext contains ONLY fields in WORKER_CONTEXT_KEYS."
+  worker_bundle_selection:
+    status: PASS
+    evidence:
+      - packages/core/src/dispatch/selector.ts
+      - packages/core/test/dispatch.test.mjs
+    notes:
+      - "selectWorkerBundleForTask returns the lone registered bundle or surfaces agent_not_registered / agent_ambiguous failure reasons."
+      - "createStaticWorkerBundleRegistry provides a deterministic in-memory registry for tests and CLI adapters."
+  evidence_pinning:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P08-T01/worker-context.json
+      - docs/next/evidence/P08-T01/core-test.log
+      - docs/next/evidence/P08-T01/protocol-test.log
+      - docs/next/evidence/P08-T01/artifacts-test.log
+      - docs/next/evidence/P08-T01/typecheck.log
+      - docs/next/evidence/P08-T01/workspace-tests.log
+      - docs/next/evidence/P08-T01/validate-next.log
+      - docs/next/evidence/P08-T01/gitleaks-p08.log
+      - docs/next/evidence/P08-T01/command-summary.env
+      - docs/next/evidence/P08-T01/git-status.log
+      - docs/next/evidence/P08-T01/git-diff-stat.log
+      - docs/next/evidence/P08-T01/evidence-index.yaml
+    notes:
+      - "scripts/serialize-p08-worker-context.mjs writes the canonical WorkerContext shape; reproducible from a freshly-built core dist."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P08-T01/core-test.log
+      - docs/next/evidence/P08-T01/protocol-test.log
+      - docs/next/evidence/P08-T01/artifacts-test.log
+      - docs/next/evidence/P08-T01/typecheck.log
+      - docs/next/evidence/P08-T01/workspace-tests.log
+      - docs/next/evidence/P08-T01/validate-next.log
+      - docs/next/evidence/P08-T01/gitleaks-p08.log
+    notes:
+      - "core: 152 tests pass (127 existing + 25 new P08-T01)."
+      - "protocol: 55 tests pass (no regression)."
+      - "artifacts: 59 tests pass (no regression)."
+      - "workspace-tests: 563 tests pass across 8 packages (94 root + 55 protocol + 152 core + 59 artifacts + 130 store-sqlite + 29 runtime-eve + 34 legacy-bridge + 10 cli-e2e)."
+      - "typecheck: PASS across 10 workspace projects."
+      - "validate-next: PASS (typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, pack dry-run)."
+      - "gitleaks protect --staged: no leaks found."
+  phase_closeout_artifacts:
+    status: PENDING
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-08/PENDING.md
+    notes:
+      - "P08-T03 closeout task (t_be46700c) is reserved for GPT-5.5 / otrlead independent review and ledger finalization."
+      - "P08-T02 per-task review pipeline (t_9321f68b) is the next ready task and depends on the dispatcher surface this report certifies."
+commands:
+  - name: core-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/core-test.log
+    result: "152 pass / 0 fail (25 new P08-T01 tests)"
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/protocol-test.log
+    result: "55 pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/workspace-tests.log
+    result: "563 pass / 0 fail across 8 packages (94 root + 55 protocol + 152 core + 59 artifacts + 130 store-sqlite + 29 runtime-eve + 34 legacy-bridge + 10 cli-e2e)"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p08
+    command: "gitleaks protect --staged"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-T01/gitleaks-p08.log
+    result: "No leaks found in P08 worktree"
+blockers: []
+phase_8_handoff:
+  next_task: P08-T02
+  next_task_id: t_9321f68b
+  summary: "Per-task review pipeline — P08-T02 builds the deterministic verification and acceptance gate that consumes the WorkerContext produced here. The CLI command surface (`next board task ...`) and the reviewer loop wiring are the natural next layer."
+  contract_inputs_for_p08_t02:
+    - "FreshContextDispatcher.dispatch(input) returns { ok, workerContext, matchedAgentId, preflightIssueCount } on success."
+    - "WorkerContext is immutable; downstream consumers MUST treat it as the single source of truth for the dispatch attempt."
+    - "DispatchIssue.code carries the typed codes (dependency_unsatisfied, resource_unavailable, contract_incomplete, context_reference_out_of_scope, worker_context_dispatcher_failure)."
+    - "mapDispatchIssueToBoardBlocker / mapDispatchIssuesToBoardBlockers are the canonical structured-issue → board-blocker mappers."
+    - "renderDispatchResult + collectBlockers are the render helpers for CLI output and evidence bundle generation."
+  preserved_boundaries:
+    - "Phase 6 hidden-oracle and fixture-hash boundaries still apply: dispatcher references only protocol-level ArtifactReferences and does not expose evaluator-only oracle material."
+    - "Phase 5 RuntimeDriver neutrality still applies: dispatcher does not import a runtime driver, board persistence, or process environment. RuntimeDriver implementation is selected downstream by the consumer of WorkerContext."
+    - "Phase 4 worker bundle prompt-content contract: WorkerContext.workerBundle.promptContentContract is the field downstream prompt-rendering code MUST consult."

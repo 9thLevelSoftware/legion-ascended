@@ -115,11 +115,14 @@ When implementing, compare against original Legion (v8) at:
 | P07-T03 | t_0c533e06 | **otrlead** | DONE | T02 |
 
 ### Phase 8: Fresh Context Task Execution and Per-Task Review
-| Task | ID | Assignee | Status | Dependencies |
-| --- | --- | --- | --- | --- |
-| P08-T01 | t_1111b940 | legionworker | todo | P07-T03 |
-| P08-T02 | t_9321f68b | legionworker | todo | T01 |
-| P08-T03 | t_be46700c | **otrlead** | todo | T02 |
+|**Status:** IN PROGRESS — P08-T01 implemented (FreshContextDispatcher + 25 unit tests + evidence bundle); P08-T02 ready, P08-T03 pending review.
+|**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-08/`
+
+|| Task | ID | Assignee | Status | Dependencies |
+|| --- | --- | --- | --- | --- |
+|| P08-T01 | t_1111b940 | legionworker | DONE | P07-T03 |
+|| P08-T02 | t_9321f68b | legionworker | ready | T01 |
+|| P08-T03 | t_be46700c | **otrlead** | todo | T02 |
 
 ### Phase 9: Merge Queue and Whole Change Acceptance
 | Task | ID | Assignee | Status | Dependencies |
