@@ -184,3 +184,23 @@ test("exposes the rule catalog for documentation consumers", () => {
   assert.ok(RUNTIME_IMPORT_BOUNDARY_RULES.forbiddenHostCliImports.has("claude-code"));
   assert.ok(RUNTIME_IMPORT_BOUNDARY_RULES.legacyPromptRoots.includes("adapters"));
 });
+
+test("passes when the fallback driver module imports only @legion/protocol + the local contract", async () => {
+  await withFixture(
+    {
+      "packages/protocol/src/index.ts": "export const X = 1;\n",
+      "packages/core/src/index.ts": "export * from \"./runtime/index.js\";\n",
+      "packages/core/src/runtime/contract.ts":
+        'import type { RunId } from "@legion/protocol";\nexport type Driver = { start(id: RunId): Promise<void> };\n',
+      "packages/core/src/runtime/legacy-cli-driver.ts":
+        'import type { RunId } from "@legion/protocol";\nimport type { Driver } from "./contract.js";\nexport class LegacyCli implements Driver { async start(_id: RunId) {} }\n',
+      "packages/core/src/runtime/selector.ts":
+        'import type { Driver } from "./contract.js";\nexport function pick(_drivers: Driver[]): Driver { return _drivers[0]; }\n'
+    },
+    async (root) => {
+      const result = await scanRuntimeImportBoundaries({ root });
+      assert.equal(result.ok, true, JSON.stringify(result.violations, null, 2));
+      assert.equal(result.runtimeFilesScanned, 3);
+    }
+  );
+});

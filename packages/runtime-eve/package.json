@@ -1,0 +1,45 @@
+{
+  "name": "@legion/runtime-eve",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ADR-004 runtime-eve adapter for Legion Next — implements the seven-method RuntimeDriver contract against Vercel Eve's public TypeScript surface (defineAgent, ctx.getSandbox, defineSandbox, defineRemoteAgent, defineEval). The Eve package is an optional peer dependency so the adapter compiles and tests pass without a live Eve install; production deployments pin eve@0.11.7.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./transport": {
+      "types": "./dist/transport/index.d.ts",
+      "import": "./dist/transport/index.js"
+    },
+    "./fallback": {
+      "types": "./dist/fallback/index.d.ts",
+      "import": "./dist/fallback/index.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @legion/core build && pnpm run build && node --test --test-reporter=spec \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "@legion/core": "workspace:*",
+    "@legion/protocol": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "eve": "0.11.7"
+  },
+  "peerDependenciesMeta": {
+    "eve": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  }
+}

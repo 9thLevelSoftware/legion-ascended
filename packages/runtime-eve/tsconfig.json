@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node"]
+  },
+  "references": [
+    { "path": "../protocol" },
+    { "path": "../core" }
+  ],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+}

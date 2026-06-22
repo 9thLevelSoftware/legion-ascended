@@ -18,7 +18,8 @@
     "test": "pnpm run build && node --test --test-reporter=spec \"test/**/*.test.mjs\""
   },
   "dependencies": {
-    "@legion/protocol": "workspace:*"
+    "@legion/protocol": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"
