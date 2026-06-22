@@ -8,11 +8,13 @@
     "pnpm": ">=11.4.0 <12"
   },
   "bin": {
-    "legion": "bin/install.js"
+    "legion": "bin/legion.js"
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile --strict-peer-dependencies",
-    "build": "pnpm -r build",
+    "build": "pnpm -r build && node scripts/build-cli-bundle.mjs",
+    "build:packages": "pnpm -r build",
+    "build:cli-bundle": "node scripts/build-cli-bundle.mjs",
     "typecheck": "pnpm run build && pnpm -r typecheck",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "check:package-contents": "node scripts/check-package-contents.mjs",
@@ -28,6 +30,8 @@
   "files": [
     ".codex-plugin/",
     "bin/",
+    "dist/legion-cli.mjs",
+    "dist/legion-cli.mjs.map",
     "agents/",
     "commands/",
     "skills/",
@@ -60,6 +64,7 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "typescript": "6.0.3"
   }
 }

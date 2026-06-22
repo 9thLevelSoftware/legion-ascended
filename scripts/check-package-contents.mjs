@@ -27,6 +27,12 @@ export const LEGACY_CHECKSUM_FILES = Object.freeze([
   "settings.json"
 ]);
 
+export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
+  "bin/legion.js",
+  "dist/legion-cli.mjs",
+  "dist/legion-cli.mjs.map"
+]);
+
 function toPosixPath(value) {
   return value.split(path.sep).join("/");
 }
@@ -91,12 +97,14 @@ export function runNpmPackDryRun(root) {
 export function comparePackagePathSets(input) {
   const baselinePaths = uniqueSorted(input.baselinePaths);
   const currentPaths = uniqueSorted(input.currentPaths);
+  const approvedExtraPaths = new Set(input.approvedExtraPaths ?? []);
   const currentSet = new Set(currentPaths);
   const baselineSet = new Set(baselinePaths);
 
   return {
     missingLegacyPaths: baselinePaths.filter((filePath) => !currentSet.has(filePath)),
-    extraPackagePaths: currentPaths.filter((filePath) => !baselineSet.has(filePath)),
+    missingApprovedPackagePaths: sortPaths(input.approvedExtraPaths ?? []).filter((filePath) => !currentSet.has(filePath)),
+    extraPackagePaths: currentPaths.filter((filePath) => !baselineSet.has(filePath) && !approvedExtraPaths.has(filePath)),
     workspacePackagePaths: currentPaths.filter((filePath) => filePath.startsWith("packages/"))
   };
 }
@@ -192,7 +200,8 @@ export async function checkLegacyPackageContents(input = {}) {
   const current = input.currentPack ?? runNpmPackDryRun(root);
   const packageComparison = comparePackagePathSets({
     baselinePaths: baseline.files,
-    currentPaths: current.files
+    currentPaths: current.files,
+    approvedExtraPaths: ROOT_ROUTER_PACKAGE_PATHS
   });
   const baselineChecksums = readChecksumFile(checksumPath);
   const currentChecksums = computeChecksumMap(root, current.files.filter((filePath) => filePath !== DEFAULT_CHECKSUM_PATH));
@@ -205,11 +214,12 @@ export async function checkLegacyPackageContents(input = {}) {
   return {
     ok:
       packageComparison.missingLegacyPaths.length === 0 &&
+      packageComparison.missingApprovedPackagePaths.length === 0 &&
       packageComparison.extraPackagePaths.length === 0 &&
       packageComparison.workspacePackagePaths.length === 0 &&
       checksumComparison.missingChecksumPaths.length === 0 &&
       checksumComparison.legacyChecksumMismatches.length === 0 &&
-      packageJson.bin?.legion === "bin/install.js",
+      packageJson.bin?.legion === "bin/legion.js",
     baselinePackage: {
       name: baseline.name,
       version: baseline.version,

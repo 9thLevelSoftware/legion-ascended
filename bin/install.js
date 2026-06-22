@@ -1848,11 +1848,11 @@ async function update(runtimeKey, scope, verify = false) {
 // SECTION 11: Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
 
-  if (args.action === 'help')    { printHelp(); process.exit(0); }
-  if (args.action === 'version') { printVersion(); process.exit(0); }
+  if (args.action === 'help')    { printHelp(); return 0; }
+  if (args.action === 'version') { printVersion(); return 0; }
 
   let runtime = args.runtime;
 
@@ -1862,12 +1862,12 @@ async function main() {
   } else if (!runtime) {
     console.error('Runtime flag required for this action. Use --claude, --codex, --kiro, etc.');
     console.error('Run with --help for full usage.');
-    process.exit(1);
+    return 1;
   }
 
   if (!RUNTIME_METADATA[runtime]) {
     console.error(`Unknown runtime: ${runtime}`);
-    process.exit(1);
+    return 1;
   }
 
   try {
@@ -1881,14 +1881,23 @@ async function main() {
       default:
         install(runtime, args.scope, args.verify);
     }
+    return 0;
   } catch (err) {
     console.error(`\nLegion installer failed: ${err.message}`);
     if (process.env.DEBUG) console.error(err.stack);
-    process.exit(1);
+    return 1;
   }
 }
 
-main();
+if (require.main === module) {
+  main().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
+}
+
+module.exports = {
+  main
+};
 
 
 

@@ -19,7 +19,7 @@ const V8_PACK_DRY_RUN = join(ROOT, "docs", "next", "evidence", "P01-PREFLIGHT", 
 const LEGACY_CHECKSUMS = join(ROOT, "checksums.sha256");
 const INSTALLER = join(ROOT, "bin", "install.js");
 
-test("P01-T10 package contents preserve the approved v8 legacy path set", async () => {
+test("package contents preserve legacy paths plus the approved root router bundle", async () => {
   const result = await checkLegacyPackageContents({
     root: ROOT,
     baselinePackPath: V8_PACK_DRY_RUN,
@@ -27,10 +27,11 @@ test("P01-T10 package contents preserve the approved v8 legacy path set", async 
   });
 
   assert.deepEqual(result.missingLegacyPaths, []);
+  assert.deepEqual(result.missingApprovedPackagePaths, []);
   assert.deepEqual(result.extraPackagePaths, []);
   assert.deepEqual(result.workspacePackagePaths, []);
   assert.deepEqual(result.legacyChecksumMismatches, []);
-  assert.equal(result.bin.legion, "bin/install.js");
+  assert.equal(result.bin.legion, "bin/legion.js");
 });
 
 test("P01-T10 seeded package mutations fail the path contract", () => {
