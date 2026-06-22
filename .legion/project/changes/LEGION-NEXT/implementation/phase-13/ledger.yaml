@@ -22,7 +22,7 @@ tasks:
   P13-T03:
     status: DONE
     run_id: "P13-T03-20260622-ga-release-preparation"
-    commit: "726a70c"
+    commit: "c45f508+f8f555a+post-amend"
     evidence: docs/next/evidence/P13-T03/integration-report.yaml
     depends_on: ["P13-T02"]
     assignee: legionworker

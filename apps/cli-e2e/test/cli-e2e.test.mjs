@@ -2313,7 +2313,7 @@ test("P13-T03 release CLI rollback-verify reports restorable for a well-formed c
       repositoryRoot,
       backupPath,
       preMigrationHash,
-      sourceHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      sourceHash: "PLACEHOLDER-SOURCE-HASH",
       existingLegionRoot: true
     };
     const manifestPath = path.join(workspace, "backup-manifest.json");

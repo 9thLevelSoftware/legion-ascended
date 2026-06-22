@@ -100,9 +100,9 @@ function freshManifest(kind, overrides = {}) {
     createdAt: "2026-06-22T15:00:00.000Z",
     repositoryRoot: "/abs/path/to/repo",
     backupPath: "/abs/path/to/.legion-backup-fresh",
-    preMigrationHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    preImportHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    sourceHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    preMigrationHash: "PLACEHOLDER-PRE-MIGRATION-HASH",
+    preImportHash: "PLACEHOLDER-PRE-IMPORT-HASH",
+    sourceHash: "PLACEHOLDER-SOURCE-HASH",
     existingLegionRoot: true,
     ...overrides
   };
@@ -257,7 +257,7 @@ test("P13-T03 rollback-policy fails closed when backupPath is missing", async ()
       manifestPath,
       freshManifest(CODEX_MANIFEST_KIND, {
         backupPath: path.join(workspace, "no-such-backup-dir"),
-        preMigrationHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        preMigrationHash: "PLACEHOLDER-PRE-MIGRATION-HASH",
         repositoryRoot: workspace
       })
     );

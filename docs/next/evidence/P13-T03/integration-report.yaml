@@ -222,12 +222,12 @@ verification:
     - name: root-tests
       command: "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\""
       exit_code: 0
-      result: "143/143 pass (was 115; +13 P13-T03 rollback-policy + 15 P13-T03 release-checklist)"
+      result: "146/146 pass (was 115 before P13-T03; +13 P13-T03 rollback-policy + 15 P13-T03 release-checklist + 3 upstream PR review follow-ups)"
       evidence: docs/next/evidence/P13-T03/workspace-tests.log
     - name: cli-e2e-tests
       command: "pnpm --filter @legion/cli-e2e test"
       exit_code: 0
-      result: "35/35 pass (was 29; +6 P13-T03 release CLI tests added)"
+      result: "36/36 pass (was 29 before P13-T03; +6 P13-T03 release CLI tests added + 1 upstream PR review follow-up)"
       evidence: docs/next/evidence/P13-T03/cli-e2e-test.log
     - name: typecheck
       command: "pnpm run typecheck"
