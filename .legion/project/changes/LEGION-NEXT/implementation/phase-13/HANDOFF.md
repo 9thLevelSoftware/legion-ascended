@@ -151,3 +151,156 @@ Recommended first checks for P13-T02:
    secrets into @legion/core or @legion/board.
 4. Preserve user artifacts and legacy bytes during eval dry-runs; the
    redaction step must mask secrets without dropping the failure context.
+
+## Delivered Surface — P13-T02
+
+### Threat-model validator
+
+- `scripts/baseline/sandbox-guard.mjs` — fail-closed boundary + redaction
+  completeness check. Confirms the run directory is contained in
+  `--output-root`, `manifest.baseline_commit` is a 40-char hex SHA, every
+  manifest artifact resolves inside the run directory and contains no `..`
+  segments, `transcript.raw.log` is absent after redaction, and the
+  redacted transcript does not contain `LEGION_SECRET_CANARY_*`. Honours
+  `--repository-root` so CLI e2e workspaces resolve correctly.
+- `scripts/baseline/retention-audit.mjs` — fail-closed retention policy
+  audit. Confirms the retained artifacts (run-manifest.json,
+  score.json, transcript.redacted.log, git-before.txt, git-after.txt,
+  fixture-hashes.sha256) are present on disk, the discarded artifacts
+  (transcript.raw.log, evals/fixtures/evaluator/**) are absent, the
+  manifest is in a gradeable terminal state, every fixture-hash digest
+  is recomputable from the on-disk bytes, and held-out material never
+  leaks into the run directory. Honours `--repository-root`.
+- `scripts/baseline/threat-model.mjs` — orchestrator. Composes the two
+  helper scripts as subprocesses plus an in-process redaction scan
+  (canary, bearer, credential-assignment, context-preservation check).
+  Emits a single JSON verdict with per-source findings. Non-zero exit
+  when any subcheck fails.
+
+### CLI surface
+
+- `packages/cli/src/commands/evals/index.ts` — added `legion next evals
+  threat-model` subcommand. The CLI parses the JSON verdict from
+  threat-model.mjs regardless of exit code so structured findings surface
+  to CI gates (the legacy `evals_helper_failed` diagnostic is suppressed
+  in favour of the threat-model verdict). The runScript path resolver
+  recognises the new `threat-model.mjs` alongside the existing capture/
+  grade/compare helpers. Subcommand requires `--run-dir` and
+  `--output-root`; accepts `--report <path>` for the JSON verdict.
+
+### Re-graded capture
+
+- `scripts/baseline/capture-run.mjs` — auto-grades every sealed run so
+  `score.json` is on disk before the threat-model validator inspects
+  the run directory. The deterministic dimensions depend only on the
+  manifest + artifacts, so grading in process keeps the round-trip
+  hermetic.
+
+### Re-graded redaction
+
+- `scripts/baseline/redact-output.mjs` — extended with six new detectors
+  (URL credentials, JWT tokens, PEM-encoded private keys, multiline
+  bearer tokens, JSON-embedded secrets, per-detector audit counts). The
+  held-out contract `redaction does not hide command failures` is
+  preserved by always keeping the surrounding context (line, prefix,
+  failure indicator) visible.
+
+### Tests
+
+- `tests/evals-baseline.test.mjs` — extended with a 6th test that pins
+  the security-sensitive.v1 held-out contract. The test asserts the
+  three critical assertions (canaries redacted, redaction does not
+  hide failures, no credential-like value committed) and the calibration
+  known_bad phrase are still sealed in the evaluator material.
+- `tests/evals-redaction.test.mjs` — 4 regression tests pinning the
+  redaction contract: detector coverage, idempotence, failure-context
+  preservation, and audit log contents.
+- `tests/evals-sandbox.test.mjs` — 7 regression tests covering
+  sandbox-guard + retention-audit (well-formed + 4 sandbox + 2
+  retention failure modes).
+- `tests/evals-threat-model.test.mjs` — 3 regression tests covering the
+  orchestrator (well-formed + 2 fail-closed modes).
+- `apps/cli-e2e/test/cli-e2e.test.mjs` — 4 CLI e2e tests for the new
+  threat-model subcommand.
+
+### Threat model document
+
+- `docs/next/baseline/SECURITY-MODEL.md` — canonical threat model
+  enumerating trust boundaries, attackers, mitigations, the held-out
+  security-sensitive.v1 contract, the retention policy (retained vs
+  discarded), and the fail-closed verdict surface (every finding code
+  documented with its source and meaning).
+
+## Verification Evidence
+
+- `node --test tests/evals-baseline.test.mjs` — PASS, 6/6 tests.
+- `node --test tests/evals-redaction.test.mjs` — PASS, 4/4 tests.
+- `node --test tests/evals-sandbox.test.mjs` — PASS, 7/7 tests.
+- `node --test tests/evals-threat-model.test.mjs` — PASS, 3/3 tests.
+- `pnpm --filter @legion/cli-e2e test` — PASS, 29/29 tests (was 21
+  before P13-T01; +4 P13-T01 evals tests +4 P13-T02 threat-model tests).
+- `pnpm --filter @legion/core test` — PASS, 245/245 tests.
+- `pnpm --filter @legion/board test` — PASS, 113/113 tests.
+- `pnpm --filter @legion/store-sqlite test` — PASS, 171/171 tests.
+- `pnpm --filter @legion/protocol test` — PASS, 55/55 tests.
+- `pnpm --filter @legion/artifacts test` — PASS, 59/59 tests.
+- `pnpm run typecheck` — PASS across 10 workspace projects.
+- `pnpm run test` — PASS across root and recursive workspace packages.
+- `pnpm run validate:next` — PASS, package boundaries, worker bundles,
+  runtime scans, schemas, tests, npm/pnpm pack all green.
+
+Full closeout transcripts are under `docs/next/evidence/P13-T02/`. The
+structured report is `docs/next/evidence/P13-T02/integration-report.yaml`;
+the positive verdict is `docs/next/evidence/P13-T02/threat-model.json`;
+the negative (tampered) verdict is
+`docs/next/evidence/P13-T02/negative/threat-model.json`.
+
+## Captured Sealed Runs
+
+One sealed v9 dry-run + one tampered-run fixture are committed under
+`docs/next/evidence/P13-T02/`:
+
+- `runs/v9/p13-security-sensitive.v1-codex-cli-r1-20260622T163335Z` —
+  sealed dry-run for security-sensitive; threat-model verdict:
+  **verified** (sandbox + retention + redaction all pass; 0 findings).
+- `negative/tampered-run` — copy of the sealed run with a
+  `LEGION_SECRET_CANARY_LEAKED_AAAA_BBBB` line appended to
+  `transcript.redacted.log`; threat-model verdict: **violation**
+  (sandbox: `canary_present_in_redacted_transcript`; redaction:
+  `canary_present_after_redaction`).
+
+The four P13-T01 sealed v9 dry-run captures also pass the P13-T02
+threat-model validator — confirming that the hardened contract is
+backwards-compatible with P13-T01 evidence.
+
+## Phase 13 Starting Point
+
+Proceed to P13-T03 (GA decision). The threat-model validator should be
+the highest-level fail-closed gate for Phase 13 acceptance. P13-T03
+should consume these inputs:
+
+- `legion next evals threat-model` composes sandbox-guard +
+  retention-audit + in-process redaction scan into a single JSON
+  verdict; treat non-zero exit as a hard fail in CI.
+- `capture-run.mjs` auto-grades so every sealed run carries a fresh
+  `score.json`; the held-out `security-sensitive.v1` contract is
+  pinned by `tests/evals-baseline.test.mjs`.
+- `P00-T06` v8 baseline execution remains blocked. The threat-model
+  validator does not gate v8 — it gates the v9 evidence. P13-T03 may
+  decide to ship v9 evidence without v8 if P00-T06 cannot be unblocked.
+- The Phase 13 fail-closed contract: absent, stale, or drifted
+  evidence must not pass as green.
+
+Recommended first checks for P13-T03:
+
+1. Read this handoff, `docs/next/evidence/P13-T02/integration-report.yaml`,
+   `docs/next/baseline/SECURITY-MODEL.md`, and
+   `scripts/baseline/threat-model.mjs` before editing.
+2. Treat a non-zero `legion next evals threat-model` exit code as a
+   hard fail. Do not weaken the contract to accommodate stale evidence.
+3. Keep GA gating in the eval/test harness layers (scripts/baseline/ +
+   @legion/cli evals subcommand) rather than introducing host-specific
+   release criteria into @legion/core or @legion/board.
+4. Preserve user artifacts and legacy bytes during eval dry-runs; the
+   redaction step must mask secrets without dropping the failure
+   context.

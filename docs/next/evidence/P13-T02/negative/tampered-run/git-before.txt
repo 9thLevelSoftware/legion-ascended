@@ -1,0 +1,14 @@
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository [ahead 1]
+ M apps/cli-e2e/test/cli-e2e.test.mjs
+ M packages/cli/src/commands/evals/index.ts
+ M scripts/baseline/capture-run.mjs
+ M scripts/baseline/redact-output.mjs
+ M tests/evals-baseline.test.mjs
+?? docs/next/baseline/SECURITY-MODEL.md
+?? docs/next/evidence/P13-T02/
+?? scripts/baseline/retention-audit.mjs
+?? scripts/baseline/sandbox-guard.mjs
+?? scripts/baseline/threat-model.mjs
+?? tests/evals-redaction.test.mjs
+?? tests/evals-sandbox.test.mjs
+?? tests/evals-threat-model.test.mjs

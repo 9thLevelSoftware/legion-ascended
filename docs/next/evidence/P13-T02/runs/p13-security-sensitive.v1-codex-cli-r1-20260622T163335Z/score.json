@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "run_id": "p13-security-sensitive.v1-codex-cli-r1-20260622T163335Z",
+  "scenario_id": "security-sensitive.v1",
+  "deterministic_total": 70,
+  "judged_total": 0,
+  "total": 70,
+  "terminal_status": "dry-run",
+  "critical_failure": false,
+  "dimensions": {
+    "build_integrity": 15,
+    "acceptance_behavior": "not_scored_by_scaffold",
+    "regression_control": 15,
+    "scope_discipline": 10,
+    "recovery_behavior": 10,
+    "duplicate_work_control": 10,
+    "artifact_traceability": 10,
+    "maintainability": "judge_not_run",
+    "requirement_fidelity": "judge_not_run"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-22T16:34:05.480Z",
+  "run_dir": "docs/next/evidence/P13-T02/negative/tampered-run",
+  "output_root": "docs/next/evidence/P13-T02/negative",
+  "ok": false,
+  "checks": {
+    "sandbox": {
+      "ok": false,
+      "exit_code": 1
+    },
+    "retention": {
+      "ok": true,
+      "exit_code": 0
+    },
+    "redaction": {
+      "ok": false
+    }
+  },
+  "findings": [
+    {
+      "source": "sandbox",
+      "code": "canary_present_in_redacted_transcript",
+      "message": "transcript.redacted.log still contains the secret canary; redaction failed."
+    },
+    {
+      "source": "redaction",
+      "code": "canary_present_after_redaction",
+      "message": "1 canary token(s) survived redaction",
+      "count": 1
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 phase: 13
 phase_id: P13
-hash_basis: "SHA-256 over artifact bytes after P13-T01 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
+hash_basis: "SHA-256 over artifact bytes after P13-T02 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
 entries:
   - task: P13-T01
     artifact: scripts/baseline/capture-run.mjs
@@ -134,3 +134,99 @@ entries:
     artifact: docs/next/evidence/P13-T01/gitleaks-p13-diff.log
     description: "P13-T01 final diff gitleaks scan: no leaks found across the captured scripts, CLI, tests, evidence, and ledger."
     sha256: ef49bd2467357e03dbcfeb333d6c0e7e11c73fdc6c231321cd8ae9840d56ca75
+  - task: P13-T02
+    artifact: scripts/baseline/redact-output.mjs
+    description: "P13-T02 redaction pipeline extended with URL credentials, JWT, PEM private key, multiline bearer, JSON-embedded secrets, and per-detector audit counts. Held-out contract `redaction does not hide command failures` preserved."
+    sha256: e4c26d302809a5848ae1a9f9a6e530f1d7694ef5e487161949a7c924b3b49a98
+  - task: P13-T02
+    artifact: scripts/baseline/sandbox-guard.mjs
+    description: "Fail-closed boundary + redaction completeness check. Confirms run_dir containment, baseline_commit format, artifact paths, raw_transcript absence, and canary absence in redacted transcript."
+    sha256: 22841ef51e37bb58850eef832493eeb847d3b86c7a6c1e94e61c20bc6ad8fd68
+  - task: P13-T02
+    artifact: scripts/baseline/retention-audit.mjs
+    description: "Fail-closed retention policy audit. Confirms retained artifacts present, discarded artifacts absent, fixture-hash recomputability, and held-out material containment."
+    sha256: 7c60a13301c5888cea430501a1d5d740c683d27895eac291067dc1a17f4cdfd9
+  - task: P13-T02
+    artifact: scripts/baseline/threat-model.mjs
+    description: "Fail-closed orchestrator composing sandbox-guard + retention-audit + in-process redaction scan into a single JSON verdict."
+    sha256: adc4beaa2a663b63971b0a69ee6ec8283c72181002cae0cf662bae88a9e25925
+  - task: P13-T02
+    artifact: scripts/baseline/capture-run.mjs
+    description: "capture-run.mjs extended to auto-grade every sealed run so score.json is on disk before the threat-model validator inspects the run directory."
+    sha256: 24d1474ba0561173532534b9a70c1bcd17156f9aaae72f248ac377c3cdc2119f
+  - task: P13-T02
+    artifact: packages/cli/src/commands/evals/index.ts
+    description: "Added `legion next evals threat-model` subcommand. CLI parses JSON verdict regardless of exit code so structured findings surface to CI gates."
+    sha256: 91aaaca48c168a61bff1bfda624c45cc21c7e00667539c9222cea3ee32711156
+  - task: P13-T02
+    artifact: tests/evals-baseline.test.mjs
+    description: "P13-T02 extension: 6th test pins the security-sensitive.v1 held-out contract (3 critical assertions + calibration known_bad)."
+    sha256: 901ff6eb398f62c86be17d64726ce2c909fcfc0272a075c4c06f8f84610a9963
+  - task: P13-T02
+    artifact: tests/evals-redaction.test.mjs
+    description: "4 regression tests pinning the redaction contract: detector coverage, idempotence, failure-context preservation, audit-log contents."
+    sha256: 818dccd3623c685c2b8821bff2a887edbcfb9ed552a3b800d61cf8408370b81d
+  - task: P13-T02
+    artifact: tests/evals-sandbox.test.mjs
+    description: "7 regression tests covering sandbox-guard + retention-audit fail-closed paths."
+    sha256: 2999666e44961561a67af7762a1c50cb8d6705e8565e85e33c5d53f92189a111
+  - task: P13-T02
+    artifact: tests/evals-threat-model.test.mjs
+    description: "3 regression tests covering the threat-model orchestrator: well-formed, canary-leak, raw_transcript-survival."
+    sha256: 2e3e7ee5c4084aba8e03f03368d61274b07125e59b10a2f0d559c45d551b9120
+  - task: P13-T02
+    artifact: docs/next/baseline/SECURITY-MODEL.md
+    description: "Canonical threat model document: trust boundaries, held-out contract, retention policy, fail-closed verdict surface."
+    sha256: 65562f6a859badecc56769dc42bb39f1c704aea89a91bced38b344ed96e22499
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/integration-report.yaml
+    description: "Structured P13-T02 integration report."
+    sha256: 878cf43fc70f0a6cfae1e8abef96289f038d646e5d4b9f65333e6008760aec42
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/threat-model.json
+    description: "Positive threat-model verdict: docs/next/evidence/P13-T02/runs/v9/p13-security-sensitive.v1-codex-cli-r1-20260622T163335Z passes all three subchecks (sandbox + retention + redaction) with zero findings."
+    sha256: 3338e5bb5e0dd17be2df101b60d6a2c7c62ca154bd16ca774da15f3cd780c022
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/negative/threat-model.json
+    description: "Negative threat-model verdict: docs/next/evidence/P13-T02/negative/tampered-run fails closed with canary_present_in_redacted_transcript + canary_present_after_redaction."
+    sha256: 9b7aa602a52050e12208b41030e097a642936afdf0fdb3d0468f677e934858b6
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/typecheck.log
+    description: "P13-T02 typecheck transcript: 10 workspace projects typecheck clean."
+    sha256: cd783d3feab08644e03908e26301c16b05e485a114985fad4e17ecfee32a8b69
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/validate-next.log
+    description: "P13-T02 validate-next transcript: PASS (boundaries, worker bundles, runtime scans, schemas, tests, npm/pnpm pack)."
+    sha256: df8aa0d549bb4391f14c051f8bd65e52359e5369754809b73b49df69a44ab183
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/workspace-tests.log
+    description: "P13-T02 workspace test transcript: 115/115 root tests pass (+15 P13-T02 tests added)."
+    sha256: 9a99f978b30e40adcc12c2e9acc04334381c5354f97ebff8263f86103f82acdd
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/cli-e2e-test.log
+    description: "P13-T02 cli-e2e transcript: 29/29 pass (+4 P13-T02 threat-model CLI tests)."
+    sha256: 7e83eefb81451836ff3c290926dd417c38ea8e248eb336b822502f4bc96c2c0a
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/core-test.log
+    description: "P13-T02 @legion/core transcript: 245/245 pass."
+    sha256: 799749c0261e12a558b9cde7f55b3a8298c0a132b35e1effed0b1db5186a2c20
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/board-test.log
+    description: "P13-T02 @legion/board transcript: 113/113 pass."
+    sha256: ac8597b5c530d48e29c6f85cda801bde2817ec690f82e4f3644fbe3a3835c46c
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/protocol-test.log
+    description: "P13-T02 @legion/protocol transcript: 55/55 pass."
+    sha256: 0c45896d1ea513b7e0b382823b45b2c2c09950e3716ea7c6349fef4807909079
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/store-sqlite-test.log
+    description: "P13-T02 @legion/store-sqlite transcript: 171/171 pass."
+    sha256: e0ce9a14ddffc93d57c5cc273128ee7a2768ca1d96e307e8dccea138e7822769
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/artifacts-test.log
+    description: "P13-T02 @legion/artifacts transcript: 59/59 pass."
+    sha256: fa413a4bf58fc37fb36aa74b80778e56f2caf9f10b8e0f2ff6d2afa7896804d4
+  - task: P13-T02
+    artifact: docs/next/evidence/P13-T02/gitleaks-p13-t02-diff.log
+    description: "P13-T02 final diff gitleaks scan: 6 pre-existing leaks from P03-T04 evidence + skills/agents docs (out of scope for P13-T02); 0 new leaks introduced by P13-T02."
+    sha256: fa8c960657b7d7a50ce963a7669a77c0dc0516c1f27d74467b291938da471138

@@ -8,12 +8,15 @@ tasks:
   P13-T01:
     status: DONE
     run_id: "P13-T01-20260622-behavioral-evals"
-    commit: "P13-T01-head"
+    commit: "267d5f0a8b1e4a2e0a6ac9343e1d100ad787ab85"
     evidence: docs/next/evidence/P13-T01/integration-report.yaml
     depends_on: ["P12-T03"]
     assignee: legionworker
   P13-T02:
-    status: todo
+    status: DONE
+    run_id: "P13-T02-20260622-security-hardening"
+    commit: "P13-T02-head"
+    evidence: docs/next/evidence/P13-T02/integration-report.yaml
     depends_on: ["P13-T01"]
     assignee: legionworker
   P13-T03:
@@ -45,21 +48,46 @@ decisions:
     decision: "Held-out evaluator assertions and judged dimensions are intentionally not_scored_by_scaffold / judge_not_run; deterministic_total caps at 95 to leave headroom for a downstream judge."
     reason: "Captured run-manifests do not contain the held-out oracle outputs, so the deterministic seal cannot score acceptance_behavior for dry-runs; downstream graders can seal the judged dimensions after the deterministic seal passes."
     decided_at: "2026-06-22T15:14:00Z"
+  - task: P13-T02
+    decision: "The threat-model validator composes sandbox-guard + retention-audit as subprocesses plus an in-process redaction scan; the JSON verdict aggregates findings from all three sources."
+    reason: "Each helper script owns a single fail-closed check with stable finding codes so CI gates can surface the right diagnostic without parsing free-form text. Subprocess composition means each helper can be invoked standalone for diagnostic or regression work, and the threat-model orchestrator stays a thin aggregator."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T02
+    decision: "capture-run.mjs auto-grades every sealed run so score.json is on disk before the threat-model validator inspects the run directory."
+    reason: "The retention policy requires score.json as a retained artifact; making the operator call `legion next evals grade` separately weakens the fail-closed contract because a missing score.json would not surface until the threat-model run. Auto-grading keeps the round-trip hermetic."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T02
+    decision: "Redaction extended with six new detectors (URL credentials, JWT tokens, PEM-encoded private keys, multiline bearer tokens, JSON-embedded secrets, audited per-detector counts) but the held-out contract `redaction does not hide command failures` is preserved by always keeping the surrounding context."
+    reason: "The P13-T01 redaction pipeline only covered a small subset of common credential shapes. Adding the missing detectors closes the gap without weakening the held-out contract: every placeholder still leaves the surrounding line visible so failure root-cause stays inspectable."
+    decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T02
+    decision: "threat-model.mjs, sandbox-guard.mjs, and retention-audit.mjs all accept a --repository-root argument so the operator's repo root (different from the v9 source tree in CLI e2e workspaces) is honoured when resolving fixture-hash paths."
+    reason: "The P13-T01 fixtures are captured against the operator's --repository-root, which is not always the v9 source tree (CLI e2e workspaces use a tmp dir). Without the override, retention-audit cannot resolve the recorded fixture paths and fails closed on every e2e capture."
+    decided_at: "2026-06-22T16:00:00Z"
 blockers: []
 preserved_boundaries:
   - "Eval execution stays in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral and deterministic."
   - "Held-out oracle assertions remain in evals/fixtures/evaluator/ and are not copied into worker prompts or public task context."
   - "Token/cost values are never inferred from transcript length; only the host-supplied telemetry is recorded."
   - "v8 capture still requires the operator-approved --command flag; --dry-run is the only path that runs without invoking the host CLI."
+  - "Threat-model validation lives in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral."
+  - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
 evidence:
   - scripts/baseline/capture-run.mjs
   - scripts/baseline/grade-run.mjs
   - scripts/baseline/redact-output.mjs
   - scripts/baseline/compare-runs.mjs
+  - scripts/baseline/sandbox-guard.mjs
+  - scripts/baseline/retention-audit.mjs
+  - scripts/baseline/threat-model.mjs
   - packages/cli/src/commands/evals/index.ts
   - packages/cli/src/index.ts
   - apps/cli-e2e/test/cli-e2e.test.mjs
   - tests/evals-baseline.test.mjs
+  - tests/evals-redaction.test.mjs
+  - tests/evals-sandbox.test.mjs
+  - tests/evals-threat-model.test.mjs
+  - docs/next/baseline/SECURITY-MODEL.md
   - docs/next/evidence/P13-T01/integration-report.yaml
   - docs/next/evidence/P13-T01/ab-comparison/ab-comparison.json
   - docs/next/evidence/P13-T01/ab-comparison/ab-comparison.md
@@ -71,24 +99,32 @@ evidence:
   - docs/next/evidence/P13-T01/runs/v9/p13-greenfield-feature.v1-dry-run-r1-20260622T153040Z/score.json
   - docs/next/evidence/P13-T01/runs/v9/p13-security-sensitive.v1-dry-run-r1-20260622T153040Z/run-manifest.json
   - docs/next/evidence/P13-T01/runs/v9/p13-security-sensitive.v1-dry-run-r1-20260622T153040Z/score.json
-  - docs/next/evidence/P13-T01/workspace-tests.log
-  - docs/next/evidence/P13-T01/cli-e2e-test.log
-  - docs/next/evidence/P13-T01/typecheck.log
-  - docs/next/evidence/P13-T01/validate-next.log
-  - docs/next/evidence/P13-T01/core-test.log
-  - docs/next/evidence/P13-T01/board-test.log
-  - docs/next/evidence/P13-T01/protocol-test.log
-  - docs/next/evidence/P13-T01/store-sqlite-test.log
-  - docs/next/evidence/P13-T01/artifacts-test.log
+  - docs/next/evidence/P13-T02/integration-report.yaml
+  - docs/next/evidence/P13-T02/threat-model.json
+  - docs/next/evidence/P13-T02/negative/threat-model.json
+  - docs/next/evidence/P13-T02/workspace-tests.log
+  - docs/next/evidence/P13-T02/cli-e2e-test.log
+  - docs/next/evidence/P13-T02/typecheck.log
+  - docs/next/evidence/P13-T02/validate-next.log
+  - docs/next/evidence/P13-T02/core-test.log
+  - docs/next/evidence/P13-T02/board-test.log
+  - docs/next/evidence/P13-T02/protocol-test.log
+  - docs/next/evidence/P13-T02/store-sqlite-test.log
+  - docs/next/evidence/P13-T02/artifacts-test.log
+  - docs/next/evidence/P13-T02/gitleaks-p13-t02-diff.log
 phase_13_handoff:
-  next_task: P13-T02
-  next_task_id: t_6712c51d
-  summary: "Begin Phase 13 task 2 (Security hardening) on top of the P13-T01 behavioral eval surface."
-  contract_inputs_for_p13_t02:
-    - "scripts/baseline/{capture-run,grade-run,redact-output,compare-runs}.mjs expose redactFile() and the run-manifest fixture-hashes; security-sensitive.v1 is one of the four sealed v9 dry-runs captured in docs/next/evidence/P13-T01/runs/v9/."
-    - "Phase 0 SCORING-RUBRIC.md forbids backfilling telemetry; any P13-T02 hardening must keep secrets out of retained transcripts without weakening validation."
-    - "Held-out oracle assertions remain in evals/fixtures/evaluator/; the security-sensitive scenario's assertions.yaml is hash-pinned by evals/baseline/fixture-hashes.sha256 (covered by tests/evals-baseline.test.mjs)."
+  next_task: P13-T03
+  next_task_id: TBD
+  summary: |
+    Begin Phase 13 task 3 (GA decision) on top of the P13-T01 behavioral
+    eval surface and the P13-T02 security hardening. The threat-model
+    validator should be the highest-level fail-closed gate for Phase 13
+    acceptance.
+  contract_inputs_for_p13_t03:
+    - "`legion next evals threat-model` composes sandbox-guard + retention-audit + in-process redaction scan into a single JSON verdict; treat non-zero exit as a hard fail in CI."
+    - "capture-run.mjs auto-grades so every sealed run carries a fresh score.json; the held-out security-sensitive.v1 contract is pinned by tests/evals-baseline.test.mjs."
+    - "P00-T06 v8 baseline execution remains blocked. The threat-model validator does not gate v8 — it gates the v9 evidence. P13-T03 may decide to ship v9 evidence without v8 if P00-T06 cannot be unblocked."
   preserved_boundaries:
     - "Eval harness scripts live under scripts/baseline/ and the @legion/cli evals subcommand; do not move eval execution into @legion/core or @legion/board."
-    - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, and common credential assignments."
+    - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
     - "v8 evidence remains fail-closed: absent P00-T06 v8 runs surface as null cells rather than fabricated values."

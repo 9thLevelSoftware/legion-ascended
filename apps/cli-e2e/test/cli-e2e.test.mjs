@@ -2000,3 +2000,184 @@ test("P13-T01 evals CLI capture without --dry-run requires --command", async () 
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test("P13-T02 evals CLI threat-model validates a sealed noop-calibration run", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    // Capture a sealed run via the CLI.
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const runDirectory = path.join(repositoryRoot, captureResult.json.runDirectory);
+    const reportPath = path.join(workspace, "threat-model-report.json");
+
+    const threatResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model",
+      "--run-dir",
+      runDirectory,
+      "--output-root",
+      outputDir,
+      "--report",
+      reportPath
+    ]);
+    assert.equal(threatResult.exitCode, 0, threatResult.stderr);
+    assert.equal(threatResult.json.ok, true);
+    assert.equal(threatResult.json.status, "verified");
+    assert.equal(threatResult.json.verdict.ok, true);
+    assert.equal(threatResult.json.verdict.checks.sandbox.ok, true);
+    assert.equal(threatResult.json.verdict.checks.retention.ok, true);
+    assert.equal(threatResult.json.verdict.checks.redaction.ok, true);
+    assert.equal(threatResult.json.verdict.findings.length, 0);
+
+    // The threat-model script must have written the report to --report.
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    assert.equal(report.ok, true);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model surfaces violations from tampered transcripts", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const runDirectory = path.join(repositoryRoot, captureResult.json.runDirectory);
+    const transcriptPath = path.join(runDirectory, "transcript.redacted.log");
+
+    // Tamper with the redacted transcript to re-introduce the canary.
+    await writeFile(
+      transcriptPath,
+      "LEGION_SECRET_CANARY_LEAKED_AAAA_BBBB\nexit_code=1\nstderr: tampered\n"
+    );
+
+    const threatResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model",
+      "--run-dir",
+      runDirectory,
+      "--output-root",
+      outputDir
+    ]);
+    assert.equal(threatResult.exitCode, 0, threatResult.stderr);
+    assert.equal(threatResult.json.ok, false);
+    assert.equal(threatResult.json.status, "violation");
+    const codes = threatResult.json.verdict.findings.map((f) => f.code);
+    assert.ok(codes.includes("canary_present_in_redacted_transcript"));
+    assert.ok(codes.includes("canary_present_after_redaction"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model rejects a run directory outside the output root", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const outputDir = path.join(workspace, "runs");
+
+    const captureResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "capture",
+      "--scenario",
+      "noop-calibration.v1",
+      "--host",
+      "test-host",
+      "--repeat",
+      "1",
+      "--output",
+      outputDir,
+      "--dry-run"
+    ]);
+    assert.equal(captureResult.exitCode, 0, captureResult.stderr);
+
+    const runDirectory = path.join(repositoryRoot, captureResult.json.runDirectory);
+
+    // Point the output-root at a sibling directory that does not contain
+    // the run directory. The validator must flag the boundary escape.
+    const altRoot = path.join(workspace, "alt-runs");
+    await mkdir(altRoot, { recursive: true });
+
+    const threatResult = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model",
+      "--run-dir",
+      runDirectory,
+      "--output-root",
+      altRoot
+    ]);
+    assert.equal(threatResult.exitCode, 0, threatResult.stderr);
+    assert.equal(threatResult.json.ok, false);
+    assert.equal(threatResult.json.status, "violation");
+    const codes = threatResult.json.verdict.findings.map((f) => f.code);
+    assert.ok(codes.includes("run_dir_escapes_output_root"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T02 evals CLI threat-model requires --run-dir and --output-root", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "evals",
+      "threat-model"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

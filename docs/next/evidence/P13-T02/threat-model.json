@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-22T16:33:46.475Z",
+  "run_dir": "docs/next/evidence/P13-T02/runs/p13-security-sensitive.v1-codex-cli-r1-20260622T163335Z",
+  "output_root": "docs/next/evidence/P13-T02/runs",
+  "ok": true,
+  "checks": {
+    "sandbox": {
+      "ok": true,
+      "exit_code": 0
+    },
+    "retention": {
+      "ok": true,
+      "exit_code": 0
+    },
+    "redaction": {
+      "ok": true
+    }
+  },
+  "findings": []
+}

@@ -397,6 +397,26 @@ async function main() {
   const manifestPath = path.join(runDir, "run-manifest.json");
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
+  // Auto-grade the freshly captured run so the retention policy can
+  // assert score.json is on disk without requiring the operator to call
+  // \`legion next evals grade\` as a separate step. The deterministic
+  // dimensions depend only on the manifest + artifacts, so grading in
+  // process keeps the round-trip hermetic.
+  try {
+    const gradeScript = path.join(REPO_ROOT, "scripts", "baseline", "grade-run.mjs");
+    await execFile(process.execPath, [gradeScript, "--run-directory", runDir], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      shell: false,
+      stdio: ["ignore", "ignore", "ignore"]
+    });
+  } catch (error) {
+    // Non-fatal: capture still produces a valid run-manifest and the
+    // operator can re-run grade. The retention policy will surface the
+    // missing score.json as a fail-closed finding rather than silently
+    // dropping the run.
+  }
+
   process.stdout.write(`${runDir}\n`);
 }
 

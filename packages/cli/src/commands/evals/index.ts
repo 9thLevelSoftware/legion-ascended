@@ -7,18 +7,28 @@
  * with Node so macOS hosts can run the pipeline without PowerShell).
  *
  * Subcommands:
- *   capture   Seal a public fixture, copy fixture, write fixture hashes,
- *             execute the operator-supplied host command (or run a dry-run
- *             calibration), redact the transcript, and write a run-manifest
- *             that validates against evals/baseline/schema/run-manifest.
- *   grade     Score a sealed run directory against the seven deterministic
- *             rubric dimensions and write score.json that validates against
- *             evals/baseline/schema/score.schema.json. Held-out evaluator
- *             assertions and judged dimensions remain out of scope here.
- *   compare   Aggregate v8 and v9 sealed run directories into an A/B report
- *             (JSON + Markdown) with cost/duration/intervention/recovery/
- *             defect metrics. Missing v8 evidence surfaces as `null` cells
- *             rather than being silently invented.
+ *   capture        Seal a public fixture, copy fixture, write fixture hashes,
+ *                  execute the operator-supplied host command (or run a
+ *                  dry-run calibration), redact the transcript, and write a
+ *                  run-manifest that validates against evals/baseline/schema/
+ *                  run-manifest.
+ *   grade          Score a sealed run directory against the seven
+ *                  deterministic rubric dimensions and write score.json that
+ *                  validates against evals/baseline/schema/score.schema.json.
+ *                  Held-out evaluator assertions and judged dimensions remain
+ *                  out of scope here.
+ *   compare        Aggregate v8 and v9 sealed run directories into an A/B
+ *                  report (JSON + Markdown) with cost/duration/intervention/
+ *                  recovery/defect metrics. Missing v8 evidence surfaces as
+ *                  `null` cells rather than being silently invented.
+ *   threat-model   Run the fail-closed security validator against a sealed
+ *                  run directory. Composes sandbox-guard.mjs (boundary +
+ *                  redaction completeness), retention-audit.mjs (retained vs
+ *                  discarded artifacts + hash drift), and an in-process
+ *                  redaction audit (canary / bearer / credential-assignment
+ *                  leak detector). Exits 0 only when every subcheck passes;
+ *                  emits a JSON verdict so CI gates can surface findings
+ *                  without parsing the runner stdout.
  *
  * The CLI never invents host telemetry — tokens and cost are recorded as
  * `{ status: "unavailable", value: null, reason: "host did not expose ..." }`
@@ -50,9 +60,10 @@ const execFile = promisify(execFileCb);
 const EVALS_HELP = `legion next evals <command>
 
 Commands:
-  capture    Seal a scenario into a run directory and write run-manifest.json.
-  grade      Compute deterministic dimension scores for a sealed run directory.
-  compare    Aggregate v8 and v9 sealed run directories into an A/B report.
+  capture        Seal a scenario into a run directory and write run-manifest.json.
+  grade          Compute deterministic dimension scores for a sealed run directory.
+  compare        Aggregate v8 and v9 sealed run directories into an A/B report.
+  threat-model   Run the fail-closed security validator against a sealed run directory.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.
@@ -90,7 +101,15 @@ Compare required options:
   --output <path>           Directory for ab-comparison.json + ab-comparison.md.
 
 Compare optional:
-  --label <text>            Heading for the Markdown report.`;
+  --label <text>            Heading for the Markdown report.
+
+Threat-model required options:
+  --run-dir <path>          Sealed run directory produced by \`evals capture\`.
+  --output-root <path>      Trusted root that contains the run directory
+                            (used for the boundary check).
+
+Threat-model optional:
+  --report <path>           Where to write the JSON verdict (in addition to stdout).`;
 
 // The v9 source root for the scripts/ and evals/ trees. Computed from the
 // compiled CLI's location (dist/commands/evals/index.js -> ../../../..).
@@ -112,6 +131,8 @@ export async function handleEvalsCommand(context: CliContext): Promise<CliResult
       return grade(commandContext);
     case "compare":
       return compare(commandContext);
+    case "threat-model":
+      return threatModel(commandContext);
     default:
       return helpResult(EVALS_HELP);
   }
@@ -226,6 +247,56 @@ async function compare(context: CliContext): Promise<CliResult> {
   );
 }
 
+async function threatModel(context: CliContext): Promise<CliResult> {
+  if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
+  const runDir = requiredStringOption(context, "run-dir");
+  if (typeof runDir !== "string") return runDir;
+  const outputRoot = requiredStringOption(context, "output-root");
+  if (typeof outputRoot !== "string") return outputRoot;
+
+  const args = [
+    "scripts/baseline/threat-model.mjs",
+    "--run-dir", runDir,
+    "--output-root", outputRoot
+  ];
+  if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
+  const report = context.args.options.get("report");
+  if (typeof report === "string") args.push("--report", report);
+
+  const result = await runScript(context, args);
+  // The threat-model script always emits a JSON verdict on its last stdout
+  // line. Parse it regardless of exit code so the CLI surface can surface
+  // structured findings (CI gates need the findings array, not a generic
+  // helper_failed error).
+  let verdict: unknown = null;
+  try {
+    verdict = JSON.parse(result.stdout.trim().split(/\r?\n/).pop() ?? "{}");
+  } catch {
+    verdict = null;
+  }
+  if (verdict && typeof verdict === "object") {
+    return success(
+      {
+        ok: (verdict as { ok?: boolean }).ok === true,
+        status: (verdict as { ok?: boolean }).ok === true ? "verified" : "violation",
+        verdict
+      },
+      (verdict as { ok?: boolean }).ok === true
+        ? `Threat-model validator passed for ${runDir}.`
+        : `Threat-model validator failed for ${runDir} — see findings.`
+    );
+  }
+  if (result.exitCode !== 0) return result.cliResult;
+  return failure(
+    {
+      ok: false,
+      status: "error",
+      diagnostics: [{ code: "threat_model_verdict_missing", message: "threat-model.mjs did not emit a JSON verdict" }]
+    },
+    "threat-model.mjs did not emit a JSON verdict"
+  );
+}
+
 async function runScript(context: CliContext, scriptArgs: readonly string[]): Promise<{ exitCode: number; stdout: string; stderr: string; cliResult: CliResult }> {
   // The helper scripts under scripts/baseline/ live in the v9 source tree.
   // When the operator points --repository-root at a different directory
@@ -233,7 +304,7 @@ async function runScript(context: CliContext, scriptArgs: readonly string[]): Pr
   // scripts from their canonical location so the relative paths the scripts
   // emit remain repo-relative.
   const resolvedArgs = scriptArgs.map((arg) =>
-    typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs")
+    typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs")
       ? path.join(V9_SOURCE_ROOT, arg)
       : arg
   );

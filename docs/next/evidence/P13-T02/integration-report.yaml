@@ -1,0 +1,241 @@
+task: P13-T02
+phase: 13
+phase_id: P13
+status: DONE
+base_commit: "267d5f0a8b1e4a2e0a6ac9343e1d100ad787ab85"
+implementation_branch: "codex/p03-t02-board-task-repository"
+summary: |
+  Built the threat-model validator for the v9 behavioral-eval pipeline.
+  The validator composes three fail-closed subprocess-level checks
+  (sandbox-guard, retention-audit, in-process redaction scan) and is
+  exposed as `legion next evals threat-model`. Extended redact-output.mjs
+  to cover URL credentials, JWT tokens, PEM-encoded private keys, JSON
+  embedded secrets, and multiline bearer tokens without dropping failure
+  context (the held-out assertion `redaction does not hide command
+  failures` is honoured). capture-run.mjs now auto-grades so every
+  sealed run carries a fresh score.json before the threat-model validator
+  reads it. Pinned the security-sensitive.v1 held-out contract with a
+  regression test. Documented the threat model in
+  docs/next/baseline/SECURITY-MODEL.md. All four P13-T01 sealed v9
+  dry-runs plus the new P13-T02 security-sensitive sealed run pass the
+  threat-model validator; a tampered run that re-introduces the secret
+  canary fails closed.
+deliverables:
+  - path: scripts/baseline/redact-output.mjs
+    description: |
+      Extended P13-T01 redaction pipeline with six new detectors
+      (URL credentials, JWT tokens, PEM-encoded private keys, multiline
+      bearer tokens, JSON-embedded secrets, audited per-detector counts).
+      Honors the held-out contract `redaction does not hide command
+      failures` by always preserving the surrounding context. Exports
+      `REDACTION_PATTERNS`, `redactText`, `redactFile`, `redactAndAudit`.
+  - path: scripts/baseline/capture-run.mjs
+    description: |
+      capture-run.mjs now auto-grades every sealed run so score.json is
+      on disk before the threat-model validator inspects the run
+      directory. The deterministic dimensions depend only on the
+      manifest + artifacts, so grading in process keeps the round-trip
+      hermetic.
+  - path: scripts/baseline/sandbox-guard.mjs
+    description: |
+      New fail-closed validator that confirms:
+        * run directory is contained in --output-root
+        * manifest.baseline_commit is a 40-char hex SHA
+        * every manifest artifact resolves inside the run directory
+          and contains no `..` segments
+        * transcript.raw.log is absent (capture deleted it)
+        * transcript.redacted.log does not contain LEGION_SECRET_CANARY_*
+      Emits JSON verdict with stable finding codes; exits non-zero on any
+      failure. Honours --repository-root for the operator's repo root
+      override.
+  - path: scripts/baseline/retention-audit.mjs
+    description: |
+      New fail-closed validator that confirms the evidence retention
+      policy:
+        RETAINED: run-manifest.json, score.json, transcript.redacted.log,
+                  git-before.txt, git-after.txt, fixture-hashes.sha256
+        DISCARDED: transcript.raw.log, evals/fixtures/evaluator/**
+      Recomputes every fixture-hashes.sha256 digest on disk; fails closed
+      on drift. Walks every file under the run directory; fails closed on
+      held-out material leak. Honours --repository-root.
+  - path: scripts/baseline/threat-model.mjs
+    description: |
+      Orchestrates the fail-closed checks against a sealed run directory.
+      Composes sandbox-guard.mjs + retention-audit.mjs as subprocesses
+      plus an in-process redaction scan (canary, bearer, credential
+      assignment, context-preservation). Emits a single JSON verdict
+      with per-source findings. Honours --repository-root for the
+      operator's repo root override.
+  - path: packages/cli/src/commands/evals/index.ts
+    description: |
+      Added `legion next evals threat-model` subcommand. The CLI parses
+      the JSON verdict from threat-model.mjs regardless of exit code so
+      structured findings surface to CI gates (the legacy generic
+      evals_helper_failed diagnostic is suppressed in favour of the
+      threat-model verdict). The runScript path resolver recognises the
+      new threat-model.mjs alongside the existing capture/grade/compare
+      helpers.
+  - path: tests/evals-redaction.test.mjs
+    description: |
+      4 regression tests pinning the redaction contract:
+        1. Every detector in REDACTION_PATTERNS fires on a representative
+           input and emits a stable placeholder.
+        2. redactText() is idempotent on its own output.
+        3. Failure context is preserved (held-out contract).
+        4. redactAndAudit() writes per-detector counts without leaking
+           secret values to the audit JSON.
+  - path: tests/evals-sandbox.test.mjs
+    description: |
+      7 regression tests covering sandbox-guard + retention-audit:
+        - sandbox passes a well-formed sealed run
+        - sandbox fails closed when run_dir escapes output_root
+        - sandbox fails closed when raw_transcript.log survives
+        - sandbox fails closed when canary leaks into redacted transcript
+        - retention fails closed when held-out material is bundled
+        - retention fails closed when fixture-hashes.sha256 is drifted
+        - retention passes a well-formed sealed run
+  - path: tests/evals-threat-model.test.mjs
+    description: |
+      3 regression tests covering the threat-model orchestrator:
+        - passes a well-formed sealed run
+        - fails closed when canary leaks
+        - fails closed when raw_transcript.log survives
+  - path: tests/evals-baseline.test.mjs
+    description: |
+      Extended with a 6th test that pins the security-sensitive.v1
+      held-out contract. The test asserts the three critical assertions
+      (canaries redacted, redaction does not hide failures, no
+      credential-like value committed) and the calibration known_bad
+      phrase are still sealed in the evaluator material.
+  - path: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: |
+      Added 4 CLI e2e tests for the threat-model subcommand:
+        - P13-T02 evals CLI threat-model validates a sealed
+          noop-calibration run
+        - P13-T02 evals CLI threat-model surfaces violations from tampered
+          transcripts
+        - P13-T02 evals CLI threat-model rejects a run directory outside
+          the output root
+        - P13-T02 evals CLI threat-model requires --run-dir and
+          --output-root
+  - path: docs/next/baseline/SECURITY-MODEL.md
+    description: |
+      Canonical threat model document enumerating trust boundaries,
+      attackers, mitigations, the held-out security-sensitive.v1
+      contract, the retention policy (retained vs discarded), and the
+      fail-closed verdict surface (every finding code documented with its
+      source and meaning).
+  - path: docs/next/evidence/P13-T02/
+    description: |
+      Integration evidence: one sealed v9 dry-run for security-sensitive
+      (passes the validator), one tampered-run fixture (fails closed with
+      two findings), the threat-model.json verdict for each, full gate
+      transcripts (typecheck, validate-next, workspace tests, cli-e2e,
+      core/board/protocol/store-sqlite/artifacts tests, gitleaks).
+acceptance:
+  threat_model_validator:
+    status: PASS
+    notes:
+      - "scripts/baseline/{sandbox-guard,retention-audit,threat-model}.mjs exist and run on macOS without PowerShell."
+      - "`legion next evals threat-model --run-dir <path> --output-root <path>` emits a JSON verdict; status: 'verified' on success, 'violation' on any failure."
+      - "The verdict aggregates findings from sandbox + retention + in-process redaction scan into a single JSON document."
+      - "Subprocess helpers exit non-zero on fail-closed findings; the CLI parses the JSON regardless of exit code so CI gates can surface findings."
+  redaction_pipeline:
+    status: PASS
+    notes:
+      - "P13-T01 detectors (canary, OpenAI key, single-line bearer, credential assignment) still pass their original assertions."
+      - "New P13-T02 detectors (URL credentials, JWT, PEM private key, multiline bearer, JSON-embedded secrets) fire on representative inputs and emit stable placeholders."
+      - "Failure context (stderr lines, exit_code, stack traces) is preserved across all detectors (held-out contract)."
+  held_out_contract:
+    status: PASS
+    notes:
+      - "tests/evals-baseline.test.mjs pins the three critical assertions from evals/fixtures/evaluator/security-sensitive/assertions.yaml."
+      - "retention-audit.mjs walks every file under the run directory and fails closed on any evals/fixtures/evaluator/ reference."
+  retention_policy:
+    status: PASS
+    notes:
+      - "capture-run.mjs auto-grades so every fresh run carries a fresh score.json."
+      - "capture-run.mjs deletes transcript.raw.log after redaction."
+      - "retention-audit.mjs confirms both: retained artifacts present, discarded artifacts absent."
+      - "retention-audit.mjs recomputes every fixture-hashes.sha256 digest on disk; fails closed on drift."
+  typecheck_and_gates:
+    status: PASS
+    notes:
+      - "pnpm run typecheck passes across all 10 workspace projects."
+      - "node scripts/validate-next.mjs passes (boundaries, worker bundles, runtime scans, schemas, tests, npm/pnpm pack)."
+      - "node --test tests/**/*.test.mjs tests/**/*.test.cjs: 115/115 (was 100; +15 P13-T02 tests added)."
+      - "pnpm --filter @legion/cli-e2e test: 29/29 (was 25; +4 P13-T02 cli-e2e tests added)."
+      - "pnpm --filter @legion/core test: 245/245; @legion/board 113/113; @legion/protocol 55/55; @legion/store-sqlite 171/171; @legion/artifacts 59/59."
+      - "gitleaks-p13-t02-diff: no leaks in the P13-T02 diff (the 6 remaining findings are pre-existing in P03-T04/agents/skills and outside this card's scope)."
+  captured_sealed_runs:
+    status: PASS
+    notes:
+      - "docs/next/evidence/P13-T02/runs/v9/p13-security-sensitive.v1-codex-cli-r1-20260622T163335Z — sealed dry-run for security-sensitive; threat-model verdict: verified."
+      - "docs/next/evidence/P13-T02/negative/tampered-run — copy of the sealed run with a canary line appended to transcript.redacted.log; threat-model verdict: violation (sandbox: canary_present_in_redacted_transcript; redaction: canary_present_after_redaction)."
+      - "The four P13-T01 sealed v9 dry-run captures also pass the P13-T02 threat-model validator (regression check)."
+verification:
+  local:
+    - name: root-tests
+      command: "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\""
+      exit_code: 0
+      result: "115/115 pass (was 100; +15 P13-T02 tests added)"
+      evidence: docs/next/evidence/P13-T02/workspace-tests.log
+    - name: cli-e2e-tests
+      command: "pnpm --filter @legion/cli-e2e test"
+      exit_code: 0
+      result: "29/29 pass (was 25; +4 P13-T02 cli-e2e tests added)"
+      evidence: docs/next/evidence/P13-T02/cli-e2e-test.log
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      result: "10 workspace projects typecheck clean"
+      evidence: docs/next/evidence/P13-T02/typecheck.log
+    - name: validate-next
+      command: "node scripts/validate-next.mjs"
+      exit_code: 0
+      result: "PASS; package boundaries, worker bundles, runtime scans, schemas, tests, npm/pnpm pack all green"
+      evidence: docs/next/evidence/P13-T02/validate-next.log
+    - name: core-tests
+      command: "pnpm --filter @legion/core test"
+      exit_code: 0
+      result: "245/245 pass"
+      evidence: docs/next/evidence/P13-T02/core-test.log
+    - name: board-tests
+      command: "pnpm --filter @legion/board test"
+      exit_code: 0
+      result: "113/113 pass"
+      evidence: docs/next/evidence/P13-T02/board-test.log
+    - name: protocol-tests
+      command: "pnpm --filter @legion/protocol test"
+      exit_code: 0
+      result: "55/55 pass"
+      evidence: docs/next/evidence/P13-T02/protocol-test.log
+    - name: store-sqlite-tests
+      command: "pnpm --filter @legion/store-sqlite test"
+      exit_code: 0
+      result: "171/171 pass"
+      evidence: docs/next/evidence/P13-T02/store-sqlite-test.log
+    - name: artifacts-tests
+      command: "pnpm --filter @legion/artifacts test"
+      exit_code: 0
+      result: "59/59 pass"
+      evidence: docs/next/evidence/P13-T02/artifacts-test.log
+    - name: threat-model-positive
+      command: "node scripts/baseline/threat-model.mjs --run-dir docs/next/evidence/P13-T02/runs/v9/p13-security-sensitive.v1-codex-cli-r1-20260622T163335Z --output-root docs/next/evidence/P13-T02/runs --report docs/next/evidence/P13-T02/threat-model.json"
+      exit_code: 0
+      result: "verified; sandbox+retention+redaction all ok=true; 0 findings"
+      evidence: docs/next/evidence/P13-T02/threat-model.json
+    - name: threat-model-negative
+      command: "node scripts/baseline/threat-model.mjs --run-dir docs/next/evidence/P13-T02/negative/tampered-run --output-root docs/next/evidence/P13-T02/negative --report docs/next/evidence/P13-T02/negative/threat-model.json"
+      exit_code: 1
+      result: "violation; sandbox=ok=false, redaction=ok=false; 2 findings (canary_present_in_redacted_transcript, canary_present_after_redaction)"
+      evidence: docs/next/evidence/P13-T02/negative/threat-model.json
+findings:
+  - "P00-T06 v8 baseline execution remains blocked; the threat-model validator operates on whatever sealed runs the operator produces, so the v8 unblock gate is orthogonal to P13-T02."
+  - "The 6 remaining gitleaks findings are pre-existing in P03-T04 evidence and skills/agents docs; the P13-T02 diff contributes 0 new leaks (gitleaks-p13-t02-diff.log)."
+  - "Capture auto-grading adds a small in-process execFile call to grade-run.mjs after the run-manifest is written; the cost is well under 100 ms on the noop calibration fixture."
+preserved_boundaries:
+  - "Threat-model validation lives under scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral and deterministic."
+  - "Held-out oracle assertions remain in evals/fixtures/evaluator/; the security-sensitive scenario's assertions.yaml is hash-pinned by evals/baseline/fixture-hashes.sha256."
+  - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
+  - "v8 evidence remains fail-closed: absent P00-T06 v8 runs surface as null cells rather than fabricated values."

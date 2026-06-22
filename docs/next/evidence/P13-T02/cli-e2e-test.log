@@ -1,0 +1,42 @@
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.832334ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (315.3975ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (477.348042ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (259.820167ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (393.249459ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (432.226542ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (752.620584ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (460.950458ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (448.058334ms)
+✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (573.085166ms)
+✔ P10-T02 board CLI routes release-observation aggregate/status/rebuild/verify idempotently (670.892083ms)
+✔ P10-T02 board CLI release-observation aggregate surfaces validation failures (136.539416ms)
+✔ P10-T02 board CLI release-observation verify fails closed on missing projection (164.464292ms)
+✔ P11-T01 board CLI dashboard status/rebuild/verify round-trip a task event log (677.145792ms)
+✔ P11-T01 board CLI dashboard verify fails closed on missing projection (137.158583ms)
+✔ P11-T01 board CLI approval-gate status/rebuild/verify surface an approved verdict (677.307875ms)
+✔ P11-T01 board CLI approval-gate status surfaces pending on no events (136.129625ms)
+✔ P11-T02 board CLI portfolio status/rebuild/verify round-trip a multi-project event log (816.416375ms)
+✔ P11-T02 board CLI portfolio verify fails closed on missing projection (143.952625ms)
+✔ P11-T02 board CLI portfolio status surfaces tenant-wide rollup on no events (144.585667ms)
+✔ P11-T02 board CLI portfolio status surfaces scoped sub-portfolio (412.26125ms)
+✔ P13-T01 evals CLI capture dry-run seals a noop-calibration run with a valid manifest (276.993292ms)
+✔ P13-T01 evals CLI grade writes deterministic score.json with the seven rubric dimensions (467.803208ms)
+✔ P13-T01 evals CLI compare surfaces missing v8 evidence as null cells (fail-closed) (645.578166ms)
+✔ P13-T01 evals CLI capture without --dry-run requires --command (139.103458ms)
+✔ P13-T02 evals CLI threat-model validates a sealed noop-calibration run (575.323666ms)
+✔ P13-T02 evals CLI threat-model surfaces violations from tampered transcripts (549.311833ms)
+✔ P13-T02 evals CLI threat-model rejects a run directory outside the output root (561.482333ms)
+✔ P13-T02 evals CLI threat-model requires --run-dir and --output-root (133.536291ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11727.405375
