@@ -25,7 +25,7 @@ const PACKS = [
 ];
 
 function readFrontmatter(content) {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   assert.ok(match, "expected YAML frontmatter");
 
   const frontmatter = {};

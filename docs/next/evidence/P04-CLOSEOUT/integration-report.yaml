@@ -37,7 +37,7 @@ acceptance:
       - skills/workflow-common-domains/SKILL.md
       - tests/workflow-common-packs.test.mjs
     notes:
-      - "All four workflow-common packs declare pack_version 1.0.0 and pack_status extracted."
+      - "All four workflow-common packs declare pack_version 1.0.0 and pack_status extracted; frontmatter parsing is CRLF-tolerant for Windows checkout portability."
   persona_purge:
     status: PASS
     evidence:

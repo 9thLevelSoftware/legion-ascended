@@ -53,7 +53,7 @@ The reviewer verified that the default v9 runtime path no longer depends on biog
 
 The local machine emitted pnpm engine warnings because Node v26.0.0 is outside the declared `>=24.0.0 <26` range. The warning is not a Phase 4 source blocker because all local gates passed; CI should continue to run on the declared Node range.
 
-Windows CI initially exposed line-ending drift in bundle prompt hashes: Markdown prompt files checked out with CRLF, while `promptContentContract.instructionsHash` was computed over LF bytes. The closeout batch now pins `bundles/*.md text eol=lf` in `.gitattributes` and adds a regression assertion in `tests/worker-bundles.test.mjs` so bundle hashes remain stable across OSes.
+Windows CI initially exposed line-ending drift in bundle prompt hashes: Markdown prompt files checked out with CRLF, while `promptContentContract.instructionsHash` was computed over LF bytes. The closeout batch now pins `bundles/*.md text eol=lf` in `.gitattributes`, adds a regression assertion in `tests/worker-bundles.test.mjs`, and makes `tests/workflow-common-packs.test.mjs` frontmatter parsing CRLF-tolerant so metadata validation is OS-portable.
 
 The preserved diagnostic log `docs/next/evidence/P04-CLOSEOUT/validate-next-prestage-failure.log` records an intermediate generated-drift failure caused by P04-T01 schema artifacts being unstaged during the first closeout pass. After staging the generated schema and lifecycle fixture, the final closeout `validate:next` run passed.
 

@@ -105,7 +105,7 @@ entries:
   - task: P04-T03
     artifact: tests/workflow-common-packs.test.mjs
     description: "Regression tests for workflow-common pack metadata/version extraction"
-    sha256: fd89d0616efdb1d79622e430c954b8d6e410ba43ac226a52486ba4b70b91844d
+    sha256: c80edeac03ea664d9429eefc7dacbf2250c7bf7217d9ae62c3a55cdbd729b573
   - task: P04-T04
     artifact: tests/persona-purge.test.mjs
     description: "Regression tests for persona purge and v9 default runtime prompt-surface invariants"
@@ -137,7 +137,7 @@ entries:
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/workflow-common-packs-test.log
     description: "Closeout workflow-common pack metadata test transcript"
-    sha256: 173ec2f46cfd93e5ea609b39ba93bbd55cfc0ff4742d5dbf897668cc821b7af6
+    sha256: f3edc1ecf9798b63d8ca48dd0579f944cd9a936ee937c53a0a1a10d910308071
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log
     description: "Closeout worker bundle validation unit-test transcript (16 pass)"
@@ -177,7 +177,7 @@ entries:
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/validate-next.log
     description: "Closeout full validate-next transcript (390 combined tests pass)"
-    sha256: 2c90f336211b092b471f689fba1d7d12d2c10e34032876fd928b488fcdc67298
+    sha256: 0b20416b79ad1c1d7fe188a93fd69e34c93e4c57e2803605242ee0517cd1a8e6
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/validate-next-prestage-failure.log
     description: "Preserved diagnostic validate-next failure caused by unstaged generated schema drift before final staging"
@@ -193,11 +193,11 @@ entries:
   - task: P04-CLOSEOUT
     artifact: docs/next/evidence/P04-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 4 closeout integration report"
-    sha256: 3d860447af544f99648ac8e00aa272732766afe129674fbac154279c7729d8eb
+    sha256: 584646e0943e0ae4f888ba4c6f26709155cadd8ab1f2e35bcfb9ddc56205f6db
   - task: P04-CLOSEOUT
     artifact: docs/next/reviews/PHASE-04-INDEPENDENT-REVIEW.md
     description: "Independent Phase 4 review with final PASS verdict"
-    sha256: 0addd7f07c0ba4fae6cf0ae857d115c86e4c19e0cb73c66af0b02614f350512f
+    sha256: f78edd0702c223395840180318bbf1b798c0506bb7607c33264afec3f1899e1b
   - task: P04-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-04/ledger.yaml
     description: "Phase 4 ledger marked DONE with task decisions, commits, evidence bundle, and blockers cleared"
@@ -205,7 +205,7 @@ entries:
   - task: P04-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-04/HANDOFF.md
     description: "Phase 4 handoff to Phase 5 with runtime-driver starting assumptions"
-    sha256: f6a57940e499af5f21798969bc3cd7bac2662bb436aa2a800aaf79e396ea39a9
+    sha256: c7a3509848f8074f2307ac99480c82d9fa22a2de0f8f51c846a6e9c0209e551f
   - task: P04-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 4 complete and point at P05-T01 as next work"

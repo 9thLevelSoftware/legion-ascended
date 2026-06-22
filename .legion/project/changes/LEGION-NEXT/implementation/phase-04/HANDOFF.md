@@ -55,7 +55,7 @@ A pre-stage `validate:next` run failed only at generated schema/doc drift becaus
 
 ## CI Remediation Notes
 
-Windows CI initially exposed CRLF checkout drift for `bundles/*.md`: the declared `promptContentContract.instructionsHash` values were computed over LF prompt bytes while Windows checked the Markdown files out with CRLF. The closeout branch now pins `bundles/*.md text eol=lf` in `.gitattributes` and tests that rule in `tests/worker-bundles.test.mjs` so prompt hashes remain stable across operating systems.
+Windows CI initially exposed CRLF checkout drift for `bundles/*.md`: the declared `promptContentContract.instructionsHash` values were computed over LF prompt bytes while Windows checked the Markdown files out with CRLF. The closeout branch now pins `bundles/*.md text eol=lf` in `.gitattributes`, tests that rule in `tests/worker-bundles.test.mjs`, and makes `tests/workflow-common-packs.test.mjs` frontmatter parsing CRLF-tolerant so pack metadata validation behaves consistently across operating systems.
 
 ## Handoff Recommendation
 
