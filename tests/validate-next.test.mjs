@@ -73,6 +73,7 @@ test("P01-T11 validate-next plan is the shared CI/local gate order", () => {
   assert.deepEqual(plan, [
     "pnpm run typecheck",
     "pnpm run check:boundaries",
+    "pnpm run check:worker-bundles",
     "pnpm --filter @legion/protocol generate:schemas",
     "pnpm --filter @legion/artifacts generate:schemas",
     "node scripts/validate-next.mjs --generate-protocol-docs",

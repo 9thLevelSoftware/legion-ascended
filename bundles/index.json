@@ -1,0 +1,266 @@
+{
+  "bundles": [
+    {
+      "id": "explorer",
+      "version": "1.0.0",
+      "role": "explorer",
+      "domain": "codebase-investigation",
+      "capabilities": [
+        "read-only-investigation",
+        "evidence-collection",
+        "dependency-mapping"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:ea77ed7bea07510f12ca2a03e80f0307cb00f0e5d6977a0494c73bfb4b9c29ed",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "explorer.md"
+    },
+    {
+      "id": "specifier",
+      "version": "1.0.0",
+      "role": "specifier",
+      "domain": "requirement-authoring",
+      "capabilities": [
+        "requirement-decomposition",
+        "acceptance-criteria-authoring",
+        "dependency-mapping"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:def6d658bb5951a7003b5440b3ec1d22c1bad7f44eb052db062afcf0697e7f3c",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "specifier.md"
+    },
+    {
+      "id": "oracle-author",
+      "version": "1.0.0",
+      "role": "oracle-author",
+      "domain": "acceptance-fixtures",
+      "capabilities": [
+        "acceptance-fixture-authoring",
+        "evidence-shape-design",
+        "deterministic-check-design"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:7e779ea48b28a1368cc574904e4221c03dafbd45104573bff48710f2f3736987",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "oracle-author.md"
+    },
+    {
+      "id": "architect",
+      "version": "1.0.0",
+      "role": "architect",
+      "domain": "system-design",
+      "capabilities": [
+        "architecture-design",
+        "interface-contract-authoring",
+        "migration-strategy-design"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:251d7dd39c3b68cc6a42d78103e22a0089b0452e44d85e9ce6f624414612eee3",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "architect.md"
+    },
+    {
+      "id": "planner",
+      "version": "1.0.0",
+      "role": "planner",
+      "domain": "task-decomposition",
+      "capabilities": [
+        "task-decomposition",
+        "dependency-analysis",
+        "scope-control"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:5a333324e30658950f54e66bc1a75f395491cfb2a2c0ae21aef1c678584e21ee",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "planner.md"
+    },
+    {
+      "id": "implementer",
+      "version": "1.0.0",
+      "role": "implementer",
+      "domain": "code-and-config",
+      "capabilities": [
+        "schema-definition",
+        "schema-validation",
+        "module-implementation",
+        "minimal-diff"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:8085cc4d5218391e5315797a8979df361ee2c201762bac0f5768ee48f1c85f5c",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "implementer.md"
+    },
+    {
+      "id": "task-reviewer",
+      "version": "1.0.0",
+      "role": "task-reviewer",
+      "domain": "code-review",
+      "capabilities": [
+        "review-criteria-application",
+        "finding-formatting",
+        "evidence-quality-gate"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:777c9c85494e265271496b378ef5ab755ee790f67eec402c67c99b6fd7f731ec",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "task-reviewer.md"
+    },
+    {
+      "id": "integration-evaluator",
+      "version": "1.0.0",
+      "role": "integration-evaluator",
+      "domain": "end-to-end-evaluation",
+      "capabilities": [
+        "e2e-evaluation",
+        "cross-package-integration-check",
+        "regression-detection"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:be9da3ec0bac53004c6446dd67d6abf0d99cd2e7266fca81ab2588277d94902c",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "integration-evaluator.md"
+    },
+    {
+      "id": "release-controller",
+      "version": "1.0.0",
+      "role": "release-controller",
+      "domain": "release-management",
+      "capabilities": [
+        "release-readiness-gate",
+        "rollback-strategy-design",
+        "forward-fix-tracking"
+      ],
+      "promptContentContract": {
+        "instructionsHash": "sha256:25094eddf8bf56effcd22993487efb46364af8fc8f8fcef1bd93d2741311264a",
+        "requiredSections": [
+          "role",
+          "domain",
+          "capabilities",
+          "prompt-content-contract"
+        ],
+        "forbiddenSections": [
+          "biography",
+          "tone",
+          "personality"
+        ]
+      },
+      "domainPacks": [
+        "workflow-common-core"
+      ],
+      "promptFile": "release-controller.md"
+    }
+  ]
+}
