@@ -346,3 +346,59 @@ export type {
   ApprovalGateReducer,
   ApprovalGateVerdict
 } from "./approval-gate/index.js";
+
+// =====================================================================
+// P11-T02 — Portfolio projection (board adapter layer).
+// Cross-project read projection over the board event log:
+// per-project rollups, cross-project dependency edges, and
+// a tenant-scoped resource allocation ledger. Re-exports the
+// typed contract, the pure reducer, the hash helpers, and
+// the projection descriptor.
+// =====================================================================
+
+export {
+  PORTFOLIO_ADAPTER_KIND,
+  PORTFOLIO_ADAPTER_SCHEMA_VERSION,
+  PORTFOLIO_ADAPTER_KEYS,
+  PORTFOLIO_DEPENDENCY_RELATIONS,
+  PORTFOLIO_PROJECTION_KEY_PREFIX,
+  PORTFOLIO_PROJECTION_VERSION,
+  PORTFOLIO_PRIORITY_BANDS,
+  PORTFOLIO_ROLLUP_AGGREGATE_KINDS,
+  PORTFOLIO_REDUCER_KIND,
+  PORTFOLIO_REDUCER_KIND_LITERAL,
+  asTenantId,
+  derivePortfolioProjectionStateHash,
+  isPortfolioProjectionState,
+  makeInitialPortfolioState,
+  makePortfolioReducer,
+  parsePortfolioProjectionKey,
+  portfolioEdgeKey,
+  portfolioPriorityBand,
+  portfolioProjectionDescriptor,
+  portfolioProjectionKey,
+  portfolioScopeFromList,
+  reducePortfolio,
+  replayPortfolio,
+  sha256OfCanonicalPortfolioInput
+} from "./portfolio/index.js";
+
+export type {
+  PortfolioAdapterKey,
+  PortfolioAggregateId,
+  PortfolioDependencyEdge,
+  PortfolioDependencyRelation,
+  PortfolioPriorityBand,
+  PortfolioProjectionDescriptor,
+  PortfolioProjectionDescriptorOptions,
+  PortfolioProjectionState,
+  PortfolioProjectRollup,
+  PortfolioReducer,
+  PortfolioReducerType,
+  PortfolioResourceLedger,
+  PortfolioRollupAggregateKind,
+  PortfolioScope,
+  ReducePortfolioOptions,
+  ReplayPortfolioOptions,
+  TenantId
+} from "./portfolio/index.js";

@@ -1,0 +1,10 @@
+apps/cli-e2e test: ✔ P11-T02 board CLI portfolio status surfaces scoped sub-portfolio (415.002375ms)
+apps/cli-e2e test: ℹ tests 21
+apps/cli-e2e test: ℹ suites 0
+apps/cli-e2e test: ℹ pass 21
+apps/cli-e2e test: ℹ fail 0
+apps/cli-e2e test: ℹ cancelled 0
+apps/cli-e2e test: ℹ skipped 0
+apps/cli-e2e test: ℹ todo 0
+apps/cli-e2e test: ℹ duration_ms 8395.732375
+apps/cli-e2e test: Done

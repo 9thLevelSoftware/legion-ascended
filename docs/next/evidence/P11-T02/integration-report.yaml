@@ -1,0 +1,147 @@
+task: P11-T02
+phase: 11
+phase_id: P11
+status: DONE
+base_commit: "4977cad89a29f1bbad60ee7e940a6f3825de7518"
+implementation_branch: "codex/p03-t02-board-task-repository"
+verification:
+  local:
+    - name: core-tests
+      command: "pnpm --filter @legion/core test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/core-test.log
+      result: "245/245 pass (no core changes)"
+    - name: board-tests
+      command: "pnpm --filter @legion/board test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/board-test.log
+      result: "113/113 pass (93 existing whole-change/release-observation/dashboard/approval-gate + 20 new portfolio)"
+    - name: store-sqlite-tests
+      command: "pnpm --filter @legion/store-sqlite test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/store-sqlite-test.log
+      result: "171/171 pass (163 existing + 8 new portfolio projector)"
+    - name: protocol-tests
+      command: "pnpm --filter @legion/protocol test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/protocol-test.log
+      result: "55/55 pass (no protocol changes)"
+    - name: artifacts-tests
+      command: "pnpm --filter @legion/artifacts test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/artifacts-test.log
+      result: "59/59 pass (no artifacts changes)"
+    - name: cli-e2e-tests
+      command: "pnpm --filter @legion/cli-e2e test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/cli-e2e-test.log
+      result: "21/21 pass (17 existing + 4 new portfolio CLI scenarios)"
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/typecheck.log
+      result: "all 10 workspace projects typecheck clean"
+    - name: workspace-tests
+      command: "pnpm run test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/workspace-tests.log
+      result: "all workspace package tests + cli-e2e pass"
+    - name: validate-next
+      command: "pnpm run validate:next"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/validate-next.log
+      result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime import boundaries, schema generation, protocol docs, schema-doc drift, package contents, tests, npm pack dry-run, pnpm pack dry-run passed"
+    - name: gitleaks-p11-diff
+      command: "git diff --cached --binary 4977cad89a29f1bbad60ee7e940a6f3825de7518 -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T02/gitleaks-p11-diff.log
+      result: "no leaks found in final Phase 11 diff scan; phase-10/phase-11 evidence indexes excluded to avoid self-referential scan"
+blockers: []
+delivered_artifacts:
+  board:
+    - path: packages/board/src/portfolio/contract.ts
+      description: "typed portfolio projection contract — PortfolioProjectionState, PortfolioProjectRollup, PortfolioDependencyEdge, PortfolioResourceLedger, projection key helpers, ReducePortfolioOptions"
+    - path: packages/board/src/portfolio/hash.ts
+      description: "deterministic SHA-256 helpers — derivePortfolioProjectionStateHash over canonical sorted JSON, sha256OfCanonicalPortfolioInput"
+    - path: packages/board/src/portfolio/reducer.ts
+      description: "pure reducePortfolio + replayPortfolio + makePortfolioReducer + portfolioProjectionDescriptor; foreign-event-safe; per-project rollups with priority bands; cross-project dependency edge map; resource allocation ledger (priority bands, claim utilization, blocked pressure); per-project rollup header (last event type, sequence, occurredAt, release/approval verdicts); priorEvents hint for incremental reducers"
+    - path: packages/board/src/portfolio/index.ts
+      description: "public portfolio barrel"
+    - path: packages/board/test/portfolio-reducer.test.mjs
+      description: "20 portfolio reducer tests covering projection key, foreign-event safety, replay determinism, task count accumulation, transitions, priority changes + bands, dependency edges (cross-project + same-project), change/release verdict exposure, scope filter, terminal project count, priorEvents hint threading"
+    - path: packages/board/test/portfolio-fixture.mjs
+      description: "deterministic task/change/release/linked event builders carrying projectId + cross-project toProjectId + relation"
+  store_sqlite:
+    - path: packages/store-sqlite/src/portfolio-projector.ts
+      description: "SqlitePortfolioProjector — replay / rebuildAndSave / verify for the portfolio projection; foreign-event-safe; threads scope from input or persisted state; strips the sha256: prefix before persisting the SQLite state hash"
+    - path: packages/store-sqlite/test/portfolio-projector.test.mjs
+      description: "8 portfolio projector tests — multi-project replay, rebuild+verify, drift detection, missing-projection verify, scope filter, replay determinism vs replayPortfolio, constructor validation"
+    - path: packages/store-sqlite/test/portfolio-fixture.mjs
+      description: "AppendBoardEventInput builders for task.created / task.transitioned / task.linked (cross-project) / change.aggregated / release.promoted"
+  cli:
+    - path: packages/cli/src/commands/board/portfolio.ts
+      description: "legion next board portfolio {status|rebuild|verify} CLI adapter; tenantId required input; optional projectIds scope filter; status/rebuild/verify round-trip with deterministic state hash"
+    - path: packages/cli/src/commands/board/index.ts
+      description: "board command tree extended with the portfolio domain (and the BOARD_HELP menu)"
+  cli_e2e:
+    - path: apps/cli-e2e/test/cli-e2e.test.mjs
+      description: "4 new P11-T02 CLI e2e tests — multi-project status/rebuild/verify round-trip, verify fails closed on missing projection, status surfaces tenant-wide rollup on no events, status surfaces scoped sub-portfolio"
+  evidence:
+    - path: docs/next/evidence/P11-T02/portfolio-snapshot.json
+      description: "canonical portfolio projection snapshot for (tnt-portfolio-snapshot-001) with 2 projects (project A: 2 tasks, 1 cross-project link, change accepted, release promoted; project B: 1 task, 1 back-link); content-addressed stateHash"
+    - path: docs/next/evidence/P11-T02/integration-report.yaml
+      description: "this structured closeout report"
+    - path: docs/next/evidence/P11-T02/board-test.log
+      description: "113/113 board test output"
+    - path: docs/next/evidence/P11-T02/store-sqlite-test.log
+      description: "171/171 store-sqlite test output"
+    - path: docs/next/evidence/P11-T02/core-test.log
+      description: "245/245 core test output"
+    - path: docs/next/evidence/P11-T02/protocol-test.log
+      description: "55/55 protocol test output"
+    - path: docs/next/evidence/P11-T02/artifacts-test.log
+      description: "59/59 artifacts test output"
+    - path: docs/next/evidence/P11-T02/cli-e2e-test.log
+      description: "21/21 cli-e2e test output"
+    - path: docs/next/evidence/P11-T02/typecheck.log
+      description: "typecheck log"
+    - path: docs/next/evidence/P11-T02/workspace-tests.log
+      description: "workspace test log"
+    - path: docs/next/evidence/P11-T02/validate-next.log
+      description: "validate-next log"
+    - path: docs/next/evidence/P11-T02/gitleaks-p11-diff.log
+      description: "gitleaks diff scan log"
+    - path: docs/next/evidence/P11-T02/git-status.log
+      description: "git status snapshot"
+    - path: docs/next/evidence/P11-T02/git-diff-stat.log
+      description: "git diff stat snapshot"
+decisions:
+  - "Portfolio projection lives in @legion/board (not @legion/core) and reads the append-only board event log; SQLite-backed projection in @legion/store-sqlite mirrors the P11-T01 dashboard / P09-T02 whole-change / P10-T01 release-observation projector pattern."
+  - "Portfolio projection is tenant-scoped: one projection key per tenantId (`portfolio:<tenantId>`). Multi-tenant board operators can host multiple portfolio projections in parallel without collisions; the optional `projectIds` scope filter lets a sub-portfolio reduce over a specific subset of projects."
+  - "Per-project rollup is content-addressed and includes: task status counts, aggregate kind counts, task count, terminal task count, active task count, blocked task count, total priority, max priority, per-band priority counts (high/mid/low), claimed task count, last event type, last global sequence, last occurredAt, last release-observation status, last approval verdict."
+  - "Cross-project dependency edges (relation = `depends_on` or `blocks`) with non-equal from/to projectId are surfaced in the public `dependencyEdges` array; same-project edges are silently dropped so the public array stays cross-project-only and the per-project rollup does not double-count."
+  - "Resource allocation ledger exposes per-project priority bands, claim utilization, and blocked pressure; the cross-project aggregate `priorityBands` is derived from the per-project rollup counts so incremental reducers (one event at a time) and full-log replays produce identical state without leaking private caches into the public shape."
+  - "Reducer accepts an optional `priorEvents` hint (mirroring the P11-T01 dashboard `ReduceDashboardOptions.priorEvents`) so incremental callers (tests, projection rebuild helpers) can reconstruct the per-task live state from a caller-supplied event slice without re-applying events to the already-populated rollups."
+  - "Dashboard and approval-gate reducers remain foreign-event-safe; the portfolio reducer is also foreign-event-safe (events with mismatching aggregateKind / aggregateId / eventType / out-of-scope projectId are ignored silently) so an interleaved multi-tenant board event log replays without throwing."
+  - "Provider-neutral boundaries: portfolio source in @legion/board never imports a runtime driver, eve, board-store (only types), or reads process.env. The SQLite projector never imports a runtime driver, eve, or reads process.env."
+findings:
+  - "Board tests: 113/113 PASS (93 existing + 20 new portfolio)"
+  - "Store-sqlite tests: 171/171 PASS (163 existing + 8 new portfolio projector)"
+  - "CLI-e2e tests: 21/21 PASS (17 existing + 4 new P11-T02 portfolio CLI scenarios)"
+  - "pnpm run typecheck: PASS across 10 workspace projects"
+  - "pnpm run validate:next: PASS (typecheck, package boundaries, worker bundles, default-runtime scan, runtime import boundaries, schema generation, protocol docs, schema-doc drift, package contents, tests, npm pack dry-run, pnpm pack dry-run)"
+  - "gitleaks scan: no leaks found in final Phase 11 diff scan (phase-10/phase-11 evidence indexes excluded)"
+preserved_boundaries:
+  - "Phase 10 package boundaries remain fixed: core owns release-observation orchestration, board owns logical aggregation/reduction for whole-change + release-observation + dashboard + approval-gate + portfolio, store-sqlite owns SQLite projection persistence. Phase 11 (P11-T02) extends board with the portfolio projection family and adds one new SQLite adapter."
+  - "Portfolio projection never mutates frozen dashboard, whole-change, release-observation, or approval-gate state; it derives cross-project counts, dependency edges, and resource ledgers from the append-only log."
+  - "Provider-specific command execution (canary probes, host monitoring, reviewer/approval workflows) stays outside @legion/core and @legion/board; the CLI surface is status/rebuild/verify only."
+  - "Phase 8 per-task, Phase 9 whole-change, Phase 10 release-observation, and Phase 11 dashboard + approval-gate hashes are preserved so portfolio anomalies can be traced back to exact task, change, and release evidence."
+phase_12_handoff:
+  next_task: P11-T03
+  summary: "P11-T03 is the OtrLead review/closeout for the Phase 11 cut line. P11-T02 closes the multi-project operations surface; P11-T03 owns the Phase 11 closeout evidence + manifest update + handoff to Phase 12."
+  contract_inputs_for_p11_t03:
+    - "Portfolio projection state under `portfolio:<tenantId>` exposes per-project rollups, cross-project dependency edges, and the resource allocation ledger; the deterministic state hash anchors drift detection across the multi-project board."
+    - "All portfolio projection state is replayable from the same append-only board event log; P11-T03 work should treat portfolio state as derived read-only state, not mutate frozen projections."
+  preserved_boundaries:
+    - "Do not introduce a new app/portfolio package; the portfolio surface lives inside the CLI adapter layer and JSON outputs that any external UI can consume."
+    - "Portfolio reducer decisions stay deterministic and replayable; provider-specific reviewer/approval execution is injected, never hardcoded into the board layer."

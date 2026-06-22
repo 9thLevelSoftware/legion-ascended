@@ -23,6 +23,7 @@ import {
 import { handleReleaseObservationCommand } from "./release-observation.js";
 import { handleDashboardCommand } from "./dashboard.js";
 import { handleApprovalGateCommand } from "./approval-gate.js";
+import { handlePortfolioCommand } from "./portfolio.js";
 
 const BOARD_HELP = `legion next board <domain>
 
@@ -34,6 +35,7 @@ Domains:
   release-observation Aggregate, replay, rebuild, and verify release-observation projection state.
   dashboard           Replay, rebuild, and verify the project-scoped dashboard projection state.
   approval-gate       Replay, rebuild, and verify the per-(projectId, changeId) approval-gate verdict.
+  portfolio           Replay, rebuild, and verify the tenant-scoped portfolio projection state (cross-project rollups, dependency edges, resource ledger).
 
 All non-help commands accept --input <path> with a JSON object.
 Global:
@@ -119,6 +121,8 @@ export async function handleBoardCommand(context: CliContext): Promise<CliResult
       return handleDashboardCommand(commandContext);
     case "approval-gate":
       return handleApprovalGateCommand(commandContext);
+    case "portfolio":
+      return handlePortfolioCommand(commandContext);
     default:
       return helpResult(BOARD_HELP);
   }

@@ -1,0 +1,10 @@
+✔ P11-T02 board CLI portfolio status surfaces tenant-wide rollup on no events (134.345584ms)
+✔ P11-T02 board CLI portfolio status surfaces scoped sub-portfolio (402.213208ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8373.036708

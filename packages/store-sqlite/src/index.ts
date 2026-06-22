@@ -5071,3 +5071,29 @@ export {
 export type {
   SqliteApprovalGateProjectorReplayResult
 } from "./approval-gate-projector.js";
+
+// =====================================================================
+// P11-T02 — Portfolio SQLite projector.
+//
+// Mirrors `SqliteReleaseObservationProjector` for the
+// portfolio projection. The board layer exposes the
+// *logical* projection descriptor and pure reducer; this
+// adapter wires that reducer into the standard SQLite
+// projection-store flow so the portfolio projection can
+// be persisted, replayed, and verified across multiple
+// projects in a tenant scope.
+// =====================================================================
+
+export {
+  SqlitePortfolioProjector,
+  portfolioProjectionKey,
+  portfolioScopeFromList,
+  reducePortfolio,
+  replayPortfolio,
+  derivePortfolioProjectionStateHash,
+  PORTFOLIO_PROJECTION_VERSION
+} from "./portfolio-projector.js";
+export type {
+  SqlitePortfolioProjectorReplayResult,
+  SqlitePortfolioProjectorOptions
+} from "./portfolio-projector.js";

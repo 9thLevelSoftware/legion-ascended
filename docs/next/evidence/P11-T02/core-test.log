@@ -1,0 +1,10 @@
+✔ P01-T07 release guards reject stale observations and invalid rollback states (0.05375ms)
+✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.172291ms)
+ℹ tests 245
+ℹ suites 0
+ℹ pass 245
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 413.696583
