@@ -1,26 +1,50 @@
 phase: 5
 phase_id: P05
-hash_basis: "SHA-256 over artifact bytes as staged for the Phase 5 ledger; identical to Git blob content bytes after commit 49855db."
+hash_basis: "SHA-256 over artifact bytes after GPT-5.5 P05-T01 closeout review; runtime-local source/test artifacts match code commit 1a44cef9b3c78b012630473e893ace6d8dc3a6af, with refreshed evidence logs generated from the same workspace state."
 entries:
   - task: P05-T01
     artifact: packages/core/src/runtime/contract.ts
-    description: "Provider-neutral RuntimeDriver TypeScript interface with the seven ADR-004 lifecycle methods and their result types"
-    sha256: 02b8b75ed50133ebeda87581618cc661184acac5bc0d56a1b9dec6054117f430
+    description: "Provider-neutral RuntimeDriver TypeScript interface with the seven ADR-004 lifecycle methods, final-output artifact(handle) mode, and result types"
+    sha256: d733cacc6f7afec5c934b6b2913db162941b9abce76174890cdedb422e56f65e
   - task: P05-T01
     artifact: packages/core/src/runtime/local-driver.ts
-    description: "Deterministic runtime-local driver that emits protocol events for every state transition"
-    sha256: 3ae3005356ad237ba8ae75486be03b801472c54ec8e7d0ab5a230a4f2f1d024f
+    description: "Deterministic runtime-local driver that emits protocol events, returns final-output bundles, carries non-terminal state on artifact(handle) failures, and preserves terminal finishedAt"
+    sha256: 6d6c4625e58d4a25f20bbe0e5d84291ad5354bb26cde57ba924acfab30b66711
   - task: P05-T01
     artifact: packages/core/src/runtime/index.ts
-    description: "Public barrel re-exporting the canonical RuntimeDriver contract and the runtime-local driver"
+    description: "Public barrel re-exporting the canonical RuntimeDriver contract, skeleton/Fake test driver, and runtime-local driver"
     sha256: c9491b11c008a1b92fd3060465d56064104196fac51dae816a68186bd5b9a3b9
   - task: P05-T01
+    artifact: packages/core/src/runtime/skeleton.ts
+    description: "RuntimeDriverSkeleton abstract base that declares all seven ADR-004 methods and fails closed with NotImplementedError"
+    sha256: aac31646326a6a28c3bdd9a4925593c22b81f67281a77496d2ba2b1324ffca1a
+  - task: P05-T01
+    artifact: packages/core/src/runtime/fake-driver.ts
+    description: "FakeRuntimeDriver deterministic in-memory driver for unit and e2e contract tests"
+    sha256: 89bc5403515e01475b957cf2cda92dec600112893cee505caa1e64ef515c35fb
+  - task: P05-T01
     artifact: packages/core/test/runtime-driver.test.mjs
-    description: "17 deterministic contract tests covering every ADR-004 lifecycle method and failure mode"
-    sha256: 545b237db9575149c10555a3e9815b9d359399f626394674c958448335aaffe4
+    description: "19 deterministic runtime-local contract tests covering every ADR-004 lifecycle method and failure/state path"
+    sha256: 936674baf36978d50a8a544fe135e0facba10d8d9a343c6a3884d50c94b618aa
+  - task: P05-T01
+    artifact: packages/core/test/runtime-e2e.test.mjs
+    description: "5 end-to-end FakeRuntimeDriver lifecycle tests covering start, stream, approve, terminal transitions, and artifact(handle) bundles"
+    sha256: 24a79fab2359bffc4295e7bfaf7ec00262dff9d28b1f279075e398ae265ea7cd
+  - task: P05-T01
+    artifact: packages/core/test/runtime-skeleton.test.mjs
+    description: "18 RuntimeDriverSkeleton and FakeRuntimeDriver smoke tests"
+    sha256: 178f0a0238ac2147cd2906f41ca666ffebd86dab33d1985f3466edc732c8215e
+  - task: P05-T01
+    artifact: packages/core/test/runtime-start-resume.test.mjs
+    description: "Focused start/resume acceptance scenario tests for FakeRuntimeDriver"
+    sha256: 0416de511f363e07f585489a6cddbc990f67c0bfe36ad340f032c4eb693c1f72
+  - task: P05-T01
+    artifact: packages/core/test/runtime-stream-approve.test.mjs
+    description: "Focused stream/approve acceptance scenario tests for FakeRuntimeDriver"
+    sha256: caf46053d6594dadd26bec804b2abae50b7485563399211ba2c328d2ed3c175a
   - task: P05-T01
     artifact: scripts/scan-runtime-import-boundaries.mjs
-    description: "ADR-004 import-boundary scan that blocks Eve, host CLIs, sqlite, and legacy prompt assets inside the runtime module"
+    description: "ADR-004 import-boundary scan that blocks Eve, host CLIs, sqlite, non-protocol workspace imports, deep imports, and legacy prompt assets inside the runtime module"
     sha256: 2564b57afeceb3bd08bfdc5fb8227e22783cab7f098bfebee21cba313843b368
   - task: P05-T01
     artifact: tests/runtime-import-boundaries.test.mjs
@@ -28,17 +52,33 @@ entries:
     sha256: 138c360dabf68bbe76cc5e62a10b2d521a804ab9f01566d94bd8e45d0d47527a
   - task: P05-T01
     artifact: docs/next/evidence/P05-T01/integration-report.yaml
-    description: "Phase 5 integration report covering contract, runtime-local driver, import-boundary scan, tsconfig/devDeps, and validate-next gates"
-    sha256: 5a839289f63bce41e3bd84cb15144ef2336582060fc67babead8134ec1d0bc6a
+    description: "P05-T01 integration report covering contract, runtime-local driver, Fake/skeleton support, import-boundary scan, final-output review fix, and validate-next gates"
+    sha256: af3bc0e7332b91c3ae392dc6915bd927c37e5aa661a1ee487d8a1231f96ecacb
   - task: P05-T01
     artifact: docs/next/evidence/P05-T01/validate-next.log
-    description: "Local validate-next output with the new runtime-import-boundaries step green and all tests passing"
-    sha256: 8c7097779412c4e11871a5c11e5b038eb4e50695a38de08ba23ddc50fe18a8df
+    description: "Refreshed validate-next output with runtime-import-boundaries green and all local gates passing"
+    sha256: 74d2f68b48fad6358105f0a763d1ea004d627f51a671fe88cdca90af8c232209
   - task: P05-T01
     artifact: docs/next/evidence/P05-T01/runtime-driver-test.log
-    description: "Local @legion/core test output with 17 RuntimeDriver contract tests green"
-    sha256: e1925c524ed497428f5d478a3879f60842a838b97f766ebd5ad308e81a2f6b0f
+    description: "Refreshed @legion/core test output with 80 core tests green, including the 19 runtime-local RuntimeDriver contract tests"
+    sha256: 86e87a47a662a9fcde5cb908869c75d2bf2731e7d32ab3cd5b25a058f5feb5b2
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/runtime-e2e-test.log
+    description: "Runtime e2e log covering final-output artifact(handle) flows"
+    sha256: e74899251f3955de8a1eb79b91112b5aac7530348d86d479f697d098b3d48154
   - task: P05-T01
     artifact: docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
-    description: "Local scan test output with 10 fixture-driven import-boundary regressions green"
-    sha256: fbe24de1af4e310e46e3dd08bd9036953c9b5296128f9b1368a577555a16bff5
+    description: "Refreshed import-boundary test output with 10 fixture-driven regressions green"
+    sha256: aff2ba5480bf9f9f9a86efcbe287f9a887476a1d441ac110cd4a26110461fbc8
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/checksums.txt
+    description: "SHA-256 manifest for P05-T01 runtime source, tests, and evidence logs"
+    sha256: fbc8eb0056a3b845b688353eab3ad0a9009a1813d13cc7b7589c85c64b3d072f
+  - task: P05-T01
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-05/ledger.yaml
+    description: "Phase 5 ledger updated with the GPT-5.5 final-output review fix decision and code commit pointer"
+    sha256: 5118e1dc94ef8d56fba7cbe56834d53f67bd36b01d45514d77ce68c253b90773
+  - task: P05-T01
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-05/HANDOFF.md
+    description: "P05-T01 downstream handoff updated with final-output fix, refreshed counts, and evidence pointers"
+    sha256: 0193aedf597206df0004217c68ed7b7be24c6488b720e411922c56d00dfcf131

@@ -1,13 +1,13 @@
-✔ passes when the runtime module only imports @legion/protocol and core barrel re-exports it (6.227958ms)
-✔ rejects eve import inside the runtime module (1.493542ms)
-✔ rejects sqlite storage import inside the runtime module (1.372459ms)
-✔ rejects host CLI imports inside the runtime module (1.466458ms)
-✔ rejects non-protocol workspace imports inside the runtime module (1.379334ms)
-✔ rejects deep workspace imports inside the runtime module (1.183375ms)
-✔ rejects runtime imports from non-barrel core sources (1.466833ms)
-✔ allows the canonical barrel re-export from packages/core/src/index.ts (1.618958ms)
-✔ rejects legacy prompt asset imports inside the runtime module (1.314375ms)
-✔ exposes the rule catalog for documentation consumers (0.073959ms)
+✔ passes when the runtime module only imports @legion/protocol and core barrel re-exports it (6.186792ms)
+✔ rejects eve import inside the runtime module (1.414292ms)
+✔ rejects sqlite storage import inside the runtime module (1.371125ms)
+✔ rejects host CLI imports inside the runtime module (1.5135ms)
+✔ rejects non-protocol workspace imports inside the runtime module (1.313834ms)
+✔ rejects deep workspace imports inside the runtime module (1.115375ms)
+✔ rejects runtime imports from non-barrel core sources (1.471ms)
+✔ allows the canonical barrel re-export from packages/core/src/index.ts (1.628541ms)
+✔ rejects legacy prompt asset imports inside the runtime module (1.3555ms)
+✔ exposes the rule catalog for documentation consumers (0.070208ms)
 ℹ tests 10
 ℹ suites 0
 ℹ pass 10
@@ -15,4 +15,4 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 77.289583
+ℹ duration_ms 76.120667
