@@ -16,6 +16,7 @@ tasks:
   P09-T02:
     status: DONE
     run_id: "P09-T02-20260622-whole-change-acceptance"
+    commit: "0533d9ba6ae6a0cde644db6e70d53c82accdf4d5"
     evidence: docs/next/evidence/P09-T02/integration-report.yaml
     depends_on: ["P09-T01"]
   P09-T03:
