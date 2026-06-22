@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -49,6 +49,16 @@ test("workflow helper input normalizes project metadata and paths", async () => 
     assert.equal(input.slugFromName("AI"), "legion-ai");
     assert.equal(projectSchema.shape.slug.safeParse(input.slugFromName("AI")).success, true);
     assert.equal(input.createdAtOption(context), timestamp);
+    assert.throws(
+      () => input.createdAtOption({
+        ...context,
+        args: {
+          positionals: [],
+          options: new Map([["created-at", "2026-06-22T12:00:00Z"]])
+        }
+      }),
+      /Invalid canonical UTC timestamp/
+    );
     assert.equal(input.displayPath(context, path.join(root, "src", "index.ts")), "src/index.ts");
 
     const owner = input.ownerActor("DAS BL!");
@@ -77,6 +87,62 @@ test("workflow helper input derives repository references from git", async () =>
     });
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper input prefers remote default branch over feature worktree branch", async () => {
+  const input = await importWorkflowModule("input");
+  const root = await tempRepo();
+  try {
+    execFileSync("git", ["init", "-b", "main", root], { stdio: "ignore" });
+    git(root, ["-c", "user.email=legion@example.com", "-c", "user.name=Legion Test", "commit", "--allow-empty", "-m", "init"]);
+    git(root, ["remote", "add", "origin", "https://example.com/legion.git"]);
+    git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+    git(root, ["checkout", "-b", "codex/task"]);
+
+    assert.deepEqual(input.repositoryReference(root), {
+      provider: "git",
+      defaultBranch: "main",
+      remoteUrl: "https://example.com/legion.git"
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper input falls back to main for non-git, detached, and feature branches without remote defaults", async () => {
+  const input = await importWorkflowModule("input");
+  const nonGitRoot = await tempRepo();
+  const detachedRoot = await tempRepo();
+  const featureRoot = await tempRepo();
+  try {
+    assert.deepEqual(input.repositoryReference(nonGitRoot), {
+      provider: "git",
+      defaultBranch: "main"
+    });
+
+    execFileSync("git", ["init", "-b", "main", detachedRoot], { stdio: "ignore" });
+    git(detachedRoot, ["-c", "user.email=legion@example.com", "-c", "user.name=Legion Test", "commit", "--allow-empty", "-m", "init"]);
+    git(detachedRoot, ["checkout", "--detach"]);
+
+    assert.deepEqual(input.repositoryReference(detachedRoot), {
+      provider: "git",
+      defaultBranch: "main"
+    });
+
+    execFileSync("git", ["init", "-b", "main", featureRoot], { stdio: "ignore" });
+    git(featureRoot, ["-c", "user.email=legion@example.com", "-c", "user.name=Legion Test", "commit", "--allow-empty", "-m", "init"]);
+    git(featureRoot, ["checkout", "-b", "codex/task"]);
+
+    assert.deepEqual(input.repositoryReference(featureRoot), {
+      provider: "git",
+      defaultBranch: "main"
+    });
+  } finally {
+    await rm(nonGitRoot, { recursive: true, force: true });
+    await rm(detachedRoot, { recursive: true, force: true });
+    await rm(featureRoot, { recursive: true, force: true });
   }
 });
 
@@ -154,6 +220,37 @@ test("workflow helper context and state load initialized and uninitialized proje
       reason: "Project is initialized and ready for the first planned change."
     });
     assert.deepEqual(initializedState.diagnostics, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper state blocks invalid project state instead of suggesting start", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, ".legion", "project"), { recursive: true });
+    await writeFile(path.join(root, ".legion", "project", "project.json"), "{ invalid json", "utf8");
+
+    const cliContext = {
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    };
+
+    const workflowState = await state.resolveWorkflowState(cliContext);
+    assert.equal(workflowState.stage, "blocked");
+    assert.equal(workflowState.projectId, null);
+    assert.equal(workflowState.currentSpecCount, 0);
+    assert.equal(workflowState.nextAction.command, "legion validate");
+    assert.match(workflowState.nextAction.reason, /repair.*before planning/i);
+    assert.notEqual(workflowState.nextAction.command, "legion start");
+    assert.ok(workflowState.diagnostics.length > 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

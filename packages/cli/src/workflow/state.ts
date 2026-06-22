@@ -24,11 +24,21 @@ export interface WorkflowState {
 export async function resolveWorkflowState(context: CliContext): Promise<WorkflowState> {
   const project = await loadWorkflowProject(context);
   if (!project.ok) {
+    if (project.reason === "not_found") {
+      return {
+        stage: "uninitialized",
+        projectId: null,
+        currentSpecCount: 0,
+        nextAction: nextAction("legion start", "No .legion/project/project.json exists."),
+        diagnostics: project.diagnostics
+      };
+    }
+
     return {
-      stage: "uninitialized",
+      stage: "blocked",
       projectId: null,
       currentSpecCount: 0,
-      nextAction: nextAction("legion start", "No .legion/project/project.json exists."),
+      nextAction: nextAction("legion validate", "Project state must be repaired before planning can continue."),
       diagnostics: project.diagnostics
     };
   }

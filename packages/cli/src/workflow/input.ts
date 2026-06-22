@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   actorSchema,
+  utcTimestampSchema,
   type Actor,
   type RepositoryReference,
   type UtcTimestamp
@@ -38,7 +39,8 @@ export function ownerActor(owner: string): Actor {
 }
 
 export function createdAtOption(context: CliContext): UtcTimestamp | undefined {
-  return stringOption(context, "created-at") as UtcTimestamp | undefined;
+  const value = stringOption(context, "created-at");
+  return value === undefined ? undefined : utcTimestampSchema.parse(value);
 }
 
 export function repositoryReference(repositoryRoot: string): Partial<RepositoryReference> {
@@ -53,11 +55,12 @@ export function repositoryReference(repositoryRoot: string): Partial<RepositoryR
     }
   };
 
-  const defaultBranch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const remoteDefaultBranch = git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
+  const currentBranch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
   const remoteUrl = git(["config", "--get", "remote.origin.url"]);
   return {
     provider: "git",
-    defaultBranch: defaultBranch && defaultBranch !== "HEAD" ? defaultBranch : "main",
+    defaultBranch: defaultBranchName(remoteDefaultBranch, currentBranch),
     ...(remoteUrl && isUrl(remoteUrl) ? { remoteUrl } : {})
   };
 }
@@ -78,4 +81,16 @@ function isUrl(value: string): boolean {
 function normalizeProjectSlug(slug: string): string {
   const candidate = slug.length >= 3 ? slug : `legion-${slug}`;
   return candidate.slice(0, 64).replace(/-+$/g, "") || "legion-project";
+}
+
+function defaultBranchName(remoteDefaultBranch: string | undefined, currentBranch: string | undefined): string {
+  if (remoteDefaultBranch !== undefined && remoteDefaultBranch.length > 0) {
+    return remoteDefaultBranch.replace(/^origin\//, "");
+  }
+
+  return currentBranch !== undefined && isStableDefaultBranch(currentBranch) ? currentBranch : "main";
+}
+
+function isStableDefaultBranch(branch: string): boolean {
+  return branch === "main" || branch === "master" || branch === "trunk" || branch === "develop";
 }
