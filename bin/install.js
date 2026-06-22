@@ -139,8 +139,7 @@ function dirnamePath(p) {
 function resolveHome() {
   const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
   if (!home) {
-    console.error('Cannot determine home directory. Set $HOME or $USERPROFILE.');
-    process.exit(1);
+    throw new Error('Cannot determine home directory. Set $HOME or $USERPROFILE.');
   }
   return normalizePath(home);
 }
@@ -1623,9 +1622,7 @@ function uninstall(runtimeKey, scope) {
   const manifest = readManifest(paths.manifestFile);
 
   if (!manifest) {
-    console.error('No Legion manifest found. Nothing to uninstall.');
-    console.error(`Expected manifest at: ${paths.manifestFile}`);
-    process.exit(1);
+    throw new Error(`No Legion manifest found. Nothing to uninstall.\nExpected manifest at: ${paths.manifestFile}`);
   }
 
   const rt = RUNTIME_METADATA[runtimeKey];
@@ -1805,9 +1802,7 @@ async function update(runtimeKey, scope, verify = false) {
   const manifest = readManifest(paths.manifestFile);
 
   if (!manifest) {
-    console.error('Legion is not installed. Run install first:');
-    console.error(`  npx @9thlevelsoftware/legion ${RUNTIME_METADATA[runtimeKey].flag}`);
-    process.exit(1);
+    throw new Error(`Legion is not installed. Run install first:\n  npx @9thlevelsoftware/legion ${RUNTIME_METADATA[runtimeKey].flag}`);
   }
 
   const installedVersion = manifest.version;
@@ -1838,9 +1833,7 @@ async function update(runtimeKey, scope, verify = false) {
     console.log('\nRe-installing...\n');
     install(runtimeKey, scope, verify);
   } catch (err) {
-    console.error(`Update check failed: ${err.message}`);
-    console.error('Your installed version is still functional.');
-    process.exit(1);
+    throw new Error(`Update check failed: ${err.message}\nYour installed version is still functional.`);
   }
 }
 

@@ -10,6 +10,7 @@ import { test } from "node:test";
 const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const LEGION_BIN = path.join(ROOT, "bin", "legion.js");
+const INSTALLER_BIN = path.join(ROOT, "bin", "install.js");
 const EXEC_OPTIONS = {
   encoding: "utf8",
   env: { ...process.env, NO_COLOR: "1" },
@@ -61,6 +62,24 @@ test("legacy installer flags still route to installer help", async () => {
   });
   assert.match(result.stdout, /Usage:/);
   assert.match(result.stdout, /--codex/);
+});
+
+test("imported installer main returns failure code instead of exiting process", async () => {
+  await withTempProject(async ({ env, project }) => {
+    const script = [
+      `const installer = require(${JSON.stringify(INSTALLER_BIN)});`,
+      "installer.main(['--codex', '--local', '--uninstall']).then((code) => { console.log('code=' + code); });"
+    ].join("\n");
+
+    const result = await execFileAsync(process.execPath, ["-e", script], {
+      ...EXEC_OPTIONS,
+      cwd: project,
+      env
+    });
+
+    assert.match(result.stdout, /code=1/);
+    assert.match(result.stderr, /No Legion manifest found/);
+  });
 });
 
 test("root bin translates uninstall subcommand to installer uninstall action", async () => {
