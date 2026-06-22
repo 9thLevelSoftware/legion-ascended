@@ -15,8 +15,8 @@ tasks:
   P10-T02:
     status: DONE
     run_id: "P10-T02-20260622-cli-release-observation-wiring"
-    commit: "PENDING"
-    closeout_commit: "PENDING"
+    commit: "98fdcb7"
+    closeout_commit: "98fdcb7"
     evidence: docs/next/evidence/P10-T02/integration-report.yaml
     depends_on: ["P10-T01"] 
 decisions:
