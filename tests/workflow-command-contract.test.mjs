@@ -34,10 +34,12 @@ test("ADR-009 makes workflow verbs the canonical CLI front door", async () => {
 
 test("CLI README leads with workflow commands, not engine commands", async () => {
   const readme = await readFile("docs/next/cli/README.md", "utf8");
-  assert.match(readme, /legion start/);
-  assert.match(readme, /legion plan 1/);
-  assert.match(readme, /legion build/);
-  assert.match(readme, /legion review/);
+  const opening = readme.slice(0, 800);
+  assert.match(opening, /^# Legion CLI\r?\n\r?\nThe canonical CLI is workflow-first:/);
+  assert.match(opening, /legion start/);
+  assert.match(opening, /legion plan 1/);
+  assert.match(opening, /legion build/);
+  assert.match(opening, /legion review/);
   assert.doesNotMatch(readme.slice(0, 1200), /legion next/);
   assert.doesNotMatch(readme.slice(0, 1200), /worker bundle/);
 });
