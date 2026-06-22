@@ -185,6 +185,7 @@ export class RuntimeLocalDriver implements RuntimeDriver {
 
     state.status = "canceled";
     const finishedAt = this.clock.now();
+    state.finishedAt = finishedAt;
     const events = buildRunFinishedEvents(state, finishedAt, "canceled");
     this.appendStream(state.runId, {
       kind: "terminal",
@@ -219,7 +220,8 @@ export class RuntimeLocalDriver implements RuntimeDriver {
       startedAt: state.startedAt,
       checkpoint: state.checkpoint,
       sandbox,
-      artifacts: [...state.artifacts]
+      artifacts: [...state.artifacts],
+      ...(state.finishedAt ? { finishedAt: state.finishedAt } : {})
     };
     return inspection;
   }
@@ -303,7 +305,9 @@ export class RuntimeLocalDriver implements RuntimeDriver {
       if (!isTerminal) {
         throw new RuntimeLocalDriverError(
           "not_terminal",
-          `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run`
+          `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run`,
+          false,
+          { state: state.status, startedAt: state.startedAt, checkpoint: state.checkpoint }
         );
       }
       const terminalStatus: "succeeded" | "failed" | "blocked" | "canceled" =
@@ -313,7 +317,7 @@ export class RuntimeLocalDriver implements RuntimeDriver {
         state.status === "canceled"
           ? state.status
           : "canceled";
-      const finishedAt = resolvedAt;
+      const finishedAt = state.finishedAt ?? resolvedAt;
       const files = [...state.artifacts];
       const metadata: Record<string, unknown> = {
         attempt: state.request.attempt,
@@ -440,6 +444,7 @@ interface LocalRunState {
   readonly runId: RunId;
   status: "created" | "started" | "succeeded" | "failed" | "blocked" | "canceled" | "superseded" | "needs_human";
   startedAt: UtcTimestamp;
+  finishedAt?: UtcTimestamp;
   checkpoint: RuntimeCheckpointRef;
   artifacts: ArtifactReference[];
   generation: number;
@@ -448,11 +453,20 @@ interface LocalRunState {
 export class RuntimeLocalDriverError extends Error {
   readonly code: string;
   readonly retryable: boolean;
+  readonly state?: Readonly<Record<string, unknown>>;
 
-  constructor(code: string, message: string, retryable: boolean = false) {
+  constructor(
+    code: string,
+    message: string,
+    retryable: boolean = false,
+    state?: Readonly<Record<string, unknown>>
+  ) {
     super(message);
     this.code = code;
     this.retryable = retryable;
+    if (state) {
+      this.state = state;
+    }
     this.name = "RuntimeLocalDriverError";
   }
 }

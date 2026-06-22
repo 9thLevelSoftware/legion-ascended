@@ -318,6 +318,51 @@ test("runtime-local artifact fetch without registering keeps inspection unchange
   assert.equal(inspection.artifacts.length, 0);
 });
 
+test("runtime-local artifact final-output rejects non-terminal runs with current state", async () => {
+  const driver = new RuntimeLocalDriver();
+  const { runId, checkpoint, startedAt } = await driver.start(makeRequest());
+
+  await assert.rejects(
+    () => driver.artifact(runId),
+    (error) => {
+      assert.ok(error instanceof RuntimeLocalDriverError);
+      assert.equal(error.code, "not_terminal");
+      assert.ok(error.state, "error carries current state");
+      assert.equal(error.state.state, "started");
+      assert.equal(error.state.startedAt, startedAt);
+      assert.deepEqual(error.state.checkpoint, checkpoint);
+      return true;
+    }
+  );
+});
+
+test("runtime-local artifact final-output preserves terminal finishedAt", async () => {
+  const startedAt = "2026-06-21T20:00:00.000Z";
+  const canceledAt = "2026-06-21T20:05:00.000Z";
+  const resolvedAt = "2026-06-21T20:10:00.000Z";
+  const times = [startedAt, canceledAt, resolvedAt];
+  const driver = new RuntimeLocalDriver({
+    clock: {
+      now: () => times.shift() ?? resolvedAt
+    }
+  });
+  const { runId } = await driver.start(makeRequest());
+  await driver.cancel(runId, {
+    code: "user_requested",
+    message: "user pressed cancel",
+    requestedBy: ACTOR,
+    at: canceledAt
+  });
+
+  const inspection = await driver.inspect(runId);
+  assert.equal(inspection.finishedAt, canceledAt);
+
+  const bundle = await driver.artifact(runId);
+  assert.equal(bundle.resolvedAt, resolvedAt);
+  assert.equal(bundle.finishedAt, canceledAt);
+  assert.equal(bundle.status, "canceled");
+});
+
 test("runtime-local rejects a request whose driver id does not match the loaded driver", async () => {
   const driver = new RuntimeLocalDriver();
   await assert.rejects(driver.start(makeRequest({
