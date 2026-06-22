@@ -25,7 +25,7 @@
       {
         "path": "packages/protocol/src/entities/task-contract.ts",
         "sha256": "sha256:4af3096364dc1189db73a2dd9de3857caeaa999bbdbfd405753539c4e6365056",
-        "mediaType": "text/markdown"
+        "mediaType": "text/typescript"
       }
     ],
     "all": [
@@ -42,7 +42,7 @@
       {
         "path": "packages/protocol/src/entities/task-contract.ts",
         "sha256": "sha256:4af3096364dc1189db73a2dd9de3857caeaa999bbdbfd405753539c4e6365056",
-        "mediaType": "text/markdown"
+        "mediaType": "text/typescript"
       }
     ]
   },

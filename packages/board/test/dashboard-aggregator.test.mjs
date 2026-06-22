@@ -168,6 +168,27 @@ test("reduceDashboard: change.aggregated(status=rejected) → rejected verdict",
   assert.equal(next.approvalPointers[0].verdict, "rejected");
 });
 
+test("reduceDashboard: newer change approvals replace stale pointers", () => {
+  const accepted = makeChangeAggregatedEvent({
+    changeId: "chg-replayed-1",
+    status: "accepted",
+    outcome: "integrated",
+    globalSequence: 1
+  });
+  const rejected = makeChangeAggregatedEvent({
+    changeId: "chg-replayed-1",
+    status: "rejected",
+    outcome: "rejected",
+    globalSequence: 2
+  });
+  const state = replayDashboard([accepted, rejected]);
+  assert.ok(state !== null);
+  assert.equal(state.approvalPointers.length, 1);
+  assert.equal(state.approvalPointers[0].changeId, "chg-replayed-1");
+  assert.equal(state.approvalPointers[0].verdict, "rejected");
+  assert.equal(state.approvalPointers[0].lastGlobalSequence, 2);
+});
+
 test("reduceDashboard: release.promoted seeds release pointer", () => {
   const event = makeReleasePromotedEvent({ globalSequence: 1 });
   const next = reduceDashboard(null, event);

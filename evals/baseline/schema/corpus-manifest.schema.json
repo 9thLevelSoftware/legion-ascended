@@ -7,14 +7,14 @@
     "schema_version": { "const": 1 },
     "canonical_manifest": { "type": "string", "minLength": 1 },
     "corpus_id": { "type": "string", "minLength": 1 },
-    "corpus_version": { "type": "string", "pattern": "^\d+\.\d+\.\d+$" },
+    "corpus_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "baseline_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "fixture_hashes": { "type": "string", "minLength": 1 },
     "scenario_ids": {
       "type": "array",
       "minItems": 8,
       "maxItems": 8,
-      "items": { "type": "string", "pattern": "^[a-z0-9-]+\.v\d+$" }
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+\\.v\\d+$" }
     }
   },
   "additionalProperties": false

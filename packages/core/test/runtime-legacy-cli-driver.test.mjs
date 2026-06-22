@@ -185,6 +185,79 @@ test("runtime-legacy-cli resume advances the checkpoint generation", async () =>
   assert.match(resume.checkpoint.note, /legacy-compat/);
 });
 
+test("runtime-legacy-cli resume rejects terminal runs without reviving them", async () => {
+  const driver = new RuntimeLegacyCliDriver();
+  const request = makeRequest();
+  const { runId, checkpoint } = await driver.start(request);
+  await driver.cancel(runId, {
+    code: "user_cancel",
+    message: "user requested cancel",
+    requestedBy: APPROVER,
+    at: "2026-06-21T20:00:00.000Z"
+  });
+  const streamLength = driver.__streamLength(runId);
+
+  await assert.rejects(driver.resume(runId, checkpoint), (error) => {
+    assert.ok(error instanceof RuntimeLegacyCliError);
+    assert.equal(error.code, "terminal_run");
+    assert.equal(error.state.state, "canceled");
+    return true;
+  });
+
+  const inspection = await driver.inspect(runId);
+  assert.equal(inspection.status, "canceled");
+  assert.equal(driver.__streamLength(runId), streamLength);
+});
+
+test("runtime-legacy-cli protocol event timestamps use the injected clock", async () => {
+  const startedAt = "2026-06-21T22:00:00.000Z";
+  const resumedAt = "2026-06-21T22:01:00.000Z";
+  const approvedAt = "2026-06-21T22:02:00.000Z";
+  const artifactAt = "2026-06-21T22:03:00.000Z";
+  const canceledAt = "2026-06-21T22:04:00.000Z";
+  const times = [startedAt, resumedAt, approvedAt, artifactAt, canceledAt];
+  const driver = new RuntimeLegacyCliDriver({
+    clock: {
+      now: () => times.shift() ?? canceledAt
+    }
+  });
+  const request = makeRequest();
+
+  const start = await driver.start(request);
+  assert.deepEqual(start.events.map((event) => event.occurredAt), [startedAt, startedAt]);
+
+  const resume = await driver.resume(start.runId, start.checkpoint);
+  assert.equal(resume.events[0].occurredAt, resumedAt);
+
+  const approval = await driver.approve({
+    approvalId: "apr_legacy-cli-clock",
+    runId: start.runId,
+    scope: scopeForLegacyApproval("apr_legacy-cli-clock", start.runId),
+    decidedBy: APPROVER,
+    decidedAt: "2026-06-21T20:00:00.000Z",
+    reason: "clock check"
+  });
+  assert.deepEqual(approval.events.map((event) => event.occurredAt), [approvedAt, approvedAt]);
+
+  const artifact = await driver.artifact(start.runId, {
+    kind: "register",
+    reference: {
+      path: "evidence/p05-t03/legacy-clock.txt",
+      sha256: sha256ContentHash("legacy-clock")
+    },
+    evidenceId: "evd_legacy-cli-clock"
+  });
+  assert.equal(artifact.events[0].occurredAt, artifactAt);
+
+  const cancel = await driver.cancel(start.runId, {
+    code: "clock_done",
+    message: "clock verification complete",
+    requestedBy: APPROVER,
+    at: canceledAt
+  });
+  assert.equal(cancel.events[0].occurredAt, canceledAt);
+});
+
 test("runtime-legacy-cli resume rejects stale checkpoints with a typed failure", async () => {
   const driver = new RuntimeLegacyCliDriver();
   const request = makeRequest();

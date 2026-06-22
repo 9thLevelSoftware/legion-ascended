@@ -90,8 +90,9 @@ export function evaluateAcceptanceGate(
   const issues: ReviewPipelineIssue[] = [];
   const tier: RiskTier = input.taskContract.risk.tier;
   const policy = input.policy ?? DEFAULT_REVIEW_GATE_POLICY;
-  const requiredGates = policy.gatesByTier[tier];
-  if (!Array.isArray(requiredGates)) {
+  const tierGates = policy.gatesByTier[tier];
+  const requiredGates = Array.isArray(tierGates) ? tierGates : [];
+  if (!Array.isArray(tierGates)) {
     issues.push({
       code: "gate_evaluator_failure",
       message: `No gate policy defined for tier ${tier}.`,

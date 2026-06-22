@@ -63,6 +63,72 @@ function appendFixtureEvents(eventRepository, appendInputs) {
   return eventRepository.appendEvents({ events: appendInputs }).events;
 }
 
+function boardEventFromAppendInput(input, globalSequence) {
+  return {
+    schemaVersion: "0.1.0",
+    eventId: `evt-approval-page-${globalSequence}`,
+    aggregateKind: input.aggregateKind,
+    aggregateId: input.aggregateId,
+    aggregateSequence: globalSequence,
+    globalSequence,
+    eventType: input.eventType,
+    eventVersion: input.eventVersion,
+    payload: input.payload,
+    payloadHash: "0".repeat(64),
+    causationId: input.causationId ?? null,
+    correlationId: input.correlationId ?? null,
+    occurredAt: input.occurredAt,
+    idempotencyKey: input.idempotencyKey ?? null,
+    payloadJson: JSON.stringify(input.payload)
+  };
+}
+
+function makePagedEventRepository(events) {
+  return {
+    listEvents(query = {}) {
+      const order = query.order ?? "asc";
+      const limit = query.limit ?? 1_000;
+      const filtered = events.filter((event) => {
+        if (query.aggregateKind && event.aggregateKind !== query.aggregateKind) return false;
+        if (query.aggregateId && event.aggregateId !== query.aggregateId) return false;
+        if (query.eventType && event.eventType !== query.eventType) return false;
+        if (
+          typeof query.fromGlobalSequence === "number" &&
+          event.globalSequence < query.fromGlobalSequence
+        ) {
+          return false;
+        }
+        if (
+          typeof query.untilGlobalSequence === "number" &&
+          event.globalSequence > query.untilGlobalSequence
+        ) {
+          return false;
+        }
+        return true;
+      });
+      filtered.sort((a, b) =>
+        order === "desc"
+          ? b.globalSequence - a.globalSequence
+          : a.globalSequence - b.globalSequence
+      );
+      return filtered.slice(0, limit);
+    },
+    appendEvent() { throw new Error("not used"); },
+    appendEvents() { throw new Error("not used"); },
+    getEvent() { return null; },
+    getEventByIdempotencyKey() { return null; },
+    countEvents() { return events.length; },
+    tail() { return []; }
+  };
+}
+
+const noopProjectionRepository = {
+  saveProjection() { throw new Error("not used"); },
+  loadProjection() { return null; },
+  deleteProjection() { throw new Error("not used"); },
+  listProjections() { return []; }
+};
+
 test("projector yields verdict=approved for accepted + promoted", async () => {
   await withTempDatabase(async (databasePath) => {
     const repositories = buildRepositories(databasePath);
@@ -361,6 +427,84 @@ test("projector replay() matches replayApprovalGate() output for the same event 
       closeRepositories(repositories);
     }
   });
+});
+
+test("projector processes canonical change and release events without projectId", () => {
+  const accepted = buildAggregatedAcceptedAppendInput({
+    occurredAt: "2026-06-22T05:10:00.000Z",
+    idempotencyKey: "approval-no-project-change"
+  });
+  const promoted = buildReleasePromotedAppendInput({
+    occurredAt: "2026-06-22T05:30:00.000Z",
+    idempotencyKey: "approval-no-project-release"
+  });
+  delete accepted.payload.projectId;
+  delete promoted.payload.projectId;
+  const events = [
+    boardEventFromAppendInput(accepted, 1),
+    boardEventFromAppendInput(promoted, 2)
+  ];
+
+  const projector = new SqliteApprovalGateProjector({
+    projectId: APPROVAL_GATE_PROJECTOR_FIXTURE_CONSTANTS.projectId,
+    changeId: APPROVAL_GATE_PROJECTOR_FIXTURE_CONSTANTS.changeId,
+    eventRepository: makePagedEventRepository(events),
+    projectionRepository: noopProjectionRepository
+  });
+  const replay = projector.replay();
+  assert.ok(replay.state !== null);
+  assert.equal(replay.state.verdict, "approved");
+  assert.equal(replay.state.eventCount, 2);
+});
+
+test("projector replay pages past the first event page", () => {
+  const events = [];
+  for (let i = 1; i <= 1_000; i += 1) {
+    events.push({
+      schemaVersion: "0.1.0",
+      eventId: `evt-approval-filler-${i}`,
+      aggregateKind: "task",
+      aggregateId: `task:filler:${i}`,
+      aggregateSequence: i,
+      globalSequence: i,
+      eventType: "task.created",
+      eventVersion: "0.1.0",
+      payload: { projectId: "proj-filler", changeId: "chg-filler", taskId: `task-${i}` },
+      payloadHash: "0".repeat(64),
+      causationId: null,
+      correlationId: null,
+      occurredAt: "2026-06-22T05:00:00.000Z",
+      idempotencyKey: null,
+      payloadJson: "{}"
+    });
+  }
+  events.push(
+    boardEventFromAppendInput(
+      buildAggregatedAcceptedAppendInput({
+        occurredAt: "2026-06-22T05:10:00.000Z",
+        idempotencyKey: "approval-page-change"
+      }),
+      1_001
+    ),
+    boardEventFromAppendInput(
+      buildReleasePromotedAppendInput({
+        occurredAt: "2026-06-22T05:30:00.000Z",
+        idempotencyKey: "approval-page-release"
+      }),
+      1_002
+    )
+  );
+
+  const projector = new SqliteApprovalGateProjector({
+    projectId: APPROVAL_GATE_PROJECTOR_FIXTURE_CONSTANTS.projectId,
+    changeId: APPROVAL_GATE_PROJECTOR_FIXTURE_CONSTANTS.changeId,
+    eventRepository: makePagedEventRepository(events),
+    projectionRepository: noopProjectionRepository
+  });
+  const replay = projector.replay();
+  assert.ok(replay.state !== null);
+  assert.equal(replay.state.verdict, "approved");
+  assert.equal(replay.rebuiltThroughGlobalSequence, 1_002);
 });
 
 test("projector ignores foreign (projectId, changeId) events", async () => {

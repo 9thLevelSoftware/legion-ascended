@@ -138,6 +138,14 @@ export class RuntimeLocalDriver implements RuntimeDriver {
 
   async resume(runId: RunId, checkpointRef: RuntimeCheckpointRef): Promise<RuntimeResumeResult> {
     const state = this.requireRun(runId);
+    if (isTerminalStatus(state.status)) {
+      throw new RuntimeLocalDriverError(
+        "terminal_run",
+        `Run ${runId} is ${state.status} and cannot be resumed`,
+        false,
+        { state: state.status, startedAt: state.startedAt, checkpoint: state.checkpoint }
+      );
+    }
     if (checkpointRef.generation !== state.checkpoint.generation) {
       throw new RuntimeLocalDriverError(
         "stale_checkpoint",
@@ -151,10 +159,10 @@ export class RuntimeLocalDriver implements RuntimeDriver {
       );
     }
 
-    state.generation += 1;
-    state.checkpoint = deriveCheckpoint(runId, state.request, this.clock.now(), state.generation);
-    state.status = "started";
     const resumedAt = this.clock.now();
+    state.generation += 1;
+    state.checkpoint = deriveCheckpoint(runId, state.request, resumedAt, state.generation);
+    state.status = "started";
     const events = buildRunResumedEvents(state, resumedAt);
 
     this.appendStream(state.runId, {
@@ -296,13 +304,7 @@ export class RuntimeLocalDriver implements RuntimeDriver {
     // the current state for non-terminal runs so callers can react
     // without re-querying via `inspect`.
     if (artifactRef === undefined) {
-      const isTerminal =
-        state.status === "succeeded" ||
-        state.status === "failed" ||
-        state.status === "canceled" ||
-        state.status === "superseded" ||
-        state.status === "blocked";
-      if (!isTerminal) {
+      if (!isTerminalStatus(state.status)) {
         throw new RuntimeLocalDriverError(
           "not_terminal",
           `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run`,
@@ -450,6 +452,16 @@ interface LocalRunState {
   generation: number;
 }
 
+function isTerminalStatus(status: LocalRunState["status"]): boolean {
+  return (
+    status === "succeeded" ||
+    status === "failed" ||
+    status === "blocked" ||
+    status === "canceled" ||
+    status === "superseded"
+  );
+}
+
 export class RuntimeLocalDriverError extends Error {
   readonly code: string;
   readonly retryable: boolean;
@@ -548,6 +560,7 @@ function buildRunCreatedEvents(
     projectId: request.projectId,
     generation: 1,
     sequence: 0,
+    occurredAt: startedAt,
     payload: {
       runId,
       taskId,
@@ -565,6 +578,7 @@ function buildRunCreatedEvents(
     projectId: request.projectId,
     generation: 1,
     sequence: 1,
+    occurredAt: startedAt,
     payload: {
       runId,
       taskId,
@@ -587,6 +601,7 @@ function buildRunResumedEvents(state: LocalRunState, resumedAt: UtcTimestamp): E
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: resumedAt,
       payload: {
         runId: state.runId,
         taskId: state.request.taskId,
@@ -611,6 +626,7 @@ function buildRunFinishedEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: finishedAt,
       payload: {
         runId: state.runId,
         taskId: state.request.taskId,
@@ -639,6 +655,7 @@ function buildApprovalGrantedEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: deliveredAt,
       payload: {
         approvalId,
         requestedBy: approvalRef.decidedBy,
@@ -654,6 +671,7 @@ function buildApprovalGrantedEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 1,
+      occurredAt: deliveredAt,
       payload: {
         approvalId,
         decidedBy: approvalRef.decidedBy,
@@ -683,6 +701,7 @@ function buildArtifactEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: resolvedAt,
       payload: {
         evidenceId,
         taskId: state.request.taskId,
@@ -702,14 +721,14 @@ interface BuildEventInput {
   readonly projectId: EventEnvelope["projectId"];
   readonly generation: number;
   readonly sequence: number;
+  readonly occurredAt: UtcTimestamp;
   readonly payload: Readonly<Record<string, unknown>>;
   readonly causationId?: EventEnvelope["id"];
   readonly correlationId?: EventEnvelope["correlationId"];
 }
 
 function buildEvent(input: BuildEventInput): EventEnvelope {
-  const id = deterministicEventId(input.type, input.runId, input.sequence, input.generation);
-  const occurredAt = "2026-06-21T20:00:00.000Z" as UtcTimestamp;
+  const id = deterministicEventId(input.type, input.runId, input.aggregate, input.sequence, input.generation);
   const base = {
     schemaVersion: "0.1.0",
     id,
@@ -721,7 +740,7 @@ function buildEvent(input: BuildEventInput): EventEnvelope {
     generation: input.generation,
     sequence: input.sequence,
     actor: input.actor,
-    occurredAt,
+    occurredAt: input.occurredAt,
     payload: input.payload as EventEnvelope["payload"]
   } as const;
 
@@ -734,8 +753,14 @@ function buildEvent(input: BuildEventInput): EventEnvelope {
   return base as EventEnvelope;
 }
 
-function deterministicEventId(type: EventType, runId: RunId, sequence: number, generation: number): EventEnvelope["id"] {
-  const hash = sha256Hex(`${type}|${runId}|${sequence}|${generation}`);
+function deterministicEventId(
+  type: EventType,
+  runId: RunId,
+  aggregate: EventEnvelope["aggregate"],
+  sequence: number,
+  generation: number
+): EventEnvelope["id"] {
+  const hash = sha256Hex(`${type}|${runId}|${aggregate.kind}|${aggregate.id}|${sequence}|${generation}`);
   return `evt_${hash.slice(0, 26)}`;
 }
 

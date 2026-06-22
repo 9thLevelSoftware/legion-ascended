@@ -1,7 +1,8 @@
 phase: P10
 status: PASS
 title: Release Observation and Rollback closeout
-branch: codex/p03-t02-board-task-repository
+evidence_branch: codex/p03-t02-board-task-repository
+branch_note: "Evidence was recorded on the reused PR integration branch, not a Phase 10-specific branch."
 base_sha: 4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a
 head_before_closeout: c98c67781999c707734742379dcda8c00dd7d904
 reviewer: "GPT-5.5 / otrlead"

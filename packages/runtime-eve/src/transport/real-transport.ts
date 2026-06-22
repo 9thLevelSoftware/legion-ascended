@@ -30,6 +30,7 @@
  */
 
 import * as path from "node:path";
+import * as crypto from "node:crypto";
 import { mkdir, writeFile, readFile, readdir, stat } from "node:fs/promises";
 
 import {
@@ -86,15 +87,18 @@ export class RealEveTransport implements EveTransport {
   private readonly options: RealEveTransportOptions;
   private readonly cache: EveModuleCache = {};
   private readonly streamQueues: Map<string, EveTransportEvent[]> = new Map();
+  private readonly checkpointGenerations: Map<string, number> = new Map();
 
   constructor(options: RealEveTransportOptions = {}) {
     this.options = options;
   }
 
   async defineAgent(spec: EveAgentSpec): Promise<EveAgentAuthored> {
-    if (this.options.worktreeRoot) {
-      await this.persistAgentModule(spec);
+    if (!this.options.worktreeRoot) {
+      return this.recordAuthoredSession(syntheticAuthored(spec));
     }
+
+    await this.persistAgentModule(spec);
     const eve = await this.loadEveModule();
     // Real Eve `defineAgent` returns a runtime object; for the
     // adapter we only need the durable identifiers. We extract them
@@ -103,20 +107,20 @@ export class RealEveTransport implements EveTransport {
     // short-lived session for the manifest hash and continuation
     // token).
     if (!eve || typeof (eve as { defineAgent?: unknown }).defineAgent !== "function") {
-      return syntheticAuthored(spec);
+      return this.recordAuthoredSession(syntheticAuthored(spec));
     }
     const defineAgent = (eve as { defineAgent: (s: unknown) => unknown }).defineAgent;
     const authored = await Promise.resolve(defineAgent(this.toEveAgentShape(spec)));
     const authoredObject = authored as Partial<EveAgentAuthored> & { id?: string; manifestHash?: string };
     if (typeof authoredObject.id !== "string" || typeof authoredObject.manifestHash !== "string") {
-      return syntheticAuthored(spec);
+      return this.recordAuthoredSession(syntheticAuthored(spec));
     }
-    return {
+    return this.recordAuthoredSession({
       sessionId: `eve_${authoredObject.id}`,
       continuationToken: `cont_${authoredObject.id}`,
-      manifestHash: authoredObject.manifestHash,
+      manifestHash: normalizeContentHash(authoredObject.manifestHash, `eve-manifest:${authoredObject.id}`),
       subagentIds: spec.subagents.map((s) => s.id)
-    };
+    });
   }
 
   async resumeSession(
@@ -124,14 +128,14 @@ export class RealEveTransport implements EveTransport {
     continuationToken: string,
     checkpointFingerprint: string
   ): Promise<EveSessionResumed> {
-    void sessionId;
     void continuationToken;
-    const generation = 2;
+    const generation = (this.checkpointGenerations.get(sessionId) ?? 1) + 1;
+    this.checkpointGenerations.set(sessionId, generation);
     return {
       sessionId,
       continuationToken,
       checkpointGeneration: generation,
-      checkpointFingerprint: `${checkpointFingerprint}-g${generation}`
+      checkpointFingerprint: sha256ContentHash(`${sessionId}|${checkpointFingerprint}|g${generation}`)
     };
   }
 
@@ -157,14 +161,15 @@ export class RealEveTransport implements EveTransport {
     const status: EveSessionSnapshot["status"] = terminalStatus ?? "started";
     const startedAt = queue[0]?.at;
     const finishedAt = terminal && terminal.kind === "terminal" ? terminal.at : undefined;
+    const checkpointGeneration = this.checkpointGenerations.get(sessionId) ?? 1;
     const lastError = terminal && terminal.kind === "terminal" && terminal.error
       ? { code: "eve_terminated", message: terminal.error }
       : undefined;
     return {
       sessionId,
       status,
-      checkpointGeneration: 1,
-      checkpointFingerprint: `sha256:${sessionId}`,
+      checkpointGeneration,
+      checkpointFingerprint: sha256ContentHash(`runtime-eve:snapshot:${sessionId}:g${checkpointGeneration}`),
       sandbox: {
         sandboxDriver: "eve-sandbox",
         worktreePath: this.options.worktreeRoot ?? "<dry-run>",
@@ -217,7 +222,7 @@ export class RealEveTransport implements EveTransport {
     return {
       sessionId,
       reference: ref.reference,
-      sha256: ref.sha256 ?? `sha256:${ref.reference}`,
+      sha256: normalizeContentHash(ref.sha256, `runtime-eve:artifact:${ref.reference}`),
       resolvedAt,
       kind: ref.kind
     };
@@ -246,7 +251,10 @@ export class RealEveTransport implements EveTransport {
       status: terminalStatus,
       startedAt: snapshot.startedAt ?? new Date().toISOString(),
       finishedAt: snapshot.finishedAt ?? new Date().toISOString(),
-      files: snapshot.artifactPaths.map((reference) => ({ reference, sha256: `sha256:${reference}` })),
+      files: snapshot.artifactPaths.map((reference) => ({
+        reference,
+        sha256: sha256ContentHash(`runtime-eve:final-output:${reference}`)
+      })),
       metadata: {
         driverId: "runtime-eve",
         eveVersion: RUNTIME_EVE_PINNED_VERSION
@@ -419,6 +427,11 @@ export class RealEveTransport implements EveTransport {
     queue.push(event);
     this.streamQueues.set(sessionId, queue);
   }
+
+  private recordAuthoredSession(authored: EveAgentAuthored): EveAgentAuthored {
+    this.checkpointGenerations.set(authored.sessionId, 1);
+    return authored;
+  }
 }
 
 function syntheticAuthored(spec: EveAgentSpec): EveAgentAuthored {
@@ -426,7 +439,18 @@ function syntheticAuthored(spec: EveAgentSpec): EveAgentAuthored {
   return {
     sessionId: `eve_${id}`,
     continuationToken: `cont_${id}`,
-    manifestHash: `sha256:${id}`,
+    manifestHash: sha256ContentHash(`runtime-eve:synthetic-manifest:${id}`),
     subagentIds: spec.subagents.map((s) => s.id)
   };
+}
+
+function normalizeContentHash(candidate: string | undefined, fallbackSeed: string): string {
+  if (candidate && /^sha256:[0-9a-f]{64}$/.test(candidate)) {
+    return candidate;
+  }
+  return sha256ContentHash(fallbackSeed);
+}
+
+function sha256ContentHash(input: string): string {
+  return `sha256:${crypto.createHash("sha256").update(input, "utf8").digest("hex")}`;
 }

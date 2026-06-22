@@ -327,8 +327,17 @@ test("P02-T10 CLI E2E script builds protocol before packages that resolve protoc
   const script = packageJson.scripts.test;
   assert.equal(typeof script, "string");
   assert.match(script, /pnpm --filter @legion\/protocol build/);
+  assert.match(script, /pnpm --filter @legion\/store-sqlite build/);
   assert.ok(
     script.indexOf("@legion/protocol build") < script.indexOf("@legion/artifacts build"),
+    script
+  );
+  assert.ok(
+    script.indexOf("@legion/board-store build") < script.indexOf("@legion/store-sqlite build"),
+    script
+  );
+  assert.ok(
+    script.indexOf("@legion/store-sqlite build") < script.indexOf("@legion/cli build"),
     script
   );
 });
@@ -725,6 +734,36 @@ test("P03-T09 board CLI routes task, claim, event, and approval operations witho
   }
 });
 
+test("P03-T09 board CLI returns usage diagnostics for malformed board input and repository errors", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const nullInputPath = path.join(workspace, "null-input.json");
+    const arrayInputPath = path.join(workspace, "array-input.json");
+    const invalidTaskPath = path.join(workspace, "invalid-task.json");
+    await mkdir(repositoryRoot, { recursive: true });
+    await writeText(nullInputPath, "null\n");
+    await writeText(arrayInputPath, "[]\n");
+    await writeJson(invalidTaskPath, { changeId: "chg_cli_board" });
+
+    for (const inputPath of [nullInputPath, arrayInputPath]) {
+      const result = await runCli(["--repository-root", repositoryRoot, "board", "task", "get", "--input", inputPath]);
+      assert.equal(result.exitCode, 1, result.stderr);
+      assert.equal(result.json.status, "usage_error");
+      assert.equal(result.json.diagnostics[0].code, "usage_error");
+      assert.match(result.json.diagnostics[0].message, /JSON input must be an object/);
+    }
+
+    const invalid = await runCli(["--repository-root", repositoryRoot, "board", "task", "create", "--input", invalidTaskPath]);
+    assert.equal(invalid.exitCode, 1, invalid.stderr);
+    assert.equal(invalid.json.status, "usage_error");
+    assert.equal(invalid.json.diagnostics[0].code, "usage_error");
+    assert.match(invalid.json.diagnostics[0].message, /taskId|projectId|contract/i);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 function sha256Hex(payload) {
   return createHash("sha256").update(payload, "utf8").digest("hex");
 }
@@ -733,14 +772,48 @@ function sha256ContentHash(payload) {
   return `sha256:${sha256Hex(payload)}`;
 }
 
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(",")}}`;
+}
+
+function releaseObservationReportSha256(report) {
+  return sha256ContentHash(canonicalJson({
+    kind: "release-observation:report",
+    schemaVersion: "1.0.0",
+    changeId: report.changeId,
+    mergeQueueHash: report.mergeQueueHash,
+    decisionSha256: report.decisionSha256,
+    tier: report.tier,
+    releaseability: report.releaseability,
+    status: report.status,
+    windowStart: report.windowStart,
+    windowEnd: report.windowEnd,
+    observedAt: report.observedAt,
+    observedBy: report.observedBy,
+    canary: report.canary,
+    healthCheck: report.healthCheck,
+    regression: report.regression,
+    alert: report.alert,
+    failureReason: report.failureReason
+  }));
+}
+
 function releaseObservationReportInput(overrides = {}) {
   const changeId = overrides.changeId ?? "chg_cli_release_observation";
   const mergeQueueHash =
     overrides.mergeQueueHash ?? sha256ContentHash(`release-observation-cli-e2e-${changeId}-mq`);
   const decisionSha256 = overrides.decisionSha256 ?? sha256ContentHash(`release-observation-cli-e2e-${changeId}-decision`);
-  const reportSha256 = overrides.reportSha256 ?? sha256ContentHash(`release-observation-cli-e2e-${changeId}-report`);
   const status = overrides.status ?? "promoted";
-  const report = {
+  const reportDraft = {
     schemaVersion: "1.0.0",
     kind: "release-observation",
     changeId,
@@ -761,9 +834,13 @@ function releaseObservationReportInput(overrides = {}) {
     healthCheck: null,
     regression: null,
     alert: null,
-    reportSha256,
     failureReason: null,
     ...(overrides.reportOverrides ?? {})
+  };
+  const reportSha256 = overrides.reportSha256 ?? releaseObservationReportSha256(reportDraft);
+  const report = {
+    ...reportDraft,
+    reportSha256
   };
   return {
     changeId,

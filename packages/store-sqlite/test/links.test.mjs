@@ -403,6 +403,23 @@ test("P03-T08 topologicalOrderForRoots restricts ordering to reachable subgraph"
   });
 });
 
+test("P03-T08 topologicalOrderForRoots seeds only zero in-degree reachable roots", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, taskRepository, linkRepository } = buildRepositories(databasePath);
+    try {
+      seedTasks(taskRepository, "tsk_a", "tsk_b", "tsk_c");
+      linkRepository.addLink({ taskId: "tsk_b", dependsOnTaskId: "tsk_a", relation: "depends_on" });
+      linkRepository.addLink({ taskId: "tsk_c", dependsOnTaskId: "tsk_b", relation: "depends_on" });
+
+      const result = linkRepository.topologicalOrderForRoots(["tsk_b", "tsk_a"]);
+      assert.deepEqual(result.order, ["tsk_a", "tsk_b", "tsk_c"]);
+      assert.deepEqual(result.excludedIncoming, []);
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("P03-T08 SqliteBoardStoreWithTaskLinkRepository exposes the link repository", async () => {
   await withTempDatabase((databasePath) => {
     const store = buildWrappedStore(databasePath);

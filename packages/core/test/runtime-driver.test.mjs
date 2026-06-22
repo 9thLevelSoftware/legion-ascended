@@ -166,6 +166,102 @@ test("runtime-local resume advances the checkpoint generation", async () => {
   });
 });
 
+test("runtime-local resume rejects terminal runs without reviving them", async () => {
+  const driver = new RuntimeLocalDriver();
+  const { runId, checkpoint } = await driver.start(makeRequest());
+  await driver.cancel(runId, {
+    code: "user_requested",
+    message: "user pressed cancel",
+    requestedBy: ACTOR,
+    at: "2026-06-21T20:05:00.000Z"
+  });
+  const streamLength = driver.__streamLength(runId);
+
+  await assert.rejects(driver.resume(runId, checkpoint), (error) => {
+    assert.equal(error.code, "terminal_run");
+    assert.equal(error.state.state, "canceled");
+    return true;
+  });
+
+  const inspection = await driver.inspect(runId);
+  assert.equal(inspection.status, "canceled");
+  assert.equal(driver.__streamLength(runId), streamLength);
+});
+
+test("runtime-local event ids include aggregate identity for same type and sequence", async () => {
+  const driver = new RuntimeLocalDriver();
+  const { runId } = await driver.start(makeRequest());
+
+  const first = await driver.approve({
+    approvalId: "apv_local-collision-1",
+    runId,
+    scope: scopeForApproval("apv_local-collision-1", runId),
+    decidedBy: APPROVER,
+    decidedAt: "2026-06-21T20:15:00.000Z",
+    reason: "first approval"
+  });
+  const second = await driver.approve({
+    approvalId: "apv_local-collision-2",
+    runId,
+    scope: scopeForApproval("apv_local-collision-2", runId),
+    decidedBy: APPROVER,
+    decidedAt: "2026-06-21T20:16:00.000Z",
+    reason: "second approval"
+  });
+
+  assert.equal(first.events[0].type, second.events[0].type);
+  assert.equal(first.events[0].sequence, second.events[0].sequence);
+  assert.notEqual(first.events[0].id, second.events[0].id);
+});
+
+test("runtime-local protocol event timestamps use the injected clock", async () => {
+  const startedAt = "2026-06-21T21:00:00.000Z";
+  const resumedAt = "2026-06-21T21:01:00.000Z";
+  const approvedAt = "2026-06-21T21:02:00.000Z";
+  const artifactAt = "2026-06-21T21:03:00.000Z";
+  const canceledAt = "2026-06-21T21:04:00.000Z";
+  const times = [startedAt, resumedAt, approvedAt, artifactAt, canceledAt];
+  const driver = new RuntimeLocalDriver({
+    clock: {
+      now: () => times.shift() ?? canceledAt
+    }
+  });
+
+  const start = await driver.start(makeRequest());
+  assert.deepEqual(start.events.map((event) => event.occurredAt), [startedAt, startedAt]);
+
+  const resume = await driver.resume(start.runId, start.checkpoint);
+  assert.equal(resume.events[0].occurredAt, resumedAt);
+
+  const approval = await driver.approve({
+    approvalId: "apv_local-clock",
+    runId: start.runId,
+    scope: scopeForApproval("apv_local-clock", start.runId),
+    decidedBy: APPROVER,
+    decidedAt: "2026-06-21T20:00:00.000Z",
+    reason: "clock check"
+  });
+  assert.deepEqual(approval.events.map((event) => event.occurredAt), [approvedAt, approvedAt]);
+
+  const artifact = await driver.artifact(start.runId, {
+    kind: "register",
+    reference: {
+      path: "evidence/p05-t01/clock.txt",
+      sha256: sha256ContentHash("clock")
+    },
+    evidenceId: "evd_local-clock"
+  });
+  assert.equal(artifact.events[0].occurredAt, artifactAt);
+
+  const cancel = await driver.cancel(start.runId, {
+    code: "clock_done",
+    message: "clock verification complete",
+    requestedBy: ACTOR,
+    at: canceledAt
+  });
+  assert.equal(cancel.events[0].occurredAt, canceledAt);
+});
+
 test("runtime-local cancel transitions the run to canceled and rejects duplicate cancels", async () => {
   const driver = new RuntimeLocalDriver();
   const { runId } = await driver.start(makeRequest());

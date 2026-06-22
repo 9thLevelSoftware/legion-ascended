@@ -157,6 +157,26 @@ test("aggregator produces a content-addressed aggregatorHash that is stable acro
   assert.match(r1.aggregatorHash, /^sha256:[0-9a-f]{64}$/);
 });
 
+test("aggregator honors input.now over the constructor clock", () => {
+  const orchestratorResult = makeOrchestratorSuccess();
+  const aggregator = new WholeChangeAcceptanceAggregator({
+    now: () => "2026-06-22T04:00:00.000Z"
+  });
+  const result = aggregator.aggregate({
+    changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
+    orchestratorResult,
+    acceptedBy: "ci-bot",
+    now: () => "2026-06-22T04:12:34.000Z"
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.acceptedAt, "2026-06-22T04:12:34.000Z");
+  assert.equal(result.state.acceptedAt, "2026-06-22T04:12:34.000Z");
+  assert.equal(
+    aggregateEventFor(result).occurredAt,
+    "2026-06-22T04:12:34.000Z"
+  );
+});
+
 test("aggregator uses deterministic, content-addressed audit hashes for payload and state", () => {
   const orchestratorResult = makeOrchestratorSuccess();
   const result = buildWholeChangeAcceptance({
@@ -511,16 +531,23 @@ test("deriveWholeChangeAggregateId pins the (changeId, mergeQueueHash) shape", (
 });
 
 test("wholeChangeAcceptanceProjectionKey follows the whole_change.acceptance: prefix", () => {
-  const key = wholeChangeAcceptanceProjectionKey(WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId);
+  const key = wholeChangeAcceptanceProjectionKey(
+    WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
+    WHOLE_CHANGE_FIXTURE_CONSTANTS.mergeQueueHash
+  );
   assert.ok(key.startsWith(WHOLE_CHANGE_PROJECTION_KEY_PREFIX));
   assert.equal(isWholeChangeAcceptanceProjectionKey(key), true);
   assert.equal(isWholeChangeAcceptanceProjectionKey("unrelated.projection"), false);
 });
 
 test("parseWholeChangeAcceptanceProjectionKey round-trips the projection key", () => {
-  const key = wholeChangeAcceptanceProjectionKey(WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId);
+  const key = wholeChangeAcceptanceProjectionKey(
+    WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
+    WHOLE_CHANGE_FIXTURE_CONSTANTS.mergeQueueHash
+  );
   const parsed = parseWholeChangeAcceptanceProjectionKey(key);
   assert.equal(parsed.changeId, WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId);
+  assert.equal(parsed.mergeQueueHash, WHOLE_CHANGE_FIXTURE_CONSTANTS.mergeQueueHash);
   assert.equal(parseWholeChangeAcceptanceProjectionKey("not-a-key"), null);
 });
 

@@ -4,7 +4,7 @@
 
 DONE.
 
-Implementation batch: Phase 8 changes on `codex/p03-t02-board-task-repository` after base `ef0581f8803dc13e1975a8f049515afff21cec28`, with final closeout evidence under `docs/next/evidence/P08-CLOSEOUT/`.
+Implementation batch: Phase 8 changes on PR integration branch `codex/p03-t02-board-task-repository` after base `ef0581f8803dc13e1975a8f049515afff21cec28`, with final closeout evidence under `docs/next/evidence/P08-CLOSEOUT/`.
 
 Phase 8 closes the CLI-first MVP cut line for Legion Next. The branch now carries fresh-context task execution and per-task review/acceptance primitives: each task can be preflighted, isolated into a frozen WorkerContext, deterministically verified, independently reviewed, and mapped into an accepted/rejected/escalated task decision before Phase 9 performs merge-queue and whole-change aggregation.
 

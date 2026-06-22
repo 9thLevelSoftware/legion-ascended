@@ -1,7 +1,7 @@
 phase: 12
 phase_id: P12
 status: DONE
-source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/12-phase-host-bridges-and-v8-migration.md"
+source_document: "docs/rebuild/12-phase-host-bridges-and-v8-migration.md"
 base_commit: "33ddf60180235dcb1a852838f6559a8cbecb7c11"
 started_at: "2026-06-22T14:19:19Z"
 completed_at: "2026-06-22T14:49:25Z"
@@ -10,21 +10,21 @@ tasks:
   P12-T01:
     status: DONE
     run_id: "P12-T01-20260622-host-bridge-docs-alignment"
-    commit: "P12-final-head"
+    commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
     evidence: docs/next/evidence/P12-T01/integration-report.yaml
     depends_on: ["P11-T03"]
     assignee: legionworker
   P12-T02:
     status: DONE
     run_id: "P12-T02-20260622-legacy-migration-verify-alias"
-    commit: "P12-final-head"
+    commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
     evidence: docs/next/evidence/P12-T02/integration-report.yaml
     depends_on: ["P12-T01"]
     assignee: legionworker
   P12-T03:
     status: DONE
     run_id: "P12-T03-20260622-phase-12-closeout"
-    commit: "P12-final-head"
+    commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
     evidence: docs/next/evidence/P12-CLOSEOUT/integration-report.yaml
     depends_on: ["P12-T02"]
     assignee: otrlead

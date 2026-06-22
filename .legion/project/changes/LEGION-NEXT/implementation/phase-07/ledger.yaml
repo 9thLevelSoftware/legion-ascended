@@ -1,15 +1,15 @@
 phase: 7
 phase_id: P07
 status: DONE
-source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/07-phase-planner-task-contracts-and-preflight.md"
+source_document: "docs/rebuild/07-phase-planner-task-contracts-and-preflight.md"
 base_commit: "e7246c06ab670c56ba8ad2509e9a19c72de65eff"
-started_at: "2026-06-22T00:40:00-04:00"
+started_at: "2026-06-22T04:40:00Z"
 completed_at: "2026-06-22T05:09:20Z"
 active_wave: 1
 tasks:
-  P07-T01: { status: DONE, run_id: "P07-T01-20260622-task-contract-schema", commit: "P07-closeout-commit" }
-  P07-T02: { status: DONE, run_id: "P07-T02-20260622-preflight-validation", commit: "P07-closeout-commit" }
-  P07-T03: { status: DONE, run_id: "P07-T03-20260622-phase-07-closeout", commit: "P07-final-head" }
+  P07-T01: { status: DONE, run_id: "P07-T01-20260622-task-contract-schema", commit: "ef0581f8803dc13e1975a8f049515afff21cec28" }
+  P07-T02: { status: DONE, run_id: "P07-T02-20260622-preflight-validation", commit: "ef0581f8803dc13e1975a8f049515afff21cec28" }
+  P07-T03: { status: DONE, run_id: "P07-T03-20260622-phase-07-closeout", commit: "ef0581f8803dc13e1975a8f049515afff21cec28" }
 decisions:
   - task: P07-T01
     decision: "TaskContract now carries explicit wave and agent assignment fields, with schema validation for wave identifiers and unique agent IDs."

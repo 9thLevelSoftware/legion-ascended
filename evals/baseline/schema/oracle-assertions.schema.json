@@ -5,7 +5,7 @@
   "required": ["schema_version", "scenario_id", "visible_to_worker", "critical_assertions", "calibration"],
   "properties": {
     "schema_version": { "const": 1 },
-    "scenario_id": { "type": "string", "pattern": "^[a-z0-9-]+\.v\d+$" },
+    "scenario_id": { "type": "string", "pattern": "^[a-z0-9-]+\\.v\\d+$" },
     "visible_to_worker": { "const": false },
     "critical_assertions": {
       "type": "array",

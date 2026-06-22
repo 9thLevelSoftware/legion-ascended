@@ -8,6 +8,8 @@
 
 import { createHash } from "node:crypto";
 
+import { deriveReleaseObservationReportSha256 } from "@legion/core";
+
 function sha256Hex(payload) {
   return createHash("sha256").update(payload, "utf8").digest("hex");
 }
@@ -44,11 +46,11 @@ export function makeReleaseObservationReport({
   changeId = FIXTURE_CHANGE_ID,
   mergeQueueHash = FIXTURE_MERGE_QUEUE_HASH,
   decisionSha256 = FIXTURE_DECISION_SHA256,
-  reportSha256 = FIXTURE_REPORT_SHA256,
+  reportSha256,
   releaseability = "releaseable",
   tier = "R0"
 } = {}) {
-  const report = {
+  const reportBody = {
     schemaVersion: "1.0.0",
     kind: "release-observation",
     changeId,
@@ -69,10 +71,12 @@ export function makeReleaseObservationReport({
     healthCheck: null,
     regression: null,
     alert: null,
-    reportSha256,
     failureReason: null
   };
-  return report;
+  return {
+    ...reportBody,
+    reportSha256: reportSha256 ?? deriveReleaseObservationReportSha256(reportBody)
+  };
 }
 
 export function makeBoardEventForReport(report, { eventType = null } = {}) {

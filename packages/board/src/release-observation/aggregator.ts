@@ -47,6 +47,7 @@ import type {
 } from "@legion/protocol";
 
 import {
+  deriveReleaseObservationReportSha256,
   RELEASE_OBSERVATION_KIND,
   type ReleaseObservationEventPayload,
   type ReleaseObservationReport
@@ -184,6 +185,19 @@ function validateInput(
         "report.reportSha256 must be a sha256: prefixed content hash",
       path: ["report", "reportSha256"]
     });
+  } else {
+    const { reportSha256: _reportSha256, ...reportBody } = report;
+    const expectedReportSha256 = deriveReleaseObservationReportSha256(
+      reportBody
+    );
+    if (report.reportSha256 !== expectedReportSha256) {
+      issues.push({
+        code: "report_sha_mismatch",
+        message:
+          "report.reportSha256 must match the canonical release-observation report hash",
+        path: ["report", "reportSha256"]
+      });
+    }
   }
 
   if (report.changeId !== input.changeId) {

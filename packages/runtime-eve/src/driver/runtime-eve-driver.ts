@@ -66,6 +66,7 @@ import type {
 import {
   RUNTIME_EVE_PINNED_VERSION,
   type EveAgentSpec,
+  type EveSessionSnapshot,
   type EveSubagentSpec,
   type EveTransport,
   type EveTransportEvent
@@ -254,6 +255,15 @@ export class RuntimeEveDriver implements RuntimeDriver {
    */
   async resume(runId: RunId, checkpointRef: RuntimeCheckpointRef): Promise<RuntimeResumeResult> {
     const state = this.requireRun(runId);
+    await this.refreshRunState(state);
+    if (isTerminalStatus(state.status)) {
+      throw new RuntimeEveDriverError(
+        "terminal_run",
+        `Run ${runId} is ${state.status} and cannot be resumed`,
+        false,
+        { state: state.status, startedAt: state.startedAt, checkpoint: state.checkpoint }
+      );
+    }
     if (checkpointRef.generation !== state.checkpoint.generation) {
       throw new RuntimeEveDriverError(
         "stale_checkpoint",
@@ -272,7 +282,7 @@ export class RuntimeEveDriver implements RuntimeDriver {
       state.continuationToken,
       state.checkpoint.fingerprint
     );
-    state.generation += 1;
+    state.generation = resumed.checkpointGeneration;
     state.checkpoint = {
       runId,
       generation: resumed.checkpointGeneration,
@@ -327,6 +337,7 @@ export class RuntimeEveDriver implements RuntimeDriver {
   async inspect(runId: RunId): Promise<RuntimeInspection> {
     const state = this.requireRun(runId);
     const snapshot = await this.transport.inspectSession(state.sessionId);
+    this.applySnapshot(state, snapshot);
     const sandbox: RuntimeSandboxState = {
       sandboxDriver: snapshot.sandbox.sandboxDriver,
       worktreePath: snapshot.sandbox.worktreePath,
@@ -335,7 +346,7 @@ export class RuntimeEveDriver implements RuntimeDriver {
     };
     return {
       runId,
-      status: snapshot.status,
+      status: state.status,
       checkpoint: state.checkpoint,
       sandbox,
       artifacts: [...state.artifacts],
@@ -363,8 +374,14 @@ export class RuntimeEveDriver implements RuntimeDriver {
     for (const event of log) {
       yield event;
     }
+    let sequence = this.nextSequence(runId);
     for await (const event of this.transport.streamSession(state.sessionId)) {
-      yield translateStreamEvent(event, runId);
+      const translated = translateStreamEvent(event, runId, sequence);
+      sequence += 1;
+      if (translated.kind === "terminal") {
+        this.applyTerminalStreamEvent(state, translated);
+      }
+      yield translated;
     }
   }
 
@@ -449,13 +466,8 @@ export class RuntimeEveDriver implements RuntimeDriver {
     const resolvedAt = this.clock.now();
 
     if (artifactRef === undefined) {
-      const isTerminal =
-        state.status === "succeeded" ||
-        state.status === "failed" ||
-        state.status === "canceled" ||
-        state.status === "superseded" ||
-        state.status === "blocked";
-      if (!isTerminal) {
+      await this.refreshRunState(state);
+      if (!isTerminalStatus(state.status)) {
         throw new RuntimeEveDriverError(
           "not_terminal",
           `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run`,
@@ -464,17 +476,13 @@ export class RuntimeEveDriver implements RuntimeDriver {
         );
       }
       const bundle = await this.transport.resolveFinalOutput(state.sessionId);
-      const terminalStatus: "succeeded" | "failed" | "blocked" | "canceled" =
-        state.status === "succeeded" ||
-        state.status === "failed" ||
-        state.status === "blocked" ||
-        state.status === "canceled"
-          ? state.status
-          : "canceled";
+      const terminalStatus = terminalArtifactStatus(state.status);
       const finishedAt = state.finishedAt ?? (bundle.finishedAt as UtcTimestamp);
+      state.status = terminalStatus;
+      state.finishedAt = finishedAt;
       const files = bundle.files.map((file) => ({
         path: file.reference as unknown as ArtifactReference["path"],
-        sha256: file.sha256 as unknown as ContentHash
+        sha256: normalizeContentHash(file.sha256, `runtime-eve:final-output-file:${file.reference}`)
       }));
       const finalOutputRef: ArtifactReference = {
         path: `.runtime-eve/${runId}/final-output.json` as unknown as ArtifactReference["path"],
@@ -652,6 +660,26 @@ export class RuntimeEveDriver implements RuntimeDriver {
     const log = this.streamLogs.get(runId);
     return log ? log.length : 0;
   }
+
+  private async refreshRunState(state: EveRunState): Promise<void> {
+    const snapshot = await this.transport.inspectSession(state.sessionId);
+    this.applySnapshot(state, snapshot);
+  }
+
+  private applySnapshot(state: EveRunState, snapshot: EveSessionSnapshot): void {
+    if (isTerminalStatus(state.status) && !isTerminalStatus(snapshot.status)) {
+      return;
+    }
+    state.status = snapshot.status;
+    if (snapshot.finishedAt) {
+      state.finishedAt = snapshot.finishedAt as UtcTimestamp;
+    }
+  }
+
+  private applyTerminalStreamEvent(state: EveRunState, event: Extract<RuntimeStreamEvent, { kind: "terminal" }>): void {
+    state.status = event.status;
+    state.finishedAt = event.at;
+  }
 }
 
 // -------------------------------------------------------------------
@@ -679,14 +707,14 @@ function deriveRunId(request: RuntimeStartRequest): RunId {
   return `run_${hash.slice(0, 22)}` as RunId;
 }
 
-function translateStreamEvent(event: EveTransportEvent, runId: RunId): RuntimeStreamEvent {
+function translateStreamEvent(event: EveTransportEvent, runId: RunId, sequence: number): RuntimeStreamEvent {
   switch (event.kind) {
     case "progress":
       return {
         kind: "progress",
         runId,
         at: event.at as UtcTimestamp,
-        sequence: 0,
+        sequence,
         note: event.note,
         ...(event.data ? { data: event.data } : {})
       };
@@ -695,7 +723,7 @@ function translateStreamEvent(event: EveTransportEvent, runId: RunId): RuntimeSt
         kind: "tool_call",
         runId,
         at: event.at as UtcTimestamp,
-        sequence: 0,
+        sequence,
         tool: event.tool,
         input: event.input,
         ...(event.output ? { output: event.output } : {})
@@ -705,7 +733,7 @@ function translateStreamEvent(event: EveTransportEvent, runId: RunId): RuntimeSt
         kind: "approval_requested",
         runId,
         at: event.at as UtcTimestamp,
-        sequence: 0,
+        sequence,
         approvalId: event.approvalId as unknown as RuntimeStreamEvent extends { kind: "approval_requested"; approvalId: infer T } ? T : never,
         scope: { effectClass: "S0", action: "approve-eve", targets: [] },
         requestedBy: { kind: "worker", id: "runtime-eve", displayName: "runtime-eve" }
@@ -715,10 +743,10 @@ function translateStreamEvent(event: EveTransportEvent, runId: RunId): RuntimeSt
         kind: "artifact_registered",
         runId,
         at: event.at as UtcTimestamp,
-        sequence: 0,
+        sequence,
         reference: {
           path: event.reference as unknown as ArtifactReference["path"],
-          sha256: (event.sha256 ?? `sha256:${event.reference}`) as unknown as ContentHash
+          sha256: normalizeContentHash(event.sha256, `runtime-eve:stream-artifact:${event.reference}`)
         }
       };
     case "terminal":
@@ -726,11 +754,34 @@ function translateStreamEvent(event: EveTransportEvent, runId: RunId): RuntimeSt
         kind: "terminal",
         runId,
         at: event.at as UtcTimestamp,
-        sequence: 0,
+        sequence,
         status: event.status,
         evidenceRefs: []
       };
   }
+}
+
+type EveTerminalStatus = "succeeded" | "failed" | "blocked" | "canceled" | "superseded";
+
+function isTerminalStatus(status: RuntimeInspection["status"]): status is EveTerminalStatus {
+  return (
+    status === "succeeded" ||
+    status === "failed" ||
+    status === "blocked" ||
+    status === "canceled" ||
+    status === "superseded"
+  );
+}
+
+function terminalArtifactStatus(status: EveTerminalStatus): "succeeded" | "failed" | "blocked" | "canceled" {
+  return status === "superseded" ? "canceled" : status;
+}
+
+function normalizeContentHash(candidate: string | undefined, fallbackSeed: string): ContentHash {
+  if (candidate && /^sha256:[0-9a-f]{64}$/.test(candidate)) {
+    return candidate as unknown as ContentHash;
+  }
+  return sha256ContentHash(fallbackSeed);
 }
 
 function buildRunCreatedEvents(

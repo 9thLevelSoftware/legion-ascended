@@ -299,6 +299,71 @@ test("P03-T03 rebuilder replay is deterministic: same events produce same state 
   });
 });
 
+test("P03-T03 rebuilder rebuildAndSave persists an empty projection", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, projectionRepository, eventRepository } = buildRepositories(databasePath);
+    try {
+      const rebuilder = new SqliteBoardProjectionRebuilder({
+        projectionKey: "tasks.empty",
+        projectionVersion: 1,
+        initialState: { tasks: {} },
+        reduce: taskStatusReducer,
+        eventRepository,
+        projectionRepository
+      });
+
+      const report = rebuilder.rebuildAndSave();
+      assert.equal(report.eventCount, 0);
+      assert.equal(report.rebuiltThroughGlobalSequence, 0);
+      assert.deepEqual(report.state, { tasks: {} });
+
+      const saved = projectionRepository.loadProjection("tasks.empty");
+      assert.equal(saved.rebuiltThroughGlobalSequence, 0);
+      assert.deepEqual(saved.state, { tasks: {} });
+      assert.doesNotThrow(() => rebuilder.verify());
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T03 rebuilder pages through the full event stream", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, eventRepository, projectionRepository } = buildRepositories(databasePath);
+    try {
+      const rebuilder = new SqliteBoardProjectionRebuilder({
+        projectionKey: "tasks.count",
+        projectionVersion: 1,
+        initialState: { count: 0 },
+        reduce: (state) => ({ count: state.count + 1 }),
+        eventRepository,
+        projectionRepository
+      });
+
+      for (let i = 0; i < 1_005; i++) {
+        eventRepository.appendEvent(
+          makeTaskEvent(`tsk_${i}`, "task.created", {
+            taskId: `tsk_${i}`,
+            projectId: "prj_alpha",
+            status: "queued",
+            priority: 500,
+            generation: 1,
+            updatedAt: "2026-06-21T12:00:00.000Z"
+          })
+        );
+      }
+
+      const report = rebuilder.rebuildAndSave();
+      assert.equal(report.eventCount, 1_005);
+      assert.equal(report.rebuiltThroughGlobalSequence, 1_004);
+      assert.equal(report.state.count, 1_005);
+      assert.equal(projectionRepository.loadProjection("tasks.count").state.count, 1_005);
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("P03-T03 rebuild can recover a projection after its derived state is deleted", async () => {
   await withTempDatabase((databasePath) => {
     const { store, eventRepository, projectionRepository } = buildRepositories(databasePath);

@@ -635,9 +635,18 @@ function upsertApprovalPointer(
   pointers: readonly DashboardApprovalPointer[],
   next: DashboardApprovalPointer
 ): DashboardApprovalPointer[] {
-  const filtered = pointers.filter(
+  const hasNewerOrEqual = pointers.some(
     (existing) =>
-      !(existing.changeId === next.changeId && existing.lastGlobalSequence >= next.lastGlobalSequence)
+      existing.changeId === next.changeId &&
+      existing.lastGlobalSequence >= next.lastGlobalSequence
+  );
+  if (hasNewerOrEqual) {
+    return [...pointers].sort((a, b) =>
+      a.changeId < b.changeId ? -1 : a.changeId > b.changeId ? 1 : 0
+    );
+  }
+  const filtered = pointers.filter(
+    (existing) => existing.changeId !== next.changeId
   );
   return [...filtered, next].sort((a, b) =>
     a.changeId < b.changeId ? -1 : a.changeId > b.changeId ? 1 : 0

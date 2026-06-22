@@ -1,7 +1,8 @@
 phase: P08
 status: PASS
 title: Fresh-context execution closeout
-branch: codex/p03-t02-board-task-repository
+evidence_branch: codex/p03-t02-board-task-repository
+branch_note: "Evidence was recorded on the reused PR integration branch, not a phase-specific branch."
 base_sha: ef0581f8803dc13e1975a8f049515afff21cec28
 head_before_closeout: ef0581f8803dc13e1975a8f049515afff21cec28
 task: P08-T01

@@ -384,6 +384,27 @@ test("P09-T01 orchestrator surfaces entry_out_of_order for non-monotonic indices
   assert.equal(result.snapshot.sequenceLength, 2);
 });
 
+test("P09-T01 orchestrator blocks invalid queue ordering before invoking the rebase runner", async () => {
+  const { entries } = makeSequencedEntries({ baseRef: "main", count: 2 });
+  const duplicate = [entries[0], { ...entries[1], sequenceIndex: 0 }];
+  let calls = 0;
+  const runner = (request) => {
+    calls += 1;
+    return buildIdentityRebaseResult(request, () => "2026-06-22T03:00:00.000Z");
+  };
+
+  const result = await orchestrator().run({
+    entries: duplicate,
+    rebaseRunner: runner,
+    initialHeadRef: "main"
+  });
+
+  assert.equal(calls, 0);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => issue.code === "entry_duplicate_sequence"));
+  assert.ok(result.snapshot.steps.every((step) => step.outcome !== "rebased"));
+});
+
 // ---------------------------------------------------------------------------
 // 8. Duplicate sequence indices
 // ---------------------------------------------------------------------------
@@ -417,6 +438,27 @@ test("P09-T01 sequencer marks entry_base_ref_mismatch as conflict", async () => 
   // Entry 1 is conflict; entry 0 still rebased.
   assert.ok(result.snapshot.steps[1].outcome === "conflict");
   assert.equal(result.decision.outcome, "rejected");
+});
+
+test("P09-T01 orchestrator honors initialHeadRef for the first queued entry", async () => {
+  const { entries } = makeSequencedEntries({ baseRef: "stale-base", count: 1 });
+  let calls = 0;
+  const runner = (request) => {
+    calls += 1;
+    return buildIdentityRebaseResult(request, () => "2026-06-22T03:00:00.000Z");
+  };
+
+  const result = await orchestrator().run({
+    entries,
+    rebaseRunner: runner,
+    initialHeadRef: "main"
+  });
+
+  assert.equal(calls, 0);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => issue.code === "entry_base_ref_mismatch"));
+  assert.equal(result.snapshot.steps[0].headRefBefore, "main");
+  assert.equal(result.snapshot.steps[0].outcome, "conflict");
 });
 
 // ---------------------------------------------------------------------------
@@ -901,6 +943,31 @@ test("P09-T01 conflict detector dedupes overlapping pairs into a single report",
   const shared = conflicts.filter((c) => c.path === sharedPath);
   assert.equal(shared.length, 1);
   assert.deepEqual(shared[0].conflictingEntrySequenceIndices, [0, 1, 2]);
+});
+
+test("P09-T01 conflict detector does not treat an entry's own sequential file as a conflict", () => {
+  const sharedPath = "packages/core/src/merge/self-sequential.ts";
+  const contract = makeFixtureContract({
+    id: "ctr_merge-self-sequential",
+    revision: 1,
+    scope: {
+      read: [".legion/project/specs/merge-queue.md"],
+      write: [sharedPath],
+      forbidden: ["packages/core/src/runtime/local-driver.ts"],
+      sequentialFiles: [sharedPath]
+    }
+  });
+  const workerContext = makeFixtureWorkerContext(contract, { workerContextHash: "merge-self-sequential" });
+  const entry = makeFixtureEntry({
+    sequenceIndex: 0,
+    contract,
+    workerContext,
+    baseRef: "main",
+    headRef: "main",
+    targetRef: "merge-head-0"
+  });
+
+  assert.deepEqual(detectPathConflicts([entry]), []);
 });
 
 // ---------------------------------------------------------------------------

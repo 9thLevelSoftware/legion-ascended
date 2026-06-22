@@ -1,7 +1,8 @@
 phase: P12
 status: PASS
 title: Host Bridges and V8 Migration closeout
-branch: codex/p03-t02-board-task-repository
+evidence_branch: codex/p03-t02-board-task-repository
+branch_note: "Evidence was recorded on the reused PR integration branch, not a Phase 12-specific branch."
 base_sha: 33ddf60180235dcb1a852838f6559a8cbecb7c11
 head_before_closeout: 33ddf60180235dcb1a852838f6559a8cbecb7c11
 reviewer: "GPT-5.5 / otrlead"

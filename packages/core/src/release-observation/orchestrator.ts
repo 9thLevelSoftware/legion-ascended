@@ -328,7 +328,7 @@ async function runAlertPhase(
     alerts.push(deepFreeze(await sink(candidateRecord)));
   }
   const critical = alerts
-    .filter((a) => a.severity === "critical")
+    .filter((a) => a.severity === "critical" && a.decision === "fired")
     .map((a) => a.alertId);
   const fired = alerts
     .filter((a) => a.decision === "fired")
@@ -387,6 +387,17 @@ function resolveStatus(
     return {
       status: "regressed",
       reason: `health unhealthy: ${healthCheck.unhealthyCheckIds.join(", ")}`
+    };
+  }
+  const skippedRequiredPhases = [
+    canary?.outcome === "skipped" ? "canary" : null,
+    healthCheck?.outcome === "skipped" ? "health_check" : null,
+    regression?.outcome === "skipped" ? "regression_detection" : null
+  ].filter((phase): phase is string => phase !== null);
+  if (skippedRequiredPhases.length > 0) {
+    return {
+      status: "observing",
+      reason: `required observation skipped: ${skippedRequiredPhases.join(", ")}`
     };
   }
   // A regressing or unhealthy observation: any of the four
@@ -516,6 +527,17 @@ export class ReleaseObservationOrchestrator {
       issues.push({
         code: "window_expired",
         message: "Release observation window has already expired; observedAt must be inside [windowStart, windowEnd].",
+        path: ["observedAt"]
+      });
+      return failureResult(
+        (decision as MergeIntegrationDecision).mergeQueueHash,
+        issues
+      );
+    }
+    if (String(input.observedAt) < String(input.windowStart)) {
+      issues.push({
+        code: "window_invalid",
+        message: "Release observation observedAt must be inside [windowStart, windowEnd].",
         path: ["observedAt"]
       });
       return failureResult(

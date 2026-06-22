@@ -63,6 +63,72 @@ function appendFixtureEvents(eventRepository, appendInputs) {
   return eventRepository.appendEvents({ events: appendInputs }).events;
 }
 
+function boardEventFromAppendInput(input, globalSequence) {
+  return {
+    schemaVersion: "0.1.0",
+    eventId: `evt-dashboard-page-${globalSequence}`,
+    aggregateKind: input.aggregateKind,
+    aggregateId: input.aggregateId,
+    aggregateSequence: globalSequence,
+    globalSequence,
+    eventType: input.eventType,
+    eventVersion: input.eventVersion,
+    payload: input.payload,
+    payloadHash: "0".repeat(64),
+    causationId: input.causationId ?? null,
+    correlationId: input.correlationId ?? null,
+    occurredAt: input.occurredAt,
+    idempotencyKey: input.idempotencyKey ?? null,
+    payloadJson: JSON.stringify(input.payload)
+  };
+}
+
+function makePagedEventRepository(events) {
+  return {
+    listEvents(query = {}) {
+      const order = query.order ?? "asc";
+      const limit = query.limit ?? 1_000;
+      const filtered = events.filter((event) => {
+        if (query.aggregateKind && event.aggregateKind !== query.aggregateKind) return false;
+        if (query.aggregateId && event.aggregateId !== query.aggregateId) return false;
+        if (query.eventType && event.eventType !== query.eventType) return false;
+        if (
+          typeof query.fromGlobalSequence === "number" &&
+          event.globalSequence < query.fromGlobalSequence
+        ) {
+          return false;
+        }
+        if (
+          typeof query.untilGlobalSequence === "number" &&
+          event.globalSequence > query.untilGlobalSequence
+        ) {
+          return false;
+        }
+        return true;
+      });
+      filtered.sort((a, b) =>
+        order === "desc"
+          ? b.globalSequence - a.globalSequence
+          : a.globalSequence - b.globalSequence
+      );
+      return filtered.slice(0, limit);
+    },
+    appendEvent() { throw new Error("not used"); },
+    appendEvents() { throw new Error("not used"); },
+    getEvent() { return null; },
+    getEventByIdempotencyKey() { return null; },
+    countEvents() { return events.length; },
+    tail() { return []; }
+  };
+}
+
+const noopProjectionRepository = {
+  saveProjection() { throw new Error("not used"); },
+  loadProjection() { return null; },
+  deleteProjection() { throw new Error("not used"); },
+  listProjections() { return []; }
+};
+
 test("projector replays task.* events into the dashboard projection", async () => {
   await withTempDatabase(async (databasePath) => {
     const repositories = buildRepositories(databasePath);
@@ -308,6 +374,44 @@ test("projector replay() matches replayDashboard() output for the same event log
       closeRepositories(repositories);
     }
   });
+});
+
+test("projector replay pages past the first event page", () => {
+  const events = [];
+  for (let i = 1; i <= 1_000; i += 1) {
+    events.push(
+      boardEventFromAppendInput(
+        buildTaskCreatedAppendInput({
+          taskId: `task-page-${i}`,
+          occurredAt: `2026-06-22T05:00:${String(i % 60).padStart(2, "0")}.000Z`,
+          idempotencyKey: `dashboard-page-${i}`
+        }),
+        i
+      )
+    );
+  }
+  events.push(
+    boardEventFromAppendInput(
+      buildChangeAggregatedAppendInput({
+        status: "accepted",
+        outcome: "integrated",
+        occurredAt: "2026-06-22T05:20:00.000Z",
+        idempotencyKey: "dashboard-page-tail"
+      }),
+      1_001
+    )
+  );
+
+  const projector = new SqliteDashboardProjector({
+    projectId: DASHBOARD_PROJECTOR_FIXTURE_CONSTANTS.projectId,
+    eventRepository: makePagedEventRepository(events),
+    projectionRepository: noopProjectionRepository
+  });
+  const replay = projector.replay();
+  assert.equal(replay.eventCount, 1_001);
+  assert.ok(replay.state !== null);
+  assert.equal(replay.state.approvalPointers.length, 1);
+  assert.equal(replay.state.rebuiltThroughGlobalSequence, 1_001);
 });
 
 test("projector ignore foreign project events (dashboard is project-scoped)", async () => {

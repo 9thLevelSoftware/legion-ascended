@@ -199,14 +199,10 @@ export function detectPathConflicts(
       }
     }
 
-    // Sequential-vs-sequential collisions are also conflicts.
-    for (const sequentialPath of sequentialPaths) {
-      for (const writePath of writePaths) {
-        if (pathsOverlap(sequentialPath, writePath)) {
-          recordConflict(sequentialPath, [entry.sequenceIndex, entry.sequenceIndex], "sequential_violation");
-        }
-      }
-    }
+    // Earlier sequential/write claims are already in `claimsByPath`.
+    // Do not compare an entry's own sequential marker with its own
+    // write scope; that marker means "serialize this file if another
+    // entry also touches it", not "conflict with myself".
 
     // Commit this entry's claims before advancing.
     for (const claim of claims) recordClaim(claim.path, claim.ownerEntrySequenceIndex, claim.kind);

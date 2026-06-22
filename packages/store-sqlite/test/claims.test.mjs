@@ -15,6 +15,7 @@ import {
   BoardClaimContendedError,
   BoardClaimGenerationError,
   BoardClaimNotFoundError,
+  BoardTerminalTaskMutationError,
   SqliteBoardClaimRepository,
   SqliteBoardTaskRepository,
   openSqliteBoardStore,
@@ -350,6 +351,38 @@ test("P03-T04 reclaimExpiredLeases stamps 'expired' on stale leases and returns 
   });
 });
 
+test("P03-T04 reclaimExpiredLeases honors ownerId when expiring stale leases", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, taskRepository, claimRepository } = buildClaimsContext(databasePath);
+    try {
+      createReadyTask(taskRepository);
+      taskRepository.createTask(createTaskInput({ taskId: "tsk_beta" }));
+      const alpha = claimRepository.tryClaim(
+        claimInput({ ownerId: "worker_a", claimedAt: "2026-06-21T11:00:00.000Z", leaseDurationMs: 5_000 })
+      );
+      const beta = claimRepository.tryClaim(
+        claimInput({
+          taskId: "tsk_beta",
+          ownerId: "worker_b",
+          claimedAt: "2026-06-21T11:00:00.000Z",
+          leaseDurationMs: 5_000
+        })
+      );
+
+      const reclaimed = claimRepository.reclaimExpiredLeases({
+        ownerId: "worker_a",
+        now: "2026-06-21T11:00:30.000Z"
+      });
+      assert.deepEqual(reclaimed.map((claim) => claim.leaseToken), [alpha.leaseToken]);
+      assert.equal(claimRepository.getClaim(alpha.leaseToken).releaseReason, "expired");
+      assert.equal(claimRepository.getClaim(beta.leaseToken).releaseReason, null);
+      assert.equal(claimRepository.getActiveClaimForTask("tsk_beta").leaseToken, beta.leaseToken);
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("P03-T04 reclaimExpiredLeases is a no-op when every lease is still valid", async () => {
   await withTempDatabase((databasePath) => {
     const { store, taskRepository, claimRepository } = buildClaimsContext(databasePath);
@@ -367,70 +400,49 @@ test("P03-T04 reclaimExpiredLeases is a no-op when every lease is still valid", 
   });
 });
 
-test("P03-T04 superseded task generations free the (task, generation) slot for new claims", async () => {
+test("P03-T04 advanced task generations free the (task, generation) slot for new claims", async () => {
   await withTempDatabase((databasePath) => {
     const { store, taskRepository, claimRepository } = buildClaimsContext(databasePath);
     try {
       createReadyTask(taskRepository);
-      const first = claimRepository.tryClaim(claimInput({ ownerId: "worker_a" }));
-      // Supersede bumps the task generation; the live lease on the previous
-      // generation must not block a fresh claim on generation 2.
-      taskRepository.supersedeTask({
+      claimRepository.tryClaim(claimInput({ ownerId: "worker_a" }));
+      // Bumping the task generation leaves the old lease archived against
+      // generation 1, but it must not block a claim on generation 2.
+      taskRepository.bumpGeneration({
         taskId: TASK_ID,
-        expectedGeneration: BOARD_TASK_GENERATION_MIN
+        expectedGeneration: BOARD_TASK_GENERATION_MIN,
+        nextContractId: "ctr_alpha_v2",
+        nextContractRevision: 2,
+        nextContractHash: "b".repeat(64)
       });
       const newTask = taskRepository.getTask(TASK_ID);
       assert.notEqual(newTask, null);
       const nextGeneration = newTask.generation;
       assert.notEqual(nextGeneration, BOARD_TASK_GENERATION_MIN);
-      const successorId = "tsk_alpha_v2";
-      // Re-create a successor that mirrors the bumped contract so the claim
-      // repository can find a row at nextGeneration to attach to.
-      taskRepository.createTask({
-        projectId: PROJECT_ID,
-        changeId: CHANGE_ID,
-        taskId: successorId,
-        contractId: CONTRACT_ID,
-        contractRevision: CONTRACT_REVISION,
-        contractHash: CONTRACT_HASH,
-        initialStatus: "ready",
-        initialGeneration: BOARD_TASK_GENERATION_MIN
-      });
-      // The superseded predecessor still holds its active lease; a fresh
-      // claim on a *different* taskId (the successor) succeeds.
-      const successorClaim = claimRepository.tryClaim({
-        taskId: successorId,
-        expectedGeneration: BOARD_TASK_GENERATION_MIN,
+      const refreshed = claimRepository.tryClaim({
+        taskId: TASK_ID,
+        expectedGeneration: nextGeneration,
         ownerId: "worker_b",
         leaseDurationMs: 30_000
       });
-      assert.equal(successorClaim.taskId, successorId);
-      // And the original task can be re-claimed on the new generation after
-      // the old lease is released — but first we re-insert a row that mirrors
-      // the bumped generation so the generation check passes.
-      const database = new DatabaseSync(databasePath);
-      try {
-        database
-          .prepare(
-            "UPDATE board_tasks SET generation = ? WHERE task_id = ?"
-          )
-          .run(nextGeneration, TASK_ID);
-        database
-          .prepare(
-            "UPDATE board_claims SET released_at = ?, release_reason = 'superseded' WHERE lease_token = ?"
-          )
-          .run("2026-06-21T11:05:00.000Z", first.leaseToken);
-        const refreshed = claimRepository.tryClaim({
-          taskId: TASK_ID,
-          expectedGeneration: nextGeneration,
-          ownerId: "worker_c",
-          leaseDurationMs: 30_000
-        });
-        assert.equal(refreshed.taskId, TASK_ID);
-        assert.equal(refreshed.generation, nextGeneration);
-      } finally {
-        database.close();
-      }
+      assert.equal(refreshed.taskId, TASK_ID);
+      assert.equal(refreshed.generation, nextGeneration);
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T04 tryClaim rejects terminal tasks even when the generation matches", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, taskRepository, claimRepository } = buildClaimsContext(databasePath);
+    try {
+      createReadyTask(taskRepository);
+      taskRepository.transitionTaskStatus(TASK_ID, { toStatus: "canceled" }, BOARD_TASK_GENERATION_MIN);
+      assert.throws(
+        () => claimRepository.tryClaim(claimInput()),
+        (error) => error instanceof BoardTerminalTaskMutationError && error.status === "canceled"
+      );
     } finally {
       store.close();
     }

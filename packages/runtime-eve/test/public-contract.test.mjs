@@ -84,6 +84,16 @@ function makeRequest(overrides = {}) {
   };
 }
 
+function sessionIdFromStart(start) {
+  const sessionId = start.events[0].payload.sessionId;
+  assert.equal(typeof sessionId, "string");
+  return sessionId;
+}
+
+function assertContentHash(value) {
+  assert.match(value, /^sha256:[0-9a-f]{64}$/);
+}
+
 test("RuntimeEveDriver exports the same seven-method surface as the ADR-004 contract", () => {
   assert.deepEqual(RUNTIME_DRIVER_METHODS, [
     "start",
@@ -150,6 +160,25 @@ test("resume: advances the checkpoint generation through Eve's continuation toke
   assert.equal(resumed.status, "started");
   assert.equal(resumed.checkpoint.generation, 2);
   assert.equal(transport.__resumeCalls().length, 1);
+});
+
+test("resume: rejects terminal runs before calling Eve resumeSession", async () => {
+  const transport = new FakeEveTransport();
+  const driver = new RuntimeEveDriver({ transport });
+  const request = makeRequest();
+  const start = await driver.start(request);
+  await driver.cancel(start.runId, {
+    code: "user_cancel",
+    message: "user pressed stop",
+    requestedBy: APPROVER,
+    at: "2026-06-21T20:30:00.000Z"
+  });
+
+  await assert.rejects(
+    driver.resume(start.runId, start.checkpoint),
+    (err) => err instanceof RuntimeEveDriverError && err.code === "terminal_run"
+  );
+  assert.equal(transport.__resumeCalls().length, 0);
 });
 
 test("resume: rejects a stale checkpoint generation", async () => {
@@ -235,6 +264,48 @@ test("stream: yields the recorded progress and translated Eve events", async () 
   const kinds = events.map((event) => event.kind);
   assert.equal(kinds.includes("progress"), true);
   assert.equal(kinds.includes("artifact_registered"), true);
+});
+
+test("stream: assigns monotonic sequences, normalizes streamed artifact hashes, and records terminal state", async () => {
+  const transport = new FakeEveTransport();
+  const driver = new RuntimeEveDriver({ transport });
+  const request = makeRequest();
+  const start = await driver.start(request);
+  const sessionId = sessionIdFromStart(start);
+  transport.__pushStreamEvent(sessionId, {
+    kind: "progress",
+    at: "2026-06-21T20:40:00.000Z",
+    note: "provider progress"
+  });
+  transport.__pushStreamEvent(sessionId, {
+    kind: "artifact_registered",
+    at: "2026-06-21T20:41:00.000Z",
+    reference: "agents/test/provider-result.json"
+  });
+  transport.__pushStreamEvent(sessionId, {
+    kind: "terminal",
+    at: "2026-06-21T20:42:00.000Z",
+    status: "succeeded"
+  });
+
+  const events = [];
+  for await (const event of driver.stream(start.runId)) {
+    events.push(event);
+  }
+
+  assert.deepEqual(events.map((event) => event.sequence), events.map((_, index) => index));
+  const streamedArtifact = events.find(
+    (event) => event.kind === "artifact_registered" && event.reference.path === "agents/test/provider-result.json"
+  );
+  assert.ok(streamedArtifact);
+  assertContentHash(streamedArtifact.reference.sha256);
+  const terminal = events.at(-1);
+  assert.equal(terminal.kind, "terminal");
+  assert.equal(terminal.status, "succeeded");
+
+  const bundle = await driver.artifact(start.runId);
+  assert.equal(bundle.status, "succeeded");
+  assert.equal(bundle.finishedAt, "2026-06-21T20:42:00.000Z");
 });
 
 test("approve: delivers the approval to Eve and emits approval.requested + approval.granted", async () => {
@@ -332,6 +403,20 @@ test("artifact: final-output mode requires a terminal run and rejects non-termin
       return state && state.state === "started";
     }
   );
+});
+
+test("artifact: final-output mode refreshes provider terminal status before lookup", async () => {
+  const transport = new FakeEveTransport();
+  const driver = new RuntimeEveDriver({ transport });
+  const request = makeRequest();
+  const start = await driver.start(request);
+  transport.__setStatus(sessionIdFromStart(start), "succeeded");
+
+  const bundle = await driver.artifact(start.runId);
+
+  assert.equal(bundle.kind, "fetch");
+  assert.equal(bundle.status, "succeeded");
+  assert.equal(typeof bundle.finishedAt, "string");
 });
 
 test("artifact: final-output mode returns the terminal bundle after cancel", async () => {
@@ -452,6 +537,17 @@ test("fallback: preferredDriver falls back to runtime-local when the preferred d
   assert.match(selection.reason, /preferred driver runtime-eve is unavailable/);
 });
 
+test("fallback: preferredDriver skips unavailable local fallback and selects an available legacy driver", () => {
+  const selection = selectDriver({
+    preferredDriver: "runtime-eve",
+    isLocalAvailable: false,
+    isEveInstalled: false,
+    isLegacyCliAvailable: true
+  });
+  assert.equal(selection.driver, "runtime-legacy-cli");
+  assert.match(selection.reason, /preferred driver runtime-eve is unavailable/);
+});
+
 test("fallback: checkEveTransportVersion returns null when the transport is pinned to the canonical version", () => {
   const transport = new FakeEveTransport();
   assert.equal(checkEveTransportVersion(transport), null);
@@ -542,14 +638,29 @@ test("RealEveTransport returns a synthetic authored result in dry-run mode (no w
   const result = await driver.start(request);
   assert.equal(result.status, "started");
   assert.equal(result.runId.startsWith("run_"), true);
+  assertContentHash(result.manifestHash);
+  assertContentHash(result.checkpoint.fingerprint);
 });
 
-test("RealEveTransport: dynamic import works against the pinned eve@0.11.7 peer dependency", async () => {
-  // This is a smoke test that only passes if the eve package
-  // is installed. The transport catches import errors and
-  // returns a structured failure when eve is unavailable; we
-  // do NOT assert success, only that the call resolves without
-  // throwing.
+test("RealEveTransport dry-run resume advances checkpoint generations monotonically", async () => {
+  const transport = new RealEveTransport();
+  const driver = new RuntimeEveDriver({ transport });
+  const request = makeRequest();
+  const start = await driver.start(request);
+
+  const first = await driver.resume(start.runId, start.checkpoint);
+  const second = await driver.resume(start.runId, first.checkpoint);
+
+  assert.equal(first.checkpoint.generation, 2);
+  assert.equal(second.checkpoint.generation, 3);
+  assertContentHash(first.checkpoint.fingerprint);
+  assertContentHash(second.checkpoint.fingerprint);
+});
+
+test("RealEveTransport: dry-run defineAgent resolves without requiring the optional Eve peer", async () => {
+  // Dry-run mode omits worktreeRoot, so the transport must return
+  // synthetic authored metadata before attempting to import the
+  // optional eve peer.
   const transport = new RealEveTransport();
   const result = await transport.defineAgent({
     agentId: "smoke-test",
@@ -571,9 +682,5 @@ test("RealEveTransport: dynamic import works against the pinned eve@0.11.7 peer 
   });
   assert.equal(typeof result.sessionId, "string");
   assert.equal(typeof result.continuationToken, "string");
-  // The smoke test only requires that the transport resolves cleanly;
-  // manifest hashing is provider-specific and may be omitted in dry-run mode.
-  if (result.manifestHash !== undefined) {
-    assert.equal(typeof result.manifestHash, "string");
-  }
+  assertContentHash(result.manifestHash);
 });

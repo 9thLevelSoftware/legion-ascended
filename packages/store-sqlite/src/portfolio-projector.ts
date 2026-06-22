@@ -109,6 +109,36 @@ function stripSha256Prefix(hash: string): string {
   return hash.startsWith("sha256:") ? hash.slice("sha256:".length) : hash;
 }
 
+const REPLAY_PAGE_LIMIT = 1_000;
+
+function listReplayEvents(
+  eventRepository: BoardEventRepository,
+  query: Omit<BoardEventQuery, "fromGlobalSequence" | "limit" | "order">
+): readonly BoardEvent[] {
+  const events: BoardEvent[] = [];
+  let fromGlobalSequence = 0;
+  for (;;) {
+    const page = eventRepository.listEvents({
+      ...query,
+      fromGlobalSequence,
+      limit: REPLAY_PAGE_LIMIT,
+      order: "asc"
+    });
+    if (page.length === 0) break;
+    events.push(...page);
+    const last = page[page.length - 1]!;
+    fromGlobalSequence = last.globalSequence + 1;
+    if (
+      page.length < REPLAY_PAGE_LIMIT ||
+      (typeof query.untilGlobalSequence === "number" &&
+        fromGlobalSequence > query.untilGlobalSequence)
+    ) {
+      break;
+    }
+  }
+  return events;
+}
+
 export interface SqlitePortfolioProjectorOptions {
   readonly tenantId: TenantId;
   readonly eventRepository: BoardEventRepository;
@@ -167,13 +197,15 @@ export class SqlitePortfolioProjector {
   replay(
     input: { readonly throughGlobalSequence?: number } = {}
   ): SqlitePortfolioProjectorReplayResult {
-    const query: BoardEventQuery = {
+    const query: Omit<
+      BoardEventQuery,
+      "fromGlobalSequence" | "limit" | "order"
+    > = {
       ...(typeof input.throughGlobalSequence === "number"
         ? { untilGlobalSequence: input.throughGlobalSequence }
-        : {}),
-      order: "asc"
+        : {})
     };
-    const events = this.#eventRepository.listEvents(query);
+    const events = listReplayEvents(this.#eventRepository, query);
     const state = replayPortfolio(events, {
       tenantId: this.#tenantId,
       scope: this.#scope

@@ -13,17 +13,19 @@ import {
   BOARD_APPROVAL_TERMINAL_STATUSES,
   BOARD_REQUIRED_INDEXES,
   BOARD_REQUIRED_TABLES,
-  BOARD_SCHEMA_VERSION,
   BOARD_TASK_GENERATION_MIN,
   BoardApprovalAlreadyExistsError,
   BoardApprovalConcurrencyError,
   BoardApprovalIllegalStatusTransitionError,
   BoardApprovalNotFoundError,
   BoardApprovalTerminalStatusError,
+  SQLITE_BOARD_MIGRATIONS,
   SqliteBoardApprovalRepository,
   openSqliteBoardStore,
   openSqliteBoardTaskRepository
 } from "../dist/index.js";
+
+const LATEST_SQLITE_BOARD_SCHEMA_VERSION = SQLITE_BOARD_MIGRATIONS.at(-1).version;
 
 async function withTempDatabase(fn) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-p03-t07-"));
@@ -170,7 +172,7 @@ test("P03-T07 schema exposes board_approvals, indexes, and protocol-aligned stat
       assert.ok(diagnostics.tables.includes("board_approvals"));
       assert.ok(diagnostics.indexes.includes("idx_board_approvals_task_id"));
       assert.ok(diagnostics.indexes.includes("idx_board_approvals_run_id"));
-      assert.equal(diagnostics.userVersion, BOARD_SCHEMA_VERSION);
+      assert.equal(diagnostics.userVersion, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
       for (const table of BOARD_REQUIRED_TABLES) {
         assert.ok(diagnostics.tables.includes(table), "missing table " + table);
       }
@@ -215,6 +217,18 @@ test("P03-T07 createApproval round-trips scope, requester, and expiresAt", async
       );
       assert.equal(replayed.approvalId, created.approvalId);
       assert.deepEqual(replayed, created);
+
+      assert.throws(
+        () =>
+          approvalRepository.createApproval(
+            createApprovalInput({
+              scope: createScopeInput({ action: "rollback.release" }),
+              expiresAt,
+              idempotencyKey: "approval-create-001"
+            })
+          ),
+        /idempotencyKey .*different intent/
+      );
     } finally {
       store.close();
     }
@@ -319,6 +333,7 @@ test("P03-T07 denyApproval transitions requested -> denied with the same guards"
       assert.equal(denied.lifecyclePhase, "revoked");
       assert.equal(denied.decidedBy.id, "approver_beta");
       assert.ok(denied.decidedAt && denied.decidedAt.length > 0);
+      assert.equal(denied.approvedAt, null);
 
       assert.throws(
         () =>
@@ -353,6 +368,7 @@ test("P03-T07 expireApproval moves requested -> expired and rejects terminal tra
       assert.equal(expired.status, "expired");
       assert.equal(expired.lifecyclePhase, "revoked");
       assert.equal(expired.decidedBy, null);
+      assert.equal(expired.approvedAt, null);
 
       assert.throws(
         () =>
@@ -386,6 +402,7 @@ test("P03-T07 revokeApproval is reachable from requested AND from granted; denie
       assert.equal(revokedPending.status, "revoked");
       assert.equal(revokedPending.lifecyclePhase, "revoked");
       assert.equal(revokedPending.decidedBy.id, "reviewer_a");
+      assert.equal(revokedPending.approvedAt, null);
 
       // Case 2: revoke while granted (a previously-granted approval can
       // still be revoked).
@@ -407,6 +424,7 @@ test("P03-T07 revokeApproval is reachable from requested AND from granted; denie
       assert.equal(revokedGranted.status, "revoked");
       assert.equal(revokedGranted.lifecyclePhase, "revoked");
       assert.equal(revokedGranted.decidedBy.id, "reviewer_b");
+      assert.equal(revokedGranted.approvedAt, null);
 
       // Case 3: revoke a denied approval must be rejected.
       const third = approvalRepository.createApproval(
@@ -529,6 +547,15 @@ test("P03-T07 listApprovals filters by taskId, runId, status, and lifecyclePhase
       // includeTerminal=true returns everything.
       const all = approvalRepository.listApprovals({ includeTerminal: true });
       assert.equal(all.length, 3);
+
+      assert.deepEqual(
+        approvalRepository.listApprovals({ status: ["denied"], includeTerminal: false }),
+        []
+      );
+      assert.deepEqual(
+        approvalRepository.listApprovals({ lifecyclePhase: ["revoked"], includeTerminal: false }),
+        []
+      );
 
       // limit honored.
       const limited = approvalRepository.listApprovals({ limit: 1 });
@@ -775,4 +802,3 @@ test("P03-T07 createApproval defaults approvalId to a UUID when not provided", a
 });
 
 void BoardApprovalTerminalStatusError;
-void BOARD_SCHEMA_VERSION;

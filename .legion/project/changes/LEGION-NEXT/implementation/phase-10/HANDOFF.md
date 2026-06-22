@@ -4,7 +4,7 @@
 
 DONE.
 
-Implementation batch: Phase 10 P10-T01 + P10-T02 + P10-T03 closeout changes on `codex/p03-t02-board-task-repository` after base `4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a`. P10-T01 ships the provider-neutral release-observation orchestrator + board adapter + SQLite projector. P10-T02 wires the P10-T01 board adapter into the CLI as `legion next board release-observation aggregate | status | rebuild | verify`. P10-T03 finalizes the ledger, evidence index, independent review, Production Lifecycle cut line, and Phase 11 handoff. Closeout evidence lives under `docs/next/evidence/P10-CLOSEOUT/`.
+Implementation batch: Phase 10 P10-T01 + P10-T02 + P10-T03 closeout changes on PR integration branch `codex/p03-t02-board-task-repository` after base `4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a`. P10-T01 ships the provider-neutral release-observation orchestrator + board adapter + SQLite projector. P10-T02 wires the P10-T01 board adapter into the CLI as `legion next board release-observation aggregate | status | rebuild | verify`. P10-T03 finalizes the ledger, evidence index, independent review, Production Lifecycle cut line, and Phase 11 handoff. Closeout evidence lives under `docs/next/evidence/P10-CLOSEOUT/`.
 
 Phase 10 closes the Production Lifecycle cut line for Legion Next. The branch now carries an accepted-change-to-release-observation lifecycle: only accepted whole-change state can enter release observation; canary, health-check, regression-detection, and alert phases are content-addressed and provider-neutral; release-observation board events are append-only/idempotent; SQLite projections can replay, rebuild, and verify drift; and the CLI exposes the operator commands needed for production lifecycle inspection.
 

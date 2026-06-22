@@ -94,6 +94,10 @@ function isDeepWorkspaceImport(specifier, packageName) {
   return specifier !== packageName && specifier.startsWith(`${packageName}/`);
 }
 
+function matchesImportRoot(specifier, packageName) {
+  return specifier === packageName || specifier.startsWith(`${packageName}/`);
+}
+
 function resolvesToLegacyPromptAsset(specifier, relativeFile) {
   if (!specifier.startsWith(".")) return null;
 
@@ -157,7 +161,7 @@ async function listSourceFiles(root, relativeDir) {
 function validateRuntimeModule({ relativeFile, specifier }) {
   const violations = [];
 
-  if (FORBIDDEN_PROVIDER_OR_STORAGE_IMPORTS.has(specifier)) {
+  if ([...FORBIDDEN_PROVIDER_OR_STORAGE_IMPORTS].some((forbidden) => matchesImportRoot(specifier, forbidden))) {
     violations.push({
       file: relativeFile,
       specifier,
@@ -166,7 +170,7 @@ function validateRuntimeModule({ relativeFile, specifier }) {
     });
   }
 
-  if (FORBIDDEN_HOST_CLI_IMPORTS.has(specifier)) {
+  if ([...FORBIDDEN_HOST_CLI_IMPORTS].some((forbidden) => matchesImportRoot(specifier, forbidden))) {
     violations.push({
       file: relativeFile,
       specifier,

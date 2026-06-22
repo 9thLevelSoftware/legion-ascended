@@ -1,7 +1,8 @@
 phase: P07
 status: PASS
 title: Planner Task Contracts and Preflight closeout
-branch: codex/p03-t02-board-task-repository
+evidence_branch: codex/p03-t02-board-task-repository
+branch_note: "Evidence was recorded on the reused PR integration branch, not a phase-specific branch."
 base_sha: e7246c06ab670c56ba8ad2509e9a19c72de65eff
 head_before_closeout: e7246c06ab670c56ba8ad2509e9a19c72de65eff
 reviewer: "GPT-5.5 / otrlead"
@@ -9,7 +10,7 @@ completed_at: "2026-06-22T05:09:20Z"
 node_version: v26.0.0
 pnpm_version: 11.4.0
 accepted_warnings:
-  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local protocol/artifacts/typecheck/workspace gates passed."
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local protocol/artifacts/typecheck/workspace gates passed. Raw command logs are retained as historical evidence; this report documents the engine-range mismatch instead of rewriting those transcripts."
   - "validate:next is expected to fail before the P07 schema/source bundle is committed because the generated-drift step intentionally rejects uncommitted changes under schemas/ and docs/next/protocol; final validate-next is rerun after commit and recorded in validate-next.log."
 acceptance:
   task_contract_wave_and_agents:

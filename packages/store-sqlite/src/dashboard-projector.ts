@@ -82,6 +82,36 @@ function stripSha256Prefix(hash: string): string {
   return hash.startsWith("sha256:") ? hash.slice("sha256:".length) : hash;
 }
 
+const REPLAY_PAGE_LIMIT = 1_000;
+
+function listReplayEvents(
+  eventRepository: BoardEventRepository,
+  query: Omit<BoardEventQuery, "fromGlobalSequence" | "limit" | "order">
+): readonly BoardEvent[] {
+  const events: BoardEvent[] = [];
+  let fromGlobalSequence = 0;
+  for (;;) {
+    const page = eventRepository.listEvents({
+      ...query,
+      fromGlobalSequence,
+      limit: REPLAY_PAGE_LIMIT,
+      order: "asc"
+    });
+    if (page.length === 0) break;
+    events.push(...page);
+    const last = page[page.length - 1]!;
+    fromGlobalSequence = last.globalSequence + 1;
+    if (
+      page.length < REPLAY_PAGE_LIMIT ||
+      (typeof query.untilGlobalSequence === "number" &&
+        fromGlobalSequence > query.untilGlobalSequence)
+    ) {
+      break;
+    }
+  }
+  return events;
+}
+
 /**
  * SQLite-backed projector for the dashboard projection.
  * One projector instance owns one projection key
@@ -141,13 +171,15 @@ export class SqliteDashboardProjector {
   replay(
     input: { readonly throughGlobalSequence?: number; readonly tailLimit?: number } = {}
   ): SqliteDashboardProjectorReplayResult {
-    const query: BoardEventQuery = {
+    const query: Omit<
+      BoardEventQuery,
+      "fromGlobalSequence" | "limit" | "order"
+    > = {
       ...(typeof input.throughGlobalSequence === "number"
         ? { untilGlobalSequence: input.throughGlobalSequence }
-        : {}),
-      order: "asc"
+        : {})
     };
-    const events = this.#eventRepository.listEvents(query);
+    const events = listReplayEvents(this.#eventRepository, query);
     let envelope: BoardProjectionState = envelopeFor(null);
     let lastSequence = -1;
     const tailLimit = Math.max(input.tailLimit ?? this.#tailLimit, 1);

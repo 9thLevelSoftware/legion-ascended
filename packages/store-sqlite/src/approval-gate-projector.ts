@@ -38,6 +38,7 @@ import type {
 import {
   approvalGateProjectionKey,
   APPROVAL_GATE_PROJECTION_VERSION,
+  makeInitialApprovalGateState,
   reduceApprovalGate,
   type ApprovalGateProjectionState,
   type ChangeId,
@@ -106,6 +107,66 @@ function deriveApprovalGateStateHash(
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }
 
+const REPLAY_PAGE_LIMIT = 1_000;
+
+function listReplayEvents(
+  eventRepository: BoardEventRepository,
+  query: Omit<BoardEventQuery, "fromGlobalSequence" | "limit" | "order">
+): readonly BoardEvent[] {
+  const events: BoardEvent[] = [];
+  let fromGlobalSequence = 0;
+  for (;;) {
+    const page = eventRepository.listEvents({
+      ...query,
+      fromGlobalSequence,
+      limit: REPLAY_PAGE_LIMIT,
+      order: "asc"
+    });
+    if (page.length === 0) break;
+    events.push(...page);
+    const last = page[page.length - 1]!;
+    fromGlobalSequence = last.globalSequence + 1;
+    if (
+      page.length < REPLAY_PAGE_LIMIT ||
+      (typeof query.untilGlobalSequence === "number" &&
+        fromGlobalSequence > query.untilGlobalSequence)
+    ) {
+      break;
+    }
+  }
+  return events;
+}
+
+function isBoundApprovalGateEvent(
+  event: BoardEvent,
+  projectId: ProjectId,
+  changeId: ChangeId
+): boolean {
+  if (
+    !(
+      (event.aggregateKind === "whole_change" &&
+        (event.eventType === "change.aggregated" ||
+          event.eventType === "change.accepted" ||
+          event.eventType === "change.rejected" ||
+          event.eventType === "change.blocked" ||
+          event.eventType === "change.escalated")) ||
+      (event.aggregateKind === "release_observation" &&
+        (event.eventType === "release.observing" ||
+          event.eventType === "release.observed" ||
+          event.eventType === "release.promoted" ||
+          event.eventType === "release.regressed" ||
+          event.eventType === "release.rolled_back"))
+    )
+  ) {
+    return false;
+  }
+  if (!event.payload || typeof event.payload !== "object") return false;
+  const payload = event.payload as Record<string, unknown>;
+  if (payload["changeId"] !== changeId) return false;
+  const eventProjectId = payload["projectId"];
+  return eventProjectId === undefined || eventProjectId === projectId;
+}
+
 /**
  * SQLite-backed projector for the approval-gate projection.
  * One projector instance owns one projection key
@@ -167,17 +228,25 @@ export class SqliteApprovalGateProjector {
   replay(
     input: { readonly throughGlobalSequence?: number } = {}
   ): SqliteApprovalGateProjectorReplayResult {
-    const query: BoardEventQuery = {
+    const query: Omit<
+      BoardEventQuery,
+      "fromGlobalSequence" | "limit" | "order"
+    > = {
       ...(typeof input.throughGlobalSequence === "number"
         ? { untilGlobalSequence: input.throughGlobalSequence }
-        : {}),
-      order: "asc"
+        : {})
     };
-    const events = this.#eventRepository.listEvents(query);
+    const events = listReplayEvents(this.#eventRepository, query);
     let envelope: BoardProjectionState = envelopeFor(null);
     let lastSequence = -1;
     for (const event of events) {
-      const current = stateFromEnvelope(envelope);
+      let current = stateFromEnvelope(envelope);
+      if (
+        current === null &&
+        isBoundApprovalGateEvent(event, this.#projectId, this.#changeId)
+      ) {
+        current = makeInitialApprovalGateState(this.#projectId, this.#changeId);
+      }
       const next = reduceApprovalGate(current, event as BoardEvent);
       envelope = envelopeFor(next);
       if (next !== null) {

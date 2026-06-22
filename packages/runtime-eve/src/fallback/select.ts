@@ -59,10 +59,20 @@ export function selectDriver(options: DriverSelectorOptions): DriverSelection {
 function resolvePreferred(preferred: DriverId, options: DriverSelectorOptions): DriverSelection {
   const selection = checkAvailability(preferred, options);
   if (selection) return selection;
+  for (const driver of PRECEDENCE) {
+    if (driver === preferred) continue;
+    const fallback = checkAvailability(driver, options);
+    if (fallback) {
+      return {
+        ...fallback,
+        reason: `preferred driver ${preferred} is unavailable; ${fallback.reason}`
+      };
+    }
+  }
   return {
     driver: "runtime-local",
     pinnedEveVersion: null,
-    reason: `preferred driver ${preferred} is unavailable; falling back to runtime-local`
+    reason: `preferred driver ${preferred} is unavailable and no configured fallback driver is available; falling back to runtime-local as a last-resort sink`
   };
 }
 

@@ -429,6 +429,38 @@ test("portfolio reducer handles terminal projects", () => {
   assert.equal(state.terminalProjectCount, 1);
 });
 
+test("portfolio reducer keeps superseded tasks in terminal rollups", () => {
+  const tenantId = asTenantId("tnt-superseded-001");
+  const created = makePortfolioTaskCreatedEvent({
+    taskId: "task-superseded-1",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    priority: 700,
+    globalSequence: 1
+  });
+  const superseded = {
+    ...created,
+    eventId: "evt-portfolio-superseded-2",
+    aggregateSequence: 2,
+    globalSequence: 2,
+    eventType: "task.superseded",
+    occurredAt: "2026-06-22T05:02:00.000Z",
+    payload: {
+      ...created.payload,
+      fromStatus: "queued",
+      toStatus: "superseded"
+    }
+  };
+  const state = replayPortfolio([created, superseded], { tenantId });
+  const rollup = state.projectRollups[PORTFOLIO_FIXTURE_CONSTANTS.projectA];
+  assert.equal(rollup.taskCount, 1);
+  assert.equal(rollup.terminalTaskCount, 1);
+  assert.equal(rollup.taskStatusCounts.superseded, 1);
+  assert.equal(rollup.taskStatusCounts.queued, undefined);
+  assert.equal(rollup.totalPriority, 700);
+  assert.equal(state.terminalProjectCount, 1);
+});
+
 test("portfolio descriptor wires the reducer into the standard shape", () => {
   const tenantId = asTenantId("tnt-desc-001");
   const descriptor = portfolioProjectionDescriptor({ tenantId });

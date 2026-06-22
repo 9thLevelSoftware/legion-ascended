@@ -3,7 +3,8 @@ phase: 12
 phase_id: P12
 status: DONE
 base_commit: "33ddf60180235dcb1a852838f6559a8cbecb7c11"
-implementation_branch: "codex/p03-t02-board-task-repository"
+evidence_branch: "codex/p03-t02-board-task-repository"
+branch_note: "Evidence was recorded on the reused PR integration branch, not a Phase 12-specific branch."
 summary: "Aligned the host-bridge documentation with the runtime metadata matrix, clarified the 10 installable AI CLI runtimes plus Kilo Code plugin boundary, documented Aider as manual-only, refreshed the README package checksum, and added a regression test that keeps runtime bridge docs aligned with metadata."
 verification:
   local:

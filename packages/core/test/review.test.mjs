@@ -146,6 +146,29 @@ test("P08-T02 R1 pipeline accepts when verification passes and reviewer is indep
   assert.match(result.isolationTag, /^fresh-context:v1:[0-9a-f]{12}$/);
 });
 
+test("P08-T02 pipeline passes its injected clock into review records", async () => {
+  const createdAt = "2026-06-22T09:45:00.000Z";
+  const contract = makeFixtureContract({
+    risk: { tier: "R1", reasons: ["isolated-module", "internal-api"] }
+  });
+  const workerContext = await makeFixtureWorkerContext({ contract });
+  const pipeline = new PerTaskReviewPipeline({
+    now: () => createdAt
+  });
+  const result = await pipeline.run({
+    taskContract: contract,
+    workerContext,
+    implementer: makeImplementer(),
+    runner: makePassingRunner(),
+    review: makeReviewerInput()
+  });
+
+  assert.equal(result.createdAt, createdAt);
+  assert.equal(result.verification.createdAt, createdAt);
+  assert.equal(result.decision.createdAt, createdAt);
+  assert.equal(result.review.createdAt, createdAt);
+});
+
 // ---------------------------------------------------------------------------
 // 2. Verification failure
 // ---------------------------------------------------------------------------
@@ -722,6 +745,28 @@ test("P08-T02 verification report records 'timedOut: true' when the runner repor
   assert.equal(outcome.report.commands[0].timedOut, true);
 });
 
+test("P08-T02 verification enforces configured timeouts when the runner hangs", async () => {
+  const contract = makeFixtureContract();
+  const workerContext = await makeFixtureWorkerContext({ contract });
+  const runner = () => new Promise(() => {});
+  const outcome = await runDeterministicVerification({
+    taskContract: contract,
+    workerContext,
+    options: {
+      runner,
+      defaultTimeoutMs: 25,
+      timeout: async () => {
+        throw new Error("timer fired");
+      }
+    }
+  });
+
+  assert.equal(outcome.report.passed, false);
+  assert.deepEqual(outcome.report.failingIndices, [0]);
+  assert.equal(outcome.report.commands[0].timedOut, true);
+  assert.ok(outcome.issues.some((issue) => issue.code === "verification_command_failed" && /timed out/.test(issue.message)));
+});
+
 // ---------------------------------------------------------------------------
 // 24. Gate evaluator policy override
 // ---------------------------------------------------------------------------
@@ -752,6 +797,37 @@ test("P08-T02 evaluateAcceptanceGate honors a custom gate policy", async () => {
   });
   assert.equal(result.decision.outcome, "accepted");
   // Custom policy drops review; default policy would have required it.
+});
+
+test("P08-T02 evaluateAcceptanceGate returns structured issues when a custom policy omits the current tier", async () => {
+  const contract = makeFixtureContract({
+    risk: { tier: "R1", reasons: ["isolated-module"] }
+  });
+  const workerContext = await makeFixtureWorkerContext({ contract });
+  const verificationOutcome = await runDeterministicVerification({
+    taskContract: contract,
+    workerContext,
+    options: { runner: makePassingRunner() }
+  });
+  const incompletePolicy = {
+    gatesByTier: {
+      R0: [],
+      R2: ["deterministic_verification"],
+      R3: ["deterministic_verification"]
+    },
+    requireIndependentReview: { R0: false, R1: false, R2: true, R3: true }
+  };
+
+  const result = evaluateAcceptanceGate({
+    taskContract: contract,
+    workerContext,
+    verification: verificationOutcome.report,
+    review: null,
+    policy: incompletePolicy
+  });
+
+  assert.ok(result.issues.some((issue) => issue.code === "gate_evaluator_failure"));
+  assert.deepEqual(result.decision.gates, []);
 });
 
 // ---------------------------------------------------------------------------

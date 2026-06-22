@@ -13,6 +13,9 @@ import { riskProfileSchema, schemaMetadataSchema } from "./common.js";
 const taskContractAgentIdSchema = z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid agent ID");
 const taskContractWaveIdSchema = z.string().regex(/^[A-Z][A-Z0-9_-]{0,31}$/, "Invalid wave ID");
 
+export const TASK_CONTRACT_LEGACY_WAVE = "LEGACY";
+export const TASK_CONTRACT_LEGACY_AGENT = "legacy-agent";
+
 export const taskContractDependencySchema = z.strictObject({
   contractId: contractIdSchema,
   revision: z.number().int().positive().optional(),
@@ -184,8 +187,8 @@ export const taskContractSchema = schemaMetadataSchema
     title: z.string().min(1).max(160),
     objective: z.string().min(1).max(4_096),
     requirementIds: z.array(requirementIdSchema).min(1),
-    wave: taskContractWaveIdSchema,
-    agents: z.array(taskContractAgentIdSchema).min(1),
+    wave: taskContractWaveIdSchema.optional().default(TASK_CONTRACT_LEGACY_WAVE),
+    agents: z.array(taskContractAgentIdSchema).min(1).optional().default([TASK_CONTRACT_LEGACY_AGENT]),
     dependencies: z.array(taskContractDependencySchema),
     context: taskContractContextSchema,
     scope: taskContractScopeSchema,

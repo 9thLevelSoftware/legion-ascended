@@ -32,6 +32,7 @@
 import type {
   BoardEvent,
   BoardEventRepository,
+  BoardEventQuery,
   BoardProjectionRebuildReport,
   BoardProjectionRepository,
   BoardProjectionState
@@ -88,6 +89,51 @@ function defaultNow(): string {
 
 function stripSha256Prefix(value: string): string {
   return value.startsWith("sha256:") ? value.slice("sha256:".length) : value;
+}
+
+const REPLAY_PAGE_LIMIT = 1_000;
+
+function listReplayEvents(
+  eventRepository: BoardEventRepository,
+  query: Omit<BoardEventQuery, "fromGlobalSequence" | "limit" | "order">
+): readonly BoardEvent[] {
+  const events: BoardEvent[] = [];
+  let fromGlobalSequence = 0;
+  for (;;) {
+    const page = eventRepository.listEvents({
+      ...query,
+      fromGlobalSequence,
+      limit: REPLAY_PAGE_LIMIT,
+      order: "asc"
+    });
+    if (page.length === 0) break;
+    events.push(...page);
+    const last = page[page.length - 1]!;
+    fromGlobalSequence = last.globalSequence + 1;
+    if (
+      page.length < REPLAY_PAGE_LIMIT ||
+      (typeof query.untilGlobalSequence === "number" &&
+        fromGlobalSequence > query.untilGlobalSequence)
+    ) {
+      break;
+    }
+  }
+  return events;
+}
+
+function isBoundReleaseObservationEvent(
+  event: BoardEvent,
+  changeId: ChangeId,
+  mergeQueueHash: string
+): boolean {
+  if (event.aggregateKind !== "release_observation") return false;
+  if (!event.payload || typeof event.payload !== "object") return false;
+  const payload = event.payload as Record<string, unknown>;
+  return (
+    payload["changeId"] === changeId &&
+    payload["mergeQueueHash"] === mergeQueueHash &&
+    event.aggregateId.startsWith(`${changeId}:${mergeQueueHash}:`)
+  );
 }
 
 /**
@@ -160,27 +206,36 @@ export class SqliteReleaseObservationProjector {
    * persisting. Useful for tests and dry-run CLI commands.
    */
   replay(input: { readonly throughGlobalSequence?: number } = {}): SqliteReleaseObservationProjectorReplayResult {
-    const events = this.#eventRepository.listEvents({
+    const events = listReplayEvents(this.#eventRepository, {
       ...(typeof input.throughGlobalSequence === "number"
         ? { untilGlobalSequence: input.throughGlobalSequence }
-        : {}),
-      order: "asc"
+        : {})
     });
     let envelope: BoardProjectionState = envelopeFor(null);
     let lastSequence = -1;
+    let eventCount = 0;
     for (const event of events) {
-      if (event.aggregateKind !== "release_observation") continue;
+      if (
+        !isBoundReleaseObservationEvent(
+          event,
+          this.#changeId,
+          this.#mergeQueueHash
+        )
+      ) {
+        continue;
+      }
       const current = stateFromEnvelope(envelope);
       const next = reduceReleaseObservation(current, event);
       envelope = envelopeFor(next);
       lastSequence = event.globalSequence;
+      eventCount += 1;
     }
     const state = stateFromEnvelope(envelope);
     return {
       projectionKey: this.#projectionKey,
       projectionVersion: this.#projectionVersion,
-      rebuiltThroughGlobalSequence: lastSequence,
-      eventCount: events.length,
+      rebuiltThroughGlobalSequence: Math.max(0, lastSequence),
+      eventCount,
       state,
       stateHash: deriveReleaseObservationProjectionStateHash(state),
       rebuiltAt: this.#now()
@@ -201,14 +256,10 @@ export class SqliteReleaseObservationProjector {
     // The SQLite projection repository requires the raw 64-char hex
     // digest, so we strip the prefix before persisting.
     const stateHashHex = stripSha256Prefix(report.stateHash);
-    // The `rebuiltThroughGlobalSequence` must be a non-negative
-    // integer for the SQLite CHECK constraint; an empty event
-    // log returns -1, so we clamp it to 0.
-    const rebuiltThrough = Math.max(0, report.rebuiltThroughGlobalSequence);
     const record = this.#projectionRepository.saveProjection({
       projectionKey: this.#projectionKey,
       projectionVersion: this.#projectionVersion,
-      rebuiltThroughGlobalSequence: rebuiltThrough,
+      rebuiltThroughGlobalSequence: report.rebuiltThroughGlobalSequence,
       state: envelopeFor(report.state),
       stateHash: stateHashHex,
       ...(typeof input.expectedProjectionVersion === "number"

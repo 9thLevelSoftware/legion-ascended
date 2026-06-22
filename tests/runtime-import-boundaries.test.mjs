@@ -60,6 +60,23 @@ test("rejects eve import inside the runtime module", async () => {
   );
 });
 
+test("rejects provider subpath imports inside the runtime module", async () => {
+  await withFixture(
+    {
+      "packages/core/src/runtime/eve-subpath.ts":
+        'import { stream } from "eve/session";\nexport const value = stream;\n'
+    },
+    async (root) => {
+      const result = await scanRuntimeImportBoundaries({ root });
+      assert.equal(result.ok, false);
+      assert.ok(
+        result.violations.some((v) => v.rule === "forbidden_provider_or_storage_import" && v.specifier === "eve/session"),
+        "expected eve subpath import violation"
+      );
+    }
+  );
+});
+
 test("rejects sqlite storage import inside the runtime module", async () => {
   await withFixture(
     {

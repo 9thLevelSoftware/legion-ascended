@@ -329,14 +329,16 @@ export function reduceApprovalGate(
 
   const eventProjectId = readProjectId(event);
   const eventChangeId = readChangeId(event);
-  if (eventProjectId === null || eventChangeId === null) return state;
+  if (eventChangeId === null) return state;
+  if (state === null && eventProjectId === null) return state;
 
   // Foreign event for a different project/change pair: do not
   // contaminate this approval-gate's state. The reducer is
   // strictly scoped to its (projectId, changeId) tuple.
   if (
     state !== null &&
-    (state.projectId !== eventProjectId || state.changeId !== eventChangeId)
+    ((eventProjectId !== null && state.projectId !== eventProjectId) ||
+      state.changeId !== eventChangeId)
   ) {
     return state;
   }

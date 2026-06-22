@@ -1,6 +1,6 @@
 phase: 8
 phase_id: P08
-hash_basis: "SHA-256 over artifact bytes after P08-T03 closeout finalization; this index is excluded to avoid self-referential hashing. gitleaks/git-status diff-stat evidence excludes this index for the same reason."
+hash_basis: "SHA-256 over artifact bytes after P08-T03 closeout finalization, refreshed for PR #22 metadata/evidence hygiene follow-up; this index is excluded to avoid self-referential hashing. gitleaks/git-status diff-stat evidence excludes this index for the same reason."
 entries:
   - task: P08-T01
     artifact: packages/core/src/dispatch/contract.ts
@@ -41,7 +41,7 @@ entries:
   - task: P08-T01
     artifact: docs/next/evidence/P08-T01/worker-context.json
     description: "Canonical WorkerContext snapshot showing schemaVersion, kind, protocolVersion, workerContextHash, isolationTag, contextRefs, scope, workerBundle, model, and frozen contract fields."
-    sha256: 6a73b9407a4b4ca8118c7af2bdfe27bed07be352a33784cab1b66fe0f0d55659
+    sha256: 7357d9eba65341659b38b0e806e6df3c25fc3f0dfb2bb254e9a28d559c92b0b7
   - task: P08-T01
     artifact: docs/next/evidence/P08-T01/core-test.log
     description: "@legion/core P08-T01 test transcript showing 152 pass / 0 fail (25 new P08-T01 tests at that cut line)."
@@ -85,7 +85,7 @@ entries:
   - task: P08-T01
     artifact: docs/next/evidence/P08-T01/integration-report.yaml
     description: "Structured P08-T01 fresh-context dispatcher integration report and handoff to P08-T02."
-    sha256: 0e804f6ff6014de9f7e7bc0a27f6819bea549c3c87c3b69daeb0cd24b77ea383
+    sha256: e4ec558dff2195dc4bcf9d587455ba6f1adc2eb593ae8ab41da44abee1a5eb95
   - task: P08-T02
     artifact: packages/core/src/review/contract.ts
     description: "Per-task review pipeline typed contract: REVIEW_PIPELINE_KEYS allowlist, issue codes, review policy, gate IDs, reviewer verdicts, and AcceptanceDecision outcome."
@@ -229,11 +229,11 @@ entries:
   - task: P08-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-08/ledger.yaml
     description: "Phase 8 ledger marked DONE with decisions, task statuses, evidence bundle, and blockers cleared."
-    sha256: 3ac68de6820bb0f5ea7aa6680716356a909f19dbb90bdc196a2f56a14d0410fa
+    sha256: 346b62191ae58d865e7cac337e00bf7048e28f4d7ef0431055a279bd8c0bc2f8
   - task: P08-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-08/HANDOFF.md
     description: "Phase 8 handoff to Phase 9 with CLI-first MVP cut-line assumptions."
-    sha256: 7929eb8ea6982a668dd1b0e53055de0da1b9b82433d123a3351b1c9b222669df
+    sha256: b6e69aea65dacc7644156fe9f759b848d17e48ca81bb109266db19708155af89
   - task: P08-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 8 complete, CLI-first MVP reached, and P09-T01 as current next work."

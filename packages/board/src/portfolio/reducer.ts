@@ -478,7 +478,7 @@ function applyTaskPriorityChanged(
   working.currentPriorityByAggregateId.set(aggregateId, priority);
 }
 
-function applyTaskDeletedOrSuperseded(
+function applyTaskDeleted(
   working: MutablePortfolioWorkingState,
   payload: Record<string, unknown>
 ): void {
@@ -505,6 +505,25 @@ function applyTaskDeletedOrSuperseded(
     );
   }
   working.currentPriorityByAggregateId.delete(aggregateId);
+}
+
+function applyTaskSuperseded(
+  working: MutablePortfolioWorkingState,
+  payload: Record<string, unknown>
+): void {
+  const projectId = readProjectIdFromPayload(payload);
+  if (!projectId || !isInScope(working.scope, projectId)) return;
+  const taskId = readTaskIdFromPayload(payload);
+  if (!taskId) return;
+  const aggregateId = `task:${projectId}:${taskId}`;
+  const rollup = working.projectRollups.get(projectId as ProjectId);
+  if (!rollup) return;
+  const current =
+    working.currentTaskStatusByAggregateId.get(aggregateId) ?? null;
+  if (current === "superseded") return;
+  if (current) decrementStatusCount(rollup, current);
+  incrementStatusCount(rollup, "superseded");
+  working.currentTaskStatusByAggregateId.set(aggregateId, "superseded");
 }
 
 function applyTaskLinked(
@@ -763,8 +782,7 @@ function replayOnePriorEvent(
       working.currentPriorityByAggregateId.set(aggregateId, priority);
       break;
     }
-    case "task.deleted":
-    case "task.superseded": {
+    case "task.deleted": {
       const projectId = readProjectIdFromPayload(payload);
       const taskId = readTaskIdFromPayload(payload);
       if (!projectId || !taskId) return;
@@ -772,6 +790,18 @@ function replayOnePriorEvent(
       working.currentTaskStatusByAggregateId.delete(aggregateId);
       working.currentPriorityByAggregateId.delete(aggregateId);
       working.currentProjectIdByAggregateId.delete(aggregateId);
+      break;
+    }
+    case "task.superseded": {
+      const projectId = readProjectIdFromPayload(payload);
+      const taskId = readTaskIdFromPayload(payload);
+      if (!projectId || !taskId) return;
+      const aggregateId = `task:${projectId}:${taskId}`;
+      working.currentTaskStatusByAggregateId.set(aggregateId, "superseded");
+      working.currentProjectIdByAggregateId.set(
+        aggregateId,
+        projectId as ProjectId
+      );
       break;
     }
     case "task.linked": {
@@ -843,8 +873,10 @@ function applyEvent(
       applyTaskPriorityChanged(working, payload);
       break;
     case "task.deleted":
+      applyTaskDeleted(working, payload);
+      break;
     case "task.superseded":
-      applyTaskDeletedOrSuperseded(working, payload);
+      applyTaskSuperseded(working, payload);
       break;
     case "task.linked":
       applyTaskLinked(working, payload);

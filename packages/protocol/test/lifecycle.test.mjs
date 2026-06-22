@@ -130,7 +130,10 @@ test("P01-T05 task contracts reject unsafe scope and incomplete verification con
     false
   );
   assert.equal(taskContractSchema.safeParse({ ...taskContract, verification: [] }).success, false);
-  assert.equal(taskContractSchema.safeParse({ ...taskContract, wave: undefined }).success, false);
+  const { wave: _wave, agents: _agents, ...legacyTaskContract } = taskContract;
+  const parsedLegacyTaskContract = taskContractSchema.parse(legacyTaskContract);
+  assert.equal(parsedLegacyTaskContract.wave, "LEGACY");
+  assert.deepEqual(parsedLegacyTaskContract.agents, ["legacy-agent"]);
   assert.equal(taskContractSchema.safeParse({ ...taskContract, agents: [] }).success, false);
   assert.equal(
     taskContractSchema.safeParse({
@@ -334,6 +337,13 @@ test("review feedback: submitted review audit fields are represented in generate
   assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "accepted", ["submittedAt"]), true);
   assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "rejected", ["submittedAt"]), true);
   assert.equal(hasJsonSchemaVariantRequiring(lifecycleJsonSchemas.reviewDecision, "superseded", ["submittedAt"]), true);
+});
+
+test("review feedback: task contract wave and agents remain backward-compatible in generated JSON Schema", () => {
+  assert.equal(lifecycleJsonSchemas.taskContract.required.includes("wave"), false);
+  assert.equal(lifecycleJsonSchemas.taskContract.required.includes("agents"), false);
+  assert.equal(lifecycleJsonSchemas.taskContract.properties.wave.default, "LEGACY");
+  assert.deepEqual(lifecycleJsonSchemas.taskContract.properties.agents.default, ["legacy-agent"]);
 });
 
 test("P01-T05 invalid lifecycle fixture cases are rejected", async () => {

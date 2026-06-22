@@ -1,7 +1,7 @@
 phase: 10
 phase_id: P10
 status: DONE
-source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/10-phase-release-observation-and-rollback.md"
+source_document: "docs/rebuild/10-phase-release-observation-and-rollback.md"
 base_commit: "4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a"
 started_at: "2026-06-22T10:00:00Z"
 completed_at: "2026-06-22T11:09:22Z"
@@ -10,21 +10,21 @@ tasks:
   P10-T01:
     status: DONE
     run_id: "P10-T01-20260622-release-observation"
-    commit: "20fc8f0"
-    closeout_commit: "0168ff8"
+    commit: "20fc8f0279e4f111507ab2ff20cfa9dfe57d68b0"
+    closeout_commit: "0168ff8f4e624e6adc85fd21ccfe7c4faf4fa6ed"
     evidence: docs/next/evidence/P10-T01/integration-report.yaml
     depends_on: ["P09-T03"]
   P10-T02:
     status: DONE
     run_id: "P10-T02-20260622-cli-release-observation-wiring"
-    commit: "98fdcb7"
-    closeout_commit: "c98c677"
+    commit: "98fdcb773c993e0e65fbf26d21ceec8048512bb8"
+    closeout_commit: "c98c67781999c707734742379dcda8c00dd7d904"
     evidence: docs/next/evidence/P10-T02/integration-report.yaml
     depends_on: ["P10-T01"]
   P10-T03:
     status: DONE
     run_id: "P10-T03-20260622-phase-10-closeout"
-    commit: "P10-final-head"
+    commit: "8cef646ce2b2912a49543510cc59ff3eb871432b"
     evidence: docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
     depends_on: ["P10-T02"]
     assignee: otrlead

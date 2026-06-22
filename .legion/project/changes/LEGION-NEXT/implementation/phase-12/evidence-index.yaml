@@ -1,6 +1,6 @@
 phase: 12
 phase_id: P12
-hash_basis: "SHA-256 over artifact bytes after P12-T03 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
+hash_basis: "SHA-256 over artifact bytes after P12-T03 closeout finalization, refreshed for PR #22 metadata/evidence hygiene follow-up; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
 entries:
   - task: P12-T01
     artifact: README.md
@@ -17,7 +17,7 @@ entries:
   - task: P12-T01
     artifact: docs/next/evidence/P12-T01/integration-report.yaml
     description: "Structured P12-T01 integration report."
-    sha256: 1d1280fa024f1fdd0fad631e0911d532bb7caf8f7859f967543731a8358b6200
+    sha256: 03c43de4245394280091313219d9958fa2abfc0bcd715a9839bbbedc2f90d4e8
   - task: P12-T02
     artifact: packages/cli/src/commands/migrate/index.ts
     description: "Migration CLI help and action parsing for explicit --verify compatibility alias."
@@ -33,7 +33,7 @@ entries:
   - task: P12-T02
     artifact: docs/next/evidence/P12-T02/integration-report.yaml
     description: "Structured P12-T02 integration report."
-    sha256: f090b33f5c5b5e78971d2ee80477ddcc392d43fbcac521d9c96ebb0b678bc500
+    sha256: 8ab683f7cc47e31c6d74a981a113a9c98e2ac509faadf09cc498a49d70c484f2
   - task: P12-CLOSEOUT
     artifact: docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
     description: "P12 closeout runtime bridge docs test transcript: 1/1 pass."
@@ -109,7 +109,7 @@ entries:
   - task: P12-CLOSEOUT
     artifact: docs/next/evidence/P12-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 12 closeout integration report."
-    sha256: a5d0a4512c0721824495b10cc9facafd3454e6762ed20054e4b458b7f5c4543f
+    sha256: 9fbce50a080d18e8130599168404ede2e74d43e0ceb6d477e18e486fe765b4ef
   - task: P12-CLOSEOUT
     artifact: docs/next/reviews/PHASE-12-INDEPENDENT-REVIEW.md
     description: "Independent Phase 12 closeout review with PASS verdict."
@@ -117,11 +117,11 @@ entries:
   - task: P12-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-12/ledger.yaml
     description: "Final Phase 12 ledger marked DONE with P12-T01 through P12-T03 complete and blockers cleared."
-    sha256: 531c665de7c5cedc8a06e3d0f234d2e67d168931cacf4a89ae287d0d4cd05e70
+    sha256: f2569a4b4dee7998a120f9d877f536cce9f9770e8b9713fc3b7a1ce035023a39
   - task: P12-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-12/HANDOFF.md
     description: "Final Phase 12 handoff to Phase 13 and Migration/Host Beta cut-line assumptions."
-    sha256: 2c0c5b39a739e8da2ff263061aa3df8d57b6c5711216fb14b63347d102978185
+    sha256: 9e36fe21c4fad29b665302cc255ff7e0f23fa4339a7c881274eb0881cf8190fb
   - task: P12-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 12 complete, Migration/Host Beta reached, and P13-T01 current."

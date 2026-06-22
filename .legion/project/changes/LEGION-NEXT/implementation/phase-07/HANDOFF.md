@@ -4,7 +4,7 @@
 
 DONE.
 
-Implementation batch: Phase 7 changes on `codex/p03-t02-board-task-repository` after base `e7246c06ab670c56ba8ad2509e9a19c72de65eff`, with final closeout evidence under `docs/next/evidence/P07-CLOSEOUT/`.
+Implementation batch: Phase 7 changes on PR integration branch `codex/p03-t02-board-task-repository` after base `e7246c06ab670c56ba8ad2509e9a19c72de65eff`, with final closeout evidence under `docs/next/evidence/P07-CLOSEOUT/`.
 
 Phase 7 closes the Planner Task Contracts and Preflight cut line for Legion Next. The branch now carries protocol-visible task-contract wave decomposition, explicit agent assignment, regenerated lifecycle fixtures and JSON Schema artifacts, and a fail-closed `preflightTaskContract` validator for dependency, resource, predecessor-artifact, and completeness checks.
 

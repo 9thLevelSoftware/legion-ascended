@@ -15,7 +15,7 @@ import type {
 // reference so provider packages only need to depend on @legion/board-store.
 export type { ApprovalId, ApprovalStatus, ChangeId, ContractId, EventId, ProjectId, RunId, TaskId, TaskRunStatus, TaskStatus };
 
-export const BOARD_SCHEMA_VERSION = 2 as const;
+export const BOARD_SCHEMA_VERSION = 3 as const;
 
 export const BOARD_TASK_STATUSES = [
   "queued",
@@ -38,9 +38,9 @@ export const BOARD_TASK_GENERATION_MIN = 1;
 
 /**
  * Allowed task status transitions on the board. Rows that reach `completed`,
- * `failed`, `canceled`, or `superseded` are terminal except for `superseded`,
- * which can be re-entered from `queued`/`ready`/`claimed`/`running`/`blocked`
- * when a replacement task is published.
+ * `canceled`, or `superseded` are terminal. `failed` is retryable by moving
+ * back to `ready`, and active pre-terminal rows can move to `superseded` when
+ * a replacement task is published.
  */
 export const BOARD_TASK_STATUS_TRANSITIONS = {
   queued: ["ready", "canceled", "superseded"],

@@ -114,7 +114,7 @@ test("aggregator emits one event with the matching event type per status", () =>
     assert.equal(event.idempotencyKey, releaseObservationIdempotencyKey(
       FIX.changeId,
       FIX.mergeQueueHash,
-      FIX.reportSha256,
+      report.reportSha256,
       eventTypeForReleaseObservationStatus(status)
     ));
   }
@@ -130,6 +130,19 @@ test("aggregator fails when reportSha256 is missing", () => {
   const result = buildReleaseObservationBoardEvent({
     changeId: FIX.changeId,
     report: bad
+  });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.ok(result.issues.map((i) => i.code).includes("report_sha_mismatch"));
+});
+
+test("aggregator rejects stale reportSha256 values", () => {
+  const report = makeReleaseObservationReport({
+    reportSha256: FIX.reportSha256
+  });
+  const result = buildReleaseObservationBoardEvent({
+    changeId: FIX.changeId,
+    report
   });
   assert.equal(result.ok, false);
   if (result.ok) return;

@@ -53,6 +53,17 @@ interface RunnerOutcome {
   readonly error?: unknown;
 }
 
+class VerificationCommandTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number, cause?: unknown) {
+    const suffix = cause instanceof Error && cause.message.length > 0 ? ` (${cause.message})` : "";
+    super(`verification command timed out after ${timeoutMs}ms${suffix}`);
+    this.name = "VerificationCommandTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 /**
  * Wrap a runner call so a thrown error or a non-promise return is
  * normalized into a structured failure. The pipeline emits a typed
@@ -62,18 +73,38 @@ interface RunnerOutcome {
  */
 async function safeInvoke(
   runner: VerificationRunner | undefined,
-  request: VerificationCommandRequest
+  request: VerificationCommandRequest,
+  timeoutMs: number,
+  timeout?: (ms: number) => Promise<never>
 ): Promise<RunnerOutcome> {
   if (runner === undefined) {
     return {
       error: new Error("verification runner is not configured for this pipeline run")
     };
   }
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
-    const outcome = await runner(request);
+    const runnerPromise = Promise.resolve().then(() => runner(request));
+    const timeoutPromise =
+      timeout === undefined
+        ? new Promise<never>((_, reject) => {
+            timeoutHandle = setTimeout(() => {
+              reject(new VerificationCommandTimeoutError(timeoutMs));
+            }, timeoutMs);
+          })
+        : timeout(timeoutMs).catch((error: unknown) => {
+            throw error instanceof VerificationCommandTimeoutError
+              ? error
+              : new VerificationCommandTimeoutError(timeoutMs, error);
+          });
+    const outcome = await Promise.race([runnerPromise, timeoutPromise]);
     return { result: outcome };
   } catch (error) {
     return { error };
+  } finally {
+    if (timeoutHandle !== undefined) {
+      clearTimeout(timeoutHandle);
+    }
   }
 }
 
@@ -81,7 +112,8 @@ function emptyResultFor(
   request: VerificationCommandRequest,
   startedAt: UtcTimestamp,
   finishedAt: UtcTimestamp,
-  errorMessage: string
+  errorMessage: string,
+  timedOut = false
 ): VerificationCommandResult {
   const noContentHash = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" as unknown as ContentHash;
   return {
@@ -94,7 +126,7 @@ function emptyResultFor(
     stderrSha256: noContentHash,
     combinedSha256: noContentHash,
     durationMs: 0,
-    timedOut: false,
+    timedOut,
     startedAt,
     finishedAt,
     notes: errorMessage
@@ -165,17 +197,21 @@ export async function runDeterministicVerification(input: {
       context: input.workerContext
     };
     const startedAt = now();
-    const outcome = await safeInvoke(runner, request);
+    const timeoutMs = verification.timeoutMs ?? defaultTimeout;
+    const outcome = await safeInvoke(runner, request, timeoutMs, input.options?.timeout);
     const finishedAt = now();
 
     if (outcome.error !== undefined) {
+      const timedOut = outcome.error instanceof VerificationCommandTimeoutError;
       const message = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
       issues.push({
         code: "verification_command_failed",
-        message: `Verification command ${index} (${verification.command}) threw: ${message}`,
+        message: timedOut
+          ? `Verification command ${index} (${verification.command}) timed out after ${timeoutMs}ms.`
+          : `Verification command ${index} (${verification.command}) threw: ${message}`,
         path: ["verification", index]
       });
-      results.push(emptyResultFor(request, startedAt, finishedAt, message));
+      results.push(emptyResultFor(request, startedAt, finishedAt, message, timedOut));
       continue;
     }
 
@@ -209,10 +245,6 @@ export async function runDeterministicVerification(input: {
     }
 
     results.push(result);
-    // Touch defaultTimeout so it remains in the call graph for
-    // tests that inspect it (and so future timeout-wiring lands in
-    // one place).
-    void defaultTimeout;
   }
 
   const report = await synthesizeReport({

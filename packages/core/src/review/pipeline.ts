@@ -117,7 +117,8 @@ export class PerTaskReviewPipeline {
         contractRevision: input.taskContract.revision,
         workerContext: input.workerContext,
         implementer: input.implementer,
-        reviewerInput: input.review
+        reviewerInput: input.review,
+        now: this.now
       });
       // Same-actor reviews are dropped to null (do not satisfy gate),
       // other validation issues propagate.

@@ -954,10 +954,14 @@
       }
     },
     "wave": {
+      "default": "LEGACY",
       "type": "string",
       "pattern": "^[A-Z][A-Z0-9_-]{0,31}$"
     },
     "agents": {
+      "default": [
+        "legacy-agent"
+      ],
       "minItems": 1,
       "type": "array",
       "items": {
@@ -1429,8 +1433,6 @@
     "title",
     "objective",
     "requirementIds",
-    "wave",
-    "agents",
     "dependencies",
     "context",
     "scope",

@@ -379,7 +379,7 @@ export const SQLITE_BOARD_MIGRATIONS: readonly SqliteMigration[] = [
         lease_expires_at TEXT NOT NULL,
         heartbeat_at TEXT NOT NULL,
         released_at TEXT,
-        release_reason TEXT CHECK (release_reason IS NULL OR release_reason IN ('completed', 'blocked', 'failed', 'canceled', 'expired', 'superseded')),
+        release_reason TEXT CHECK (release_reason IS NULL OR release_reason IN ('completed', 'blocked', 'failed', 'canceled', 'expired')),
         FOREIGN KEY (task_id) REFERENCES board_tasks(task_id) ON DELETE CASCADE
       )`,
       `CREATE TABLE board_task_runs (
@@ -444,6 +444,36 @@ export const SQLITE_BOARD_MIGRATIONS: readonly SqliteMigration[] = [
     statements: [
       `ALTER TABLE board_task_comments ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'`,
       `UPDATE board_task_comments SET updated_at = created_at WHERE updated_at = '1970-01-01T00:00:00.000Z'`
+    ]
+  },
+  {
+    version: 3,
+    name: "add-superseded-claim-release-reason",
+    statements: [
+      `ALTER TABLE board_claims RENAME TO board_claims_v2`,
+      `CREATE TABLE board_claims (
+        lease_token TEXT PRIMARY KEY CHECK (length(lease_token) > 0),
+        task_id TEXT NOT NULL,
+        generation INTEGER NOT NULL CHECK (generation > 0),
+        owner_id TEXT NOT NULL CHECK (length(owner_id) > 0),
+        run_id TEXT,
+        claimed_at TEXT NOT NULL,
+        lease_expires_at TEXT NOT NULL,
+        heartbeat_at TEXT NOT NULL,
+        released_at TEXT,
+        release_reason TEXT CHECK (release_reason IS NULL OR release_reason IN ('completed', 'blocked', 'failed', 'canceled', 'expired', 'superseded')),
+        FOREIGN KEY (task_id) REFERENCES board_tasks(task_id) ON DELETE CASCADE
+      )`,
+      `INSERT INTO board_claims (
+        lease_token, task_id, generation, owner_id, run_id, claimed_at,
+        lease_expires_at, heartbeat_at, released_at, release_reason
+      )
+      SELECT lease_token, task_id, generation, owner_id, run_id, claimed_at,
+             lease_expires_at, heartbeat_at, released_at, release_reason
+      FROM board_claims_v2`,
+      `DROP TABLE board_claims_v2`,
+      "CREATE UNIQUE INDEX idx_board_claims_live_task_generation ON board_claims(task_id, generation) WHERE released_at IS NULL",
+      "CREATE INDEX idx_board_claims_task_id ON board_claims(task_id)"
     ]
   }
 ] as const;
@@ -811,6 +841,68 @@ function blockerFromJson(raw: string | null): BoardTaskBlocker | null {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function intentMatches(
+  storedIntent: Readonly<Record<string, unknown>>,
+  currentIntent: Readonly<Record<string, unknown>>
+): boolean {
+  return canonicalizeJson(storedIntent) === canonicalizeJson(currentIntent);
+}
+
+function throwIdempotencyIntentMismatch(scope: string, idempotencyKey: string): never {
+  throw new Error(scope + " idempotencyKey " + idempotencyKey + " replayed with a different intent.");
+}
+
+function taskCreateIntent(input: {
+  readonly taskId: string;
+  readonly projectId: string;
+  readonly changeId: string;
+  readonly contractId: string;
+  readonly contractRevision: number;
+  readonly contractHash: string;
+  readonly initialGeneration: number;
+  readonly status: BoardTaskStatus;
+  readonly priority: number;
+  readonly blockerJson: string | null;
+  readonly explicitCreatedAt: string | null;
+}): Readonly<Record<string, unknown>> {
+  return {
+    taskId: input.taskId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    contractId: input.contractId,
+    contractRevision: input.contractRevision,
+    contractHash: input.contractHash,
+    initialGeneration: input.initialGeneration,
+    initialStatus: input.status,
+    initialPriority: input.priority,
+    blockerJson: input.blockerJson,
+    createdAt: input.explicitCreatedAt
+  };
+}
+
+function taskRowMatchesCreateIntent(
+  row: BoardTaskRow,
+  intent: Readonly<Record<string, unknown>>
+): boolean {
+  return (
+    row.task_id === intent["taskId"] &&
+    row.project_id === intent["projectId"] &&
+    row.change_id === intent["changeId"] &&
+    row.contract_id === intent["contractId"] &&
+    row.contract_revision === intent["contractRevision"] &&
+    row.contract_hash === intent["contractHash"] &&
+    row.generation === intent["initialGeneration"] &&
+    row.status === intent["initialStatus"] &&
+    row.priority === intent["initialPriority"] &&
+    row.blocker_json === intent["blockerJson"] &&
+    (intent["createdAt"] === null || row.created_at === intent["createdAt"])
+  );
+}
+
 function rowToBoardTask(row: BoardTaskRow): BoardTask {
   const status = row.status;
   assertValidStatus(status);
@@ -886,6 +978,12 @@ export class SqliteBoardTaskRepository implements BoardTaskRepositoryWithHooks {
     const priority = input.initialPriority ?? 500;
     assertValidPriority(priority);
     assertValidContractHash(input.contractHash);
+    if (status === "blocked" && !input.blocker) {
+      throw new Error("Board task initial status blocked must include a blocker.");
+    }
+    if (status !== "blocked" && input.blocker) {
+      throw new Error("Board task initial status " + status + " must not include a blocker.");
+    }
 
     if (!Number.isInteger(input.contractRevision) || input.contractRevision <= 0) {
       throw new Error("Board task contract revision must be a positive integer.");
@@ -898,10 +996,24 @@ export class SqliteBoardTaskRepository implements BoardTaskRepositoryWithHooks {
     const changeIdString = String(input.changeId);
     const contractIdString = String(input.contractId);
     const createdAt = input.createdAt ?? now;
+    assertValidIsoTimestamp(createdAt, "createdAt");
     const initialGeneration = input.initialGeneration ?? BOARD_TASK_GENERATION_MIN;
     if (!Number.isInteger(initialGeneration) || initialGeneration < BOARD_TASK_GENERATION_MIN) {
       throw new Error("Board task initial generation must be a positive integer.");
     }
+    const intent = taskCreateIntent({
+      taskId: taskIdString,
+      projectId: projectIdString,
+      changeId: changeIdString,
+      contractId: contractIdString,
+      contractRevision: input.contractRevision,
+      contractHash: input.contractHash,
+      initialGeneration,
+      status,
+      priority,
+      blockerJson,
+      explicitCreatedAt: input.createdAt ?? null
+    });
 
     const database = this.#database;
     database.exec("BEGIN IMMEDIATE");
@@ -915,13 +1027,29 @@ export class SqliteBoardTaskRepository implements BoardTaskRepositoryWithHooks {
           .get("board.task.create", input.idempotencyKey) as { result_json: string } | undefined;
         if (existingIdempotent) {
           try {
-            const parsed = JSON.parse(existingIdempotent.result_json) as { taskId: string };
+            const parsed = JSON.parse(existingIdempotent.result_json) as {
+              readonly taskId?: unknown;
+              readonly intent?: unknown;
+            };
+            if (typeof parsed.taskId !== "string") {
+              throw new Error("Board task idempotency record missing taskId.");
+            }
             const existingRow = loadBoardTaskRow(database, parsed.taskId);
             if (existingRow) {
+              if (isRecord(parsed.intent)) {
+                if (!intentMatches(parsed.intent, intent)) {
+                  throwIdempotencyIntentMismatch("Board task create", input.idempotencyKey);
+                }
+              } else if (!taskRowMatchesCreateIntent(existingRow, intent)) {
+                throwIdempotencyIntentMismatch("Board task create", input.idempotencyKey);
+              }
               database.exec("COMMIT");
               return rowToBoardTask(existingRow);
             }
-          } catch {
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("idempotencyKey")) {
+              throw error;
+            }
             // Fall through and re-raise as a duplicate-task error below.
           }
         }
@@ -945,7 +1073,7 @@ export class SqliteBoardTaskRepository implements BoardTaskRepositoryWithHooks {
         now
       );
       if (input.idempotencyKey) {
-        const resultJson = JSON.stringify({ taskId: taskIdString });
+        const resultJson = JSON.stringify({ taskId: taskIdString, intent });
         const resultHash = createHash("sha256").update(resultJson).digest("hex");
         database
           .prepare(
@@ -1148,7 +1276,8 @@ export class SqliteBoardTaskRepository implements BoardTaskRepositoryWithHooks {
       if (isTerminalStatus(current.status)) {
         throw new BoardTerminalTaskMutationError(input.taskId, current.status);
       }
-      const now = this.#now();
+      const now = input.updatedAt ?? this.#now();
+      assertValidIsoTimestamp(now, "updatedAt");
       const nextGeneration = current.generation + 1;
       const result = this.#database
         .prepare(
@@ -1191,10 +1320,11 @@ export class SqliteBoardTaskRepository implements BoardTaskRepositoryWithHooks {
       }
       const current = rowToBoardTask(currentRow);
 
-      if (current.status === "superseded") {
+      if (isTerminalStatus(current.status)) {
         throw new BoardTerminalTaskMutationError(input.taskId, current.status);
       }
-      const now = this.#now();
+      const now = input.supersededAt ?? this.#now();
+      assertValidIsoTimestamp(now, "supersededAt");
       // Supersede must advance the generation so any live leases or queued
       // claims on the prior generation become stale and are reclaimed.
       const nextGeneration = current.generation + 1;
@@ -1407,7 +1537,8 @@ export class SqliteBoardStoreWithRepository implements BoardStore {
     this.repository = new SqliteBoardTaskRepository({
       database,
       eventRepository,
-      eventHooks: [createBoardTaskEventHook()]
+      eventHooks: [createBoardTaskEventHook()],
+      ...(options.now ? { now: options.now } : {})
     });
   }
 
@@ -1462,7 +1593,13 @@ const BOARD_CLAIM_STATEMENTS = {
                          WHERE task_id = ? AND released_at IS NULL
                          ORDER BY claimed_at ASC
                          LIMIT 1`,
-  selectTaskGeneration: `SELECT generation FROM board_tasks WHERE task_id = ?`,
+  selectActiveForTaskGeneration: `SELECT lease_token, task_id, generation, owner_id, run_id, claimed_at,
+                                         lease_expires_at, heartbeat_at, released_at, release_reason
+                                  FROM board_claims
+                                  WHERE task_id = ? AND generation = ? AND released_at IS NULL
+                                  ORDER BY claimed_at ASC
+                                  LIMIT 1`,
+  selectTaskForClaim: `SELECT generation, status FROM board_tasks WHERE task_id = ?`,
   insertClaim: `INSERT INTO board_claims (lease_token, task_id, generation, owner_id, run_id,
                                         claimed_at, lease_expires_at, heartbeat_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1475,8 +1612,15 @@ const BOARD_CLAIM_STATEMENTS = {
                   FROM board_claims
                   WHERE released_at IS NULL AND lease_expires_at <= ?
                   ORDER BY lease_expires_at ASC`,
+  selectExpiredForOwner: `SELECT lease_token, task_id, generation, owner_id, run_id, claimed_at,
+                                 lease_expires_at, heartbeat_at, released_at, release_reason
+                          FROM board_claims
+                          WHERE released_at IS NULL AND lease_expires_at <= ? AND owner_id = ?
+                          ORDER BY lease_expires_at ASC`,
   expireOne: `UPDATE board_claims SET released_at = ?, release_reason = 'expired'
-              WHERE lease_token = ? AND released_at IS NULL`
+              WHERE lease_token = ? AND released_at IS NULL`,
+  expireOneForOwner: `UPDATE board_claims SET released_at = ?, release_reason = 'expired'
+                      WHERE lease_token = ? AND owner_id = ? AND released_at IS NULL`
 } as const;
 
 function assertValidLeaseToken(leaseToken: string): void {
@@ -1579,22 +1723,26 @@ export class SqliteBoardClaimRepository implements BoardClaimRepository {
     const runId = input.runId === undefined ? null : String(input.runId);
 
     return runImmediateTransaction(this.#database, () => {
-      const taskGenerationRow = this.#database
-        .prepare(BOARD_CLAIM_STATEMENTS.selectTaskGeneration)
-        .get(taskId) as { generation: number } | undefined;
-      if (!taskGenerationRow) {
+      const taskRow = this.#database
+        .prepare(BOARD_CLAIM_STATEMENTS.selectTaskForClaim)
+        .get(taskId) as { generation: number; status: string } | undefined;
+      if (!taskRow) {
         throw new BoardClaimGenerationError(input.taskId, input.expectedGeneration, null);
       }
-      if (taskGenerationRow.generation !== input.expectedGeneration) {
+      assertValidStatus(taskRow.status);
+      if (taskRow.generation !== input.expectedGeneration) {
         throw new BoardClaimGenerationError(
           input.taskId,
           input.expectedGeneration,
-          taskGenerationRow.generation
+          taskRow.generation
         );
       }
+      if (isTerminalStatus(taskRow.status)) {
+        throw new BoardTerminalTaskMutationError(input.taskId, taskRow.status);
+      }
       const existing = this.#database
-        .prepare(BOARD_CLAIM_STATEMENTS.selectActiveForTask)
-        .get(taskId) as BoardClaimRow | undefined;
+        .prepare(BOARD_CLAIM_STATEMENTS.selectActiveForTaskGeneration)
+        .get(taskId, input.expectedGeneration) as BoardClaimRow | undefined;
       if (existing) {
         throw new BoardClaimContendedError(
           input.taskId,
@@ -1696,15 +1844,26 @@ export class SqliteBoardClaimRepository implements BoardClaimRepository {
     if (typeof now !== "string" || Number.isNaN(new Date(now).getTime())) {
       throw new Error("Board claim reclaim timestamp must be a valid ISO-8601 timestamp.");
     }
+    if (options.ownerId !== undefined) {
+      assertValidOwnerId(options.ownerId);
+    }
     return runImmediateTransaction(this.#database, () => {
       const expired = this.#database
-        .prepare(BOARD_CLAIM_STATEMENTS.selectExpired)
-        .all(now) as unknown as BoardClaimRow[];
+        .prepare(
+          options.ownerId === undefined
+            ? BOARD_CLAIM_STATEMENTS.selectExpired
+            : BOARD_CLAIM_STATEMENTS.selectExpiredForOwner
+        )
+        .all(...(options.ownerId === undefined ? [now] : [now, options.ownerId])) as unknown as BoardClaimRow[];
       const reclaimed: BoardClaim[] = [];
       for (const row of expired) {
         const result = this.#database
-          .prepare(BOARD_CLAIM_STATEMENTS.expireOne)
-          .run(now, row.lease_token);
+          .prepare(
+            options.ownerId === undefined
+              ? BOARD_CLAIM_STATEMENTS.expireOne
+              : BOARD_CLAIM_STATEMENTS.expireOneForOwner
+          )
+          .run(...(options.ownerId === undefined ? [now, row.lease_token] : [now, row.lease_token, options.ownerId]));
         if (result.changes !== 1) {
           continue;
         }
@@ -2060,6 +2219,38 @@ function loadApprovalRow(database: DatabaseSync, approvalId: string): BoardAppro
     | undefined;
 }
 
+function approvalCreateIntent(input: {
+  readonly approvalId: string | null;
+  readonly taskId: string;
+  readonly runId: string | null;
+  readonly scopeJson: string;
+  readonly requestedByJson: string;
+  readonly requestedAt: string | null;
+}): Readonly<Record<string, unknown>> {
+  return {
+    approvalId: input.approvalId,
+    taskId: input.taskId,
+    runId: input.runId,
+    scopeJson: input.scopeJson,
+    requestedByJson: input.requestedByJson,
+    requestedAt: input.requestedAt
+  };
+}
+
+function approvalRowMatchesCreateIntent(
+  row: BoardApprovalRow,
+  intent: Readonly<Record<string, unknown>>
+): boolean {
+  return (
+    (intent["approvalId"] === null || row.approval_id === intent["approvalId"]) &&
+    row.task_id === intent["taskId"] &&
+    row.run_id === intent["runId"] &&
+    row.scope_json === intent["scopeJson"] &&
+    row.requested_by_json === intent["requestedByJson"] &&
+    (intent["requestedAt"] === null || row.requested_at === intent["requestedAt"])
+  );
+}
+
 function rowToBoardApproval(row: BoardApprovalRow): BoardApproval {
   assertValidApprovalStatus(row.status);
   const status = row.status;
@@ -2084,7 +2275,7 @@ function rowToBoardApproval(row: BoardApprovalRow): BoardApproval {
     decidedBy,
     requestedAt: row.requested_at,
     decidedAt: row.decided_at,
-    approvedAt: row.decided_at,
+    approvedAt: status === "granted" ? row.decided_at : null,
     expiresAt,
     decisionReason
   };
@@ -2121,6 +2312,14 @@ export class SqliteBoardApprovalRepository implements BoardApprovalRepository {
     const approvalId = String(input.approvalId ?? "apv_" + randomUUID());
     const scopeJson = scopeToJson(input.scope, input.expiresAt ?? null);
     const requestedByJson = actorToJson(input.requestedBy);
+    const intent = approvalCreateIntent({
+      approvalId: input.approvalId === undefined ? null : approvalId,
+      taskId,
+      runId,
+      scopeJson,
+      requestedByJson,
+      requestedAt: input.requestedAt ?? null
+    });
 
     return runImmediateTransaction(this.#database, () => {
       if (input.idempotencyKey) {
@@ -2134,12 +2333,28 @@ export class SqliteBoardApprovalRepository implements BoardApprovalRepository {
           | undefined;
         if (existingIdempotent) {
           try {
-            const parsed = JSON.parse(existingIdempotent.result_json) as { approvalId: string };
+            const parsed = JSON.parse(existingIdempotent.result_json) as {
+              readonly approvalId?: unknown;
+              readonly intent?: unknown;
+            };
+            if (typeof parsed.approvalId !== "string") {
+              throw new Error("Board approval idempotency record missing approvalId.");
+            }
             const existingRow = loadApprovalRow(this.#database, parsed.approvalId);
             if (existingRow) {
+              if (isRecord(parsed.intent)) {
+                if (!intentMatches(parsed.intent, intent)) {
+                  throwIdempotencyIntentMismatch("Board approval create", input.idempotencyKey);
+                }
+              } else if (!approvalRowMatchesCreateIntent(existingRow, intent)) {
+                throwIdempotencyIntentMismatch("Board approval create", input.idempotencyKey);
+              }
               return rowToBoardApproval(existingRow);
             }
-          } catch {
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("idempotencyKey")) {
+              throw error;
+            }
             // Fall through and surface a duplicate-approval error below.
           }
         }
@@ -2181,7 +2396,7 @@ export class SqliteBoardApprovalRepository implements BoardApprovalRepository {
         throw error;
       }
       if (input.idempotencyKey) {
-        const resultJson = JSON.stringify({ approvalId });
+        const resultJson = JSON.stringify({ approvalId, intent });
         const resultHash = createHash("sha256").update(resultJson).digest("hex");
         this.#database
           .prepare(
@@ -2246,6 +2461,9 @@ export class SqliteBoardApprovalRepository implements BoardApprovalRepository {
       const nonTerminal = BOARD_APPROVAL_STATUSES.filter((s) => !isTerminalApprovalStatus(s));
       if (statusFilter && statusFilter.length > 0) {
         statusFilter = statusFilter.filter((s) => nonTerminal.includes(s));
+        if (statusFilter.length === 0) {
+          return [];
+        }
       } else {
         statusFilter = nonTerminal;
       }
@@ -2569,6 +2787,41 @@ function rowToBoardOutbox(row: BoardOutboxRow): BoardOutbox {
   };
 }
 
+function outboxCreateIntent(input: {
+  readonly outboxId: string | null;
+  readonly effectClass: BoardOutboxEffectClass;
+  readonly effectKind: string;
+  readonly targetHash: string;
+  readonly payloadJson: string;
+  readonly availableAt: string | null;
+  readonly createdAt: string | null;
+}): Readonly<Record<string, unknown>> {
+  return {
+    outboxId: input.outboxId,
+    effectClass: input.effectClass,
+    effectKind: input.effectKind,
+    targetHash: input.targetHash,
+    payloadJson: input.payloadJson,
+    availableAt: input.availableAt,
+    createdAt: input.createdAt
+  };
+}
+
+function outboxRowMatchesCreateIntent(
+  row: BoardOutboxRow,
+  intent: Readonly<Record<string, unknown>>
+): boolean {
+  return (
+    (intent["outboxId"] === null || row.outbox_id === intent["outboxId"]) &&
+    row.effect_class === intent["effectClass"] &&
+    row.effect_kind === intent["effectKind"] &&
+    row.target_hash === intent["targetHash"] &&
+    row.payload_json === intent["payloadJson"] &&
+    (intent["availableAt"] === null || row.available_at === intent["availableAt"]) &&
+    (intent["createdAt"] === null || row.created_at === intent["createdAt"])
+  );
+}
+
 interface SqliteBoardOutboxRepositoryOptions {
   readonly database: DatabaseSync;
   readonly now?: () => string;
@@ -2603,11 +2856,23 @@ export class SqliteBoardOutboxRepository implements BoardOutboxRepository {
     assertValidIsoTimestamp(availableAt, "availableAt");
     const payloadJson = canonicalizeJson(input.payload);
     const idempotencyKey = input.idempotencyKey ?? `outbox:${outboxId}`;
+    const intent = outboxCreateIntent({
+      outboxId: input.outboxId === undefined ? null : outboxId,
+      effectClass: input.effectClass,
+      effectKind: input.effectKind,
+      targetHash: input.targetHash,
+      payloadJson,
+      availableAt: input.availableAt ?? null,
+      createdAt: input.createdAt ?? null
+    });
 
     return runImmediateTransaction(this.#database, () => {
       if (input.idempotencyKey) {
         const existing = loadOutboxRowByIdempotencyKey(this.#database, input.idempotencyKey);
         if (existing) {
+          if (!outboxRowMatchesCreateIntent(existing, intent)) {
+            throwIdempotencyIntentMismatch("Board outbox enqueue", input.idempotencyKey);
+          }
           return rowToBoardOutbox(existing);
         }
       }
@@ -2622,7 +2887,7 @@ export class SqliteBoardOutboxRepository implements BoardOutboxRepository {
         )
         .run(outboxId, idempotencyKey, input.effectClass, input.effectKind, input.targetHash, payloadJson, availableAt, createdAt, createdAt);
       if (input.idempotencyKey) {
-        const resultJson = JSON.stringify({ outboxId });
+        const resultJson = JSON.stringify({ outboxId, intent });
         const resultHash = createHash("sha256").update(resultJson).digest("hex");
         this.#database
           .prepare(
@@ -3283,17 +3548,115 @@ interface StoredEventCursor {
   readonly aggregateSequence: number;
   readonly globalSequence: number;
   readonly payloadHash: string;
+  readonly eventType?: string;
+  readonly eventVersion?: string;
+  readonly causationId?: string | null;
+  readonly correlationId?: string | null;
+  readonly occurredAt?: string;
+  readonly intent?: Readonly<Record<string, unknown>>;
 }
 
-function rowToStoredCursor(row: BoardEventRow): StoredEventCursor {
+function rowToStoredCursor(
+  row: BoardEventRow,
+  intent?: Readonly<Record<string, unknown>>
+): StoredEventCursor {
   return {
     eventId: row.event_id,
     aggregateKind: row.aggregate_kind,
     aggregateId: row.aggregate_id,
     aggregateSequence: row.aggregate_sequence,
     globalSequence: row.global_sequence,
-    payloadHash: row.payload_hash
+    payloadHash: row.payload_hash,
+    eventType: row.event_type,
+    eventVersion: row.event_version,
+    causationId: row.causation_id,
+    correlationId: row.correlation_id,
+    occurredAt: row.occurred_at,
+    ...(intent ? { intent } : {})
   };
+}
+
+function eventAppendIntent(input: {
+  readonly eventId: string | null;
+  readonly aggregateKind: BoardEventAggregateKind;
+  readonly aggregateId: string;
+  readonly eventType: BoardEventType;
+  readonly eventVersion: string;
+  readonly payloadHash: string;
+  readonly causationId: string | null;
+  readonly correlationId: string | null;
+  readonly occurredAt: string | null;
+}): Readonly<Record<string, unknown>> {
+  return {
+    eventId: input.eventId,
+    aggregateKind: input.aggregateKind,
+    aggregateId: input.aggregateId,
+    eventType: input.eventType,
+    eventVersion: input.eventVersion,
+    payloadHash: input.payloadHash,
+    causationId: input.causationId,
+    correlationId: input.correlationId,
+    occurredAt: input.occurredAt
+  };
+}
+
+function eventRowMatchesIntent(
+  row: BoardEventRow,
+  intent: Readonly<Record<string, unknown>>
+): boolean {
+  return (
+    (intent["eventId"] === null || row.event_id === intent["eventId"]) &&
+    row.aggregate_kind === intent["aggregateKind"] &&
+    row.aggregate_id === intent["aggregateId"] &&
+    row.event_type === intent["eventType"] &&
+    row.event_version === intent["eventVersion"] &&
+    row.payload_hash === intent["payloadHash"] &&
+    row.causation_id === intent["causationId"] &&
+    row.correlation_id === intent["correlationId"] &&
+    (intent["occurredAt"] === null || row.occurred_at === intent["occurredAt"])
+  );
+}
+
+function throwEventIdempotencyIntentMismatch(
+  idempotencyKey: string,
+  globalSequence: number | null
+): never {
+  throw new BoardEventAppendError(
+    "Board event idempotencyKey " + idempotencyKey + " replayed with a different event intent.",
+    {
+      idempotencyKey,
+      cause: "duplicate_idempotency_key",
+      actual: globalSequence
+    }
+  );
+}
+
+function parseStoredEventCursor(record: BoardIdempotencyRow): StoredEventCursor {
+  const parsed = JSON.parse(record.result_json) as unknown;
+  if (!isRecord(parsed) || typeof parsed["eventId"] !== "string") {
+    throw new Error("Board event idempotency record missing eventId.");
+  }
+  return parsed as unknown as StoredEventCursor;
+}
+
+function findEventIdempotencyKey(database: DatabaseSync, eventId: string): string | null {
+  const rows = database
+    .prepare(
+      "SELECT scope, idempotency_key, result_hash, result_json, created_at " +
+        "FROM board_idempotency_records WHERE scope = ? ORDER BY created_at DESC"
+    )
+    .all(BOARD_EVENT_IDEMPOTENCY_SCOPE) as unknown as BoardIdempotencyRow[];
+  for (const row of rows) {
+    try {
+      const cursor = parseStoredEventCursor(row);
+      if (cursor["eventId"] === eventId) {
+        return row.idempotency_key;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 function generateEventId(): EventId {
@@ -3407,15 +3770,7 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
       .prepare(BOARD_EVENT_STATEMENTS.selectById)
       .get(String(eventId)) as BoardEventRow | undefined;
     if (!row) return null;
-    const idem = this.#database
-      .prepare(
-        "SELECT idempotency_key FROM board_idempotency_records " +
-          "WHERE scope = ? AND result_json LIKE ? ORDER BY created_at DESC LIMIT 1"
-      )
-      .get(BOARD_EVENT_IDEMPOTENCY_SCOPE, "%" + String(eventId) + "%") as
-      | { idempotency_key: string }
-      | undefined;
-    const idempotencyKey = idem?.idempotency_key ?? null;
+    const idempotencyKey = findEventIdempotencyKey(this.#database, String(eventId));
     return rowToBoardEvent(row, idempotencyKey);
   }
 
@@ -3428,7 +3783,7 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
       .get(BOARD_EVENT_IDEMPOTENCY_SCOPE, idempotencyKey) as BoardIdempotencyRow | undefined;
     if (!record) return null;
     try {
-      const cursor = JSON.parse(record.result_json) as StoredEventCursor;
+      const cursor = parseStoredEventCursor(record);
       const eventRow = this.#database
         .prepare(BOARD_EVENT_STATEMENTS.selectById)
         .get(cursor.eventId) as BoardEventRow | undefined;
@@ -3514,16 +3869,17 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
     const causationId = input.causationId ? String(input.causationId) : null;
     const correlationId = input.correlationId ?? null;
     const eventId = input.eventId ? String(input.eventId) : generateEventId();
-
-    const existingById = this.#database
-      .prepare(BOARD_EVENT_STATEMENTS.selectById)
-      .get(eventId) as BoardEventRow | undefined;
-    if (existingById) {
-      throw new BoardEventAppendError("Board event " + eventId + " already exists.", {
-        eventId: existingById.event_id as EventId,
-        cause: "duplicate_event_id"
-      });
-    }
+    const intent = eventAppendIntent({
+      eventId: input.eventId ? eventId : null,
+      aggregateKind: input.aggregateKind,
+      aggregateId: input.aggregateId,
+      eventType: input.eventType,
+      eventVersion,
+      payloadHash,
+      causationId,
+      correlationId,
+      occurredAt: input.occurredAt ?? null
+    });
 
     if (idempotencyKey) {
       const existingIdem = this.#database
@@ -3531,7 +3887,7 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
         .get(BOARD_EVENT_IDEMPOTENCY_SCOPE, idempotencyKey) as BoardIdempotencyRow | undefined;
       if (existingIdem) {
         try {
-          const cursor = JSON.parse(existingIdem.result_json) as StoredEventCursor;
+          const cursor = parseStoredEventCursor(existingIdem);
           if (cursor.payloadHash !== payloadHash) {
             throw new BoardEventAppendError(
               "Board event idempotencyKey " +
@@ -3548,6 +3904,13 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
             .prepare(BOARD_EVENT_STATEMENTS.selectById)
             .get(cursor.eventId) as BoardEventRow | undefined;
           if (eventRow) {
+            if (isRecord(cursor.intent)) {
+              if (!intentMatches(cursor.intent, intent)) {
+                throwEventIdempotencyIntentMismatch(idempotencyKey, cursor.globalSequence);
+              }
+            } else if (!eventRowMatchesIntent(eventRow, intent)) {
+              throwEventIdempotencyIntentMismatch(idempotencyKey, cursor.globalSequence);
+            }
             return rowToBoardEvent(eventRow, idempotencyKey);
           }
         } catch (error) {
@@ -3556,6 +3919,16 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
           throw new Error("Failed to deserialize board event idempotency record: " + message);
         }
       }
+    }
+
+    const existingById = this.#database
+      .prepare(BOARD_EVENT_STATEMENTS.selectById)
+      .get(eventId) as BoardEventRow | undefined;
+    if (existingById) {
+      throw new BoardEventAppendError("Board event " + eventId + " already exists.", {
+        eventId: existingById.event_id as EventId,
+        cause: "duplicate_event_id"
+      });
     }
 
     const nextAggregate = (this.#database
@@ -3634,7 +4007,7 @@ export class SqliteBoardEventRepository implements BoardEventRepository {
     }
 
     if (idempotencyKey) {
-      const cursor: StoredEventCursor = rowToStoredCursor(inserted);
+      const cursor: StoredEventCursor = rowToStoredCursor(inserted, intent);
       const resultJson = JSON.stringify(cursor);
       const resultHash = createHash("sha256").update(resultJson).digest("hex");
       this.#database
@@ -3937,21 +4310,32 @@ export class SqliteBoardProjectionRebuilder<S extends BoardProjectionState = Boa
     if (typeof until !== "undefined" && (!Number.isInteger(until) || until < 0)) {
       throw new Error("Board projection replay throughGlobalSequence must be a non-negative integer.");
     }
-    const events = this.#eventRepository.listEvents({
-      ...(typeof until === "number" ? { untilGlobalSequence: until } : {}),
-      order: "asc"
-    });
     let state: S = this.#initialState;
     let lastSequence = -1;
-    for (const event of events) {
-      state = this.#reduce(state, event);
-      lastSequence = event.globalSequence;
+    let eventCount = 0;
+    let fromGlobalSequence = 0;
+    const pageSize = 1_000;
+    while (typeof until !== "number" || fromGlobalSequence <= until) {
+      const events = this.#eventRepository.listEvents({
+        fromGlobalSequence,
+        ...(typeof until === "number" ? { untilGlobalSequence: until } : {}),
+        order: "asc",
+        limit: pageSize
+      });
+      if (events.length === 0) break;
+      for (const event of events) {
+        state = this.#reduce(state, event);
+        lastSequence = event.globalSequence;
+        eventCount += 1;
+      }
+      fromGlobalSequence = lastSequence + 1;
+      if (events.length < pageSize) break;
     }
     return {
       projectionKey: this.projectionKey,
       projectionVersion: this.projectionVersion,
-      rebuiltThroughGlobalSequence: lastSequence,
-      eventCount: events.length,
+      rebuiltThroughGlobalSequence: Math.max(lastSequence, 0),
+      eventCount,
       state,
       stateHash: canonicalStateHash(state),
       rebuiltAt: this.#now()
@@ -4794,8 +5178,8 @@ export class SqliteBoardTaskLinkRepository implements BoardTaskLinkRepository {
     }
 
     const ready: string[] = [];
-    for (const root of rootSet) {
-      if (reachable.has(root)) ready.push(root);
+    for (const node of reachable) {
+      if ((inDegree.get(node) ?? 0) === 0) ready.push(node);
     }
     ready.sort();
 

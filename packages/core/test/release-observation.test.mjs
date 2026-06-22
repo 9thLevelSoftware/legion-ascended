@@ -186,6 +186,46 @@ test("critical alert → rolled_back status", async () => {
   assert.match(result.report.failureReason ?? "", /critical alert/);
 });
 
+test("suppressed critical alert does not force rollback", async () => {
+  const result = await buildReleaseObservation(buildInput({
+    canary: makeCanaryInput({ passed: 1 }),
+    healthCheck: makeHealthCheckInput({ healthy: 1 }),
+    alert: {
+      candidateAlerts: [
+        {
+          alertId: "alert-critical-suppressed-0",
+          severity: "critical",
+          title: "page",
+          summary: "x",
+          source: "canary"
+        }
+      ],
+      sink: (alert) => ({
+        ...alert,
+        decision: "suppressed"
+      })
+    }
+  }), { now: NOW });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.report.status, "promoted");
+  assert.deepEqual(result.report.alert?.criticalAlertIds, []);
+  assert.deepEqual(result.report.alert?.suppressedAlertIds, [
+    "alert-critical-suppressed-0"
+  ]);
+});
+
+test("skipped required observation blocks promotion", async () => {
+  const result = await buildReleaseObservation(buildInput({
+    canary: { invocations: [] },
+    healthCheck: makeHealthCheckInput({ healthy: 1 })
+  }), { now: NOW });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.report.status, "observing");
+  assert.match(result.report.failureReason ?? "", /required observation skipped/);
+});
+
 // ---------------------------------------------------------------------------
 // Determinism
 // ---------------------------------------------------------------------------
@@ -233,6 +273,15 @@ test("observedAt > windowEnd yields window_expired issue", async () => {
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.ok(result.issues.map((i) => i.code).includes("window_expired"));
+});
+
+test("observedAt before windowStart yields window_invalid issue", async () => {
+  const result = await buildReleaseObservation(buildInput({
+    observedAt: "2026-06-22T04:59:59.000Z"
+  }), { now: NOW });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.ok(result.issues.map((i) => i.code).includes("window_invalid"));
 });
 
 // ---------------------------------------------------------------------------

@@ -425,20 +425,34 @@ async function withBoardStore<T extends BoardStoreHandle>(
   openStore: () => T,
   callback: (store: T) => Promise<CliResult>
 ): Promise<CliResult> {
-  await mkdir(path.dirname(boardDatabasePath(context)), { recursive: true });
-  const store = openStore();
+  let store: T | undefined;
   try {
+    await mkdir(path.dirname(boardDatabasePath(context)), { recursive: true });
+    store = openStore();
     store.migrate();
     return await callback(store);
+  } catch (error) {
+    return usageError(error instanceof Error ? error.message : String(error));
   } finally {
-    store.close();
+    if (store !== undefined) {
+      try {
+        store.close();
+      } catch {
+        // Best-effort cleanup; preserve the original command result.
+      }
+    }
   }
 }
 
 async function loadBoardInput(context: CliContext): Promise<Record<string, unknown> | CliResult> {
   const inputPath = requiredStringOption(context, "input");
   if (typeof inputPath !== "string") return inputPath;
-  return readJsonInput(inputPath);
+  const parsed = await readJsonInput(inputPath);
+  if (isCliResult(parsed)) return parsed;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return usageError(`JSON input must be an object: ${inputPath}`);
+  }
+  return parsed;
 }
 
 function boardStoreOptions(context: CliContext): { readonly databasePath: string; readonly busyTimeoutMs: number } {

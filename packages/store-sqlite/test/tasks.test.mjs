@@ -10,7 +10,6 @@ import { fileURLToPath } from "node:url";
 import {
   BOARD_REQUIRED_INDEXES,
   BOARD_REQUIRED_TABLES,
-  BOARD_SCHEMA_VERSION,
   BOARD_TASK_GENERATION_MIN,
   BOARD_TASK_PRIORITY_MAX,
   BOARD_TASK_PRIORITY_MIN,
@@ -18,12 +17,14 @@ import {
   BoardIllegalStatusTransitionError,
   BoardTaskNotFoundError,
   BoardTerminalTaskMutationError,
+  SQLITE_BOARD_MIGRATIONS,
   openSqliteBoardStore,
   openSqliteBoardTaskRepository,
   SqliteBoardTaskRepository
 } from "../dist/index.js";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
+const LATEST_SQLITE_BOARD_SCHEMA_VERSION = SQLITE_BOARD_MIGRATIONS.at(-1).version;
 
 async function withTempDatabase(fn) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-p03-t02-"));
@@ -97,6 +98,64 @@ test("P03-T02 create rejects duplicate task ids with a descriptive error", async
     try {
       repository.createTask(createInput());
       assert.throws(() => repository.createTask(createInput()), /already exists/);
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T02 create validates blocker/status coupling before persisting", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, repository } = buildRepository(databasePath);
+    try {
+      assert.throws(
+        () => repository.createTask(createInput({ initialStatus: "blocked" })),
+        /initial status blocked must include a blocker/
+      );
+      assert.throws(
+        () =>
+          repository.createTask(
+            createInput({
+              taskId: "tsk_beta",
+              initialStatus: "ready",
+              blocker: { reason: "not actually blocked" }
+            })
+          ),
+        /initial status ready must not include a blocker/
+      );
+
+      const blocker = { reason: "waiting on dependency", reportedBy: "worker_alpha" };
+      const blocked = repository.createTask(
+        createInput({ taskId: "tsk_blocked", initialStatus: "blocked", blocker })
+      );
+      assert.equal(blocked.status, "blocked");
+      assert.deepEqual(blocked.blocker, blocker);
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T02 createTask rejects idempotency replays with a different create intent", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, repository } = buildRepository(databasePath);
+    try {
+      const first = repository.createTask(createInput({ idempotencyKey: "task-create-alpha" }));
+      const replay = repository.createTask(createInput({ idempotencyKey: "task-create-alpha" }));
+      assert.deepEqual(replay, first);
+
+      assert.throws(
+        () =>
+          repository.createTask(
+            createInput({
+              taskId: "tsk_beta",
+              contractId: "ctr_beta",
+              idempotencyKey: "task-create-alpha"
+            })
+          ),
+        /idempotencyKey .*different intent/
+      );
+      assert.equal(repository.getTask("tsk_beta"), null);
     } finally {
       store.close();
     }
@@ -337,6 +396,35 @@ test("P03-T02 bumpGeneration rotates the contract reference and increments gener
   });
 });
 
+test("P03-T02 bumpGeneration honors caller-supplied updatedAt", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, repository } = buildRepository(databasePath);
+    try {
+      repository.createTask(createInput());
+      const updatedAt = "2026-06-21T15:45:00.000Z";
+      const bumped = repository.bumpGeneration({
+        taskId: TASK_ID,
+        expectedGeneration: 1,
+        nextContractId: "ctr_v2",
+        nextContractRevision: 2,
+        nextContractHash: "b".repeat(64),
+        updatedAt
+      });
+      assert.equal(bumped.updatedAt, updatedAt);
+
+      const raw = new DatabaseSync(databasePath);
+      try {
+        const row = raw.prepare("SELECT updated_at FROM board_tasks WHERE task_id = ?").get(TASK_ID);
+        assert.equal(row.updated_at, updatedAt);
+      } finally {
+        raw.close();
+      }
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("P03-T02 bumpGeneration rejects generation mismatches with BoardConcurrencyError", async () => {
   await withTempDatabase((databasePath) => {
     const { store, repository } = buildRepository(databasePath);
@@ -420,6 +508,55 @@ test("P03-T02 supersedeTask writes a board_task_links row keyed on relation='sup
           .get(successorId);
         assert.equal(link.relation, "supersedes");
         assert.equal(link.depends_on_task_id, TASK_ID);
+      } finally {
+        raw.close();
+      }
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T02 supersedeTask rejects terminal tasks", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, repository } = buildRepository(databasePath);
+    try {
+      repository.createTask(createInput());
+      repository.transitionTaskStatus(TASK_ID, { toStatus: "ready" }, 1);
+      repository.transitionTaskStatus(TASK_ID, { toStatus: "canceled" }, 1);
+      assert.throws(
+        () => repository.supersedeTask({ taskId: TASK_ID, expectedGeneration: 1 }),
+        (error) => error instanceof BoardTerminalTaskMutationError && error.status === "canceled"
+      );
+      assert.equal(repository.getTask(TASK_ID).status, "canceled");
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T02 supersedeTask honors supersededAt for retired, successor, and link rows", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, repository } = buildRepository(databasePath);
+    try {
+      repository.createTask(createInput());
+      const supersededAt = "2026-06-21T16:00:00.000Z";
+      const result = repository.supersedeTask({
+        taskId: TASK_ID,
+        expectedGeneration: 1,
+        successorTaskId: "tsk_successor",
+        supersededAt
+      });
+      assert.equal(result.retired.updatedAt, supersededAt);
+      assert.equal(result.successor.createdAt, supersededAt);
+      assert.equal(result.successor.updatedAt, supersededAt);
+
+      const raw = new DatabaseSync(databasePath);
+      try {
+        const link = raw
+          .prepare("SELECT created_at FROM board_task_links WHERE task_id = ? AND depends_on_task_id = ?")
+          .get("tsk_successor", TASK_ID);
+        assert.equal(link.created_at, supersededAt);
       } finally {
         raw.close();
       }
@@ -561,7 +698,7 @@ test("P03-T02 migration diagnostics surface every required table and index for b
     const { store, repository } = buildRepository(databasePath);
     try {
       const diagnostics = store.inspect();
-      assert.equal(diagnostics.userVersion, BOARD_SCHEMA_VERSION);
+      assert.equal(diagnostics.userVersion, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
       assert.equal(diagnostics.foreignKeys, true);
       assert.equal(diagnostics.journalMode, "wal");
       assert.deepEqual(diagnostics.missingTables, []);

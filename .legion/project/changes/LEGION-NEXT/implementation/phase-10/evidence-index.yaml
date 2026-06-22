@@ -1,6 +1,6 @@
 phase: 10
 phase_id: P10
-hash_basis: "SHA-256 over artifact bytes after P10-T03 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index and the generated gitleaks log for the same reason."
+hash_basis: "SHA-256 over artifact bytes after P10-T03 closeout finalization, refreshed for PR #22 metadata/evidence hygiene follow-up; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index and the generated gitleaks log for the same reason."
 entries:
   - task: P10-T01
     artifact: packages/core/src/release-observation/contract.ts
@@ -255,7 +255,7 @@ entries:
   - task: P10-CLOSEOUT
     artifact: docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 10 closeout integration report."
-    sha256: a8f83a7efefbdcd66c75ec79ddb42ce649bc0ec38109f78476137492562340ca
+    sha256: 20b4ccaebf556660b7a978e0b70d17f9bef7b00c9ec33712e0a8957bf7049bfb
   - task: P10-CLOSEOUT
     artifact: docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md
     description: "Independent Phase 10 closeout review with PASS verdict."
@@ -263,11 +263,11 @@ entries:
   - task: P10-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml
     description: "Final Phase 10 ledger marked DONE with P10-T01 through P10-T03 complete and blockers cleared."
-    sha256: ba8ea7384a14c1900a339d63281cbcaa8f63256ef0a715a498a6ce56dfefc01b
+    sha256: dc2edd3c63ad499010d53de53f1b941e83e2ff01d083b6a8c9bb6fa616526145
   - task: P10-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
     description: "Final Phase 10 handoff to Phase 11 and Production Lifecycle cut-line assumptions."
-    sha256: 04da2661db877631af908bf4a35244b506a56473473c57615392417d302622f9
+    sha256: 126b1ff21b67d1519d6aa447fc61dfcb11d17bb0f4d6e9f7a29e74afc462526b
   - task: P10-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 10 complete, Production Lifecycle reached, and P11-T01 current."

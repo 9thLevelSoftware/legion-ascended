@@ -100,6 +100,7 @@ export interface SequencerStepInput {
   readonly headRefBefore: string;
   readonly expectedBaseRef: string;
   readonly conflicts: readonly ConflictReport[];
+  readonly preIssues?: readonly MergeQueueIssue[];
   readonly rebaseRunner: RebaseRunner | undefined;
   readonly now: () => UtcTimestamp;
   readonly implementationActor: Actor;
@@ -158,7 +159,7 @@ export async function runSequencerStep(
 ): Promise<SequencerStepResult> {
   const { entry, headRefBefore, expectedBaseRef, conflicts, rebaseRunner, now } = input;
 
-  const issues: MergeQueueIssue[] = [];
+  const issues: MergeQueueIssue[] = [...(input.preIssues ?? [])];
 
   // Branch 1: base ref drifted. We only flag this when the previous
   // step actually advanced the head ref; otherwise the head has not
@@ -208,6 +209,9 @@ export async function runSequencerStep(
   // Decide blocking outcome BEFORE invoking the runner so we never
   // touch git when we already know the step will fail.
   const blockedByBaseRef = issues.some((issue) => issue.code === "entry_base_ref_mismatch");
+  const blockedByOrdering = issues.some(
+    (issue) => issue.code === "entry_duplicate_sequence" || issue.code === "entry_out_of_order"
+  );
   const blockedByDecision = entry.decision.outcome === "rejected" || entry.decision.outcome === "escalated";
   const blockedByConflict = hasConflicts;
 
@@ -216,7 +220,7 @@ export async function runSequencerStep(
 
   if (blockedByDecision) {
     outcome = entry.decision.outcome === "escalated" ? "escalated" : "rejected";
-  } else if (blockedByConflict || blockedByBaseRef) {
+  } else if (blockedByOrdering || blockedByConflict || blockedByBaseRef) {
     outcome = "conflict";
   } else if (rebaseRunner === undefined) {
     // No runner wired — record as `queued` so the orchestrator can
@@ -327,7 +331,8 @@ export async function runSequencer(
   ownership: PathOwnershipMap | undefined,
   rebaseRunner: RebaseRunner | undefined,
   now: () => UtcTimestamp,
-  implementationActor: Actor
+  implementationActor: Actor,
+  initialHeadRefOverride?: string
 ): Promise<{
   readonly steps: readonly MergeQueueStep[];
   readonly issues: readonly MergeQueueIssue[];
@@ -364,7 +369,7 @@ export async function runSequencer(
   const allConflicts = detectPathConflicts(sorted, ownership);
 
   // 3. Walk each entry.
-  const initialHeadRef = sorted[0]?.baseRef ?? "HEAD";
+  const initialHeadRef = initialHeadRefOverride ?? sorted[0]?.baseRef ?? "HEAD";
   let headRef = initialHeadRef;
   const steps: MergeQueueStep[] = [];
   const allIssues: MergeQueueIssue[] = [...orderingIssues];
@@ -372,6 +377,7 @@ export async function runSequencer(
 
   let previousOutcome: MergeStepOutcome | null = null;
   for (const entry of sorted) {
+    const entryOrderingIssues = orderingIssues.filter((issue) => issue.entrySequenceIndex === entry.sequenceIndex);
     const entryConflicts = allConflicts.filter((conflict) =>
       conflict.conflictingEntrySequenceIndices.includes(entry.sequenceIndex)
     );
@@ -381,13 +387,16 @@ export async function runSequencer(
       headRefBefore: headRef,
       expectedBaseRef,
       conflicts: entryConflicts,
-      rebaseRunner: blocked ? undefined : rebaseRunner,
+      preIssues: entryOrderingIssues,
+      rebaseRunner: blocked || orderingIssues.length > 0 ? undefined : rebaseRunner,
       now,
       implementationActor,
       previousOutcome
     });
 
-    for (const issue of stepResult.step.issues) allIssues.push(issue);
+    for (const issue of stepResult.step.issues) {
+      if (!orderingIssues.includes(issue)) allIssues.push(issue);
+    }
     steps.push(stepResult.step);
     headRef = stepResult.nextHeadRef;
     previousOutcome = stepResult.step.outcome;

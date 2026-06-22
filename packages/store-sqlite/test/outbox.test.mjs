@@ -84,17 +84,32 @@ test("P03-T05 enqueueOutbox canonicalizes payload JSON and supports filtered lis
   });
 });
 
-test("P03-T05 enqueueOutbox reuses the same outbox row for duplicate idempotency keys", async () => {
+test("P03-T05 enqueueOutbox reuses duplicate idempotency keys only for the same intent", async () => {
   await withTempDatabase((databasePath) => {
     const { store, repository } = buildRepository(databasePath);
     try {
-      const first = repository.enqueueOutbox(createInput({ idempotencyKey: "idem-duplicate" }));
-      const second = repository.enqueueOutbox(
-        createInput({ outboxId: "outbox_beta", payload: { first: true }, idempotencyKey: "idem-duplicate" })
+      const input = createInput({ idempotencyKey: "idem-duplicate" });
+      const first = repository.enqueueOutbox(input);
+      const replay = repository.enqueueOutbox(input);
+      assert.deepEqual(replay, first);
+
+      assert.throws(
+        () =>
+          repository.enqueueOutbox(
+            createInput({
+              outboxId: "outbox_beta",
+              effectKind: "dispatch.other",
+              payload: { first: true },
+              idempotencyKey: "idem-duplicate"
+            })
+          ),
+        /idempotencyKey .*different intent/
       );
-      assert.equal(second.outboxId, first.outboxId);
-      assert.equal(second.idempotencyKey, first.idempotencyKey);
-      assert.equal(repository.listOutbox({}).length, 1);
+      const other = repository.enqueueOutbox(
+        createInput({ outboxId: "outbox_gamma", idempotencyKey: "idem-gamma" })
+      );
+      assert.equal(other.outboxId, "outbox_gamma");
+      assert.equal(repository.listOutbox({}).length, 2);
 
       const raw = new DatabaseSync(databasePath);
       try {
@@ -102,8 +117,8 @@ test("P03-T05 enqueueOutbox reuses the same outbox row for duplicate idempotency
         const idempotencyCount = raw
           .prepare("SELECT COUNT(*) AS count FROM board_idempotency_records WHERE scope = ?")
           .get("board.outbox.enqueue");
-        assert.equal(outboxCount.count, 1);
-        assert.equal(idempotencyCount.count, 1);
+        assert.equal(outboxCount.count, 2);
+        assert.equal(idempotencyCount.count, 2);
       } finally {
         raw.close();
       }

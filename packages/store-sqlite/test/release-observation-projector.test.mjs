@@ -22,6 +22,7 @@ import {
 import {
   buildFixturePayload,
   buildRepositories,
+  makeFixtureBoardEvent,
   makeFixtureReport,
   RELEASE_OBSERVATION_STORE_FIXTURE_CONSTANTS,
   withTempDatabase
@@ -33,6 +34,52 @@ function closeRepositories(repositories) {
   repositories.database.close();
   repositories.store.close();
 }
+
+function makePagedEventRepository(events) {
+  return {
+    listEvents(query = {}) {
+      const order = query.order ?? "asc";
+      const limit = query.limit ?? 1_000;
+      const filtered = events.filter((event) => {
+        if (query.aggregateKind && event.aggregateKind !== query.aggregateKind) return false;
+        if (query.aggregateId && event.aggregateId !== query.aggregateId) return false;
+        if (query.eventType && event.eventType !== query.eventType) return false;
+        if (
+          typeof query.fromGlobalSequence === "number" &&
+          event.globalSequence < query.fromGlobalSequence
+        ) {
+          return false;
+        }
+        if (
+          typeof query.untilGlobalSequence === "number" &&
+          event.globalSequence > query.untilGlobalSequence
+        ) {
+          return false;
+        }
+        return true;
+      });
+      filtered.sort((a, b) =>
+        order === "desc"
+          ? b.globalSequence - a.globalSequence
+          : a.globalSequence - b.globalSequence
+      );
+      return filtered.slice(0, limit);
+    },
+    appendEvent() { throw new Error("not used"); },
+    appendEvents() { throw new Error("not used"); },
+    getEvent() { return null; },
+    getEventByIdempotencyKey() { return null; },
+    countEvents() { return events.length; },
+    tail() { return []; }
+  };
+}
+
+const noopProjectionRepository = {
+  saveProjection() { throw new Error("not used"); },
+  loadProjection() { return null; },
+  deleteProjection() { throw new Error("not used"); },
+  listProjections() { return []; }
+};
 
 // ---------------------------------------------------------------------------
 // Envelope helpers
@@ -151,6 +198,62 @@ test("projector produces state=null when no events have been emitted for the cha
   });
 });
 
+test("projector filters replay to its bound aggregate", () => {
+  const foreignReport = makeFixtureReport({
+    changeId: "chg-release-observation-foreign",
+    reportSha256: "sha256:" + "1".repeat(64)
+  });
+  const targetReport = makeFixtureReport();
+  const events = [
+    makeFixtureBoardEvent(foreignReport, { globalSequence: 1 }),
+    makeFixtureBoardEvent(targetReport, { globalSequence: 2 })
+  ];
+  const projector = new SqliteReleaseObservationProjector({
+    changeId: FIX.changeId,
+    mergeQueueHash: FIX.mergeQueueHash,
+    eventRepository: makePagedEventRepository(events),
+    projectionRepository: noopProjectionRepository
+  });
+  const result = projector.replay();
+  assert.equal(result.eventCount, 1);
+  assert.equal(result.rebuiltThroughGlobalSequence, 2);
+  assert.equal(result.state?.changeId, FIX.changeId);
+});
+
+test("projector replay pages past the first event page", () => {
+  const events = [];
+  for (let i = 1; i <= 1_000; i += 1) {
+    events.push({
+      schemaVersion: "0.1.0",
+      eventId: `evt-release-filler-${i}`,
+      aggregateKind: "task",
+      aggregateId: `task:filler:${i}`,
+      aggregateSequence: i,
+      globalSequence: i,
+      eventType: "task.created",
+      eventVersion: "0.1.0",
+      payload: { projectId: "proj-filler", changeId: "chg-filler", taskId: `task-${i}` },
+      payloadHash: "0".repeat(64),
+      causationId: null,
+      correlationId: null,
+      occurredAt: "2026-06-22T05:00:00.000Z",
+      idempotencyKey: null,
+      payloadJson: "{}"
+    });
+  }
+  events.push(makeFixtureBoardEvent(makeFixtureReport(), { globalSequence: 1_001 }));
+  const projector = new SqliteReleaseObservationProjector({
+    changeId: FIX.changeId,
+    mergeQueueHash: FIX.mergeQueueHash,
+    eventRepository: makePagedEventRepository(events),
+    projectionRepository: noopProjectionRepository
+  });
+  const result = projector.replay();
+  assert.equal(result.eventCount, 1);
+  assert.equal(result.rebuiltThroughGlobalSequence, 1_001);
+  assert.equal(result.state?.lastEventType, "release.promoted");
+});
+
 // ---------------------------------------------------------------------------
 // rebuildAndSave + verify
 // ---------------------------------------------------------------------------
@@ -190,6 +293,29 @@ test("projector rebuildAndSave persists the state and verify round-trips", async
         stateFromReleaseObservationEnvelope(projectionRecord.state),
         null
       );
+    } finally {
+      closeRepositories(repositories);
+    }
+  });
+});
+
+test("projector rebuildAndSave persists and verifies an empty projection", async () => {
+  await withTempDatabase(async (databasePath) => {
+    const repositories = buildRepositories(databasePath);
+    const { eventRepository, projectionRepository } = repositories;
+    try {
+      const projector = new SqliteReleaseObservationProjector({
+        changeId: FIX.changeId,
+        mergeQueueHash: FIX.mergeQueueHash,
+        eventRepository,
+        projectionRepository
+      });
+      const rebuilt = projector.rebuildAndSave();
+      assert.equal(rebuilt.state, null);
+      assert.equal(rebuilt.rebuiltThroughGlobalSequence, 0);
+      const verified = projector.verify();
+      assert.equal(verified.state, null);
+      assert.equal(verified.rebuiltThroughGlobalSequence, 0);
     } finally {
       closeRepositories(repositories);
     }

@@ -499,7 +499,8 @@ export class WholeChangeAcceptanceAggregator {
       input.changeId,
       validated.mergeQueueHash
     );
-    const acceptedAt = this.#now();
+    const acceptedAt =
+      typeof input.now === "function" ? input.now() : this.#now();
     const acceptedBy = input.acceptedBy.trim();
 
     // Build the payload once so the same bytes feed the event

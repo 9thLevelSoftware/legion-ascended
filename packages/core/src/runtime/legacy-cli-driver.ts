@@ -184,6 +184,16 @@ interface LegacyRunState {
   guaranteeLevel: RuntimeLegacyCliGuaranteeLevel;
 }
 
+function isTerminalStatus(status: LegacyRunState["status"]): boolean {
+  return (
+    status === "succeeded" ||
+    status === "failed" ||
+    status === "blocked" ||
+    status === "canceled" ||
+    status === "superseded"
+  );
+}
+
 /**
  * Typed errors emitted by the legacy driver. The `code` field is the
  * selector's stable contract; downstream consumers must pattern-match
@@ -197,6 +207,7 @@ export class RuntimeLegacyCliError extends Error {
     | "invalid_request"
     | "stale_checkpoint"
     | "checkpoint_mismatch"
+    | "terminal_run"
     | "already_canceled"
     | "already_succeeded"
     | "approval_not_acceptable"
@@ -304,6 +315,14 @@ export class RuntimeLegacyCliDriver implements RuntimeDriver {
 
   async resume(runId: RunId, checkpointRef: RuntimeCheckpointRef): Promise<RuntimeResumeResult> {
     const state = this.requireRun(runId);
+    if (isTerminalStatus(state.status)) {
+      throw new RuntimeLegacyCliError(
+        "terminal_run",
+        `Run ${runId} is ${state.status} and cannot be resumed`,
+        false,
+        { state: state.status, startedAt: state.startedAt, checkpoint: state.checkpoint }
+      );
+    }
     if (checkpointRef.generation !== state.checkpoint.generation) {
       throw new RuntimeLegacyCliError(
         "stale_checkpoint",
@@ -317,10 +336,10 @@ export class RuntimeLegacyCliDriver implements RuntimeDriver {
       );
     }
 
-    state.generation += 1;
-    state.checkpoint = deriveLegacyCheckpoint(runId, state.request, this.clock.now(), state.generation);
-    state.status = "started";
     const resumedAt = this.clock.now();
+    state.generation += 1;
+    state.checkpoint = deriveLegacyCheckpoint(runId, state.request, resumedAt, state.generation);
+    state.status = "started";
     const events = buildRunResumedEvents(state, resumedAt);
 
     this.appendStream(state.runId, {
@@ -454,13 +473,7 @@ export class RuntimeLegacyCliDriver implements RuntimeDriver {
     const resolvedAt = this.clock.now();
 
     if (artifactRef === undefined) {
-      const isTerminal =
-        state.status === "succeeded" ||
-        state.status === "failed" ||
-        state.status === "canceled" ||
-        state.status === "superseded" ||
-        state.status === "blocked";
-      if (!isTerminal) {
+      if (!isTerminalStatus(state.status)) {
         throw new RuntimeLegacyCliError(
           "not_terminal",
           `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run (legacy driver)`,
@@ -687,6 +700,7 @@ function buildRunCreatedEvents(
     projectId: request.projectId,
     generation: 1,
     sequence: 0,
+    occurredAt: startedAt,
     payload: {
       runId,
       taskId,
@@ -706,6 +720,7 @@ function buildRunCreatedEvents(
     projectId: request.projectId,
     generation: 1,
     sequence: 1,
+    occurredAt: startedAt,
     payload: {
       runId,
       taskId,
@@ -729,6 +744,7 @@ function buildRunResumedEvents(state: LegacyRunState, resumedAt: UtcTimestamp): 
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: resumedAt,
       payload: {
         runId: state.runId,
         taskId: state.request.taskId,
@@ -754,6 +770,7 @@ function buildRunFinishedEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: finishedAt,
       payload: {
         runId: state.runId,
         taskId: state.request.taskId,
@@ -783,6 +800,7 @@ function buildApprovalGrantedEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: deliveredAt,
       payload: {
         approvalId,
         requestedBy: approvalRef.decidedBy,
@@ -798,6 +816,7 @@ function buildApprovalGrantedEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 1,
+      occurredAt: deliveredAt,
       payload: {
         approvalId,
         decidedBy: approvalRef.decidedBy,
@@ -827,6 +846,7 @@ function buildArtifactEvents(
       projectId: state.request.projectId,
       generation: state.generation,
       sequence: 0,
+      occurredAt: resolvedAt,
       payload: {
         evidenceId,
         taskId: state.request.taskId,
@@ -847,6 +867,7 @@ interface BuildEventInput {
   readonly projectId: EventEnvelope["projectId"];
   readonly generation: number;
   readonly sequence: number;
+  readonly occurredAt: UtcTimestamp;
   readonly payload: Readonly<Record<string, unknown>>;
   readonly causationId?: EventEnvelope["id"];
   readonly correlationId?: EventEnvelope["correlationId"];
@@ -854,7 +875,6 @@ interface BuildEventInput {
 
 function buildEvent(input: BuildEventInput): EventEnvelope {
   const id = deterministicEventId(input.type, input.runId, input.sequence, input.generation);
-  const occurredAt = "2026-06-21T20:00:00.000Z" as UtcTimestamp;
   const base = {
     schemaVersion: "0.1.0",
     id,
@@ -866,7 +886,7 @@ function buildEvent(input: BuildEventInput): EventEnvelope {
     generation: input.generation,
     sequence: input.sequence,
     actor: input.actor,
-    occurredAt,
+    occurredAt: input.occurredAt,
     payload: input.payload as EventEnvelope["payload"]
   } as const;
 

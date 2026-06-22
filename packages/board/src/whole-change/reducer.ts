@@ -303,12 +303,15 @@ export function replayWholeChangeAcceptance(
  * `changeId` so a single board can run multiple whole-change
  * projections concurrently without collisions.
  */
-export function wholeChangeAcceptanceProjectionKey(changeId: ChangeId): string {
+export function wholeChangeAcceptanceProjectionKey(
+  changeId: ChangeId,
+  mergeQueueHash: ContentHash
+): string {
   // changeId is a branded string like "chg-..." — sanitize so
   // any future id schema that introduces non-conforming
   // characters still maps cleanly into the projection key.
   const sanitized = changeId.replace(/[^a-z0-9._:-]/gi, "_");
-  return `whole_change.acceptance:${sanitized}` as string;
+  return `whole_change.acceptance:${sanitized}:${mergeQueueHash}` as string;
 }
 
 /**
@@ -319,11 +322,20 @@ export function wholeChangeAcceptanceProjectionKey(changeId: ChangeId): string {
  */
 export function parseWholeChangeAcceptanceProjectionKey(
   projectionKey: string
-): { readonly changeId: string } | null {
+): {
+  readonly changeId: string;
+  readonly mergeQueueHash: ContentHash;
+} | null {
   if (!projectionKey.startsWith("whole_change.acceptance:")) return null;
-  const changeId = projectionKey.slice("whole_change.acceptance:".length);
+  const rest = projectionKey.slice("whole_change.acceptance:".length);
+  const hashMarker = ":sha256:";
+  const markerIndex = rest.lastIndexOf(hashMarker);
+  if (markerIndex <= 0) return null;
+  const changeId = rest.slice(0, markerIndex);
+  const mergeQueueHash = rest.slice(markerIndex + 1);
   if (changeId.length === 0) return null;
-  return { changeId };
+  if (!isContentHash(mergeQueueHash)) return null;
+  return { changeId, mergeQueueHash };
 }
 
 /**

@@ -182,7 +182,8 @@ export class MergeQueueOrchestrator {
       input.ownership,
       input.rebaseRunner,
       input.now ?? this.now,
-      this.implementationActor
+      this.implementationActor,
+      input.initialHeadRef
     );
 
     // 3. Snapshot.

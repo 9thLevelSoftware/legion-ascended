@@ -115,6 +115,23 @@ test("scanner flags forbidden headings injected into a v9 default runtime file",
   );
 });
 
+test("scanner flags biography headings injected into a v9 default runtime file", async () => {
+  await withFixture(
+    {
+      "skills/workflow-common-core/SKILL.md":
+        "# Workflow Common Core\n\n## Biography\n\nThis worker has a rich personal history.\n"
+    },
+    async (root) => {
+      const result = await scanDefaultRuntime({ root });
+      assert.equal(result.ok, false, "scanner must reject biography headings");
+      assert.ok(
+        result.violations.some((v) => v.category === "forbidden-heading" && /Biography/.test(v.excerpt)),
+        JSON.stringify(result.violations, null, 2)
+      );
+    }
+  );
+});
+
 test("scanner walks future bundles/ directory and flags persona prose there", async () => {
   await withFixture(
     {

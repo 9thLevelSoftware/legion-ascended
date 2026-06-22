@@ -6,7 +6,7 @@
   "properties": {
     "schema_version": { "const": 1 },
     "corpus_id": { "type": "string", "minLength": 1 },
-    "corpus_version": { "type": "string", "pattern": "^\d+\.\d+\.\d+$" },
+    "corpus_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "status": { "type": "string", "minLength": 1 },
     "created_at": { "type": "string", "minLength": 1 },
     "baseline": {
@@ -50,7 +50,7 @@
         "type": "object",
         "required": ["id", "family", "manifest", "public_input", "evaluator_material", "risk_tier"],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9-]+\.v\d+$" },
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+\\.v\\d+$" },
           "family": {
             "enum": [
               "greenfield-feature",

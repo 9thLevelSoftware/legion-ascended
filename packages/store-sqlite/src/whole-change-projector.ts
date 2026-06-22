@@ -28,6 +28,7 @@
 import type {
   BoardEvent,
   BoardEventRepository,
+  BoardEventQuery,
   BoardProjectionRebuildReport,
   BoardProjectionRepository,
   BoardProjectionState
@@ -39,6 +40,7 @@ import {
   wholeChangeAcceptanceProjectionKey,
   WHOLE_CHANGE_PROJECTION_VERSION,
   type ChangeId,
+  type ContentHash,
   type WholeChangeAcceptanceState
 } from "@legion/board";
 
@@ -76,10 +78,66 @@ function stateFromEnvelope(
   return record.state ?? null;
 }
 
+function stripSha256Prefix(value: string): string {
+  return value.startsWith("sha256:") ? value.slice("sha256:".length) : value;
+}
+
+function isContentHash(value: unknown): value is ContentHash {
+  return (
+    typeof value === "string" &&
+    /^sha256:[0-9a-f]{64}$/.test(value)
+  );
+}
+
+const REPLAY_PAGE_LIMIT = 1_000;
+
+function listReplayEvents(
+  eventRepository: BoardEventRepository,
+  query: Omit<BoardEventQuery, "fromGlobalSequence" | "limit" | "order">
+): readonly BoardEvent[] {
+  const events: BoardEvent[] = [];
+  let fromGlobalSequence = 0;
+  for (;;) {
+    const page = eventRepository.listEvents({
+      ...query,
+      fromGlobalSequence,
+      limit: REPLAY_PAGE_LIMIT,
+      order: "asc"
+    });
+    if (page.length === 0) break;
+    events.push(...page);
+    const last = page[page.length - 1]!;
+    fromGlobalSequence = last.globalSequence + 1;
+    if (
+      page.length < REPLAY_PAGE_LIMIT ||
+      (typeof query.untilGlobalSequence === "number" &&
+        fromGlobalSequence > query.untilGlobalSequence)
+    ) {
+      break;
+    }
+  }
+  return events;
+}
+
+function isBoundWholeChangeEvent(
+  event: BoardEvent,
+  changeId: ChangeId,
+  mergeQueueHash: string
+): boolean {
+  if (event.aggregateKind !== "whole_change") return false;
+  if (event.aggregateId !== `${changeId}:${mergeQueueHash}`) return false;
+  if (!event.payload || typeof event.payload !== "object") return false;
+  const payload = event.payload as Record<string, unknown>;
+  return (
+    payload["changeId"] === changeId &&
+    payload["mergeQueueHash"] === mergeQueueHash
+  );
+}
+
 /**
  * SQLite-backed projector for the whole-change acceptance
  * projection. One projector instance owns one projection key
- * (`whole_change.acceptance:<changeId>`).
+ * (`whole_change.acceptance:<changeId>:<mergeQueueHash>`).
  */
 export class SqliteWholeChangeAcceptanceProjector {
   readonly #eventRepository: BoardEventRepository;
@@ -87,9 +145,11 @@ export class SqliteWholeChangeAcceptanceProjector {
   readonly #projectionKey: string;
   readonly #projectionVersion: number;
   readonly #changeId: ChangeId;
+  readonly #mergeQueueHash: ContentHash;
 
   constructor(options: {
     readonly changeId: ChangeId;
+    readonly mergeQueueHash: string;
     readonly eventRepository: BoardEventRepository;
     readonly projectionRepository: BoardProjectionRepository;
     readonly now?: () => string;
@@ -98,6 +158,9 @@ export class SqliteWholeChangeAcceptanceProjector {
     if (!options.changeId || typeof options.changeId !== "string") {
       throw new Error("changeId must be a non-empty branded string");
     }
+    if (!isContentHash(options.mergeQueueHash)) {
+      throw new Error("mergeQueueHash must be a sha256: prefixed content hash");
+    }
     if (!options.eventRepository) {
       throw new Error("eventRepository is required");
     }
@@ -105,7 +168,11 @@ export class SqliteWholeChangeAcceptanceProjector {
       throw new Error("projectionRepository is required");
     }
     this.#changeId = options.changeId;
-    this.#projectionKey = wholeChangeAcceptanceProjectionKey(options.changeId);
+    this.#mergeQueueHash = options.mergeQueueHash;
+    this.#projectionKey = wholeChangeAcceptanceProjectionKey(
+      options.changeId,
+      options.mergeQueueHash
+    );
     this.#projectionVersion =
       options.projectionVersion ?? WHOLE_CHANGE_PROJECTION_VERSION;
     this.#eventRepository = options.eventRepository;
@@ -120,26 +187,30 @@ export class SqliteWholeChangeAcceptanceProjector {
    * persisting. Useful for tests and dry-run CLI commands.
    */
   replay(input: { readonly throughGlobalSequence?: number } = {}): SqliteWholeChangeAcceptanceProjectorReplayResult {
-    const events = this.#eventRepository.listEvents({
+    const events = listReplayEvents(this.#eventRepository, {
       ...(typeof input.throughGlobalSequence === "number"
         ? { untilGlobalSequence: input.throughGlobalSequence }
-        : {}),
-      order: "asc"
+        : {})
     });
     let envelope: BoardProjectionState = envelopeFor(null);
     let lastSequence = -1;
+    let eventCount = 0;
     for (const event of events) {
+      if (!isBoundWholeChangeEvent(event, this.#changeId, this.#mergeQueueHash)) {
+        continue;
+      }
       const current = stateFromEnvelope(envelope);
       const next = reduceWholeChangeAcceptance(current, event);
       envelope = envelopeFor(next);
       lastSequence = event.globalSequence;
+      eventCount += 1;
     }
     const state = stateFromEnvelope(envelope);
     return {
       projectionKey: this.#projectionKey,
       projectionVersion: this.#projectionVersion,
-      rebuiltThroughGlobalSequence: lastSequence,
-      eventCount: events.length,
+      rebuiltThroughGlobalSequence: Math.max(0, lastSequence),
+      eventCount,
       state,
       stateHash: deriveWholeChangeProjectionStateHash(state),
       rebuiltAt: this.#now()
@@ -159,9 +230,7 @@ export class SqliteWholeChangeAcceptanceProjector {
     // The board's `stateHash` carries the canonical `sha256:` prefix.
     // The SQLite projection repository requires the raw 64-char hex
     // digest, so we strip the prefix before persisting.
-    const stateHashHex = report.stateHash.startsWith("sha256:")
-      ? report.stateHash.slice("sha256:".length)
-      : report.stateHash;
+    const stateHashHex = stripSha256Prefix(report.stateHash);
     const record = this.#projectionRepository.saveProjection({
       projectionKey: this.#projectionKey,
       projectionVersion: this.#projectionVersion,
@@ -194,9 +263,7 @@ export class SqliteWholeChangeAcceptanceProjector {
       );
     }
     const report = this.replay(input);
-    const stateHashHex = report.stateHash.startsWith("sha256:")
-      ? report.stateHash.slice("sha256:".length)
-      : report.stateHash;
+    const stateHashHex = stripSha256Prefix(report.stateHash);
     if (
       saved.stateHash !== stateHashHex ||
       saved.rebuiltThroughGlobalSequence !== report.rebuiltThroughGlobalSequence
@@ -227,6 +294,13 @@ export class SqliteWholeChangeAcceptanceProjector {
    */
   get changeId(): ChangeId {
     return this.#changeId;
+  }
+
+  /**
+   * Return the mergeQueueHash the projector is bound to.
+   */
+  get mergeQueueHash(): ContentHash {
+    return this.#mergeQueueHash;
   }
 
   /**

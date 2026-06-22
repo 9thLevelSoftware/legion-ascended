@@ -33,6 +33,19 @@ async function readYaml(relativePath) {
   return parseYaml(await readFile(path.join(ROOT, relativePath), "utf8"));
 }
 
+test("P06-T01 baseline JSON schemas parse as committed JSON", async () => {
+  const schemaRoot = path.join(ROOT, "evals", "baseline", "schema");
+  const schemaFiles = (await readdir(schemaRoot))
+    .filter((file) => file.endsWith(".json"))
+    .sort();
+
+  assert.ok(schemaFiles.includes("manifest.schema.json"));
+  for (const schemaFile of schemaFiles) {
+    const parsed = JSON.parse(await readFile(path.join(schemaRoot, schemaFile), "utf8"));
+    assert.equal(parsed.type, "object", `${schemaFile} should be an object schema`);
+  }
+});
+
 test("P06-T01 baseline manifest captures corpus governance and oracle fixture policy", async () => {
   const manifest = await readYaml("evals/baseline/manifest.yaml");
 

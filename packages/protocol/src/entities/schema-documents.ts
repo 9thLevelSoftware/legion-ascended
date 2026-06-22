@@ -37,12 +37,12 @@ export const lifecycleFixtureCorpusSchema = z.strictObject({
 
 export type LifecycleFixtureCorpus = z.infer<typeof lifecycleFixtureCorpusSchema>;
 
-function jsonSchemaDocument(id: string, title: string, schema: z.ZodType) {
+function jsonSchemaDocument(id: string, title: string, schema: z.ZodType, options?: Parameters<typeof z.toJSONSchema>[1]) {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: id,
     title,
-    ...z.toJSONSchema(schema)
+    ...z.toJSONSchema(schema, options)
   };
 }
 
@@ -50,7 +50,8 @@ export const lifecycleJsonSchemas = {
   taskContract: jsonSchemaDocument(
     "https://schemas.9thlevelsoftware.com/legion/entities/task-contract.schema.json",
     "Legion protocol task contract entity schema",
-    taskContractSchema
+    taskContractSchema,
+    { io: "input" }
   ),
   task: jsonSchemaDocument(
     "https://schemas.9thlevelsoftware.com/legion/entities/task.schema.json",

@@ -199,6 +199,26 @@ test("P03-T03 appendEvent supports idempotencyKey replay with identical payload"
   });
 });
 
+test("P03-T03 appendEvent preserves idempotent replays with explicit event ids", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, eventRepository } = buildEventRepository(databasePath);
+    try {
+      const input = {
+        ...baseEvent(),
+        eventId: "evt_idempotent_explicit_123456789",
+        idempotencyKey: "idem-explicit-event",
+        occurredAt: "2026-06-21T12:00:00.000Z"
+      };
+      const first = eventRepository.appendEvent(input);
+      const second = eventRepository.appendEvent(input);
+      assert.deepEqual(second, first);
+      assert.equal(eventRepository.countEvents(), 1);
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("P03-T03 appendEvent rejects idempotencyKey replay with different payload", async () => {
   await withTempDatabase((databasePath) => {
     const { store, eventRepository } = buildEventRepository(databasePath);
@@ -209,6 +229,62 @@ test("P03-T03 appendEvent rejects idempotencyKey replay with different payload",
         () => eventRepository.appendEvent({ ...baseEvent(), idempotencyKey, payload: { taskId: "tsk_beta" } }),
         (error) => error instanceof BoardEventAppendError && error.context.cause === "payload_hash_mismatch"
       );
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T03 appendEvent rejects idempotencyKey replay with a different envelope", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, eventRepository } = buildEventRepository(databasePath);
+    try {
+      const idempotencyKey = "idem-envelope-conflict";
+      const payload = { taskId: "shared" };
+      eventRepository.appendEvent({
+        ...baseEvent(),
+        aggregateId: "tsk_alpha",
+        payload,
+        idempotencyKey
+      });
+      assert.throws(
+        () =>
+          eventRepository.appendEvent({
+            ...baseEvent(),
+            aggregateId: "tsk_beta",
+            payload,
+            idempotencyKey
+          }),
+        (error) =>
+          error instanceof BoardEventAppendError &&
+          error.context.cause === "duplicate_idempotency_key" &&
+          error.context.idempotencyKey === idempotencyKey
+      );
+    } finally {
+      store.close();
+    }
+  });
+});
+
+test("P03-T03 getEvent resolves idempotency keys by exact stored event id", async () => {
+  await withTempDatabase((databasePath) => {
+    const { store, eventRepository } = buildEventRepository(databasePath);
+    try {
+      const first = eventRepository.appendEvent({
+        ...baseEvent(),
+        eventId: "evt_prefix",
+        idempotencyKey: "idem-prefix",
+        occurredAt: "2026-06-21T12:00:00.000Z"
+      });
+      eventRepository.appendEvent({
+        ...baseEvent({ aggregateId: "tsk_beta", payload: { taskId: "tsk_beta" } }),
+        eventId: "evt_prefix_extra",
+        idempotencyKey: "idem-prefix-extra",
+        occurredAt: "2026-06-21T12:01:00.000Z"
+      });
+
+      const fetched = eventRepository.getEvent(first.event.eventId);
+      assert.equal(fetched.idempotencyKey, "idem-prefix");
     } finally {
       store.close();
     }
@@ -326,6 +402,39 @@ test("P03-T03 task repository mutations emit board_task_events atomically throug
   });
 });
 
+test("P03-T03 SqliteBoardStoreWithRepository threads injected clocks into task rows and events", async () => {
+  await withTempDatabase((databasePath) => {
+    const fixedNow = "2026-06-21T18:00:00.000Z";
+    const store = SqliteBoardStoreWithRepository.open(
+      { databasePath, busyTimeoutMs: 7_500 },
+      { now: () => fixedNow }
+    );
+    try {
+      store.migrate();
+      const created = store.repository.createTask({
+        projectId: "prj_alpha",
+        changeId: "chg_alpha",
+        taskId: "tsk_alpha",
+        contractId: "ctr_alpha",
+        contractRevision: 1,
+        contractHash: "a".repeat(64)
+      });
+      assert.equal(created.createdAt, fixedNow);
+      assert.equal(created.updatedAt, fixedNow);
+      const events = store.repository.eventRepository.listEvents({
+        aggregateKind: "task",
+        aggregateId: "tsk_alpha"
+      });
+      assert.equal(events.length, 1);
+      assert.equal(events[0].occurredAt, fixedNow);
+      assert.equal(events[0].payload.createdAt, fixedNow);
+      assert.equal(events[0].payload.updatedAt, fixedNow);
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("P03-T03 task supersede emits task.superseded and task.linked events", async () => {
   await withTempDatabase((databasePath) => {
     const store = SqliteBoardStoreWithRepository.open({ databasePath, busyTimeoutMs: 7_500 });
@@ -340,13 +449,21 @@ test("P03-T03 task supersede emits task.superseded and task.linked events", asyn
         contractRevision: 1,
         contractHash: "a".repeat(64)
       });
-      repository.supersedeTask({ taskId: "tsk_alpha", expectedGeneration: 1, successorTaskId: "tsk_beta" });
+      const supersededAt = "2026-06-21T19:00:00.000Z";
+      repository.supersedeTask({
+        taskId: "tsk_alpha",
+        expectedGeneration: 1,
+        successorTaskId: "tsk_beta",
+        supersededAt
+      });
 
       const superseded = repository.eventRepository.listEvents({ aggregateId: "tsk_alpha", eventType: "task.superseded" });
       assert.equal(superseded.length, 1);
+      assert.equal(superseded[0].occurredAt, supersededAt);
       const linked = repository.eventRepository.listEvents({ aggregateKind: "task_link", aggregateId: "tsk_beta" });
       assert.equal(linked.length, 1);
       assert.equal(linked[0].eventType, "task.linked");
+      assert.equal(linked[0].occurredAt, supersededAt);
     } finally {
       store.close();
     }

@@ -67,7 +67,7 @@ export const GOVERNANCE_DOCUMENTS = Object.freeze([
 // emit. Anchored to line start and limited to the prose categories the v9
 // runtime forbids (see ADR-002 §"Forbidden Prose Categories").
 export const FORBIDDEN_HEADING_PATTERNS = Object.freeze([
-  /^#{1,6}\s+(Your\s+)?(Identity|Memory|Experience|Personality|Tone)\b/im,
+  /^#{1,6}\s+(Your\s+)?(Identity|Biography|Memory|Experience|Personality|Tone)\b/im,
   /^#{1,6}\s+(Your\s+)?Core\s+Beliefs?\b/im,
   /^#{1,6}\s+(Your\s+)?Communication\s+Style\b/im,
   /^#{1,6}\s+(Your\s+)?Success\s+Metrics\b/im,

@@ -1,11 +1,15 @@
 phase: 7
 phase_id: P07
-hash_basis: "SHA-256 over artifact bytes after P07-T03 closeout finalization; this index is excluded to avoid self-referential hashing."
+hash_basis: "SHA-256 over artifact bytes after P07-T03 closeout finalization, refreshed for PR #22 metadata/schema hygiene follow-up; this index is excluded to avoid self-referential hashing."
 entries:
   - task: P07-T01
     artifact: packages/protocol/src/entities/task-contract.ts
     description: "TaskContract schema and preflight implementation with wave/agents and structured preflight issues"
-    sha256: bc9f44d6a4d2ef0afea079643b1ab747b0e4647deeaaf4f60dee64e0b9690b47
+    sha256: fa455fd0c964f162d540c1b18b51eda126c7d712163c70dc1ffa99e94bdc2524
+  - task: P07-T01
+    artifact: packages/protocol/src/entities/schema-documents.ts
+    description: "Generated TaskContract JSON Schema emits accepted input shape so defaulted wave/agents remain backward-compatible"
+    sha256: 22552fcfa77e379b235fdc22638700930626dd4fbff300f2113676172e670bbb
   - task: P07-T01
     artifact: schemas/entities/fixtures/lifecycle-valid.json
     description: "Valid lifecycle fixture updated with TaskContract wave and agent assignments"
@@ -16,8 +20,8 @@ entries:
     sha256: 1f84808eb0225c24f83409de45635dacc92e92735f1296d39403bb0b82e92b1d
   - task: P07-T01
     artifact: schemas/entities/task-contract.schema.json
-    description: "Generated TaskContract JSON Schema exposing wave and agents"
-    sha256: fec5c8201fc3ebdfdb93f41b75e741911b91ab9370c45bafd69971f88abeb955
+    description: "Generated TaskContract JSON Schema exposing optional wave/agents defaults"
+    sha256: d9dd9ccfa37d0b23a4cf407cea22acd395d7cde131f27e5ccc89dd590b846932
   - task: P07-T01
     artifact: schemas/artifacts/taskgraph.schema.json
     description: "Generated artifact taskgraph schema refreshed against the revised protocol TaskContract contract"
@@ -37,7 +41,7 @@ entries:
   - task: P07-T02
     artifact: packages/protocol/test/lifecycle.test.mjs
     description: "Lifecycle regression tests for TaskContract wave/agents and preflight success/failure paths"
-    sha256: c1505e797ac0fea059497cdec47546ae4a471065ae33a7281b1d972fd6dfbb83
+    sha256: 81ada25136f5416d2d6b76b1c3fb53e0db07cd7e9fb80451023b6f8ba02ddd6f
   - task: P07-CLOSEOUT
     artifact: docs/next/evidence/P07-CLOSEOUT/git-status.log
     description: "Closeout git status, diff stat, name-status, untracked file, and recent commit capture"
@@ -73,19 +77,19 @@ entries:
   - task: P07-CLOSEOUT
     artifact: docs/next/evidence/P07-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 7 closeout integration report"
-    sha256: ee68097a12226b2a43ad43273b5af5e506b9451bd186d623c582d450835be5c4
+    sha256: 1f00921693106c84715e2a8dbc831c3b7e906afdb36b67d9c05048682674e551
   - task: P07-CLOSEOUT
     artifact: docs/next/reviews/PHASE-07-INDEPENDENT-REVIEW.md
     description: "Independent Phase 7 review with final PASS verdict"
-    sha256: 9ec6dd9e07a7be055e27743e7258aab5f17dba09f838b946972603453e098eb4
+    sha256: 17ab922d9b021f5429e2b2c15f5d60c7581f2b69e4afd79059a5cb57b985bba9
   - task: P07-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-07/ledger.yaml
     description: "Phase 7 ledger marked DONE with decisions, task statuses, evidence bundle, and blockers cleared"
-    sha256: b79926e61489cc08219703c1752b00858f0c69ccb9faf062f1a71d5b6fcc78be
+    sha256: 0ad9269afd9c9c7c9848bc4a4f7e6f224f599b3067cc7fcf17ca381d9f23a1aa
   - task: P07-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-07/HANDOFF.md
     description: "Phase 7 handoff to Phase 8 with planner/preflight cut-line assumptions"
-    sha256: d64f631bede6558f49c2ac13099388d94697cdd6d51cbc36d31e486742001bc2
+    sha256: 0964a8366016274d636e7404affbac44c9c89c18ac5c522fd33272d1ee399afe
   - task: P07-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 7 complete and point at P08-T01 as next work"
