@@ -112,7 +112,6 @@ test("P13-T03 rollback-policy passes a well-formed codex backup-manifest", async
   await withWorkspace(async (workspace) => {
     const backupPath = path.join(workspace, "backup");
     writeBackup(backupPath, {
-      "legacy-protocol": "legacy bytes\n",
       "manifest.json": "{\"version\":\"8.0.5\"}\n"
     });
     const manifestPath = path.join(workspace, "backup-manifest.json");
@@ -130,6 +129,29 @@ test("P13-T03 rollback-policy passes a well-formed codex backup-manifest", async
     assert.equal(blocking.length, 0);
     assert.equal(payload.checks.manifest.ok, true);
     assert.equal(payload.checks.restore_target.ok, true);
+  });
+});
+
+test("P13-T03 rollback-policy accepts codex backups captured before legacy-protocol migration", async () => {
+  await withWorkspace(async (workspace) => {
+    const backupPath = path.join(workspace, "backup");
+    writeBackup(backupPath, {
+      "commands/legion/start.md": "# start\n",
+      "agents/default.md": "# agent\n",
+      "manifest.json": "{\"version\":\"8.0.5\"}\n"
+    });
+    const manifestPath = path.join(workspace, "backup-manifest.json");
+    const preMigrationHash = hashBackupDir(backupPath);
+    writeManifest(manifestPath, freshManifest(CODEX_MANIFEST_KIND, { backupPath, preMigrationHash, repositoryRoot: workspace }));
+
+    const result = run(["--backup-manifest", manifestPath, "--repository-root", workspace, "--source", "codex-legion"]);
+    assert.equal(result.status, 0, `unexpected stderr: ${result.stderr}`);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, true);
+    assert.equal(
+      payload.findings.some((f) => f.code === "manifest_existing_legion_root_missing:legacy-protocol"),
+      false
+    );
   });
 });
 
@@ -232,7 +254,7 @@ test("P13-T03 rollback-policy fails closed when a required field is missing", as
 test("P13-T03 rollback-policy fails closed when repositoryRoot does not match", async () => {
   await withWorkspace(async (workspace) => {
     const backupPath = path.join(workspace, "backup");
-    writeBackup(backupPath, { "legacy-protocol": "x" });
+    writeBackup(backupPath, { "manifest.json": "{\"version\":\"8.0.5\"}\n" });
     const manifestPath = path.join(workspace, "backup-manifest.json");
     const preMigrationHash = hashBackupDir(backupPath);
     writeManifest(
@@ -271,11 +293,11 @@ test("P13-T03 rollback-policy fails closed when backupPath is missing", async ()
 test("P13-T03 rollback-policy fails closed on backupPath hash drift", async () => {
   await withWorkspace(async (workspace) => {
     const backupPath = path.join(workspace, "backup");
-    writeBackup(backupPath, { "legacy-protocol": "original" });
+    writeBackup(backupPath, { "manifest.json": "{\"version\":\"8.0.5\"}\n" });
     const manifestPath = path.join(workspace, "backup-manifest.json");
     // Record the original hash, then tamper with the bytes.
     const preMigrationHash = hashBackupDir(backupPath);
-    writeFileSync(path.join(backupPath, "legacy-protocol"), "TAMPERED", "utf8");
+    writeFileSync(path.join(backupPath, "manifest.json"), "TAMPERED", "utf8");
     writeManifest(
       manifestPath,
       freshManifest(CODEX_MANIFEST_KIND, {
@@ -294,7 +316,7 @@ test("P13-T03 rollback-policy fails closed on backupPath hash drift", async () =
 test("P13-T03 rollback-policy fails closed when manifest is older than 365 days", async () => {
   await withWorkspace(async (workspace) => {
     const backupPath = path.join(workspace, "backup");
-    writeBackup(backupPath, { "legacy-protocol": "x" });
+    writeBackup(backupPath, { "manifest.json": "{\"version\":\"8.0.5\"}\n" });
     const manifestPath = path.join(workspace, "backup-manifest.json");
     const preMigrationHash = hashBackupDir(backupPath);
     writeManifest(
@@ -317,7 +339,7 @@ test("P13-T03 rollback-policy emits well-formed checks map", async () => {
   await withWorkspace(async (workspace) => {
     const backupPath = path.join(workspace, "backup");
     writeBackup(backupPath, {
-      "legacy-protocol": "x",
+      "commands/legion/start.md": "# start\n",
       "manifest.json": "{\"version\":\"8.0.5\"}\n"
     });
     const manifestPath = path.join(workspace, "backup-manifest.json");

@@ -27,7 +27,7 @@
 //     [--report <path>]
 
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,8 +72,15 @@ function isContained(candidate, root) {
   return true;
 }
 
-function auditRunDirectory({ runDir, outputRoot }) {
+function realpathIfPresent(candidate) {
+  if (!existsSync(candidate)) return path.resolve(candidate);
+  return realpath(candidate);
+}
+
+async function auditRunDirectory({ runDir, outputRoot }) {
   const findings = [];
+  const realRunDir = await realpathIfPresent(runDir);
+  const realOutputRoot = await realpathIfPresent(outputRoot);
   const runManifestPath = path.join(runDir, "run-manifest.json");
   if (!existsSync(runManifestPath)) {
     return {
@@ -88,7 +95,7 @@ function auditRunDirectory({ runDir, outputRoot }) {
   }
 
   // Boundary check 1: run directory must be inside --output-root.
-  if (!isContained(runDir, outputRoot)) {
+  if (!isContained(realRunDir, realOutputRoot)) {
     findings.push({
       code: "run_dir_escapes_output_root",
       message: `run directory ${runDir} is not contained in ${outputRoot}`
@@ -129,7 +136,8 @@ function auditRunDirectory({ runDir, outputRoot }) {
       continue;
     }
     const abs = path.resolve(runDir, rel);
-    if (!isContained(abs, runDir)) {
+    const realAbs = await realpathIfPresent(abs);
+    if (!isContained(realAbs, realRunDir)) {
       findings.push({
         code: "artifact_path_escapes_run_dir",
         message: `${key} path resolves outside the run directory: ${abs}`
@@ -176,7 +184,7 @@ async function main() {
     : REPO_ROOT;
   const absRunDir = path.resolve(repoRootOverride, runDir);
   const absOutputRoot = path.resolve(repoRootOverride, outputRoot);
-  const verdict = auditRunDirectory({ runDir: absRunDir, outputRoot: absOutputRoot });
+  const verdict = await auditRunDirectory({ runDir: absRunDir, outputRoot: absOutputRoot });
   const payload = {
     schema_version: 1,
     output_root: path.relative(repoRootOverride, absOutputRoot),

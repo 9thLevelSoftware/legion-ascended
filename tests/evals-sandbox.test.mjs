@@ -19,7 +19,7 @@ import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -150,6 +150,65 @@ test("P13-T02 sandbox-guard fails closed when run_dir escapes output_root", asyn
     const payload = JSON.parse(result.stdout.trim());
     assert.equal(payload.ok, false);
     assert.ok(payload.findings.some((f) => f.code === "run_dir_escapes_output_root"));
+  });
+});
+
+test("P13-T02 sandbox-guard fails closed when run_dir symlink escapes output_root", async (t) => {
+  await withTempWorkspace(async (workspace) => {
+    const outputRoot = path.join(workspace, "runs");
+    const externalRunDir = path.join(workspace, "outside", "v9", "p13-r1");
+    const linkedRunDir = path.join(outputRoot, "v9", "p13-r1");
+    mkdirSync(path.dirname(linkedRunDir), { recursive: true });
+    mkdirSync(externalRunDir, { recursive: true });
+    await buildSealedRun(externalRunDir);
+    try {
+      await symlink(externalRunDir, linkedRunDir, process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      if (["EACCES", "ENOSYS", "EPERM"].includes(error?.code)) {
+        t.skip(`symlink creation unavailable: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      throw error;
+    }
+
+    const result = runHelper("sandbox-guard.mjs", [
+      "--run-dir", linkedRunDir,
+      "--output-root", outputRoot
+    ]);
+    assert.notEqual(result.exit_code, 0);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, false);
+    assert.ok(payload.findings.some((f) => f.code === "run_dir_escapes_output_root"));
+  });
+});
+
+test("P13-T02 sandbox-guard fails closed when manifest artifact symlink escapes run_dir", async (t) => {
+  await withTempWorkspace(async (workspace) => {
+    const outputRoot = path.join(workspace, "runs");
+    const runDir = path.join(outputRoot, "v9", "p13-r1");
+    const externalTranscript = path.join(workspace, "outside", "transcript.redacted.log");
+    mkdirSync(runDir, { recursive: true });
+    await buildSealedRun(runDir);
+    writeFile(externalTranscript, "external transcript\n");
+    await rm(path.join(runDir, "transcript.redacted.log"), { force: true });
+    try {
+      await symlink(externalTranscript, path.join(runDir, "transcript.redacted.log"), "file");
+    } catch (error) {
+      if (["EACCES", "ENOSYS", "EPERM"].includes(error?.code)) {
+        t.skip(`symlink creation unavailable: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      throw error;
+    }
+
+    const result = runHelper("sandbox-guard.mjs", [
+      "--run-dir", runDir,
+      "--output-root", outputRoot
+    ]);
+    assert.notEqual(result.exit_code, 0);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, false);
+    assert.ok(payload.findings.some((f) => f.code === "artifact_path_escapes_run_dir"));
   });
 });
 

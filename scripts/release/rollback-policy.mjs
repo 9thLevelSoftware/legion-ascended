@@ -29,8 +29,9 @@
 //   * manifest_existing_legion_root_*  - if existingLegionRoot=true, the
 //                                        .legion directory must exist
 //                                        and contain the expected user
-//                                        artefacts (legacy-protocol,
-//                                        project, manifest.json).
+//                                        artefacts (manifest.json for
+//                                        codex-legion backups; project
+//                                        for planning backups).
 //   * restore_target_writable          - the rollback would be able to
 //                                        remove the current `.legion`
 //                                        root (no read-only parent dir).
@@ -62,7 +63,7 @@ const KNOWN_KINDS = {
   "codex-legion-migration-backup": {
     preHashField: "preMigrationHash",
     sourceLabel: "codex-legion",
-    expectedFileNames: ["legacy-protocol", "manifest.json"],
+    expectedFileNames: ["manifest.json"],
     backupSubpathHint: ".legion"
   },
   "planning-import-backup": {
