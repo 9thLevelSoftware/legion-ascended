@@ -1,0 +1,31 @@
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.307166ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (286.213ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (463.8185ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (254.3595ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (378.117792ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (413.683458ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (726.331542ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (444.393083ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (428.024875ms)
+✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (558.133833ms)
+✔ P10-T02 board CLI routes release-observation aggregate/status/rebuild/verify idempotently (651.367875ms)
+✔ P10-T02 board CLI release-observation aggregate surfaces validation failures (141.223125ms)
+✔ P10-T02 board CLI release-observation verify fails closed on missing projection (150.105583ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5027.183125

@@ -20,13 +20,16 @@ import {
   type CliResult
 } from "../../runtime.js";
 
+import { handleReleaseObservationCommand } from "./release-observation.js";
+
 const BOARD_HELP = `legion next board <domain>
 
 Domains:
-  task       Create, inspect, and mutate board task rows.
-  event      Append and inspect append-only board events.
-  claim      Create and manage task claim leases.
-  approval   Create and manage approval records.
+  task                Create, inspect, and mutate board task rows.
+  event               Append and inspect append-only board events.
+  claim               Create and manage task claim leases.
+  approval            Create and manage approval records.
+  release-observation Aggregate, replay, rebuild, and verify release-observation projection state.
 
 All non-help commands accept --input <path> with a JSON object.
 Global:
@@ -106,6 +109,8 @@ export async function handleBoardCommand(context: CliContext): Promise<CliResult
       return handleClaimCommand(commandContext);
     case "approval":
       return handleApprovalCommand(commandContext);
+    case "release-observation":
+      return handleReleaseObservationCommand(commandContext);
     default:
       return helpResult(BOARD_HELP);
   }

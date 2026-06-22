@@ -2,9 +2,9 @@
 
 ## Status
 
-IN PROGRESS.
+DONE.
 
-Implementation batch: Phase 10 P10-T01 changes on `codex/p03-t02-board-task-repository` after base `4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a`, with closeout evidence under `docs/next/evidence/P10-T01/`. P10-T01 implements the release observation canary monitoring, health checks, regression detection, and automated alerting on top of the accepted whole-change lifecycle.
+Implementation batch: Phase 10 P10-T01 + P10-T02 changes on `codex/p03-t02-board-task-repository` after base `4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a`. P10-T01 ships the provider-neutral release-observation orchestrator + board adapter + SQLite projector. P10-T02 wires the P10-T01 board adapter into the CLI as `legion next board release-observation aggregate | status | rebuild | verify`. Closeout evidence lives under `docs/next/evidence/P10-T01/` and `docs/next/evidence/P10-T02/`.
 
 ## Delivered Surface
 
@@ -65,8 +65,44 @@ Phase 10-T01 establishes these stable assumptions for downstream phases (P10-T02
 10. The board adapter layer never imports a runtime driver, eve, node:sqlite, or reads `process.env`. The core release-observation module never imports board persistence, runtime drivers, eve, or reads `process.env`.
 11. `board-store` `BOARD_EVENT_TYPES` and `BOARD_EVENT_AGGREGATE_KINDS` allowlists are extended with the new event types and aggregate kind. No SQL migration is required because the existing CHECK constraints are length-based.
 12. The `SqliteReleaseObservationProjector` mirrors the P09-T02 projector pattern: one projector per `(changeId, mergeQueueHash)`, replay + persist + verify through the standard SQLite projection flow, foreign-event filter.
+13. Phase 10-T02 wires the release-observation board events into the CLI: `legion next board release-observation { aggregate | status | rebuild | verify }`. All four subcommands route through `SqliteBoardStoreWithEventRepository.open(...)` so the SQLite handle is opened/closed atomically. The CLI is the operator surface; it never spawns canary/health-check subprocesses — those stay injected through provider-neutral runners in `@legion/core`.
+14. Phase 10-T02's CLI never imports `eve`, `node:sqlite`, or reads `process.env`. All persistence flows through `@legion/store-sqlite`; all report-to-event translation flows through `@legion/board`.
 
-## Phase 10-T02 Starting Point
+## Delivered Surface — P10-T02 (CLI Wiring)
+
+### `@legion/cli` — `legion next board release-observation` command tree
+
+- `packages/cli/src/commands/board/release-observation.ts`: typed CLI adapter — `aggregate | status | rebuild | verify` subcommands. Reuses the P10-T01 `ReleaseObservationBoardAggregator` for fail-closed report → board event translation, and the P10-T01 `SqliteReleaseObservationProjector` for replay/rebuild/verify through the SQLite board store. All four subcommands route through `SqliteBoardStoreWithEventRepository.open(...)` so the SQLite handle is opened/closed atomically and the WAL is released before temp directory cleanup. Validation is fail-closed: missing `changeId`, missing `report`, invalid `mergeQueueHash` (must match `sha256:[0-9a-f]{64}`), or a non-`(changeId, mergeQueueHash)` projection key yields a typed `usageError` rather than a silent partial result.
+- `packages/cli/src/commands/board/index.ts`: board root dispatcher wired to `handleReleaseObservationCommand`; `BOARD_HELP` extended with the release-observation domain entry.
+- `packages/cli/package.json`: dependencies extended with `@legion/board`, `@legion/board-store`, `@legion/core` (workspace links).
+- `packages/cli/tsconfig.json`: project references extended with `board`, `board-store`, `core`.
+- `apps/cli-e2e/test/cli-e2e.test.mjs`: three new e2e tests — `aggregate/status/rebuild/verify idempotency`, `validation failure surface`, and `verify fails closed on missing projection`.
+
+### `scripts/check-package-boundaries.mjs`
+
+- `@legion/cli` `allowedWorkspaceImports` extended with `@legion/board`, `@legion/board-store`, `@legion/core` so the CLI can consume the board adapter and the SQLite projector. No reverse imports are introduced; the package-boundary and runtime-import-boundary scans continue to pass after the CLI surface extension.
+
+## Verification Evidence — P10-T02
+
+- `pnpm --filter @legion/cli-e2e test` — PASS, 13/13 tests (10 existing + 3 new release-observation CLI tests).
+- `pnpm --filter @legion/core test` — PASS, 245/245 tests (no core changes).
+- `pnpm --filter @legion/board test` — PASS, 53/53 tests (no board changes).
+- `pnpm --filter @legion/store-sqlite test` — PASS, 144/144 tests (no store-sqlite changes).
+- `pnpm --filter @legion/protocol test` — PASS, 55/55 tests (no protocol changes).
+- `pnpm --filter @legion/artifacts test` — PASS, 59/59 tests (no artifacts changes).
+- `pnpm run typecheck` — PASS, all 10 workspace projects.
+- `pnpm run check:boundaries` — PASS, package boundary check passed.
+- `pnpm run check:worker-bundles` — PASS, all worker bundles pass.
+- `node scripts/scan-runtime-import-boundaries.mjs` — PASS, RuntimeDriver import-boundary scan passed (7 runtime files, 36 core files).
+- `node scripts/scan-default-runtime.mjs` — PASS, files=15 violations=0.
+- `pnpm run validate:next` — PASS, all 12 gates pass.
+- `git diff --cached 4af51fa -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml' | gitleaks detect --pipe --no-color --redact` — PASS, no leaks found in the final Phase 10-T02 diff scan.
+
+Full transcripts are under `docs/next/evidence/P10-T02/`. The structured closeout report is `docs/next/evidence/P10-T02/integration-report.yaml`; the canonical CLI aggregate output is `docs/next/evidence/P10-T02/release-observation-cli-snapshot.json`; the SHA-256 artifact index is `.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml`; the phase-10 ledger is `.legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml`.
+
+## Phase 10 Cut Line (Historical — P10-T02 Starting Point)
+
+The original P10-T02 starting-point recommendations (now satisfied by the delivered CLI wiring):
 
 Proceed to P10-T02 (`t_4e06d5c7`): Wire the release-observation board events into the CLI's existing whole-change acceptance flow.
 

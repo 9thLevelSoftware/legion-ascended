@@ -1,6 +1,6 @@
 phase: 10
 phase_id: P10
-hash_basis: "SHA-256 over artifact bytes after P10-T01 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index for the same reason."
+hash_basis: "SHA-256 over artifact bytes after P10-T02 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index for the same reason."
 entries:
   - task: P10-T01
     artifact: packages/core/src/release-observation/contract.ts
@@ -106,3 +106,106 @@ entries:
     artifact: docs/next/evidence/P10-T01/gitleaks-p10-diff.log
     description: "gitleaks scan of the final Phase 10 diff (excluding self-referential evidence index) — no leaks found."
     sha256: e25df8d4e9c16c8e59370ed855dc00829c6d19fdbd10fee678cf643889ee957a
+
+  - task: P10-T02
+    artifact: packages/cli/src/commands/board/release-observation.ts
+    description: "CLI release-observation adapter — aggregate | status | rebuild | verify subcommands; fail-closed input validation; uses ReleaseObservationBoardAggregator + SqliteReleaseObservationProjector."
+    sha256: 3824cf5307bbd3c6c271a4b4aa51b522400182ed176431bc27af1f49735fe507
+  - task: P10-T02
+    artifact: packages/cli/src/commands/board/index.ts
+    description: "Board CLI dispatcher wired to handleReleaseObservationCommand; BOARD_HELP extended with release-observation domain entry."
+    sha256: 8efb479b5234f509b63cf904b068320bf4f6ab79ef821bdc1efd184628a58061
+  - task: P10-T02
+    artifact: packages/cli/package.json
+    description: "CLI dependencies extended with @legion/board, @legion/board-store, @legion/core."
+    sha256: 42d8fd9a462bba8337409b072148784e706aabd1c1ce78094c79983acd6f88e3
+  - task: P10-T02
+    artifact: packages/cli/tsconfig.json
+    description: "CLI TypeScript project references extended with board, board-store, core."
+    sha256: 4a513156475016a3b23360523a8a645af39685807c2a44dd465d3121931b7a52
+  - task: P10-T02
+    artifact: scripts/check-package-boundaries.mjs
+    description: "@legion/cli allowedWorkspaceImports extended with @legion/board, @legion/board-store, @legion/core so the CLI can consume the board adapter and the SQLite projector."
+    sha256: 3dc24bb8c589e7f26c639e694e2499e8c1982fbeff8e63684623a2e771c19d3a
+  - task: P10-T02
+    artifact: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: "CLI e2e test extended with three release-observation tests: aggregate/status/rebuild/verify idempotency, validation failure surface, verify fails closed on missing projection."
+    sha256: 4bb62197e08bd97cb34d48a6e67242754088d4e1596effea95826ffb33214bbc
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/integration-report.yaml
+    description: "Phase 10-T02 closeout integration report."
+    sha256: 7fa1b103968ee814d7d1948ec408c10b5bc24e256de5cee46c85bc12b1bd9a11
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/cli-e2e-test.log
+    description: "CLI e2e test transcript — 13/13 pass."
+    sha256: a75e6c2c559a8a97122c1332302b66c78764d9d5f06b3e3a965b425e3655efea
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/core-test.log
+    description: "core test transcript — 245/245 pass (no core changes)."
+    sha256: b685b014275f40e619417df431815f83e9d43603ec4cfec9ac2c240f4c3f005e
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/board-test.log
+    description: "board test transcript — 53/53 pass (no board changes)."
+    sha256: 316334f0bf309f2fed4ea3ab2a58d9310f04b2b75d57faa56c4bca101f2647a4
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/store-sqlite-test.log
+    description: "store-sqlite test transcript — 144/144 pass (no store-sqlite changes)."
+    sha256: b628dbd5245b17fd1361c904b63441966797327e8314dba7a911500a0f879632
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/protocol-test.log
+    description: "protocol test transcript — 55/55 pass (no protocol changes)."
+    sha256: 077a41d29476d12dd26e47e7a5a557da0fceef8969075e4f702a1dc1f2d1ca57
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/artifacts-test.log
+    description: "artifacts test transcript — 59/59 pass (no artifacts changes)."
+    sha256: c73a43e9e0ccdb0437342e55cc32993ec4c1b99e0d14e5b8fc371346eddc03e8
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/typecheck.log
+    description: "Root typecheck transcript — all 10 workspace projects typecheck clean."
+    sha256: 2959f908c058d74cab7de2189d51fbb5ae5eddabb95f8d1b0a4ff5ad6c33d0af
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/validate-next.log
+    description: "validate-next transcript — all 12 gates pass."
+    sha256: f988561c2dc5d5b74f11c16c10762771fdde069d6bc2e12cba14216ab4eba136
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/package-boundaries.log
+    description: "package-boundary check — passed."
+    sha256: bd798983e50e69201501bda183391d76bcb1c57b71f2aeaa9185f5376f5e5883
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/runtime-import-boundaries.log
+    description: "runtime-import-boundary scan — passed (7 runtime files, 36 core files)."
+    sha256: 32e8f36697c4c8bde527c5d764e5c2f4ccb52662d72d119fd504abe15cf08ba5
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/default-runtime-scan.log
+    description: "default-runtime scan — files=15 violations=0."
+    sha256: ddc9008de9aba8bfda32f287424956981763873aba4cd9bccbbad49e60b9a000
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/worker-bundles.log
+    description: "worker bundles check — all worker bundles pass."
+    sha256: 8c8752126058a0fd7bda85794b395871cbd006ae25c646f0c003314f0bf5e7e2
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/gitleaks-p10-t02-diff.log
+    description: "gitleaks scan of the Phase 10-T02 diff — no leaks found."
+    sha256: 2dfe7f553e7042636d19b63e6e9f84b52af17af072cd239d6ad9d3782502c75f
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/release-observation-cli-snapshot.json
+    description: "canonical serialized release-observation CLI aggregate output from a happy-path run."
+    sha256: f202c6896b4d4dc12e8d79e76ac320c82938734b433edc4ab207a3c3f7647cbe
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/test.log
+    description: "Full workspace test transcript — all packages pass."
+    sha256: e76e2a798eb1105c19f2adfb2b790c80373ea190c7779f0a6358338056c18a37
+
+  - task: P10-T02
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
+    description: "Phase 10 closeout handoff document — P10-T01 + P10-T02 deliverable summary, verification evidence, and downstream-phase cut-line invariants."
+    sha256: 03aae79b45e960a52a8f76721f6edc82744472eccda19e488ed873c82447fe2c
+  - task: P10-T02
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml
+    description: "Phase 10 ledger — P10-T01 + P10-T02 status, run ids, evidence paths, and phase-10 handoff summary."
+    sha256: fa1055974cd5f9d1205876e496d656ec86d3498148dfbf16a1c7a1444dd44e64
+
+  - task: P10-T02
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "LEGION-ASCENDED kanban manifest — P10-T02 marked DONE; summary line updated to reflect 36 completed tasks and the P10-T03 reviewer handoff."
+    sha256: 1a91f70fafc16870dc9cd145943004b78240e827a81d2a4b769190dcee817e23

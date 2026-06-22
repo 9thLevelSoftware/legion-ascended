@@ -51,7 +51,15 @@ const DEFAULT_PACKAGES = [
     name: "@legion/cli",
     root: "packages/cli",
     src: "packages/cli/src",
-    allowedWorkspaceImports: ["@legion/protocol", "@legion/artifacts", "@legion/legacy-bridge", "@legion/store-sqlite"]
+    allowedWorkspaceImports: [
+      "@legion/protocol",
+      "@legion/artifacts",
+      "@legion/board",
+      "@legion/board-store",
+      "@legion/core",
+      "@legion/legacy-bridge",
+      "@legion/store-sqlite"
+    ]
   }
 ];
 

@@ -72,6 +72,15 @@ importers:
       '@legion/artifacts':
         specifier: workspace:*
         version: link:../artifacts
+      '@legion/board':
+        specifier: workspace:*
+        version: link:../board
+      '@legion/board-store':
+        specifier: workspace:*
+        version: link:../board-store
+      '@legion/core':
+        specifier: workspace:*
+        version: link:../core
       '@legion/legacy-bridge':
         specifier: workspace:*
         version: link:../legacy-bridge

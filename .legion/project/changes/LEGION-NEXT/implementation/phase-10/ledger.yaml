@@ -12,6 +12,13 @@ tasks:
     commit: "20fc8f0"
     evidence: docs/next/evidence/P10-T01/integration-report.yaml
     depends_on: ["P09-T03"]
+  P10-T02:
+    status: DONE
+    run_id: "P10-T02-20260622-cli-release-observation-wiring"
+    commit: "PENDING"
+    closeout_commit: "PENDING"
+    evidence: docs/next/evidence/P10-T02/integration-report.yaml
+    depends_on: ["P10-T01"] 
 decisions:
   - task: P10-T01
     decision: "Release observation lives in @legion/core (not @legion/board) because it consumes the merge queue's frozen MergeQueueOrchestratorResult and adds monitoring/health/regression/alert evidence on top — mirroring the P08-T01 / P09-T01 layering."

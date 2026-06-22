@@ -9,6 +9,9 @@
   "references": [
     { "path": "../protocol" },
     { "path": "../artifacts" },
+    { "path": "../board" },
+    { "path": "../board-store" },
+    { "path": "../core" },
     { "path": "../legacy-bridge" }
   ],
   "include": ["src/**/*.ts"]

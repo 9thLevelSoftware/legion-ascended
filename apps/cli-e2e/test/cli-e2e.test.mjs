@@ -724,3 +724,242 @@ test("P03-T09 board CLI routes task, claim, event, and approval operations witho
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+function sha256Hex(payload) {
+  return createHash("sha256").update(payload, "utf8").digest("hex");
+}
+
+function sha256ContentHash(payload) {
+  return `sha256:${sha256Hex(payload)}`;
+}
+
+function releaseObservationReportInput(overrides = {}) {
+  const changeId = overrides.changeId ?? "chg_cli_release_observation";
+  const mergeQueueHash =
+    overrides.mergeQueueHash ?? sha256ContentHash(`release-observation-cli-e2e-${changeId}-mq`);
+  const decisionSha256 = overrides.decisionSha256 ?? sha256ContentHash(`release-observation-cli-e2e-${changeId}-decision`);
+  const reportSha256 = overrides.reportSha256 ?? sha256ContentHash(`release-observation-cli-e2e-${changeId}-report`);
+  const status = overrides.status ?? "promoted";
+  const report = {
+    schemaVersion: "1.0.0",
+    kind: "release-observation",
+    changeId,
+    mergeQueueHash,
+    decisionSha256,
+    tier: overrides.tier ?? "R0",
+    releaseability: overrides.releaseability ?? "releaseable",
+    status,
+    windowStart: "2026-06-22T05:00:00.000Z",
+    windowEnd: "2026-06-22T05:30:00.000Z",
+    observedAt: "2026-06-22T05:15:00.000Z",
+    observedBy: {
+      id: "ci-bot",
+      type: "ci-bot",
+      displayName: "ci-bot"
+    },
+    canary: null,
+    healthCheck: null,
+    regression: null,
+    alert: null,
+    reportSha256,
+    failureReason: null,
+    ...(overrides.reportOverrides ?? {})
+  };
+  return {
+    changeId,
+    mergeQueueHash,
+    reportSha256,
+    status,
+    report,
+    aggregateInput: {
+      changeId,
+      report,
+      reporter: "ci-bot",
+      correlationId: "corr-cli-e2e"
+    },
+    projectionInput: {
+      changeId,
+      mergeQueueHash
+    }
+  };
+}
+
+test("P10-T02 board CLI routes release-observation aggregate/status/rebuild/verify idempotently", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const aggregateInputPath = path.join(workspace, "release-observation-aggregate.json");
+    const projectionInputPath = path.join(workspace, "release-observation-projection.json");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    const fixture = releaseObservationReportInput();
+    await writeJson(aggregateInputPath, fixture.aggregateInput);
+    await writeJson(projectionInputPath, fixture.projectionInput);
+
+    // Aggregate: build a BoardEvent from the report and append.
+    const aggregated = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "aggregate",
+      "--input",
+      aggregateInputPath
+    ]);
+    assert.equal(aggregated.exitCode, 0, aggregated.stderr);
+    assert.equal(aggregated.json.ok, true);
+    assert.equal(aggregated.json.status, "appended");
+    assert.equal(aggregated.json.changeId, fixture.changeId);
+    assert.equal(aggregated.json.mergeQueueHash, fixture.mergeQueueHash);
+    assert.equal(aggregated.json.reportSha256, fixture.reportSha256);
+    assert.equal(aggregated.json.lastEventType, `release.${fixture.status}`);
+    assert.equal(aggregated.json.idempotencyKey, `${fixture.changeId}:${fixture.mergeQueueHash}:${fixture.reportSha256}:release.${fixture.status}`);
+    assert.equal(aggregated.json.eventIds.length, 1);
+    assert.ok(aggregated.json.eventIds[0].length >= 16);
+
+    // Re-running aggregate must be idempotent — same idempotencyKey, no new event id.
+    const replayed = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "aggregate",
+      "--input",
+      aggregateInputPath
+    ]);
+    assert.equal(replayed.exitCode, 0, replayed.stderr);
+    assert.equal(replayed.json.ok, true);
+    assert.equal(replayed.json.eventIds[0], aggregated.json.eventIds[0]);
+
+    // Status: replay returns the projection state without persisting.
+    const status = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "status",
+      "--input",
+      projectionInputPath
+    ]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    assert.equal(status.json.ok, true);
+    assert.equal(status.json.status, "replayed");
+    assert.equal(status.json.lastEventType, `release.${fixture.status}`);
+    assert.equal(status.json.state.lastEventType, `release.${fixture.status}`);
+    assert.equal(status.json.projection.state?.changeId, fixture.changeId);
+    assert.equal(status.json.projection.state?.mergeQueueHash, fixture.mergeQueueHash);
+
+    // Rebuild: persist the projection.
+    const rebuilt = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "rebuild",
+      "--input",
+      projectionInputPath
+    ]);
+    assert.equal(rebuilt.exitCode, 0, rebuilt.stderr);
+    assert.equal(rebuilt.json.ok, true);
+    assert.equal(rebuilt.json.status, "rebuilt");
+    assert.ok(typeof rebuilt.json.projection.rebuiltThroughGlobalSequence === "number");
+    assert.ok(rebuilt.json.projection.eventCount >= 1);
+    assert.equal(rebuilt.json.state.lastEventType, `release.${fixture.status}`);
+
+    // Verify: persisted projection must match a fresh replay.
+    const verified = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "verify",
+      "--input",
+      projectionInputPath
+    ]);
+    assert.equal(verified.exitCode, 0, verified.stderr);
+    assert.equal(verified.json.ok, true);
+    assert.equal(verified.json.status, "verified");
+    assert.equal(verified.json.projection.stateHash, rebuilt.json.projection.stateHash);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P10-T02 board CLI release-observation aggregate surfaces validation failures", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const badInputPath = path.join(workspace, "release-observation-bad.json");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    await writeJson(badInputPath, {
+      changeId: "chg_cli_release_observation_bad",
+      report: {
+        schemaVersion: "1.0.0",
+        kind: "release-observation",
+        changeId: "chg_cli_release_observation_mismatch",
+        mergeQueueHash: sha256ContentHash("release-observation-cli-e2e-bad-mq"),
+        decisionSha256: sha256ContentHash("release-observation-cli-e2e-bad-decision"),
+        tier: "R0",
+        releaseability: "releaseable",
+        status: "promoted",
+        windowStart: "2026-06-22T05:00:00.000Z",
+        windowEnd: "2026-06-22T05:30:00.000Z",
+        observedAt: "2026-06-22T05:15:00.000Z",
+        observedBy: { id: "ci-bot", type: "ci-bot", displayName: "ci-bot" },
+        canary: null,
+        healthCheck: null,
+        regression: null,
+        alert: null,
+        reportSha256: sha256ContentHash("release-observation-cli-e2e-bad-report"),
+        failureReason: null
+      }
+    });
+
+    const failure = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "aggregate",
+      "--input",
+      badInputPath
+    ]);
+    assert.equal(failure.exitCode, 1, failure.stderr);
+    assert.equal(failure.json.ok, false);
+    assert.equal(failure.json.status, "failed");
+    assert.equal(failure.json.code, "aggregate_failed");
+    assert.ok(failure.json.issues.some((issue) => issue.code === "change_id_mismatch"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P10-T02 board CLI release-observation verify fails closed on missing projection", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const projectionInputPath = path.join(workspace, "release-observation-empty.json");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    await writeJson(projectionInputPath, {
+      changeId: "chg_cli_release_observation_missing",
+      mergeQueueHash: sha256ContentHash("release-observation-cli-e2e-empty")
+    });
+
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "release-observation",
+      "verify",
+      "--input",
+      projectionInputPath
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.equal(result.json.code, "verify_failed");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
