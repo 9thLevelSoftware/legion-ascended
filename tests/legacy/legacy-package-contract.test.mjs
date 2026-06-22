@@ -54,6 +54,24 @@ test("P01-T10 seeded persona checksum mutation fails the checksum contract", () 
   assert.deepEqual(comparison.legacyChecksumMismatches, ["agents/agents-orchestrator.md"]);
 });
 
+test("Task 4 router and bundle checksum mutations fail the checksum contract", () => {
+  const comparison = compareChecksumMaps({
+    baselineChecksums: new Map([
+      ["bin/legion.js", "a".repeat(64)],
+      ["dist/legion-cli.mjs", "a".repeat(64)]
+    ]),
+    currentChecksums: new Map([
+      ["bin/legion.js", "b".repeat(64)],
+      ["dist/legion-cli.mjs", "b".repeat(64)]
+    ])
+  });
+
+  assert.deepEqual(comparison.legacyChecksumMismatches, [
+    "bin/legion.js",
+    "dist/legion-cli.mjs"
+  ]);
+});
+
 test("P01-T10 seeded installer path mutation fails the installer matrix contract", () => {
   const comparison = compareInstallerMatrix({
     expected: new Map([["codex:local:manifest", ".legion/manifest.json"]]),

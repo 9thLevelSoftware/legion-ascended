@@ -24,7 +24,9 @@ const INSTALLER_FLAGS = new Set([
   '--local',
   '--verify',
   '--uninstall',
-  '--update'
+  '--update',
+  '--version',
+  '-v'
 ]);
 
 function shouldRouteToInstaller(args) {
@@ -32,7 +34,7 @@ function shouldRouteToInstaller(args) {
   if (first === 'install') return true;
   if (first === 'uninstall') return true;
   if (first === 'update') return true;
-  return args.some((arg) => INSTALLER_FLAGS.has(arg));
+  return INSTALLER_FLAGS.has(first);
 }
 
 function installerArgsFor(args) {

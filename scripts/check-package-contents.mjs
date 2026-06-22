@@ -16,21 +16,22 @@ export const LEGACY_CHECKSUM_PREFIXES = Object.freeze([
   "skills/"
 ]);
 
+export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
+  "bin/legion.js",
+  "dist/legion-cli.mjs",
+  "dist/legion-cli.mjs.map"
+]);
+
 export const LEGACY_CHECKSUM_FILES = Object.freeze([
   "bin/install.js",
   "bin/runtime-metadata.js",
+  ...ROOT_ROUTER_PACKAGE_PATHS,
   "docs/control-modes.md",
   "docs/runtime-audit.md",
   "docs/runtime-certification-checklists.md",
   "docs/security/install-integrity.md",
   "docs/settings.schema.json",
   "settings.json"
-]);
-
-export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
-  "bin/legion.js",
-  "dist/legion-cli.mjs",
-  "dist/legion-cli.mjs.map"
 ]);
 
 function toPosixPath(value) {

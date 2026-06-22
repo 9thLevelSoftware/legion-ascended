@@ -64,6 +64,23 @@ test("legacy installer flags still route to installer help", async () => {
   assert.match(result.stdout, /--codex/);
 });
 
+test("legacy version flags route to installer version", async () => {
+  for (const flag of ["--version", "-v"]) {
+    const result = await execFileAsync(process.execPath, ["bin/legion.js", flag], {
+      ...EXEC_OPTIONS
+    });
+    assert.match(result.stdout, /Legion v9\.0\.0-alpha\.0/);
+  }
+});
+
+test("workflow and dev commands keep their own flags", async () => {
+  const result = await execFileAsync(process.execPath, ["bin/legion.js", "dev", "migrate", "--verify", "--help"], {
+    ...EXEC_OPTIONS
+  });
+  assert.match(result.stdout, /legion dev migrate/);
+  assert.doesNotMatch(result.stdout, /Usage:/);
+});
+
 test("imported installer main returns failure code instead of exiting process", async () => {
   await withTempProject(async ({ env, project }) => {
     const script = [
