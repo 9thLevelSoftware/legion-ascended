@@ -1,0 +1,295 @@
+{
+  "ok": true,
+  "schemaVersion": "1.0.0",
+  "kind": "release-observation",
+  "changeId": "chg-release-observation-fixture-001",
+  "mergeQueueHash": "sha256:8f36b25dbf037024c57c890206f19e42d1ef0b6475efeb902ecabe918236eacd",
+  "report": {
+    "schemaVersion": "1.0.0",
+    "kind": "release-observation",
+    "changeId": "chg-release-observation-fixture-001",
+    "mergeQueueHash": "sha256:8f36b25dbf037024c57c890206f19e42d1ef0b6475efeb902ecabe918236eacd",
+    "decisionSha256": "sha256:c63f3d9a7b49ff9ae5dbd03acff9fde3170c0e73cbe6bd7476e67d5afa6bb965",
+    "tier": "R0",
+    "releaseability": "releaseable",
+    "status": "promoted",
+    "windowStart": "2026-06-22T05:00:00.000Z",
+    "windowEnd": "2026-06-22T05:30:00.000Z",
+    "observedAt": "2026-06-22T05:15:00.000Z",
+    "observedBy": {
+      "id": "chg-release-observation-fixture-001",
+      "type": "ci-bot",
+      "displayName": "ci-bot"
+    },
+    "canary": {
+      "phase": "canary",
+      "invocations": [
+        {
+          "probeId": "canary-pass-0",
+          "tier": "R0",
+          "weight": 1,
+          "expectedOutcome": "passed",
+          "startedAt": "2026-06-22T05:00:00.000Z",
+          "finishedAt": "2026-06-22T05:00:01.000Z",
+          "outcome": "passed"
+        },
+        {
+          "probeId": "canary-pass-1",
+          "tier": "R0",
+          "weight": 1,
+          "expectedOutcome": "passed",
+          "startedAt": "2026-06-22T05:00:00.000Z",
+          "finishedAt": "2026-06-22T05:00:01.000Z",
+          "outcome": "passed"
+        },
+        {
+          "probeId": "canary-pass-2",
+          "tier": "R0",
+          "weight": 1,
+          "expectedOutcome": "passed",
+          "startedAt": "2026-06-22T05:00:00.000Z",
+          "finishedAt": "2026-06-22T05:00:01.000Z",
+          "outcome": "passed"
+        }
+      ],
+      "failedProbeIds": [],
+      "skippedProbeIds": [],
+      "timedOutProbeIds": [],
+      "outcome": "passed",
+      "startedAt": "2026-06-22T05:30:00.000Z",
+      "finishedAt": "2026-06-22T05:30:00.000Z",
+      "phaseSha256": "sha256:4a5d0096f0fbec59a2ab6be191ff5d0375eb1c79cf3af0ca48967b8001bf4a80"
+    },
+    "healthCheck": {
+      "phase": "health_check",
+      "invocations": [
+        {
+          "checkId": "health-pass-0",
+          "endpoint": "https://example.com/health/0",
+          "intervalMs": 30000,
+          "timeoutMs": 5000,
+          "expectedStatus": "healthy",
+          "startedAt": "2026-06-22T05:00:00.000Z",
+          "finishedAt": "2026-06-22T05:00:01.000Z",
+          "observedStatus": "healthy",
+          "latencyMs": 12
+        },
+        {
+          "checkId": "health-pass-1",
+          "endpoint": "https://example.com/health/1",
+          "intervalMs": 30000,
+          "timeoutMs": 5000,
+          "expectedStatus": "healthy",
+          "startedAt": "2026-06-22T05:00:00.000Z",
+          "finishedAt": "2026-06-22T05:00:01.000Z",
+          "observedStatus": "healthy",
+          "latencyMs": 12
+        }
+      ],
+      "unhealthyCheckIds": [],
+      "degradedCheckIds": [],
+      "skippedCheckIds": [],
+      "outcome": "healthy",
+      "startedAt": "2026-06-22T05:30:00.000Z",
+      "finishedAt": "2026-06-22T05:30:00.000Z",
+      "phaseSha256": "sha256:f439309d0ba2d0c0dff400995d0fd6b76a1535cf85dba7e34ad37e833a9718d2"
+    },
+    "regression": null,
+    "alert": null,
+    "failureReason": null,
+    "reportSha256": "sha256:bdb0ded7b05f2ef703c69d214ab06b87e816ba2e12beda21dd2ec3514527cadb"
+  },
+  "eventPayloads": [
+    {
+      "schemaVersion": "1.0.0",
+      "kind": "release-observation",
+      "changeId": "chg-release-observation-fixture-001",
+      "mergeQueueHash": "sha256:8f36b25dbf037024c57c890206f19e42d1ef0b6475efeb902ecabe918236eacd",
+      "decisionSha256": "sha256:c63f3d9a7b49ff9ae5dbd03acff9fde3170c0e73cbe6bd7476e67d5afa6bb965",
+      "tier": "R0",
+      "releaseability": "releaseable",
+      "status": "promoted",
+      "windowStart": "2026-06-22T05:00:00.000Z",
+      "windowEnd": "2026-06-22T05:30:00.000Z",
+      "observedAt": "2026-06-22T05:15:00.000Z",
+      "observedBy": {
+        "id": "chg-release-observation-fixture-001",
+        "type": "ci-bot",
+        "displayName": "ci-bot"
+      },
+      "canary": {
+        "phase": "canary",
+        "invocations": [
+          {
+            "probeId": "canary-pass-0",
+            "tier": "R0",
+            "weight": 1,
+            "expectedOutcome": "passed",
+            "startedAt": "2026-06-22T05:00:00.000Z",
+            "finishedAt": "2026-06-22T05:00:01.000Z",
+            "outcome": "passed"
+          },
+          {
+            "probeId": "canary-pass-1",
+            "tier": "R0",
+            "weight": 1,
+            "expectedOutcome": "passed",
+            "startedAt": "2026-06-22T05:00:00.000Z",
+            "finishedAt": "2026-06-22T05:00:01.000Z",
+            "outcome": "passed"
+          },
+          {
+            "probeId": "canary-pass-2",
+            "tier": "R0",
+            "weight": 1,
+            "expectedOutcome": "passed",
+            "startedAt": "2026-06-22T05:00:00.000Z",
+            "finishedAt": "2026-06-22T05:00:01.000Z",
+            "outcome": "passed"
+          }
+        ],
+        "failedProbeIds": [],
+        "skippedProbeIds": [],
+        "timedOutProbeIds": [],
+        "outcome": "passed",
+        "startedAt": "2026-06-22T05:30:00.000Z",
+        "finishedAt": "2026-06-22T05:30:00.000Z",
+        "phaseSha256": "sha256:4a5d0096f0fbec59a2ab6be191ff5d0375eb1c79cf3af0ca48967b8001bf4a80"
+      },
+      "healthCheck": {
+        "phase": "health_check",
+        "invocations": [
+          {
+            "checkId": "health-pass-0",
+            "endpoint": "https://example.com/health/0",
+            "intervalMs": 30000,
+            "timeoutMs": 5000,
+            "expectedStatus": "healthy",
+            "startedAt": "2026-06-22T05:00:00.000Z",
+            "finishedAt": "2026-06-22T05:00:01.000Z",
+            "observedStatus": "healthy",
+            "latencyMs": 12
+          },
+          {
+            "checkId": "health-pass-1",
+            "endpoint": "https://example.com/health/1",
+            "intervalMs": 30000,
+            "timeoutMs": 5000,
+            "expectedStatus": "healthy",
+            "startedAt": "2026-06-22T05:00:00.000Z",
+            "finishedAt": "2026-06-22T05:00:01.000Z",
+            "observedStatus": "healthy",
+            "latencyMs": 12
+          }
+        ],
+        "unhealthyCheckIds": [],
+        "degradedCheckIds": [],
+        "skippedCheckIds": [],
+        "outcome": "healthy",
+        "startedAt": "2026-06-22T05:30:00.000Z",
+        "finishedAt": "2026-06-22T05:30:00.000Z",
+        "phaseSha256": "sha256:f439309d0ba2d0c0dff400995d0fd6b76a1535cf85dba7e34ad37e833a9718d2"
+      },
+      "regression": null,
+      "alert": null,
+      "report": {
+        "schemaVersion": "1.0.0",
+        "kind": "release-observation",
+        "changeId": "chg-release-observation-fixture-001",
+        "mergeQueueHash": "sha256:8f36b25dbf037024c57c890206f19e42d1ef0b6475efeb902ecabe918236eacd",
+        "decisionSha256": "sha256:c63f3d9a7b49ff9ae5dbd03acff9fde3170c0e73cbe6bd7476e67d5afa6bb965",
+        "tier": "R0",
+        "releaseability": "releaseable",
+        "status": "promoted",
+        "windowStart": "2026-06-22T05:00:00.000Z",
+        "windowEnd": "2026-06-22T05:30:00.000Z",
+        "observedAt": "2026-06-22T05:15:00.000Z",
+        "observedBy": {
+          "id": "chg-release-observation-fixture-001",
+          "type": "ci-bot",
+          "displayName": "ci-bot"
+        },
+        "canary": {
+          "phase": "canary",
+          "invocations": [
+            {
+              "probeId": "canary-pass-0",
+              "tier": "R0",
+              "weight": 1,
+              "expectedOutcome": "passed",
+              "startedAt": "2026-06-22T05:00:00.000Z",
+              "finishedAt": "2026-06-22T05:00:01.000Z",
+              "outcome": "passed"
+            },
+            {
+              "probeId": "canary-pass-1",
+              "tier": "R0",
+              "weight": 1,
+              "expectedOutcome": "passed",
+              "startedAt": "2026-06-22T05:00:00.000Z",
+              "finishedAt": "2026-06-22T05:00:01.000Z",
+              "outcome": "passed"
+            },
+            {
+              "probeId": "canary-pass-2",
+              "tier": "R0",
+              "weight": 1,
+              "expectedOutcome": "passed",
+              "startedAt": "2026-06-22T05:00:00.000Z",
+              "finishedAt": "2026-06-22T05:00:01.000Z",
+              "outcome": "passed"
+            }
+          ],
+          "failedProbeIds": [],
+          "skippedProbeIds": [],
+          "timedOutProbeIds": [],
+          "outcome": "passed",
+          "startedAt": "2026-06-22T05:30:00.000Z",
+          "finishedAt": "2026-06-22T05:30:00.000Z",
+          "phaseSha256": "sha256:4a5d0096f0fbec59a2ab6be191ff5d0375eb1c79cf3af0ca48967b8001bf4a80"
+        },
+        "healthCheck": {
+          "phase": "health_check",
+          "invocations": [
+            {
+              "checkId": "health-pass-0",
+              "endpoint": "https://example.com/health/0",
+              "intervalMs": 30000,
+              "timeoutMs": 5000,
+              "expectedStatus": "healthy",
+              "startedAt": "2026-06-22T05:00:00.000Z",
+              "finishedAt": "2026-06-22T05:00:01.000Z",
+              "observedStatus": "healthy",
+              "latencyMs": 12
+            },
+            {
+              "checkId": "health-pass-1",
+              "endpoint": "https://example.com/health/1",
+              "intervalMs": 30000,
+              "timeoutMs": 5000,
+              "expectedStatus": "healthy",
+              "startedAt": "2026-06-22T05:00:00.000Z",
+              "finishedAt": "2026-06-22T05:00:01.000Z",
+              "observedStatus": "healthy",
+              "latencyMs": 12
+            }
+          ],
+          "unhealthyCheckIds": [],
+          "degradedCheckIds": [],
+          "skippedCheckIds": [],
+          "outcome": "healthy",
+          "startedAt": "2026-06-22T05:30:00.000Z",
+          "finishedAt": "2026-06-22T05:30:00.000Z",
+          "phaseSha256": "sha256:f439309d0ba2d0c0dff400995d0fd6b76a1535cf85dba7e34ad37e833a9718d2"
+        },
+        "regression": null,
+        "alert": null,
+        "failureReason": null,
+        "reportSha256": "sha256:bdb0ded7b05f2ef703c69d214ab06b87e816ba2e12beda21dd2ec3514527cadb"
+      },
+      "reportSha256": "sha256:bdb0ded7b05f2ef703c69d214ab06b87e816ba2e12beda21dd2ec3514527cadb",
+      "failureReason": null
+    }
+  ],
+  "reportSha256": "sha256:bdb0ded7b05f2ef703c69d214ab06b87e816ba2e12beda21dd2ec3514527cadb"
+}

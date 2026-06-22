@@ -1,0 +1,96 @@
+task: P10-T01
+phase: 10
+phase_id: P10
+status: DONE
+base_commit: "4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a"
+implementation_branch: "codex/p03-t02-board-task-repository"
+verification:
+  local:
+    - name: core-tests
+      command: "pnpm --filter @legion/core test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/core-test.log
+      result: "245/245 pass (226 existing + 19 new release-observation tests)"
+    - name: board-tests
+      command: "pnpm --filter @legion/board test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/board-test.log
+      result: "53/53 pass (32 existing + 21 new release-observation board adapter tests)"
+    - name: store-sqlite-tests
+      command: "pnpm --filter @legion/store-sqlite test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/store-sqlite-test.log
+      result: "144/144 pass (135 existing + 9 new release-observation SQLite projector tests)"
+    - name: protocol-tests
+      command: "pnpm --filter @legion/protocol test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/protocol-test.log
+      result: "55/55 pass (no protocol changes)"
+    - name: artifacts-tests
+      command: "pnpm --filter @legion/artifacts test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/artifacts-test.log
+      result: "59/59 pass (no artifacts changes)"
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/typecheck.log
+      result: "all 10 workspace projects typecheck clean"
+    - name: validate-next
+      command: "pnpm run validate:next"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/validate-next.log
+      result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime import boundaries, schema generation, protocol docs, schema-doc drift, package contents, tests, npm pack dry-run, pnpm pack dry-run passed"
+    - name: gitleaks-p10-diff
+      command: "git diff --cached --binary 657f14ef52974efb0b72f009f536f7105884ad9c -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-09/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T01/gitleaks-p10-diff.log
+      result: "no leaks found in final Phase 10 diff scan; phase-09/phase-10 evidence indexes excluded to avoid self-referential scan"
+blockers: []
+delivered_artifacts:
+  core:
+    - path: packages/core/src/release-observation/contract.ts
+      description: "typed contract — ReleaseObservationInput, ReleaseObservationReport, CanaryPhaseResult, HealthCheckPhaseResult, RegressionPhaseResult, AlertPhaseResult, status/releaseability maps, event payload, idempotency key, allowlists"
+    - path: packages/core/src/release-observation/hash.ts
+      description: "deterministic SHA-256 helpers for canary/health/regression/alert phase hashes + report hash"
+    - path: packages/core/src/release-observation/orchestrator.ts
+      description: "ReleaseObservationOrchestrator + buildReleaseObservation; fail-closed four-phase pipeline with injected runners"
+    - path: packages/core/src/release-observation/index.ts
+      description: "public barrel"
+    - path: packages/core/test/release-observation.test.mjs
+      description: "19 orchestrator tests"
+    - path: packages/core/test/release-observation-fixture.mjs
+      description: "deterministic orchestrator + canary/health/regression/alert fixture builders"
+  board:
+    - path: packages/board/src/release-observation/contract.ts
+      description: "board adapter contract — ReleaseObservationBoardAggregatorInput, projection state, event payload, idempotency key, allowlists"
+    - path: packages/board/src/release-observation/hash.ts
+      description: "deterministic SHA-256 helpers for board adapter event payloads + projection states"
+    - path: packages/board/src/release-observation/aggregator.ts
+      description: "ReleaseObservationBoardAggregator + buildReleaseObservationBoardEvent; fail-closed validation + content-addressed event emission"
+    - path: packages/board/src/release-observation/reducer.ts
+      description: "pure reducer + projection key helpers + projection descriptor"
+    - path: packages/board/src/release-observation/index.ts
+      description: "public barrel"
+    - path: packages/board/test/release-observation-aggregator.test.mjs
+      description: "21 board adapter tests"
+    - path: packages/board/test/release-observation-fixture.mjs
+      description: "deterministic report + event builders"
+    - path: packages/board-store/src/index.ts
+      description: "BOARD_EVENT_TYPES and BOARD_EVENT_AGGREGATE_KINDS allowlists extended with release.observing/observed/promoted/regressed/rolled_back and release_observation"
+  store_sqlite:
+    - path: packages/store-sqlite/src/release-observation-projector.ts
+      description: "SqliteReleaseObservationProjector; replay/persist/verify; foreign-event filter; constructor validation"
+    - path: packages/store-sqlite/test/release-observation-projector.test.mjs
+      description: "9 SQLite projector tests"
+    - path: packages/store-sqlite/test/release-observation-fixture.mjs
+      description: "deterministic report builders + SQLite temp-database harness"
+phase_10_handoff:
+  next_task: P10-T02
+  next_task_id: t_4e06d5c7
+  summary: "Wire the release-observation board events into the CLI's existing whole-change acceptance flow so operators can see canary/health/regression/alert evidence on top of accepted whole-change state. P10-T02 also surfaces the canary + health check status in the canary/observation plan and the e2e lifecycle tests."
+  contract_inputs_for_p10_t02:
+    - "The ReleaseObservationBoardAggregator emits one BoardEvent per orchestrator run with aggregateKind='release_observation' and eventType in {release.observing, release.observed, release.promoted, release.regressed, release.rolled_back}."
+    - "The board event's idempotencyKey is <changeId>:<mergeQueueHash>:<reportSha256>:<eventType>; downstream consumers should use this key for re-run idempotency."
+    - "The SqliteReleaseObservationProjector is the canonical projection surface; CLI commands should read the projection state through the projector rather than the raw event log."
+    - "ReleaseObservationReport.status is the canonical releaseability verdict; the CLI should treat promoted as the 'release ready' signal and rolled_back / regressed as the 'rollback / forward-fix' signal."

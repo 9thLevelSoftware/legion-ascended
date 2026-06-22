@@ -667,7 +667,15 @@ export const BOARD_EVENT_TYPES = [
   "change.accepted",
   "change.rejected",
   "change.escalated",
-  "change.blocked"
+  "change.blocked",
+  // P10-T01 — Release observation aggregator (board adapter
+  // layer). Emits observing/promoted/regressed/rolled_back
+  // transitions on top of accepted whole-change state.
+  "release.observing",
+  "release.observed",
+  "release.promoted",
+  "release.regressed",
+  "release.rolled_back"
 ] as const;
 
 export type BoardEventType = (typeof BOARD_EVENT_TYPES)[number];
@@ -686,7 +694,9 @@ export const BOARD_EVENT_AGGREGATE_KINDS = [
   "outbox",
   "projection",
   // P09-T02 — Whole-change aggregate (board adapter layer).
-  "whole_change"
+  "whole_change",
+  // P10-T01 — Release-observation aggregate (board adapter layer).
+  "release_observation"
 ] as const;
 
 export type BoardEventAggregateKind = (typeof BOARD_EVENT_AGGREGATE_KINDS)[number];

@@ -204,3 +204,57 @@ export type {
   WholeChangeEventPayload,
   WholeChangeEventType
 } from "./whole-change/index.js";
+
+// =====================================================================
+// P10-T01 — Release observation board adapter.
+// Bridges the release-observation orchestrator's
+// `ReleaseObservationReport` to the board's event log + projection
+// store. Re-exports the typed contract, the pure reducer, the
+// aggregator, and the deterministic hashing helpers.
+// =====================================================================
+
+export {
+  buildReleaseObservationBoardEvent,
+  deriveReleaseObservationAggregateId,
+  deriveReleaseObservationEventPayloadHash,
+  deriveReleaseObservationProjectionStateHash,
+  eventTypeForReleaseObservationStatus,
+  isReleaseObservationEventType,
+  makeReleaseObservationReducer,
+  parseReleaseObservationProjectionKey,
+  reduceReleaseObservation,
+  releaseObservationIdempotencyKey,
+  releaseObservationProjectionDescriptor,
+  releaseObservationProjectionKey,
+  replayReleaseObservation,
+  sha256OfCanonical as releaseObservationSha256OfCanonical,
+  ReleaseObservationBoardAggregator,
+  RELEASE_OBSERVATION_AGGREGATE_KIND_LITERAL,
+  RELEASE_OBSERVATION_AGGREGATE_KINDS,
+  RELEASE_OBSERVATION_ADAPTER_HASH_VERSION,
+  RELEASE_OBSERVATION_ADAPTER_KIND,
+  RELEASE_OBSERVATION_ADAPTER_SCHEMA_VERSION,
+  RELEASE_OBSERVATION_BOARD_EVENT_TYPES,
+  RELEASE_OBSERVATION_PROJECTION_KEY_PREFIX,
+  RELEASE_OBSERVATION_PROJECTION_VERSION,
+  RELEASE_OBSERVATION_REDUCER_KIND,
+  RELEASE_OBSERVATION_REDUCER_KIND_LITERAL,
+  type ContentHash
+} from "./release-observation/index.js";
+
+export type {
+  ReleaseObservationBoardAggregatorFailure,
+  ReleaseObservationBoardAggregatorInput,
+  ReleaseObservationBoardAggregatorOptions,
+  ReleaseObservationBoardAggregatorResult,
+  ReleaseObservationBoardAggregatorSuccess,
+  ReleaseObservationBoardIssue,
+  ReleaseObservationBoardIssueCode,
+  ReleaseObservationBoardEventType,
+  ReleaseObservationReducer,
+  ReleaseObservationAggregateId,
+  ReleaseObservationAggregateKind,
+  ReleaseObservationAdapterKey,
+  ReleaseObservationProjectionDescriptor,
+  ReleaseObservationProjectionState
+} from "./release-observation/index.js";

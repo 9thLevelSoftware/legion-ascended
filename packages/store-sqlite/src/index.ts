@@ -5007,3 +5007,24 @@ export {
 export type {
   SqliteWholeChangeAcceptanceProjectorReplayResult
 } from "./whole-change-projector.js";
+
+// =====================================================================
+// P10-T01 — Release observation SQLite projector.
+//
+// Mirrors `SqliteWholeChangeAcceptanceProjector` for the
+// release-observation board projection. The board layer exposes
+// the *logical* projection descriptor and pure reducer; this
+// adapter wires that reducer into the standard SQLite
+// projection-store flow so the release-observation projection
+// can be persisted, replayed, and verified.
+// =====================================================================
+
+export {
+  SqliteReleaseObservationProjector,
+  envelopeReleaseObservationState,
+  stateFromReleaseObservationEnvelope,
+  releaseObservationProjectionKeyFor
+} from "./release-observation-projector.js";
+export type {
+  SqliteReleaseObservationProjectorReplayResult
+} from "./release-observation-projector.js";

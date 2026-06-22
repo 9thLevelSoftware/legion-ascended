@@ -1,0 +1,20 @@
+✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (0.615125ms)
+✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (1.294375ms)
+✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.631167ms)
+✔ P01-T05 invalid lifecycle fixture cases are rejected (1.248208ms)
+✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (7.985ms)
+✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.07375ms)
+✔ canonical scalar primitives reject ambiguous representations (1.217375ms)
+✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.476584ms)
+✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.18475ms)
+✔ common protocol structures are strict and versioned (0.733959ms)
+✔ generated primitive JSON schemas match committed artifacts (4.086167ms)
+✔ fixture corpus captures valid and invalid primitive examples (1.759ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 176.186541
