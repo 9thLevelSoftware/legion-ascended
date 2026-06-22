@@ -9,10 +9,15 @@ driver, and an import-boundary scan that fails closed on any Eve,
 host-CLI, sqlite, or legacy-prompt-asset import inside
 `packages/core/src/runtime/`.
 
-P05-T02 (Eve adapter certification) and P05-T03 (Fallback driver
-policy) can now build on the contract. P05-T04 (Phase 5 closeout)
-will aggregate the cross-driver evidence and the independent review
-once Eve is wired in.
+P05-T02 certifies the external Eve adapter surface. The branch now
+also carries a provider-neutral `@legion/runtime-eve` package, a
+pinned Eve transport boundary, fallback-policy documentation,
+subagent/sandbox/eval helpers, and synchronized selector precedence
+in `@legion/core`.
+
+P05-T03 (Fallback driver policy) can now build on the synchronized
+precedence. P05-T04 (Phase 5 closeout) will aggregate the cross-driver
+evidence and the independent review once Eve is wired in.
 
 ## What landed in this card
 
@@ -55,11 +60,11 @@ once Eve is wired in.
   `@legion/protocol` and the local `./contract.js` module; Eve
   imports must come through a dedicated adapter package, not through
   `packages/core/src/runtime/`.
-- P05-T03 must document the runtime-local → runtime-eve →
+- P05-T03 must document the runtime-eve → runtime-local →
   runtime-legacy-cli precedence and the conditions under which each
-  driver is invoked. The current branch only carries `runtime-local`
-  plus the abstract skeleton; P05-T02 will add `runtime-eve` and
-  P05-T03 will add `runtime-legacy-cli` plus the selector.
+  driver is invoked. The current branch now carries `runtime-eve`
+  plus the abstract skeleton; P05-T03 will validate the selector and
+  close out the remaining policy documentation.
 
 ## Known follow-ups
 

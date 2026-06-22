@@ -70,6 +70,63 @@ entries:
     artifact: docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
     description: "Refreshed import-boundary test output with 10 fixture-driven regressions green"
     sha256: aff2ba5480bf9f9f9a86efcbe287f9a887476a1d441ac110cd4a26110461fbc8
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/driver/runtime-eve-driver.ts
+    description: "Provider-neutral RuntimeEveDriver implementing the seven-method RuntimeDriver contract against the Eve transport boundary"
+    sha256: 517de2ed23e7f0ddce25e5d89fc16599037054c700c3566571e3efe6d7e28b70
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/contract.ts
+    description: "Transport boundary contract for Eve snapshots, authored results, and pinned version checks"
+    sha256: 3aa468621827087e01614c5631821d1a87fc2fd907e0879ae4c4c99b0f54bc2f
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/fake-transport.ts
+    description: "Deterministic in-memory Eve transport used by the public-contract certification suite"
+    sha256: 51863d2e5a94aa4ec4416af7b25fc998335b51ea7095e37f56861c47ff167487
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/real-transport.ts
+    description: "Pinned Eve transport wrapper that loads eve@0.11.7 dynamically and falls back to a synthetic authored result in dry-run mode"
+    sha256: 91fca1f6d83ece0b5feb778a1facb60919245d0c2c774ab5659a2319438d1b98
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/fallback/select.ts
+    description: "Fallback selector that resolves runtime-eve → runtime-local → runtime-legacy-cli and honors explicit overrides"
+    sha256: 390bacda1376e4364a949931ae442d8c6db529484a554900a7a44d0b17b6b64d
+  - task: P05-T02
+    artifact: packages/runtime-eve/test/public-contract.test.mjs
+    description: "29 public-contract tests covering start/resume/cancel/inspect/stream/approve/artifact/subagent/sandbox/eval plus fallback selection"
+    sha256: f30fa01c3d5718bbd7d916486ed1db7e10ff77a0f72b40899977630ed7f23d64
+  - task: P05-T02
+    artifact: packages/core/src/runtime/selector.ts
+    description: "Core selector synchronized to the certified runtime-eve-first precedence"
+    sha256: 99466c6b74d523979cb7b503fd8bd9c957cdf383d71e7de90dde9da58b4965d3
+  - task: P05-T02
+    artifact: packages/core/test/runtime-selector.test.mjs
+    description: "Selector regression test updated to pin the runtime-eve-first precedence order"
+    sha256: 61b63b07b4fe063976b915a6bd35e3a7a4c8728ff03215c938fc47226f01c629
+  - task: P05-T02
+    artifact: docs/next/runtime-fallback-policy.md
+    description: "Standalone fallback policy documentation for the certified runtime-eve-first precedence"
+    sha256: f55f0a66fed08bda51bd09da80f02eb7f955176ebacc1e9e24062545c516b0dd
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/integration-report.yaml
+    description: "P05-T02 integration report with PASS summary, verification notes, and artifact manifest"
+    sha256: 0ada43f38528dc00aa272e3e6adb52a7275c7dbae03d1bf70f5a1ffc9c54a38a
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/runtime-eve-test.log
+    description: "Public-contract package test log showing 29/29 runtime-eve tests green"
+    sha256: 556b7d021da4d6884d1ccbaad4abcbde880da7dfc1f6ab5cc541abcc17a8c8da
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/test.log
+    description: "Repo-wide test log showing all workspace suites green after the fallback precedence update"
+    sha256: 4a3e8a6be83fd56e7ad39f8dfe66faf5611de1def65a647f00e671cc53a4eb7f
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/typecheck.log
+    description: "Repo-wide typecheck log showing all workspace projects green"
+    sha256: ca10a1958c2ae0f9ee49501a73c6a940644b4ec571c2fb870d808ddf349a3881
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/validate-next.log
+    description: "Repo-wide validate-next log showing the runtime-import-boundaries and validation gates green"
+    sha256: 148c20d655e2516eb5b8dbf7da6a593e613d1ce02812bface31a2eb0a123ac61
+
   - task: P05-T01
     artifact: docs/next/evidence/P05-T01/checksums.txt
     description: "SHA-256 manifest for P05-T01 runtime source, tests, and evidence logs"

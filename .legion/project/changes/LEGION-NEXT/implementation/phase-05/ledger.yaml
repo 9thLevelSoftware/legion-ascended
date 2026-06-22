@@ -8,7 +8,7 @@ completed_at: null
 active_wave: 1
 tasks:
   P05-T01: { status: DONE, run_id: "P05-T01-20260621-runtime-driver-contract", commit: "1a44cef" }
-  P05-T02: { status: TODO, depends_on: ["P05-T01"] }
+  P05-T02: { status: DONE, run_id: "P05-T02-20260621-runtime-eve", commit: "pending" }
   P05-T03: { status: TODO, depends_on: ["P05-T01"] }
   P05-T04: { status: TODO, depends_on: ["P05-T01","P05-T02","P05-T03"] }
 decisions:
@@ -32,6 +32,10 @@ decisions:
     decision: "Closeout review tightened the runtime-local final-output path so non-terminal artifact(handle) failures carry a current-state snapshot and terminal bundles preserve the terminal finishedAt timestamp."
     reason: "The extended artifact(handle) mode added after the original RuntimeDriver contract must behave the same way in the canonical runtime-local driver as it does in the FakeRuntimeDriver end-to-end tests. Preserving terminal finishedAt also keeps artifact resolution time separate from run completion time for downstream evidence indexing."
     decided_at: "2026-06-21T22:49:00-04:00"
+  - task: P05-T02
+    decision: "runtime-eve is now the certified external runtime driver candidate, with a public-contract adapter package, a pinned Eve transport boundary, subagent/sandbox/eval helpers, fallback policy docs, and synchronized core selector precedence."
+    reason: "P05-T02 had to validate the public ADR-004 runtime contract against Eve's public surface, prove fallback behavior, and keep the core selector aligned with the new precedence so validate-next remains green. The adapter is isolated in packages/runtime-eve and the core selector/test expectations were updated to the new certified default."
+    decided_at: "2026-06-22T03:24:50Z"
 blockers: []
 evidence:
   - packages/core/src/runtime/contract.ts
@@ -45,3 +49,26 @@ evidence:
   - docs/next/evidence/P05-T01/validate-next.log
   - docs/next/evidence/P05-T01/runtime-driver-test.log
   - docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
+  - packages/runtime-eve/package.json
+  - packages/runtime-eve/tsconfig.json
+  - packages/runtime-eve/src/index.ts
+  - packages/runtime-eve/src/driver/runtime-eve-driver.ts
+  - packages/runtime-eve/src/transport/contract.ts
+  - packages/runtime-eve/src/transport/fake-transport.ts
+  - packages/runtime-eve/src/transport/real-transport.ts
+  - packages/runtime-eve/src/transport/index.ts
+  - packages/runtime-eve/src/fallback/select.ts
+  - packages/runtime-eve/src/fallback/index.ts
+  - packages/runtime-eve/src/sandbox/open.ts
+  - packages/runtime-eve/src/subagent/invoke.ts
+  - packages/runtime-eve/src/eval/run.ts
+  - packages/runtime-eve/test/public-contract.test.mjs
+  - packages/core/src/runtime/selector.ts
+  - packages/core/test/runtime-selector.test.mjs
+  - docs/next/runtime-fallback-policy.md
+  - docs/next/evidence/P05-T02/integration-report.yaml
+  - docs/next/evidence/P05-T02/checksums.txt
+  - docs/next/evidence/P05-T02/runtime-eve-test.log
+  - docs/next/evidence/P05-T02/test.log
+  - docs/next/evidence/P05-T02/typecheck.log
+  - docs/next/evidence/P05-T02/validate-next.log
