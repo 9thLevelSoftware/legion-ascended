@@ -1,0 +1,44 @@
+phase: 5
+phase_id: P05
+hash_basis: "SHA-256 over artifact bytes as staged for the Phase 5 ledger; identical to Git blob content bytes after commit 49855db."
+entries:
+  - task: P05-T01
+    artifact: packages/core/src/runtime/contract.ts
+    description: "Provider-neutral RuntimeDriver TypeScript interface with the seven ADR-004 lifecycle methods and their result types"
+    sha256: 02b8b75ed50133ebeda87581618cc661184acac5bc0d56a1b9dec6054117f430
+  - task: P05-T01
+    artifact: packages/core/src/runtime/local-driver.ts
+    description: "Deterministic runtime-local driver that emits protocol events for every state transition"
+    sha256: 3ae3005356ad237ba8ae75486be03b801472c54ec8e7d0ab5a230a4f2f1d024f
+  - task: P05-T01
+    artifact: packages/core/src/runtime/index.ts
+    description: "Public barrel re-exporting the canonical RuntimeDriver contract and the runtime-local driver"
+    sha256: c9491b11c008a1b92fd3060465d56064104196fac51dae816a68186bd5b9a3b9
+  - task: P05-T01
+    artifact: packages/core/test/runtime-driver.test.mjs
+    description: "17 deterministic contract tests covering every ADR-004 lifecycle method and failure mode"
+    sha256: 545b237db9575149c10555a3e9815b9d359399f626394674c958448335aaffe4
+  - task: P05-T01
+    artifact: scripts/scan-runtime-import-boundaries.mjs
+    description: "ADR-004 import-boundary scan that blocks Eve, host CLIs, sqlite, and legacy prompt assets inside the runtime module"
+    sha256: 2564b57afeceb3bd08bfdc5fb8227e22783cab7f098bfebee21cba313843b368
+  - task: P05-T01
+    artifact: tests/runtime-import-boundaries.test.mjs
+    description: "10 fixture-driven regression tests pinning the import-boundary rule catalog"
+    sha256: 138c360dabf68bbe76cc5e62a10b2d521a804ab9f01566d94bd8e45d0d47527a
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/integration-report.yaml
+    description: "Phase 5 integration report covering contract, runtime-local driver, import-boundary scan, tsconfig/devDeps, and validate-next gates"
+    sha256: 5a839289f63bce41e3bd84cb15144ef2336582060fc67babead8134ec1d0bc6a
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/validate-next.log
+    description: "Local validate-next output with the new runtime-import-boundaries step green and all tests passing"
+    sha256: 8c7097779412c4e11871a5c11e5b038eb4e50695a38de08ba23ddc50fe18a8df
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/runtime-driver-test.log
+    description: "Local @legion/core test output with 17 RuntimeDriver contract tests green"
+    sha256: e1925c524ed497428f5d478a3879f60842a838b97f766ebd5ad308e81a2f6b0f
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
+    description: "Local scan test output with 10 fixture-driven import-boundary regressions green"
+    sha256: fbe24de1af4e310e46e3dd08bd9036953c9b5296128f9b1368a577555a16bff5

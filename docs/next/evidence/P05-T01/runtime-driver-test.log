@@ -1,0 +1,25 @@
+✔ RuntimeDriver contract enumerates ADR-004's seven methods (1.079417ms)
+✔ runtime-local start emits a deterministic run id and protocol events (0.493833ms)
+✔ runtime-local start is idempotent against the same idempotency key (0.269917ms)
+✔ runtime-local inspect returns provider-neutral state for a started run (0.11ms)
+✔ runtime-local stream yields protocol events and terminal marker for cancel (0.175084ms)
+✔ runtime-local resume advances the checkpoint generation (0.151875ms)
+✔ runtime-local cancel transitions the run to canceled and rejects duplicate cancels (0.095042ms)
+✔ runtime-local approve delivers an approval and emits approval.requested.v1 + approval.granted.v1 events (0.134333ms)
+✔ runtime-local approve is idempotent for the same approval decision (0.105084ms)
+✔ runtime-local approve rejects when the run is no longer accepting input (0.154042ms)
+✔ runtime-local artifact register records an artifact and emits an artifact_registered stream event (0.139166ms)
+✔ runtime-local artifact with evidence id emits an evidence.collected.v1 event (0.083417ms)
+✔ runtime-local artifact fetch without registering keeps inspection unchanged (0.068416ms)
+✔ runtime-local rejects a request whose driver id does not match the loaded driver (0.069125ms)
+✔ runtime-local rejects start when contractRevision is not positive (0.069291ms)
+✔ runtime-local errors when inspect/stream/approve/artifact are called on an unknown run (0.072584ms)
+✔ runtime-local cancel returns a single run.finished.v1 event with terminal status (0.045083ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 117.421042

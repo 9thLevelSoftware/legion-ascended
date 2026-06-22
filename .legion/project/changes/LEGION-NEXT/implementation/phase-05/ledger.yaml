@@ -1,0 +1,42 @@
+phase: 5
+phase_id: P05
+status: IN_PROGRESS
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/05-phase-runtime-driver.md"
+base_commit: "43d059902f5dc35fc2604e2bd22b076186d8f5d7"
+started_at: "2026-06-21T22:00:00-04:00"
+completed_at: null
+active_wave: 1
+tasks:
+  P05-T01: { status: DONE, run_id: "P05-T01-20260621-runtime-driver-contract", commit: "49855db" }
+  P05-T02: { status: TODO, depends_on: ["P05-T01"] }
+  P05-T03: { status: TODO, depends_on: ["P05-T01"] }
+  P05-T04: { status: TODO, depends_on: ["P05-T01","P05-T02","P05-T03"] }
+decisions:
+  - task: P05-T01
+    decision: "The RuntimeDriver contract is a TypeScript interface in packages/core/src/runtime/contract.ts that declares the seven ADR-004 lifecycle methods (start, resume, cancel, inspect, stream, approve, artifact) and references only @legion/protocol types"
+    reason: "ADR-004 mandates a provider-neutral contract; the core domain types, protocol entities, board records, policy records, task contracts, approvals, evidence indexes, and worker bundle manifests must not import Eve types or rely on private Eve internals. A typed TypeScript interface gives every consumer (state machines, board logic, future Eve adapter, future legacy-cli adapter) a single compile-time contract."
+    decided_at: "2026-06-21T22:05:00-04:00"
+  - task: P05-T01
+    decision: "runtime-local is implemented as a deterministic in-memory driver that allocates run ids from the request idempotency key, freezes the manifest hash on start, advances the checkpoint generation on resume, and emits protocol events for every state transition"
+    reason: "Deterministic local execution is the P05-T01 acceptance criterion. The local driver must produce Legion-protocol-compliant events so the rest of the core (state machines, event store, evidence indexing) can consume them unchanged; producing real EventEnvelope shapes (run.created.v1, run.started.v1, run.finished.v1, approval.requested.v1, approval.granted.v1, evidence.collected.v1) means downstream tests do not need an event-envelope mocker."
+    decided_at: "2026-06-21T22:05:30-04:00"
+  - task: P05-T01
+    decision: "A dedicated runtime-import-boundary scan (scripts/scan-runtime-import-boundaries.mjs) blocks Eve, host CLIs, sqlite, non-@legion/protocol workspace imports, deep workspace imports, and legacy prompt asset imports inside packages/core/src/runtime/, and blocks core source OUTSIDE runtime/ from depending on the driver until Phase 5 wires the board to it"
+    reason: "ADR-004 says the contract must import no Eve or host CLI implementation types; check-package-boundaries.mjs already blocks `eve`, `node:sqlite`, `better-sqlite3`, `sqlite3` for `@legion/core`, but does not cover host CLI entry points (`claude-code`, `codex-cli`, etc.), does not enforce the `runtime/` encapsulation rule, and does not surface a focused runtime regression test. A dedicated scan wired into validate-next gives us a single-line failure when a future PR pulls an Eve type or a host-CLI entry point into the core."
+    decided_at: "2026-06-21T22:06:00-04:00"
+  - task: P05-T01
+    decision: "The runtime module is exposed from the public @legion/core barrel and Phase 5 follows with the Eve adapter (P05-T02) and fallback policy (P05-T03)"
+    reason: "The runtime module is part of the v9 core public API. Phase 5 needs both the Eve adapter (certified against this contract) and the fallback driver policy (runtime-local → runtime-eve → runtime-legacy-cli) before any production default can bind to Eve. P05-T04 (Phase 5 closeout) aggregates evidence and the independent review before Phase 6."
+    decided_at: "2026-06-21T22:06:30-04:00"
+blockers: []
+evidence:
+  - packages/core/src/runtime/contract.ts
+  - packages/core/src/runtime/local-driver.ts
+  - packages/core/src/runtime/index.ts
+  - packages/core/test/runtime-driver.test.mjs
+  - scripts/scan-runtime-import-boundaries.mjs
+  - tests/runtime-import-boundaries.test.mjs
+  - docs/next/evidence/P05-T01/integration-report.yaml
+  - docs/next/evidence/P05-T01/validate-next.log
+  - docs/next/evidence/P05-T01/runtime-driver-test.log
+  - docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
