@@ -1,8 +1,28 @@
-# Legion Next CLI
+# Legion CLI
 
-P02-T10 introduces the private `@legion/cli` package as a thin command layer over the Phase 2 artifact and migration services.
+The canonical CLI is workflow-first:
 
-The current public root binary remains the legacy installer entry point. The v9 surface is implemented under the explicit `next` namespace so later packaging can route `legion next ...` without changing existing default behavior.
+```powershell
+legion start
+legion status
+legion plan 1
+legion build
+legion review
+legion ship
+```
+
+The CLI preserves the original Legion workflow verbs while routing them through the v9 typed control plane. Normal users should not need `project`, `change`, `board`, extension manifests, prompt hashes, or hidden compatibility aliases to begin work.
+
+Advanced operator and developer commands live under `legion dev`:
+
+```powershell
+legion dev project status
+legion dev change validate chg_example
+legion dev board task list --input query.json
+legion dev migrate --from-planning --dry-run --planning-root .planning --staging-root .legion/var/import
+legion dev evals threat-model --run-dir runs/example --output-root runs
+legion dev release checklist --release-version 9.0.0
+```
 
 ## Project Commands
 
