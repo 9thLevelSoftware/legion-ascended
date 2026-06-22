@@ -1,0 +1,6 @@
+ README.md                                  |  6 +++---
+ apps/cli-e2e/test/cli-e2e.test.mjs         | 14 +++++++-------
+ checksums.sha256                           |  2 +-
+ packages/cli/src/commands/migrate/index.ts |  8 ++++++--
+ packages/cli/src/index.ts                  |  2 +-
+ 5 files changed, 18 insertions(+), 14 deletions(-)

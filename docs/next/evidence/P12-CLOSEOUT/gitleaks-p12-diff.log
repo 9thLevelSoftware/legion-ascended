@@ -1,0 +1,13 @@
+$ git diff --cached --binary 33ddf60180235dcb1a852838f6559a8cbecb7c11 -- '":!.legion/project/changes/LEGION-NEXT/implementation/phase-12/evidence-index.yaml"' '":!docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log"' | gitleaks detect --pipe --no-color --redact
+started_at=2026-06-22T14:54:14Z
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+10:54AM INF scanned ~466468 bytes (466.47 KB) in 171ms
+10:54AM INF no leaks found
+finished_at=2026-06-22T14:54:15Z
+exit_code=0

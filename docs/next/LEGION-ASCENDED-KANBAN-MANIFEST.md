@@ -38,8 +38,8 @@
 | CLI-first MVP | After Phase 8 ✓ |
 | Accepted change lifecycle | After Phase 9 ✓ |
 | Production lifecycle | After Phase 10 ✓ |
-| Operator/UI beta | After Phase 11 |
-| Migration/host beta | After Phase 12 |
+| Operator/UI beta | After Phase 11 ✓ |
+| Migration/host beta | After Phase 12 ✓ |
 | General availability | After Phase 13 |
 
 ## V8 vs V9 Comparison Reference
@@ -154,11 +154,14 @@ When implementing, compare against original Legion (v8) at:
 | P11-T03 | t_d7c20b33 | **otrlead** | **DONE** | T02 |
 
 ### Phase 12: Host Bridges and V8 Migration
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead; Migration/Host Beta cut line reached)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-12/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P12-T01 | t_ca438233 | legionworker | todo | P11-T03 |
-| P12-T02 | t_20172b35 | legionworker | todo | T01 |
-| P12-T03 | t_0f093435 | **otrlead** | todo | T02 |
+| P12-T01 | t_ca438233 | legionworker | **DONE** | P11-T03 |
+| P12-T02 | t_20172b35 | legionworker | **DONE** | T01 |
+| P12-T03 | t_0f093435 | **otrlead** | **DONE** | T02 |
 
 ### Phase 13: Behavioral Evals, Security Hardening, and GA
 | Task | ID | Assignee | Status | Dependencies |
@@ -170,7 +173,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 11:** 40 tasks (P03-T01 through P11-T03)
-- **Remaining tasks:** 7 (5 worker tasks, 2 review/closeout tasks)
-- **Current:** Phase 11 is DONE; P12-T01 (Host Bridges and V8 Migration) is next
+- **Completed through Phase 12:** 43 tasks (P03-T01 through P12-T03)
+- **Remaining tasks:** 4 (3 worker tasks, 1 review/closeout task)
+- **Current:** Phase 12 is DONE; P13-T01 (Behavioral evals) is next
 - **Final:** P13-T04 (GA decision)

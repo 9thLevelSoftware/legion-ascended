@@ -617,23 +617,23 @@ test("P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy 
     await copyFixture("codex", "local-codex", repositoryRoot);
     const legionBefore = await hashDirectory(path.join(repositoryRoot, ".legion"));
 
-    const dryRun = await runCli([
+    const verified = await runCli([
       "--repository-root",
       repositoryRoot,
       "migrate",
       "--from-codex-legion",
-      "--dry-run",
+      "--verify",
       "--staging-root",
       stagingRoot,
       "--run-id",
-      "cli-codex-dry-run",
+      "cli-codex-verify",
       "--created-at",
       FIXED_TIME
     ]);
-    assert.equal(dryRun.exitCode, 0, dryRun.stderr);
-    assert.equal(dryRun.json.ok, true);
-    assert.equal(dryRun.json.status, "dry_run");
-    assert.ok(dryRun.json.report.moves.some((move) => move.sourcePath === ".legion/commands/legion/start.md"));
+    assert.equal(verified.exitCode, 0, verified.stderr);
+    assert.equal(verified.json.ok, true);
+    assert.equal(verified.json.status, "dry_run");
+    assert.ok(verified.json.report.moves.some((move) => move.sourcePath === ".legion/commands/legion/start.md"));
     assert.equal(await hashDirectory(path.join(repositoryRoot, ".legion")), legionBefore);
 
     const applied = await runCli([

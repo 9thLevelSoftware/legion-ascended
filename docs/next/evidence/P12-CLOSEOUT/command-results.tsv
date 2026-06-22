@@ -1,0 +1,13 @@
+name	command	exit_code	log
+runtime-bridge-docs-test	node --test tests/runtime-bridge-docs.test.mjs	0	docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
+cli-e2e-test	pnpm --filter @legion/cli-e2e test	0	docs/next/evidence/P12-CLOSEOUT/cli-e2e-test.log
+core-test	pnpm --filter @legion/core test	0	docs/next/evidence/P12-CLOSEOUT/core-test.log
+board-test	pnpm --filter @legion/board test	0	docs/next/evidence/P12-CLOSEOUT/board-test.log
+store-sqlite-test	pnpm --filter @legion/store-sqlite test	0	docs/next/evidence/P12-CLOSEOUT/store-sqlite-test.log
+protocol-test	pnpm --filter @legion/protocol test	0	docs/next/evidence/P12-CLOSEOUT/protocol-test.log
+artifacts-test	pnpm --filter @legion/artifacts test	0	docs/next/evidence/P12-CLOSEOUT/artifacts-test.log
+typecheck	pnpm run typecheck	0	docs/next/evidence/P12-CLOSEOUT/typecheck.log
+workspace-tests	pnpm run test	0	docs/next/evidence/P12-CLOSEOUT/workspace-tests.log
+validate-next-precloseout	pnpm run validate:next	0	docs/next/evidence/P12-CLOSEOUT/validate-next-precloseout.log
+validate-next	pnpm run validate:next	0	docs/next/evidence/P12-CLOSEOUT/validate-next.log
+gitleaks-p12-diff	git diff --cached --binary 33ddf60180235dcb1a852838f6559a8cbecb7c11 -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-12/evidence-index.yaml' ':!docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log' | gitleaks detect --pipe --no-color --redact	0	docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log

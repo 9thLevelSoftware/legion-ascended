@@ -1,0 +1,35 @@
+task: P12-T01
+phase: 12
+phase_id: P12
+status: DONE
+base_commit: "33ddf60180235dcb1a852838f6559a8cbecb7c11"
+implementation_branch: "codex/p03-t02-board-task-repository"
+summary: "Aligned the host-bridge documentation with the runtime metadata matrix, clarified the 10 installable AI CLI runtimes plus Kilo Code plugin boundary, documented Aider as manual-only, refreshed the README package checksum, and added a regression test that keeps runtime bridge docs aligned with metadata."
+verification:
+  local:
+    - name: runtime-bridge-docs-test
+      command: "node --test tests/runtime-bridge-docs.test.mjs"
+      exit_code: 0
+      evidence: docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
+      result: "1 pass / 0 fail"
+    - name: validate-next-precloseout
+      command: "pnpm run validate:next"
+      exit_code: 0
+      evidence: docs/next/evidence/P12-CLOSEOUT/validate-next-precloseout.log
+      result: "validate-next PASS after the host-bridge docs/checksum/test update"
+deliverables:
+  - path: README.md
+    description: "Host bridge matrix wording now describes 10 installable AI CLI runtimes plus Kilo Code plugin support and calls out Aider as manual-only."
+  - path: checksums.sha256
+    description: "README package checksum refreshed after the documentation update."
+  - path: tests/runtime-bridge-docs.test.mjs
+    description: "Regression test asserting README, runtime audit, and certification checklist stay aligned with runtime metadata labels."
+findings:
+  - "Runtime metadata remains the source of truth for bridge labels and installability."
+  - "README wording no longer over-counts Aider as an installable CLI runtime."
+  - "Installer checksum verification remains green after the README change."
+blockers: []
+phase_12_handoff:
+  next_task: P12-T02
+  next_task_id: t_20172b35
+  summary: "P12-T02 should layer explicit compatibility verification on the migration CLI while preserving the existing dry-run/apply/rollback safety properties."

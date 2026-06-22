@@ -1,6 +1,6 @@
 # Legion
 
-Orchestrate 49 AI specialist personalities across 10 AI CLI runtimes plus the Kilo Code plugin.
+Orchestrate 49 AI specialist personalities across 10 installable AI CLI runtimes plus the Kilo Code plugin.
 
 > *"My name is Legion, for we are many."*
 
@@ -62,7 +62,7 @@ node bin/install.js --claude
 ### Prerequisites
 
 - Node.js 18+
-- One of the 10 AI CLI runtimes listed above or Kilo Code plugin support via `--kilo-code` (support tier varies by runtime)
+- One of the 10 installable AI CLI runtimes listed above or Kilo Code plugin support via `--kilo-code` (Aider remains manual-only; support tier varies by runtime)
 
 ### Codex note
 
@@ -934,7 +934,7 @@ legion/                     <- Project root
 ## Design Principles
 
 - **Personality-first**: Agent .md files are the source of truth for behavior
-- **Runtime-agnostic**: Works with 10 AI CLI runtimes plus Kilo Code plugin support — skills, commands, and agents adapt via per-runtime adapters (support tiers listed below)
+- **Runtime-agnostic**: Works with 10 installable AI CLI runtimes plus Kilo Code plugin support — skills, commands, and agents adapt via per-runtime adapters (support tiers listed below)
 - **Human-readable state**: All planning files are markdown, readable without tools
 - **Full personality injection**: Agents are spawned with their complete .md as instructions
 - **Standardized format**: All 49 agents use Format A — emoji section headings, "Your" pronouns, current range 156-472 lines (minimum 80)

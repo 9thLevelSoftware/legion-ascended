@@ -22,7 +22,7 @@ Commands:
   project   Initialize, validate, and inspect v9 project artifacts.
   change    Create, validate, diff, and archive v9 change bundles.
   board     Create, inspect, and mutate board tasks, events, claims, and approvals.
-  migrate   Dry-run, apply, and roll back legacy migration flows.
+  migrate   Verify, dry-run, apply, and roll back legacy migration flows.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.

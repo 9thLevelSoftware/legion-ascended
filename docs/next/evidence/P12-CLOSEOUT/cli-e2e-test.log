@@ -1,0 +1,43 @@
+$ pnpm --filter @legion/cli-e2e test
+started_at=2026-06-22T14:47:33Z
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.431292ms)
+✔ P02-T10 valueless global flags remain flags before positional commands (280.815958ms)
+✔ P02-T10 valueless command flags remain flags before positional arguments (467.932833ms)
+✔ P02-T10 command subcommands honor help flags without requiring inputs (272.27675ms)
+✔ P02-T10 JSON input boundary failures return usage diagnostics (372.862459ms)
+✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (414.81025ms)
+✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (740.469542ms)
+✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (448.282167ms)
+✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (417.217791ms)
+✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (515.871666ms)
+✔ P10-T02 board CLI routes release-observation aggregate/status/rebuild/verify idempotently (689.691375ms)
+✔ P10-T02 board CLI release-observation aggregate surfaces validation failures (130.678333ms)
+✔ P10-T02 board CLI release-observation verify fails closed on missing projection (132.189875ms)
+✔ P11-T01 board CLI dashboard status/rebuild/verify round-trip a task event log (638.467959ms)
+✔ P11-T01 board CLI dashboard verify fails closed on missing projection (132.154208ms)
+✔ P11-T01 board CLI approval-gate status/rebuild/verify surface an approved verdict (680.464958ms)
+✔ P11-T01 board CLI approval-gate status surfaces pending on no events (141.190167ms)
+✔ P11-T02 board CLI portfolio status/rebuild/verify round-trip a multi-project event log (768.002083ms)
+✔ P11-T02 board CLI portfolio verify fails closed on missing projection (132.68225ms)
+✔ P11-T02 board CLI portfolio status surfaces tenant-wide rollup on no events (129.82675ms)
+✔ P11-T02 board CLI portfolio status surfaces scoped sub-portfolio (403.651167ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8033.788542
+finished_at=2026-06-22T14:47:43Z
+exit_code=0
