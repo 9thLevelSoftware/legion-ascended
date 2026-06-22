@@ -12,6 +12,10 @@
     "requirementIds": [
       "req_protocol-entities"
     ],
+    "wave": "A",
+    "agents": [
+      "protocol-planner"
+    ],
     "dependencies": [],
     "context": {
       "specRefs": [

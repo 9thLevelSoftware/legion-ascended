@@ -13,6 +13,7 @@ import {
   releaseSchema,
   reviewDecisionSchema,
   taskContractSchema,
+  preflightTaskContract,
   taskRunSchema,
   taskSchema
 } from "../dist/index.js";
@@ -52,9 +53,67 @@ test("P01-T05 keeps task contract, operational task, and run attempt separate", 
   assert.equal(taskSchema.safeParse(valid.task).success, true);
   assert.equal(taskRunSchema.safeParse(valid.taskRun).success, true);
 
+  assert.equal(valid.taskContract.wave, "A");
+  assert.deepEqual(valid.taskContract.agents, ["protocol-planner"]);
   assert.equal(taskContractSchema.safeParse({ ...valid.taskContract, status: "ready" }).success, false);
   assert.equal(taskSchema.safeParse({ ...valid.task, objective: valid.taskContract.objective }).success, false);
   assert.equal(taskRunSchema.safeParse({ ...valid.taskRun, scope: valid.taskContract.scope }).success, false);
+});
+
+test("P01-T05 task contracts preflight dependency satisfaction, resource availability, and contract completeness", async () => {
+  const { taskContract } = await readLifecycleFixture("lifecycle-valid.json");
+
+  const satisfied = preflightTaskContract(taskContract, {
+    availableContracts: [{ contractId: taskContract.id, revision: taskContract.revision }],
+    availableAgents: taskContract.agents,
+    availableArtifacts: taskContract.context.predecessorArtifacts
+  });
+  assert.equal(satisfied.ok, true);
+  assert.deepEqual(satisfied.issues, []);
+
+  const dependencyBlocked = preflightTaskContract(
+    {
+      ...taskContract,
+      dependencies: [{ contractId: "ctr_missing-dependency", revision: 2 }]
+    },
+    {
+      availableContracts: [{ contractId: taskContract.id, revision: taskContract.revision }],
+      availableAgents: taskContract.agents,
+      availableArtifacts: taskContract.context.predecessorArtifacts
+    }
+  );
+  assert.equal(dependencyBlocked.ok, false);
+  assert.equal(dependencyBlocked.issues[0].code, "dependency_unsatisfied");
+
+  const resourceBlocked = preflightTaskContract(taskContract, {
+    availableContracts: [{ contractId: taskContract.id, revision: taskContract.revision }],
+    availableAgents: []
+  });
+  assert.equal(resourceBlocked.ok, false);
+  assert.equal(resourceBlocked.issues[0].code, "resource_unavailable");
+
+  const incomplete = preflightTaskContract(
+    {
+      ...taskContract,
+      context: {
+        ...taskContract.context,
+        specRefs: [],
+        designRefs: [],
+        predecessorArtifacts: []
+      },
+      completion: {
+        ...taskContract.completion,
+        expectedArtifacts: []
+      }
+    },
+    {
+      availableContracts: [{ contractId: taskContract.id, revision: taskContract.revision }],
+      availableAgents: taskContract.agents
+    }
+  );
+  assert.equal(incomplete.ok, false);
+  assert.equal(incomplete.issues[0].code, "contract_incomplete");
+  assert.equal(incomplete.issues.at(-1).code, "contract_incomplete");
 });
 
 test("P01-T05 task contracts reject unsafe scope and incomplete verification contracts", async () => {
@@ -71,11 +130,13 @@ test("P01-T05 task contracts reject unsafe scope and incomplete verification con
     false
   );
   assert.equal(taskContractSchema.safeParse({ ...taskContract, verification: [] }).success, false);
+  assert.equal(taskContractSchema.safeParse({ ...taskContract, wave: undefined }).success, false);
+  assert.equal(taskContractSchema.safeParse({ ...taskContract, agents: [] }).success, false);
   assert.equal(
     taskContractSchema.safeParse({
       ...taskContract,
       risk: {
-        tier: "R3",
+        tier: "R2",
         reasons: ["public-schema-contract"]
       },
       completion: {

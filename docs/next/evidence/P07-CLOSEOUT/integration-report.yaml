@@ -1,0 +1,105 @@
+phase: P07
+status: PASS
+title: Planner Task Contracts and Preflight closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: e7246c06ab670c56ba8ad2509e9a19c72de65eff
+head_before_closeout: e7246c06ab670c56ba8ad2509e9a19c72de65eff
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T05:09:20Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local protocol/artifacts/typecheck/workspace gates passed."
+  - "validate:next is expected to fail before the P07 schema/source bundle is committed because the generated-drift step intentionally rejects uncommitted changes under schemas/ and docs/next/protocol; final validate-next is rerun after commit and recorded in validate-next.log."
+acceptance:
+  task_contract_wave_and_agents:
+    status: PASS
+    evidence:
+      - packages/protocol/src/entities/task-contract.ts
+      - packages/protocol/test/lifecycle.test.mjs
+      - schemas/entities/task-contract.schema.json
+      - schemas/entities/fixtures/lifecycle-valid.json
+    notes:
+      - "TaskContract includes a protocol-visible wave field and non-empty agents array."
+      - "Agent IDs are schema-validated and duplicate agent assignments are rejected in superRefine."
+  preflight_validation:
+    status: PASS
+    evidence:
+      - packages/protocol/src/entities/task-contract.ts
+      - packages/protocol/test/lifecycle.test.mjs
+    notes:
+      - "preflightTaskContract returns typed success/failure results with structured issues."
+      - "Preflight checks missing or mismatched contract dependencies, unavailable assigned agents, unavailable predecessor artifacts, missing context references, and missing expected completion artifacts."
+  generated_schema_and_fixture_alignment:
+    status: PASS
+    evidence:
+      - schemas/entities/task-contract.schema.json
+      - schemas/entities/fixtures/lifecycle-valid.json
+      - schemas/entities/fixtures/lifecycle-invalid.json
+      - schemas/artifacts/taskgraph.schema.json
+      - packages/artifacts/test/archive.test.mjs
+      - packages/artifacts/test/change-support.test.mjs
+      - packages/artifacts/test/traceability.test.mjs
+    notes:
+      - "Lifecycle fixtures and artifact test consumers were updated to the new TaskContract shape."
+      - "Generated protocol/artifact schemas carry the new TaskContract fields through downstream validation."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P07-CLOSEOUT/protocol-test.log
+      - docs/next/evidence/P07-CLOSEOUT/artifacts-test.log
+      - docs/next/evidence/P07-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P07-CLOSEOUT/workspace-tests.log
+      - docs/next/evidence/P07-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P07-CLOSEOUT/gitleaks-p07-diff.log
+    notes:
+      - "Protocol and artifacts package tests passed."
+      - "Workspace typecheck and full workspace tests passed."
+      - "Final validate-next and targeted secret scan are recorded in the closeout evidence bundle."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-07/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-07/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-07/HANDOFF.md
+      - docs/next/reviews/PHASE-07-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P07-T01 through P07-T03 complete and blockers cleared."
+      - "Phase 8 handoff points to P08-T01 fresh-context execution and preflight inputs."
+commands:
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P07-CLOSEOUT/protocol-test.log
+    result: "55 pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P07-CLOSEOUT/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P07-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P07-CLOSEOUT/workspace-tests.log
+    result: "538 pass / 0 fail"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P07-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import-boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p07-diff
+    command: "gitleaks detect over git diff --binary worktree snapshot"
+    exit_code: 0
+    evidence: docs/next/evidence/P07-CLOSEOUT/gitleaks-p07-diff.log
+    result: "No leaks found in P07 diff"
+blockers: []
+phase_8_handoff:
+  next_task: P08-T01
+  next_task_id: t_1111b940
+  summary: "Implement fresh-context execution so each dispatched worker receives context derived from a preflighted TaskContract, without cross-task memory bleed, while preserving Phase 6 hidden-oracle boundaries and Phase 5 RuntimeDriver neutrality."

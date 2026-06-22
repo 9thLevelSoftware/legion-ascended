@@ -1,0 +1,92 @@
+phase: 7
+phase_id: P07
+hash_basis: "SHA-256 over artifact bytes after P07-T03 closeout finalization; this index is excluded to avoid self-referential hashing."
+entries:
+  - task: P07-T01
+    artifact: packages/protocol/src/entities/task-contract.ts
+    description: "TaskContract schema and preflight implementation with wave/agents and structured preflight issues"
+    sha256: bc9f44d6a4d2ef0afea079643b1ab747b0e4647deeaaf4f60dee64e0b9690b47
+  - task: P07-T01
+    artifact: schemas/entities/fixtures/lifecycle-valid.json
+    description: "Valid lifecycle fixture updated with TaskContract wave and agent assignments"
+    sha256: 8e97ed26b5eff23b737ae638877839148ee5e9abd63b94758f903b30e5ce9782
+  - task: P07-T01
+    artifact: schemas/entities/fixtures/lifecycle-invalid.json
+    description: "Invalid lifecycle fixture updated for the TaskContract shape"
+    sha256: 1f84808eb0225c24f83409de45635dacc92e92735f1296d39403bb0b82e92b1d
+  - task: P07-T01
+    artifact: schemas/entities/task-contract.schema.json
+    description: "Generated TaskContract JSON Schema exposing wave and agents"
+    sha256: fec5c8201fc3ebdfdb93f41b75e741911b91ab9370c45bafd69971f88abeb955
+  - task: P07-T01
+    artifact: schemas/artifacts/taskgraph.schema.json
+    description: "Generated artifact taskgraph schema refreshed against the revised protocol TaskContract contract"
+    sha256: 7f383027f8b08156d35260bcc550a017df26e37c0b28cabbb7ac2addebe2fa64
+  - task: P07-T01
+    artifact: packages/artifacts/test/archive.test.mjs
+    description: "Artifact archive tests updated for TaskContract wave/agent fields"
+    sha256: 8633910452f04ae0318e650e8a855e81b36c82c18643b6c4d479af1a44654417
+  - task: P07-T01
+    artifact: packages/artifacts/test/change-support.test.mjs
+    description: "Artifact change-support tests updated for TaskContract wave/agent fields"
+    sha256: 2b766d9e69774811d83f149a0b694df2e2ee3c4b7389e7c3aa24693312aa1359
+  - task: P07-T01
+    artifact: packages/artifacts/test/traceability.test.mjs
+    description: "Artifact traceability tests updated for TaskContract wave/agent fields"
+    sha256: bbd0a6cff7337e5d655f337946aa9d40b8a88d2990d39345add40e654d322627
+  - task: P07-T02
+    artifact: packages/protocol/test/lifecycle.test.mjs
+    description: "Lifecycle regression tests for TaskContract wave/agents and preflight success/failure paths"
+    sha256: c1505e797ac0fea059497cdec47546ae4a471065ae33a7281b1d972fd6dfbb83
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/git-status.log
+    description: "Closeout git status, diff stat, name-status, untracked file, and recent commit capture"
+    sha256: 3a037b7d58e311d3983ad53ec2161eaa9493d26e467f12e254d1495c5438d9b5
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/protocol-test.log
+    description: "Closeout @legion/protocol package test transcript showing 55 pass"
+    sha256: 9bdb73b07dca0a559bf59a78a9335d95dbe534abdc87eaab33943249a979d270
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/artifacts-test.log
+    description: "Closeout @legion/artifacts package test transcript showing 59 pass"
+    sha256: 047a60766a6ac9196b5498d58a3949c8c30d7c25534c5d102a147241d5db9676
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/typecheck.log
+    description: "Closeout workspace typecheck transcript"
+    sha256: a806a9bc221e87903c488785a00f4f422b445b2fbfa72ed50d5d86f017430d49
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/workspace-tests.log
+    description: "Closeout recursive workspace test transcript showing 538 pass"
+    sha256: 8b87592d556b6e3702e5461db0c49f27ac5225673d1adc8f51fe4dcf160f9cb6
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/validate-next.log
+    description: "Closeout validate-next transcript with all gates passing"
+    sha256: 3a7abec2bba862d86bb41f212e0a6f47ff87259dc9dcd50b46253a4c0bfebb22
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/gitleaks-p07-diff.log
+    description: "Closeout targeted P07 diff secret scan transcript showing no leaks"
+    sha256: eb2d8cd4163a790714333976dba91247fd438bb4c57b0c3d7a53120bef86cec5
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/command-summary.env
+    description: "Closeout command exit-code and timestamp summary"
+    sha256: 4b7488eb7a07a0ffc4a22e208536f4d2edecc8465bd2cc3020837ced9fa95c26
+  - task: P07-CLOSEOUT
+    artifact: docs/next/evidence/P07-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 7 closeout integration report"
+    sha256: ee68097a12226b2a43ad43273b5af5e506b9451bd186d623c582d450835be5c4
+  - task: P07-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-07-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 7 review with final PASS verdict"
+    sha256: 9ec6dd9e07a7be055e27743e7258aab5f17dba09f838b946972603453e098eb4
+  - task: P07-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-07/ledger.yaml
+    description: "Phase 7 ledger marked DONE with decisions, task statuses, evidence bundle, and blockers cleared"
+    sha256: b79926e61489cc08219703c1752b00858f0c69ccb9faf062f1a71d5b6fcc78be
+  - task: P07-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-07/HANDOFF.md
+    description: "Phase 7 handoff to Phase 8 with planner/preflight cut-line assumptions"
+    sha256: d64f631bede6558f49c2ac13099388d94697cdd6d51cbc36d31e486742001bc2
+  - task: P07-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 7 complete and point at P08-T01 as next work"
+    sha256: 18fc295171f97bda4399e18b7c0e89b3b9c84ee65e4a27f9610f3cba8e69949a

@@ -7,8 +7,11 @@ import {
   projectIdSchema,
   requirementIdSchema
 } from "../primitives/ids.js";
-import { artifactPathSchema, artifactReferenceSchema } from "../primitives/values.js";
+import { artifactPathSchema, artifactReferenceSchema, type ArtifactReference } from "../primitives/values.js";
 import { riskProfileSchema, schemaMetadataSchema } from "./common.js";
+
+const taskContractAgentIdSchema = z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid agent ID");
+const taskContractWaveIdSchema = z.string().regex(/^[A-Z][A-Z0-9_-]{0,31}$/, "Invalid wave ID");
 
 export const taskContractDependencySchema = z.strictObject({
   contractId: contractIdSchema,
@@ -66,6 +69,111 @@ export const taskContractCompletionSchema = z.strictObject({
 
 export type TaskContractCompletion = z.infer<typeof taskContractCompletionSchema>;
 
+export interface TaskContractPreflightContext {
+  readonly availableContracts?: readonly TaskContractDependency[];
+  readonly availableAgents?: readonly string[];
+  readonly availableArtifacts?: readonly ArtifactReference[];
+}
+
+export type TaskContractPreflightIssueCode =
+  | "dependency_unsatisfied"
+  | "resource_unavailable"
+  | "contract_incomplete";
+
+export interface TaskContractPreflightIssue {
+  readonly code: TaskContractPreflightIssueCode;
+  readonly message: string;
+  readonly path: readonly (string | number)[];
+}
+
+export interface TaskContractPreflightSuccess {
+  readonly ok: true;
+  readonly taskContract: TaskContract;
+  readonly issues: readonly [];
+}
+
+export interface TaskContractPreflightFailure {
+  readonly ok: false;
+  readonly taskContract: TaskContract;
+  readonly issues: readonly TaskContractPreflightIssue[];
+}
+
+export type TaskContractPreflightResult = TaskContractPreflightSuccess | TaskContractPreflightFailure;
+
+function referenceKey(reference: ArtifactReference): string {
+  return `${reference.path}|${reference.sha256}`;
+}
+
+export function preflightTaskContract(
+  taskContract: TaskContract,
+  context: TaskContractPreflightContext = {}
+): TaskContractPreflightResult {
+  const issues: TaskContractPreflightIssue[] = [];
+  const availableContractIds = new Map<string, number | undefined>();
+  for (const contract of context.availableContracts ?? []) {
+    availableContractIds.set(contract.contractId, contract.revision);
+  }
+  const availableAgentIds = new Set(context.availableAgents ?? []);
+  const availableArtifactKeys = new Set((context.availableArtifacts ?? []).map(referenceKey));
+
+  for (const [index, dependency] of taskContract.dependencies.entries()) {
+    const revision = availableContractIds.get(dependency.contractId);
+    const revisionSatisfied = dependency.revision === undefined || revision === dependency.revision;
+    if (!availableContractIds.has(dependency.contractId) || !revisionSatisfied) {
+      const revisionText = dependency.revision === undefined ? "" : ` revision ${dependency.revision}`;
+      issues.push({
+        code: "dependency_unsatisfied",
+        message: `Dependency ${dependency.contractId}${revisionText} is not available for execution.`,
+        path: ["dependencies", index]
+      });
+    }
+  }
+
+  for (const [index, agentId] of taskContract.agents.entries()) {
+    if (!availableAgentIds.has(agentId)) {
+      issues.push({
+        code: "resource_unavailable",
+        message: `Agent resource ${agentId} is not available for execution.`,
+        path: ["agents", index]
+      });
+    }
+  }
+
+  for (const [index, predecessorArtifact] of taskContract.context.predecessorArtifacts.entries()) {
+    if (!availableArtifactKeys.has(referenceKey(predecessorArtifact))) {
+      issues.push({
+        code: "dependency_unsatisfied",
+        message: `Predecessor artifact ${predecessorArtifact.path} is not available for execution.`,
+        path: ["context", "predecessorArtifacts", index]
+      });
+    }
+  }
+
+  if (
+    taskContract.context.specRefs.length === 0 &&
+    taskContract.context.designRefs.length === 0 &&
+    taskContract.context.predecessorArtifacts.length === 0
+  ) {
+    issues.push({
+      code: "contract_incomplete",
+      message: "Task contract context must include at least one source, design, or predecessor artifact reference.",
+      path: ["context"]
+    });
+  }
+
+  if (taskContract.completion.expectedArtifacts.length === 0) {
+    issues.push({
+      code: "contract_incomplete",
+      message: "Task contract completion must declare at least one expected artifact.",
+      path: ["completion", "expectedArtifacts"]
+    });
+  }
+
+  return issues.length === 0
+    ? { ok: true, taskContract, issues: [] }
+    : { ok: false, taskContract, issues };
+}
+
 export const taskContractSchema = schemaMetadataSchema
   .extend({
     kind: z.literal("task-contract"),
@@ -76,6 +184,8 @@ export const taskContractSchema = schemaMetadataSchema
     title: z.string().min(1).max(160),
     objective: z.string().min(1).max(4_096),
     requirementIds: z.array(requirementIdSchema).min(1),
+    wave: taskContractWaveIdSchema,
+    agents: z.array(taskContractAgentIdSchema).min(1),
     dependencies: z.array(taskContractDependencySchema),
     context: taskContractContextSchema,
     scope: taskContractScopeSchema,
@@ -88,6 +198,20 @@ export const taskContractSchema = schemaMetadataSchema
   })
   .superRefine((taskContract, context) => {
     const forbidden = new Set(taskContract.scope.forbidden);
+    const seenAgents = new Map<string, number>();
+
+    for (const [index, agentId] of taskContract.agents.entries()) {
+      const previousIndex = seenAgents.get(agentId);
+      if (previousIndex !== undefined) {
+        context.addIssue({
+          code: "custom",
+          message: "Task contract agent assignments must be unique.",
+          path: ["agents", index]
+        });
+      } else {
+        seenAgents.set(agentId, index);
+      }
+    }
 
     for (const [index, writePath] of taskContract.scope.write.entries()) {
       if (forbidden.has(writePath)) {

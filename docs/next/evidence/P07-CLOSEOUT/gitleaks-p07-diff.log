@@ -1,0 +1,9 @@
+command=gitleaks detect over git diff --binary post-validate closeout snapshot
+started_at=2026-06-22T05:09:41Z
+commit_base=70bfaa815f78406a7b193a723b42254f64869c5b
+
+[90m1:09AM[0m [32mINF[0m [1mscanned ~96622 bytes (96.62 KB) in 52.3ms[0m
+[90m1:09AM[0m [32mINF[0m [1mno leaks found[0m
+
+exit_code=0
+finished_at=2026-06-22T05:09:42Z

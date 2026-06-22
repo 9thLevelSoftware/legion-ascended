@@ -105,11 +105,14 @@ When implementing, compare against original Legion (v8) at:
 | P06-T03 | t_b7f23936 | **otrlead** | DONE | T02 |
 
 ### Phase 7: Planner Task Contracts and Preflight
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-07/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P07-T01 | t_8c382c22 | legionworker | todo | P06-T03 |
-| P07-T02 | t_d731d488 | legionworker | todo | T01 |
-| P07-T03 | t_0c533e06 | **otrlead** | todo | T02 |
+| P07-T01 | t_8c382c22 | legionworker | DONE | P06-T03 |
+| P07-T02 | t_d731d488 | legionworker | DONE | T01 |
+| P07-T03 | t_0c533e06 | **otrlead** | DONE | T02 |
 
 ### Phase 8: Fresh Context Task Execution and Per-Task Review
 | Task | ID | Assignee | Status | Dependencies |
@@ -156,7 +159,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 6:** 25 tasks (P03-T01 through P06-T03)
-- **Remaining tasks:** 22 (15 worker tasks, 7 review/closeout tasks)
-- **Current:** P07-T01 is dependency-gated on P06-T03 closeout and is next after Phase 6 completion
+- **Completed through Phase 7:** 28 tasks (P03-T01 through P07-T03)
+- **Remaining tasks:** 19 (13 worker tasks, 6 review/closeout tasks)
+- **Current:** P08-T01 is dependency-gated on P07-T03 closeout and is next after Phase 7 completion
 - **Final:** P13-T04 (GA decision)

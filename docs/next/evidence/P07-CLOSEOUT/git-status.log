@@ -1,0 +1,44 @@
+captured_at=2026-06-22T05:10:07Z
+branch=codex/p03-t02-board-task-repository
+head=70bfaa815f78406a7b193a723b42254f64869c5b
+
+## git status --short --branch
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository [ahead 1]
+ M .legion/project/changes/LEGION-NEXT/implementation/phase-07/ledger.yaml
+ M docs/next/evidence/P07-CLOSEOUT/command-summary.env
+ M docs/next/evidence/P07-CLOSEOUT/git-status.log
+ M docs/next/evidence/P07-CLOSEOUT/gitleaks-p07-diff.log
+ M docs/next/evidence/P07-CLOSEOUT/integration-report.yaml
+?? .legion/project/changes/LEGION-NEXT/implementation/phase-07/evidence-index.yaml
+?? docs/next/evidence/P07-CLOSEOUT/validate-next.log
+
+## git diff --stat
+ .../implementation/phase-07/ledger.yaml            |  4 +-
+ .../next/evidence/P07-CLOSEOUT/command-summary.env |  4 +-
+ docs/next/evidence/P07-CLOSEOUT/git-status.log     | 56 ++++------------------
+ .../evidence/P07-CLOSEOUT/gitleaks-p07-diff.log    | 11 +++--
+ .../evidence/P07-CLOSEOUT/integration-report.yaml  |  6 +--
+ 5 files changed, 24 insertions(+), 57 deletions(-)
+
+## git diff --name-status
+M	.legion/project/changes/LEGION-NEXT/implementation/phase-07/ledger.yaml
+M	docs/next/evidence/P07-CLOSEOUT/command-summary.env
+M	docs/next/evidence/P07-CLOSEOUT/git-status.log
+M	docs/next/evidence/P07-CLOSEOUT/gitleaks-p07-diff.log
+M	docs/next/evidence/P07-CLOSEOUT/integration-report.yaml
+
+## untracked files
+.legion/project/changes/LEGION-NEXT/implementation/phase-07/evidence-index.yaml
+docs/next/evidence/P07-CLOSEOUT/validate-next.log
+
+## recent commits
+70bfaa8 docs(P07): close planner preflight phase
+e7246c0 docs(P06): close baseline oracle phase
+240ace3 docs(P05): close runtime driver phase
+d6616be record runtime-eve certification metadata
+4b77330 certify runtime-eve adapter and fallback precedence
+344749a feat(runtime): add fallback policy and legacy CLI driver
+3fd026a docs(P05-T01): refresh RuntimeDriver closeout evidence
+1a44cef fix(core): preserve runtime-local final-output state
+9fc6a9d feat(core): add artifact(handle) final-output mode + e2e lifecycle test
+8220e37 docs(P05-T01): Phase 5 closeout ledger, evidence index, and HANDOFF

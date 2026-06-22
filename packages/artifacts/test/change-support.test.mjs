@@ -264,6 +264,8 @@ function taskContract(id, currentSpec, change, oracle, artifactInputs, overrides
     title: `${id} task`,
     objective: "Implement deterministic change support artifacts.",
     requirementIds: [currentSpec.document.primaryRequirementId],
+    wave: "A",
+    agents: ["taskgraph-planner"],
     dependencies: [],
     context: {
       specRefs: [currentSpec.reference],

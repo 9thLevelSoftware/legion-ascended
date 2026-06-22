@@ -226,6 +226,8 @@ function taskContract(requirementId, oracleId, currentSpec, change, artifactInpu
     title: `${requirementId} archive task`,
     objective: `Implement and verify ${requirementId}.`,
     requirementIds: [requirementId],
+    wave: "A",
+    agents: ["archive-planner"],
     dependencies: [],
     context: {
       specRefs: [currentSpec.reference],
