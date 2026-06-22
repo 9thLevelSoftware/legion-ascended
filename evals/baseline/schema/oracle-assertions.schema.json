@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legion oracle assertions schema",
+  "type": "object",
+  "required": ["schema_version", "scenario_id", "visible_to_worker", "critical_assertions", "calibration"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scenario_id": { "type": "string", "pattern": "^[a-z0-9-]+\.v\d+$" },
+    "visible_to_worker": { "const": false },
+    "critical_assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["known_good", "known_bad"],
+      "properties": {
+        "known_good": { "type": "string", "minLength": 1 },
+        "known_bad": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

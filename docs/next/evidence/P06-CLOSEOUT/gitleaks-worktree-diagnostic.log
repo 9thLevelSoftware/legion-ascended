@@ -1,0 +1,6 @@
+command=gitleaks detect --source . --no-git --redact --no-banner --report-format json
+exit_code=1
+classification=diagnostic-only; not used as the P06 closeout gate because it scans pre-existing packaged markdown outside the P06 diff.
+findings_count=3
+findings=agents/marketing-social-platform-specialist.md:67 linkedin-client-id; skills/memory-manager/SKILL.md:761 generic-api-key; skills/review-evaluators/SKILL.md:649 generic-api-key
+p06_gate=docs/next/evidence/P06-CLOSEOUT/gitleaks-p06-diff.log passed with no leaks found.

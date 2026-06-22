@@ -34,7 +34,7 @@
 | --- | --- |
 | Architecture feasibility | After Phase 0 ✓ |
 | Typed foundation | After Phase 2 ✓ |
-| Durable operational kernel | After Phase 5 |
+| Durable operational kernel | After Phase 5 ✓ |
 | CLI-first MVP | After Phase 8 |
 | Accepted change lifecycle | After Phase 9 |
 | Production lifecycle | After Phase 10 |
@@ -95,11 +95,14 @@ When implementing, compare against original Legion (v8) at:
 | P05-T04 | t_1e2a51f0 | **otrlead** | DONE | T02,T03 |
 
 ### Phase 6: Baseline Specification and Oracle Pipeline
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-06/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P06-T01 | t_5008bcfb | legionworker | todo | P05-T04 |
-| P06-T02 | t_a924dd03 | legionworker | todo | T01 |
-| P06-T03 | t_b7f23936 | **otrlead** | todo | T02 |
+| P06-T01 | t_5008bcfb | legionworker | DONE | P05-T04 |
+| P06-T02 | t_a924dd03 | legionworker | DONE | T01 |
+| P06-T03 | t_b7f23936 | **otrlead** | DONE | T02 |
 
 ### Phase 7: Planner Task Contracts and Preflight
 | Task | ID | Assignee | Status | Dependencies |
@@ -153,7 +156,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 5:** 22 tasks (P03-T01 through P05-T04)
-- **Remaining tasks:** 25 (18 worker tasks, 7 review/closeout tasks)
-- **Current:** P06-T01 is dependency-gated on P05-T04 closeout and is next after Phase 5 completion
+- **Completed through Phase 6:** 25 tasks (P03-T01 through P06-T03)
+- **Remaining tasks:** 22 (15 worker tasks, 7 review/closeout tasks)
+- **Current:** P07-T01 is dependency-gated on P06-T03 closeout and is next after Phase 6 completion
 - **Final:** P13-T04 (GA decision)

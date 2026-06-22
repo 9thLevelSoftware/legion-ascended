@@ -1,0 +1,148 @@
+phase: 6
+phase_id: P06
+hash_basis: "SHA-256 over artifact bytes after P06-T03 closeout finalization; this index is excluded to avoid self-referential hashing."
+entries:
+  - task: P06-T01
+    artifact: docs/next/baseline/BENCHMARK-CORPUS.md
+    description: "Baseline corpus governance document naming the canonical manifest, hidden oracle material, fixture hashes, and scenario families"
+    sha256: 303460e6a6230a82c03ef583414a70e3a268b1038dfd2e7f0c938b8b4820e307
+  - task: P06-T01
+    artifact: docs/next/baseline/SCORING-RUBRIC.md
+    description: "Scoring rubric aligned to deterministic and judged baseline dimensions plus hidden oracle assertions"
+    sha256: 318c52e15bcaf2e400f70b31af02c83ff4a2ace01547afedd5ed34617be7a73c
+  - task: P06-T01
+    artifact: docs/next/baseline/V8-MEASUREMENT-HARNESS.md
+    description: "Measurement harness document referencing the canonical manifest and oracle assertion schema"
+    sha256: a766f29e45bb4338550f66ac581f737dda6751164fe794a8965205dfbdc57669
+  - task: P06-T01
+    artifact: evals/baseline/README.md
+    description: "Baseline package README documenting manifest, schemas, fixture hashes, and harness usage"
+    sha256: 579047138cf538e2ad77866f0cf721c45f8fb38bf33ee7d9d43f366d767aba4d
+  - task: P06-T01
+    artifact: evals/baseline/manifest.yaml
+    description: "Canonical baseline corpus manifest for legion-v8-baseline-corpus@1.0.0"
+    sha256: 0f612bb7d06893b819b7f483387a965f02bf3d09b80fcb83de27d57c57d9598c
+  - task: P06-T01
+    artifact: evals/baseline/run-manifest-template.yaml
+    description: "Run manifest template aligned to baseline manifest and oracle policy"
+    sha256: 1c10888340a9775da0944415987e06d382dbdfcaa1dad96add76f512a54dc6a7
+  - task: P06-T01
+    artifact: evals/baseline/fixture-hashes.sha256
+    description: "Lowercase SHA-256 fixture hash manifest over LF-normalized UTF-8 text and POSIX-relative paths"
+    sha256: d6290f8a51c13f781aa9bb315fbcd71e62d8dd1adfdcb332df213ba46250d45c
+  - task: P06-T01
+    artifact: evals/baseline/schema/corpus-manifest.schema.json
+    description: "Alias corpus-manifest schema preserving a sealed pointer to the canonical manifest"
+    sha256: c76650f97c3ed154727e5f4b7ea7ff735e908f38162f512285d6f8965a36d200
+  - task: P06-T01
+    artifact: evals/baseline/schema/manifest.schema.json
+    description: "Canonical baseline corpus manifest JSON schema"
+    sha256: 36b7b9fcfc48dc7fcd1986126bd724ab26ad607a22ee54ebbf27038175696703
+  - task: P06-T01
+    artifact: evals/baseline/schema/oracle-assertions.schema.json
+    description: "Evaluator-only oracle assertions schema requiring visible_to_worker false"
+    sha256: 79a91003b849a908d0d61baf8203b73545b57967ba77c3a4c6a2788f2bad50ae
+  - task: P06-T01
+    artifact: evals/baseline/schema/score.schema.json
+    description: "Score schema updated for deterministic/judged baseline scoring and auditability"
+    sha256: 645d30912f7cb9038468482b86a381c5cde1d2e6bb46ed8ac54283cb8697ae55
+  - task: P06-T01
+    artifact: scripts/baseline/README.md
+    description: "Baseline harness operator notes aligned to the Phase 6 canonical manifest"
+    sha256: 50d860e8e205ef6792cbb0b6db90750a91ff7879830ab30275bd2e850f38677b
+  - task: P06-T01
+    artifact: scripts/baseline/capture-run.ps1
+    description: "PowerShell capture runner updated for canonical manifest/hash handling"
+    sha256: 086b703fe201d3d54ae1d6bfc20a30c15d5a84356eabe7c5a9644d1797aea97e
+  - task: P06-T01
+    artifact: tests/baseline-spec.test.mjs
+    description: "Baseline-spec regression tests covering manifest governance, hidden oracles, and fixture hash canonicalization"
+    sha256: 20e579784bd315478258a4557f07f3bdb132d8d92f20cb55e6246ae2c0fd4012
+  - task: P06-T02
+    artifact: packages/artifacts/src/oracles/service.ts
+    description: "Oracle artifact service enforcing revisioned and reviewable oracle writes"
+    sha256: bb59a8d9c09885378a70cd30eb56bb0bf935c3872775a2f6e1d60cfb581659c2
+  - task: P06-T02
+    artifact: packages/artifacts/src/taskgraphs/service.ts
+    description: "Taskgraph service binding exact artifact inputs and manifest hashes"
+    sha256: 6d6881abb10ab432485eaaeb1289c18743068cee68bbdd3febbcf06df83e2697
+  - task: P06-T02
+    artifact: packages/artifacts/src/evidence-index/service.ts
+    description: "Evidence-index service enforcing run/review provenance and manifest-hash revalidation"
+    sha256: c61227e1a9fdb57a000775d77f89958c23afde916efbd269a269fb11f9789483
+  - task: P06-T02
+    artifact: packages/artifacts/test/change-support.test.mjs
+    description: "Artifact service regression tests for oracle/taskgraph/evidence-index provenance behavior"
+    sha256: 44ce567fea0591b0a38e7b430748ce18a627f0e922d3bd5df4c6750cb74a0505
+  - task: P06-T02
+    artifact: docs/next/evidence/P06-T02/completion-report.yaml
+    description: "P06-T02 completion report with oracle-pipeline acceptance and verification summary"
+    sha256: 8d31a8f5574fc6d38b315a1c78e8b375ea5d39247bd8702ad6a184b4dfcbba30
+  - task: P06-T02
+    artifact: docs/next/evidence/P06-T02/full-validation.log
+    description: "P06-T02 validate-next transcript"
+    sha256: abebafeb70a7a14404165c6abe931a0aa1e8d0d957079b1ed6a13223ca526562
+  - task: P06-T02
+    artifact: docs/next/evidence/P06-T02/oracle-taskgraph-evidence-test.log
+    description: "P06-T02 @legion/artifacts test transcript"
+    sha256: 42355891e997afdc168e5d50ce2e130e92c2ae1f0e042d222b33ef8205c4b530
+  - task: P06-T02
+    artifact: docs/next/evidence/P06-T02/oracle-taskgraph-proof.json
+    description: "P06-T02 oracle/taskgraph/evidence-index proof manifest"
+    sha256: 78eacabc849b8a2cef73f335d3eb6f46e1273cacf2c3ef80a5ca6226a21d57c2
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/git-status.log
+    description: "Closeout git status, diff stat, name-status, and recent commit capture"
+    sha256: 14d71e0c4d1382c40d4141e30d496c8ad3936e830fdfc9bb13f98bfaf6494ffc
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/baseline-node-check.log
+    description: "Closeout baseline-spec JavaScript syntax check transcript"
+    sha256: 0f24c9b9c57dda2b7dcd626469d9a3038082cba48957033bdeb114f910973132
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/artifacts-test.log
+    description: "Closeout @legion/artifacts package test transcript showing 59 pass"
+    sha256: 0df77702af868ed8a4898e5dd65aec8208c7bf17577438b34447f4e19011e129
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/typecheck.log
+    description: "Closeout workspace typecheck transcript"
+    sha256: 43e015cfdbabb03e4778b343e322cab148f93fb464eba01d7647163ec830c905
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/workspace-tests.log
+    description: "Closeout recursive workspace test transcript showing 537 pass"
+    sha256: 5fcd0019b91ba6354f7395a1c8393c336737b130f1aa0451c4fc89f271e6a4a1
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/validate-next.log
+    description: "Closeout validate-next transcript with all gates passing"
+    sha256: 1ddf1d7ff1f767adc0f8428541e7cc14cb33953c27d6970570a5c6c6a20af4ef
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/gitleaks-p06-diff.log
+    description: "Closeout targeted P06 diff secret scan transcript showing no leaks"
+    sha256: 116840c5f44031e8b7d44857c354681a41fbf1b4078a13a7abe4fdd692d09720
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/gitleaks-worktree-diagnostic.log
+    description: "Diagnostic broad worktree gitleaks note classifying pre-existing non-P06 findings"
+    sha256: b1b01cd17635c7c3300bd374af622b576711de207fe4f4ffeabc97905005bac3
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/command-summary.env
+    description: "Closeout command exit-code and timestamp summary"
+    sha256: d67293dda401caf8b87fa187be958b47a20600585e7ae601f7a593a75f44f8cb
+  - task: P06-CLOSEOUT
+    artifact: docs/next/evidence/P06-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 6 closeout integration report"
+    sha256: 079f9cf9791c75db2d2f9cbe16df42a280c27d4d2cd9979677d3bf0df798e94d
+  - task: P06-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-06-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 6 review with final PASS verdict"
+    sha256: e7b08f1af80f282438729f1e15be180d503f927728a526cce147d88c13a80022
+  - task: P06-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-06/ledger.yaml
+    description: "Phase 6 ledger marked DONE with decisions, task statuses, evidence bundle, and blockers cleared"
+    sha256: 13fdc5ed0e59bbaa2d543e6cf78ef1eaf8fd05f3c87ca263db08f93862e52ea1
+  - task: P06-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-06/HANDOFF.md
+    description: "Phase 6 handoff to Phase 7 with baseline/oracle cut-line assumptions"
+    sha256: 213655137e0fa62ca46117a8b05d60cac7232063d3c81c5ea58f2c07f5ac3a00
+  - task: P06-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 6 complete and point at P07-T01 as next work"
+    sha256: 7bab807b8865d8c9737a0aefc2326162db219c4fccdf46995686e429fee1723d

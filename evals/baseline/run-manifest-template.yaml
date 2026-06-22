@@ -1,21 +1,15 @@
 schema_version: 1
-run_id: P00-T06-EXAMPLE-greenfield-feature-v1-codex-cli-r1
-scenario_id: greenfield-feature.v1
-fixture_id: greenfield-feature.v1
-baseline:
-  source_repository: C:/Users/dasbl/Documents/legion
-  tag: v8-baseline-20260619
-  commit: 855e975beec3bac6dc06db598081b6ac11ea8e14
-host:
-  name: codex-cli
-  adapter: v8-command-surface
-  os: Windows 11
-model:
-  provider: unavailable-in-template
-  name: unavailable-in-template
+run_id: generated-per-run
+scenario_id: selected-from-evals-baseline-manifest
+host: recorded-per-run
+model: recorded-per-run
+adapter: recorded-per-run
+repeat: 1
+baseline_commit: recorded-per-run
+fixture_hashes: evals/baseline/fixture-hashes.sha256
 timestamps:
-  started_at: "2026-06-19T00:00:00-04:00"
-  ended_at: "2026-06-19T00:00:00-04:00"
+  started_at: recorded-per-run
+  ended_at: recorded-per-run
 telemetry:
   tokens: { status: unavailable, value: null, reason: host did not expose telemetry }
   cost: { status: unavailable, value: null, reason: host did not expose telemetry }
@@ -24,7 +18,6 @@ events: []
 terminal_status: dry-run
 artifacts:
   transcript: transcript.redacted.log
-  fixture_hashes: fixture-hashes.sha256
   git_before: git-before.txt
   git_after: git-after.txt
   score: score.json

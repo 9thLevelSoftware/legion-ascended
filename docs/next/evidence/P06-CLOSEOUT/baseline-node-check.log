@@ -1,0 +1,5 @@
+command=node --check tests/baseline-spec.test.mjs
+started_at=2026-06-22T04:29:28Z
+
+exit_code=0
+finished_at=2026-06-22T04:29:28Z

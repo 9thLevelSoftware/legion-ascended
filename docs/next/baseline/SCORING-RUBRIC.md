@@ -24,4 +24,4 @@ Total score is 100. A scenario fails regardless of numeric score when a critical
 
 ## Calibration
 
-The rubric rejects compile-only and overbroad solution classes. `security-sensitive.v1` and `interrupted-resumed.v1` seed critical failures so the rubric can detect security weakening, ungradeable interruption, and duplicate-dispatch behavior.
+The rubric rejects compile-only and overbroad solution classes. `security-sensitive.v1` and `interrupted-resumed.v1` seed critical failures so the rubric can detect security weakening, ungradeable interruption, and duplicate-dispatch behavior. The hidden oracle assertions are stored in `evals/fixtures/evaluator/*/assertions.yaml` and validated by `evals/baseline/schema/oracle-assertions.schema.json`.

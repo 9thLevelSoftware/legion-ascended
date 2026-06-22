@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legion baseline corpus manifest schema",
+  "type": "object",
+  "required": ["schema_version", "corpus_id", "corpus_version", "status", "created_at", "baseline", "policy", "scenarios", "calibration"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "corpus_id": { "type": "string", "minLength": 1 },
+    "corpus_version": { "type": "string", "pattern": "^\d+\.\d+\.\d+$" },
+    "status": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "minLength": 1 },
+    "baseline": {
+      "type": "object",
+      "required": ["source_repository", "tag", "commit", "package_version"],
+      "properties": {
+        "source_repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "package_version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "public_inputs_root",
+        "evaluator_material_root",
+        "hidden_material_visible_to_worker",
+        "evaluator_assertions_schema",
+        "fixture_hashes",
+        "fixture_hash_normalization",
+        "scoring_rubric"
+      ],
+      "properties": {
+        "public_inputs_root": { "type": "string", "minLength": 1 },
+        "evaluator_material_root": { "type": "string", "minLength": 1 },
+        "hidden_material_visible_to_worker": { "const": false },
+        "evaluator_assertions_schema": { "type": "string", "minLength": 1 },
+        "fixture_hashes": { "type": "string", "minLength": 1 },
+        "fixture_hash_normalization": { "type": "string", "minLength": 1 },
+        "scoring_rubric": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["id", "family", "manifest", "public_input", "evaluator_material", "risk_tier"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+\.v\d+$" },
+          "family": {
+            "enum": [
+              "greenfield-feature",
+              "brownfield-feature",
+              "bug-fix",
+              "refactor",
+              "api-change",
+              "ui-flow",
+              "security-sensitive",
+              "interrupted-resumed"
+            ]
+          },
+          "manifest": { "type": "string", "minLength": 1 },
+          "public_input": { "type": "string", "minLength": 1 },
+          "evaluator_material": { "type": "string", "minLength": 1 },
+          "risk_tier": { "enum": ["R1", "R2", "R3"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["noop_fixture", "evidence_directory"],
+      "properties": {
+        "noop_fixture": { "type": "string", "minLength": 1 },
+        "evidence_directory": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

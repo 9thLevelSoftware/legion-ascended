@@ -51,9 +51,13 @@ $fixtureHashFile = Join-Path $runDirectory "fixture-hashes.sha256"
 Get-ChildItem -LiteralPath (Join-Path $workspace "public-fixture") -Recurse -File |
   Sort-Object FullName |
   ForEach-Object {
-    $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
-    $relative = Resolve-Path -LiteralPath $_.FullName -Relative
-    "$($hash.Hash)  $relative"
+    $contents = [System.IO.File]::ReadAllText($_.FullName)
+    $normalized = $contents.Replace("`r`n", "`n").Replace("`r", "`n")
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($normalized)
+    $hashBytes = [System.Security.Cryptography.SHA256]::HashData($bytes)
+    $hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant()
+    $relative = [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName).Replace('\\', '/')
+    "$hash  $relative"
   } |
   Set-Content -LiteralPath $fixtureHashFile -Encoding ascii
 

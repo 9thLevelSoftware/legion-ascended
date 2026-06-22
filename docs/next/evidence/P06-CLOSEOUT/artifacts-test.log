@@ -1,0 +1,78 @@
+command=pnpm --filter @legion/artifacts test
+started_at=2026-06-22T04:18:09Z
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+✔ P02-T07 previews and archives an accepted change into current truth (520.45675ms)
+✔ P02-T07 archives removal of a primary requirement while preserving remaining requirements (587.924708ms)
+✔ P02-T07 refuses to archive changes that are not accepted (330.542708ms)
+✔ P02-T07 refuses stale current-spec bases before mutating current truth (380.090834ms)
+✔ P02-T07 rollback does not overwrite concurrent current truth updates (432.55025ms)
+✔ P02-T07 refuses missing accepted evidence (336.566833ms)
+✔ P02-T07 rolls back current truth when archive metadata write fails (345.618042ms)
+✔ P02-T07 retry after a recorded archive is idempotent (219.392458ms)
+✔ P02-T07 refuses idempotent archive retry when current truth drifted (177.163625ms)
+✔ canonical project artifact paths reject ambiguous or escaping input (2.758458ms)
+✔ stable protocol JSON sorts keys without locale-dependent ordering (0.173375ms)
+✔ repository discovery and path resolution stay beneath the real project root (18.14325ms)
+✔ JSON artifact reads return protocol validation diagnostics with source paths (35.643125ms)
+✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (112.987333ms)
+✔ revisioned writes reject concurrent writers and stale superseded content (153.905416ms)
+✔ P02-T05 creates revisioned oracle metadata and manifest hashes change after oracle revision (447.343708ms)
+✔ P02-T05 oracle manifest reports invalid oracle filenames at their actual artifact path (105.266042ms)
+✔ P02-T05 oracle reads reject artifacts whose embedded oracle ID disagrees with the requested path (396.966ms)
+✔ P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order (696.118708ms)
+✔ P02-T05 taskgraph rejects empty or duplicate artifact inputs with diagnostics (261.14275ms)
+✔ P02-T05 taskgraph rejects copied identities and stale manifest hashes on read (310.91075ms)
+✔ P02-T05 evidence index rejects incomplete provenance and records accepted evidence references (304.177667ms)
+✔ P02-T05 evidence index rejects empty inputs, copied identities, and stale manifest hashes (302.708042ms)
+✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (356.149917ms)
+✔ P02-T04 rejects conflicting delta operations before writing a bundle (144.885708ms)
+✔ P02-T04 detects stale current-spec bases during change validation (366.001167ms)
+✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (283.131ms)
+✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (128.5845ms)
+✔ P02-T04 preflights bundle artifact paths before writing partial deltas (140.087625ms)
+✔ P02-T04 validates add deltas against current truth (288.593125ms)
+✔ P02-T04 rejects add bundle creation when the target already exists in unlisted current truth (134.969625ms)
+✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (272.78775ms)
+✔ P02-T04 rejects side artifacts whose change IDs disagree with the bundle path (478.722167ms)
+✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (236.01225ms)
+✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (83.408292ms)
+✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (213.930292ms)
+✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (33.482125ms)
+✔ P02-T02 manifest schema reports malformed input without throwing (0.845375ms)
+✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (128.851708ms)
+✔ P02-T09 init allows migrated legacy protocol namespace while preserving collision checks (145.939834ms)
+✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (87.907583ms)
+✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (483.08075ms)
+✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (213.097875ms)
+✔ P02-T03 ignores non-file .md entries when listing current specs (141.659916ms)
+✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (91.62175ms)
+✔ P02-T03 preserves non-structural markdown headings inside current spec sections (116.044542ms)
+✔ P02-T03 rejects reserved current spec section headings inside section content (108.520167ms)
+✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (187.9245ms)
+✔ P02-T03 classifies semantic spec index diffs (0.992958ms)
+✔ P02-T03 blocks stale edits and supports rename and deprecate operations (232.173959ms)
+✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (90.873042ms)
+✔ P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically (542.03ms)
+✔ P02-T06 accepts shared oracle coverage without false orphan diagnostics (479.802209ms)
+✔ P02-T06 reports calibrated broken traceability chains with exact diagnostics (403.447ms)
+✔ P02-T06 applies trace integrity checks to evidence references (402.502167ms)
+✔ P02-T06 reports stale artifact input revisions after downstream sources change (423.34175ms)
+✔ P02-T06 cycle diagnostics name only nodes participating in the cycle (449.371875ms)
+✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (300.725125ms)
+✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (213.717083ms)
+ℹ tests 59
+ℹ suites 0
+ℹ pass 59
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3515.933916
+
+exit_code=0
+finished_at=2026-06-22T04:18:14Z
