@@ -1,0 +1,10 @@
+name	command	exit_code	evidence
+cli-e2e-test	pnpm --filter @legion/cli-e2e test	0	docs/next/evidence/P10-CLOSEOUT/cli-e2e-test.log
+core-test	pnpm --filter @legion/core test	0	docs/next/evidence/P10-CLOSEOUT/core-test.log
+board-test	pnpm --filter @legion/board test	0	docs/next/evidence/P10-CLOSEOUT/board-test.log
+store-sqlite-test	pnpm --filter @legion/store-sqlite test	0	docs/next/evidence/P10-CLOSEOUT/store-sqlite-test.log
+protocol-test	pnpm --filter @legion/protocol test	0	docs/next/evidence/P10-CLOSEOUT/protocol-test.log
+artifacts-test	pnpm --filter @legion/artifacts test	0	docs/next/evidence/P10-CLOSEOUT/artifacts-test.log
+typecheck	pnpm run typecheck	0	docs/next/evidence/P10-CLOSEOUT/typecheck.log
+workspace-tests	pnpm run test	0	docs/next/evidence/P10-CLOSEOUT/workspace-tests.log
+validate-next	pnpm run validate:next	0	docs/next/evidence/P10-CLOSEOUT/validate-next.log

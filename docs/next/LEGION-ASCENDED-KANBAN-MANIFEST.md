@@ -37,7 +37,7 @@
 | Durable operational kernel | After Phase 5 ✓ |
 | CLI-first MVP | After Phase 8 ✓ |
 | Accepted change lifecycle | After Phase 9 ✓ |
-| Production lifecycle | After Phase 10 |
+| Production lifecycle | After Phase 10 ✓ |
 | Operator/UI beta | After Phase 11 |
 | Migration/host beta | After Phase 12 |
 | General availability | After Phase 13 |
@@ -134,11 +134,14 @@ When implementing, compare against original Legion (v8) at:
 | P09-T03 | t_095363c6 | **otrlead** | DONE | T02 |
 
 ### Phase 10: Release Observation and Rollback
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead; Production Lifecycle cut line reached)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-10/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
 | P10-T01 | t_ec8b37af | legionworker | DONE | P09-T03 |
 | P10-T02 | t_4e06d5c7 | legionworker | DONE | T01 |
-| P10-T03 | t_b98d1428 | **otrlead** | todo | T02 |
+| P10-T03 | t_b98d1428 | **otrlead** | DONE | T02 |
 
 ### Phase 11: Kanban Dashboard and Multi-Project Operations
 | Task | ID | Assignee | Status | Dependencies |
@@ -164,7 +167,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 10:** 36 tasks (P03-T01 through P10-T02)
-- **Remaining tasks:** 11 (8 worker tasks, 3 review/closeout tasks)
-- **Current:** P10-T02 is DONE; P10-T03 (independent Phase 10 closeout review) is next, dependency-gated on P10-T02
+- **Completed through Phase 10:** 37 tasks (P03-T01 through P10-T03)
+- **Remaining tasks:** 10 (7 worker tasks, 3 review/closeout tasks)
+- **Current:** P10-T03 is DONE; P11-T01 (Kanban dashboard and multi-project operations) is next, dependency-gated on P10-T03
 - **Final:** P13-T04 (GA decision)

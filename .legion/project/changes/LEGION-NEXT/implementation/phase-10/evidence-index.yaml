@@ -1,6 +1,6 @@
 phase: 10
 phase_id: P10
-hash_basis: "SHA-256 over artifact bytes after P10-T02 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index for the same reason."
+hash_basis: "SHA-256 over artifact bytes after P10-T03 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index and the generated gitleaks log for the same reason."
 entries:
   - task: P10-T01
     artifact: packages/core/src/release-observation/contract.ts
@@ -186,7 +186,7 @@ entries:
   - task: P10-T02
     artifact: docs/next/evidence/P10-T02/gitleaks-p10-t02-diff.log
     description: "gitleaks scan of the Phase 10-T02 diff — no leaks found."
-    sha256: 2dfe7f553e7042636d19b63e6e9f84b52af17af072cd239d6ad9d3782502c75f
+    sha256: b757ae977b6da9f514ae5589c26d071367c30be879d26f54c5438250289dad66
   - task: P10-T02
     artifact: docs/next/evidence/P10-T02/release-observation-cli-snapshot.json
     description: "canonical serialized release-observation CLI aggregate output from a happy-path run."
@@ -196,16 +196,79 @@ entries:
     description: "Full workspace test transcript — all packages pass."
     sha256: e76e2a798eb1105c19f2adfb2b790c80373ea190c7779f0a6358338056c18a37
 
-  - task: P10-T02
-    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
-    description: "Phase 10 closeout handoff document — P10-T01 + P10-T02 deliverable summary, verification evidence, and downstream-phase cut-line invariants."
-    sha256: 03aae79b45e960a52a8f76721f6edc82744472eccda19e488ed873c82447fe2c
-  - task: P10-T02
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/cli-e2e-test.log
+    description: "P10 closeout CLI e2e transcript — 13/13 pass, including release-observation aggregate/status/rebuild/verify coverage."
+    sha256: df489c474004068c6a197529615f6c9233876ee2ad076cf1ce3b875554a09f35
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/core-test.log
+    description: "P10 closeout @legion/core test transcript — 245/245 pass."
+    sha256: 19d84d4c6f3ed14faca042819a9bfa38325afe9ef84f3170f72bf10e1c658b41
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/board-test.log
+    description: "P10 closeout @legion/board test transcript — 53/53 pass."
+    sha256: 8ce2ebe074b92c92fc08400c67df44e02aeb6b2279458f6b518fe13bb4fbed03
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/store-sqlite-test.log
+    description: "P10 closeout @legion/store-sqlite test transcript — 144/144 pass."
+    sha256: f078605f1c4a4f4cfac0303b11977a2cb7bf765d229243758b760bd82adbd44c
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/protocol-test.log
+    description: "P10 closeout @legion/protocol test transcript — 55/55 pass."
+    sha256: 045b32c3ea0983b91fc593e52bc447f9e398f23da4deb8fb81e761836ebd613c
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/artifacts-test.log
+    description: "P10 closeout @legion/artifacts test transcript — 59/59 pass."
+    sha256: 621fc1b8487a83cae57441dfe895f14a9e7c3718d0c34c3f5a139f6b349ceee8
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/typecheck.log
+    description: "P10 closeout workspace typecheck transcript — all 10 workspace projects build/typecheck clean."
+    sha256: ece8a57514b0bb11850ca09300b2afe1baea414d5c3be8647b08a8ddb301cb8b
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/workspace-tests.log
+    description: "P10 closeout full workspace test transcript — root + recursive package suites passed, including apps/cli-e2e 13/13."
+    sha256: 14cb73b338b7967c925794885dfc1ebf0f15af8be0d8e51d207535e3ce05fae8
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/validate-next.log
+    description: "P10 closeout final validate-next transcript — all gates pass."
+    sha256: ad363e548bd3b2dcfbe86226f57a828caf481250ad1ab4ca285824a82c4c4c5a
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/gitleaks-p10-diff.log
+    description: "P10 closeout final Phase 10 diff gitleaks pipe scan — no leaks found; evidence-index and generated gitleaks log excluded to avoid self-reference."
+    sha256: 4fe26da4bc203613da1dfaa1929a2d53ac9af70a1e1cafbd5d378798f5a9c8ff
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/command-summary.env
+    description: "P10 closeout command, version, branch, base, and timestamp summary."
+    sha256: 4415c28933b06f00ccc5e3bac7d033e60c00889a5b9c78b008c9ba44a619203e
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/command-results.tsv
+    description: "P10 closeout command exit-code table."
+    sha256: b8d49d8bbb562f5293d248eca8cfb79bfbfefcf87dd23b8e2f5b7245bf3bf708
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/git-status.log
+    description: "P10 closeout pre-commit git status evidence."
+    sha256: 150170a83ad4af587929533aa148e91678fceca1d25fd705a6fc547690af1481
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/git-diff-stat.log
+    description: "P10 closeout staged diff stat evidence."
+    sha256: 694bef0fe30fee65b496fdceac036bd04501d91c231f6c5998197df9e4abc453
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 10 closeout integration report."
+    sha256: b63370ee3c3f163dd46876e2ec72b5a789e16fea4a518674da2e44e7ad3c10bb
+  - task: P10-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 10 closeout review with PASS verdict."
+    sha256: 2a4b06bbb038c26b534455c144abd18229a8f71b21a0fbe2214746e545097201
+  - task: P10-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml
-    description: "Phase 10 ledger — P10-T01 + P10-T02 status, run ids, evidence paths, and phase-10 handoff summary."
-    sha256: fa1055974cd5f9d1205876e496d656ec86d3498148dfbf16a1c7a1444dd44e64
-
-  - task: P10-T02
+    description: "Final Phase 10 ledger marked DONE with P10-T01 through P10-T03 complete and blockers cleared."
+    sha256: b3bf58a256199ddf542e4644d661cbd0ab286b2ae46018250a1c08fd27b59636
+  - task: P10-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
+    description: "Final Phase 10 handoff to Phase 11 and Production Lifecycle cut-line assumptions."
+    sha256: 36854a2515631dc93fa3b471695ed24efc1bc8700b71dcabe0220c2fb4358950
+  - task: P10-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
-    description: "LEGION-ASCENDED kanban manifest — P10-T02 marked DONE; summary line updated to reflect 36 completed tasks and the P10-T03 reviewer handoff."
-    sha256: 1a91f70fafc16870dc9cd145943004b78240e827a81d2a4b769190dcee817e23
+    description: "Kanban manifest updated to mark Phase 10 complete, Production Lifecycle reached, and P11-T01 current."
+    sha256: 4563955b7f36e84a3361123f459fdafd2b95ea96d39d32e912302941a55988a0
