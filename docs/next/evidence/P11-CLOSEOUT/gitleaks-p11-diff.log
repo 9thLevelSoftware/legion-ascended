@@ -1,0 +1,12 @@
+==> git diff --cached --binary 4977cad89a29f1bbad60ee7e940a6f3825de7518 -- ... | gitleaks detect --pipe --no-color --redact
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+10:03AM INF scanned ~794003 bytes (794 KB) in 348ms
+10:03AM INF no leaks found
+
+<exit_code>0</exit_code>

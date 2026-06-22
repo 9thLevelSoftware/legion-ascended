@@ -1,0 +1,69 @@
+==> pnpm --filter @legion/protocol test
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+$ tsc -p tsconfig.json
+✔ P01-T09 versioned records fail closed without a valid schemaVersion (1.064708ms)
+✔ P01-T09 canonical compatibility fixtures remain readable (3.848667ms)
+✔ P01-T09 protocol negotiation rejects unsupported old and future versions (0.333833ms)
+✔ P01-T09 explicit migrations apply in order and are idempotent when repeated (1.153625ms)
+✔ P01-T09 migration failures do not partially mutate caller input (0.603542ms)
+✔ P01-T09 downcasts require explicit information-preservation evidence (0.269208ms)
+✔ P01-T09 compatibility reports include matrix and evolution policy text (0.383459ms)
+✔ P01-T04 valid entity fixture corpus parses and serializes identically (8.082583ms)
+✔ P01-T04 entity schemas reject mutable operational state and missing required fields (1.564167ms)
+✔ P01-T04 change schemas keep current truth and proposed metadata distinct (0.506333ms)
+✔ P01-T04 trace references bind entity kind to matching ID prefix (0.4405ms)
+✔ review feedback: project IDs must match project slugs (2.079333ms)
+✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (1.850041ms)
+✔ review feedback: risk overrides must be internally consistent (1.199125ms)
+✔ review feedback: superseded requirements require replacement references (1.028291ms)
+✔ review feedback: decisions enforce audit fields and selected alternative consistency (1.00825ms)
+✔ review feedback: decision audit rules are preserved in generated JSON Schema (0.418125ms)
+✔ review feedback: oracle type and execution mode must agree (0.649708ms)
+✔ P01-T04 oracle ownership and protection are explicit (0.637875ms)
+✔ P01-T04 decisions can be superseded without rewriting history (0.5055ms)
+✔ P01-T04 invalid entity fixture cases are rejected (0.662166ms)
+✔ P01-T04 generated entity JSON schemas match committed artifacts (3.876083ms)
+✔ P01-T06 event fixture corpus parses and serializes identically (10.264292ms)
+✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.44ms)
+✔ P01-T06 event envelopes reject transport details and imperative payloads (2.272167ms)
+✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.532291ms)
+✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (1.563917ms)
+✔ P01-T06 API fixture corpus parses commands, results, and queries (3.755625ms)
+✔ P01-T06 every state-changing command has success and typed rejection results (0.152541ms)
+✔ review feedback: API refinements reject inconsistent command semantics (0.691292ms)
+✔ review feedback: missing command catalog entries fail validation instead of throwing (0.429125ms)
+✔ review feedback: unknown event and command discriminants fail without throwing (0.906958ms)
+✔ P01-T06 API contracts reject transport-specific response fields (0.838542ms)
+✔ P01-T06 generated event and API JSON schemas match committed artifacts (6.255ms)
+✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (0.48225ms)
+✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (13.170125ms)
+✔ P01-T05 keeps task contract, operational task, and run attempt separate (2.439083ms)
+✔ P01-T05 task contracts preflight dependency satisfaction, resource availability, and contract completeness (0.703875ms)
+✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.0915ms)
+✔ P01-T05 task run manifests are frozen after start (1.317083ms)
+✔ P01-T05 evidence and reviews can represent unknown or not verified results (0.644583ms)
+✔ P01-T05 review findings require evidence for blocking severity (1.798541ms)
+✔ P01-T05 approvals require explicit action scope and idempotency (0.530167ms)
+✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (0.606375ms)
+✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (1.502375ms)
+✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.562375ms)
+✔ P01-T05 invalid lifecycle fixture cases are rejected (1.4385ms)
+✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (7.713625ms)
+✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.02625ms)
+✔ canonical scalar primitives reject ambiguous representations (1.724ms)
+✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.944333ms)
+✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.209166ms)
+✔ common protocol structures are strict and versioned (0.731833ms)
+✔ generated primitive JSON schemas match committed artifacts (3.948334ms)
+✔ fixture corpus captures valid and invalid primitive examples (3.112083ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 180.114209
+
+<exit_code>0</exit_code>

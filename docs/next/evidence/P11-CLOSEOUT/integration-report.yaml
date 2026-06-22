@@ -1,0 +1,165 @@
+phase: P11
+status: PASS
+title: Kanban Dashboard and Multi-Project Operations closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: 4977cad89a29f1bbad60ee7e940a6f3825de7518
+head_before_closeout: 1ca46c6dc565e33d14450b716968298d0fee26d7
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T13:56:28Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local cli-e2e/core/board/store-sqlite/protocol/artifacts/typecheck/workspace/validate gates passed."
+  - "The roadmap's Windows rebuild prompt path for Phase 11 is not present in the macOS checkout; closeout relied on the Phase 10 handoff plus P11-T01/P11-T02 integration reports, code, snapshots, and verification transcripts."
+acceptance:
+  dashboard_and_approval_gate_operator_surface:
+    status: PASS
+    evidence:
+      - packages/board/src/dashboard/contract.ts
+      - packages/board/src/dashboard/reducer.ts
+      - packages/board/src/approval-gate/contract.ts
+      - packages/board/src/approval-gate/reducer.ts
+      - packages/store-sqlite/src/dashboard-projector.ts
+      - packages/store-sqlite/src/approval-gate-projector.ts
+      - packages/cli/src/commands/board/dashboard.ts
+      - packages/cli/src/commands/board/approval-gate.ts
+      - docs/next/evidence/P11-T01/dashboard-snapshot.json
+      - docs/next/evidence/P11-T01/approval-gate-snapshot.json
+    notes:
+      - "Dashboard projection is project-scoped, foreign-event-safe, deterministic, and content-addressed."
+      - "Approval-gate projection is change-scoped and fail-closed over whole-change plus release-observation evidence."
+      - "SQLite projectors replay/rebuild/verify through the projection store; CLI exposes status/rebuild/verify only."
+  portfolio_multi_project_operations:
+    status: PASS
+    evidence:
+      - packages/board/src/portfolio/contract.ts
+      - packages/board/src/portfolio/hash.ts
+      - packages/board/src/portfolio/reducer.ts
+      - packages/store-sqlite/src/portfolio-projector.ts
+      - packages/cli/src/commands/board/portfolio.ts
+      - packages/board/test/portfolio-reducer.test.mjs
+      - packages/store-sqlite/test/portfolio-projector.test.mjs
+      - apps/cli-e2e/test/cli-e2e.test.mjs
+      - docs/next/evidence/P11-T02/portfolio-snapshot.json
+    notes:
+      - "Portfolio projection is tenant-scoped, optional projectIds-scoped, foreign-event-safe, and content-addressed."
+      - "Public state includes per-project rollups, cross-project dependency edges, resource allocation ledger, and terminalProjectCount."
+      - "CLI portfolio status/rebuild/verify covers tenant-wide, scoped, missing-projection, and multi-project round-trip scenarios."
+  independent_review_actor_separation:
+    status: PASS
+    evidence:
+      - docs/next/reviews/PHASE-11-INDEPENDENT-REVIEW.md
+      - docs/next/evidence/P11-T01/integration-report.yaml
+      - docs/next/evidence/P11-T02/integration-report.yaml
+      - docs/next/evidence/P11-CLOSEOUT/integration-report.yaml
+    notes:
+      - "P11 implementation assignee was legionworker; P11 closeout reviewer is GPT-5.5 / otrlead."
+      - "No same-actor closeout/review issue blocks the Operator/UI Beta cut line."
+  phase_boundaries:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P11-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P11-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P11-CLOSEOUT/board-test.log
+      - docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+    notes:
+      - "@legion/board owns dashboard, approval-gate, and portfolio logical reducers and does not import SQLite persistence."
+      - "@legion/store-sqlite owns SQLite projection adapters."
+      - "@legion/cli owns operator command routing; provider/host-specific execution remains outside board/core."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P11-CLOSEOUT/cli-e2e-test.log
+      - docs/next/evidence/P11-CLOSEOUT/core-test.log
+      - docs/next/evidence/P11-CLOSEOUT/board-test.log
+      - docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+      - docs/next/evidence/P11-CLOSEOUT/protocol-test.log
+      - docs/next/evidence/P11-CLOSEOUT/artifacts-test.log
+      - docs/next/evidence/P11-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P11-CLOSEOUT/workspace-tests.log
+      - docs/next/evidence/P11-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log
+    notes:
+      - "@legion/cli-e2e: 21 pass / 0 fail."
+      - "@legion/core: 245 pass / 0 fail; @legion/board: 113 pass / 0 fail; @legion/store-sqlite: 171 pass / 0 fail."
+      - "@legion/protocol: 55 pass / 0 fail; @legion/artifacts: 59 pass / 0 fail."
+      - "Workspace typecheck passed across 10 projects."
+      - "Workspace tests passed across root and recursive package suites including apps/cli-e2e 21/21."
+      - "validate-next passed all project gates."
+      - "Final Phase 11 diff gitleaks pipe scan found no leaks."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-11/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-11/HANDOFF.md
+      - docs/next/reviews/PHASE-11-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P11-T01 through P11-T03 complete and blockers cleared."
+      - "Operator/UI Beta cut line is marked complete and Phase 12 begins at P12-T01."
+commands:
+  - name: cli-e2e-test
+    command: "pnpm --filter @legion/cli-e2e test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/cli-e2e-test.log
+    result: "21 pass / 0 fail"
+  - name: core-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/core-test.log
+    result: "245 pass / 0 fail"
+  - name: board-test
+    command: "pnpm --filter @legion/board test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/board-test.log
+    result: "113 pass / 0 fail"
+  - name: store-sqlite-test
+    command: "pnpm --filter @legion/store-sqlite test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+    result: "171 pass / 0 fail"
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/protocol-test.log
+    result: "55 pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/workspace-tests.log
+    result: "root + recursive package suites passed; cli-e2e 21/21 passed"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema generation, protocol docs, schema-doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p11-diff
+    command: "git diff --cached --binary 4977cad89a29f1bbad60ee7e940a6f3825de7518 -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml' ':!docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log' | gitleaks detect --pipe --no-color --redact"
+    exit_code: 0
+    evidence: docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log
+    result: "No leaks found in final Phase 11 diff scan; phase-10/phase-11 evidence indexes and generated gitleaks log excluded to avoid self-reference"
+blockers: []
+phase_12_handoff:
+  next_task: P12-T01
+  next_task_id: t_ca438233
+  summary: "Implement Host Bridges and V8 Migration on top of the completed Operator/UI Beta cut line."
+  contract_inputs_for_p12:
+    - "DashboardProjectionState keyed by dashboard:<projectId> is the canonical project-scoped operator read surface."
+    - "ApprovalGateProjectionState keyed by approval-gate:<projectId>:<changeId> is the canonical per-change verdict and trace-back surface."
+    - "PortfolioProjectionState keyed by portfolio:<tenantId> is the canonical tenant-scoped cross-project read surface."
+    - "Dashboard, approval-gate, and portfolio CLI status/rebuild/verify commands are stable JSON operator surfaces for bridge integration."
+  preserved_boundaries:
+    - "Do not mutate projection state in place; append board events and rebuild/verify projections."
+    - "Keep host-specific probes, V8 migration execution, notifications, and bridge commands in adapter layers; board/core remain deterministic and provider-neutral."
+    - "Carry Phase 8/9/10/11 content hashes forward so bridge/UI anomalies remain auditable."

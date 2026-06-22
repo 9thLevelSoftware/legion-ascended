@@ -1,0 +1,21 @@
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository [ahead 2]
+M  .legion/project/changes/LEGION-NEXT/implementation/phase-11/HANDOFF.md
+A  .legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml
+M  .legion/project/changes/LEGION-NEXT/implementation/phase-11/ledger.yaml
+M  docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+A  docs/next/evidence/P11-CLOSEOUT/artifacts-test.log
+A  docs/next/evidence/P11-CLOSEOUT/board-test.log
+A  docs/next/evidence/P11-CLOSEOUT/cli-e2e-test.log
+A  docs/next/evidence/P11-CLOSEOUT/command-results.tsv
+A  docs/next/evidence/P11-CLOSEOUT/command-summary.env
+A  docs/next/evidence/P11-CLOSEOUT/core-test.log
+A  docs/next/evidence/P11-CLOSEOUT/git-diff-stat.log
+A  docs/next/evidence/P11-CLOSEOUT/git-status.log
+A  docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log
+A  docs/next/evidence/P11-CLOSEOUT/integration-report.yaml
+A  docs/next/evidence/P11-CLOSEOUT/protocol-test.log
+A  docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+A  docs/next/evidence/P11-CLOSEOUT/typecheck.log
+A  docs/next/evidence/P11-CLOSEOUT/validate-next.log
+A  docs/next/evidence/P11-CLOSEOUT/workspace-tests.log
+A  docs/next/reviews/PHASE-11-INDEPENDENT-REVIEW.md

@@ -144,11 +144,14 @@ When implementing, compare against original Legion (v8) at:
 | P10-T03 | t_b98d1428 | **otrlead** | DONE | T02 |
 
 ### Phase 11: Kanban Dashboard and Multi-Project Operations
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead; Operator/UI Beta cut line reached)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-11/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
 | P11-T01 | t_249912d8 | legionworker | **DONE** | P10-T03 |
-| P11-T02 | t_86857911 | legionworker | todo | T01 |
-| P11-T03 | t_d7c20b33 | **otrlead** | todo | T02 |
+| P11-T02 | t_86857911 | legionworker | **DONE** | T01 |
+| P11-T03 | t_d7c20b33 | **otrlead** | **DONE** | T02 |
 
 ### Phase 12: Host Bridges and V8 Migration
 | Task | ID | Assignee | Status | Dependencies |
@@ -167,7 +170,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 11:** 38 tasks (P03-T01 through P11-T01)
-- **Remaining tasks:** 9 (6 worker tasks, 3 review/closeout tasks)
-- **Current:** P11-T01 (Kanban dashboard and multi-project operations) is DONE; P11-T02 (multi-project routing + approval inbox + JSON snapshots) is next
+- **Completed through Phase 11:** 40 tasks (P03-T01 through P11-T03)
+- **Remaining tasks:** 7 (5 worker tasks, 2 review/closeout tasks)
+- **Current:** Phase 11 is DONE; P12-T01 (Host Bridges and V8 Migration) is next
 - **Final:** P13-T04 (GA decision)

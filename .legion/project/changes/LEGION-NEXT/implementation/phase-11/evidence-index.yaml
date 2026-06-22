@@ -1,0 +1,224 @@
+phase: 11
+phase_id: P11
+hash_basis: "SHA-256 over artifact bytes after P11-T03 closeout finalization; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
+entries:
+  - task: P11-T01
+    artifact: packages/board/src/dashboard/contract.ts
+    description: "Dashboard projection contract: project-scoped DashboardProjectionState, task status counts, event timeline, release-observation pointers, approval pointers, and projection key helpers."
+    sha256: c3c94dfb512d44d13aef5daa3e45d2771a3e70fa81113faa3979f0d823b6b7a0
+  - task: P11-T01
+    artifact: packages/board/src/dashboard/hash.ts
+    description: "Deterministic SHA-256 hashing for dashboard projection states and canonical dashboard inputs."
+    sha256: b547cb34c31989166cc9be7f77c7ba2c4e0215f16b7b31dd42133dd5982b2ba7
+  - task: P11-T01
+    artifact: packages/board/src/dashboard/reducer.ts
+    description: "Pure dashboard reducer/replay implementation with project-scoped counters, bounded timeline, release/approval pointers, foreign-event safety, and priorEvents support."
+    sha256: df66c5133bc84cc44b6af4a345bd64f8446420b774bc64d8830c9231670c8217
+  - task: P11-T01
+    artifact: packages/board/src/dashboard/index.ts
+    description: "Public barrel for the dashboard projection surface."
+    sha256: 5d5000cc7aa3f921088d2f32e65cc83606f53c94a814f1716621d309d210c7b7
+  - task: P11-T01
+    artifact: packages/board/src/approval-gate/contract.ts
+    description: "Approval-gate projection contract: per-change ApprovalGateProjectionState, fail-closed verdict enum, and projection key helpers."
+    sha256: d8c97654731f514665b8c9bffb03087e987df54871126e9ec74ad0601cb391cf
+  - task: P11-T01
+    artifact: packages/board/src/approval-gate/reducer.ts
+    description: "Pure approval-gate reducer/replay implementation over whole-change and release-observation events with fail-closed verdict reduction."
+    sha256: 0c9a9e8bc75e325c020f6931f60a4d05698182b6cc5f62960e969c98153fce4b
+  - task: P11-T01
+    artifact: packages/board/src/approval-gate/index.ts
+    description: "Public barrel for the approval-gate projection surface."
+    sha256: 350b0df989ae83415b9ce8209f9e6a79699c765d988882f5136c056aa4e1af48
+  - task: P11-T01
+    artifact: packages/board/test/dashboard-aggregator.test.mjs
+    description: "Dashboard reducer tests covering projection key shape, schema constants, foreign-event safety, replay determinism, status counts, tail bounds, and hashes."
+    sha256: 94470b53a61b0cb8d259ff52f7ca615c81d16d4302bbd989c7215e3709a47af9
+  - task: P11-T01
+    artifact: packages/board/test/dashboard-fixture.mjs
+    description: "Dashboard fixture builders for task/change/release events carrying projectId."
+    sha256: 9b77c8adbce55e95f0495c8cf80e4aa4243a9bc79cda0d2b61fcabac476600cc
+  - task: P11-T01
+    artifact: packages/board/test/approval-gate.test.mjs
+    description: "Approval-gate reducer tests covering accepted/promoted approval, rejection, blocking, regression rollback, foreign events, and malformed payloads."
+    sha256: 3344b782439c4bd306b9b537abbf769efc862255dd65a39d61db4a6aa46bde6c
+  - task: P11-T01
+    artifact: packages/board/test/approval-gate-fixture.mjs
+    description: "Approval-gate fixture builders for change and release events carrying projectId/changeId."
+    sha256: de232a2b07cf2ed6873dcc39cc42496e62e1654e52f3c02d8722976ffdb0d226
+  - task: P11-T01
+    artifact: packages/store-sqlite/src/dashboard-projector.ts
+    description: "SQLite dashboard projector: replay/rebuild/save/verify for dashboard projection state."
+    sha256: ecce695d8fd78408b23e2df432507f4e8bea2a355c5deb5e0c60ef43926b9887
+  - task: P11-T01
+    artifact: packages/store-sqlite/src/approval-gate-projector.ts
+    description: "SQLite approval-gate projector: replay/rebuild/save/verify for approval-gate projection state."
+    sha256: a4e6e179d0b904ecfd8e9d7717ac5f05bd315a22bb1650ef06bdaaaac39cedac
+  - task: P11-T01
+    artifact: packages/store-sqlite/test/dashboard-projector.test.mjs
+    description: "Dashboard SQLite projector tests for replay, rebuild, verify, drift detection, foreign events, and constructor validation."
+    sha256: d0504be2beb45afe5af07846ae85359a13fd4ff5ab1a8068f42e803ba2b9a9e0
+  - task: P11-T01
+    artifact: packages/store-sqlite/test/dashboard-fixture.mjs
+    description: "Dashboard SQLite projector event fixture builders."
+    sha256: 904a0ac54196805d0d6ffa804269ea0440cd337c79bc036b5640f7bc48541a61
+  - task: P11-T01
+    artifact: packages/store-sqlite/test/approval-gate-projector.test.mjs
+    description: "Approval-gate SQLite projector tests for verdicts, rollback, rebuild/verify, drift, and foreign-event filtering."
+    sha256: 96042ff817b14cf4d9d9f518bf2cf1d5a97bd528bd902009f72073b54dafb4f4
+  - task: P11-T01
+    artifact: packages/store-sqlite/test/approval-gate-fixture.mjs
+    description: "Approval-gate SQLite projector event fixture builders."
+    sha256: 6c92cf65aa8fa4c17c562597b352243704b0a2643dcfca689959e663658c1b2a
+  - task: P11-T01
+    artifact: packages/cli/src/commands/board/dashboard.ts
+    description: "CLI adapter for legion next board dashboard status/rebuild/verify."
+    sha256: b6a87fa954cf0b52e6aa3b152f1c795e98da87aa6d4805e611cfc760e839442d
+  - task: P11-T01
+    artifact: packages/cli/src/commands/board/approval-gate.ts
+    description: "CLI adapter for legion next board approval-gate status/rebuild/verify."
+    sha256: c7ef93e11791869115eec8095480eb1af89d0f5fd3b36744599ade95d848a874
+  - task: P11-T01
+    artifact: docs/next/evidence/P11-T01/dashboard-snapshot.json
+    description: "Canonical dashboard projection snapshot with task status counts, release pointer, approval pointer, event timeline, and stateHash."
+    sha256: 54522b27e2c0c45e39d6b0073239d6c71f6d92d56330d47fcc00e67e11f3993f
+  - task: P11-T01
+    artifact: docs/next/evidence/P11-T01/approval-gate-snapshot.json
+    description: "Canonical approval-gate snapshot with approved verdict after whole-change acceptance and release promotion."
+    sha256: 09919e1dca384969038ea4176f3db820fe4529c448688ee94342d794b15c7bc3
+  - task: P11-T01
+    artifact: docs/next/evidence/P11-T01/integration-report.yaml
+    description: "Structured P11-T01 integration report."
+    sha256: 82c60833275816e761fb398cbd8a58cd524a454280509c03476b8a1343bb87f8
+  - task: P11-T02
+    artifact: packages/board/src/portfolio/contract.ts
+    description: "Portfolio projection contract: tenant-scoped PortfolioProjectionState, per-project rollups, dependency edges, resource ledger, scope helpers, and projection key helpers."
+    sha256: e8651cfe042a67b64cd24a208ee8bad435df0f88d39c28f70f69836c083e244c
+  - task: P11-T02
+    artifact: packages/board/src/portfolio/hash.ts
+    description: "Deterministic SHA-256 hashing for portfolio projection states and canonical portfolio inputs."
+    sha256: d18806c5653f5106e0ca4e5407770a383ab412861849359daa1ab50aea581d10
+  - task: P11-T02
+    artifact: packages/board/src/portfolio/reducer.ts
+    description: "Pure portfolio reducer/replay implementation with per-project rollups, cross-project dependency edges, resource allocation ledger, scope filtering, terminal counts, foreign-event safety, and priorEvents support."
+    sha256: 841d1333ed8d1ded3f8e9968ea5985034d5eb91ea674053e28759e7c44491902
+  - task: P11-T02
+    artifact: packages/board/src/portfolio/index.ts
+    description: "Public barrel for the portfolio projection surface."
+    sha256: dcd80f0097e6f6e9b6aae79fa6ea4a2f244ce440fb391cd066df8a9d8c11684d
+  - task: P11-T02
+    artifact: packages/board/test/portfolio-reducer.test.mjs
+    description: "Portfolio reducer tests covering projection keys, schema constants, foreign-event safety, replay determinism, task/priority/edge rollups, scope filters, terminal projects, and priorEvents."
+    sha256: 19e4f3e17a8085cd426adf7434b5a43a517f09ce0510c8c47a02b0a368512b04
+  - task: P11-T02
+    artifact: packages/board/test/portfolio-fixture.mjs
+    description: "Portfolio fixture builders for task/change/release/link events carrying projectId/toProjectId/relation."
+    sha256: 442d6ff648b310da455b8f79124d4b358d5b388deeb97a50906268e650245c38
+  - task: P11-T02
+    artifact: packages/store-sqlite/src/portfolio-projector.ts
+    description: "SQLite portfolio projector: tenant-scoped replay/rebuild/save/verify with scope persistence and projection hash handling."
+    sha256: 9f1d23941f5e7db47bc9c77d684b4a0e6d4e0bf73b5602f9b01f65bb5108cc0b
+  - task: P11-T02
+    artifact: packages/store-sqlite/test/portfolio-projector.test.mjs
+    description: "Portfolio SQLite projector tests for multi-project replay, rebuild/verify, drift, missing projection, scope filters, determinism, and constructor validation."
+    sha256: 8e5b0a8f508899086a71ecd78ac9a40cfea1600a983592c516b2a366f0462a1e
+  - task: P11-T02
+    artifact: packages/store-sqlite/test/portfolio-fixture.mjs
+    description: "Portfolio SQLite projector event fixture builders."
+    sha256: e6d53b3820320f63aff23d8da8292224afe2f6adac79e9cb973a3861b2d3bd5a
+  - task: P11-T02
+    artifact: packages/cli/src/commands/board/portfolio.ts
+    description: "CLI adapter for legion next board portfolio status/rebuild/verify with tenantId and optional projectIds scope."
+    sha256: 351c960612ae1bf669f2e2b564e11df471635d62e7fe6baa77d926e4ba6ba963
+  - task: P11-T02
+    artifact: packages/cli/src/commands/board/index.ts
+    description: "Board CLI dispatcher including dashboard, approval-gate, and portfolio command domains."
+    sha256: 2a9d91dc6fbe8ba91a6f11bb1c2afb33b5f0d6c9cb5be28d0013428efa68e868
+  - task: P11-T02
+    artifact: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: "CLI e2e suite including P11 dashboard, approval-gate, and portfolio status/rebuild/verify scenarios."
+    sha256: 33e6a870a6335e3bb856b4306f6a613be337caf2af3208b77232b68603530c11
+  - task: P11-T02
+    artifact: docs/next/evidence/P11-T02/portfolio-snapshot.json
+    description: "Canonical tenant portfolio snapshot with per-project rollups, cross-project dependency edges, resource ledger, and stateHash."
+    sha256: 4baa46bf265e9a0eb23f63c51aee1204593b3403db9b57792623299323b97d2c
+  - task: P11-T02
+    artifact: docs/next/evidence/P11-T02/integration-report.yaml
+    description: "Structured P11-T02 integration report."
+    sha256: 903279dcca4aaa2f13c73210929a4b4005b3106f5e18c3ccaa16df48e0401c70
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/cli-e2e-test.log
+    description: "P11 closeout CLI e2e transcript: 21/21 pass including dashboard, approval-gate, and portfolio CLI coverage."
+    sha256: 7563b9090d1bdb6de3de8c595af01931c30a2737540074a8717478737aff9ecb
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/core-test.log
+    description: "P11 closeout @legion/core test transcript: 245/245 pass."
+    sha256: 6f8ef284eacff366b63c1063ab994129dfcfdd1effb75c51bb594174d2a58621
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/board-test.log
+    description: "P11 closeout @legion/board test transcript: 113/113 pass."
+    sha256: 4e115956845c5c759180378cb000fdf9bd4cd97a031b807b4a28ee9e8e209eab
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+    description: "P11 closeout @legion/store-sqlite test transcript: 171/171 pass."
+    sha256: 619be155b74f79da6286c69acea3a56ef108363f9e534d2b52f9740c18f56bd6
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/protocol-test.log
+    description: "P11 closeout @legion/protocol test transcript: 55/55 pass."
+    sha256: 103d8e736618318e893771b6a88ec835914bf27770f6744e36e0029ab431b86b
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/artifacts-test.log
+    description: "P11 closeout @legion/artifacts test transcript: 59/59 pass."
+    sha256: 9dca7a046c0cc206187c9c1f8d93ebb3ae07a6e766ce93704969eb73be319220
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/typecheck.log
+    description: "P11 closeout workspace typecheck transcript: 10 workspace projects build/typecheck clean."
+    sha256: 4e4ae7c6febbf237297838c592b374608123a9b718303bf918f81b8b45207e53
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/workspace-tests.log
+    description: "P11 closeout full workspace test transcript: root + recursive workspace packages pass, including cli-e2e 21/21."
+    sha256: 306fafab3dcf3e8c6f8e842acde6dcdd45ac3b21e51bfcf32192e7932159feee
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/validate-next.log
+    description: "P11 closeout validate-next transcript: full project gate stack passed."
+    sha256: 73ffaef9a459a6138ae5f2fb70071f519bf68ddd9a0bc082809de63961c9342f
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log
+    description: "P11 closeout final Phase 11 diff gitleaks pipe scan: no leaks found; evidence-index and generated gitleaks log excluded to avoid self-reference."
+    sha256: 0ef4cead956761d2afd569b4fcb2ec9d0d217ec73cf5ff76da454ed6d4f8def1
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/command-summary.env
+    description: "P11 closeout command, version, branch, base, head, and timestamp summary."
+    sha256: 95e2f662998e52fc905a333f8480cfc0b0671bb47c6608c200b37d4e77abafa2
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/command-results.tsv
+    description: "P11 closeout command exit-code table."
+    sha256: fdd405a02078713e93fa9e50bb15d791d25d7874fbb519692b99cf8376ab473c
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/git-status.log
+    description: "P11 closeout pre-commit git status evidence."
+    sha256: e450e4d7ab5d1fdf38dade3b9ad0608c633cc2738177052f280bd4561ba3a28a
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/git-diff-stat.log
+    description: "P11 closeout diff stat evidence."
+    sha256: 531593d41e493523a74eec03af48fdc7f55d26178aa20522a06c16ed68ec2d73
+  - task: P11-CLOSEOUT
+    artifact: docs/next/evidence/P11-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 11 closeout integration report."
+    sha256: eeebd33d949850c3847c640ea38bc7a6cc309464f4ec9e61c9158f24b85c612d
+  - task: P11-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-11-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 11 closeout review with PASS verdict."
+    sha256: 081cedb76fb61a6c4b37bb994d9c7cd3a4d12daf727d78ad3cb3988821d64a47
+  - task: P11-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-11/ledger.yaml
+    description: "Final Phase 11 ledger marked DONE with P11-T01 through P11-T03 complete and blockers cleared."
+    sha256: 9fd98d95547a33374a734cd279a0192411d739ddcf5a3c49e5871924019fdc3d
+  - task: P11-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-11/HANDOFF.md
+    description: "Final Phase 11 handoff to Phase 12 and Operator/UI Beta cut-line assumptions."
+    sha256: f78d167e9efc4bc39da192dd75362300ec380126ec01611de0779f5f4e7b59d2
+  - task: P11-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 11 complete, Operator/UI Beta reached, and P12-T01 current."
+    sha256: 74444d93a3cafa276ee51f09a518488a6f61228cec680329ee20c8ed588ae732
