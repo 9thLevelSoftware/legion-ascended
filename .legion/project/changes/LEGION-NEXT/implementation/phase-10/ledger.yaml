@@ -81,6 +81,10 @@ decisions:
     decision: "Closeout reruns the full P10 gate stack and a final Phase 10 diff gitleaks scan excluding self-referential evidence artifacts."
     reason: "The final evidence bundle records cli-e2e/core/board/store-sqlite/protocol/artifacts tests, workspace typecheck, workspace tests, validate-next, and gitleaks over the staged Phase 10 diff from base 4fa0155."
     decided_at: "2026-06-22T11:09:22Z"
+  - task: P10-T03
+    decision: "Close release-observation projector tests' SQLite handles before temp directory cleanup."
+    reason: "GitHub Windows Phase 1 CI exposed EBUSY on board.sqlite / board.sqlite-wal cleanup. The P10 projector tests now mirror the P09 whole-change projector test pattern by closing the explicit DatabaseSync handle and the board store handle in finally blocks before rm(root)."
+    decided_at: "2026-06-22T11:31:00Z"
 blockers: []
 preserved_boundaries:
   - "Phase 9 package boundaries remain fixed: core owns merge queue orchestration, board owns logical aggregation/reduction, store-sqlite owns SQLite projection persistence. Phase 10 follows the same layering for release observation."

@@ -11,6 +11,7 @@ pnpm_version: 11.4.0
 accepted_warnings:
   - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local cli-e2e/core/board/store-sqlite/protocol/artifacts/typecheck/workspace/validate gates passed."
   - "The roadmap's Windows rebuild prompt path for Phase 10 is not present in the macOS checkout; closeout relied on the Phase 9 handoff plus P10-T01/P10-T02 integration reports, code, snapshots, and verification transcripts."
+  - "GitHub Windows Phase 1 CI initially failed with EBUSY while deleting release-observation projector temp SQLite files; closeout patched packages/store-sqlite/test/release-observation-projector.test.mjs to close both the explicit DatabaseSync handle and the board store handle before temp directory cleanup, then reran store-sqlite/workspace/validate gates successfully."
 acceptance:
   release_observation_orchestrator:
     status: PASS
@@ -110,6 +111,17 @@ acceptance:
     notes:
       - "Ledger finalized with P10-T01 through P10-T03 complete and blockers cleared."
       - "Production Lifecycle cut line is marked complete and Phase 11 begins at P11-T01."
+  windows_ci_projector_cleanup:
+    status: PASS
+    evidence:
+      - packages/store-sqlite/test/release-observation-projector.test.mjs
+      - docs/next/evidence/P10-CLOSEOUT/store-sqlite-test.log
+      - docs/next/evidence/P10-CLOSEOUT/workspace-tests.log
+      - docs/next/evidence/P10-CLOSEOUT/validate-next.log
+    notes:
+      - "GitHub Windows Phase 1 CI failed once with EBUSY while removing board.sqlite / board.sqlite-wal from P10 release-observation projector temporary databases."
+      - "The test helper now closes the explicit DatabaseSync handle as well as the store handle in a finally block before temp directory cleanup."
+      - "Local store-sqlite, workspace tests, and validate-next reruns passed after the cleanup fix."
 commands:
   - name: cli-e2e-test
     command: "pnpm --filter @legion/cli-e2e test"

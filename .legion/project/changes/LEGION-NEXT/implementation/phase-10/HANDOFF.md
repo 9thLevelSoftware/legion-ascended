@@ -110,3 +110,5 @@ Recommended first checks for P11-T01:
 ## Accepted Warning
 
 Local closeout verification ran on Node v26.0.0 and emitted pnpm engine warnings because the packages declare `>=24.0.0 <26`. The warning is not a Phase 10 source blocker because the local CLI e2e, core, board, store-sqlite, protocol, artifacts, typecheck, workspace, validate-next, and gitleaks gates passed; CI/release runners should continue to use the declared Node range.
+
+GitHub Windows Phase 1 CI initially failed with `EBUSY` while deleting release-observation projector temp SQLite files (`board.sqlite` / `board.sqlite-wal`). The closeout fix mirrors the P09 whole-change projector tests: P10 projector tests now close both the explicit `DatabaseSync` handle and the board store handle before `withTempDatabase` removes the temp directory. Local `pnpm --filter @legion/store-sqlite test`, `pnpm run test`, and `pnpm run validate:next` passed after the cleanup fix.

@@ -62,6 +62,8 @@ The P10-T03 closeout reviewer (`GPT-5.5 / otrlead`) is distinct from the impleme
 
 The local machine emitted pnpm engine warnings because Node v26.0.0 is outside the declared `>=24.0.0 <26` range. The warning is not a Phase 10 source blocker because all package, CLI e2e, typecheck, workspace, validate-next, and secret-scan gates passed in the closeout environment; CI/release runners should continue to use the declared Node range.
 
+GitHub Windows Phase 1 CI initially exposed an `EBUSY` cleanup failure while removing `board.sqlite` / `board.sqlite-wal` from `packages/store-sqlite/test/release-observation-projector.test.mjs`. The closeout fix mirrors the P09 whole-change projector pattern: tests now close the explicit `DatabaseSync` handle and the board store handle before temporary directory removal. Local `@legion/store-sqlite`, workspace tests, and `validate-next` passed afterward.
+
 The source phase prompt package referenced by the roadmap (`C:/Users/dasbl/Documents/legion/docs/rebuild/10-phase-release-observation-and-rollback.md`) is not present in the macOS checkout. This is not a closeout blocker because the Phase 9 handoff, P10 task integration reports, implementation evidence, and closeout verification logs provide the durable local source of truth for the delivered P10 cut line.
 
 ## Closeout Notes

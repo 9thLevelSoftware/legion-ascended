@@ -1,21 +1,10 @@
- .../LEGION-NEXT/implementation/phase-10/HANDOFF.md |  120 +-
- .../implementation/phase-10/evidence-index.yaml    |   89 +-
- .../implementation/phase-10/ledger.yaml            |  101 +-
- docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md       |   13 +-
- docs/next/evidence/P10-CLOSEOUT/artifacts-test.log |   73 +
- docs/next/evidence/P10-CLOSEOUT/board-test.log     |   68 +
- docs/next/evidence/P10-CLOSEOUT/cli-e2e-test.log   |   31 +
- .../next/evidence/P10-CLOSEOUT/command-results.tsv |   10 +
- .../next/evidence/P10-CLOSEOUT/command-summary.env |   11 +
- docs/next/evidence/P10-CLOSEOUT/core-test.log      |  256 +++
- docs/next/evidence/P10-CLOSEOUT/git-diff-stat.log  |   18 +
- docs/next/evidence/P10-CLOSEOUT/git-status.log     |   20 +
- .../evidence/P10-CLOSEOUT/gitleaks-p10-diff.log    |    9 +
- .../evidence/P10-CLOSEOUT/integration-report.yaml  |  177 ++
- docs/next/evidence/P10-CLOSEOUT/protocol-test.log  |   66 +
- .../evidence/P10-CLOSEOUT/store-sqlite-test.log    |  157 ++
- docs/next/evidence/P10-CLOSEOUT/typecheck.log      |   44 +
- docs/next/evidence/P10-CLOSEOUT/validate-next.log  | 1797 ++++++++++++++++++++
- .../next/evidence/P10-CLOSEOUT/workspace-tests.log |  848 +++++++++
- docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md   |   69 +
- 20 files changed, 3880 insertions(+), 97 deletions(-)
+ .../LEGION-NEXT/implementation/phase-10/HANDOFF.md |    2 +
+ .../implementation/phase-10/ledger.yaml            |    4 +
+ .../evidence/P10-CLOSEOUT/gitleaks-p10-diff.log    |    4 +-
+ .../evidence/P10-CLOSEOUT/integration-report.yaml  |   12 +
+ .../evidence/P10-CLOSEOUT/store-sqlite-test.log    |  290 ++--
+ docs/next/evidence/P10-CLOSEOUT/validate-next.log  | 1478 +++++++++----------
+ .../next/evidence/P10-CLOSEOUT/workspace-tests.log | 1482 ++++++++++----------
+ docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md   |    2 +
+ .../test/release-observation-projector.test.mjs    |  219 +--
+ 9 files changed, 1771 insertions(+), 1722 deletions(-)
