@@ -16,6 +16,7 @@ await build({
   target: "node24",
   format: "esm",
   sourcemap: true,
+  sourcesContent: false,
   external: [
     "node:*",
     "yaml"

@@ -18,6 +18,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const V8_PACK_DRY_RUN = join(ROOT, "docs", "next", "evidence", "P01-PREFLIGHT", "v8-npm-pack-dry-run.json");
 const LEGACY_CHECKSUMS = join(ROOT, "checksums.sha256");
 const INSTALLER = join(ROOT, "bin", "install.js");
+const CLI_SOURCEMAP = join(ROOT, "dist", "legion-cli.mjs.map");
 
 test("package contents preserve legacy paths plus the approved root router bundle", async () => {
   const result = await checkLegacyPackageContents({
@@ -70,6 +71,19 @@ test("Task 4 router and bundle checksum mutations fail the checksum contract", (
     "bin/legion.js",
     "dist/legion-cli.mjs"
   ]);
+});
+
+test("Task 4 CLI sourcemap omits embedded sources and machine-specific paths", () => {
+  const text = readFileSync(CLI_SOURCEMAP, "utf8");
+  const map = JSON.parse(text);
+
+  assert.doesNotMatch(text, /\\r\\n/);
+  assert.equal(Object.hasOwn(map, "sourcesContent"), false);
+  assert.ok(Array.isArray(map.sources));
+  for (const source of map.sources) {
+    assert.doesNotMatch(source, /^[A-Za-z]:[\\/]/);
+    assert.doesNotMatch(source, /[\\/]Users[\\/]/);
+  }
 });
 
 test("P01-T10 seeded installer path mutation fails the installer matrix contract", () => {
