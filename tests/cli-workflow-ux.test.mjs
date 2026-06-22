@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +10,154 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 async function tempRepo() {
   return mkdtemp(path.join(tmpdir(), "legion-workflow-ux-"));
 }
+
+async function importWorkflowModule(name) {
+  try {
+    return await import(`../packages/cli/dist/workflow/${name}.js`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    assert.fail(`workflow ${name} module should be importable: ${message}`);
+  }
+}
+
+function git(repositoryRoot, args) {
+  return execFileSync("git", ["-C", repositoryRoot, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  }).trim();
+}
+
+test("workflow helper input normalizes project metadata and paths", async () => {
+  const input = await importWorkflowModule("input");
+  const { actorSchema, projectSchema } = await import("../packages/protocol/dist/index.js");
+  const root = await tempRepo();
+  try {
+    const timestamp = "2026-06-22T12:00:00.000Z";
+    const context = {
+      args: {
+        positionals: [],
+        options: new Map([["created-at", timestamp]])
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    };
+
+    assert.equal(input.slugFromName("  Asset Mapper!!  "), "asset-mapper");
+    assert.equal(input.slugFromName("!!!"), "legion-project");
+    assert.equal(input.slugFromName("AI"), "legion-ai");
+    assert.equal(projectSchema.shape.slug.safeParse(input.slugFromName("AI")).success, true);
+    assert.equal(input.createdAtOption(context), timestamp);
+    assert.equal(input.displayPath(context, path.join(root, "src", "index.ts")), "src/index.ts");
+
+    const owner = input.ownerActor("DAS BL!");
+    assert.deepEqual(actorSchema.parse(owner), {
+      kind: "human",
+      id: "das-bl",
+      displayName: "DAS BL!"
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper input derives repository references from git", async () => {
+  const input = await importWorkflowModule("input");
+  const root = await tempRepo();
+  try {
+    execFileSync("git", ["init", "-b", "trunk", root], { stdio: "ignore" });
+    git(root, ["-c", "user.email=legion@example.com", "-c", "user.name=Legion Test", "commit", "--allow-empty", "-m", "init"]);
+    git(root, ["remote", "add", "origin", "https://example.com/legion.git"]);
+
+    assert.deepEqual(input.repositoryReference(root), {
+      provider: "git",
+      defaultBranch: "trunk",
+      remoteUrl: "https://example.com/legion.git"
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper render formats next actions and diagnostics", async () => {
+  const render = await importWorkflowModule("render");
+
+  const action = render.nextAction("legion plan 1", "Project is initialized.");
+  assert.deepEqual(action, {
+    command: "legion plan 1",
+    reason: "Project is initialized."
+  });
+  assert.equal(render.renderNextAction(action), "Next: legion plan 1\nReason: Project is initialized.");
+  assert.equal(render.renderDiagnostics([]), "");
+  assert.equal(render.renderDiagnostics([{ message: "Project manifest is missing." }, "Plain diagnostic"]), "- Project manifest is missing.\n- Plain diagnostic");
+});
+
+test("workflow helper context and state load initialized and uninitialized projects", async () => {
+  const contextHelpers = await importWorkflowModule("context");
+  const state = await importWorkflowModule("state");
+  const input = await importWorkflowModule("input");
+  const { initProject } = await import("../packages/artifacts/dist/index.js");
+  const root = await tempRepo();
+  try {
+    const cliContext = {
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    };
+
+    const missing = await contextHelpers.loadWorkflowProject(cliContext);
+    assert.equal(missing.ok, false);
+    assert.equal(missing.reason, "not_found");
+
+    const uninitialized = await state.resolveWorkflowState(cliContext);
+    assert.equal(uninitialized.stage, "uninitialized");
+    assert.equal(uninitialized.projectId, null);
+    assert.equal(uninitialized.currentSpecCount, 0);
+    assert.deepEqual(uninitialized.nextAction, {
+      command: "legion start",
+      reason: "No .legion/project/project.json exists."
+    });
+
+    const initialized = await initProject({
+      repositoryRoot: root,
+      slug: input.slugFromName("Asset Mapper"),
+      name: "Asset Mapper",
+      description: "Metadata authoring and deterministic asset resolution",
+      repository: {
+        provider: "git",
+        defaultBranch: "main"
+      },
+      decisionOwners: [input.ownerActor("dasbl")],
+      createdAt: "2026-06-22T12:00:00.000Z"
+    });
+    assert.equal(initialized.ok, true);
+
+    const loaded = await contextHelpers.loadWorkflowProject(cliContext);
+    assert.equal(loaded.ok, true);
+    assert.equal(loaded.loaded.project.id, "prj_asset-mapper");
+
+    const validation = await contextHelpers.validateWorkflowProject(cliContext);
+    assert.equal(validation.ok, true);
+
+    const initializedState = await state.resolveWorkflowState(cliContext);
+    assert.equal(initializedState.stage, "started");
+    assert.equal(initializedState.projectId, "prj_asset-mapper");
+    assert.equal(initializedState.currentSpecCount, 0);
+    assert.deepEqual(initializedState.nextAction, {
+      command: "legion plan 1",
+      reason: "Project is initialized and ready for the first planned change."
+    });
+    assert.deepEqual(initializedState.diagnostics, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("root help leads with workflow commands and hides next namespace", async () => {
   const result = await runCliCapture(["--help"]);
