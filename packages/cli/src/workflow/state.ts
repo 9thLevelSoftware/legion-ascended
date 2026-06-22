@@ -44,13 +44,21 @@ export async function resolveWorkflowState(context: CliContext): Promise<Workflo
   }
 
   const specs = await listCurrentSpecs({ repositoryRoot: context.repositoryRoot });
-  const currentSpecCount = specs.ok ? specs.documents.length : 0;
+  if (!specs.ok) {
+    return {
+      stage: "blocked",
+      projectId: project.loaded.project.id,
+      currentSpecCount: 0,
+      nextAction: nextAction("legion validate", "Current project truth must be repaired before planning can continue."),
+      diagnostics: specs.diagnostics
+    };
+  }
 
   return {
     stage: "started",
     projectId: project.loaded.project.id,
-    currentSpecCount,
+    currentSpecCount: specs.documents.length,
     nextAction: nextAction("legion plan 1", "Project is initialized and ready for the first planned change."),
-    diagnostics: specs.ok ? [] : specs.diagnostics
+    diagnostics: []
   };
 }

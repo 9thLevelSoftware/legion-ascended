@@ -81,9 +81,14 @@ function isIgnorableLegionRootEntry(name: string): boolean {
   return name === ".DS_Store" || name === "Thumbs.db" || name === "desktop.ini" || name.startsWith("._");
 }
 
-function migrationDiagnostic(message: string): { readonly code: "migration_required"; readonly message: string } {
+function migrationDiagnostic(message: string): {
+  readonly code: "migration_required";
+  readonly message: string;
+  readonly source: { readonly path: ".legion/project/project.json" };
+} {
   return {
     code: "migration_required",
-    message
+    message,
+    source: { path: ".legion/project/project.json" }
   };
 }
