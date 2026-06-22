@@ -75,6 +75,7 @@ test("P01-T11 validate-next plan is the shared CI/local gate order", () => {
     "pnpm run check:boundaries",
     "pnpm run check:worker-bundles",
     "node scripts/scan-default-runtime.mjs",
+    "node scripts/scan-runtime-import-boundaries.mjs",
     "pnpm --filter @legion/protocol generate:schemas",
     "pnpm --filter @legion/artifacts generate:schemas",
     "node scripts/validate-next.mjs --generate-protocol-docs",

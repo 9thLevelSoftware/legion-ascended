@@ -19,5 +19,8 @@
   },
   "dependencies": {
     "@legion/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
   }
 }

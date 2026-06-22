@@ -81,6 +81,10 @@ importers:
       '@legion/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
 
   packages/legacy-bridge:
     dependencies:

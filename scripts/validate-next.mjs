@@ -15,6 +15,10 @@ const VALIDATE_NEXT_PLAN = [
     id: "default-runtime-scan",
     command: "node scripts/scan-default-runtime.mjs"
   },
+  {
+    id: "runtime-import-boundaries",
+    command: "node scripts/scan-runtime-import-boundaries.mjs"
+  },
   { id: "schema-generation", command: "pnpm --filter @legion/protocol generate:schemas" },
   { id: "artifact-schema-generation", command: "pnpm --filter @legion/artifacts generate:schemas" },
   { id: "protocol-docs", command: "node scripts/validate-next.mjs --generate-protocol-docs" },
