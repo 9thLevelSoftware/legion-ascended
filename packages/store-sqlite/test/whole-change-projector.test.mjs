@@ -45,7 +45,12 @@ function buildRepositories(databasePath) {
   const database = new DatabaseSync(databasePath);
   const eventRepository = openSqliteBoardEventRepository({ database });
   const projectionRepository = openSqliteBoardProjectionRepository({ database });
-  return { store, eventRepository, projectionRepository };
+  return { store, database, eventRepository, projectionRepository };
+}
+
+function closeRepositories(repositories) {
+  repositories.database.close();
+  repositories.store.close();
 }
 
 function appendEvent(eventRepository, payload, options) {
@@ -65,58 +70,63 @@ function appendEvent(eventRepository, payload, options) {
 
 test("projector replays an aggregator-emitted event into the projection store", async () => {
   await withTempDatabase(async (databasePath) => {
-    const { store, eventRepository, projectionRepository } = buildRepositories(databasePath);
+    const repositories = buildRepositories(databasePath);
+    const { eventRepository, projectionRepository } = repositories;
+    try {
+      const orchestratorResult = makeOrchestratorSuccess();
+      const aggregatorResult = buildWholeChangeAcceptance({
+        changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
+        orchestratorResult,
+        acceptedBy: "ci-bot",
+        now: () => "2026-06-22T04:00:00.000Z"
+      });
+      const event = aggregatorResult.events[0];
 
-    const orchestratorResult = makeOrchestratorSuccess();
-    const aggregatorResult = buildWholeChangeAcceptance({
-      changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
-      orchestratorResult,
-      acceptedBy: "ci-bot",
-      now: () => "2026-06-22T04:00:00.000Z"
-    });
-    const event = aggregatorResult.events[0];
+      appendEvent(eventRepository, event.payload, {
+        eventType: "change.accepted",
+        idempotencyKey: event.idempotencyKey
+      });
 
-    appendEvent(eventRepository, event.payload, {
-      eventType: "change.accepted",
-      idempotencyKey: event.idempotencyKey
-    });
+      const projector = new SqliteWholeChangeAcceptanceProjector({
+        changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
+        eventRepository,
+        projectionRepository
+      });
 
-    const projector = new SqliteWholeChangeAcceptanceProjector({
-      changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
-      eventRepository,
-      projectionRepository
-    });
+      const replay = projector.replay();
+      assert.equal(replay.state !== null, true);
+      assert.equal(replay.state.mergeQueueHash, WHOLE_CHANGE_FIXTURE_CONSTANTS.mergeQueueHash);
+      assert.equal(replay.state.status, "accepted");
+      assert.equal(replay.state.aggregatorHash, aggregatorResult.aggregatorHash);
 
-    const replay = projector.replay();
-    assert.equal(replay.state !== null, true);
-    assert.equal(replay.state.mergeQueueHash, WHOLE_CHANGE_FIXTURE_CONSTANTS.mergeQueueHash);
-    assert.equal(replay.state.status, "accepted");
-    assert.equal(replay.state.aggregatorHash, aggregatorResult.aggregatorHash);
+      const persisted = projector.rebuildAndSave();
+      assert.equal(persisted.state.aggregatorHash, replay.state.aggregatorHash);
 
-    const persisted = projector.rebuildAndSave();
-    assert.equal(persisted.state.aggregatorHash, replay.state.aggregatorHash);
-
-    const verified = projector.verify();
-    assert.equal(verified.state.aggregatorHash, replay.state.aggregatorHash);
-
-    store.close();
+      const verified = projector.verify();
+      assert.equal(verified.state.aggregatorHash, replay.state.aggregatorHash);
+    } finally {
+      closeRepositories(repositories);
+    }
   });
 });
 
 test("projector produces state=null when no events have been emitted for the change", async () => {
   await withTempDatabase(async (databasePath) => {
-    const { store, eventRepository, projectionRepository } = buildRepositories(databasePath);
-    const projector = new SqliteWholeChangeAcceptanceProjector({
-      changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
-      eventRepository,
-      projectionRepository
-    });
+    const repositories = buildRepositories(databasePath);
+    const { eventRepository, projectionRepository } = repositories;
+    try {
+      const projector = new SqliteWholeChangeAcceptanceProjector({
+        changeId: WHOLE_CHANGE_FIXTURE_CONSTANTS.changeId,
+        eventRepository,
+        projectionRepository
+      });
 
-    const replay = projector.replay();
-    assert.equal(replay.state, null);
-    assert.equal(replay.eventCount, 0);
-
-    store.close();
+      const replay = projector.replay();
+      assert.equal(replay.state, null);
+      assert.equal(replay.eventCount, 0);
+    } finally {
+      closeRepositories(repositories);
+    }
   });
 });
 

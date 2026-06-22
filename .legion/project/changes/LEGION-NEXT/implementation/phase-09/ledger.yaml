@@ -4,7 +4,7 @@ status: DONE
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/09-phase-merge-queue-and-whole-change-acceptance.md"
 base_commit: "657f14ef52974efb0b72f009f536f7105884ad9c"
 started_at: "2026-06-22T07:30:00Z"
-completed_at: "2026-06-22T09:18:10Z"
+completed_at: "2026-06-22T09:43:20Z"
 active_wave: 3
 tasks:
   P09-T01:
@@ -85,6 +85,10 @@ decisions:
     decision: "Closeout reruns the full P09 gate stack and a final Phase 9 diff gitleaks scan excluding this self-referential evidence index."
     reason: "The final evidence bundle records core/protocol/artifacts/board/store-sqlite tests, workspace typecheck, workspace tests, validate-next, and gitleaks over the staged Phase 9 diff from base 657f14e."
     decided_at: "2026-06-22T09:18:10Z"
+  - task: P09-T03
+    decision: "Windows Phase 1 CI EBUSY cleanup on the whole-change projector test is fixed by closing the explicit DatabaseSync handle before temporary directory removal."
+    reason: "GitHub Windows exposed board.sqlite-wal remaining locked after projector tests. The closeout patch returns the DatabaseSync handle from the test repository helper and closes both database and store handles in finally blocks, then reruns @legion/store-sqlite and validate-next successfully."
+    decided_at: "2026-06-22T09:42:00Z"
 blockers: []
 evidence:
   - packages/core/src/merge/contract.ts

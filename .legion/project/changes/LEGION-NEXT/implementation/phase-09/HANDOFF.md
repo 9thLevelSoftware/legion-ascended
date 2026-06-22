@@ -68,6 +68,7 @@ Phase 9 establishes these stable assumptions for downstream phases (P10+):
 13. Reducer replay is terminal and idempotent for the same `(changeId, mergeQueueHash)` pair; a fresh run must produce a new mergeQueueHash/projection event.
 14. The independent closeout reviewer (`GPT-5.5 / otrlead`) is distinct from both the implementation assignee (`legionworker`) and the serialized acceptance actor (`ci-bot`) in the P09-T02 evidence snapshot.
 15. Phase 5 RuntimeDriver neutrality, Phase 6 hidden-oracle sealing, Phase 7 TaskContract/preflight boundary, and Phase 8 fresh-context/per-task-review boundaries are preserved.
+16. Whole-change projector tests must close both the explicit `DatabaseSync` repository handle and the store handle before temp directory cleanup; Windows keeps `board.sqlite-wal` locked otherwise.
 
 ## Phase 10 Starting Point
 

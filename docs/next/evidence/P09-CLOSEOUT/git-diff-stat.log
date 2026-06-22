@@ -1,14 +1,16 @@
 === staged Phase 9 diff stat vs 657f14ef52974efb0b72f009f536f7105884ad9c (excluding self-referential evidence-index.yaml) ===
- .../LEGION-NEXT/implementation/phase-09/HANDOFF.md |   93 ++
- .../implementation/phase-09/ledger.yaml            |  136 ++
+ .../LEGION-NEXT/implementation/phase-09/HANDOFF.md |   94 ++
+ .../implementation/phase-09/ledger.yaml            |  141 ++
  docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md       |   16 +-
  docs/next/evidence/P09-CLOSEOUT/artifacts-test.log |   80 +
  docs/next/evidence/P09-CLOSEOUT/board-test.log     |   54 +
  .../next/evidence/P09-CLOSEOUT/command-results.tsv |    9 +
- .../next/evidence/P09-CLOSEOUT/command-summary.env |    6 +
+ .../next/evidence/P09-CLOSEOUT/command-summary.env |    8 +
  docs/next/evidence/P09-CLOSEOUT/core-test.log      |  244 +++
+ docs/next/evidence/P09-CLOSEOUT/git-diff-stat.log  |   75 +
+ docs/next/evidence/P09-CLOSEOUT/git-status.log     |   20 +
  .../evidence/P09-CLOSEOUT/gitleaks-p09-diff.log    |   16 +
- .../evidence/P09-CLOSEOUT/integration-report.yaml  |  155 ++
+ .../evidence/P09-CLOSEOUT/integration-report.yaml  |  166 ++
  docs/next/evidence/P09-CLOSEOUT/protocol-test.log  |   73 +
  .../evidence/P09-CLOSEOUT/store-sqlite-test.log    |  155 ++
  docs/next/evidence/P09-CLOSEOUT/typecheck.log      |   51 +
@@ -40,7 +42,7 @@
  docs/next/evidence/P09-T02/validate-next.log       | 1745 +++++++++++++++++++
  .../evidence/P09-T02/whole-change-snapshot.json    |   75 +
  docs/next/evidence/P09-T02/workspace-tests.log     |  796 +++++++++
- docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md   |   60 +
+ docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md   |   62 +
  packages/board-store/src/index.ts                  |   14 +-
  packages/board/package.json                        |   10 +-
  packages/board/src/index.ts                        |   56 +
@@ -68,8 +70,8 @@
  packages/store-sqlite/src/index.ts                 |   19 +
  .../store-sqlite/src/whole-change-projector.ts     |  252 +++
  .../store-sqlite/test/whole-change-fixture.mjs     |  185 +++
- .../test/whole-change-projector.test.mjs           |  179 ++
+ .../test/whole-change-projector.test.mjs           |  189 +++
  packages/store-sqlite/tsconfig.json                |    1 +
  pnpm-lock.yaml                                     |   13 +
  scripts/check-package-boundaries.mjs               |    2 +-
- 73 files changed, 17073 insertions(+), 15 deletions(-)
+ 75 files changed, 17199 insertions(+), 15 deletions(-)

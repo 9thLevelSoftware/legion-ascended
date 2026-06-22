@@ -157,7 +157,7 @@ entries:
   - task: P09-T02
     artifact: packages/store-sqlite/test/whole-change-projector.test.mjs
     description: "P09-T02 SQLite projector test suite."
-    sha256: 3ed2561a3c13c3d97270bdf5b8214052cab0135b63c7effa8c3be50932d169bd
+    sha256: e5161b2d892e0e07c7bcc959173c7d270ecf817bf22044b78002562ff3961a65
   - task: P09-T02
     artifact: packages/store-sqlite/test/whole-change-fixture.mjs
     description: "Whole-change store-sqlite fixture builders."
@@ -249,7 +249,7 @@ entries:
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/store-sqlite-test.log
     description: "P09 closeout @legion/store-sqlite test transcript."
-    sha256: f5dbd758be2c3d7ef712b6f4811fa4c5fd796bb9089488f9801e1e896a3ca87a
+    sha256: d7922e0fdc9b27bb42e0a992c5d32d5e67a2cc619b36b56491328ed947abdc01
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/typecheck.log
     description: "P09 closeout workspace typecheck transcript."
@@ -261,15 +261,15 @@ entries:
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/validate-next.log
     description: "P09 closeout final validate-next transcript."
-    sha256: 3fc205ec0060cd97d998e09455feea8d00283259912a1848e0cdd3ac7ac2a844
+    sha256: fa0e7bbbb14a8784398fd7f1776a0d0e11059612b7e724fa46fed4d376b7a9ee
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/gitleaks-p09-diff.log
     description: "P09 closeout final Phase 9 diff gitleaks pipe scan transcript."
-    sha256: 69d681e216e922d6499bf11385af258524c42e5905cb8c082c673132fd361365
+    sha256: 3113577d380db254d3a50a798eff02e3373921557b8263113c6fa29e32cf5689
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/command-summary.env
     description: "P09 closeout command/version/scope summary."
-    sha256: bb7a512f554db9675dfb71680a4d5aa72b1a18c494a1018d22a01e9d58dbf76e
+    sha256: f4c1c1feff4950ea6604415bd3364ef5cb4a3240fe5fd07e678650c553af172f
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/command-results.tsv
     description: "P09 closeout command exit-code table."
@@ -277,27 +277,27 @@ entries:
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/git-status.log
     description: "P09 closeout pre-commit git status evidence."
-    sha256: 3110813cb7d4c478215ae223fe682b965ecbff87a1d1921add8326fe12bbd9c6
+    sha256: 61be22b870b7fbea0582fe11c2ba6dea78eebe7d011d151c75de62f01a4ea16b
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/git-diff-stat.log
     description: "P09 closeout staged diff stat evidence."
-    sha256: cccebd78a65f3b8a2cbe2cfa7f703f5b1064493309e65364111b61c477a1706a
+    sha256: 60be532331151922b44eea4a7889d567de56b3b27af14939c2cc2149e93272d2
   - task: P09-CLOSEOUT
     artifact: docs/next/evidence/P09-CLOSEOUT/integration-report.yaml
     description: "Structured Phase 9 closeout integration report."
-    sha256: 1b0c1595147ab0cb475e13f74d4798fd201bec1e5eb33a18efcae31cdee2f6ba
+    sha256: b80f47663b4de81e04feff0c7197a019fc49b9f560015b075e971714c8c60fab
   - task: P09-CLOSEOUT
     artifact: docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md
     description: "Independent Phase 9 closeout review with PASS verdict."
-    sha256: 6ddec079a2373b77cbe82c1cba4cb09a55f27bc8a8041b6f8715bc5dbaeaea1c
+    sha256: 3652603474267bf4d466952f3f2dfe6f7f9f3fd0f8061adb13adeaf1e257c164
   - task: P09-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-09/ledger.yaml
     description: "Final Phase 9 ledger marked DONE with decisions, evidence, and blockers cleared."
-    sha256: c3f6f5c558e5042198d8b820ada802fcf50b4963c14d209f94716b41482f2572
+    sha256: b1fc73e1c01e5212ddf0f97a5b79e05b36035991577bc6be5b2a63eb8fe1de6d
   - task: P09-CLOSEOUT
     artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-09/HANDOFF.md
     description: "Final Phase 9 handoff to Phase 10 and Accepted Change Lifecycle cut-line assumptions."
-    sha256: a5698313e1f398bba07648de43896a35b14fbbf329a91f1db3822c9580e33610
+    sha256: d99477bc73e74b52580b561cfa8a08b894f074f5fcf54588fa97fbb6cc0907ba
   - task: P09-CLOSEOUT
     artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
     description: "Kanban manifest updated to mark Phase 9 complete and P10-T01 current."

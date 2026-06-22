@@ -55,6 +55,8 @@ The P09-T03 closeout reviewer (`GPT-5.5 / otrlead`) is distinct from the impleme
 
 The local machine emitted pnpm engine warnings because Node v26.0.0 is outside the declared `>=24.0.0 <26` range. The warning is not a Phase 9 source blocker because all package, typecheck, workspace, validate-next, and secret-scan gates passed in the closeout environment; CI/release runners should continue to use the declared Node range.
 
+GitHub Windows Phase 1 CI initially exposed an `EBUSY` cleanup failure while removing `board.sqlite-wal` in `packages/store-sqlite/test/whole-change-projector.test.mjs`. The closeout fix closes the explicit `DatabaseSync` handle before temporary directory removal; local `@legion/store-sqlite` and `validate:next` reruns passed afterward.
+
 ## Closeout Notes
 
 Phase 10 can begin after this closeout commit is pushed and the PR/CI gate confirms the same verification set. Release observation should consume the accepted whole-change event/projection as the immutable release cut-line input, preserve `mergeQueueHash`, `decisionSha256`, `aggregatorHash`, `workerContextHashes[]`, and `idempotencyKey` in canary/regression evidence, and treat `blocked` whole-change states as non-releaseable until a new merge-queue hash produces an accepted state.
