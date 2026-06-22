@@ -2,31 +2,27 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { handleBoardCommand } from "./commands/board/index.js";
-import { handleChangeCommand } from "./commands/change/index.js";
-import { handleEvalsCommand } from "./commands/evals/index.js";
-import { handleMigrateCommand } from "./commands/migrate/index.js";
-import { handleProjectCommand } from "./commands/project/index.js";
-import { handleReleaseCommand } from "./commands/release/index.js";
+import { handleDevCommand } from "./commands/dev/index.js";
+import { WORKFLOW_COMMANDS } from "./commands/registry.js";
+import { handleWorkflowCommand } from "./commands/workflow/index.js";
 import {
   helpResult,
   parseCliArgs,
   stripCommand,
   unexpectedError,
-  usageError,
+  withWarning,
   type CliContext,
   type CliResult
 } from "./runtime.js";
 
-const ROOT_HELP = `legion next <command>
+const ROOT_HELP = `legion <command>
 
-Commands:
-  project   Initialize, validate, and inspect v9 project artifacts.
-  change    Create, validate, diff, and archive v9 change bundles.
-  board     Create, inspect, and mutate board tasks, events, claims, and approvals.
-  migrate   Verify, dry-run, apply, and roll back legacy migration flows.
-  evals     Capture, grade, and compare sealed v8/v9 behavioral eval runs.
-  release   Run the GA release checklist and the rollback-policy verifier.
+Workflow commands:
+${WORKFLOW_COMMANDS.map((entry) => `  ${entry.name.padEnd(10)} ${entry.summary}`).join("\n")}
+
+Advanced:
+  dev        Advanced typed engine and operator commands.
+  install    Install Legion workflows into an AI coding runtime.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.
@@ -45,8 +41,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2), io
   stdout: process.stdout,
   stderr: process.stderr
 }): Promise<number> {
-  const namespacedArgs = argv[0] === "next" ? argv.slice(1) : argv;
-  const parsed = parseCliArgs(namespacedArgs);
+  const parsed = parseCliArgs(argv);
   const repositoryRoot = path.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context: CliContext = {
     args: parsed,
@@ -72,23 +67,25 @@ async function dispatch(context: CliContext): Promise<CliResult> {
   const [command] = context.args.positionals;
   if (command === undefined) return helpResult(ROOT_HELP);
 
-  const commandContext = stripCommand(context, 1);
-  switch (command) {
-    case "project":
-      return handleProjectCommand(commandContext);
-    case "change":
-      return handleChangeCommand(commandContext);
-    case "board":
-      return handleBoardCommand(commandContext);
-    case "migrate":
-      return handleMigrateCommand(commandContext);
-    case "evals":
-      return handleEvalsCommand(commandContext);
-    case "release":
-      return handleReleaseCommand(commandContext);
-    default:
-      return usageError(`Unknown legion next command: ${command}.`);
+  if (command === "dev") {
+    return handleDevCommand(stripCommand(context, 1));
   }
+
+  if (command === "next") {
+    const result = await handleDevCommand(stripCommand(context, 1));
+    return withWarning(result, {
+      code: "legacy_next_namespace",
+      message: legacyNextMessage(context.args.positionals)
+    });
+  }
+
+  return handleWorkflowCommand(context);
+}
+
+function legacyNextMessage(positionals: readonly string[]): string {
+  const replacement = positionals.slice(1).join(" ");
+  const command = replacement.length > 0 ? ` ${replacement}` : "";
+  return `Use legion dev${command}. The legion next namespace is a hidden compatibility alias.`;
 }
 
 function writeResult(result: CliResult, context: CliContext, io: CliIo): void {
