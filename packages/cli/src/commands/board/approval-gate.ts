@@ -1,5 +1,5 @@
 /**
- * P11-T01 — `legion next board approval-gate` CLI adapter.
+ * P11-T01 — `legion dev board approval-gate` CLI adapter.
  *
  * Wires the approval-gate projector into the CLI's existing
  * board command tree. The CLI is the operator surface for
@@ -53,7 +53,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const APPROVAL_GATE_HELP = `legion next board approval-gate <action>
+const APPROVAL_GATE_HELP = `legion dev board approval-gate <action>
 
 Actions:
   status    Replay the approval-gate projection without persisting.

@@ -20,7 +20,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const MIGRATE_HELP = `legion next migrate --from-planning|--from-codex-legion --verify|--dry-run|--apply|--rollback
+const MIGRATE_HELP = `legion dev migrate --from-planning|--from-codex-legion --verify|--dry-run|--apply|--rollback
 
 Compatibility verify:
   --from-planning --verify --planning-root <path> --staging-root <path> --run-id <id> --project <file>

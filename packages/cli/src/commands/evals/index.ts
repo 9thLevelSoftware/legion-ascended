@@ -1,5 +1,5 @@
 /**
- * P13-T01 — `legion next evals` CLI adapter.
+ * P13-T01 — `legion dev evals` CLI adapter.
  *
  * Release-grade behavioral evals with v8/v9 A/B comparison on sealed
  * scenarios. Routes through the Node-based capture/grade/compare scripts
@@ -57,7 +57,7 @@ import {
 
 const execFile = promisify(execFileCb);
 
-const EVALS_HELP = `legion next evals <command>
+const EVALS_HELP = `legion dev evals <command>
 
 Commands:
   capture        Seal a scenario into a run directory and write run-manifest.json.

@@ -26,7 +26,7 @@ Global:
 
 export async function handleDevCommand(context: CliContext): Promise<CliResult> {
   const [command] = context.args.positionals;
-  if (context.args.options.has("help") || command === undefined || command === "help") {
+  if (command === undefined || command === "help") {
     return helpResult(DEV_HELP);
   }
 

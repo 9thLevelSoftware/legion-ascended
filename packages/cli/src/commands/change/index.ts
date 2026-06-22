@@ -23,7 +23,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const CHANGE_HELP = `legion next change <command>
+const CHANGE_HELP = `legion dev change <command>
 
 Commands:
   create --input <file>     Create a change bundle from a JSON input object.

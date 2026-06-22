@@ -22,7 +22,6 @@ ${WORKFLOW_COMMANDS.map((entry) => `  ${entry.name.padEnd(10)} ${entry.summary}`
 
 Advanced:
   dev        Advanced typed engine and operator commands.
-  install    Install Legion workflows into an AI coding runtime.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.

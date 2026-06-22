@@ -19,6 +19,7 @@ test("root help leads with workflow commands and hides next namespace", async ()
   assert.match(result.stdout, /build\s+Execute/);
   assert.match(result.stdout, /review\s+Review/);
   assert.match(result.stdout, /dev\s+Advanced/);
+  assert.doesNotMatch(result.stdout, /install\s+Install Legion workflows/);
   assert.doesNotMatch(result.stdout, /legion next <command>/);
   assert.doesNotMatch(result.stdout, /worker bundle manifest/i);
 });
@@ -104,4 +105,27 @@ test("dev help exposes engine commands for operators", async () => {
   assert.match(result.stdout, /change\s+Direct change bundle/);
   assert.match(result.stdout, /board\s+Direct operational Kanban/);
   assert.match(result.stdout, /worker\s+Validate and inspect worker bundles/);
+});
+
+test("dev subcommand help delegates to the engine handler", async () => {
+  const result = await runCliCapture(["dev", "project", "--help"]);
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /legion dev project <command>/);
+  assert.doesNotMatch(result.stdout, /legion next project/);
+});
+
+test("legacy next subcommand JSON help uses dev help and preserves warning", async () => {
+  const result = await runCliCapture(["next", "project", "--help", "--json"]);
+  assert.equal(result.exitCode, 0);
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.status, "help");
+  assert.match(payload.help, /legion dev project <command>/);
+  assert.doesNotMatch(payload.help, /legion next project/);
+  assert.deepEqual(payload.warnings, [
+    {
+      code: "legacy_next_namespace",
+      message: "Use legion dev project. The legion next namespace is a hidden compatibility alias."
+    }
+  ]);
 });

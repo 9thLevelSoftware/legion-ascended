@@ -19,7 +19,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const PROJECT_HELP = `legion next project <command>
+const PROJECT_HELP = `legion dev project <command>
 
 Commands:
   init --input <file>       Initialize .legion/project from a JSON input object.
