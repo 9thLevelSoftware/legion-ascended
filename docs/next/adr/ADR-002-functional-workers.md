@@ -36,7 +36,7 @@ The following persona content is discarded from the v9 default runtime:
 | Memory claims inside persona text | Operational memory belongs in committed intent, event logs, evidence indexes, and explicit memory artifacts, not a persona narrative. |
 | Conflicting authority claims | Authority is defined by worker policy, task contract, and risk gates. |
 
-The compatibility map is temporary and migration-only. It maps legacy persona IDs to `{functional role, domain packs, rubrics, capability metadata}` so existing v8 plans, outcomes, and historical evidence can be imported without losing meaning. New v9 task dispatch cannot use the compatibility map as the primary router. The map may be packaged with a legacy bridge for one major release after v9 GA, then removed in v10 unless telemetry and support evidence justify an approved extension.
+The compatibility map is temporary and migration-only. It maps legacy persona IDs to `{functional role, domain packs, rubrics, capability metadata}` so existing v8 plans, outcomes, and historical evidence can be imported without losing meaning. The full 48-row migration table lives in `docs/next/migration/LEGACY-PERSONA-MAP.md`. New v9 task dispatch cannot use the compatibility map as the primary router. The map may be packaged with a legacy bridge for one major release after v9 GA, then removed in v10 unless telemetry and support evidence justify an approved extension.
 
 Persona retention and discard inventory sample:
 

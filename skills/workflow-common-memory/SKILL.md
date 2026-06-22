@@ -1,6 +1,9 @@
 ---
 name: workflow-common-memory
 description: Optional memory conventions shared across commands
+pack_id: workflow-common-memory
+pack_version: 1.0.0
+pack_status: extracted
 triggers: [memory, outcomes, preferences, learning]
 token_cost: low
 summary: "Project-scoped memory behavior and integration rules used when memory-manager is activated."
@@ -9,6 +12,15 @@ summary: "Project-scoped memory behavior and integration rules used when memory-
 # Workflow Common Memory Extension
 
 Use only when memory behavior is active.
+
+## Versioned Domain Pack v1.0.0
+Reusable memory bundle extracted from the v8 workflow-common-memory skill.
+
+- Memory is project-scoped by default and never cross-project for recommendation boosts.
+- Memory is additive guidance and cannot override mandatory role constraints.
+- Missing memory files must not block command execution.
+- Record writes only at canonical integration points in `workflow-common/SKILL.md`.
+- All writes are append-only and project-scoped.
 
 ## Rules
 - Memory is project-scoped by default and never cross-project for recommendation boosts.

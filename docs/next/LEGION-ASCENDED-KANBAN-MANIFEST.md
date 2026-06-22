@@ -70,15 +70,18 @@ When implementing, compare against original Legion (v8) at:
 | P03-T11 | t_50c978e2 | **otrlead** | DONE | T10 |
 
 ### Phase 4: Functional Worker Bundles and Persona Purge
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-04/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P04-T01 | t_ad40aa58 | legionworker | todo | P03-T11 |
-| P04-T02 | t_2613b3e4 | legionworker | todo | T01 |
-| P04-T03 | t_644ab6c2 | legionworker | todo | T01 |
-| P04-T04 | t_992af897 | legionworker | todo | T02,T03 |
-| P04-T05 | t_ac36e4e9 | legionworker | todo | T04 |
-| P04-T06 | t_0debf216 | legionworker | todo | T04 |
-| P04-T07 | t_174d7346 | **otrlead** | todo | T05,T06 |
+| P04-T01 | t_ad40aa58 | legionworker | DONE | P03-T11 |
+| P04-T02 | t_2613b3e4 | legionworker | DONE | T01 |
+| P04-T03 | t_644ab6c2 | legionworker | DONE | T01 |
+| P04-T04 | t_992af897 | legionworker | DONE | T02,T03 |
+| P04-T05 | t_ac36e4e9 | legionworker | DONE | T04 |
+| P04-T06 | t_0debf216 | legionworker | DONE | T04 |
+| P04-T07 | t_174d7346 | **otrlead** | DONE | T05,T06 |
 
 ### Phase 5: Runtime Driver and Eve Integration
 | Task | ID | Assignee | Status | Dependencies |
@@ -146,8 +149,8 @@ When implementing, compare against original Legion (v8) at:
 | P13-T04 | t_50860be4 | **otrlead** | todo | T03 |
 
 ## Summary
-- **Total tasks:** 46 remaining (+ P03-T01 already done)
-- **Worker tasks:** 35 assigned to legionworker (MiniMax-M3 / Kimi 2.7 fallback)
-- **Review tasks:** 11 assigned to otrlead (GPT-5.5)
-- **Current:** P03 closeout complete; P04-T01 is next dependency-gated implementation task
+- **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
+- **Completed through Phase 4:** 18 tasks (P03-T01 through P04-T07)
+- **Remaining tasks:** 29 (20 worker tasks, 9 review/closeout tasks)
+- **Current:** P05-T01 is dependency-gated on P04-T07 closeout and is next after Phase 4 completion
 - **Final:** P13-T04 (GA decision)

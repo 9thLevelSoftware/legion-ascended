@@ -1,6 +1,9 @@
 ---
 name: workflow-common-github
 description: Optional GitHub interaction conventions shared across commands
+pack_id: workflow-common-github
+pack_version: 1.0.0
+pack_status: extracted
 triggers: [github, issue, pr, milestone]
 token_cost: low
 summary: "Shared rules for optional GitHub issue/PR/milestone interactions when github-sync is active."
@@ -9,6 +12,15 @@ summary: "Shared rules for optional GitHub issue/PR/milestone interactions when 
 # Workflow Common GitHub Extension
 
 Use only when GitHub integration is enabled and available.
+
+## Versioned Domain Pack v1.0.0
+Reusable GitHub integration bundle extracted from the v8 workflow-common-github skill.
+
+- GitHub is optional and must never fail the core workflow when unavailable.
+- Require both `gh auth status` success and a valid git remote.
+- Prefer idempotent updates (comment/edit) over duplicate issue or PR creation.
+- Mirror every GitHub write back into `.planning/STATE.md` during the same invocation.
+- Leave read-only GitHub operations side-effect free.
 
 ## Rules
 - Treat GitHub as optional integration; never fail core workflow if unavailable.

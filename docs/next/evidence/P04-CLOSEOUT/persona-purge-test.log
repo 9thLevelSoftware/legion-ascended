@@ -1,0 +1,16 @@
+$ node --test tests/persona-purge.test.mjs
+
+✔ v9 default runtime path contains no biography, tone, or personality prose (12.534041ms)
+✔ v9 default runtime path files declare promptContentContract forbiddens (0.855ms)
+✔ v9 worker bundle schema marks biography, tone, personality as forbidden (0.317167ms)
+✔ v9 protocol source still exports the promptContentContract schema (0.22375ms)
+✔ v9 governance documents reference the contract without injecting it (2.049375ms)
+✔ package-boundary check still blocks v9 packages from importing legacy prompt assets (9.764666ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 83.907333

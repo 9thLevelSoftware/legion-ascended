@@ -1,0 +1,52 @@
+$ git status --short --branch && git log --oneline --decorate --max-count=8 && git diff --stat 28b83d4bee3c003992f5af002b3916a05ddce4bd..HEAD && git diff --stat
+
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository [ahead 3]
+ M docs/next/adr/ADR-002-functional-workers.md
+ M packages/protocol/src/entities/task-run.ts
+ M schemas/entities/fixtures/lifecycle-valid.json
+ M schemas/entities/task-run.schema.json
+ M skills/workflow-common-domains/SKILL.md
+ M skills/workflow-common-github/SKILL.md
+ M skills/workflow-common-memory/SKILL.md
+?? .serena/
+?? docs/next/evidence/P04-CLOSEOUT/
+?? docs/next/migration/LEGACY-PERSONA-MAP.md
+?? tests/workflow-common-packs.test.mjs
+bcf94d1 (HEAD -> codex/p03-t02-board-task-repository) feat: P04-T06 prompt content scan — automated scan verifying no default runtime path injects persona prose
+e16bec3 feat: P04-T05 worker bundle validation (manifest schema, capability completeness, domain-pack integrity)
+c2e6bfb feat: P04-T04 purge biography/tone/personality prose from v9 default runtime path
+28b83d4 (origin/codex/p03-t02-board-task-repository) feat: complete P03 transactional board control plane
+f599745 (origin/main, origin/HEAD, main) Merge pull request #21 from 9thLevelSoftware/codex/p03-t01-board-store
+0469be4 fix: P03-T01 harden sqlite migrations
+fe5ed27 fix: align P03-T01 sqlite review semantics
+cf31c01 fix: harden P03-T01 sqlite store
+ bundles/architect.md                       |  18 +
+ bundles/explorer.md                        |  18 +
+ bundles/implementer.md                     |  19 +
+ bundles/index.json                         | 266 +++++++++++++
+ bundles/integration-evaluator.md           |  18 +
+ bundles/oracle-author.md                   |  19 +
+ bundles/planner.md                         |  18 +
+ bundles/release-controller.md              |  18 +
+ bundles/specifier.md                       |  19 +
+ bundles/task-reviewer.md                   |  18 +
+ checksums.sha256                           |  10 +-
+ package.json                               |   2 +
+ schemas/entities/worker-bundle.schema.json |  91 +++++
+ scripts/scan-default-runtime.mjs           | 287 ++++++++++++++
+ scripts/validate-next.mjs                  |   5 +
+ scripts/validate-worker-bundles.mjs        | 613 +++++++++++++++++++++++++++++
+ skills/workflow-common-core/SKILL.md       |  53 ++-
+ tests/default-runtime-scan.test.mjs        | 195 +++++++++
+ tests/persona-purge.test.mjs               | 172 ++++++++
+ tests/validate-next.test.mjs               |   2 +
+ tests/worker-bundles.test.mjs              | 378 ++++++++++++++++++
+ 21 files changed, 2214 insertions(+), 25 deletions(-)
+ docs/next/adr/ADR-002-functional-workers.md    |   2 +-
+ packages/protocol/src/entities/task-run.ts     |  18 +-
+ schemas/entities/fixtures/lifecycle-valid.json |  21 +-
+ schemas/entities/task-run.schema.json          | 385 +++++++++++++++++++++++--
+ skills/workflow-common-domains/SKILL.md        |  12 +
+ skills/workflow-common-github/SKILL.md         |  12 +
+ skills/workflow-common-memory/SKILL.md         |  12 +
+ 7 files changed, 431 insertions(+), 31 deletions(-)

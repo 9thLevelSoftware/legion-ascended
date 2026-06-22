@@ -1,0 +1,208 @@
+phase: 4
+phase_id: P04
+hash_basis: "SHA-256 over artifact bytes as staged for the Phase 4 closeout; identical to Git blob content bytes after commit."
+entries:
+  - task: P04-T01
+    artifact: packages/protocol/src/entities/task-run.ts
+    description: "TaskRun protocol source expanded with functional WorkerBundle manifest role/domain/capabilities and nested prompt-content contract"
+    sha256: 9b86da0d40ff3f890603e52a9351581b7b1892557bd87b1cdfa739c7026f264a
+  - task: P04-T01
+    artifact: schemas/entities/fixtures/lifecycle-valid.json
+    description: "Lifecycle fixture updated to use the expanded WorkerBundle manifest shape"
+    sha256: 9062a6b3471ca34459bc19cc926d9d4b3d0adb037f2a4d0edbb9dc2aa836676f
+  - task: P04-T01
+    artifact: schemas/entities/task-run.schema.json
+    description: "Generated task-run JSON schema with expanded WorkerBundle manifest requirements"
+    sha256: 7738252505d9d96691f05be9d4dc5fc5bf89ebe0e7465235fa05fb1beeb698ae
+  - task: P04-T05
+    artifact: schemas/entities/worker-bundle.schema.json
+    description: "Standalone worker bundle manifest JSON schema for registry validation"
+    sha256: 3d0da8b001af4b959faf3ca6352c4aff4fd9a96d085d0af000c326465358a4fc
+  - task: P04-T02
+    artifact: docs/next/adr/ADR-002-functional-workers.md
+    description: "ADR-002 updated to reference the canonical 48-row legacy persona migration table"
+    sha256: a8c2b91da9cabc8532067917b99ca0ffd245755f3116fb3b36e819ab3d733939
+  - task: P04-T02
+    artifact: docs/next/migration/LEGACY-PERSONA-MAP.md
+    description: "Migration-only map from legacy v8 persona IDs to v9 functional roles and domain packs"
+    sha256: 0b99ea741cd6a1bbf05af8209fca9000fab7b862c8b4a27775bf8001efa78f35
+  - task: P04-T03
+    artifact: skills/workflow-common-core/SKILL.md
+    description: "Core workflow-common pack metadata plus persona-free v9 bundle-resolution contract"
+    sha256: c44767e76973f1d894d639a59fbd676ad0db1e5d920c51f5afb88ef4644f1337
+  - task: P04-T03
+    artifact: skills/workflow-common-domains/SKILL.md
+    description: "Domain workflow-common pack metadata and v1.0.0 extracted pack content"
+    sha256: 875332b19b3185d9328bca8dd3d2cc1b86c12006a213ad2ed47c0b099136fe7e
+  - task: P04-T03
+    artifact: skills/workflow-common-github/SKILL.md
+    description: "GitHub workflow-common pack metadata and v1.0.0 extracted pack content"
+    sha256: 20404bb11d869f3b51bc66e84e9341091488bb2f436658d38dced8f721208c7f
+  - task: P04-T03
+    artifact: skills/workflow-common-memory/SKILL.md
+    description: "Memory workflow-common pack metadata and v1.0.0 extracted pack content"
+    sha256: 1b40d080aed914a7dea2d6658c8a502761b8d41a46395247ca809c5b37ae8cc3
+  - task: P04-T05
+    artifact: bundles/index.json
+    description: "Canonical registry of the nine ADR-002 v9 default worker bundles"
+    sha256: 5bcd9c946e775303c2a59b5bf7b609bf86a84fa3f63994b77cacc9263861c096
+  - task: P04-T05
+    artifact: bundles/explorer.md
+    description: "Explorer worker bundle prompt content"
+    sha256: ea77ed7bea07510f12ca2a03e80f0307cb00f0e5d6977a0494c73bfb4b9c29ed
+  - task: P04-T05
+    artifact: bundles/specifier.md
+    description: "Specifier worker bundle prompt content"
+    sha256: def6d658bb5951a7003b5440b3ec1d22c1bad7f44eb052db062afcf0697e7f3c
+  - task: P04-T05
+    artifact: bundles/oracle-author.md
+    description: "Oracle-author worker bundle prompt content"
+    sha256: 7e779ea48b28a1368cc574904e4221c03dafbd45104573bff48710f2f3736987
+  - task: P04-T05
+    artifact: bundles/architect.md
+    description: "Architect worker bundle prompt content"
+    sha256: 251d7dd39c3b68cc6a42d78103e22a0089b0452e44d85e9ce6f624414612eee3
+  - task: P04-T05
+    artifact: bundles/planner.md
+    description: "Planner worker bundle prompt content"
+    sha256: 5a333324e30658950f54e66bc1a75f395491cfb2a2c0ae21aef1c678584e21ee
+  - task: P04-T05
+    artifact: bundles/implementer.md
+    description: "Implementer worker bundle prompt content"
+    sha256: 8085cc4d5218391e5315797a8979df361ee2c201762bac0f5768ee48f1c85f5c
+  - task: P04-T05
+    artifact: bundles/task-reviewer.md
+    description: "Task-reviewer worker bundle prompt content"
+    sha256: 777c9c85494e265271496b378ef5ab755ee790f67eec402c67c99b6fd7f731ec
+  - task: P04-T05
+    artifact: bundles/integration-evaluator.md
+    description: "Integration-evaluator worker bundle prompt content"
+    sha256: be9da3ec0bac53004c6446dd67d6abf0d99cd2e7266fca81ab2588277d94902c
+  - task: P04-T05
+    artifact: bundles/release-controller.md
+    description: "Release-controller worker bundle prompt content"
+    sha256: 25094eddf8bf56effcd22993487efb46364af8fc8f8fcef1bd93d2741311264a
+  - task: P04-T05
+    artifact: scripts/validate-worker-bundles.mjs
+    description: "Worker bundle validation gate for schema, role/capability completeness, prompt hash, and domain-pack integrity"
+    sha256: 40aa3ac8995adeaaf954122ab086514d7afc289c8b4b7efeb942475d47644336
+  - task: P04-T06
+    artifact: scripts/scan-default-runtime.mjs
+    description: "Default-runtime prompt scanner for biography/tone/personality and v8 persona boilerplate regressions"
+    sha256: 6ba623ef09f5ec893cd001bb6b794b4a4aa9dbe67df03a1daebcb23041d44647
+  - task: P04-T06
+    artifact: scripts/validate-next.mjs
+    description: "validate-next pipeline wired to worker-bundles and default-runtime-scan gates"
+    sha256: 9151183ffe806b9fcab5cc69f3fae3f8f0f4f6a9e40ac12b72f04def49bc3153
+  - task: P04-T06
+    artifact: package.json
+    description: "Root package scripts exposing check:worker-bundles and check:default-runtime"
+    sha256: 47298eb835a1f536c0412da8d0d82cb66a2774ceec2bcc22fee2eb56d5a04119
+  - task: P04-T03
+    artifact: tests/workflow-common-packs.test.mjs
+    description: "Regression tests for workflow-common pack metadata/version extraction"
+    sha256: fd89d0616efdb1d79622e430c954b8d6e410ba43ac226a52486ba4b70b91844d
+  - task: P04-T04
+    artifact: tests/persona-purge.test.mjs
+    description: "Regression tests for persona purge and v9 default runtime prompt-surface invariants"
+    sha256: 7a5b12b2f0036298ec596fe866d8797f841effd2664c934cefe917710f0e61df
+  - task: P04-T05
+    artifact: tests/worker-bundles.test.mjs
+    description: "Regression tests for worker bundle validation positive and negative paths"
+    sha256: dd38b8327e269bb394b80f8f52bdd2203649afa7c71b85aadc261ba30f74901b
+  - task: P04-T06
+    artifact: tests/default-runtime-scan.test.mjs
+    description: "Regression tests for default runtime scanner surface and violation reporting"
+    sha256: f5fee180420ea6171b445401f983bb953bfcd396e4aebc4fe141e0bd61c6bede
+  - task: P04-T06
+    artifact: tests/validate-next.test.mjs
+    description: "validate-next plan assertion updated for worker-bundles and default-runtime-scan steps"
+    sha256: 5c678f792fb11dcec0e970b1d23be5ac348bdb8ee289db53158553c0d796c23c
+  - task: P04-T03
+    artifact: checksums.sha256
+    description: "Package content checksum baseline updated for changed v8/v9 packaged files"
+    sha256: 4762365eb0f8877a805fb75107c2bba30e49bf941d0412acecbaf0593d1db738
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/git-status.log
+    description: "Closeout git status, recent commits, committed P04 diff stat, and unstaged diff stat"
+    sha256: 5eb901e7664e83c011557a1f8536cbc09e7a390837397a988125dde190e1a3a0
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/protocol-test.log
+    description: "Closeout protocol package test transcript (54 pass)"
+    sha256: b727f797b9594b7796f1e8a7429b9da17a5055668b175d5f82e88d6acb3598cc
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/workflow-common-packs-test.log
+    description: "Closeout workflow-common pack metadata test transcript"
+    sha256: 173ec2f46cfd93e5ea609b39ba93bbd55cfc0ff4742d5dbf897668cc821b7af6
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log
+    description: "Closeout worker bundle validation unit-test transcript (15 pass)"
+    sha256: 9ed82bc547e0058e2cff27c241cd0e7500400240f29213d808448f1eb8fd59a6
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/default-runtime-scan-test.log
+    description: "Closeout default runtime scanner unit-test transcript (8 pass)"
+    sha256: c776574262532268ee256281b182f156d543ca2ce4d7709a086a97c2d5f99e1a
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/persona-purge-test.log
+    description: "Closeout persona purge regression test transcript (6 pass)"
+    sha256: 8c5e83784ff33bc8855f17f51fcc90107412fb95c4e46342918317abb7a62a2f
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/check-worker-bundles.log
+    description: "Closeout worker bundle validation CLI transcript with 0 violations"
+    sha256: 2111067f635449e252f96f408b5705ce654f7ae0343c3edf5159e32a6d08779e
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/check-default-runtime.log
+    description: "Closeout default runtime scan CLI transcript with 15 files and 0 violations"
+    sha256: e2368b07a6dc12e5a577a1bf75f45cdfc5b3cd84a82ff7e4291cc75f2255da2f
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/check-boundaries.log
+    description: "Closeout package-boundary verification transcript"
+    sha256: 04477e224e39b96110b1594f7007d14b5c85483a11f420b7d09ede4ddd31a734
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/check-package-contents.log
+    description: "Closeout package content/checksum verification transcript"
+    sha256: 005c833e665f718aaabe3b5bd936cccd859470ce21e4963f94ed69fa94b9860b
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/typecheck.log
+    description: "Closeout workspace typecheck transcript"
+    sha256: a002b3882083336986a7ec422e6f439b4730d5cca12c546515eb033c309b26ae
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/workspace-tests.log
+    description: "Closeout recursive workspace test transcript (312 pass)"
+    sha256: 7960b36a95c22fee2097abd3eb090b164fe12615ada7452abbb7b25475c735af
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/validate-next.log
+    description: "Closeout full validate-next transcript (389 combined tests pass)"
+    sha256: 2e0b855c04e442dd5d5489caede037acd846c450d6034c233c5b9e940735a42e
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/validate-next-prestage-failure.log
+    description: "Preserved diagnostic validate-next failure caused by unstaged generated schema drift before final staging"
+    sha256: 6bd71f7f4a2d8b70bdbaa8766c1b5e152d740abd0b80665fc5d8469a42e8362f
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/gitleaks-branch.log
+    description: "Closeout branch secret scan transcript"
+    sha256: f551d444aa5094fd34ae84e0422b374c4da14e385223928ce3ed8f9b24f1aa59
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/command-summary.env
+    description: "Closeout command exit-code and test-count summary"
+    sha256: da6b209d418c682b7906ae14231f3eca900e3c115fc979b8d15b69726c8f30dd
+  - task: P04-CLOSEOUT
+    artifact: docs/next/evidence/P04-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 4 closeout integration report"
+    sha256: 452553b35e3efa186cceeb6d2cfedd6c3550fcd12415220f070e8539d9f9f052
+  - task: P04-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-04-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 4 review with final PASS verdict"
+    sha256: b16b5304129e7606f7377e4305971f1e264fbd4258753dfe838756e08a963904
+  - task: P04-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-04/ledger.yaml
+    description: "Phase 4 ledger marked DONE with task decisions, commits, evidence bundle, and blockers cleared"
+    sha256: bf065c02e10d0b7cc757d20fef78b550b773012ad534c220a8f764240fbc1f3e
+  - task: P04-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-04/HANDOFF.md
+    description: "Phase 4 handoff to Phase 5 with runtime-driver starting assumptions"
+    sha256: 2041a0d5e9d87d18baa19d7fd8416c413266dc4fe31304ca5ee0045322de5cdf
+  - task: P04-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 4 complete and point at P05-T01 as next work"
+    sha256: 3f2482469f8de132fc80c06dc406e2508374bac6ece43ce22da805edd058533e

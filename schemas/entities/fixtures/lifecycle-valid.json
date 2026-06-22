@@ -138,7 +138,26 @@
       "workerBundle": {
         "id": "implementer",
         "version": "1.0.0",
-        "instructionsHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "role": "implementer",
+        "domain": "protocol-core",
+        "capabilities": [
+          "schema-definition",
+          "schema-validation"
+        ],
+        "promptContentContract": {
+          "instructionsHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "requiredSections": [
+            "role",
+            "domain",
+            "capabilities",
+            "prompt-content-contract"
+          ],
+          "forbiddenSections": [
+            "biography",
+            "tone",
+            "personality"
+          ]
+        }
       },
       "model": {
         "provider": "openai",

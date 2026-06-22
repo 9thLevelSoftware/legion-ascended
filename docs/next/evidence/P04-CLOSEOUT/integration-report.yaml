@@ -1,0 +1,138 @@
+phase: P04
+status: PASS
+title: Functional Worker Bundles and Persona Purge closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: 28b83d4bee3c003992f5af002b3916a05ddce4bd
+head_before_closeout: bcf94d106ed842740b620b6246bff8c1b3077181
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-21T20:55:54-04:00"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but every final local gate passed."
+  - "validate-next-prestage-failure.log is an intermediate diagnostic failure from generated schema artifacts being unstaged; final validate-next passed after staging generated schemas."
+acceptance:
+  legacy_persona_map:
+    status: PASS
+    evidence: docs/next/migration/LEGACY-PERSONA-MAP.md
+    notes:
+      - "48 legacy v8 persona IDs mapped to functional roles and domain packs."
+      - "testing-code-polisher intentionally excluded as a post-v8 addition."
+      - "ADR-002 links the migration table and forbids using it as the primary v9 runtime router."
+  functional_worker_bundle_contract:
+    status: PASS
+    evidence:
+      - packages/protocol/src/entities/task-run.ts
+      - schemas/entities/task-run.schema.json
+      - schemas/entities/worker-bundle.schema.json
+    notes:
+      - "WorkerBundleManifest requires id, version, role, domain, capabilities, and promptContentContract."
+      - "promptContentContract requires instructionsHash, requiredSections, and forbiddenSections."
+  domain_pack_extraction:
+    status: PASS
+    evidence:
+      - skills/workflow-common-core/SKILL.md
+      - skills/workflow-common-github/SKILL.md
+      - skills/workflow-common-memory/SKILL.md
+      - skills/workflow-common-domains/SKILL.md
+      - tests/workflow-common-packs.test.mjs
+    notes:
+      - "All four workflow-common packs declare pack_version 1.0.0 and pack_status extracted."
+  persona_purge:
+    status: PASS
+    evidence:
+      - skills/workflow-common-core/SKILL.md
+      - tests/persona-purge.test.mjs
+      - scripts/scan-default-runtime.mjs
+    notes:
+      - "v9 default runtime prompt surface excludes biography, tone, personality, identity-fiction, and legacy persona-injection boilerplate."
+      - "Legacy v8 persona files remain preserved outside the v9 default runtime path."
+  worker_bundle_validation:
+    status: PASS
+    evidence:
+      - bundles/index.json
+      - bundles/*.md
+      - scripts/validate-worker-bundles.mjs
+      - tests/worker-bundles.test.mjs
+    notes:
+      - "Nine ADR-002 default roles are registered one-to-one with bundle IDs."
+      - "Bundle prompt hashes are verified against on-disk prompt bytes."
+  prompt_content_scan:
+    status: PASS
+    evidence:
+      - scripts/scan-default-runtime.mjs
+      - tests/default-runtime-scan.test.mjs
+      - tests/persona-purge.test.mjs
+    notes:
+      - "Scanner covers 15 files: four workflow-common packs, nine bundle prompts, ADR-002, and LEGACY-PERSONA-MAP."
+commands:
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/protocol-test.log
+    result: "54 pass / 0 fail"
+  - name: workflow-common-packs-test
+    command: "node --test tests/workflow-common-packs.test.mjs"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/workflow-common-packs-test.log
+    result: "1 pass / 0 fail"
+  - name: worker-bundles-test
+    command: "node --test tests/worker-bundles.test.mjs"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log
+    result: "15 pass / 0 fail"
+  - name: default-runtime-scan-test
+    command: "node --test tests/default-runtime-scan.test.mjs"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/default-runtime-scan-test.log
+    result: "8 pass / 0 fail"
+  - name: persona-purge-test
+    command: "node --test tests/persona-purge.test.mjs"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/persona-purge-test.log
+    result: "6 pass / 0 fail"
+  - name: check-worker-bundles
+    command: "pnpm run check:worker-bundles"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/check-worker-bundles.log
+    result: "0 schema/capability/domain-pack violations"
+  - name: check-default-runtime
+    command: "pnpm run check:default-runtime"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/check-default-runtime.log
+    result: "15 files scanned / 0 violations"
+  - name: check-boundaries
+    command: "pnpm run check:boundaries"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/check-boundaries.log
+    result: PASS
+  - name: check-package-contents
+    command: "pnpm run check:package-contents"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/check-package-contents.log
+    result: PASS
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/typecheck.log
+    result: PASS
+  - name: workspace-tests
+    command: "pnpm -r --if-present test"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/workspace-tests.log
+    result: "312 pass / 0 fail"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/validate-next.log
+    result: "389 pass / 0 fail plus validate-next gates"
+  - name: gitleaks-branch
+    command: "gitleaks detect --source . --log-opts=28b83d4bee3c003992f5af002b3916a05ddce4bd..HEAD --redact --no-banner"
+    exit_code: 0
+    evidence: docs/next/evidence/P04-CLOSEOUT/gitleaks-branch.log
+    result: PASS
+blockers: []
+phase_5_handoff:
+  next_task: P05-T01
+  next_task_id: t_1c45d2fa
+  summary: "Implement RuntimeDriver lifecycle against ADR-004 using Phase 4's functional worker bundle manifest and persona-free prompt-content contract as the dispatch input surface."

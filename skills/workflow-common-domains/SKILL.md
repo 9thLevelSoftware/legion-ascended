@@ -1,6 +1,9 @@
 ---
 name: workflow-common-domains
 description: Optional cross-domain conventions for design/marketing/specialized workflows
+pack_id: workflow-common-domains
+pack_version: 1.0.0
+pack_status: extracted
 triggers: [design, marketing, domain, campaign, brief]
 token_cost: low
 summary: "Shared optional conventions for domain workflows that are not always loaded in core execution."
@@ -9,6 +12,15 @@ summary: "Shared optional conventions for domain workflows that are not always l
 # Workflow Common Domain Extension
 
 Use for domain-specific workflows only.
+
+## Versioned Domain Pack v1.0.0
+Reusable domain-activation bundle extracted from the v8 workflow-common-domains skill.
+
+- Activate only for MKT-* or DSN-* requirements, matching frontmatter, or explicit domain flags.
+- Keyword-based detection is a hint only; it is not a trigger.
+- Marketing workflows produce campaign artifacts under `.planning/campaigns/`.
+- Design workflows produce design artifacts under `.planning/designs/`.
+- Domain extensions refine execution; they never replace core phase/state flow.
 
 ## Rules
 

@@ -1,0 +1,18 @@
+$ node --test tests/default-runtime-scan.test.mjs
+
+✔ scanner reports the canonical v9 default runtime surface (1.015333ms)
+✔ scanner passes on the current v9 default runtime surface (12.423792ms)
+✔ scanner flags biography prose injected into a v9 default runtime file (1.913083ms)
+✔ scanner flags forbidden headings injected into a v9 default runtime file (1.006083ms)
+✔ scanner walks future bundles/ directory and flags persona prose there (1.022542ms)
+✔ scanner flags legacy v8 boilerplate re-introduced into v9 surface (0.956125ms)
+✔ scanner reports structured violation rows with file, line, category, excerpt (0.996292ms)
+✔ scanner also walks declared governance documents and keeps them clean (1.995459ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 82.538916

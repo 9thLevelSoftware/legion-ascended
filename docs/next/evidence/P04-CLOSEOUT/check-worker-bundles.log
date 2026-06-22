@@ -1,0 +1,13 @@
+$ pnpm run check:worker-bundles
+
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/validate-worker-bundles.mjs
+
+[validate-worker-bundles] schema validation
+  pass (0 violation(s))
+[validate-worker-bundles] capability completeness
+  pass (0 violation(s))
+[validate-worker-bundles] domain-pack integrity
+  pass (0 violation(s))
+
+[validate-worker-bundles] all worker bundles pass
