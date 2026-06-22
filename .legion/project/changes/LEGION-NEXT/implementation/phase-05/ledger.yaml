@@ -1,16 +1,16 @@
 phase: 5
 phase_id: P05
-status: IN_PROGRESS
-source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/05-phase-runtime-driver.md"
+status: DONE
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/05-phase-runtime-driver-and-eve-integration.md"
 base_commit: "43d059902f5dc35fc2604e2bd22b076186d8f5d7"
 started_at: "2026-06-21T22:00:00-04:00"
-completed_at: null
+completed_at: "2026-06-22T03:34:55Z"
 active_wave: 1
 tasks:
-  P05-T01: { status: DONE, run_id: "P05-T01-20260621-runtime-driver-contract", commit: "1a44cef" }
-  P05-T02: { status: DONE, run_id: "P05-T02-20260621-runtime-eve", commit: "4b77330" }
-  P05-T03: { status: TODO, depends_on: ["P05-T01"] }
-  P05-T04: { status: TODO, depends_on: ["P05-T01","P05-T02","P05-T03"] }
+  P05-T01: { status: DONE, run_id: "P05-T01-20260621-runtime-driver-contract", commit: "3fd026a" }
+  P05-T02: { status: DONE, run_id: "P05-T02-20260621-runtime-eve", commit: "d6616be" }
+  P05-T03: { status: DONE, run_id: "P05-T03-20260621-fallback-driver-policy", commit: "344749a" }
+  P05-T04: { status: DONE, run_id: "P05-T04-20260621-phase-05-closeout", commit: "P05-final-head" }
 decisions:
   - task: P05-T01
     decision: "The RuntimeDriver contract is a TypeScript interface in packages/core/src/runtime/contract.ts that declares the seven ADR-004 lifecycle methods (start, resume, cancel, inspect, stream, approve, artifact) and references only @legion/protocol types"
@@ -22,53 +22,59 @@ decisions:
     decided_at: "2026-06-21T22:05:30-04:00"
   - task: P05-T01
     decision: "A dedicated runtime-import-boundary scan (scripts/scan-runtime-import-boundaries.mjs) blocks Eve, host CLIs, sqlite, non-@legion/protocol workspace imports, deep workspace imports, and legacy prompt asset imports inside packages/core/src/runtime/, and blocks core source OUTSIDE runtime/ from depending on the driver until Phase 5 wires the board to it"
-    reason: "ADR-004 says the contract must import no Eve or host CLI implementation types; check-package-boundaries.mjs already blocks `eve`, `node:sqlite`, `better-sqlite3`, `sqlite3` for `@legion/core`, but does not cover host CLI entry points (`claude-code`, `codex-cli`, etc.), does not enforce the `runtime/` encapsulation rule, and does not surface a focused runtime regression test. A dedicated scan wired into validate-next gives us a single-line failure when a future PR pulls an Eve type or a host-CLI entry point into the core."
+    reason: "ADR-004 says the contract must import no Eve or host CLI implementation types; check-package-boundaries.mjs already blocks sqlite/provider imports for @legion/core, but does not cover host CLI entry points, runtime encapsulation, or focused Eve-regression messaging. A dedicated scan wired into validate-next gives a single-line failure when a future PR pulls an Eve type or host-CLI entry point into the core runtime."
     decided_at: "2026-06-21T22:06:00-04:00"
-  - task: P05-T01
-    decision: "The runtime module is exposed from the public @legion/core barrel and Phase 5 follows with the Eve adapter (P05-T02) and fallback policy (P05-T03)"
-    reason: "The runtime module is part of the v9 core public API. Phase 5 needs both the Eve adapter (certified against this contract) and the fallback driver policy (runtime-local → runtime-eve → runtime-legacy-cli) before any production default can bind to Eve. P05-T04 (Phase 5 closeout) aggregates evidence and the independent review before Phase 6."
-    decided_at: "2026-06-21T22:06:30-04:00"
   - task: P05-T01
     decision: "Closeout review tightened the runtime-local final-output path so non-terminal artifact(handle) failures carry a current-state snapshot and terminal bundles preserve the terminal finishedAt timestamp."
     reason: "The extended artifact(handle) mode added after the original RuntimeDriver contract must behave the same way in the canonical runtime-local driver as it does in the FakeRuntimeDriver end-to-end tests. Preserving terminal finishedAt also keeps artifact resolution time separate from run completion time for downstream evidence indexing."
     decided_at: "2026-06-21T22:49:00-04:00"
   - task: P05-T02
-    decision: "runtime-eve is now the certified external runtime driver candidate, with a public-contract adapter package, a pinned Eve transport boundary, subagent/sandbox/eval helpers, fallback policy docs, and synchronized core selector precedence."
-    reason: "P05-T02 had to validate the public ADR-004 runtime contract against Eve's public surface, prove fallback behavior, and keep the core selector aligned with the new precedence so validate-next remains green. The adapter is isolated in packages/runtime-eve and the core selector/test expectations were updated to the new certified default."
+    decision: "runtime-eve is the certified external runtime driver candidate, with a public-contract adapter package, a pinned Eve transport boundary, subagent/sandbox/eval helpers, and synchronized selector precedence."
+    reason: "P05-T02 had to validate the public ADR-004 runtime contract against Eve's public surface, prove fallback behavior, and keep the core selector aligned with the certified default. The adapter is isolated in packages/runtime-eve and the core selector/test expectations are updated to the new certified default."
     decided_at: "2026-06-22T03:24:50Z"
+  - task: P05-T03
+    decision: "The default RuntimeDriver selector now resolves runtime-eve -> runtime-local -> runtime-legacy-cli, while explicit requested-driver policy fails closed when the requested driver is unavailable."
+    reason: "Phase 5's durable operational kernel cut line requires Eve to be the preferred runtime when available, deterministic runtime-local to remain the local/test fallback, and the legacy CLI compatibility path to be explicit rather than implicit. Refusing silent downgrade on forced drivers keeps rollback and degraded-mode decisions audit-visible."
+    decided_at: "2026-06-22T03:25:30Z"
+  - task: P05-T03
+    decision: "runtime-legacy-cli is retained only as a reduced-guarantee transitional driver that still satisfies the seven-method RuntimeDriver surface."
+    reason: "Legacy command compatibility remains useful during migration, but it does not provide the same checkpoint, terminal stream, or artifact preservation guarantees as Eve/local. Keeping those guarantees documented and test-visible prevents Phase 6+ from treating the fallback as a durable runtime equivalent."
+    decided_at: "2026-06-22T03:26:00Z"
+  - task: P05-T04
+    decision: "Close Phase 5 with consolidated P05-CLOSEOUT evidence, independent GPT-5.5 review, finalized ledger/index, and a Phase 6 baseline-specification/oracle-pipeline handoff."
+    reason: "P05-T01 through P05-T03 collectively establish the Durable Operational Kernel cut line: provider-neutral runtime contract, deterministic local runtime, certified Eve adapter, fallback selector, legacy compatibility fallback, import-boundary guard, and full validate-next verification. Phase 6 can now build baseline/oracle artifacts against this runtime surface."
+    decided_at: "2026-06-22T03:34:55Z"
 blockers: []
 evidence:
   - packages/core/src/runtime/contract.ts
   - packages/core/src/runtime/local-driver.ts
+  - packages/core/src/runtime/legacy-cli-driver.ts
+  - packages/core/src/runtime/selector.ts
   - packages/core/src/runtime/index.ts
   - packages/core/test/runtime-driver.test.mjs
   - packages/core/test/runtime-e2e.test.mjs
-  - scripts/scan-runtime-import-boundaries.mjs
-  - tests/runtime-import-boundaries.test.mjs
-  - docs/next/evidence/P05-T01/integration-report.yaml
-  - docs/next/evidence/P05-T01/validate-next.log
-  - docs/next/evidence/P05-T01/runtime-driver-test.log
-  - docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
-  - packages/runtime-eve/package.json
-  - packages/runtime-eve/tsconfig.json
-  - packages/runtime-eve/src/index.ts
+  - packages/core/test/runtime-legacy-cli-driver.test.mjs
+  - packages/core/test/runtime-selector.test.mjs
   - packages/runtime-eve/src/driver/runtime-eve-driver.ts
   - packages/runtime-eve/src/transport/contract.ts
   - packages/runtime-eve/src/transport/fake-transport.ts
   - packages/runtime-eve/src/transport/real-transport.ts
-  - packages/runtime-eve/src/transport/index.ts
   - packages/runtime-eve/src/fallback/select.ts
-  - packages/runtime-eve/src/fallback/index.ts
-  - packages/runtime-eve/src/sandbox/open.ts
-  - packages/runtime-eve/src/subagent/invoke.ts
-  - packages/runtime-eve/src/eval/run.ts
   - packages/runtime-eve/test/public-contract.test.mjs
-  - packages/core/src/runtime/selector.ts
-  - packages/core/test/runtime-selector.test.mjs
   - docs/next/runtime-fallback-policy.md
+  - scripts/scan-runtime-import-boundaries.mjs
+  - tests/runtime-import-boundaries.test.mjs
+  - docs/next/evidence/P05-T01/integration-report.yaml
   - docs/next/evidence/P05-T02/integration-report.yaml
-  - docs/next/evidence/P05-T02/checksums.txt
-  - docs/next/evidence/P05-T02/runtime-eve-test.log
-  - docs/next/evidence/P05-T02/test.log
-  - docs/next/evidence/P05-T02/typecheck.log
-  - docs/next/evidence/P05-T02/validate-next.log
+  - docs/next/evidence/P05-CLOSEOUT/git-status.log
+  - docs/next/evidence/P05-CLOSEOUT/core-runtime-test.log
+  - docs/next/evidence/P05-CLOSEOUT/runtime-eve-test.log
+  - docs/next/evidence/P05-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P05-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P05-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P05-CLOSEOUT/gitleaks-branch.log
+  - docs/next/evidence/P05-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P05-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-05-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-05/evidence-index.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-05/HANDOFF.md

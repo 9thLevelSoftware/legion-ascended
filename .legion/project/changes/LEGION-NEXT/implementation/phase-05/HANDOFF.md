@@ -1,79 +1,64 @@
-# Phase 5 Handoff — RuntimeDriver Contract and `runtime-local`
+# Phase 5 Handoff — Runtime Driver and Eve Integration
 
 ## Status
 
-P05-T01 closes Phase 5's RuntimeDriver contract gate. The branch
-`codex/p03-t02-board-task-repository` now carries a provider-neutral
-TypeScript contract against ADR-004, a deterministic `runtime-local`
-driver, and an import-boundary scan that fails closed on any Eve,
-host-CLI, sqlite, or legacy-prompt-asset import inside
-`packages/core/src/runtime/`.
+DONE.
 
-P05-T02 certifies the external Eve adapter surface. The branch now
-also carries a provider-neutral `@legion/runtime-eve` package, a
-pinned Eve transport boundary, fallback-policy documentation,
-subagent/sandbox/eval helpers, and synchronized selector precedence
-in `@legion/core`.
+Implementation batch: Phase 5 changes on `codex/p03-t02-board-task-repository` after base `43d059902f5dc35fc2604e2bd22b076186d8f5d7`, with final closeout evidence under `docs/next/evidence/P05-CLOSEOUT/`.
 
-P05-T03 (Fallback driver policy) can now build on the synchronized
-precedence. P05-T04 (Phase 5 closeout) will aggregate the cross-driver
-evidence and the independent review once Eve is wired in.
+Phase 5 closes the Durable Operational Kernel cut line for Legion Next. The branch now carries a provider-neutral ADR-004 `RuntimeDriver` contract, deterministic `runtime-local`, certified `runtime-eve`, reduced-guarantee `runtime-legacy-cli`, a tested fallback selector, runtime import-boundary enforcement, and a Phase 6-ready evidence/review bundle.
 
-## What landed in this card
+## Delivered Surface
 
-| Artifact | Purpose |
-| --- | --- |
-| `packages/core/src/runtime/contract.ts` | The provider-neutral `RuntimeDriver` TypeScript interface and its result types |
-| `packages/core/src/runtime/local-driver.ts` | Deterministic in-memory `runtime-local` driver emitting protocol events, final-output state snapshots, and terminal `finishedAt` preservation |
-| `packages/core/src/runtime/index.ts` | Public barrel re-exporting the canonical surface |
-| `packages/core/test/runtime-driver.test.mjs` | 19 deterministic contract tests (start / resume / cancel / inspect / stream / approve / artifact + error paths, including final-output state and timestamp regressions) |
-| `packages/core/test/runtime-e2e.test.mjs` | 5 end-to-end FakeRuntimeDriver lifecycle tests covering stream / approve / terminal artifact bundle flows |
-| `scripts/scan-runtime-import-boundaries.mjs` | ADR-004 import-boundary scan |
-| `tests/runtime-import-boundaries.test.mjs` | 10 fixture-driven regression tests pinning the rule catalog |
-| `scripts/validate-next.mjs` + `tests/validate-next.test.mjs` | New `runtime-import-boundaries` step wired between `default-runtime-scan` and `schema-generation` |
-| `packages/core/package.json` + `packages/core/tsconfig.json` | `@types/node` ^24.0.0 dev dep + `types: ["node"]` so `node:crypto` is available inside the local driver without leaking into `@legion/protocol` |
+- `packages/core/src/runtime/contract.ts`: canonical provider-neutral RuntimeDriver interface with the seven ADR-004 lifecycle methods: start, resume, cancel, inspect, stream, approve, and artifact.
+- `packages/core/src/runtime/local-driver.ts`: deterministic in-memory `runtime-local` driver emitting Legion protocol events, checkpoint generations, approvals, terminal stream events, and final-output artifact bundles.
+- `packages/core/src/runtime/legacy-cli-driver.ts`: transitional `runtime-legacy-cli` compatibility driver with explicit reduced checkpoint, stream, and artifact guarantees.
+- `packages/core/src/runtime/selector.ts`: core fallback selector with default precedence `runtime-eve -> runtime-local -> runtime-legacy-cli` and fail-closed requested-driver behavior.
+- `packages/runtime-eve/`: isolated `@legion/runtime-eve` adapter package with driver, transport boundary, fake and real transports, subagent/sandbox/eval helpers, and public-contract certification tests.
+- `scripts/scan-runtime-import-boundaries.mjs` and `tests/runtime-import-boundaries.test.mjs`: validate-next guard preventing Eve, host CLI, sqlite, non-protocol workspace imports, deep workspace imports, and legacy prompt assets from entering `packages/core/src/runtime/`.
+- `docs/next/runtime-fallback-policy.md`: operator-facing fallback policy and reduced-guarantee notes.
 
-## Acceptance evidence
+## Verification Evidence
 
-- `pnpm run typecheck` — green across all 9 workspace projects.
-- `pnpm run test` — green across all workspace test suites
-  (80 @legion/core, 54 @legion/protocol, 59 @legion/artifacts,
-  130 @legion/store-sqlite, 34 @legion/legacy-bridge,
-  10 apps/cli-e2e, 88 top-level).
-- `node scripts/validate-next.mjs` — exits 0; the new
-  `runtime-import-boundaries` step reports
-  `RuntimeDriver import-boundary scan passed (5 runtime files, 10 core files)`.
-- Full logs and SHA-256 checksums in
-  `docs/next/evidence/P05-T01/` and
-  `.legion/project/changes/LEGION-NEXT/implementation/phase-05/evidence-index.yaml`.
-- GPT-5.5 closeout review added commit `1a44cef9b3c78b012630473e893ace6d8dc3a6af`, which fixes two runtime-local final-output edge cases: non-terminal `artifact(runId)` rejections now carry the current state snapshot, and terminal bundles preserve the terminal `finishedAt` instead of substituting artifact resolution time.
+- `pnpm --filter @legion/core test` — PASS, 127/127 tests. Covers runtime-local, runtime-legacy-cli, selector, skeleton/fake driver, and core lifecycle regressions.
+- `pnpm --filter @legion/runtime-eve test` — PASS, 29/29 tests. Covers runtime-eve public contract, transport behavior, subagent/sandbox/eval helpers, and package-level fallback selection.
+- `pnpm run typecheck` — PASS across 10 workspace projects.
+- `pnpm run test` — PASS, 532/532 counted root/workspace tests.
+- `pnpm run validate:next` — PASS, including typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import-boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run.
+- `gitleaks detect --source . --log-opts=43d059902f5dc35fc2604e2bd22b076186d8f5d7..HEAD --redact --no-banner` — PASS, 10 commits scanned, no leaks found.
 
-## Notes for downstream cards
+Full transcripts are under `docs/next/evidence/P05-CLOSEOUT/`. The structured closeout report is `docs/next/evidence/P05-CLOSEOUT/integration-report.yaml`; the independent review is `docs/next/reviews/PHASE-05-INDEPENDENT-REVIEW.md`; the SHA-256 artifact index is `.legion/project/changes/LEGION-NEXT/implementation/phase-05/evidence-index.yaml`.
 
-- The contract is exported from `@legion/core`. Downstream cards
-  should `import { RuntimeDriver, RuntimeLocalDriver,
-  RUNTIME_DRIVER_METHODS, RuntimeStartRequest, RuntimeInspection,
-  RuntimeStreamEvent } from "@legion/core"`.
-- P05-T02 must build the Eve adapter against this exact contract
-  shape and use `scripts/scan-runtime-import-boundaries.mjs` as its
-  Eve-import-boundary regression guard. The current scan accepts only
-  `@legion/protocol` and the local `./contract.js` module; Eve
-  imports must come through a dedicated adapter package, not through
-  `packages/core/src/runtime/`.
-- P05-T03 must document the runtime-eve → runtime-local →
-  runtime-legacy-cli precedence and the conditions under which each
-  driver is invoked. The current branch now carries `runtime-eve`
-  plus the abstract skeleton; P05-T03 will validate the selector and
-  close out the remaining policy documentation.
+## Durable Operational Kernel Cut Line
 
-## Known follow-ups
+Phase 5 establishes these stable assumptions for downstream phases:
 
-- The branch also carries a sibling `RuntimeDriverSkeleton` +
-  `FakeRuntimeDriver` implementation authored by sargassoworker (a
-  concurrent worker on the same scratch workspace). The skeleton
-  throws `NotImplementedError` per method; the Fake is a second
-  small in-memory driver. Both pass tests and the import-boundary
-  scan. They are kept on the branch because they do not break the
-  canonical `RuntimeLocalDriver` and they are useful scaffolding for
-  future external drivers. P05-T02 can decide whether to retain,
-  trim, or replace them.
+1. Runtime consumers depend on the `RuntimeDriver` contract from `@legion/core`, not on Eve internals or host CLI APIs.
+2. `runtime-eve` is the preferred durable runtime candidate when registered and available.
+3. `runtime-local` remains the deterministic local/test fallback and must continue to produce provider-neutral protocol events.
+4. `runtime-legacy-cli` is a compatibility fallback only; its reduced guarantees are documented, test-visible, and should remain audit-visible in Phase 6+ evidence.
+5. Requested-driver overrides must fail closed when unavailable instead of silently downgrading.
+6. Runtime import boundaries are part of `validate:next`; future runtime work must keep Eve/CLI/sqlite imports outside `packages/core/src/runtime/`.
+7. Worker bundle prompt content from Phase 4 remains data passed into runtime manifests; provider adapters must not reintroduce legacy persona routing or prompt prose.
+
+## Phase 6 Starting Point
+
+Proceed to P06-T01 (`t_5008bcfb`): Baseline specification schema — oracle manifest, baseline corpus governance, scoring fixtures, and hashes from `evals/baseline`.
+
+Phase 6 should build baseline/oracle artifacts against these inputs:
+
+- Phase 5 RuntimeDriver contract and fallback policy.
+- Phase 4 functional worker bundles and prompt-content contract.
+- Phase 2 traceability/artifact model and evidence-index patterns.
+- The Phase 5 closeout report and review artifacts named above.
+
+Recommended first checks for P06-T01:
+
+1. Read this handoff, `docs/next/runtime-fallback-policy.md`, and the Phase 6 source document before editing.
+2. Treat runtime output artifacts as RuntimeDriver final-output/evidence references, not provider-specific Eve objects.
+3. Store baseline/oracle hashes in durable evidence files and wire any new validation into `validate:next` before P06 closeout.
+4. Preserve fail-closed behavior for missing or mismatched oracle/baseline hashes; do not let Phase 6 fixtures silently regenerate without review evidence.
+
+## Accepted Warning
+
+Local closeout verification ran on Node v26.0.0 and emitted pnpm engine warnings because the packages declare `>=24.0.0 <26`. The warning is not a Phase 5 source blocker because every local gate passed; CI/release runners should continue to use the declared Node range.

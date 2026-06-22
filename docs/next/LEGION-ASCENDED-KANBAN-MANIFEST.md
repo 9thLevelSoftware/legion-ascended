@@ -84,12 +84,15 @@ When implementing, compare against original Legion (v8) at:
 | P04-T07 | t_174d7346 | **otrlead** | DONE | T05,T06 |
 
 ### Phase 5: Runtime Driver and Eve Integration
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-05/`
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P05-T01 | t_1c45d2fa | legionworker | todo | P04-T07 |
-| P05-T02 | t_06a1f415 | legionworker | todo | T01 |
-| P05-T03 | t_20beaed8 | legionworker | todo | T01 |
-| P05-T04 | t_1e2a51f0 | **otrlead** | todo | T02,T03 |
+| P05-T01 | t_1c45d2fa | legionworker | DONE | P04-T07 |
+| P05-T02 | t_06a1f415 | legionworker | DONE | T01 |
+| P05-T03 | t_20beaed8 | legionworker | DONE | T01 |
+| P05-T04 | t_1e2a51f0 | **otrlead** | DONE | T02,T03 |
 
 ### Phase 6: Baseline Specification and Oracle Pipeline
 | Task | ID | Assignee | Status | Dependencies |
@@ -150,7 +153,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 4:** 18 tasks (P03-T01 through P04-T07)
-- **Remaining tasks:** 29 (20 worker tasks, 9 review/closeout tasks)
-- **Current:** P05-T01 is dependency-gated on P04-T07 closeout and is next after Phase 4 completion
+- **Completed through Phase 5:** 22 tasks (P03-T01 through P05-T04)
+- **Remaining tasks:** 25 (18 worker tasks, 7 review/closeout tasks)
+- **Current:** P06-T01 is dependency-gated on P05-T04 closeout and is next after Phase 5 completion
 - **Final:** P13-T04 (GA decision)
