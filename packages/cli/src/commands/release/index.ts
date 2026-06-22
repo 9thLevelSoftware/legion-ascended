@@ -104,26 +104,27 @@ async function checklist(context: CliContext): Promise<CliResult> {
   const args = ["scripts/release/release-checklist.mjs", "--release-version", releaseVersion];
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
-  if (typeof validateNextLog === "string") args.push("--validate-next-log", validateNextLog);
+  if (typeof validateNextLog === "string") {
+    args.push("--validate-next-log", path.resolve(context.repositoryRoot, validateNextLog));
+  }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", report);
+  if (typeof report === "string") args.push("--report", path.resolve(context.repositoryRoot, report));
 
   const result = await runScript(context, args);
-  // Parse the JSON verdict from the last stdout line regardless of
-  // exit code so CI gates surface structured findings.
+  // Parse the JSON verdict regardless of helper exit code so CI gates
+  // surface structured findings.
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
     const verdictOk = (verdict as { ok?: boolean }).ok === true;
-    return success(
-      {
-        ok: verdictOk,
-        status: verdictOk ? "ready" : "blocked",
-        verdict
-      },
-      verdictOk
-        ? `Release checklist ready for ${releaseVersion}.`
-        : `Release checklist blocked for ${releaseVersion} — see findings.`
-    );
+    const payload = {
+      ok: verdictOk,
+      status: verdictOk ? "ready" : "blocked",
+      verdict
+    };
+    const message = verdictOk
+      ? `Release checklist ready for ${releaseVersion}.`
+      : `Release checklist blocked for ${releaseVersion} — see findings.`;
+    return verdictOk ? success(payload, message) : failure(payload, message);
   }
   if (result.exitCode !== 0) return result.cliResult;
   return failure(
@@ -141,27 +142,27 @@ async function rollbackVerify(context: CliContext): Promise<CliResult> {
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
 
-  const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", backupManifest];
+  const resolvedManifest = path.resolve(context.repositoryRoot, backupManifest);
+  const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", report);
+  if (typeof report === "string") args.push("--report", path.resolve(context.repositoryRoot, report));
 
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
     const verdictOk = (verdict as { ok?: boolean }).ok === true;
-    return success(
-      {
-        ok: verdictOk,
-        status: verdictOk ? "restorable" : "blocked",
-        verdict
-      },
-      verdictOk
-        ? `Backup manifest ${backupManifest} is restorable.`
-        : `Backup manifest ${backupManifest} is blocked — see findings.`
-    );
+    const payload = {
+      ok: verdictOk,
+      status: verdictOk ? "restorable" : "blocked",
+      verdict
+    };
+    const message = verdictOk
+      ? `Backup manifest ${backupManifest} is restorable.`
+      : `Backup manifest ${backupManifest} is blocked — see findings.`;
+    return verdictOk ? success(payload, message) : failure(payload, message);
   }
   if (result.exitCode !== 0) return result.cliResult;
   return failure(
@@ -175,17 +176,33 @@ async function rollbackVerify(context: CliContext): Promise<CliResult> {
 }
 
 function parseJsonVerdict(stdout: string): unknown {
-  // The release-checklist and rollback-policy helpers emit a single
-  // pretty-printed JSON object followed by a trailing newline. Strip
-  // the leading/trailing whitespace and parse the whole document
-  // rather than relying on the last line, since a pretty-printed JSON
-  // object's last line is just a closing brace.
+  // The release-checklist and rollback-policy helpers emit pretty JSON.
+  // Prefer the whole document, then tolerate diagnostic lines before or
+  // after the object.
   const trimmed = stdout.trim();
   if (trimmed.length === 0) return null;
   try {
     return JSON.parse(trimmed);
   } catch {
-    return null;
+    const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const candidate = lines[index];
+      if (candidate === undefined) continue;
+      if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // Keep scanning older lines.
+      }
+    }
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      return null;
+    }
   }
 }
 

@@ -28,11 +28,14 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT_PATH = fileURLToPath(import.meta.url);
 
 // The JSON-credential pattern is reused in two passes (audit count + final
 // replacement), so we hoist it to a top-level constant rather than nesting
 // it inside REDACTION_PATTERNS.
-const JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"[^"]*"/gi;
+const JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
 
 // Each entry is { id, pattern, replacement }. The `id` is reported in the
 // audit log so the threat-model validator can confirm which detectors
@@ -125,7 +128,7 @@ export function redactText(input) {
         count += 1;
         // Preserve the JSON key (so readers know which credential was
         // redacted) but mask the value.
-        return match.replace(/:\s*"[^"]*"/, ': "[REDACTED_JSON_SECRET]"');
+        return match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"');
       });
       if (count > 0) audit[entry.id] = count;
       continue;
@@ -200,7 +203,8 @@ async function main() {
   process.stdout.write(`${JSON.stringify({ ok: true, audit })}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : undefined;
+if (invokedPath !== undefined && path.resolve(SCRIPT_PATH) === invokedPath) {
   main().catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);

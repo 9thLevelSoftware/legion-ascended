@@ -106,6 +106,10 @@ function ensureSemver(value, name) {
   return value;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function findLinksTo(text, target) {
   // Accept the standard Markdown forms: bare relative path or
   // `<relative-path>` or `(relative-path)`. We do not validate that the
@@ -125,18 +129,25 @@ function auditChangelog({ changelogPath, releaseVersion }) {
     return findings;
   }
   const text = readFileSync(changelogPath, "utf8");
-  // The GA entry must mention the release version. We accept either
-  // "GA-approved" or "GA-pending" so the checklist can run before and
-  // after final approval.
-  const versionNeedle = `## [${releaseVersion}]`;
-  if (!text.includes(versionNeedle)) {
+  // The requested GA entry must mention the release version and carry
+  // its own status marker. Older release entries must not satisfy this
+  // gate for a new section that lacks an explicit GA state.
+  const headingPattern = new RegExp(`^## \\[${escapeRegExp(releaseVersion)}\\][^\\n]*(?:\\n|$)`, "m");
+  const heading = text.match(headingPattern);
+  if (!heading || typeof heading.index !== "number") {
     findings.push({
       code: "changelog_missing_ga_entry",
       message: `CHANGELOG.md is missing an entry for ${releaseVersion}; expected a \`## [${releaseVersion}]\` section.`
     });
     return findings;
   }
-  if (!text.includes("GA-approved") && !text.includes("GA-pending")) {
+  const entryStart = heading.index;
+  const afterHeading = entryStart + heading[0].length;
+  const nextHeadingOffset = text.slice(afterHeading).search(/^## \[/m);
+  const entryText = nextHeadingOffset === -1
+    ? text.slice(entryStart)
+    : text.slice(entryStart, afterHeading + nextHeadingOffset);
+  if (!entryText.includes("GA-approved") && !entryText.includes("GA-pending")) {
     findings.push({
       code: "changelog_missing_ga_keyword",
       message: `CHANGELOG.md ${releaseVersion} entry is present but does not declare "GA-approved" or "GA-pending" status.`

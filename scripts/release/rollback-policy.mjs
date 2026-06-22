@@ -45,8 +45,8 @@
 //     [--source codex-legion|planning] \
 //     [--report /path/to/rollback-policy.json]
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants, existsSync, readFileSync, readdirSync } from "node:fs";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -102,7 +102,7 @@ function ensureString(value, name) {
 // and POSIX-relative paths; we recompute that here so a tampered or
 // drifted backup surfaces as a stable finding.
 import { createHash } from "node:crypto";
-import { readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 
 function toPosixPath(value) {
   return value.split(path.sep).join("/");
@@ -324,22 +324,15 @@ async function auditRestoreTarget({ repositoryRoot, manifest, kind }) {
     });
     return findings;
   }
-  // Confirm the parent directory is writable (best-effort: stat only;
-  // the bridge's rollback will surface ENOENT/EACCES itself).
+  // Confirm the parent directory is writable. access() accounts for the
+  // current process identity and platform ACLs better than raw mode bits.
   try {
     const parent = path.dirname(legionRoot);
-    const st = await stat(parent);
-    if (!(st.mode & 0o200)) {
-      findings.push({
-        code: "restore_target_writable",
-        message: `Parent of .legion (${parent}) is read-only; rollback cannot delete and replace the existing tree.`
-      });
-    }
+    await access(parent, constants.W_OK);
   } catch {
-    // Parent missing is a hard fail for any restore; surface it.
     findings.push({
       code: "restore_target_writable",
-      message: `Parent of .legion (${path.dirname(legionRoot)}) is not accessible.`
+      message: `Parent of .legion (${path.dirname(legionRoot)}) is not writable or accessible.`
     });
   }
   // If the manifest is a planning-import backup, the live .legion

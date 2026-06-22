@@ -2101,7 +2101,7 @@ test("P13-T02 evals CLI threat-model surfaces violations from tampered transcrip
       "--output-root",
       outputDir
     ]);
-    assert.equal(threatResult.exitCode, 0, threatResult.stderr);
+    assert.equal(threatResult.exitCode, 1, threatResult.stderr);
     assert.equal(threatResult.json.ok, false);
     assert.equal(threatResult.json.status, "violation");
     const codes = threatResult.json.verdict.findings.map((f) => f.code);
@@ -2153,7 +2153,7 @@ test("P13-T02 evals CLI threat-model rejects a run directory outside the output 
       "--output-root",
       altRoot
     ]);
-    assert.equal(threatResult.exitCode, 0, threatResult.stderr);
+    assert.equal(threatResult.exitCode, 1, threatResult.stderr);
     assert.equal(threatResult.json.ok, false);
     assert.equal(threatResult.json.status, "violation");
     const codes = threatResult.json.verdict.findings.map((f) => f.code);
@@ -2195,7 +2195,7 @@ test("P13-T03 release CLI checklist reports blocked when the GA evidence is miss
       "--release-version",
       "9.0.0"
     ]);
-    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.exitCode, 1, result.stderr);
     assert.equal(result.json.ok, false);
     assert.equal(result.json.status, "blocked");
     assert.ok(result.json.verdict, "verdict should be parsed");
@@ -2226,7 +2226,7 @@ test("P13-T03 release CLI checklist surfaces a stable per-check breakdown", asyn
       "--release-version",
       "9.0.0"
     ]);
-    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.exitCode, 1, result.stderr);
     // Each precondition is exposed as a sub-check under verdict.checks
     // so CI dashboards can render the per-gate status without parsing
     // the findings list.
@@ -2263,7 +2263,7 @@ test("P13-T03 release CLI rollback-verify reports blocked when the manifest is m
       "--backup-manifest",
       "/no/such/path/backup-manifest.json"
     ]);
-    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.exitCode, 1, result.stderr);
     assert.equal(result.json.ok, false);
     assert.equal(result.json.status, "blocked");
     assert.ok(result.json.verdict, "verdict should be parsed");

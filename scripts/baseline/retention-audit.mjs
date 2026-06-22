@@ -277,7 +277,8 @@ async function main() {
   if (!verdict.ok) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : undefined;
+if (invokedPath !== undefined && path.resolve(SCRIPT_PATH) === invokedPath) {
   main().catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     process.exit(1);

@@ -338,3 +338,30 @@ test("P13-T03 release-checklist fails closed when --release-version is not semve
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /semver/);
 });
+
+test("P13-T03 release-checklist scopes GA keyword to the requested CHANGELOG entry", async () => {
+  await withWorkspace(async (workspace) => {
+    const repoRoot = writeGaWorkspace(workspace);
+    const changelogPath = path.join(repoRoot, "CHANGELOG.md");
+    await writeFile(
+      changelogPath,
+      [
+        "# Changelog",
+        "",
+        "## [8.9.0] - GA-approved",
+        "",
+        "Older release.",
+        "",
+        "## [9.0.0] - in progress",
+        "",
+        "No GA marker here.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    assert.notEqual(result.status, 0);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.ok(payload.findings.some((f) => f.code === "changelog_missing_ga_keyword"));
+  });
+});

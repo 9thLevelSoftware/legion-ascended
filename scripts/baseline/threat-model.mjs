@@ -54,6 +54,38 @@ function ensureString(value, name) {
   return value;
 }
 
+function parseJsonFromStdout(stdout) {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Helpers normally emit one compact JSON object. This fallback keeps
+    // the orchestrator tolerant of warnings or diagnostic lines emitted
+    // before or after the JSON verdict.
+    const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const candidate = lines[index];
+      if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // Keep scanning older lines.
+      }
+    }
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(trimmed.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 // Invoke a sibling script under scripts/baseline/ as a subprocess. We use
 // spawnSync rather than importing the modules so the verdict reflects
 // each helper's own exit code (a process-level fail-closed gate). The
@@ -71,12 +103,7 @@ function runHelper(scriptName, args) {
   if (result.error) throw result.error;
   const stdout = result.stdout ?? "";
   const stderr = result.stderr ?? "";
-  let json = null;
-  try {
-    json = JSON.parse(stdout.trim().split(/\r?\n/).pop() ?? "{}");
-  } catch {
-    json = null;
-  }
+  const json = parseJsonFromStdout(stdout);
   return {
     exit_code: result.status ?? 1,
     stdout,
@@ -120,7 +147,7 @@ function runRedactionAudit(runDir) {
       count: bearerMatches.length
     });
   }
-  const credentialAssignment = text.match(/(api[_-]?key|token|password|secret)(\s*[:=]\s*)['"]?(?!REDACTED)[^'"\s]+/gi);
+  const credentialAssignment = text.match(/(api[_-]?key|token|password|secret)(\s*[:=]\s*)['"]?(?!\[?REDACTED\b|\[REDACTED_)[^'"\s]+/gi);
   if (credentialAssignment) {
     findings.push({
       code: "credential_assignment_present_after_redaction",
@@ -209,7 +236,8 @@ async function main() {
   if (!ok) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : undefined;
+if (invokedPath !== undefined && path.resolve(SCRIPT_PATH) === invokedPath) {
   main().catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     process.exit(1);

@@ -205,7 +205,8 @@ async function grade(context: CliContext): Promise<CliResult> {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", runDirectory]);
+  const resolvedRunDirectory = path.resolve(context.repositoryRoot, runDirectory);
+  const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
   return success(
@@ -226,9 +227,10 @@ async function compare(context: CliContext): Promise<CliResult> {
   }
   const args = [
     "scripts/baseline/compare-runs.mjs",
-    "--v8-dir", context.args.options.get("v8-dir") as string,
-    "--v9-dir", context.args.options.get("v9-dir") as string,
-    "--output", context.args.options.get("output") as string
+    "--repository-root", context.repositoryRoot,
+    "--v8-dir", path.resolve(context.repositoryRoot, context.args.options.get("v8-dir") as string),
+    "--v9-dir", path.resolve(context.repositoryRoot, context.args.options.get("v9-dir") as string),
+    "--output", path.resolve(context.repositoryRoot, context.args.options.get("output") as string)
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -256,35 +258,29 @@ async function threatModel(context: CliContext): Promise<CliResult> {
 
   const args = [
     "scripts/baseline/threat-model.mjs",
-    "--run-dir", runDir,
-    "--output-root", outputRoot
+    "--run-dir", path.resolve(context.repositoryRoot, runDir),
+    "--output-root", path.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", report);
+  if (typeof report === "string") args.push("--report", path.resolve(context.repositoryRoot, report));
 
   const result = await runScript(context, args);
-  // The threat-model script always emits a JSON verdict on its last stdout
-  // line. Parse it regardless of exit code so the CLI surface can surface
-  // structured findings (CI gates need the findings array, not a generic
-  // helper_failed error).
-  let verdict: unknown = null;
-  try {
-    verdict = JSON.parse(result.stdout.trim().split(/\r?\n/).pop() ?? "{}");
-  } catch {
-    verdict = null;
-  }
+  // Parse the JSON verdict regardless of exit code so the CLI surface can
+  // return structured findings (CI gates need the findings array, not a
+  // generic helper_failed error).
+  const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
-    return success(
-      {
-        ok: (verdict as { ok?: boolean }).ok === true,
-        status: (verdict as { ok?: boolean }).ok === true ? "verified" : "violation",
-        verdict
-      },
-      (verdict as { ok?: boolean }).ok === true
-        ? `Threat-model validator passed for ${runDir}.`
-        : `Threat-model validator failed for ${runDir} — see findings.`
-    );
+    const verdictOk = (verdict as { ok?: boolean }).ok === true;
+    const payload = {
+      ok: verdictOk,
+      status: verdictOk ? "verified" : "violation",
+      verdict
+    };
+    const message = verdictOk
+      ? `Threat-model validator passed for ${runDir}.`
+      : `Threat-model validator failed for ${runDir} — see findings.`;
+    return verdictOk ? success(payload, message) : failure(payload, message);
   }
   if (result.exitCode !== 0) return result.cliResult;
   return failure(
@@ -295,6 +291,34 @@ async function threatModel(context: CliContext): Promise<CliResult> {
     },
     "threat-model.mjs did not emit a JSON verdict"
   );
+}
+
+function parseJsonVerdict(stdout: string): unknown {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const candidate = lines[index];
+      if (candidate === undefined) continue;
+      if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // Keep scanning older lines.
+      }
+    }
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
 }
 
 async function runScript(context: CliContext, scriptArgs: readonly string[]): Promise<{ exitCode: number; stdout: string; stderr: string; cliResult: CliResult }> {
