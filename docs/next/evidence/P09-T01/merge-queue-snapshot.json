@@ -1,0 +1,338 @@
+{
+  "ok": true,
+  "schemaVersion": "1.0.0",
+  "kind": "merge-queue",
+  "snapshot": {
+    "schemaVersion": "1.0.0",
+    "kind": "merge-queue",
+    "sequenceLength": 3,
+    "steps": [
+      {
+        "schemaVersion": "1.0.0",
+        "kind": "merge-queue-step",
+        "sequenceIndex": 0,
+        "entryRef": {
+          "workerContextHash": "merge-0",
+          "isolationTag": "merge-queue:v1:e1c347293ae3",
+          "reviewPipelineHash": "sha256:d4570987e29dc62b0d08f85f215a2166abe18694ad051b7dbb86ce36cd42cc5a",
+          "verificationReportSha256": "sha256:b240ac23868e9bdb023bda0e4f59fc1f2fbb91c7f30cdda1454e153c1056a1d1",
+          "reviewHash": "sha256:0d6ae7ce695c9e45838da8041e4e8b2a25414966411ad82a47fb11edb59df902",
+          "decisionSha256": "sha256:1483e0f4ebc92525df8f70897399e8e75770471d4b41b95c82fba06734926903",
+          "taskContractId": "ctr_merge-0",
+          "contractRevision": 1
+        },
+        "outcome": "rebased",
+        "headRefBefore": "main",
+        "headRefAfter": "merge-head-0-6uwhg6o5",
+        "conflicts": [],
+        "rebase": {
+          "entrySequenceIndex": 0,
+          "command": "merge-queue.identity",
+          "args": [
+            "--sequence",
+            "0"
+          ],
+          "exitCode": 0,
+          "expectedExitCode": 0,
+          "stdoutSha256": "sha256:5ea688feaad4bfbe4c0ed2d56fd0610769e046d60ae1256b814e30bf0726e8ca",
+          "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "combinedSha256": "sha256:a4773e62beb70ed6ab92bd5f6c546dd1bfed26612f57330e2bdd5179fe82aaac",
+          "durationMs": 5,
+          "timedOut": false,
+          "startedAt": "2026-06-22T03:00:00.000Z",
+          "finishedAt": "2026-06-22T03:00:01.000Z",
+          "newHeadRef": "merge-head-0-6uwhg6o5"
+        },
+        "verification": {
+          "kind": "verification-report",
+          "schemaVersion": "1.0.0",
+          "taskContractId": "ctr_merge-0",
+          "contractRevision": 1,
+          "workerContextHash": "merge-0",
+          "commands": [
+            {
+              "index": 0,
+              "command": "pnpm",
+              "args": [
+                "--filter",
+                "@legion/core",
+                "test"
+              ],
+              "exitCode": 0,
+              "expectedExitCode": 0,
+              "stdoutSha256": "sha256:239c10f0af9701f11d46dfa9c7f940c18464e3ea57c33072981738f49b9159a3",
+              "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "combinedSha256": "sha256:c4475865d9ae9f7cf40b236f319d7ecd04a289f6086594a139af0e69f03b319b",
+              "durationMs": 10,
+              "timedOut": false,
+              "startedAt": "2026-06-22T02:00:00.000Z",
+              "finishedAt": "2026-06-22T02:00:01.000Z"
+            }
+          ],
+          "passed": true,
+          "failingIndices": [],
+          "reportSha256": "sha256:b240ac23868e9bdb023bda0e4f59fc1f2fbb91c7f30cdda1454e153c1056a1d1",
+          "createdAt": "2026-06-22T02:30:00.000Z"
+        },
+        "review": {
+          "kind": "review-record",
+          "schemaVersion": "1.0.0",
+          "taskContractId": "ctr_merge-0",
+          "contractRevision": 1,
+          "workerContextHash": "merge-0",
+          "reviewer": {
+            "kind": "human",
+            "id": "reviewer.merge",
+            "displayName": "Merge Reviewer"
+          },
+          "implementer": {
+            "kind": "worker",
+            "id": "legion-worker"
+          },
+          "verdicts": {
+            "specification": "pass",
+            "integration": "pass",
+            "evidence": "pass"
+          },
+          "findings": [],
+          "confidence": "high",
+          "summary": "merge fixture reviewer pass",
+          "independent": true,
+          "reviewHash": "sha256:0d6ae7ce695c9e45838da8041e4e8b2a25414966411ad82a47fb11edb59df902",
+          "createdAt": "2026-06-22T02:00:00.000Z",
+          "submittedAt": "2026-06-22T02:30:00.000Z"
+        },
+        "issues": [],
+        "createdAt": "2026-06-22T03:00:00.000Z",
+        "stepSha256": "sha256:49293d898207bea01ff3e2065d199e22cfd2282c16b31ea3acad4ca0a65b0d73"
+      },
+      {
+        "schemaVersion": "1.0.0",
+        "kind": "merge-queue-step",
+        "sequenceIndex": 1,
+        "entryRef": {
+          "workerContextHash": "merge-1",
+          "isolationTag": "merge-queue:v1:8ebc4975cd40",
+          "reviewPipelineHash": "sha256:99330341360194e30ccc086a019d46d6ebf01d7f8e6d61b1ffdb6d37d649d6d9",
+          "verificationReportSha256": "sha256:38cfd9e245d92f424acdf1a95acd35680b3ff0def12edaa45e06503448663c14",
+          "reviewHash": "sha256:f49a5cbf705657cd608fc64e8710c29046b44d4ccdf872d525e0daf2de0da8ae",
+          "decisionSha256": "sha256:f14ea2358325d6e8bb1a3448fad39314b9d3104fbdc2fd5fa6a16299e941f17c",
+          "taskContractId": "ctr_merge-1",
+          "contractRevision": 1
+        },
+        "outcome": "rebased",
+        "headRefBefore": "merge-head-0-6uwhg6o5",
+        "headRefAfter": "merge-head-1-l0ahs6xc",
+        "conflicts": [],
+        "rebase": {
+          "entrySequenceIndex": 1,
+          "command": "merge-queue.identity",
+          "args": [
+            "--sequence",
+            "1"
+          ],
+          "exitCode": 0,
+          "expectedExitCode": 0,
+          "stdoutSha256": "sha256:1cab448dd01fe62e8737f2ce29de3be13a7f1511377f302c6fa64f33be858f5d",
+          "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "combinedSha256": "sha256:a49517ee7ba97faed5b2f4392cba39295434189ff30073ec11b34328da812bca",
+          "durationMs": 5,
+          "timedOut": false,
+          "startedAt": "2026-06-22T03:00:00.000Z",
+          "finishedAt": "2026-06-22T03:00:01.000Z",
+          "newHeadRef": "merge-head-1-l0ahs6xc"
+        },
+        "verification": {
+          "kind": "verification-report",
+          "schemaVersion": "1.0.0",
+          "taskContractId": "ctr_merge-1",
+          "contractRevision": 1,
+          "workerContextHash": "merge-1",
+          "commands": [
+            {
+              "index": 0,
+              "command": "pnpm",
+              "args": [
+                "--filter",
+                "@legion/core",
+                "test"
+              ],
+              "exitCode": 0,
+              "expectedExitCode": 0,
+              "stdoutSha256": "sha256:239c10f0af9701f11d46dfa9c7f940c18464e3ea57c33072981738f49b9159a3",
+              "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "combinedSha256": "sha256:c4475865d9ae9f7cf40b236f319d7ecd04a289f6086594a139af0e69f03b319b",
+              "durationMs": 10,
+              "timedOut": false,
+              "startedAt": "2026-06-22T02:00:00.000Z",
+              "finishedAt": "2026-06-22T02:00:01.000Z"
+            }
+          ],
+          "passed": true,
+          "failingIndices": [],
+          "reportSha256": "sha256:38cfd9e245d92f424acdf1a95acd35680b3ff0def12edaa45e06503448663c14",
+          "createdAt": "2026-06-22T02:30:00.000Z"
+        },
+        "review": {
+          "kind": "review-record",
+          "schemaVersion": "1.0.0",
+          "taskContractId": "ctr_merge-1",
+          "contractRevision": 1,
+          "workerContextHash": "merge-1",
+          "reviewer": {
+            "kind": "human",
+            "id": "reviewer.merge",
+            "displayName": "Merge Reviewer"
+          },
+          "implementer": {
+            "kind": "worker",
+            "id": "legion-worker"
+          },
+          "verdicts": {
+            "specification": "pass",
+            "integration": "pass",
+            "evidence": "pass"
+          },
+          "findings": [],
+          "confidence": "high",
+          "summary": "merge fixture reviewer pass",
+          "independent": true,
+          "reviewHash": "sha256:f49a5cbf705657cd608fc64e8710c29046b44d4ccdf872d525e0daf2de0da8ae",
+          "createdAt": "2026-06-22T02:00:00.000Z",
+          "submittedAt": "2026-06-22T02:30:00.000Z"
+        },
+        "issues": [],
+        "createdAt": "2026-06-22T03:00:00.000Z",
+        "stepSha256": "sha256:10f77a2691597b7d8f35730de2e7913b53c57cb4e914e15eb4a569bd663cfa89"
+      },
+      {
+        "schemaVersion": "1.0.0",
+        "kind": "merge-queue-step",
+        "sequenceIndex": 2,
+        "entryRef": {
+          "workerContextHash": "merge-2",
+          "isolationTag": "merge-queue:v1:d240ad181442",
+          "reviewPipelineHash": "sha256:4b95c6c5272118fb557b7c8277d04bf283f46762c6f767f349e6915e186c325f",
+          "verificationReportSha256": "sha256:2c0d3941d76328fd71ec28bae4aebdbe3cec40b10568362803344e0fa1ac992e",
+          "reviewHash": "sha256:1f49f3604e5789eb9d1b5c7b333b32615510a0dc88744400428bbb91a1c71b4a",
+          "decisionSha256": "sha256:6f208c30edaf0e4671e6ea1f4963cc0e260b98385b85aa377dec3a22dae5e937",
+          "taskContractId": "ctr_merge-2",
+          "contractRevision": 1
+        },
+        "outcome": "rebased",
+        "headRefBefore": "merge-head-1-l0ahs6xc",
+        "headRefAfter": "merge-head-2-syjatkx7",
+        "conflicts": [],
+        "rebase": {
+          "entrySequenceIndex": 2,
+          "command": "merge-queue.identity",
+          "args": [
+            "--sequence",
+            "2"
+          ],
+          "exitCode": 0,
+          "expectedExitCode": 0,
+          "stdoutSha256": "sha256:44b18a1b8be8c9ef3244f6332c9dd789837b0e4dc36c2bc28e3e0535360c6cd6",
+          "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "combinedSha256": "sha256:819f8f3c08a82f6b0f0e6d30877b2e2d4dfe233de310a5b2572c9f8cb840640a",
+          "durationMs": 5,
+          "timedOut": false,
+          "startedAt": "2026-06-22T03:00:00.000Z",
+          "finishedAt": "2026-06-22T03:00:01.000Z",
+          "newHeadRef": "merge-head-2-syjatkx7"
+        },
+        "verification": {
+          "kind": "verification-report",
+          "schemaVersion": "1.0.0",
+          "taskContractId": "ctr_merge-2",
+          "contractRevision": 1,
+          "workerContextHash": "merge-2",
+          "commands": [
+            {
+              "index": 0,
+              "command": "pnpm",
+              "args": [
+                "--filter",
+                "@legion/core",
+                "test"
+              ],
+              "exitCode": 0,
+              "expectedExitCode": 0,
+              "stdoutSha256": "sha256:239c10f0af9701f11d46dfa9c7f940c18464e3ea57c33072981738f49b9159a3",
+              "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "combinedSha256": "sha256:c4475865d9ae9f7cf40b236f319d7ecd04a289f6086594a139af0e69f03b319b",
+              "durationMs": 10,
+              "timedOut": false,
+              "startedAt": "2026-06-22T02:00:00.000Z",
+              "finishedAt": "2026-06-22T02:00:01.000Z"
+            }
+          ],
+          "passed": true,
+          "failingIndices": [],
+          "reportSha256": "sha256:2c0d3941d76328fd71ec28bae4aebdbe3cec40b10568362803344e0fa1ac992e",
+          "createdAt": "2026-06-22T02:30:00.000Z"
+        },
+        "review": {
+          "kind": "review-record",
+          "schemaVersion": "1.0.0",
+          "taskContractId": "ctr_merge-2",
+          "contractRevision": 1,
+          "workerContextHash": "merge-2",
+          "reviewer": {
+            "kind": "human",
+            "id": "reviewer.merge",
+            "displayName": "Merge Reviewer"
+          },
+          "implementer": {
+            "kind": "worker",
+            "id": "legion-worker"
+          },
+          "verdicts": {
+            "specification": "pass",
+            "integration": "pass",
+            "evidence": "pass"
+          },
+          "findings": [],
+          "confidence": "high",
+          "summary": "merge fixture reviewer pass",
+          "independent": true,
+          "reviewHash": "sha256:1f49f3604e5789eb9d1b5c7b333b32615510a0dc88744400428bbb91a1c71b4a",
+          "createdAt": "2026-06-22T02:00:00.000Z",
+          "submittedAt": "2026-06-22T02:30:00.000Z"
+        },
+        "issues": [],
+        "createdAt": "2026-06-22T03:00:00.000Z",
+        "stepSha256": "sha256:86bf49623399baa960468f00a458f69dc555af6d04cb7d90e90eed482788ebb9"
+      }
+    ],
+    "orderedSequenceIndices": [
+      0,
+      1,
+      2
+    ],
+    "createdAt": "2026-06-22T03:00:00.000Z",
+    "mergeQueueHash": "sha256:9ff609ee9f1f2b980c38960d7fe5c1db2ea766b24f4360116c5273ed7df9a377"
+  },
+  "decision": {
+    "schemaVersion": "1.0.0",
+    "kind": "merge-integration-decision",
+    "mergeQueueHash": "sha256:9ff609ee9f1f2b980c38960d7fe5c1db2ea766b24f4360116c5273ed7df9a377",
+    "finalHeadRef": "merge-head-2-syjatkx7",
+    "outcome": "integrated",
+    "acceptedEntries": [
+      0,
+      1,
+      2
+    ],
+    "rejectedEntries": [],
+    "escalatedEntries": [],
+    "conflictEntries": [],
+    "createdAt": "2026-06-22T03:00:00.000Z",
+    "rationale": "Integrated: 3 entry(ies) rebased sequentially.",
+    "decisionSha256": "sha256:adcdf215892b32fbc7253dafe1cca3e8d053fb77d3d0dcad99d27157cd467de0"
+  },
+  "blockers": [],
+  "issues": [],
+  "mergeQueueHash": "sha256:9ff609ee9f1f2b980c38960d7fe5c1db2ea766b24f4360116c5273ed7df9a377",
+  "createdAt": "2026-06-22T03:00:00.000Z"
+}

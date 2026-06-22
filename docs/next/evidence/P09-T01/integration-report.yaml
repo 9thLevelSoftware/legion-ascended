@@ -1,0 +1,137 @@
+phase: P09
+status: PASS
+title: Merge queue — ordered merge queue with conflict detection, rebase, and sequential integration
+branch: codex/p03-t02-board-task-repository
+base_sha: 657f14ef52974efb0b72f009f536f7105884ad9c
+head_sha: pending
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T07:36:40Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local core/protocol/artifacts/typecheck/workspace/validate gates passed."
+acceptance:
+  ordered_merge_queue:
+    status: PASS
+    evidence:
+      - packages/core/src/merge/contract.ts
+      - packages/core/src/merge/orchestrator.ts
+      - packages/core/src/merge/rebase.ts
+      - packages/core/test/merge.test.mjs
+      - docs/next/evidence/P09-T01/merge-queue-snapshot.json
+    notes:
+      - "MergeQueueOrchestrator accepts an ordered set of accepted task runs and produces a frozen snapshot plus a whole-change MergeIntegrationDecision."
+      - "Sequencer walks one entry at a time, refuses to advance past a conflict / rejected / escalated step, and propagates a `previousOutcome` flag so later entries do not falsely report `entry_base_ref_mismatch` when the head ref has not moved."
+      - "The orchestrator result exposes only the `MERGE_QUEUE_KEYS` allowlist; every output is deeply frozen."
+  conflict_detection:
+    status: PASS
+    evidence:
+      - packages/core/src/merge/conflict.ts
+      - packages/core/test/merge.test.mjs
+    notes:
+      - "Path-level conflict detector normalizes POSIX paths (handles `.`, `..`, trailing slashes) and reports `overlapping_write` and `sequential_violation` reports with stable sorted indices."
+      - "An externally supplied PathOwnershipMap is honored alongside contract-declared write/sequential scopes, so CLI adapters can layer in filesystem-discovered claims (e.g. `git ls-tree`)."
+      - "Conflict pairs are deduped by `(path, reason)` so the same pair across multiple overlapping scopes collapses into a single ConflictReport."
+  rebase_sequencer:
+    status: PASS
+    evidence:
+      - packages/core/src/merge/rebase.ts
+      - packages/core/test/merge.test.mjs
+    notes:
+      - "Rebase execution is injected as a `RebaseRunner` callback so the merge queue stays provider-neutral (no git, no Eve, no board persistence)."
+      - "A failing runner surfaces `rebase_command_failed`; an empty `newHeadRef` surfaces `rebase_head_drift`; both gate the step to `conflict`."
+      - "Without a runner, every step is `queued` and the whole-change decision is `blocked`."
+  whole_change_integration_gate:
+    status: PASS
+    evidence:
+      - packages/core/src/merge/gate.ts
+      - packages/core/test/merge.test.mjs
+    notes:
+      - "Fail-closed aggregation: any `rejected` or `conflict` step forces whole-change `rejected`; any `escalated` step forces whole-change `escalated`; any `queued` step forces `blocked`; otherwise `integrated`."
+      - "Decision carries the snapshot's `mergeQueueHash`, a deterministic `decisionSha256`, and a human-readable `rationale` so audit consumers can grep for the failing entry set."
+  phase_boundaries:
+    status: PASS
+    evidence:
+      - packages/core/test/merge.test.mjs
+    notes:
+      - "Provider-neutral source scan: no imports of `runtime-local-driver`, `runtime-eve`, `runtime-legacy-cli`, `board-store`, `node:sqlite`, or `process.env` in the merge module."
+      - "Phase 8 freshness boundary preserved: merge queue consumes `WorkerContext` (deeply frozen, content-addressed) and `PerTaskReviewPipelineResult` (frozen decision/review/verification) but never reads worker scratch state."
+      - "Phase 5 runtime-import-boundary scan still passes: the merge module does not depend on `../runtime/*` (uses an inline `sha256ContentHash` helper). Hidden oracle boundary preserved: queue entries reference only public WorkerContext + PerTaskReviewPipeline data."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P09-T01/core-test.log
+      - docs/next/evidence/P09-T01/protocol-test.log
+      - docs/next/evidence/P09-T01/artifacts-test.log
+      - docs/next/evidence/P09-T01/typecheck.log
+      - docs/next/evidence/P09-T01/workspace-tests.log
+      - docs/next/evidence/P09-T01/validate-next.log
+      - docs/next/evidence/P09-T01/gitleaks-p09-diff.log
+    notes:
+      - "@legion/core: 226 pass / 0 fail (185 prior + 41 P09-T01)."
+      - "@legion/protocol: pass / 0 fail; @legion/artifacts: pass / 0 fail."
+      - "Workspace typecheck passed across 10 projects."
+      - "Workspace tests passed: root + recursive package suites including cli-e2e 10/10."
+      - "validate-next passed all project gates including runtime-import-boundaries and package boundaries."
+      - "Full P09-T01 diff gitleaks pipe scan found no leaks in 130.21 KB of staged change."
+  evidence_artifacts:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P09-T01/merge-queue-snapshot.json
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-09/ledger.yaml (planned)
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-09/evidence-index.yaml (planned)
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-09/HANDOFF.md (planned)
+      - docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md (planned)
+    notes:
+      - "Canonical snapshot JSON shows outcome=integrated, mergeQueueHash=sha256:9ff609ee9f1f2b980c38960d7fe5c1db2ea766b24f4360116c5273ed7df9a377, decisionSha256=sha256:adcdf215892b32fbc7253dafe1cca3e8d053fb77d3d0dcad99d27157cd467de0."
+      - "Phase 9 ledger, evidence index, HANDOFF, and independent review are produced in P09-T03 by otrlead."
+commands:
+  - name: core-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/core-test.log
+    result: "226 pass / 0 fail (185 prior + 41 P09-T01)"
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/protocol-test.log
+    result: "pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/artifacts-test.log
+    result: "pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/workspace-tests.log
+    result: "root + recursive package suites passed; cli-e2e 10/10 passed"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p09-diff
+    command: "git diff --binary HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-09' ':!docs/next/evidence/P09-T01' | gitleaks detect --pipe --no-color --redact"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-T01/gitleaks-p09-diff.log
+    result: "No leaks found in 130.21 KB P09-T01 diff scan"
+blockers: []
+phase_9_handoff:
+  next_task: P09-T02
+  next_task_id: t_13698b40
+  summary: "P09-T02 will layer the whole-change acceptance aggregator (board-driven events, change acceptance transitions) on top of the merge queue's deterministic snapshot and decision shapes."
+  contract_inputs_for_p09_t02:
+    - "MergeQueueOrchestratorResult.snapshot (mergeQueueHash, orderedSequenceIndices, per-step stepSha256 + outcome + headRefAfter)."
+    - "MergeQueueOrchestratorResult.decision (outcome, acceptedEntries, rejectedEntries, escalatedEntries, conflictEntries, finalHeadRef, rationale, decisionSha256)."
+    - "MergeQueueOrchestratorResult.blockers (code, path, entrySequenceIndex, reporter, reportedAt) for board persistence."
+    - "MergeQueueOrchestratorResult.issues (typed MergeQueueIssue[] with codes from the MergeQueueIssueCode allowlist) for the next stage's event sourcing."
+  preserved_boundaries:
+    - "Do not re-implement conflict detection in the aggregator; consume MergeQueueOrchestratorResult.conflicts per-step instead."
+    - "Do not bypass the rebase sequencer to advance the head ref; the queue owns the per-step state machine."
+    - "Keep board persistence out of core: the aggregator projects snapshot/decision/blockers into board events, but core does not depend on board-store."

@@ -1,0 +1,75 @@
+phase: 9
+phase_id: P09
+status: IN_PROGRESS
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/09-phase-merge-queue-and-whole-change-acceptance.md"
+base_commit: "657f14ef52974efb0b72f009f536f7105884ad9c"
+started_at: "2026-06-22T07:30:00Z"
+completed_at: null
+active_wave: 1
+tasks:
+  P09-T01:
+    status: DONE
+    run_id: "P09-T01-20260622-merge-queue-orchestrator"
+    commit: "pending"
+    evidence: docs/next/evidence/P09-T01/integration-report.yaml
+    depends_on: ["P08-T03"]
+  P09-T02:
+    status: TODO
+    depends_on: ["P09-T01"]
+  P09-T03:
+    status: TODO
+    depends_on: ["P09-T02"]
+    assignee: otrlead
+decisions:
+  - task: P09-T01
+    decision: "MergeQueue module lives in @legion/core (not @legion/protocol) because it orchestrates protocol-level entities AND core-level dispatch/review outputs."
+    reason: "Mirrors the P08-T01 and P08-T02 placement rule: protocol owns the entity schemas (TaskContract, PerTaskReviewPipelineResult, WorkerContext) and core owns the orchestrators that consume those entities. Keeping the merge queue in core preserves the protocol → core → CLI/board layering."
+    decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T01
+    decision: "Rebase execution is injected via a `RebaseRunner` callback; core never imports git, Eve, or board persistence."
+    reason: "ADR-004 (RuntimeDriver neutrality) and Phase 5 boundary scan forbid non-runtime modules in core from depending on runtime helpers. The CLI adapter wraps the actual git/Eve call so the queue stays provider-neutral."
+    decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T01
+    decision: "Conflict detection is path-based and deterministic; it normalizes POSIX paths (handles `.`, `..`, trailing slashes) and reports `overlapping_write` or `sequential_violation` with sorted, deduped indices."
+    reason: "Two entries claiming the same write path must block integration before the rebase step advances. The detector is pure: it only inspects entry contracts and an optional external `PathOwnershipMap` (so the CLI can layer in filesystem-discovered claims)."
+    decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T01
+    decision: "Per-step outcome is one of seven values: `queued`, `rebased`, `conflict`, `rejected`, `escalated`, `integrated`, with `integrated` reserved for the whole-change aggregate."
+    reason: "Per-step outcomes must distinguish 'runner wired, rebase succeeded' from 'runner wired, rebase failed' from 'runner missing' so the orchestrator can compute the whole-change outcome without re-running the sequencer."
+    decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T01
+    decision: "Whole-change integration gate fails closed: any rejected/conflict step forces whole-change `rejected`; any escalated step forces whole-change `escalated`; any queued step forces whole-change `blocked`; otherwise `integrated`."
+    reason: "Phase 8 already established that `AcceptanceDecision.outcome` is `accepted | rejected | escalated`; the merge queue preserves the same three-valued logic at the whole-change level and adds `blocked` for the 'runner not wired' state so operators can distinguish 'not yet integrated' from 'integrated'."
+    decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T01
+    decision: "Sequencer propagates `previousOutcome` to the next step so a queued / conflict / rejected / escalated previous step does NOT trigger a spurious `entry_base_ref_mismatch`."
+    reason: "When a step did not advance the head ref, the next entry's `baseRef` cannot drift from the chain's perspective. Flagging it would surface misleading conflicts during board-driven review of pending queues."
+    decided_at: "2026-06-22T07:35:00Z"
+  - task: P09-T01
+    decision: "Merge queue snapshot carries `mergeQueueHash`; per-step hashes are `stepSha256`; whole-change decision hash is `decisionSha256`. The hash inputs are stable across replays so audit consumers can prove 'same queue ⇒ same decision'."
+    reason: "Phase 8 set the precedent with `workerContextHash`, `reviewPipelineHash`, and `decisionSha256`; the merge queue extends that content-addressed audit trail to the whole-change layer."
+    decided_at: "2026-06-22T07:35:00Z"
+evidence:
+  - packages/core/src/merge/contract.ts
+  - packages/core/src/merge/hash.ts
+  - packages/core/src/merge/conflict.ts
+  - packages/core/src/merge/rebase.ts
+  - packages/core/src/merge/gate.ts
+  - packages/core/src/merge/orchestrator.ts
+  - packages/core/src/merge/index.ts
+  - packages/core/src/index.ts
+  - packages/core/test/merge.test.mjs
+  - packages/core/test/merge-fixture.mjs
+  - packages/core/test/merge-evidence-snapshot.mjs
+  - docs/next/evidence/P09-T01/merge-queue-snapshot.json
+  - docs/next/evidence/P09-T01/integration-report.yaml
+  - docs/next/evidence/P09-T01/core-test.log
+  - docs/next/evidence/P09-T01/protocol-test.log
+  - docs/next/evidence/P09-T01/artifacts-test.log
+  - docs/next/evidence/P09-T01/typecheck.log
+  - docs/next/evidence/P09-T01/workspace-tests.log
+  - docs/next/evidence/P09-T01/validate-next.log
+  - docs/next/evidence/P09-T01/gitleaks-p09-diff.log
+  - docs/next/evidence/P09-T01/command-summary.env
+  - docs/next/evidence/P09-T01/git-status.log
+  - docs/next/evidence/P09-T01/git-diff-stat.log

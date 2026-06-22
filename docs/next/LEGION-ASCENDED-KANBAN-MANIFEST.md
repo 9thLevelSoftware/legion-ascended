@@ -125,11 +125,11 @@ When implementing, compare against original Legion (v8) at:
 | P08-T03 | t_be46700c | **otrlead** | DONE | T02 |
 
 ### Phase 9: Merge Queue and Whole Change Acceptance
-**Status:** TODO — next task after Phase 8 closeout is P09-T01 merge queue.
+**Status:** IN PROGRESS — P09-T01 merge queue done; P09-T02 + P09-T03 remaining.
 
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P09-T01 | t_cf3bdb25 | legionworker | todo | P08-T03 |
+| P09-T01 | t_cf3bdb25 | legionworker | DONE | P08-T03 |
 | P09-T02 | t_13698b40 | legionworker | todo | T01 |
 | P09-T03 | t_095363c6 | **otrlead** | todo | T02 |
 
@@ -164,7 +164,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 8:** 31 tasks (P03-T01 through P08-T03)
-- **Remaining tasks:** 16 (11 worker tasks, 5 review/closeout tasks)
-- **Current:** P09-T01 is dependency-gated on P08-T03 closeout and is next after Phase 8 completion
+- **Completed through Phase 9:** 32 tasks (P03-T01 through P09-T01)
+- **Remaining tasks:** 15 (10 worker tasks, 5 review/closeout tasks)
+- **Current:** P09-T01 is DONE; P09-T02 is next (whole-change acceptance aggregator, dependency-gated on T01)
 - **Final:** P13-T04 (GA decision)
