@@ -35,7 +35,7 @@
 | Architecture feasibility | After Phase 0 ✓ |
 | Typed foundation | After Phase 2 ✓ |
 | Durable operational kernel | After Phase 5 ✓ |
-| CLI-first MVP | After Phase 8 |
+| CLI-first MVP | After Phase 8 ✓ |
 | Accepted change lifecycle | After Phase 9 |
 | Production lifecycle | After Phase 10 |
 | Operator/UI beta | After Phase 11 |
@@ -115,16 +115,18 @@ When implementing, compare against original Legion (v8) at:
 | P07-T03 | t_0c533e06 | **otrlead** | DONE | T02 |
 
 ### Phase 8: Fresh Context Task Execution and Per-Task Review
-|**Status:** IN PROGRESS — P08-T01 implemented (FreshContextDispatcher + 25 unit tests + evidence bundle); P08-T02 implemented (PerTaskReviewPipeline + 33 unit tests + evidence bundle); P08-T03 pending review.
-|**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-08/`
+**Status:** DONE (closeout reviewed by GPT-5.5 / otrlead; CLI-first MVP cut line reached)
+**Ledger:** `.legion/project/changes/LEGION-NEXT/implementation/phase-08/`
 
-|| Task | ID | Assignee | Status | Dependencies |
-|| --- | --- | --- | --- | --- |
-|| P08-T01 | t_1111b940 | legionworker | DONE | P07-T03 |
-|| P08-T02 | t_9321f68b | legionworker | DONE | T01 |
-|| P08-T03 | t_be46700c | **otrlead** | todo | T02 |
+| Task | ID | Assignee | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| P08-T01 | t_1111b940 | legionworker | DONE | P07-T03 |
+| P08-T02 | t_9321f68b | legionworker | DONE | T01 |
+| P08-T03 | t_be46700c | **otrlead** | DONE | T02 |
 
 ### Phase 9: Merge Queue and Whole Change Acceptance
+**Status:** TODO — next task after Phase 8 closeout is P09-T01 merge queue.
+
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
 | P09-T01 | t_cf3bdb25 | legionworker | todo | P08-T03 |
@@ -162,7 +164,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 7:** 28 tasks (P03-T01 through P07-T03)
-- **Remaining tasks:** 19 (13 worker tasks, 6 review/closeout tasks)
-- **Current:** P08-T01 is dependency-gated on P07-T03 closeout and is next after Phase 7 completion
+- **Completed through Phase 8:** 31 tasks (P03-T01 through P08-T03)
+- **Remaining tasks:** 16 (11 worker tasks, 5 review/closeout tasks)
+- **Current:** P09-T01 is dependency-gated on P08-T03 closeout and is next after Phase 8 completion
 - **Final:** P13-T04 (GA decision)

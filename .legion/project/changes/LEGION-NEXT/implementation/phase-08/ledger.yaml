@@ -1,14 +1,15 @@
 phase: 8
 phase_id: P08
-status: IN_PROGRESS
+status: DONE
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/08-phase-fresh-context-task-execution-and-per-task-review.md"
 base_commit: "ef0581f8803dc13e1975a8f049515afff21cec28"
 started_at: "2026-06-22T05:30:00-04:00"
-active_wave: 2
+completed_at: "2026-06-22T06:49:50Z"
+active_wave: 3
 tasks:
   P08-T01: { status: DONE, run_id: "P08-T01-20260622-fresh-context-dispatcher", commit: "3096d5f" }
-  P08-T02: { status: DONE, run_id: "P08-T02-20260622-per-task-review-pipeline", commit: "8f549c9537967b1129f1b686ed4ec4d937482377", depends_on: ["P08-T01"] }
-  P08-T03: { status: TODO, run_id: null, commit: null, depends_on: ["P08-T02"], assignee: otrlead }
+  P08-T02: { status: DONE, run_id: "P08-T02-20260622-per-task-review-pipeline", commit: "8f549c9537967b1129f1b686ed4ec4d937482377", closeout_commit: "d459252", depends_on: ["P08-T01"] }
+  P08-T03: { status: DONE, run_id: "P08-T03-20260622-phase-08-closeout", commit: "P08-final-head", depends_on: ["P08-T02"], assignee: otrlead }
 decisions:
   - task: P08-T01
     decision: "Fresh-context dispatcher lives in @legion/core (not @legion/protocol) because WorkerContext is a core-internal execution concept that derives from the protocol-level TaskContract."
@@ -54,6 +55,14 @@ decisions:
     decision: "Acceptance decision outcome is one of three values: `accepted`, `rejected`, `escalated`."
     reason: "Three-valued outcome preserves the difference between 'gate failed ⇒ task must redo' and 'gate requires human ⇒ task must escalate' without conflating them."
     decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T03
+    decision: "Close Phase 8 as the CLI-first MVP cut line with fresh-context dispatch plus per-task review/acceptance evidence finalized."
+    reason: "P08-T01 and P08-T02 together establish the minimal CLI-first worker lifecycle: a task is preflighted, isolated into a frozen WorkerContext, verified deterministically, independently reviewed, and mapped to accepted/rejected/escalated task outcomes before Phase 9 aggregates whole-change acceptance."
+    decided_at: "2026-06-22T06:49:50Z"
+  - task: P08-T03
+    decision: "Closeout reruns a full Phase 8 diff gitleaks scan instead of relying only on the P08-T02 task-level gitleaks transcript."
+    reason: "The P08-T02 task transcript recorded a mis-specified file-as-source invocation that scanned 0 bytes. The closeout gate compensates with `git diff --binary ef0581f...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe`, scanning 432.28 KB of Phase 8 diff with no leaks found while excluding this self-referential hash index."
+    decided_at: "2026-06-22T06:49:50Z"
 blockers: []
 evidence:
   - packages/core/src/dispatch/contract.ts
@@ -62,23 +71,6 @@ evidence:
   - packages/core/src/dispatch/blocker.ts
   - packages/core/src/dispatch/dispatcher.ts
   - packages/core/src/dispatch/index.ts
-  - packages/core/src/index.ts
-  - packages/core/test/dispatch.test.mjs
-  - packages/core/test/dispatch-fixture.mjs
-  - scripts/serialize-p08-worker-context.mjs
-  - docs/next/evidence/P08-T01/git-status.log
-  - docs/next/evidence/P08-T01/git-diff-stat.log
-  - docs/next/evidence/P08-T01/core-test.log
-  - docs/next/evidence/P08-T01/protocol-test.log
-  - docs/next/evidence/P08-T01/artifacts-test.log
-  - docs/next/evidence/P08-T01/typecheck.log
-  - docs/next/evidence/P08-T01/workspace-tests.log
-  - docs/next/evidence/P08-T01/validate-next.log
-  - docs/next/evidence/P08-T01/gitleaks-p08.log
-  - docs/next/evidence/P08-T01/command-summary.env
-  - docs/next/evidence/P08-T01/worker-context.json
-  - docs/next/evidence/P08-T01/integration-report.yaml
-  - docs/next/evidence/P08-T01/evidence-index.yaml
   - packages/core/src/review/contract.ts
   - packages/core/src/review/hash.ts
   - packages/core/src/review/verification.ts
@@ -86,19 +78,29 @@ evidence:
   - packages/core/src/review/gate.ts
   - packages/core/src/review/pipeline.ts
   - packages/core/src/review/index.ts
+  - packages/core/src/index.ts
+  - packages/core/test/dispatch.test.mjs
+  - packages/core/test/dispatch-fixture.mjs
   - packages/core/test/review.test.mjs
   - packages/core/test/review-fixture.mjs
+  - scripts/serialize-p08-worker-context.mjs
   - scripts/serialize-p08-t02-review.mjs
+  - docs/next/evidence/P08-T01/worker-context.json
+  - docs/next/evidence/P08-T01/integration-report.yaml
   - docs/next/evidence/P08-T02/review-pipeline-result.json
-  - docs/next/evidence/P08-T02/git-status.log
-  - docs/next/evidence/P08-T02/git-diff-stat.log
-  - docs/next/evidence/P08-T02/core-test.log
-  - docs/next/evidence/P08-T02/protocol-test.log
-  - docs/next/evidence/P08-T02/artifacts-test.log
-  - docs/next/evidence/P08-T02/typecheck.log
-  - docs/next/evidence/P08-T02/workspace-tests.log
-  - docs/next/evidence/P08-T02/validate-next.log
-  - docs/next/evidence/P08-T02/gitleaks-p08-t02.log
-  - docs/next/evidence/P08-T02/command-summary.env
   - docs/next/evidence/P08-T02/integration-report.yaml
   - docs/next/evidence/P08-T02/evidence-index.yaml
+  - docs/next/evidence/P08-CLOSEOUT/core-test.log
+  - docs/next/evidence/P08-CLOSEOUT/protocol-test.log
+  - docs/next/evidence/P08-CLOSEOUT/artifacts-test.log
+  - docs/next/evidence/P08-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P08-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P08-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log
+  - docs/next/evidence/P08-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P08-CLOSEOUT/git-status.log
+  - docs/next/evidence/P08-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-08-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-08/HANDOFF.md
+  - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md

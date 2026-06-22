@@ -1,0 +1,128 @@
+phase: P08
+status: PASS
+title: Fresh Context Task Execution and Per-Task Review closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: ef0581f8803dc13e1975a8f049515afff21cec28
+head_before_closeout: d459252353b4b06abb2a871c41c6d0affc844bb8
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T06:49:50Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local core/protocol/artifacts/typecheck/workspace/validate gates passed."
+  - "The P08-T02 task-level gitleaks transcript used a mis-specified file-as-source invocation and scanned 0 bytes; this closeout compensates with a full Phase 8 diff pipe scan recorded in docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log."
+acceptance:
+  fresh_context_task_execution:
+    status: PASS
+    evidence:
+      - packages/core/src/dispatch/contract.ts
+      - packages/core/src/dispatch/dispatcher.ts
+      - packages/core/src/dispatch/blocker.ts
+      - packages/core/test/dispatch.test.mjs
+      - docs/next/evidence/P08-T01/worker-context.json
+    notes:
+      - "FreshContextDispatcher derives a deep-frozen WorkerContext from a preflighted TaskContract and exposes only WORKER_CONTEXT_KEYS."
+      - "Dispatcher failure modes preserve structured P07 preflight issue codes and add context_reference_out_of_scope for spec/design reference leakage."
+      - "WorkerContext hash and isolationTag provide stable, content-addressed audit handles for logs, evidence, and downstream review."
+  per_task_review_pipeline:
+    status: PASS
+    evidence:
+      - packages/core/src/review/contract.ts
+      - packages/core/src/review/verification.ts
+      - packages/core/src/review/reviewer.ts
+      - packages/core/src/review/gate.ts
+      - packages/core/src/review/pipeline.ts
+      - packages/core/test/review.test.mjs
+      - docs/next/evidence/P08-T02/review-pipeline-result.json
+    notes:
+      - "Verification is deterministic and injected; core never spawns child processes or runtime drivers."
+      - "Reviewer identity is checked against the implementer, same-actor reviews surface reviewer_is_implementer, and blocking findings without evidence refs are rejected."
+      - "ADR-006 per-task gates produce accepted, rejected, or escalated outcomes; R3 escalates for explicit human approval rather than being treated as a failed task."
+  phase_boundaries:
+    status: PASS
+    evidence:
+      - packages/core/test/dispatch.test.mjs
+      - packages/core/test/review.test.mjs
+      - docs/next/evidence/P08-CLOSEOUT/core-test.log
+    notes:
+      - "P07 preflight remains the protocol-level readiness gate; Phase 8 consumes it rather than duplicating it."
+      - "Phase 6 hidden-oracle boundary is preserved because worker/review contexts reference only protocol artifact references and deterministic WorkerContext data."
+      - "Phase 5 RuntimeDriver neutrality is preserved by static scans that reject runtime driver, Eve, board-store, or process.env imports in dispatch/review source."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P08-CLOSEOUT/core-test.log
+      - docs/next/evidence/P08-CLOSEOUT/protocol-test.log
+      - docs/next/evidence/P08-CLOSEOUT/artifacts-test.log
+      - docs/next/evidence/P08-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P08-CLOSEOUT/workspace-tests.log
+      - docs/next/evidence/P08-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log
+    notes:
+      - "@legion/core: 185 pass / 0 fail, including P08-T01 and P08-T02 coverage."
+      - "@legion/protocol: 55 pass / 0 fail; @legion/artifacts: 59 pass / 0 fail."
+      - "Workspace typecheck passed across 10 projects."
+      - "Workspace tests passed: root 94 plus package suites through cli-e2e 10, with no failures."
+      - "validate-next passed all project gates."
+      - "Full Phase 8 diff gitleaks pipe scan found no leaks."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-08/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-08/HANDOFF.md
+      - docs/next/reviews/PHASE-08-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P08-T01 through P08-T03 complete and blockers cleared."
+      - "CLI-first MVP cut line is marked complete and Phase 9 begins at P09-T01 merge queue."
+commands:
+  - name: core-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/core-test.log
+    result: "185 pass / 0 fail"
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/protocol-test.log
+    result: "55 pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/workspace-tests.log
+    result: "workspace/root + recursive package suites passed; cli-e2e 10/10 passed"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p08-diff
+    command: "git diff --binary ef0581f8803dc13e1975a8f049515afff21cec28...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact"
+    exit_code: 0
+    evidence: docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log
+    result: "No leaks found in 432.28 KB Phase 8 diff scan; phase-08/evidence-index.yaml excluded to avoid self-referential scan"
+blockers: []
+phase_9_handoff:
+  next_task: P09-T01
+  next_task_id: t_cf3bdb25
+  summary: "Build the merge queue and whole-change acceptance layer on top of Phase 8's frozen WorkerContext and PerTaskReviewPipeline outputs."
+  contract_inputs_for_p09:
+    - "WorkerContext is the immutable, content-addressed input for every task run; Phase 9 merge records should reference workerContextHash/isolationTag rather than prior session state."
+    - "PerTaskReviewPipelineResult carries deterministic verification, independent review, and acceptance decision hashes for task-level aggregation."
+    - "AcceptanceDecision outcome is accepted/rejected/escalated; whole-change acceptance must fail closed on rejected task decisions and route escalated R3 tasks to explicit approval."
+    - "Structured issue codes and evidence refs are mandatory for conflict/blocker reporting."
+  preserved_boundaries:
+    - "Do not expose hidden oracle assertions while aggregating whole-change acceptance; use public artifact/evidence refs only."
+    - "Keep merge queue orchestration provider-neutral; runtime drivers execute commands outside core."
+    - "Continue using P07 TaskContract/preflight data as the planning/source-of-truth boundary."
