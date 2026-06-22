@@ -232,14 +232,15 @@ function readDependsOnTaskIdFromPayload(
 function readFromStatusFromPayload(
   payload: Record<string, unknown>
 ): BoardTaskStatus | null {
-  const value = payload["fromStatus"];
+  const value =
+    payload["status"] ?? payload["previousStatus"] ?? payload["fromStatus"];
   return isBoardTaskStatus(value) ? value : null;
 }
 
 function readToStatusFromPayload(
   payload: Record<string, unknown>
 ): BoardTaskStatus | null {
-  const value = payload["toStatus"];
+  const value = payload["nextStatus"] ?? payload["toStatus"];
   return isBoardTaskStatus(value) ? value : null;
 }
 

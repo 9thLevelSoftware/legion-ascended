@@ -143,6 +143,32 @@ test("reduceDashboard: task.transitioned rolls the counter", () => {
   assert.equal(stateB.eventCount, 2);
 });
 
+test("reduceDashboard: task events read repository-emitted status fields", () => {
+  const created = makeTaskCreatedEvent({
+    taskId: "task-sqlite-fields",
+    globalSequence: 1
+  });
+  created.payload.status = "ready";
+  delete created.payload.fromStatus;
+
+  const transitioned = makeTaskTransitionedEvent({
+    taskId: "task-sqlite-fields",
+    globalSequence: 2
+  });
+  transitioned.payload.previousStatus = "ready";
+  transitioned.payload.nextStatus = "blocked";
+  delete transitioned.payload.fromStatus;
+  delete transitioned.payload.toStatus;
+
+  const state = replayDashboard([created, transitioned], {
+    projectId: DASHBOARD_FIXTURE_CONSTANTS.projectId
+  });
+
+  assert.ok(state !== null);
+  assert.equal(state.taskStatusCounts.ready, undefined);
+  assert.equal(state.taskStatusCounts.blocked, 1);
+});
+
 test("reduceDashboard: change.aggregated seeds approval pointer", () => {
   const event = makeChangeAggregatedEvent({
     changeId: "chg-test-1",
@@ -222,6 +248,34 @@ test("reduceDashboard: foreign project events do not contaminate", () => {
   assert.equal(stateB.taskStatusCounts.queued, 1);
   assert.equal(stateB.eventCount, 1);
   assert.equal(stateB.eventTimeline.length, 1);
+});
+
+test("reduceDashboard: bound project scope handles canonical events without projectId", () => {
+  const canonical = makeChangeAggregatedEvent({
+    changeId: "chg-canonical-dashboard",
+    status: "accepted",
+    globalSequence: 1
+  });
+  delete canonical.payload.projectId;
+
+  const foreign = makeChangeAggregatedEvent({
+    changeId: "chg-foreign-dashboard",
+    projectId: "proj-foreign-003",
+    status: "rejected",
+    globalSequence: 2
+  });
+
+  const unbound = replayDashboard([canonical]);
+  assert.equal(unbound, null);
+
+  const bound = replayDashboard([canonical, foreign], {
+    projectId: DASHBOARD_FIXTURE_CONSTANTS.projectId
+  });
+  assert.ok(bound !== null);
+  assert.equal(bound.projectId, DASHBOARD_FIXTURE_CONSTANTS.projectId);
+  assert.equal(bound.approvalPointers.length, 1);
+  assert.equal(bound.approvalPointers[0].changeId, "chg-canonical-dashboard");
+  assert.equal(bound.approvalPointers[0].verdict, "approved");
 });
 
 test("reduceDashboard: ignores malformed / null payloads", () => {

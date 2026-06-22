@@ -378,6 +378,7 @@ export class RuntimeEveDriver implements RuntimeDriver {
     for await (const event of this.transport.streamSession(state.sessionId)) {
       const translated = translateStreamEvent(event, runId, sequence);
       sequence += 1;
+      this.appendStream(runId, translated);
       if (translated.kind === "terminal") {
         this.applyTerminalStreamEvent(state, translated);
       }

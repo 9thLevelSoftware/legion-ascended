@@ -219,6 +219,39 @@ test("portfolio reducer tracks task transitions across projects", () => {
   assert.equal(rollup.activeTaskCount, 1);
 });
 
+test("portfolio reducer reads repository-emitted task status fields", () => {
+  const tenantId = asTenantId("tnt-r2-sqlite-fields");
+  const initial = makeInitialPortfolioState(tenantId);
+  const e1 = makePortfolioTaskCreatedEvent({
+    taskId: "task-r2-sqlite-fields",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    priority: 500,
+    globalSequence: 1
+  });
+  e1.payload.status = "ready";
+  delete e1.payload.fromStatus;
+
+  const e2 = makePortfolioTaskTransitionedEvent({
+    taskId: "task-r2-sqlite-fields",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    globalSequence: 2
+  });
+  e2.payload.previousStatus = "ready";
+  e2.payload.nextStatus = "completed";
+  delete e2.payload.fromStatus;
+  delete e2.payload.toStatus;
+
+  let state = reducePortfolio(initial, e1, { priorEvents: [] });
+  state = reducePortfolio(state, e2, { priorEvents: [e1] });
+  const rollup = state.projectRollups[PORTFOLIO_FIXTURE_CONSTANTS.projectA];
+  assert.equal(rollup.taskStatusCounts.ready, undefined);
+  assert.equal(rollup.taskStatusCounts.completed, 1);
+  assert.equal(rollup.terminalTaskCount, 1);
+  assert.equal(state.terminalProjectCount, 1);
+});
+
 test("portfolio reducer tracks priority changes", () => {
   const tenantId = asTenantId("tnt-r3-001");
   const initial = makeInitialPortfolioState(tenantId);

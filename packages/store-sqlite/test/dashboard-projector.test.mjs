@@ -368,7 +368,9 @@ test("projector replay() matches replayDashboard() output for the same event log
       });
 
       const projectorState = projector.replay().state;
-      const directState = replayDashboard(appended);
+      const directState = replayDashboard(appended, {
+        projectId: DASHBOARD_PROJECTOR_FIXTURE_CONSTANTS.projectId
+      });
       assert.deepEqual(projectorState, directState);
     } finally {
       closeRepositories(repositories);
@@ -412,6 +414,41 @@ test("projector replay pages past the first event page", () => {
   assert.ok(replay.state !== null);
   assert.equal(replay.state.approvalPointers.length, 1);
   assert.equal(replay.state.rebuiltThroughGlobalSequence, 1_001);
+});
+
+test("projector seeds the bound project for canonical events without projectId", () => {
+  const accepted = boardEventFromAppendInput(
+    buildChangeAggregatedAppendInput({
+      status: "accepted",
+      outcome: "integrated",
+      occurredAt: "2026-06-22T05:20:00.000Z",
+      idempotencyKey: "dashboard-canonical-accepted"
+    }),
+    1
+  );
+  delete accepted.payload.projectId;
+  const foreign = boardEventFromAppendInput(
+    buildChangeAggregatedAppendInput({
+      projectId: "proj-dashboard-foreign",
+      changeId: "chg-dashboard-foreign",
+      status: "rejected",
+      outcome: "rejected",
+      occurredAt: "2026-06-22T05:21:00.000Z",
+      idempotencyKey: "dashboard-canonical-foreign"
+    }),
+    2
+  );
+
+  const projector = new SqliteDashboardProjector({
+    projectId: DASHBOARD_PROJECTOR_FIXTURE_CONSTANTS.projectId,
+    eventRepository: makePagedEventRepository([accepted, foreign]),
+    projectionRepository: noopProjectionRepository
+  });
+  const replay = projector.replay();
+  assert.ok(replay.state !== null);
+  assert.equal(replay.state.projectId, DASHBOARD_PROJECTOR_FIXTURE_CONSTANTS.projectId);
+  assert.equal(replay.state.approvalPointers.length, 1);
+  assert.equal(replay.state.approvalPointers[0].changeId, DASHBOARD_PROJECTOR_FIXTURE_CONSTANTS.changeId);
 });
 
 test("projector ignore foreign project events (dashboard is project-scoped)", async () => {

@@ -188,6 +188,7 @@ export class SqliteDashboardProjector {
       if (!event) continue;
       const current = stateFromEnvelope(envelope);
       const next = reduceDashboard(current, event as BoardEvent, {
+        projectId: this.#projectId,
         tailLimit,
         priorEvents: events.slice(0, i) as readonly BoardEvent[]
       });

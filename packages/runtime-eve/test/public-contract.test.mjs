@@ -303,6 +303,24 @@ test("stream: assigns monotonic sequences, normalizes streamed artifact hashes, 
   assert.equal(terminal.kind, "terminal");
   assert.equal(terminal.status, "succeeded");
 
+  await driver.artifact(start.runId, {
+    kind: "register",
+    reference: {
+      path: "agents/test/post-stream.json",
+      sha256: sha256ContentHash("post-stream")
+    }
+  });
+  const recorded = [];
+  for await (const event of driver.stream(start.runId)) {
+    recorded.push(event);
+    if (recorded.length >= events.length + 1) break;
+  }
+  const postStreamArtifact = recorded.find(
+    (event) => event.kind === "artifact_registered" && event.reference.path === "agents/test/post-stream.json"
+  );
+  assert.ok(postStreamArtifact);
+  assert.equal(postStreamArtifact.sequence > terminal.sequence, true);
+
   const bundle = await driver.artifact(start.runId);
   assert.equal(bundle.status, "succeeded");
   assert.equal(bundle.finishedAt, "2026-06-21T20:42:00.000Z");

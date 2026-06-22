@@ -166,6 +166,28 @@ function readBoardTaskStatus(
   return null;
 }
 
+function readTaskCreatedStatus(
+  payload: Record<string, unknown>
+): BoardTaskStatus | null {
+  return (
+    readBoardTaskStatus(payload["status"]) ??
+    readBoardTaskStatus(payload["fromStatus"])
+  );
+}
+
+function readTaskTransitionStatus(
+  payload: Record<string, unknown>
+): BoardTaskStatus | null {
+  return (
+    readBoardTaskStatus(payload["nextStatus"]) ??
+    readBoardTaskStatus(payload["toStatus"])
+  );
+}
+
+function readBoundProjectId(value: unknown): string | null {
+  return isString(value) && value.length > 0 ? value : null;
+}
+
 function readDashboardReleaseStatus(
   value: unknown
 ): Exclude<DashboardReleaseStatus, "absent"> | null {
@@ -210,6 +232,22 @@ function isTaskEventType(eventType: BoardEventType): boolean {
     eventType === "task.bumped" ||
     eventType === "task.linked"
   );
+}
+
+function isProjectlessCanonicalEvent(event: BoardEvent): boolean {
+  return (
+    isWholeChangeEventType(event.eventType) ||
+    isReleaseObservationEventType(event.eventType)
+  );
+}
+
+function isDashboardEventInProjectScope(
+  event: BoardEvent,
+  projectId: string
+): boolean {
+  const eventProjectId = readProjectId(event);
+  if (eventProjectId !== null) return eventProjectId === projectId;
+  return isProjectlessCanonicalEvent(event);
 }
 
 function eventTypeToReleaseStatus(
@@ -305,6 +343,15 @@ function pushTimeline(
 
 export interface ReduceDashboardOptions {
   /**
+   * Optional project binding supplied by project-scoped
+   * projectors. Canonical whole-change/release events may not
+   * carry `payload.projectId`; the bound project lets replay
+   * seed the dashboard for those events while still rejecting
+   * explicit foreign-project payloads.
+   */
+  readonly projectId?: ProjectId | string;
+
+  /**
    * Bound the rolling event timeline. Defaults to
    * `DASHBOARD_DEFAULT_TAIL_LIMIT`. Clamped to
    * `DASHBOARD_MAX_TAIL_LIMIT`.
@@ -340,17 +387,19 @@ export function reduceDashboard(
   if (!event.payload || typeof event.payload !== "object") return state;
 
   // Foreign projectId check — the dashboard is project-scoped.
+  const boundProjectId = readBoundProjectId(options.projectId);
   const eventProjectId = readProjectId(event);
-  if (
-    state !== null &&
-    eventProjectId !== null &&
-    eventProjectId !== state.projectId
-  ) {
-    return state;
+  let projectId: string | null = null;
+
+  if (boundProjectId !== null) {
+    if (!isDashboardEventInProjectScope(event, boundProjectId)) return state;
+    if (state !== null && state.projectId !== boundProjectId) return state;
+    projectId = state !== null ? state.projectId : boundProjectId;
+  } else {
+    if (eventProjectId === null) return state;
+    if (state !== null && eventProjectId !== state.projectId) return state;
+    projectId = state !== null ? state.projectId : eventProjectId;
   }
-  const projectId: string | null =
-    state !== null ? state.projectId : eventProjectId;
-  if (projectId === null) return state;
 
   const tailLimit = Math.min(
     Math.max(options.tailLimit ?? DASHBOARD_DEFAULT_TAIL_LIMIT, 1),
@@ -367,6 +416,11 @@ export function reduceDashboard(
   if (options.priorEvents) {
     for (const priorEvent of options.priorEvents) {
       if (!isTaskEventType(priorEvent.eventType)) continue;
+      if (boundProjectId !== null) {
+        if (readProjectId(priorEvent) !== boundProjectId) continue;
+      } else if (readProjectId(priorEvent) !== projectId) {
+        continue;
+      }
       const priorPayload = priorEvent.payload as Record<string, unknown>;
       const priorTaskId = readStringField(priorPayload, "taskId");
       if (priorTaskId === null) continue;
@@ -375,12 +429,12 @@ export function reduceDashboard(
         continue;
       }
       if (priorEvent.eventType === "task.created") {
-        const fromStatus = readBoardTaskStatus(priorPayload["fromStatus"]) ?? "queued";
+        const fromStatus = readTaskCreatedStatus(priorPayload) ?? "queued";
         liveTaskStatusByTaskId.set(priorTaskId, fromStatus);
         continue;
       }
       if (priorEvent.eventType === "task.transitioned") {
-        const toStatus = readBoardTaskStatus(priorPayload["toStatus"]);
+        const toStatus = readTaskTransitionStatus(priorPayload);
         if (toStatus !== null) liveTaskStatusByTaskId.set(priorTaskId, toStatus);
         continue;
       }
@@ -497,9 +551,9 @@ function applyTaskEvent(
   let nextStatus: BoardTaskStatus | null = previousStatus;
 
   if (event.eventType === "task.created") {
-    nextStatus = readBoardTaskStatus(payload["fromStatus"]) ?? "queued";
+    nextStatus = readTaskCreatedStatus(payload) ?? "queued";
   } else if (event.eventType === "task.transitioned") {
-    nextStatus = readBoardTaskStatus(payload["toStatus"]) ?? previousStatus;
+    nextStatus = readTaskTransitionStatus(payload) ?? previousStatus;
   } else if (event.eventType === "task.superseded") {
     nextStatus = "superseded";
   } else if (
@@ -613,7 +667,7 @@ function summariseEvent(event: BoardEvent): string {
   if (!isRecord(event.payload)) return summaryForGeneric(event);
   const payload = event.payload as Record<string, unknown>;
   if (isTaskEventType(event.eventType)) {
-    const toStatus = readBoardTaskStatus(payload["toStatus"]);
+    const toStatus = readTaskTransitionStatus(payload);
     return summaryForTaskTransition(payload, toStatus);
   }
   if (isWholeChangeEventType(event.eventType)) {
