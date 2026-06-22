@@ -1,0 +1,10 @@
+✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (312.714667ms)
+✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (240.850167ms)
+ℹ tests 59
+ℹ suites 0
+ℹ pass 59
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3644.164667

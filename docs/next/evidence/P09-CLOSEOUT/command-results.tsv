@@ -1,0 +1,9 @@
+core-test	0	pnpm --filter @legion/core test
+protocol-test	0	pnpm --filter @legion/protocol test
+artifacts-test	0	pnpm --filter @legion/artifacts test
+board-test	0	pnpm --filter @legion/board test
+store-sqlite-test	0	pnpm --filter @legion/store-sqlite test
+typecheck	0	pnpm run typecheck
+workspace-tests	0	pnpm run test
+validate-next	0	pnpm run validate:next
+gitleaks-p09-diff	0	git diff --cached --binary 657f14ef52974efb0b72f009f536f7105884ad9c -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-09/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact

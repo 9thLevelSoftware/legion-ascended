@@ -1,0 +1,108 @@
+task: P10-T02
+phase: 10
+phase_id: P10
+status: DONE
+base_commit: "4af51fa1d8468e72f10d4e5ad44d0e1f55c1f0d0"
+implementation_branch: "codex/p03-t02-board-task-repository"
+verification:
+  local:
+    - name: cli-e2e-tests
+      command: "pnpm --filter @legion/cli-e2e test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/cli-e2e-test.log
+      result: "13/13 pass (10 existing + 3 new release-observation CLI tests)"
+    - name: core-tests
+      command: "pnpm --filter @legion/core test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/core-test.log
+      result: "245/245 pass (no core changes)"
+    - name: board-tests
+      command: "pnpm --filter @legion/board test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/board-test.log
+      result: "53/53 pass (no board changes)"
+    - name: store-sqlite-tests
+      command: "pnpm --filter @legion/store-sqlite test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/store-sqlite-test.log
+      result: "144/144 pass (no store-sqlite changes)"
+    - name: protocol-tests
+      command: "pnpm --filter @legion/protocol test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/protocol-test.log
+      result: "55/55 pass (no protocol changes)"
+    - name: artifacts-tests
+      command: "pnpm --filter @legion/artifacts test"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/artifacts-test.log
+      result: "59/59 pass (no artifacts changes)"
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/typecheck.log
+      result: "all 10 workspace projects typecheck clean"
+    - name: package-boundaries
+      command: "pnpm run check:boundaries"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/package-boundaries.log
+      result: "package boundary check passed"
+    - name: runtime-import-boundaries
+      command: "node scripts/scan-runtime-import-boundaries.mjs"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/runtime-import-boundaries.log
+      result: "RuntimeDriver import-boundary scan passed (7 runtime files, 36 core files)"
+    - name: default-runtime-scan
+      command: "node scripts/scan-default-runtime.mjs"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/default-runtime-scan.log
+      result: "scan-default-runtime: files=15 violations=0"
+    - name: worker-bundles
+      command: "pnpm run check:worker-bundles"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/worker-bundles.log
+      result: "all worker bundles pass"
+    - name: validate-next
+      command: "pnpm run validate:next"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/validate-next.log
+      result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime import boundaries, schema generation, protocol docs, schema-doc drift, package contents, tests, npm pack dry-run, pnpm pack dry-run passed"
+    - name: gitleaks-p10-t02-diff
+      command: "git diff --cached 4af51fa -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml' | gitleaks detect --pipe --no-color --redact"
+      exit_code: 0
+      evidence: docs/next/evidence/P10-T02/gitleaks-p10-t02-diff.log
+      result: "no leaks found in final Phase 10-T02 diff scan; phase-10 evidence indexes excluded to avoid self-referential scan"
+blockers: []
+delivered_artifacts:
+  cli:
+    - path: packages/cli/src/commands/board/release-observation.ts
+      description: "legion next board release-observation CLI adapter — aggregate | status | rebuild | verify subcommands; fail-closed input validation; reuses ReleaseObservationBoardAggregator + SqliteReleaseObservationProjector"
+    - path: packages/cli/src/commands/board/index.ts
+      description: "board root dispatcher wired to handleReleaseObservationCommand; BOARD_HELP extended with the release-observation domain entry"
+    - path: packages/cli/package.json
+      description: "added @legion/board, @legion/board-store, @legion/core to dependencies"
+    - path: packages/cli/tsconfig.json
+      description: "added board, board-store, core project references"
+  cli_e2e:
+    - path: apps/cli-e2e/test/cli-e2e.test.mjs
+      description: "3 new e2e tests: aggregate/status/rebuild/verify idempotency, validation failure surface, verify fails closed on missing projection"
+  tooling:
+    - path: scripts/check-package-boundaries.mjs
+      description: "@legion/cli allowedWorkspaceImports extended with @legion/board, @legion/board-store, @legion/core so the CLI can consume the board adapter and the SQLite projector"
+phase_10_handoff:
+  next_task: P10-CLOSEOUT
+  next_task_id: null
+  summary: "Phase 10-T02 wires the release-observation board events into the CLI so operators can run `legion next board release-observation aggregate|status|rebuild|verify`. The CLI is the operator surface on top of the P10-T01 board adapter; no orchestrator changes were required."
+  contract_outputs_from_p10_t02:
+    - "`legion next board release-observation aggregate --input <file>` builds a ReleaseObservationBoardAggregator success event and appends it through SqliteBoardEventRepository.appendEvents. Idempotency key matches the canonical <changeId>:<mergeQueueHash>:<reportSha256>:<eventType> shape; re-runs on the same idempotency key return the original event id (no duplicate appends)."
+    - "`legion next board release-observation status --input <file>` replays the SqliteReleaseObservationProjector without persisting. Returns the projection state (or null) plus the frozen `stateHash` so operators can diff two release-observation runs."
+    - "`legion next board release-observation rebuild --input <file>` replays and persists the projection under `release-observation:<changeId>:<mergeQueueHash>` through SqliteBoardProjectionRepository.saveProjection."
+    - "`legion next board release-observation verify --input <file>` loads the persisted projection and replays the event log; surfaces drift as a typed failure shape rather than silently passing."
+    - "All four subcommands route through SqliteBoardStoreWithEventRepository so the SQLite database handle + projection handle are opened/closed atomically and the WAL is released before temp directory cleanup."
+  package_boundary_invariants_preserved:
+    - "@legion/cli never imports eve, node:sqlite, or reads process.env — the new release-observation adapter delegates all persistence to @legion/store-sqlite."
+    - "The CLI's allowedWorkspaceImports now explicitly allowlists @legion/board, @legion/board-store, and @legion/core. No reverse imports."
+    - "Package-boundary and runtime-import-boundary scans continue to pass after the CLI surface extension."
+tests_added: 3
+tests_passed: 13
+tests_run: 13
+validate_next_gates: 12

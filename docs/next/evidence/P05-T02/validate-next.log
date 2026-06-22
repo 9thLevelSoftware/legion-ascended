@@ -1,0 +1,1588 @@
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/validate-next.mjs
+
+[validate:next] typecheck: pnpm run typecheck
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && pnpm -r typecheck
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm -r build
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 10 of 11 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/board-store build$ tsc -p tsconfig.json
+packages/artifacts build$ tsc -p tsconfig.json
+packages/core build$ tsc -p tsconfig.json
+packages/board-store build: Done
+packages/core build: Done
+packages/artifacts build: Done
+packages/runtime-eve build$ tsc -p tsconfig.json
+packages/board build$ tsc -p tsconfig.json
+packages/legacy-bridge build$ tsc -p tsconfig.json
+packages/store-sqlite build$ tsc -p tsconfig.json
+packages/board build: Done
+packages/runtime-eve build: Done
+packages/store-sqlite build: Done
+packages/legacy-bridge build: Done
+packages/cli build$ tsc -p tsconfig.json
+packages/cli build: Done
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 10 of 11 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
+packages/board-store typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/board-store typecheck: Done
+packages/artifacts typecheck: Done
+packages/core typecheck: Done
+packages/legacy-bridge typecheck$ tsc -p tsconfig.json --noEmit
+packages/board typecheck$ tsc -p tsconfig.json --noEmit
+packages/store-sqlite typecheck$ tsc -p tsconfig.json --noEmit
+packages/runtime-eve typecheck$ tsc -p tsconfig.json --noEmit
+packages/board typecheck: Done
+packages/store-sqlite typecheck: Done
+packages/runtime-eve typecheck: Done
+packages/legacy-bridge typecheck: Done
+packages/cli typecheck$ tsc -p tsconfig.json --noEmit
+packages/cli typecheck: Done
+
+[validate:next] package-boundaries: pnpm run check:boundaries
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+
+[validate:next] worker-bundles: pnpm run check:worker-bundles
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/validate-worker-bundles.mjs
+
+[validate-worker-bundles] schema validation
+  pass (0 violation(s))
+[validate-worker-bundles] capability completeness
+  pass (0 violation(s))
+[validate-worker-bundles] domain-pack integrity
+  pass (0 violation(s))
+
+[validate-worker-bundles] all worker bundles pass
+
+[validate:next] default-runtime-scan: node scripts/scan-default-runtime.mjs
+[scan-default-runtime] files=15 violations=0
+
+[validate:next] runtime-import-boundaries: node scripts/scan-runtime-import-boundaries.mjs
+RuntimeDriver import-boundary scan passed (7 runtime files, 12 core files).
+
+[validate:next] schema-generation: pnpm --filter @legion/protocol generate:schemas
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+[validate:next] artifact-schema-generation: pnpm --filter @legion/artifacts generate:schemas
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+
+[validate:next] protocol-docs: node scripts/validate-next.mjs --generate-protocol-docs
+
+[validate:next] schema-doc-drift: node scripts/validate-next.mjs --check-generated-drift
+
+[validate:next] package-contents: pnpm run check:package-contents
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/check-package-contents.mjs
+{
+  "ok": true,
+  "baselinePackage": {
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "fileCount": 135
+  },
+  "currentPackage": {
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "fileCount": 135
+  },
+  "bin": {
+    "legion": "bin/install.js"
+  },
+  "missingLegacyPaths": [],
+  "extraPackagePaths": [],
+  "workspacePackagePaths": [],
+  "missingChecksumPaths": [],
+  "legacyChecksumMismatches": []
+}
+
+[validate:next] tests: pnpm run test
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node --test "tests/**/*.test.mjs" "tests/**/*.test.cjs" && pnpm -r --if-present test
+✔ scanner reports the canonical v9 default runtime surface (1.283833ms)
+✔ scanner passes on the current v9 default runtime surface (40.752083ms)
+✔ scanner flags biography prose injected into a v9 default runtime file (14.84525ms)
+✔ scanner flags forbidden headings injected into a v9 default runtime file (3.695584ms)
+✔ scanner walks future bundles/ directory and flags persona prose there (3.5995ms)
+✔ scanner flags legacy v8 boilerplate re-introduced into v9 surface (3.376416ms)
+✔ scanner reports structured violation rows with file, line, category, excerpt (4.385416ms)
+✔ scanner also walks declared governance documents and keeps them clean (5.143958ms)
+✔ installer lazy-loads YAML support for Kilo Code mode merging (0.94225ms)
+✔ installer source keeps one update generator and rejects non-200 registry responses (1.028208ms)
+✔ Codex prompt installs concrete template context paths for runtimes without at-refs (103.443708ms)
+✔ Kilo uninstall preserves pre-existing user skill directories and files (169.155375ms)
+✔ uninstall tolerates older manifests without paths metadata (59.162042ms)
+✔ update removes stale artifacts from the previous manifest before reinstalling (464.792542ms)
+▶ installer local mode installs runtime-native artifacts for every supported runtime
+  ✔ claude local install + uninstall (128.48575ms)
+  ✔ codex local install + uninstall (143.253ms)
+  ✔ cursor local install + uninstall (257.477375ms)
+  ✔ copilot local install + uninstall (188.508875ms)
+  ✔ gemini local install + uninstall (189.121ms)
+  ✔ antigravity local install + uninstall (252.921292ms)
+  ✔ kiro local install + uninstall (228.894125ms)
+  ✔ windsurf local install + uninstall (156.61275ms)
+  ✔ opencode local install + uninstall (143.487125ms)
+  ✔ kilo local install + uninstall (159.4375ms)
+  ✔ kilocode local install + uninstall (194.366875ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2045.7415ms)
+▶ installer global mode installs runtime-native artifacts for every globally supported runtime
+  ✔ claude global install + uninstall (127.606916ms)
+  ✔ codex global install + uninstall (143.97425ms)
+  ✔ copilot global install + uninstall (300.832042ms)
+  ✔ gemini global install + uninstall (205.097ms)
+  ✔ antigravity global install + uninstall (212.567416ms)
+  ✔ kiro global install + uninstall (289.279417ms)
+  ✔ opencode global install + uninstall (265.875083ms)
+  ✔ kilo global install + uninstall (205.740708ms)
+  ✔ kilocode global install + uninstall (223.37875ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (1976.36775ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (376.512833ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (157.2435ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (218.548958ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (161.219584ms)
+✔ installer --verify validates checksums in local source installs (149.040292ms)
+✔ P01-T10 package contents preserve the approved v8 legacy path set (445.417125ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.121375ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.07025ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.093291ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (166.905292ms)
+✔ accepts legal protocol, core, artifacts, board, store, and legacy bridge imports (35.415209ms)
+✔ rejects protocol imports from core (7.637208ms)
+✔ rejects deep imports across workspace package exports (6.521625ms)
+✔ rejects provider and storage imports outside the SQLite provider package (25.875667ms)
+✔ rejects workspace package imports of legacy prompt assets (9.828792ms)
+✔ v9 default runtime path contains no biography, tone, or personality prose (33.062959ms)
+✔ v9 default runtime path files declare promptContentContract forbiddens (1.3285ms)
+✔ v9 worker bundle schema marks biography, tone, personality as forbidden (0.595417ms)
+✔ v9 protocol source still exports the promptContentContract schema (1.055625ms)
+✔ v9 governance documents reference the contract without injecting it (10.168083ms)
+✔ package-boundary check still blocks v9 packages from importing legacy prompt assets (33.470667ms)
+✔ passes when the runtime module only imports @legion/protocol and core barrel re-exports it (20.441917ms)
+✔ rejects eve import inside the runtime module (6.460667ms)
+✔ rejects sqlite storage import inside the runtime module (6.253375ms)
+✔ rejects host CLI imports inside the runtime module (5.641833ms)
+✔ rejects non-protocol workspace imports inside the runtime module (4.956291ms)
+✔ rejects deep workspace imports inside the runtime module (3.901125ms)
+✔ rejects runtime imports from non-barrel core sources (4.592292ms)
+✔ allows the canonical barrel re-export from packages/core/src/index.ts (4.732083ms)
+✔ rejects legacy prompt asset imports inside the runtime module (4.722458ms)
+✔ exposes the rule catalog for documentation consumers (0.508459ms)
+✔ passes when the fallback driver module imports only @legion/protocol + the local contract (6.816208ms)
+✔ P01-T11 validate-next plan is the shared CI/local gate order (1.129709ms)
+✔ P01-T11 CI workflow blocks Phase 1 gates on all supported platforms (6.294125ms)
+✔ P01-T11 protocol compatibility workflow uses pinned actions and generated schema checks (7.185459ms)
+✔ P01-T11 generated protocol docs match the current schema and transition sources (5272.133375ms)
+✔ P04-T05 real-repo worker bundles pass schema, capability, and domain-pack checks (21.408333ms)
+✔ P04-T05 real-repo registry covers every v9 default worker role exactly once (1.605625ms)
+✔ P04-T05 real-repo registry marks biography, tone, personality as forbidden on every bundle (0.567334ms)
+✔ P04-T05 bundle prompt hashes are protected from Windows CRLF checkout drift (0.70175ms)
+✔ P04-T05 rejects empty capabilities array (10.1995ms)
+✔ P04-T05 rejects unknown role (10.728875ms)
+✔ P04-T05 rejects duplicate capability within a bundle (8.720917ms)
+✔ P04-T05 rejects mismatched instructionsHash (6.167416ms)
+✔ P04-T05 rejects prompt file that renders a forbidden heading (7.139833ms)
+✔ P04-T05 rejects empty forbiddenSections (4.891458ms)
+✔ P04-T05 rejects bundle that omits workflow-common-core pack reference (14.106625ms)
+✔ P04-T05 rejects pack file with pack_version below v1.0.0 (6.47575ms)
+✔ P04-T05 rejects pack file with pack_status other than extracted (10.897583ms)
+✔ P04-T05 rejects mandatory workflow-common pack file missing from disk (20.47225ms)
+✔ P04-T05 exposes the canonical v9 default role set (0.147042ms)
+✔ P04-T05 pins the mandatory workflow-common pack set (0.046291ms)
+✔ workflow-common packs are versioned extracted content (7.979792ms)
+ℹ tests 89
+ℹ suites 0
+ℹ pass 89
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6037.559334
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 10 of 11 workspace projects
+packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/protocol test: $ tsc -p tsconfig.json
+packages/protocol test: ✔ P01-T09 versioned records fail closed without a valid schemaVersion (3.129541ms)
+packages/protocol test: ✔ P01-T09 canonical compatibility fixtures remain readable (6.383167ms)
+packages/protocol test: ✔ P01-T09 protocol negotiation rejects unsupported old and future versions (0.394ms)
+packages/protocol test: ✔ P01-T09 explicit migrations apply in order and are idempotent when repeated (1.7125ms)
+packages/protocol test: ✔ P01-T09 migration failures do not partially mutate caller input (0.871583ms)
+packages/protocol test: ✔ P01-T09 downcasts require explicit information-preservation evidence (0.2835ms)
+packages/protocol test: ✔ P01-T09 compatibility reports include matrix and evolution policy text (0.423708ms)
+packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (12.768708ms)
+packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (2.734084ms)
+packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (1.969084ms)
+packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (1.441417ms)
+packages/protocol test: ✔ review feedback: project IDs must match project slugs (1.226625ms)
+packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (2.239625ms)
+packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (1.813834ms)
+packages/protocol test: ✔ review feedback: superseded requirements require replacement references (1.125708ms)
+packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (2.327167ms)
+packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (1.08025ms)
+packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (4.383167ms)
+packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.757333ms)
+packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (0.603375ms)
+packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (0.779958ms)
+packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (3.4895ms)
+packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (11.967083ms)
+packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.549083ms)
+packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (4.068417ms)
+packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.62225ms)
+packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (0.970584ms)
+packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (4.110584ms)
+packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.176834ms)
+packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (0.818125ms)
+packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (0.389917ms)
+packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (1.213083ms)
+packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (1.072459ms)
+packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (8.661125ms)
+packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (0.522ms)
+packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (13.04775ms)
+packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (2.348167ms)
+packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.232834ms)
+packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (1.046708ms)
+packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (0.795833ms)
+packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (1.476708ms)
+packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (0.989792ms)
+packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (0.952834ms)
+packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (2.3095ms)
+packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (0.846917ms)
+packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (1.615709ms)
+packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (10.804583ms)
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (3.320666ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (5.710791ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.572959ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (2.407917ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (0.7595ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (8.779459ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (3.09375ms)
+packages/protocol test: ℹ tests 54
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 54
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 244.073125
+packages/protocol test: Done
+packages/artifacts test$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/core test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/core test: $ tsc -p tsconfig.json
+packages/artifacts test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/artifacts test: $ tsc -p tsconfig.json
+packages/artifacts test: $ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+packages/core test: ✔ P01-T08 ADR-006 golden examples classify into expected tiers and gates (11.353583ms)
+packages/core test: ✔ P01-T08 adding a high-risk signal never lowers the derived tier (3.169709ms)
+packages/core test: ✔ P01-T08 lower-tier overrides require decision-owner approval and cannot undercut hard floors (4.272334ms)
+packages/core test: ✔ P01-T08 explanations list normalized signals and overrides deterministically (0.141834ms)
+packages/core test: ✔ P01-T08 untrusted text cannot alter policy without an approved policy artifact (0.589834ms)
+packages/core test: ✔ P01-T08 gate derivation rejects malformed custom gate policy instead of emitting partial gates (0.179584ms)
+packages/core test: ✔ P01-T08 custom policy validation reports malformed policy objects without TypeErrors (0.278375ms)
+packages/core test: ✔ P01-T08 risk signal and override runtime validation rejects malformed JavaScript inputs (0.153667ms)
+packages/core test: ✔ P01-T08 lower-tier overrides enforce retained gates in the returned gate set (0.11575ms)
+packages/core test: ✔ P01-T08 risk profile reason strings stay within protocol limits (0.126125ms)
+packages/core test: ✔ RuntimeDriver contract enumerates ADR-004's seven methods (1.256042ms)
+packages/core test: ✔ runtime-local start emits a deterministic run id and protocol events (0.593166ms)
+packages/core test: ✔ runtime-local start is idempotent against the same idempotency key (0.310792ms)
+packages/core test: ✔ runtime-local inspect returns provider-neutral state for a started run (0.134917ms)
+packages/core test: ✔ runtime-local stream yields protocol events and terminal marker for cancel (0.193583ms)
+packages/core test: ✔ runtime-local resume advances the checkpoint generation (0.182625ms)
+packages/core test: ✔ runtime-local cancel transitions the run to canceled and rejects duplicate cancels (0.125333ms)
+packages/core test: ✔ runtime-local approve delivers an approval and emits approval.requested.v1 + approval.granted.v1 events (0.1515ms)
+packages/core test: ✔ runtime-local approve is idempotent for the same approval decision (0.106458ms)
+packages/core test: ✔ runtime-local approve rejects when the run is no longer accepting input (0.159709ms)
+packages/core test: ✔ runtime-local artifact register records an artifact and emits an artifact_registered stream event (0.19725ms)
+packages/core test: ✔ runtime-local artifact with evidence id emits an evidence.collected.v1 event (0.088084ms)
+packages/core test: ✔ runtime-local artifact fetch without registering keeps inspection unchanged (0.06675ms)
+packages/core test: ✔ runtime-local artifact final-output rejects non-terminal runs with current state (0.084125ms)
+packages/core test: ✔ runtime-local artifact final-output preserves terminal finishedAt (0.108792ms)
+packages/core test: ✔ runtime-local rejects a request whose driver id does not match the loaded driver (0.065042ms)
+packages/core test: ✔ runtime-local rejects start when contractRevision is not positive (0.052209ms)
+packages/core test: ✔ runtime-local errors when inspect/stream/approve/artifact are called on an unknown run (0.065958ms)
+packages/core test: ✔ runtime-local cancel returns a single run.finished.v1 event with terminal status (0.054083ms)
+packages/core test: ✔ e2e happy path: start → stream → approve (deny) → artifact(handle) returns final output bundle (1.024292ms)
+packages/core test: ✔ e2e cancel path: start → artifact(handle) before terminal returns not_terminal failure with current state (0.417041ms)
+packages/core test: ✔ e2e cancel path: start → register artifact → cancel → artifact(handle) returns the canceled bundle (0.115791ms)
+packages/core test: ✔ RuntimeDriverSkeleton class docstring enumerates the seven ADR-004 methods and references ADR-004 (0.775625ms)
+packages/core test: ✔ e2e happy path with explicit termination: start → stream → approve → __terminate(succeeded) → artifact(handle) returns succeeded bundle (0.150583ms)
+packages/core test: ✔ runtime-legacy-cli exports the ADR-004 driver id and version (0.757208ms)
+packages/core test: ✔ runtime-legacy-cli advertises documented reduced-guarantee contract (0.055792ms)
+packages/core test: ✔ runtime-legacy-cli driver instance exposes guarantees() method (0.071333ms)
+packages/core test: ✔ runtime-legacy-cli start emits a leg_-prefixed run id and protocol events (0.618541ms)
+packages/core test: ✔ runtime-legacy-cli start is idempotent against the same idempotency key (0.30975ms)
+packages/core test: ✔ runtime-legacy-cli start rejects a request bound to a different driver id (0.087792ms)
+packages/core test: ✔ runtime-legacy-cli start rejects invalid request shapes (0.118125ms)
+packages/core test: ✔ runtime-legacy-cli inspect returns provider-neutral state for a started run (0.133917ms)
+packages/core test: ✔ runtime-legacy-cli inspect rejects unknown runs with a typed failure (0.069042ms)
+packages/core test: ✔ runtime-legacy-cli resume advances the checkpoint generation (0.201334ms)
+packages/core test: ✔ runtime-legacy-cli resume rejects stale checkpoints with a typed failure (0.124ms)
+packages/core test: ✔ runtime-legacy-cli resume rejects mismatched fingerprints with a typed failure (0.103667ms)
+packages/core test: ✔ runtime-legacy-cli resume rejects unknown runs with a typed failure (0.0625ms)
+packages/core test: ✔ runtime-legacy-cli cancel transitions to canceled and emits a terminal stream event (0.168708ms)
+packages/core test: ✔ runtime-legacy-cli cancel is idempotent: a second cancel throws already_canceled (0.093875ms)
+packages/core test: ✔ runtime-legacy-cli cancel rejects unknown runs with a typed failure (0.082083ms)
+packages/core test: ✔ runtime-legacy-cli stream yields a single progress event for a fresh run (0.082333ms)
+packages/core test: ✔ runtime-legacy-cli stream rejects unknown runs with a typed failure (0.052625ms)
+packages/core test: ✔ runtime-legacy-cli approve delivers the first approval and records a stream event (0.14775ms)
+packages/core test: ✔ runtime-legacy-cli approve is idempotent for a duplicate (decidedAt + decidedBy.id match) (0.079417ms)
+packages/core test: ✔ runtime-legacy-cli approve rejects a different decision for the same approval id (0.083833ms)
+packages/core test: ✔ runtime-legacy-cli approve rejects non-started runs with approval_not_acceptable (0.084875ms)
+packages/core test: ✔ runtime-legacy-cli approve rejects unknown runs with a typed failure (0.061333ms)
+packages/core test: ✔ runtime-legacy-cli artifact(handle) on a non-terminal run returns a structured failure with current state (0.1335ms)
+packages/core test: ✔ runtime-legacy-cli artifact(handle) on a terminal run returns the final-output bundle with reduced guarantee metadata (0.133625ms)
+packages/core test: ✔ runtime-legacy-cli artifact(handle) on a canceled run preserves the canceled terminal status and finishedAt (0.069583ms)
+packages/core test: ✔ runtime-legacy-cli __terminate on a terminal run throws already_succeeded / already_canceled (0.082041ms)
+packages/core test: ✔ runtime-legacy-cli artifact(handle) preserves the artifact reference registered during the run (0.087791ms)
+packages/core test: ✔ runtime-legacy-cli satisfies the seven-method ADR-004 surface (0.043542ms)
+packages/core test: ✔ RUNTIME_DRIVER_PRECEDENCE encodes ADR-004 default ordering runtime-eve → runtime-local → runtime-legacy-cli (1.238291ms)
+packages/core test: ✔ RUNTIME_DRIVER_IDS exposes the canonical driver id constants (0.071167ms)
+packages/core test: ✔ isRuntimeDriverPrecedenceId narrows known ids and rejects unknown ids (0.047042ms)
+packages/core test: ✔ selector returns runtime-local when both local and legacy are registered (0.2235ms)
+packages/core test: ✔ selector falls back to runtime-legacy-cli when runtime-local is unavailable (0.115833ms)
+packages/core test: ✔ selector falls back to runtime-legacy-cli when runtime-local is not registered (0.060541ms)
+packages/core test: ✔ selector falls back to runtime-legacy-cli when only Eve is registered but its availability is false (0.083959ms)
+packages/core test: ✔ selector records precedence_default for every lower-preference driver when a higher one wins (0.071709ms)
+packages/core test: ✔ selector honours policy.requestedDriver and marks the selection forced (0.074542ms)
+packages/core test: ✔ selector refuses to fall through silently when the requested driver is unavailable (0.101833ms)
+packages/core test: ✔ selector refuses to fall through silently when the requested driver is not registered (0.055792ms)
+packages/core test: ✔ selector rejects an unknown requested driver id with a typed failure (23.395375ms)
+packages/core test: ✔ selector returns a typed failure when no driver is registered (0.203833ms)
+packages/core test: ✔ selector returns a typed failure when every driver is marked unavailable (0.289917ms)
+packages/core test: ✔ selector considers all three precedence slots even when the first two are unavailable (0.239083ms)
+packages/core test: ✔ selector surfaces the guarantee level of the chosen driver (0.131708ms)
+packages/core test: ✔ requireRuntimeDriver returns the driver on success and throws TypeError on failure (1.820875ms)
+packages/core test: ✔ selector enumerates considered candidates in precedence order (0.295167ms)
+packages/core test: ✔ RUNTIME_DRIVER_METHODS enumerates the seven ADR-004 methods in order (1.219708ms)
+packages/core test: ✔ RuntimeDriverSkeleton declares all seven methods matching ADR-004 (0.084709ms)
+packages/core test: ✔ skeleton.start throws NotImplementedError (0.26025ms)
+packages/core test: ✔ skeleton.resume throws NotImplementedError (0.094083ms)
+packages/core test: ✔ skeleton.cancel throws NotImplementedError (0.084334ms)
+packages/core test: ✔ skeleton.inspect throws NotImplementedError (0.071375ms)
+packages/core test: ✔ skeleton.approve throws NotImplementedError (0.086958ms)
+packages/core test: ✔ skeleton.artifact throws NotImplementedError (0.080667ms)
+packages/core test: ✔ skeleton stream generator throws NotImplementedError on first pull (0.088458ms)
+packages/core test: ✔ FakeRuntimeDriver exposes the correct driverId (0.089084ms)
+packages/core test: ✔ FakeRuntimeDriver.start allocates a run and returns a handle-shaped result (0.19125ms)
+packages/core test: ✔ FakeRuntimeDriver.resume rejects unknown and terminal runs, advances known runs (0.202083ms)
+packages/core test: ✔ FakeRuntimeDriver.cancel is idempotent and transitions state (0.067958ms)
+packages/core test: ✔ FakeRuntimeDriver.inspect rejects unknown runs and reflects state for known runs (0.12425ms)
+packages/core test: ✔ FakeRuntimeDriver.stream yields events in order and replays history (0.161833ms)
+packages/core test: ✔ FakeRuntimeDriver.approve advances a waiting run and rejects non-waiting runs (0.152708ms)
+packages/core test: ✔ FakeRuntimeDriver.artifact registers and rejects unknown runs (0.14575ms)
+packages/core test: ✔ FakeRuntimeDriver is structurally assignable to RuntimeDriver (0.036583ms)
+packages/core test: ✔ FakeRuntimeDriver.start with a valid request returns a handle-shaped result (2.6935ms)
+packages/core test: ✔ FakeRuntimeDriver.start is deterministic for the same request shape (0.166292ms)
+packages/core test: ✔ FakeRuntimeDriver.start with a non-positive contractRevision returns invalid_request (0.340958ms)
+packages/core test: ✔ FakeRuntimeDriver.start with a non-positive attempt returns invalid_request (0.094916ms)
+packages/core test: ✔ FakeRuntimeDriver.start with a mismatched driver id returns driver_mismatch (0.105792ms)
+packages/core test: ✔ FakeRuntimeDriver.resume of an unknown handle returns unknown_run (0.118584ms)
+packages/core test: ✔ FakeRuntimeDriver.resume of a terminal (canceled) handle returns terminal_run (0.147375ms)
+packages/core test: ✔ FakeRuntimeDriver.resume rejects every terminal status with terminal_run (0.109166ms)
+packages/core test: ✔ stream(handle) yields incremental provider-neutral events in order for a running run (1.44875ms)
+packages/core test: ✔ stream(handle) on a terminal run yields nothing further (0.188708ms)
+packages/core test: ✔ approve(handle, decision) advances a waiting handle forward (0.194ms)
+packages/core test: ✔ approve(handle, decision) of a non-waiting handle returns a structured failure (0.278333ms)
+packages/core test: ✔ reject cancels a waiting handle (0.09825ms)
+packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.74125ms)
+packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.634542ms)
+packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.314542ms)
+packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.098625ms)
+packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.096958ms)
+packages/core test: ✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.153917ms)
+packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.301875ms)
+packages/core test: ✔ P01-T07 integration completions must match the recorded side-effect intent (28.181875ms)
+packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.400583ms)
+packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.220458ms)
+packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.130625ms)
+packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.30325ms)
+packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.072792ms)
+packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (3.991417ms)
+packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (2.187792ms)
+packages/core test: ℹ tests 127
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 127
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 519.850083
+packages/core test: Done
+packages/artifacts test: $ tsc -p tsconfig.json
+packages/artifacts test: ✔ P02-T07 previews and archives an accepted change into current truth (454.956ms)
+packages/artifacts test: ✔ P02-T07 archives removal of a primary requirement while preserving remaining requirements (504.541667ms)
+packages/artifacts test: ✔ P02-T07 refuses to archive changes that are not accepted (301.250541ms)
+packages/artifacts test: ✔ P02-T07 refuses stale current-spec bases before mutating current truth (335.245208ms)
+packages/artifacts test: ✔ P02-T07 rollback does not overwrite concurrent current truth updates (377.583791ms)
+packages/artifacts test: ✔ P02-T07 refuses missing accepted evidence (303.662583ms)
+packages/artifacts test: ✔ P02-T07 rolls back current truth when archive metadata write fails (373.318667ms)
+packages/artifacts test: ✔ P02-T07 retry after a recorded archive is idempotent (590.762125ms)
+packages/artifacts test: ✔ P02-T07 refuses idempotent archive retry when current truth drifted (552.841167ms)
+packages/artifacts test: ✔ canonical project artifact paths reject ambiguous or escaping input (2.996084ms)
+packages/artifacts test: ✔ stable protocol JSON sorts keys without locale-dependent ordering (0.146167ms)
+packages/artifacts test: ✔ repository discovery and path resolution stay beneath the real project root (15.028542ms)
+packages/artifacts test: ✔ JSON artifact reads return protocol validation diagnostics with source paths (37.796792ms)
+packages/artifacts test: ✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (96.661ms)
+packages/artifacts test: ✔ revisioned writes reject concurrent writers and stale superseded content (107.470459ms)
+packages/artifacts test: ✔ P02-T05 creates revisioned oracle metadata and manifest hashes change after oracle revision (322.241459ms)
+packages/artifacts test: ✔ P02-T05 oracle manifest reports invalid oracle filenames at their actual artifact path (122.309125ms)
+packages/artifacts test: ✔ P02-T05 oracle reads reject artifacts whose embedded oracle ID disagrees with the requested path (344.123708ms)
+packages/artifacts test: ✔ P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order (584.714209ms)
+packages/artifacts test: ✔ P02-T05 taskgraph rejects empty or duplicate artifact inputs with diagnostics (270.490667ms)
+packages/artifacts test: ✔ P02-T05 taskgraph rejects copied identities and stale manifest hashes on read (289.467167ms)
+packages/artifacts test: ✔ P02-T05 evidence index rejects incomplete provenance and records accepted evidence references (265.671792ms)
+packages/artifacts test: ✔ P02-T05 evidence index rejects empty inputs, copied identities, and stale manifest hashes (283.255042ms)
+packages/artifacts test: ✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (298.990916ms)
+packages/artifacts test: ✔ P02-T04 rejects conflicting delta operations before writing a bundle (133.363ms)
+packages/artifacts test: ✔ P02-T04 detects stale current-spec bases during change validation (341.793833ms)
+packages/artifacts test: ✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (275.258ms)
+packages/artifacts test: ✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (104.565083ms)
+packages/artifacts test: ✔ P02-T04 preflights bundle artifact paths before writing partial deltas (101.688875ms)
+packages/artifacts test: ✔ P02-T04 validates add deltas against current truth (266.022041ms)
+packages/artifacts test: ✔ P02-T04 rejects add bundle creation when the target already exists in unlisted current truth (137.451292ms)
+packages/artifacts test: ✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (227.003334ms)
+packages/artifacts test: ✔ P02-T04 rejects side artifacts whose change IDs disagree with the bundle path (459.844375ms)
+packages/artifacts test: ✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (207.672667ms)
+packages/artifacts test: ✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (140.059167ms)
+packages/artifacts test: ✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (304.7155ms)
+packages/artifacts test: ✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (23.186834ms)
+packages/artifacts test: ✔ P02-T02 manifest schema reports malformed input without throwing (0.753583ms)
+packages/artifacts test: ✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (112.9375ms)
+packages/artifacts test: ✔ P02-T09 init allows migrated legacy protocol namespace while preserving collision checks (115.429583ms)
+packages/artifacts test: ✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (146.739042ms)
+packages/artifacts test: ✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (246.1215ms)
+packages/artifacts test: ✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (149.912334ms)
+packages/artifacts test: ✔ P02-T03 ignores non-file .md entries when listing current specs (117.85175ms)
+packages/artifacts test: ✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (76.014208ms)
+packages/artifacts test: ✔ P02-T03 preserves non-structural markdown headings inside current spec sections (119.934042ms)
+packages/artifacts test: ✔ P02-T03 rejects reserved current spec section headings inside section content (105.751208ms)
+packages/artifacts test: ✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (167.216625ms)
+packages/artifacts test: ✔ P02-T03 classifies semantic spec index diffs (0.287125ms)
+packages/artifacts test: ✔ P02-T03 blocks stale edits and supports rename and deprecate operations (218.088084ms)
+packages/artifacts test: ✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (103.435625ms)
+packages/artifacts test: ✔ P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically (514.808416ms)
+packages/artifacts test: ✔ P02-T06 accepts shared oracle coverage without false orphan diagnostics (440.306375ms)
+packages/artifacts test: ✔ P02-T06 reports calibrated broken traceability chains with exact diagnostics (335.910125ms)
+packages/artifacts test: ✔ P02-T06 applies trace integrity checks to evidence references (380.932459ms)
+packages/artifacts test: ✔ P02-T06 reports stale artifact input revisions after downstream sources change (374.99425ms)
+packages/artifacts test: ✔ P02-T06 cycle diagnostics name only nodes participating in the cycle (381.945041ms)
+packages/artifacts test: ✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (386.140459ms)
+packages/artifacts test: ✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (564.391375ms)
+packages/artifacts test: ℹ tests 59
+packages/artifacts test: ℹ suites 0
+packages/artifacts test: ℹ pass 59
+packages/artifacts test: ℹ fail 0
+packages/artifacts test: ℹ cancelled 0
+packages/artifacts test: ℹ skipped 0
+packages/artifacts test: ℹ todo 0
+packages/artifacts test: ℹ duration_ms 4036.967708
+packages/artifacts test: Done
+packages/legacy-bridge test$ pnpm --filter @legion/artifacts build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/runtime-eve test$ pnpm --filter @legion/core build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/store-sqlite test$ pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/legacy-bridge test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/store-sqlite test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/runtime-eve test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/store-sqlite test: $ tsc -p tsconfig.json
+packages/legacy-bridge test: $ tsc -p tsconfig.json
+packages/runtime-eve test: $ tsc -p tsconfig.json
+packages/store-sqlite test: $ tsc -p tsconfig.json
+packages/runtime-eve test: $ tsc -p tsconfig.json
+packages/legacy-bridge test: $ tsc -p tsconfig.json
+packages/store-sqlite test: ✔ P03-T07 schema exposes board_approvals, indexes, and protocol-aligned status enum (49.689ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval round-trips scope, requester, and expiresAt (36.23325ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval assigns approval_id when not provided and refuses duplicates (56.9665ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval rejects unknown task with a foreign-key error (3.814ms)
+packages/store-sqlite test: ✔ P03-T07 grantApproval transitions requested -> granted with expectedStatus guard (5.057583ms)
+packages/store-sqlite test: ✔ P03-T07 denyApproval transitions requested -> denied with the same guards (27.299333ms)
+packages/store-sqlite test: ✔ P03-T07 expireApproval moves requested -> expired and rejects terminal transitions (43.699667ms)
+packages/store-sqlite test: ✔ P03-T07 revokeApproval is reachable from requested AND from granted; denied/expired/revoked reject revoke (30.818417ms)
+packages/store-sqlite test: ✔ P03-T07 listApprovals filters by taskId, runId, status, and lifecyclePhase (52.476917ms)
+packages/store-sqlite test: ✔ P03-T07 expectedStatus mismatches raise BoardApprovalConcurrencyError (20.582792ms)
+packages/runtime-eve test: ✔ RuntimeEveDriver exports the same seven-method surface as the ADR-004 contract (1.413542ms)
+packages/runtime-eve test: ✔ start: defines the agent on Eve, freezes the manifest hash, and emits run.created + run.started (1.551334ms)
+packages/runtime-eve test: ✔ start: rejects requests that do not match the runtime-eve driver id (0.338917ms)
+packages/runtime-eve test: ✔ start: rejects duplicate run ids with a structured duplicate_run failure (0.144959ms)
+packages/runtime-eve test: ✔ resume: advances the checkpoint generation through Eve's continuation token (0.211583ms)
+packages/runtime-eve test: ✔ resume: rejects a stale checkpoint generation (0.118917ms)
+packages/runtime-eve test: ✔ cancel: terminates the Eve session and emits run.finished.v1 with status canceled (0.838375ms)
+packages/runtime-eve test: ✔ cancel: rejects a re-cancel with an already_canceled failure (0.690417ms)
+packages/runtime-eve test: ✔ inspect: returns provider-neutral status, sandbox, and artifact references (0.382291ms)
+packages/runtime-eve test: ✔ stream: yields the recorded progress and translated Eve events (1.118333ms)
+packages/runtime-eve test: ✔ approve: delivers the approval to Eve and emits approval.requested + approval.granted (0.389959ms)
+packages/runtime-eve test: ✔ approve: is idempotent for the same approvalId, decidedAt, and decidedBy (0.12125ms)
+packages/runtime-eve test: ✔ approve: rejects a run that is not in started or needs_human state (0.104958ms)
+packages/runtime-eve test: ✔ artifact: register mode appends to the run's artifact list and emits an artifact_registered stream event (0.069917ms)
+packages/runtime-eve test: ✔ artifact: final-output mode requires a terminal run and rejects non-terminal calls with state snapshot (0.065792ms)
+packages/runtime-eve test: ✔ artifact: final-output mode returns the terminal bundle after cancel (0.134667ms)
+packages/runtime-eve test: ✔ subagent: registerAndInvokeSubagent delegates to Eve's defineRemoteAgent and records the invocation (0.198125ms)
+packages/runtime-eve test: ✔ sandbox: openRunSandbox returns the Eve sandbox execution and asserts network egress is denied by default (0.121ms)
+packages/runtime-eve test: ✔ sandbox: R0 policy tier gets a secret canary env on the Eve sandbox (0.206833ms)
+packages/runtime-eve test: ✔ eval: runRunEval records the assertion set and emits a progress stream event (0.13675ms)
+packages/runtime-eve test: ✔ fallback: selectDriver picks runtime-local when Eve is unavailable (0.07125ms)
+packages/runtime-eve test: ✔ fallback: selectDriver picks runtime-eve when Eve is installed and no preferred driver is set (0.029417ms)
+packages/runtime-eve test: ✔ fallback: preferredDriver falls back to runtime-local when the preferred driver is unavailable (0.144292ms)
+packages/runtime-eve test: ✔ fallback: checkEveTransportVersion returns null when the transport is pinned to the canonical version (0.045208ms)
+packages/runtime-eve test: ✔ runtime-eve produces the same seven-method shape that runtime-local satisfies (0.236167ms)
+packages/runtime-eve test: ✔ runtime-local and runtime-eve share the same driverId-version field semantics (0.054667ms)
+packages/runtime-eve test: ✔ runtime-eve derives a deterministic run id from the request seed (0.061791ms)
+packages/runtime-eve test: ✔ RealEveTransport returns a synthetic authored result in dry-run mode (no worktree root) (2.581042ms)
+packages/runtime-eve test: ✔ RealEveTransport: dynamic import works against the pinned eve@0.11.7 peer dependency (0.109417ms)
+packages/runtime-eve test: ℹ tests 29
+packages/runtime-eve test: ℹ suites 0
+packages/runtime-eve test: ℹ pass 29
+packages/runtime-eve test: ℹ fail 0
+packages/runtime-eve test: ℹ cancelled 0
+packages/runtime-eve test: ℹ skipped 0
+packages/runtime-eve test: ℹ todo 0
+packages/runtime-eve test: ℹ duration_ms 229.351625
+packages/runtime-eve test: Done
+packages/store-sqlite test: ✔ P03-T07 missing approval raises BoardApprovalNotFoundError (33.269334ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval rejects malformed scope, requester, and timestamps (16.418333ms)
+packages/store-sqlite test: ✔ P03-T07 lifecycle phase map matches the documented pending/approved/revoked grouping (0.134958ms)
+packages/store-sqlite test: ✔ P03-T07 grantApproval then revokeApproval exercises the granted->revoked path explicitly (10.524625ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval with null runId is allowed when no run association exists (26.246875ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval defaults approvalId to a UUID when not provided (22.206542ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim inserts an active lease and getClaim returns the same row (50.884834ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim refuses a second concurrent claim on the same task+generation with BoardClaimContendedError (33.333542ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim rejects a mismatched expectedGeneration with BoardClaimGenerationError (17.785625ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim rejects missing tasks with BoardClaimGenerationError(actualGeneration=null) (71.272084ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim validates owner, lease duration, and lease token shape (22.938666ms)
+packages/store-sqlite test: ✔ P03-T04 getActiveClaimForTask returns the only live lease and null when none exists (32.519041ms)
+packages/store-sqlite test: ✔ P03-T04 heartbeat advances leaseExpiresAt and rejects unknown lease tokens (6.151042ms)
+packages/store-sqlite test: ✔ P03-T04 heartbeat on a released claim is a no-op and returns the archived row unchanged (9.78125ms)
+packages/store-sqlite test: ✔ P03-T04 release is idempotent: a second release returns the same archived row (22.924625ms)
+packages/store-sqlite test: ✔ P03-T04 release with an unknown lease token raises BoardClaimNotFoundError (32.561542ms)
+packages/store-sqlite test: ✔ P03-T04 release validates the reason enum (29.088ms)
+packages/store-sqlite test: ✔ P03-T04 reclaimExpiredLeases stamps 'expired' on stale leases and returns the reclaimed rows (22.405583ms)
+packages/store-sqlite test: ✔ P03-T04 reclaimExpiredLeases is a no-op when every lease is still valid (24.884084ms)
+packages/store-sqlite test: ✔ P03-T04 superseded task generations free the (task, generation) slot for new claims (19.422208ms)
+packages/store-sqlite test: ✔ P03-T04 release reasons cover every documented enum value (0.115334ms)
+packages/store-sqlite test: ✔ P03-T04 migration diagnostics include board_claims and both required indexes (6.463792ms)
+packages/store-sqlite test: ✔ P03-T04 SQLite provider package exports every claim contract the @legion/board package re-exports (26.259959ms)
+packages/store-sqlite test: ✔ P03-comments create + get round-trip persists comment with task association and timestamps (55.0195ms)
+packages/store-sqlite test: ✔ P03-comments list returns comments for a task ordered by creation time with task id (15.784375ms)
+packages/store-sqlite test: ✔ P03-comments update changes body and updatedAt while preserving task association and createdAt (40.237917ms)
+packages/store-sqlite test: ✔ P03-comments update can change actor without changing task association (48.455375ms)
+packages/store-sqlite test: ✔ P03-comments delete removes the comment from the task's comment list (4.508958ms)
+packages/store-sqlite test: ✔ P03-comments create and list for a missing task fail with BoardTaskNotFoundError (11.319459ms)
+packages/store-sqlite test: ✔ P03-comments get returns null and update/delete throw for unknown comment ids (22.468333ms)
+packages/store-sqlite test: ✔ P03-comments rejects empty, oversized, and invalid comment bodies (24.927667ms)
+packages/store-sqlite test: ✔ P03-comments rejects malformed actors (10.986334ms)
+packages/store-sqlite test: ✔ P03-comments deleting a task cascades and removes its comments (5.676375ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent persists an immutable event with monotonic aggregate and global sequences (49.973167ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent assigns independent aggregate sequences per aggregate (37.264917ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvents batches multiple events in one transaction (24.47225ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent supports explicit event id, causation, correlation, and occurredAt (57.875041ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent rejects duplicate event ids (4.547333ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent enforces expectedAggregateSequence (4.187583ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent enforces expectedGlobalSequence (27.613125ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent supports idempotencyKey replay with identical payload (12.083625ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent rejects idempotencyKey replay with different payload (24.443792ms)
+packages/store-sqlite test: ✔ P03-T03 listEvents filters and orders by global_sequence (5.347542ms)
+packages/store-sqlite test: ✔ P03-T03 tail returns the most recent events (12.680375ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent rejects unknown aggregate kinds and event types (17.806667ms)
+packages/store-sqlite test: ✔ P03-T03 SQLite provider exports the event repository contracts (31.276209ms)
+packages/store-sqlite test: ✔ P03-T03 task repository mutations emit board_task_events atomically through SqliteBoardStoreWithRepository (32.429333ms)
+packages/store-sqlite test: ✔ P03-T03 task supersede emits task.superseded and task.linked events (45.696125ms)
+packages/store-sqlite test: ✔ P03-T03 task delete emits task.deleted event (6.617167ms)
+packages/store-sqlite test: ✔ P03-T10 board integration recovers claimed tasks from a backup after storage corruption (100.83275ms)
+packages/store-sqlite test: ✔ P03-T10 board integration replays repository events after backup restore (81.407792ms)
+packages/store-sqlite test: ✔ P03-T10 board integration preserves outbox delivery state across backup restore (32.759833ms)
+packages/store-sqlite test: ✔ P03-T08 addLink + getLink round-trip for every relation kind (71.363083ms)
+packages/store-sqlite test: ✔ P03-T08 addLink rejects self-loops, invalid relations, and missing endpoints (33.088125ms)
+packages/store-sqlite test: ✔ P03-T08 addLink detects a 2-node depends_on cycle (106.716209ms)
+packages/store-sqlite test: ✔ P03-T08 addLink detects a longer depends_on cycle (24.507792ms)
+packages/store-sqlite test: ✔ P03-T08 addLink detects cycles for blocks relations (7.558584ms)
+packages/store-sqlite test: ✔ P03-T08 relates_to is non-directional and never rejected for cycles (26.514542ms)
+packages/store-sqlite test: ✔ P03-T08 removeLink returns the removed edge and getLink returns null (43.942375ms)
+packages/store-sqlite test: ✔ P03-T08 listOutgoingLinks, listIncomingLinks, and listLinks filter correctly (21.011709ms)
+packages/store-sqlite test: ✔ P03-T08 findCycles returns empty for an acyclic graph and reports cycles injected below the repository boundary (45.438333ms)
+packages/store-sqlite test: ✔ P03-T08 topologicalOrder returns dependency-safe order with alphabetical tie-breaking (25.871291ms)
+packages/store-sqlite test: ✔ P03-T08 topologicalOrder handles disconnected subgraphs (23.0115ms)
+packages/store-sqlite test: ✔ P03-T08 topologicalOrder omits tasks with no DAG edges (21.213916ms)
+packages/store-sqlite test: ✔ P03-T08 topologicalOrder throws BoardTaskLinkCycleAggregateError for cycles (17.997667ms)
+packages/store-sqlite test: ✔ P03-T08 topologicalOrderForRoots restricts ordering to reachable subgraph (27.843042ms)
+packages/store-sqlite test: ✔ P03-T08 SqliteBoardStoreWithTaskLinkRepository exposes the link repository (42.625125ms)
+packages/store-sqlite test: ✔ P03-T08 SQLite provider exports every link contract the @legion/board package re-exports (20.597ms)
+packages/store-sqlite test: ✔ P03-T01 migrates a real board database and reports schema diagnostics (70.311292ms)
+packages/store-sqlite test: ✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (33.788ms)
+packages/store-sqlite test: ✔ P03-T01 schema accepts zero-based protocol event sequences (58.752875ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (2.20675ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rejects applied versions without migration records (1.371416ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner honors explicit target versions (1.894208ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rejects unsupported target versions (2.025209ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner treats missing scalar pragma rows as empty rows (0.111583ms)
+packages/store-sqlite test: ✔ P03-T01 migration rollback preserves the original migration failure (0.140542ms)
+packages/store-sqlite test: ✔ P03-T01 backup hashing avoids whole-file reads (0.877333ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner fails closed for unknown future schema versions (10.563334ms)
+packages/store-sqlite test: ✔ P03-T01 migration checksums are deterministic over ordered SQL statements (15.698875ms)
+packages/store-sqlite test: ✔ P03-T05 enqueueOutbox canonicalizes payload JSON and supports filtered listing (48.186625ms)
+packages/store-sqlite test: ✔ P03-T05 enqueueOutbox reuses the same outbox row for duplicate idempotency keys (41.733167ms)
+packages/store-sqlite test: ✔ P03-T05 claimOutbox and markOutboxAttempt track retries and terminal statuses (91.087875ms)
+packages/store-sqlite test: ✔ P03-T05 claimOutbox throws not found for missing rows (5.79225ms)
+packages/store-sqlite test: ✔ P03-T03 saveProjection inserts and updates a projection with optimistic version CAS (64.03625ms)
+packages/store-sqlite test: ✔ P03-T03 saveProjection throws BoardProjectionDriftError on version mismatch (17.070458ms)
+packages/store-sqlite test: ✔ P03-T03 deleteProjection removes a projection and respects expected version (79.39525ms)
+packages/store-sqlite test: ✔ P03-T03 listStaleProjections returns projections behind a global sequence (22.61475ms)
+packages/store-sqlite test: ✔ P03-T03 rebuilder replays events in order to produce deterministic projection state (31.896833ms)
+packages/store-sqlite test: ✔ P03-T03 rebuilder replay is deterministic: same events produce same state hash (7.636542ms)
+packages/store-sqlite test: ✔ P03-T03 rebuild can recover a projection after its derived state is deleted (13.897292ms)
+packages/store-sqlite test: ✔ P03-T03 verify detects drift and confirms consistency (20.064667ms)
+packages/store-sqlite test: ✔ P03-T03 rebuilder rebuildAndSave advances projection version atomically (35.6305ms)
+packages/store-sqlite test: ✔ P03-T03 SQLite provider exports every projection contract the board package re-exports (25.113583ms)
+packages/store-sqlite test: ✔ P03-T02 create + get round-trip persists every column of a new board task (41.913625ms)
+packages/store-sqlite test: ✔ P03-T02 create rejects duplicate task ids with a descriptive error (39.330959ms)
+packages/store-sqlite test: ✔ P03-T02 create rejects malformed contract hash, invalid priority, and unknown statuses (5.639041ms)
+packages/store-sqlite test: ✔ P03-T02 priority, status, and generation min/max constants agree with the protocol and schema (20.652125ms)
+packages/store-sqlite test: ✔ P03-T02 setPriority advances the task while preserving status, contract, and generation (21.755458ms)
+packages/store-sqlite test: ✔ P03-T02 setPriority throws BoardConcurrencyError on generation mismatch (21.178459ms)
+packages/store-sqlite test: ✔ P03-T02 setPriority throws BoardTaskNotFoundError when no expectedGeneration is provided and the task is missing (17.371042ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus walks the queued → ready → claimed → running → completed path (26.668042ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus records a blocker for blocked status and rejects mismatched blockers (44.346084ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus refuses illegal status transitions with BoardIllegalStatusTransitionError (23.853958ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus refuses mutating terminal states with BoardTerminalTaskMutationError (52.18975ms)
+packages/store-sqlite test: ✔ P03-T02 failed tasks can be re-queued and run again to completion (34.971292ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration rotates the contract reference and increments generation atomically (38.008ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration rejects generation mismatches with BoardConcurrencyError (49.304875ms)
+packages/legacy-bridge test: ✔ P02-T09 dry-run inventories local and global Codex .legion protocol installs deterministically (319.304ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration refuses to migrate terminal tasks (18.115458ms)
+packages/store-sqlite test: ✔ P03-T02 supersedeTask writes a board_task_links row keyed on relation='supersedes' and updates generation (11.344833ms)
+packages/store-sqlite test: ✔ P03-T02 supersedeTask fails on generation mismatch and does not write a successor (16.327125ms)
+packages/store-sqlite test: ✔ P03-T02 listTasks filters by status, project, change, and excludes terminal states by default (9.653458ms)
+packages/store-sqlite test: ✔ P03-T02 listTasks rejects invalid limits and honors bounded limits (24.475417ms)
+packages/store-sqlite test: ✔ P03-T02 deleteTask removes the row when the generation matches (20.938125ms)
+packages/store-sqlite test: ✔ P03-T02 deleteTask throws BoardConcurrencyError on generation mismatch (28.483541ms)
+packages/store-sqlite test: ✔ P03-T02 migration diagnostics surface every required table and index for board_tasks operations (22.474875ms)
+packages/store-sqlite test: ✔ P03-T02 concurrent priority writes preserve last-writer-wins via generation check (49.535334ms)
+packages/legacy-bridge test: ✔ P02-T09 apply preserves customized bytes and unblocks v9 project initialization (200.920125ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration + priority update interact correctly when generation changes mid-flight (21.081125ms)
+packages/store-sqlite test: ✔ P03-T02 board_task_events can be appended after CRUD with zero-based aggregate sequence per schema (7.438541ms)
+packages/store-sqlite test: ✔ P03-T02 SQLite provider package exports every contract type the @legion/board package re-exports (3.976875ms)
+packages/store-sqlite test: ℹ tests 130
+packages/store-sqlite test: ℹ suites 0
+packages/store-sqlite test: ℹ pass 130
+packages/store-sqlite test: ℹ fail 0
+packages/store-sqlite test: ℹ cancelled 0
+packages/store-sqlite test: ℹ skipped 0
+packages/store-sqlite test: ℹ todo 0
+packages/store-sqlite test: ℹ duration_ms 1119.305584
+packages/store-sqlite test: Done
+packages/legacy-bridge test: ✔ P02-T09 rollback restores the exact pre-migration .legion layout (114.77625ms)
+packages/legacy-bridge test: ✔ P02-T09 partial installs without manifests are preserved as customized legacy data (47.591292ms)
+packages/legacy-bridge test: ✔ P02-T09 repeat migration is a no-op report without moving v9 project data (130.030709ms)
+packages/legacy-bridge test: ✔ P02-T09 apply resumes an interrupted legacy-protocol move with matching existing files (111.828625ms)
+packages/legacy-bridge test: ✔ P02-T09 apply removes empty legacy roots so v9 init is unblocked (144.747791ms)
+packages/legacy-bridge test: ✔ P02-T09 apply moves legacy migration roots so v9 init is unblocked (165.052625ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects backup roots that overlap .legion before copying (40.308791ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects symlinked legacy entries instead of silently dropping them (31.363917ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source (42.209875ms)
+packages/legacy-bridge test: ✔ P02-T09 backup manifests use absolute paths so rollback survives cwd changes (74.284375ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback rejects unusable backup manifests before deleting current .legion (10.441042ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback rejects backup manifests from another repository before deleting current .legion (44.668542ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback verifies backup hashes before replacing current .legion (63.67425ms)
+packages/legacy-bridge test: ✔ P02-T09 apply rejects tampered migration report moves before cleanup (32.477459ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run stages deterministic v9 artifacts without mutating legacy .planning (220.755125ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run reports stale state, contradictory plan summaries, and missing requirements (124.458916ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run rejects staging paths that overlap repository or source roots (21.3945ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run handles EOF summaries, malformed YAML, and invalid timestamps as diagnostics (175.305708ms)
+packages/legacy-bridge test: ✔ P02-T08 apply backs up destination and rollback restores exact pre-import .legion bytes (79.132541ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects tampered staging, bad reports, and invalid timestamps without mutating destination (65.260125ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects backup roots that overlap .legion before copying (53.588167ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion (78.882166ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects backup roots that overlap planning source or staging roots (60.74975ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs (111.415834ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects malformed backup manifests without deleting current .legion (9.770542ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects unusable backup manifests before deleting current .legion (29.750417ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects backup manifests from another repository before deleting current .legion (123.642042ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback accepts backup manifests created through a symlinked repository root (97.940916ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects backup paths inside current .legion before deleting (8.912791ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects relative manifest repository roots before deleting current .legion (4.071584ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback verifies backup hashes before replacing current .legion (65.518541ms)
+packages/legacy-bridge test: ✔ P02-T08 repeated apply is rejected without changing destination (65.579166ms)
+packages/legacy-bridge test: ℹ tests 34
+packages/legacy-bridge test: ℹ suites 0
+packages/legacy-bridge test: ℹ pass 34
+packages/legacy-bridge test: ℹ fail 0
+packages/legacy-bridge test: ℹ cancelled 0
+packages/legacy-bridge test: ℹ skipped 0
+packages/legacy-bridge test: ℹ todo 0
+packages/legacy-bridge test: ℹ duration_ms 1788.654167
+packages/legacy-bridge test: Done
+apps/cli-e2e test$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.459625ms)
+apps/cli-e2e test: ✔ P02-T10 valueless global flags remain flags before positional commands (290.418584ms)
+apps/cli-e2e test: ✔ P02-T10 valueless command flags remain flags before positional arguments (506.549292ms)
+apps/cli-e2e test: ✔ P02-T10 command subcommands honor help flags without requiring inputs (266.426375ms)
+apps/cli-e2e test: ✔ P02-T10 JSON input boundary failures return usage diagnostics (398.7285ms)
+apps/cli-e2e test: ✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (427.914042ms)
+apps/cli-e2e test: ✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (824.979041ms)
+apps/cli-e2e test: ✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (467.15575ms)
+apps/cli-e2e test: ✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (464.826666ms)
+apps/cli-e2e test: ✔ P03-T09 board CLI routes task, claim, event, and approval operations without prompts (556.601083ms)
+apps/cli-e2e test: ℹ tests 10
+apps/cli-e2e test: ℹ suites 0
+apps/cli-e2e test: ℹ pass 10
+apps/cli-e2e test: ℹ fail 0
+apps/cli-e2e test: ℹ cancelled 0
+apps/cli-e2e test: ℹ skipped 0
+apps/cli-e2e test: ℹ todo 0
+apps/cli-e2e test: ℹ duration_ms 4356.148209
+apps/cli-e2e test: Done
+
+[validate:next] npm-pack: npm pack --dry-run --json
+[
+  {
+    "id": "@9thlevelsoftware/legion@9.0.0-alpha.0",
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "size": 738126,
+    "unpackedSize": 2343718,
+    "shasum": "1d478fdc89fffce7c45bce2136175429bde69dd1",
+    "integrity": "sha512-8P+H4mOF97i4ib50aIqOjVSYFPdYSbUohJEpcp1vZFTMssyDER0ggg98sYIazoyzbaa0wB/dzT8sMjFjL2wXjQ==",
+    "filename": "9thlevelsoftware-legion-9.0.0-alpha.0.tgz",
+    "files": [
+      {
+        "path": ".codex-plugin/plugin.json",
+        "size": 1412,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 81679,
+        "mode": 420
+      },
+      {
+        "path": "adapters/ADAPTER.md",
+        "size": 6945,
+        "mode": 420
+      },
+      {
+        "path": "adapters/aider.md",
+        "size": 9412,
+        "mode": 420
+      },
+      {
+        "path": "adapters/antigravity-cli.md",
+        "size": 4072,
+        "mode": 420
+      },
+      {
+        "path": "adapters/claude-code.md",
+        "size": 6040,
+        "mode": 420
+      },
+      {
+        "path": "adapters/codex-cli.md",
+        "size": 5874,
+        "mode": 420
+      },
+      {
+        "path": "adapters/copilot-cli.md",
+        "size": 4784,
+        "mode": 420
+      },
+      {
+        "path": "adapters/cursor.md",
+        "size": 3713,
+        "mode": 420
+      },
+      {
+        "path": "adapters/gemini-cli.md",
+        "size": 5280,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-cli.md",
+        "size": 11403,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kilo-code.md",
+        "size": 5510,
+        "mode": 420
+      },
+      {
+        "path": "adapters/kiro-cli.md",
+        "size": 5101,
+        "mode": 420
+      },
+      {
+        "path": "adapters/opencode.md",
+        "size": 9364,
+        "mode": 420
+      },
+      {
+        "path": "adapters/windsurf.md",
+        "size": 3615,
+        "mode": 420
+      },
+      {
+        "path": "agents/agents-orchestrator.md",
+        "size": 14117,
+        "mode": 420
+      },
+      {
+        "path": "agents/data-analytics-engineer.md",
+        "size": 22249,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-brand-guardian.md",
+        "size": 12219,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ui-designer.md",
+        "size": 8719,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-architect.md",
+        "size": 9643,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-ux-researcher.md",
+        "size": 14548,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-visual-storyteller.md",
+        "size": 8011,
+        "mode": 420
+      },
+      {
+        "path": "agents/design-whimsy-injector.md",
+        "size": 6642,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-ai-engineer.md",
+        "size": 8053,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-backend-architect.md",
+        "size": 10127,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-frontend-developer.md",
+        "size": 9844,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-infrastructure-devops.md",
+        "size": 19148,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-laravel-specialist.md",
+        "size": 19456,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-mobile-app-builder.md",
+        "size": 7791,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-rapid-prototyper.md",
+        "size": 7676,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-security-engineer.md",
+        "size": 17203,
+        "mode": 420
+      },
+      {
+        "path": "agents/engineering-senior-developer.md",
+        "size": 23313,
+        "mode": 420
+      },
+      {
+        "path": "agents/lsp-index-engineer.md",
+        "size": 11879,
+        "mode": 420
+      },
+      {
+        "path": "agents/macos-spatial-metal-engineer.md",
+        "size": 12863,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-app-store-optimizer.md",
+        "size": 13734,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-content-social-strategist.md",
+        "size": 15115,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-growth-hacker.md",
+        "size": 17715,
+        "mode": 420
+      },
+      {
+        "path": "agents/marketing-social-platform-specialist.md",
+        "size": 11947,
+        "mode": 420
+      },
+      {
+        "path": "agents/polymath.md",
+        "size": 9048,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-feedback-synthesizer.md",
+        "size": 19681,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-sprint-prioritizer.md",
+        "size": 11675,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-technical-writer.md",
+        "size": 17521,
+        "mode": 420
+      },
+      {
+        "path": "agents/product-trend-researcher.md",
+        "size": 11311,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-experiment-tracker.md",
+        "size": 10222,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-project-shepherd.md",
+        "size": 10522,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-operations.md",
+        "size": 10526,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-management-studio-producer.md",
+        "size": 11526,
+        "mode": 420
+      },
+      {
+        "path": "agents/project-manager-senior.md",
+        "size": 10607,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-executive-summary-generator.md",
+        "size": 9796,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-finance-tracker.md",
+        "size": 9422,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-legal-compliance-checker.md",
+        "size": 16554,
+        "mode": 420
+      },
+      {
+        "path": "agents/support-support-responder.md",
+        "size": 16050,
+        "mode": 420
+      },
+      {
+        "path": "agents/terminal-integration-specialist.md",
+        "size": 26248,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-api-tester.md",
+        "size": 13183,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-code-polisher.md",
+        "size": 19168,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-performance-benchmarker.md",
+        "size": 12832,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-qa-verification-specialist.md",
+        "size": 16616,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-test-results-analyzer.md",
+        "size": 15252,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-tool-evaluator.md",
+        "size": 8132,
+        "mode": 420
+      },
+      {
+        "path": "agents/testing-workflow-optimizer.md",
+        "size": 11644,
+        "mode": 420
+      },
+      {
+        "path": "agents/visionos-spatial-engineer.md",
+        "size": 22349,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-cockpit-interaction-specialist.md",
+        "size": 24051,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-immersive-developer.md",
+        "size": 25594,
+        "mode": 420
+      },
+      {
+        "path": "agents/xr-interface-architect.md",
+        "size": 22639,
+        "mode": 420
+      },
+      {
+        "path": "bin/install.js",
+        "size": 72602,
+        "mode": 420
+      },
+      {
+        "path": "bin/runtime-metadata.js",
+        "size": 18900,
+        "mode": 420
+      },
+      {
+        "path": "checksums.sha256",
+        "size": 13013,
+        "mode": 420
+      },
+      {
+        "path": "commands/advise.md",
+        "size": 10719,
+        "mode": 420
+      },
+      {
+        "path": "commands/agent.md",
+        "size": 5197,
+        "mode": 420
+      },
+      {
+        "path": "commands/board.md",
+        "size": 11924,
+        "mode": 420
+      },
+      {
+        "path": "commands/build.md",
+        "size": 32038,
+        "mode": 420
+      },
+      {
+        "path": "commands/explore.md",
+        "size": 6379,
+        "mode": 420
+      },
+      {
+        "path": "commands/learn.md",
+        "size": 8926,
+        "mode": 420
+      },
+      {
+        "path": "commands/map.md",
+        "size": 6658,
+        "mode": 420
+      },
+      {
+        "path": "commands/milestone.md",
+        "size": 10302,
+        "mode": 420
+      },
+      {
+        "path": "commands/plan.md",
+        "size": 28384,
+        "mode": 420
+      },
+      {
+        "path": "commands/polish.md",
+        "size": 17559,
+        "mode": 420
+      },
+      {
+        "path": "commands/portfolio.md",
+        "size": 10195,
+        "mode": 420
+      },
+      {
+        "path": "commands/quick.md",
+        "size": 14640,
+        "mode": 420
+      },
+      {
+        "path": "commands/retro.md",
+        "size": 8698,
+        "mode": 420
+      },
+      {
+        "path": "commands/review.md",
+        "size": 42659,
+        "mode": 420
+      },
+      {
+        "path": "commands/ship.md",
+        "size": 12255,
+        "mode": 420
+      },
+      {
+        "path": "commands/start.md",
+        "size": 9300,
+        "mode": 420
+      },
+      {
+        "path": "commands/status.md",
+        "size": 13462,
+        "mode": 420
+      },
+      {
+        "path": "commands/update.md",
+        "size": 4184,
+        "mode": 420
+      },
+      {
+        "path": "commands/validate.md",
+        "size": 13947,
+        "mode": 420
+      },
+      {
+        "path": "docs/control-modes.md",
+        "size": 6932,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-audit.md",
+        "size": 6138,
+        "mode": 420
+      },
+      {
+        "path": "docs/runtime-certification-checklists.md",
+        "size": 7443,
+        "mode": 420
+      },
+      {
+        "path": "docs/security/install-integrity.md",
+        "size": 1155,
+        "mode": 420
+      },
+      {
+        "path": "docs/settings.schema.json",
+        "size": 5628,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1963,
+        "mode": 420
+      },
+      {
+        "path": "settings.json",
+        "size": 1204,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-creator/SKILL.md",
+        "size": 16006,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/CATALOG.md",
+        "size": 22382,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/DOMAINS.md",
+        "size": 16241,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/GAP_ANALYSIS.md",
+        "size": 26754,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md",
+        "size": 1459,
+        "mode": 420
+      },
+      {
+        "path": "skills/agent-registry/SKILL.md",
+        "size": 11169,
+        "mode": 420
+      },
+      {
+        "path": "skills/authority-enforcer/SKILL.md",
+        "size": 31842,
+        "mode": 420
+      },
+      {
+        "path": "skills/board-of-directors/SKILL.md",
+        "size": 32658,
+        "mode": 420
+      },
+      {
+        "path": "skills/cli-dispatch/SKILL.md",
+        "size": 23611,
+        "mode": 420
+      },
+      {
+        "path": "skills/code-polish/SKILL.md",
+        "size": 28620,
+        "mode": 420
+      },
+      {
+        "path": "skills/codebase-mapper/SKILL.md",
+        "size": 86881,
+        "mode": 420
+      },
+      {
+        "path": "skills/design-workflows/SKILL.md",
+        "size": 56502,
+        "mode": 420
+      },
+      {
+        "path": "skills/execution-tracker/SKILL.md",
+        "size": 14030,
+        "mode": 420
+      },
+      {
+        "path": "skills/github-sync/SKILL.md",
+        "size": 24413,
+        "mode": 420
+      },
+      {
+        "path": "skills/hooks-integration/SKILL.md",
+        "size": 5619,
+        "mode": 420
+      },
+      {
+        "path": "skills/intent-router/SKILL.md",
+        "size": 52318,
+        "mode": 420
+      },
+      {
+        "path": "skills/legion/SKILL.md",
+        "size": 2423,
+        "mode": 420
+      },
+      {
+        "path": "skills/marketing-workflows/SKILL.md",
+        "size": 27769,
+        "mode": 420
+      },
+      {
+        "path": "skills/memory-manager/SKILL.md",
+        "size": 52408,
+        "mode": 420
+      },
+      {
+        "path": "skills/milestone-tracker/SKILL.md",
+        "size": 17183,
+        "mode": 420
+      },
+      {
+        "path": "skills/phase-decomposer/SKILL.md",
+        "size": 53315,
+        "mode": 420
+      },
+      {
+        "path": "skills/plan-critique/SKILL.md",
+        "size": 26251,
+        "mode": 420
+      },
+      {
+        "path": "skills/polymath-engine/SKILL.md",
+        "size": 5685,
+        "mode": 420
+      },
+      {
+        "path": "skills/portfolio-manager/SKILL.md",
+        "size": 13730,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/SKILL.md",
+        "size": 17951,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/project-template.md",
+        "size": 706,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/roadmap-template.md",
+        "size": 720,
+        "mode": 420
+      },
+      {
+        "path": "skills/questioning-flow/templates/state-template.md",
+        "size": 621,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-evaluators/SKILL.md",
+        "size": 65932,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-loop/SKILL.md",
+        "size": 62212,
+        "mode": 420
+      },
+      {
+        "path": "skills/review-panel/SKILL.md",
+        "size": 32846,
+        "mode": 420
+      },
+      {
+        "path": "skills/security-review/SKILL.md",
+        "size": 27319,
+        "mode": 420
+      },
+      {
+        "path": "skills/ship-pipeline/SKILL.md",
+        "size": 13430,
+        "mode": 420
+      },
+      {
+        "path": "skills/spec-pipeline/SKILL.md",
+        "size": 34493,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/SKILL.md",
+        "size": 94932,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-A.md",
+        "size": 4628,
+        "mode": 420
+      },
+      {
+        "path": "skills/wave-executor/WAVE-B.md",
+        "size": 6145,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-core/SKILL.md",
+        "size": 15866,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-domains/SKILL.md",
+        "size": 2056,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-github/SKILL.md",
+        "size": 2149,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common-memory/SKILL.md",
+        "size": 1937,
+        "mode": 420
+      },
+      {
+        "path": "skills/workflow-common/SKILL.md",
+        "size": 49717,
+        "mode": 420
+      }
+    ],
+    "entryCount": 135,
+    "bundled": []
+  }
+]
+
+[validate:next] pnpm-pack: pnpm pack --dry-run
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+package: @9thlevelsoftware/legion@9.0.0-alpha.0
+Tarball Contents
+.codex-plugin/plugin.json
+adapters/ADAPTER.md
+adapters/aider.md
+adapters/antigravity-cli.md
+adapters/claude-code.md
+adapters/codex-cli.md
+adapters/copilot-cli.md
+adapters/cursor.md
+adapters/gemini-cli.md
+adapters/kilo-cli.md
+adapters/kilo-code.md
+adapters/kiro-cli.md
+adapters/opencode.md
+adapters/windsurf.md
+agents/agents-orchestrator.md
+agents/data-analytics-engineer.md
+agents/design-brand-guardian.md
+agents/design-ui-designer.md
+agents/design-ux-architect.md
+agents/design-ux-researcher.md
+agents/design-visual-storyteller.md
+agents/design-whimsy-injector.md
+agents/engineering-ai-engineer.md
+agents/engineering-backend-architect.md
+agents/engineering-frontend-developer.md
+agents/engineering-infrastructure-devops.md
+agents/engineering-laravel-specialist.md
+agents/engineering-mobile-app-builder.md
+agents/engineering-rapid-prototyper.md
+agents/engineering-security-engineer.md
+agents/engineering-senior-developer.md
+agents/lsp-index-engineer.md
+agents/macos-spatial-metal-engineer.md
+agents/marketing-app-store-optimizer.md
+agents/marketing-content-social-strategist.md
+agents/marketing-growth-hacker.md
+agents/marketing-social-platform-specialist.md
+agents/polymath.md
+agents/product-feedback-synthesizer.md
+agents/product-sprint-prioritizer.md
+agents/product-technical-writer.md
+agents/product-trend-researcher.md
+agents/project-management-experiment-tracker.md
+agents/project-management-project-shepherd.md
+agents/project-management-studio-operations.md
+agents/project-management-studio-producer.md
+agents/project-manager-senior.md
+agents/support-executive-summary-generator.md
+agents/support-finance-tracker.md
+agents/support-legal-compliance-checker.md
+agents/support-support-responder.md
+agents/terminal-integration-specialist.md
+agents/testing-api-tester.md
+agents/testing-code-polisher.md
+agents/testing-performance-benchmarker.md
+agents/testing-qa-verification-specialist.md
+agents/testing-test-results-analyzer.md
+agents/testing-tool-evaluator.md
+agents/testing-workflow-optimizer.md
+agents/visionos-spatial-engineer.md
+agents/xr-cockpit-interaction-specialist.md
+agents/xr-immersive-developer.md
+agents/xr-interface-architect.md
+bin/install.js
+bin/runtime-metadata.js
+checksums.sha256
+commands/advise.md
+commands/agent.md
+commands/board.md
+commands/build.md
+commands/explore.md
+commands/learn.md
+commands/map.md
+commands/milestone.md
+commands/plan.md
+commands/polish.md
+commands/portfolio.md
+commands/quick.md
+commands/retro.md
+commands/review.md
+commands/ship.md
+commands/start.md
+commands/status.md
+commands/update.md
+commands/validate.md
+docs/control-modes.md
+docs/runtime-audit.md
+docs/runtime-certification-checklists.md
+docs/security/install-integrity.md
+docs/settings.schema.json
+package.json
+README.md
+settings.json
+skills/agent-creator/SKILL.md
+skills/agent-registry/CATALOG.md
+skills/agent-registry/DOMAINS.md
+skills/agent-registry/GAP_ANALYSIS.md
+skills/agent-registry/MANDATORY-PERSONA-CONTRACT.md
+skills/agent-registry/SKILL.md
+skills/authority-enforcer/SKILL.md
+skills/board-of-directors/SKILL.md
+skills/cli-dispatch/SKILL.md
+skills/code-polish/SKILL.md
+skills/codebase-mapper/SKILL.md
+skills/design-workflows/SKILL.md
+skills/execution-tracker/SKILL.md
+skills/github-sync/SKILL.md
+skills/hooks-integration/SKILL.md
+skills/intent-router/SKILL.md
+skills/legion/SKILL.md
+skills/marketing-workflows/SKILL.md
+skills/memory-manager/SKILL.md
+skills/milestone-tracker/SKILL.md
+skills/phase-decomposer/SKILL.md
+skills/plan-critique/SKILL.md
+skills/polymath-engine/SKILL.md
+skills/portfolio-manager/SKILL.md
+skills/questioning-flow/SKILL.md
+skills/questioning-flow/templates/project-template.md
+skills/questioning-flow/templates/roadmap-template.md
+skills/questioning-flow/templates/state-template.md
+skills/review-evaluators/SKILL.md
+skills/review-loop/SKILL.md
+skills/review-panel/SKILL.md
+skills/security-review/SKILL.md
+skills/ship-pipeline/SKILL.md
+skills/spec-pipeline/SKILL.md
+skills/wave-executor/SKILL.md
+skills/wave-executor/WAVE-A.md
+skills/wave-executor/WAVE-B.md
+skills/workflow-common-core/SKILL.md
+skills/workflow-common-domains/SKILL.md
+skills/workflow-common-github/SKILL.md
+skills/workflow-common-memory/SKILL.md
+skills/workflow-common/SKILL.md
+Tarball Details
+9thlevelsoftware-legion-9.0.0-alpha.0.tgz

@@ -16,6 +16,8 @@
     "typecheck": "pnpm run build && pnpm -r typecheck",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "check:package-contents": "node scripts/check-package-contents.mjs",
+    "check:worker-bundles": "node scripts/validate-worker-bundles.mjs",
+    "check:default-runtime": "node scripts/scan-default-runtime.mjs",
     "test": "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
     "docs:protocol": "pnpm run typecheck && node scripts/validate-next.mjs --generate-protocol-docs",
     "validate": "pnpm run validate:next",

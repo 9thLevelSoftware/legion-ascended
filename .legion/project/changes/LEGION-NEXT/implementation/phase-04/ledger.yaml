@@ -1,0 +1,65 @@
+phase: 4
+phase_id: P04
+status: DONE
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/04-phase-functional-worker-bundles-and-persona-purge.md"
+base_commit: "28b83d4bee3c003992f5af002b3916a05ddce4bd"
+started_at: "2026-06-21T19:45:47-04:00"
+completed_at: "2026-06-21T20:55:54-04:00"
+active_wave: 1
+tasks:
+  P04-T01: { status: DONE, run_id: "P04-T01-20260621-worker-bundle-manifest-schema", commit: "P04-final-head" }
+  P04-T02: { status: DONE, run_id: "P04-T02-20260621-legacy-persona-id-map", commit: "P04-final-head" }
+  P04-T03: { status: DONE, run_id: "P04-T03-20260621-domain-pack-extraction", commit: "P04-final-head" }
+  P04-T04: { status: DONE, run_id: "P04-T04-20260621-default-runtime-persona-purge", commit: "c2e6bfb" }
+  P04-T05: { status: DONE, run_id: "P04-T05-20260621-worker-bundle-validation", commit: "e16bec3" }
+  P04-T06: { status: DONE, run_id: "P04-T06-20260621-default-runtime-scan", commit: "bcf94d1" }
+  P04-T07: { status: DONE, run_id: "P04-T07-20260621-phase-04-closeout", commit: "P04-final-head" }
+decisions:
+  - task: P04-T01
+    decision: "WorkerBundle manifests use functional role, domain, capabilities, and a nested prompt-content contract instead of a flat persona pointer"
+    reason: "The TaskRun manifest now embeds workerBundleManifest with role/domain/capabilities plus promptContentContract.instructionsHash, requiredSections, and forbiddenSections. The lifecycle fixture and generated task-run schema were updated so task runs freeze the same provider-neutral bundle contract the runtime will execute."
+    decided_at: "2026-06-21T19:56:01-04:00"
+  - task: P04-T02
+    decision: "Legacy persona IDs are mapped only for migration semantics, not v9 default runtime dispatch"
+    reason: "docs/next/migration/LEGACY-PERSONA-MAP.md covers the 48 legacy v8 personas and links from ADR-002. The table maps legacy IDs to functional roles and domain packs so imported plans and evidence retain meaning; testing-code-polisher is intentionally excluded as a post-v8 addition."
+    decided_at: "2026-06-21T20:02:52-04:00"
+  - task: P04-T03
+    decision: "workflow-common-* content is treated as versioned extracted domain-pack material"
+    reason: "The four workflow-common packs now carry pack_id, pack_version 1.0.0, pack_status extracted, and dedicated v1.0.0 sections. tests/workflow-common-packs.test.mjs guards the metadata contract and package checksums remain clean."
+    decided_at: "2026-06-21T20:04:50-04:00"
+  - task: P04-T04
+    decision: "The v9 default runtime keeps operational rules but purges biography/tone/personality prose from its always-load surface"
+    reason: "skills/workflow-common-core/SKILL.md was rewritten away from v8 Personality Injection and Agent Path Resolution sections into bundle-resolution and prompt-contract rules. Legacy v8 agents and the deprecated workflow-common shim remain preserved but are outside the v9 default runtime path."
+    decided_at: "2026-06-21T20:28:45-04:00"
+  - task: P04-T05
+    decision: "A canonical nine-role worker bundle registry is the v9 default runtime bundle surface"
+    reason: "bundles/index.json registers one v1.0.0 bundle for each ADR-002 default role. scripts/validate-worker-bundles.mjs enforces manifest schema shape, role/id uniqueness, prompt hash integrity, forbidden-section completeness, and workflow-common domain-pack integrity. .gitattributes pins bundle Markdown to LF checkout semantics so those prompt hashes remain stable across Windows/macOS/Linux."
+    decided_at: "2026-06-21T20:39:35-04:00"
+  - task: P04-T06
+    decision: "Default runtime persona regressions are blocked by a dedicated scanner wired into validate:next"
+    reason: "scripts/scan-default-runtime.mjs scans the four workflow-common packs, all bundles/*.md prompt files, and governance docs with runtime/governance rule sets. validate:next now runs check:worker-bundles before default-runtime-scan and then generated schema/doc drift checks."
+    decided_at: "2026-06-21T20:48:05-04:00"
+  - task: P04-T07
+    decision: "Close Phase 4 with consolidated P04-CLOSEOUT evidence and a Phase 5 runtime-driver handoff"
+    reason: "The closeout bundle records focused worker-bundle and default-runtime scans, root/workspace tests, validate-next, gitleaks, the independent review, ledger, evidence index, and handoff so Phase 5 can depend on the functional bundle contract instead of Kanban metadata alone."
+    decided_at: "2026-06-21T20:55:54-04:00"
+blockers: []
+evidence:
+  - .gitattributes
+  - docs/next/evidence/P04-CLOSEOUT/git-status.log
+  - docs/next/evidence/P04-CLOSEOUT/protocol-test.log
+  - docs/next/evidence/P04-CLOSEOUT/workflow-common-packs-test.log
+  - docs/next/evidence/P04-CLOSEOUT/worker-bundles-test.log
+  - docs/next/evidence/P04-CLOSEOUT/default-runtime-scan-test.log
+  - docs/next/evidence/P04-CLOSEOUT/persona-purge-test.log
+  - docs/next/evidence/P04-CLOSEOUT/check-worker-bundles.log
+  - docs/next/evidence/P04-CLOSEOUT/check-default-runtime.log
+  - docs/next/evidence/P04-CLOSEOUT/check-boundaries.log
+  - docs/next/evidence/P04-CLOSEOUT/check-package-contents.log
+  - docs/next/evidence/P04-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P04-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P04-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P04-CLOSEOUT/gitleaks-branch.log
+  - docs/next/evidence/P04-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-04-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-04/HANDOFF.md

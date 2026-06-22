@@ -1,0 +1,94 @@
+{
+  "ok": true,
+  "status": "appended",
+  "changeId": "chg_release_observation_snapshot",
+  "mergeQueueHash": "sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d",
+  "reportSha256": "sha256:e67e9f19ab29008d0a84860727389de3ec1d0de0795b5f184fe8856aca67bb50",
+  "lastEventType": "release.promoted",
+  "idempotencyKey": "chg_release_observation_snapshot:sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d:sha256:e67e9f19ab29008d0a84860727389de3ec1d0de0795b5f184fe8856aca67bb50:release.promoted",
+  "observedAt": "2026-06-22T05:30:00.000Z",
+  "eventIds": [
+    "evt_mpsmt7pcvvtv2jf302ks4scewa"
+  ],
+  "state": {
+    "schemaVersion": "1.0.0",
+    "kind": "release-observation-adapter",
+    "changeId": "chg_release_observation_snapshot",
+    "mergeQueueHash": "sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d",
+    "reportSha256": "sha256:e67e9f19ab29008d0a84860727389de3ec1d0de0795b5f184fe8856aca67bb50",
+    "decisionSha256": "sha256:e940fa69bbbab42004432eb206b489f9c91a88da00d6b5f5303c4a38c2bd7459",
+    "report": {
+      "schemaVersion": "1.0.0",
+      "kind": "release-observation",
+      "changeId": "chg_release_observation_snapshot",
+      "mergeQueueHash": "sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d",
+      "decisionSha256": "sha256:e940fa69bbbab42004432eb206b489f9c91a88da00d6b5f5303c4a38c2bd7459",
+      "tier": "R0",
+      "releaseability": "releaseable",
+      "status": "promoted",
+      "windowStart": "2026-06-22T05:00:00.000Z",
+      "windowEnd": "2026-06-22T05:30:00.000Z",
+      "observedAt": "2026-06-22T05:15:00.000Z",
+      "observedBy": {
+        "id": "ci-bot",
+        "type": "ci-bot",
+        "displayName": "ci-bot"
+      },
+      "canary": null,
+      "healthCheck": null,
+      "regression": null,
+      "alert": null,
+      "reportSha256": "sha256:e67e9f19ab29008d0a84860727389de3ec1d0de0795b5f184fe8856aca67bb50",
+      "failureReason": null
+    },
+    "lastEventType": "release.promoted",
+    "lastObservedAt": "2026-06-22T05:30:00.000Z",
+    "observedBy": "ci-bot",
+    "reportCount": 1
+  },
+  "projection": {
+    "projectionKey": "release-observation:chg_release_observation_snapshot:sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d",
+    "projectionVersion": 1,
+    "rebuiltThroughGlobalSequence": 0,
+    "eventCount": 1,
+    "state": {
+      "schemaVersion": "1.0.0",
+      "kind": "release-observation-adapter",
+      "changeId": "chg_release_observation_snapshot",
+      "mergeQueueHash": "sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d",
+      "reportSha256": "sha256:e67e9f19ab29008d0a84860727389de3ec1d0de0795b5f184fe8856aca67bb50",
+      "decisionSha256": "sha256:e940fa69bbbab42004432eb206b489f9c91a88da00d6b5f5303c4a38c2bd7459",
+      "report": {
+        "schemaVersion": "1.0.0",
+        "kind": "release-observation",
+        "changeId": "chg_release_observation_snapshot",
+        "mergeQueueHash": "sha256:90d3579360b9a22c6963950e96c599cf8e5fa014ea9a4280eb01140cfa0adf2d",
+        "decisionSha256": "sha256:e940fa69bbbab42004432eb206b489f9c91a88da00d6b5f5303c4a38c2bd7459",
+        "tier": "R0",
+        "releaseability": "releaseable",
+        "status": "promoted",
+        "windowStart": "2026-06-22T05:00:00.000Z",
+        "windowEnd": "2026-06-22T05:30:00.000Z",
+        "observedAt": "2026-06-22T05:15:00.000Z",
+        "observedBy": {
+          "id": "ci-bot",
+          "type": "ci-bot",
+          "displayName": "ci-bot"
+        },
+        "canary": null,
+        "healthCheck": null,
+        "regression": null,
+        "alert": null,
+        "reportSha256": "sha256:e67e9f19ab29008d0a84860727389de3ec1d0de0795b5f184fe8856aca67bb50",
+        "failureReason": null
+      },
+      "lastEventType": "release.promoted",
+      "lastObservedAt": "2026-06-22T05:30:00.000Z",
+      "observedBy": "ci-bot",
+      "reportCount": 1
+    },
+    "stateHash": "sha256:53e81ad1f928fa2902993ab4cfc72cf2038607849ee43b96bf54b2d1d42bd4b7",
+    "rebuiltAt": "2026-06-22T05:45:00.000Z"
+  }
+}
+

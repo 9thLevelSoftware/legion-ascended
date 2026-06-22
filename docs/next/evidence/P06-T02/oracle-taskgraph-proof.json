@@ -1,0 +1,17 @@
+{
+  "task": "P06-T02",
+  "proofs": {
+    "oracleArtifactsAreRevisionedAndReviewable": true,
+    "taskgraphsBindExactArtifactInputs": true,
+    "taskgraphManifestHashesAreVerifiedOnRead": true,
+    "evidenceIndexRequiresRunAndReviewProvenance": true,
+    "evidenceIndexRevalidatesManifestHashOnRead": true,
+    "acceptedEvidenceReferencesRemainDurableWithoutBulkLogs": true
+  },
+  "implementedArtifacts": [
+    "packages/artifacts/src/oracles/service.ts",
+    "packages/artifacts/src/taskgraphs/service.ts",
+    "packages/artifacts/src/evidence-index/service.ts",
+    "packages/artifacts/test/change-support.test.mjs"
+  ]
+}

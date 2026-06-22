@@ -1,0 +1,10 @@
+packages/board typecheck$ tsc -p tsconfig.json --noEmit
+packages/legacy-bridge typecheck$ tsc -p tsconfig.json --noEmit
+packages/runtime-eve typecheck$ tsc -p tsconfig.json --noEmit
+packages/store-sqlite typecheck$ tsc -p tsconfig.json --noEmit
+packages/board typecheck: Done
+packages/runtime-eve typecheck: Done
+packages/store-sqlite typecheck: Done
+packages/legacy-bridge typecheck: Done
+packages/cli typecheck$ tsc -p tsconfig.json --noEmit
+packages/cli typecheck: Done

@@ -1,28 +1,68 @@
 phase: 3
 phase_id: P03
-status: RUNNING
+status: DONE
 source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/03-phase-transactional-kanban-control-plane.md"
-base_commit: "f8ef2e7fe65cf090c72226800b65010cb32d0172"
+base_commit: "f599745c873de91685dfcfbca0f92fe7c78a6939"
 started_at: "2026-06-21T15:32:19-04:00"
-completed_at: null
+completed_at: "2026-06-21T19:05:57-04:00"
 active_wave: 1
 tasks:
   P03-T01: { status: DONE, run_id: "P03-T01-20260621-board-store-schema", commit: "1c2b17bc0bbfb7c0f9bf695c7c4f01c1efb1b7ed" }
-  P03-T02: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T03: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T04: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T05: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T06: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T07: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T08: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T09: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T10: { status: NOT_STARTED, run_id: null, commit: null }
-  P03-T11: { status: NOT_STARTED, run_id: null, commit: null }
+  P03-T02: { status: DONE, run_id: "P03-T02-20260621-board-task-repository", commit: "PR#22-final-head" }
+  P03-T03: { status: DONE, run_id: "P03-T03-20260621-board-event-append-and-projection-rebuild", commit: "PR#22-final-head" }
+  P03-T04: { status: DONE, run_id: "P03-T04-20260621-board-claims-and-leases", commit: "PR#22-final-head" }
+  P03-T05: { status: DONE, run_id: "P03-T05-20260621-board-outbox", commit: "PR#22-final-head" }
+  P03-T06: { status: DONE, run_id: "P03-T06-20260621-board-task-comments", commit: "PR#22-final-head" }
+  P03-T07: { status: DONE, run_id: "P03-T07-20260621-board-approvals", commit: "PR#22-final-head" }
+  P03-T08: { status: DONE, run_id: "P03-T08-20260621-board-task-links", commit: "PR#22-final-head" }
+  P03-T09: { status: DONE, run_id: "P03-T09-20260621-board-cli", commit: "PR#22-final-head" }
+  P03-T10: { status: DONE, run_id: "P03-T10-20260621-board-integration-tests", commit: "PR#22-final-head" }
+  P03-T11: { status: DONE, run_id: "P03-T11-20260621-phase-03-closeout", commit: "PR#22-final-head" }
 decisions:
   - task: P03-T01
     decision: "Keep SQLite isolated in @legion/store-sqlite"
     reason: "ADR-008 selects node:sqlite for the local provider but forbids SQLite-specific handles, statements, row IDs, pragmas, and file paths from protocol/core contracts. P03-T01 therefore introduces @legion/board-store for provider-neutral board contracts and @legion/store-sqlite for concrete node:sqlite setup, schema, migrations, diagnostics, and tests."
     decided_at: "2026-06-21T15:32:19-04:00"
+  - task: P03-T02
+    decision: "Board task generation tracks both contract revisions and supersede events"
+    reason: "P03-T02 advances the generation column on two distinct axes: (1) bumpGeneration rotates contract_id, contract_revision, and contract_hash together and is the only legal way to point an active task at a new revision, and (2) supersedeTask writes a `board_task_links` row with relation='supersedes' and bumps the generation so any live leases on the prior generation become stale and are reclaimed. Both paths execute inside `BEGIN IMMEDIATE` transactions and use the `WHERE task_id = ? AND generation = ?` clause for optimistic-concurrency guarantees; mismatches surface as `BoardConcurrencyError`."
+    decided_at: "2026-06-21T16:55:00-04:00"
+  - task: P03-T04
+    decision: "Board claims are atomic per (task_id, generation) and idempotent on release/heartbeat via the partial UNIQUE index `idx_board_claims_live_task_generation`"
+    reason: "P03-T04 backs single-worker claim semantics with `CREATE UNIQUE INDEX idx_board_claims_live_task_generation ON board_claims(task_id, generation) WHERE released_at IS NULL` so a second concurrent tryClaim on the same (task_id, generation) tuple fails fast at the storage layer; the application translates the unique-constraint failure into `BoardClaimContendedError`. Lease token is a `randomUUID` (default) or caller-supplied opaque string of at least `BOARD_LEASE_TOKEN_MIN_LENGTH` characters. Heartbeat and release narrow their UPDATE with `WHERE lease_token = ? AND released_at IS NULL`, which makes both operations idempotent — re-releasing an archived lease returns the original `released_at`/`release_reason` rather than overwriting it. Reclaim sweeps walk the same partial UNIQUE index, so the cost is proportional to the active lease set rather than the full claim history. P03-T04 also widened the `release_reason` CHECK constraint to include `'superseded'` so the dispatcher can stamp claims whose task generation was rotated by supersedeTask."
+    decided_at: "2026-06-21T17:20:00-04:00"
+  - task: P03-T07
+    decision: "Board approvals use protocol-aligned statuses grouped into pending/approved/revoked lifecycle phases, with run association and expectedStatus CAS guards"
+    reason: "P03-T07 introduces `board_approvals` with status values `requested/granted/denied/expired/revoked`. The read layer derives `lifecyclePhase` (`pending` for requested, `approved` for granted, `revoked` for denied/expired/revoked) so consumers can query coarse approval health without enumerating terminal statuses. Every mutation (grant/deny/expire/revoke) checks `expectedStatus` against the persisted row and uses `WHERE status = ?` for optimistic concurrency, surfacing `BoardApprovalConcurrencyError` on mismatch. Approvals are optionally bound to `board_task_runs(run_id)` with `ON DELETE SET NULL` so a run can disappear without orphaning the approval history. `createApproval` reuses `board_idempotency_records` for idempotent request replay."
+    decided_at: "2026-06-21T17:55:00-04:00"
+  - task: P03-T03
+    decision: "Board task mutations emit events atomically inside the repository transaction via event hooks, and projections rebuild deterministically from the event log"
+    reason: "P03-T03 extends SqliteBoardTaskRepository to implement BoardTaskRepositoryWithHooks, accept a shared SqliteBoardEventRepository on the same database handle, and append task.* / task_link.* events inside each BEGIN IMMEDIATE mutation. A default hook maps every mutation kind to canonical event payload shapes so the event log captures every state change. SqliteBoardEventRepository exposes appendEventInTransaction for callers already inside a transaction. Projections are stored in board_projections with a rebuilt_through_global_sequence marker and a SHA-256 state hash; SqliteBoardProjectionRebuilder replays events in global-sequence order, supports save/load/delete/stale-listing, and detects drift with BoardProjectionDriftError."
+    decided_at: "2026-06-21T18:00:00-04:00"
+  - task: P03-T05
+    decision: "Board outbox delivery uses idempotent enqueue records and explicit pending/claimed/succeeded/failed/dead-letter status transitions"
+    reason: "P03-T05 adds a transactional outbox repository so event delivery can be retried without losing payload identity. Enqueue canonicalizes payload JSON, stores a target hash, and records idempotency keys in board_idempotency_records with scope `board.outbox.enqueue`. Claiming advances pending or expired claimed rows to claimed, increments attempts, and records claimant/lease metadata; terminal statuses are guarded so succeeded and dead-lettered work cannot be re-claimed accidentally."
+    decided_at: "2026-06-21T18:37:00-04:00"
+  - task: P03-T06
+    decision: "Board task comments are task-scoped records with strict body/actor validation and cascade cleanup"
+    reason: "P03-T06 stores comments in board_task_comments with task_id ownership, created_at/updated_at timestamps, actor metadata, and FK-backed cascade deletion when a task is removed. The repository validates task existence for create/list operations and raises typed not-found errors for missing comments on update/delete."
+    decided_at: "2026-06-21T17:59:00-04:00"
+  - task: P03-T08
+    decision: "Board task dependency edges use stored board_task_links rows and enforce DAG safety for directional dependency relations"
+    reason: "P03-T08 treats `depends_on` and `blocks` as DAG relations that reject self-loops and cycle-closing inserts while preserving `relates_to` as non-DAG metadata. Topological order helpers use deterministic alphabetical tie-breaking and expose excluded incoming edges in stored-link orientation so downstream schedulers can explain why roots were omitted."
+    decided_at: "2026-06-21T18:20:00-04:00"
+  - task: P03-T09
+    decision: "Board automation starts with noninteractive JSON-file CLI commands for task, event, claim, and approval operations"
+    reason: "P03-T09 wires `legion next board` into the CLI dispatcher and opens SQLite board stores under `.legion/var/board.sqlite`. Commands require `--input <json>` and return JSON payloads, which gives Phase 4 worker automation a stable process boundary without introducing prompts or UI coupling. CLI imports @legion/store-sqlite by explicit package-boundary allowlist while provider-specific storage remains out of protocol/core packages."
+    decided_at: "2026-06-21T18:51:00-04:00"
+  - task: P03-T10
+    decision: "Close Phase 3 only after restore/recovery integration coverage exercises claims, events, and outbox state across backup restoration"
+    reason: "P03-T10 adds integration tests that backup and restore real SQLite board databases, then verify claimed-task recovery, event replay after restore, and outbox delivery-state preservation. This provides a cross-surface regression gate before Phase 4 worker automation depends on board persistence."
+    decided_at: "2026-06-21T19:01:00-04:00"
+  - task: P03-T11
+    decision: "Use a consolidated P03-CLOSEOUT evidence bundle for final review rather than reconstructing per-worker evidence directories after the fact"
+    reason: "Several worker runs completed with verification stored in Kanban metadata while only some per-task evidence directories were committed. The closeout bundle captures the final source tree with store-sqlite tests, CLI E2E, typecheck, package-boundary, and validate-next transcripts; the evidence index maps the final code/evidence artifacts back to individual P03 tasks."
+    decided_at: "2026-06-21T19:05:57-04:00"
 blockers: []
 evidence:
   - docs/next/evidence/P03-T01/store-sqlite-test.log
@@ -33,3 +73,50 @@ evidence:
   - docs/next/evidence/P03-T01/schema-diagnostics.json
   - docs/next/evidence/P03-T01/query-plan-review.md
   - docs/next/evidence/P03-T01/completion-report.yaml
+  - docs/next/evidence/P03-T02/store-sqlite-test.log
+  - docs/next/evidence/P03-T02/package-boundaries.log
+  - docs/next/evidence/P03-T02/board-store-typecheck.log
+  - docs/next/evidence/P03-T02/store-sqlite-typecheck.log
+  - docs/next/evidence/P03-T02/board-typecheck.log
+  - docs/next/evidence/P03-T02/typecheck.log
+  - docs/next/evidence/P03-T02/full-test-suite.log
+  - docs/next/evidence/P03-T02/full-validation.log
+  - docs/next/evidence/P03-T02/schema-diagram.md
+  - docs/next/evidence/P03-T02/schema-diagnostics.json
+  - docs/next/evidence/P03-T02/board-diagnostics.sqlite
+  - docs/next/evidence/P03-T02/query-plan-review.md
+  - docs/next/evidence/P03-T02/completion-report.yaml
+  - docs/next/evidence/P03-T04/store-sqlite-test.log
+  - docs/next/evidence/P03-T04/package-boundaries.log
+  - docs/next/evidence/P03-T04/board-store-typecheck.log
+  - docs/next/evidence/P03-T04/store-sqlite-typecheck.log
+  - docs/next/evidence/P03-T04/board-typecheck.log
+  - docs/next/evidence/P03-T04/typecheck.log
+  - docs/next/evidence/P03-T04/full-test-suite.log
+  - docs/next/evidence/P03-T04/full-validation.log
+  - docs/next/evidence/P03-T04/schema-diagram.md
+  - docs/next/evidence/P03-T04/schema-diagnostics.json
+  - docs/next/evidence/P03-T04/board-diagnostics.sqlite
+  - docs/next/evidence/P03-T04/query-plan-review.md
+  - docs/next/evidence/P03-T04/completion-report.yaml
+  - docs/next/evidence/P03-T07/store-sqlite-test.log
+  - docs/next/evidence/P03-T07/package-boundaries.log
+  - docs/next/evidence/P03-T07/typecheck.log
+  - docs/next/evidence/P03-T07/full-test-suite.log
+  - docs/next/evidence/P03-T07/full-validation.log
+  - docs/next/evidence/P03-T07/completion-report.yaml
+  - docs/next/evidence/P03-T03/store-sqlite-test.log
+  - docs/next/evidence/P03-T03/typecheck.log
+  - docs/next/evidence/P03-T03/package-boundaries.log
+  - docs/next/evidence/P03-T03/full-test-suite.log
+  - docs/next/evidence/P03-T03/full-validation.log
+  - docs/next/evidence/P03-T03/completion-report.yaml
+  - docs/next/evidence/P03-CLOSEOUT/store-sqlite-test.log
+  - docs/next/evidence/P03-CLOSEOUT/cli-e2e-test.log
+  - docs/next/evidence/P03-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P03-CLOSEOUT/package-boundaries.log
+  - docs/next/evidence/P03-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P03-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P03-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-03-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-03/HANDOFF.md

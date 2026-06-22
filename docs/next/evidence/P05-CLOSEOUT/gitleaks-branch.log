@@ -1,0 +1,6 @@
+$ gitleaks detect --source . --log-opts=43d059902f5dc35fc2604e2bd22b076186d8f5d7..HEAD --redact --no-banner
+[90m11:39PM[0m [32mINF[0m [1m10 commits scanned.[0m
+[90m11:39PM[0m [32mINF[0m [1mscanned ~704456 bytes (704.46 KB) in 95.9ms[0m
+[90m11:39PM[0m [32mINF[0m [1mno leaks found[0m
+
+[exit_code=0]

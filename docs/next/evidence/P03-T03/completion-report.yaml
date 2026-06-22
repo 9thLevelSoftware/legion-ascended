@@ -1,0 +1,47 @@
+status: DONE
+phase: 3
+task: P03-T03
+summary: "Delivered the board event append path, projection repository, reducer-driven rebuilder, and drift recovery for the SQLite board store. SqliteBoardTaskRepository now implements BoardTaskRepositoryWithHooks and emits task.* events atomically with every mutation through SqliteBoardStoreWithRepository. Tests cover event append, idempotency, sequence constraints, projection save/load/CAS, rebuild ordering, drift detection, and recovery after projection deletion."
+files_changed:
+  - packages/board-store/src/index.ts
+  - packages/board/src/index.ts
+  - packages/store-sqlite/src/index.ts
+  - packages/store-sqlite/test/events.test.mjs
+  - packages/store-sqlite/test/projections.test.mjs
+verification:
+  - command: "pnpm --filter @legion/store-sqlite test"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T03/store-sqlite-test.log (107/107 tests pass)"
+  - command: "pnpm -r typecheck"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T03/typecheck.log"
+  - command: "pnpm run check:boundaries"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T03/package-boundaries.log"
+  - command: "pnpm run test"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T03/full-test-suite.log"
+  - command: "pnpm run validate:next"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T03/full-validation.log"
+acceptance:
+  - criterion: "Appending a board event creates a durable append-only event record and does not mutate or overwrite prior events."
+    result: PASS
+  - criterion: "Successful event append updates the corresponding board projection deterministically via SqliteBoardProjectionRebuilder."
+    result: PASS
+  - criterion: "Projection rebuild replays persisted events in order and produces the same projection state as incremental mutation."
+    result: PASS
+  - criterion: "Rebuild can recover a projection after its derived state is deleted, reset, or detected as drifted."
+    result: PASS
+  - criterion: "SqliteBoardTaskRepository mutations emit board_task_events atomically through event hooks wired in SqliteBoardStoreWithRepository."
+    result: PASS
+  - criterion: "Relevant tests cover event append, projection mutation, rebuild ordering, and drift recovery."
+    result: PASS
+commits: []
+risks_or_followups:
+  - "Projections are rebuilt by replaying the full event log; for high-event boards, add incremental catch-up from the saved rebuilt_through_global_sequence marker."
+  - "The default task event hook does not yet chain causation_id from the supersede event to the linked task_link event; causation/correlation plumbing can be extended when cross-aggregate tracing is required."
+  - "P03-T05/P03-T06 (runs and outbox) will likely need their own event hooks and projections."
+blocker:
+  condition: none
+  decision_needed: none

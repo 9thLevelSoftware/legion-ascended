@@ -1,0 +1,156 @@
+phase: P09
+task: T02
+status: PASS
+title: Whole-change acceptance — board-driven aggregator mapping merge-queue decisions to board events and projections
+branch: codex/p03-t02-board-task-repository
+base_sha: 657f14ef52974efb0b72f009f536f7105884ad9c
+reviewer: "GPT-5.5 / otrlead"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local core/protocol/artifacts/board/store-sqlite/typecheck/workspace/validate gates passed."
+acceptance:
+  outcome_to_status_mapping:
+    status: PASS
+    cases:
+      - outcome: integrated
+        status: accepted
+        event_type: change.accepted
+      - outcome: rejected
+        status: rejected
+        event_type: change.rejected
+      - outcome: escalated
+        status: blocked
+        event_type: change.blocked
+      - outcome: blocked
+        status: blocked
+        event_type: change.blocked
+    evidence:
+      - packages/board/src/whole-change/aggregator.ts
+      - packages/board/src/whole-change/contract.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+  fail_closed_validation:
+    status: PASS
+    cases:
+      - "empty queue (snapshot.sequenceLength === 0) → typed `empty_queue` issue"
+      - "missing decision → typed `decision_missing` issue"
+      - "missing snapshot → typed `snapshot_missing` issue"
+      - "decision.mergeQueueHash mismatch → typed `merge_queue_hash_mismatch` issue"
+      - "snapshot.mergeQueueHash mismatch → typed `merge_queue_hash_mismatch` issue"
+      - "workerContextHashes could not be derived → typed `orchestrator_result_invalid` issue"
+      - "invalid acceptedBy (null/undefined/empty/blank/non-string) → typed `accepted_by_invalid` issue"
+    evidence:
+      - packages/board/src/whole-change/aggregator.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+  audit_trail:
+    status: PASS
+    handles:
+      - "every emitted BoardEvent carries mergeQueueHash"
+      - "every emitted BoardEvent carries decisionSha256"
+      - "every emitted BoardEvent carries workerContextHashes[]"
+      - "every emitted BoardEvent carries aggregatorHash"
+      - "every emitted BoardEvent carries payloadHash (sha256 of canonical payload)"
+      - "every emitted BoardEvent carries idempotencyKey = <changeId>:<mergeQueueHash>:<eventType>"
+    evidence:
+      - packages/board/src/whole-change/aggregator.ts
+      - packages/board/src/whole-change/hash.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+  deterministic_hashing:
+    status: PASS
+    notes:
+      - "Hash inputs are JSON-canonicalized via stable key sort."
+      - "Same aggregator inputs yield identical aggregatorHash across re-runs."
+      - "Tampered state (mutated reason) fails verifyWholeChangeAcceptanceState."
+    evidence:
+      - packages/board/src/whole-change/hash.ts
+      - packages/board/src/whole-change/reducer.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+  frozen_output:
+    status: PASS
+    notes:
+      - "WholeChangeAcceptanceAggregatorSuccess is deeply frozen."
+      - "WholeChangeAcceptanceState is deeply frozen."
+      - "Every emitted BoardEvent is deeply frozen."
+      - "Board event envelope preserves aggregateKind=whole_change and the change.* event types."
+    evidence:
+      - packages/board/src/whole-change/aggregator.ts
+      - packages/board/src/whole-change/contract.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+  reducer_roundtrip:
+    status: PASS
+    notes:
+      - "reducer replays an aggregator-emitted event into the same state."
+      - "reducer ignores foreign events (different aggregateKind)."
+      - "reducer ignores events with mismatched aggregateId."
+      - "reducer is idempotent under duplicate event emission."
+      - "reducer accepts the change.* event-type family (change.aggregated, change.accepted, change.rejected, change.escalated, change.blocked)."
+    evidence:
+      - packages/board/src/whole-change/reducer.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+  sqlite_projector:
+    status: PASS
+    notes:
+      - "SqliteWholeChangeAcceptanceProjector wires the board's pure reducer into the standard SqliteBoardProjectionRebuilder flow."
+      - "replay produces state=null when no events have been emitted yet."
+      - "rebuildAndSave persists the projection."
+      - "verify catches drift between saved and replayed state."
+      - "The stateHash carries the canonical sha256: prefix; the SQLite layer strips it before persisting."
+    evidence:
+      - packages/store-sqlite/src/whole-change-projector.ts
+      - packages/store-sqlite/test/whole-change-projector.test.mjs
+      - packages/store-sqlite/dist/whole-change-projector.js
+  package_boundary_invariant:
+    status: PASS
+    notes:
+      - "@legion/board does NOT import @legion/store-sqlite (boundary check enforces this)."
+      - "@legion/store-sqlite imports @legion/board for the reducer + descriptor."
+      - "@legion/store-sqlite does NOT import @legion/protocol directly (uses re-exports from @legion/board)."
+    evidence:
+      - scripts/check-package-boundaries.mjs
+      - packages/board/package.json
+      - packages/store-sqlite/package.json
+tests:
+  core:
+    command: "pnpm --filter @legion/core test"
+    result: PASS
+    counts: { total: 226, passed: 226, failed: 0 }
+  protocol:
+    command: "pnpm --filter @legion/protocol test"
+    result: PASS
+  artifacts:
+    command: "pnpm --filter @legion/artifacts test"
+    result: PASS
+    counts: { total: 59, passed: 59, failed: 0 }
+  board:
+    command: "pnpm --filter @legion/board test"
+    result: PASS
+    counts: { total: 32, passed: 32, failed: 0 }
+    notes:
+      - "32 whole-change-aggregator tests cover outcome→status mapping, validation, audit hashes, frozen output, idempotency, foreign-event ignore, schema constants, and reducer roundtrip."
+  store_sqlite:
+    command: "pnpm --filter @legion/store-sqlite test"
+    result: PASS
+    counts: { total: 135, passed: 135, failed: 0 }
+    notes:
+      - "5 P09-T02 projector tests cover SQLite-backed replay, persistence, and drift verification."
+workspace_tests:
+  command: "pnpm run test"
+  result: PASS
+  notes:
+    - "All root + recursive workspace package suites green, including apps/cli-e2e (10/10)."
+typecheck:
+  command: "pnpm run typecheck"
+  result: PASS
+  notes:
+    - "10/10 workspace projects typecheck cleanly."
+validate_next:
+  command: "pnpm run validate:next"
+  result: PASS
+  notes:
+    - "All gates pass including runtime-import-boundaries."
+gitleaks:
+  command: "git diff --cached -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-09' ':!docs/next/evidence/P09-T01' ':!docs/next/evidence/P09-T02' | gitleaks detect --pipe --no-color --redact"
+  result: PASS
+  notes:
+    - "119.94 KB P09-T02 diff scan, no leaks found."
+phase_continuing_point: P09-T03 (t_095363c6) — independent review at the whole-change layer

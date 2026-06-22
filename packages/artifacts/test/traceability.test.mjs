@@ -258,6 +258,8 @@ function taskContract(id, requirementId, oracleId, currentSpec, change, artifact
     title: `${requirementId} task`,
     objective: `Implement and verify ${requirementId}.`,
     requirementIds: [requirementId],
+    wave: "A",
+    agents: ["traceability-planner"],
     dependencies: [],
     context: {
       specRefs: [currentSpec.reference],

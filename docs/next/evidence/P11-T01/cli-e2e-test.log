@@ -1,0 +1,15 @@
+✔ P10-T02 board CLI routes release-observation aggregate/status/rebuild/verify idempotently (703.41725ms)
+✔ P10-T02 board CLI release-observation aggregate surfaces validation failures (130.03925ms)
+✔ P10-T02 board CLI release-observation verify fails closed on missing projection (129.144542ms)
+✔ P11-T01 board CLI dashboard status/rebuild/verify round-trip a task event log (639.497666ms)
+✔ P11-T01 board CLI dashboard verify fails closed on missing projection (134.074292ms)
+✔ P11-T01 board CLI approval-gate status/rebuild/verify surface an approved verdict (637.191708ms)
+✔ P11-T01 board CLI approval-gate status surfaces pending on no events (129.481208ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6572.625916

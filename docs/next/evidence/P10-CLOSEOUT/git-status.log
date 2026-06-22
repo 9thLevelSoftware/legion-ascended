@@ -1,0 +1,11 @@
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository
+M  .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
+M  .legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml
+ M docs/next/evidence/P10-CLOSEOUT/git-status.log
+M  docs/next/evidence/P10-CLOSEOUT/gitleaks-p10-diff.log
+M  docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
+M  docs/next/evidence/P10-CLOSEOUT/store-sqlite-test.log
+M  docs/next/evidence/P10-CLOSEOUT/validate-next.log
+M  docs/next/evidence/P10-CLOSEOUT/workspace-tests.log
+M  docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md
+M  packages/store-sqlite/test/release-observation-projector.test.mjs

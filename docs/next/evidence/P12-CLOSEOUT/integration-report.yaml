@@ -1,0 +1,160 @@
+phase: P12
+status: PASS
+title: Host Bridges and V8 Migration closeout
+evidence_branch: codex/p03-t02-board-task-repository
+branch_note: "Evidence was recorded on the reused PR integration branch, not a Phase 12-specific branch."
+base_sha: 33ddf60180235dcb1a852838f6559a8cbecb7c11
+head_before_closeout: 33ddf60180235dcb1a852838f6559a8cbecb7c11
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T14:49:25Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local runtime-docs/cli-e2e/core/board/store-sqlite/protocol/artifacts/typecheck/workspace/validate/gitleaks gates passed."
+  - "The roadmap's Windows rebuild prompt path for Phase 12 is not present in the macOS checkout; closeout relied on the Phase 11 handoff plus P12 task metadata/reports, code, docs, and verification transcripts."
+acceptance:
+  host_bridge_matrix_alignment:
+    status: PASS
+    evidence:
+      - README.md
+      - checksums.sha256
+      - tests/runtime-bridge-docs.test.mjs
+      - docs/next/evidence/P12-T01/integration-report.yaml
+    notes:
+      - "README now describes 10 installable AI CLI runtimes plus Kilo Code plugin support."
+      - "Aider remains documented as manual-only and is not counted as an installable runtime."
+      - "README package checksum was refreshed and a regression test enforces docs/metadata alignment."
+  migration_verify_alias:
+    status: PASS
+    evidence:
+      - packages/cli/src/commands/migrate/index.ts
+      - packages/cli/src/index.ts
+      - apps/cli-e2e/test/cli-e2e.test.mjs
+      - docs/next/evidence/P12-T02/integration-report.yaml
+    notes:
+      - "`--verify` is advertised for planning and Codex migration sources."
+      - "`--verify` maps to the existing dry-run path and returns `status: dry_run`."
+      - "Codex migration e2e proves verify preserves source bytes, apply moves legacy data, and rollback restores the original hash."
+  independent_review_actor_separation:
+    status: PASS
+    evidence:
+      - docs/next/reviews/PHASE-12-INDEPENDENT-REVIEW.md
+      - docs/next/evidence/P12-T01/integration-report.yaml
+      - docs/next/evidence/P12-T02/integration-report.yaml
+      - docs/next/evidence/P12-CLOSEOUT/integration-report.yaml
+    notes:
+      - "P12 implementation assignee was legionworker; P12 closeout reviewer is GPT-5.5 / otrlead."
+      - "No same-actor closeout/review issue blocks the Migration/Host Beta cut line."
+  phase_boundaries:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P12-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P12-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P12-CLOSEOUT/cli-e2e-test.log
+    notes:
+      - "P12 changes are scoped to docs/checksum/root test and CLI migration handling."
+      - "@legion/core and @legion/board remain provider-neutral; no host-specific execution moved into deterministic core/board layers."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
+      - docs/next/evidence/P12-CLOSEOUT/cli-e2e-test.log
+      - docs/next/evidence/P12-CLOSEOUT/core-test.log
+      - docs/next/evidence/P12-CLOSEOUT/board-test.log
+      - docs/next/evidence/P12-CLOSEOUT/store-sqlite-test.log
+      - docs/next/evidence/P12-CLOSEOUT/protocol-test.log
+      - docs/next/evidence/P12-CLOSEOUT/artifacts-test.log
+      - docs/next/evidence/P12-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P12-CLOSEOUT/workspace-tests.log
+      - docs/next/evidence/P12-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log
+    notes:
+      - "runtime bridge docs: 1 pass / 0 fail."
+      - "@legion/cli-e2e: 21 pass / 0 fail."
+      - "@legion/core: 245 pass / 0 fail; @legion/board: 113 pass / 0 fail; @legion/store-sqlite: 171 pass / 0 fail."
+      - "@legion/protocol: 55 pass / 0 fail; @legion/artifacts: 59 pass / 0 fail."
+      - "Workspace typecheck passed across 10 projects."
+      - "Workspace tests passed across root and recursive package suites including apps/cli-e2e 21/21."
+      - "validate-next passed all project gates."
+      - "Final Phase 12 diff gitleaks pipe scan found no leaks."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-12/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-12/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-12/HANDOFF.md
+      - docs/next/reviews/PHASE-12-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P12-T01 through P12-T03 complete and blockers cleared."
+      - "Migration/Host Beta cut line is marked complete and Phase 13 begins at P13-T01."
+commands:
+  - name: runtime-bridge-docs-test
+    command: "node --test tests/runtime-bridge-docs.test.mjs"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
+    result: "1 pass / 0 fail"
+  - name: cli-e2e-test
+    command: "pnpm --filter @legion/cli-e2e test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/cli-e2e-test.log
+    result: "21 pass / 0 fail"
+  - name: core-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/core-test.log
+    result: "245 pass / 0 fail"
+  - name: board-test
+    command: "pnpm --filter @legion/board test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/board-test.log
+    result: "113 pass / 0 fail"
+  - name: store-sqlite-test
+    command: "pnpm --filter @legion/store-sqlite test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/store-sqlite-test.log
+    result: "171 pass / 0 fail"
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/protocol-test.log
+    result: "55 pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/workspace-tests.log
+    result: "root + recursive package suites passed; cli-e2e 21/21 passed"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema generation, protocol docs, schema-doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p12-diff
+    command: "git diff --cached --binary 33ddf60180235dcb1a852838f6559a8cbecb7c11 -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-12/evidence-index.yaml' ':!docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log' | gitleaks detect --pipe --no-color --redact"
+    exit_code: 0
+    evidence: docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log
+    result: "No leaks found in final Phase 12 diff scan; phase-12 evidence index and generated gitleaks log excluded to avoid self-reference"
+blockers: []
+phase_13_handoff:
+  next_task: P13-T01
+  next_task_id: t_12f977b4
+  summary: "Begin Behavioral Evals, Security Hardening, and GA on top of the completed Migration/Host Beta cut line."
+  contract_inputs_for_p13:
+    - "Runtime bridge matrix is metadata-aligned and package-verified: 10 installable AI CLI runtimes plus Kilo Code plugin support, with Aider manual-only."
+    - "Legacy migration compatibility verification is explicit through `--verify`, preserving source bytes through the dry-run path."
+    - "Codex migration e2e covers verify/apply/rollback and proves rollback restores the original source hash."
+    - "Phase 12 closeout evidence can seed sealed v8/v9 behavioral eval scenarios for host selection and migration preservation."
+  preserved_boundaries:
+    - "Do not mutate legacy source bytes or user artifacts during eval dry-runs."
+    - "Keep eval/security execution outside @legion/core and @legion/board unless it is deterministic protocol/core logic."
+    - "Treat absent, stale, or drifted host/migration evidence as fail-closed."

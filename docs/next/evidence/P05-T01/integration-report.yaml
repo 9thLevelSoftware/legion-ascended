@@ -1,0 +1,97 @@
+phase: P05-T01
+status: PASS
+title: RuntimeDriver implementation — start/resume/cancel/inspect/stream/approve/artifact
+branch: codex/p03-t02-board-task-repository
+base_sha: 43d059902f5dc35fc2604e2bd22b076186d8f5d7
+head_sha: 1a44cef9b3c78b012630473e893ace6d8dc3a6af
+reviewer: "GPT-5.5 / otrlead"
+assignee: legionworker
+completed_at: "2026-06-21T22:49:00-04:00"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but every final local gate passed."
+  - "Concurrent sargassoworker run produced a sibling implementation (RuntimeDriverSkeleton + FakeRuntimeDriver) which is now also committed on this branch. sargassoworker's commit `49855db` also bundled the canonical legionworker RuntimeDriver implementation, the runtime-import-boundary scan, and the validate-next step into a single feature commit. Both implementations coexist on the branch and pass `pnpm run test` together (80 tests in @legion/core after the final-output closeout fix). The P05-T01 closeout accepts this dual layout and treats legionworker's `RuntimeLocalDriver` as the canonical production-shaped driver per ADR-004's `runtime-local` row, while the abstract skeleton remains a useful scaffolding device for future external drivers."
+acceptance:
+  runtime_driver_contract:
+    status: PASS
+    evidence:
+      - packages/core/src/runtime/contract.ts
+      - packages/core/src/runtime/index.ts
+    notes:
+      - "Declares the seven ADR-004 lifecycle methods as a typed TypeScript interface (`RuntimeDriver`)."
+      - "Imports only from `@legion/protocol` and the local `./contract.js` module; never from Eve, host CLIs, sqlite, or legacy prompt assets."
+      - "Re-exports the canonical driver surface from `@legion/core` so downstream packages and the v9 board can `import { RuntimeDriver, RuntimeLocalDriver, RUNTIME_DRIVER_METHODS } from \"@legion/core\"`."
+  runtime_local_driver:
+    status: PASS
+    evidence:
+      - packages/core/src/runtime/local-driver.ts
+      - packages/core/test/runtime-driver.test.mjs
+      - docs/next/evidence/P05-T01/runtime-driver-test.log
+    notes:
+      - "Deterministic in-memory driver that allocates run ids from the request idempotency key, advances checkpoint generations on resume, emits protocol events (run.created.v1, run.started.v1, run.finished.v1, approval.requested.v1, approval.granted.v1, evidence.collected.v1) for every state transition, and surfaces typed failures for unknown or terminal runs."
+      - "19 contract tests cover every lifecycle method (start, resume, cancel, inspect, stream, approve, artifact) plus the driver-mismatch, unknown-run, contract-revision, approval-not-acceptable, non-terminal final-output, and terminal finishedAt error/state paths. All 19 green."
+      - "GPT-5.5 closeout review found and fixed a runtime-local final-output gap: `artifact(runId)` now rejects non-terminal runs with a current-state snapshot and preserves the terminal `finishedAt` timestamp instead of substituting artifact resolution time."
+  import_boundary_scan:
+    status: PASS
+    evidence:
+      - scripts/scan-runtime-import-boundaries.mjs
+      - tests/runtime-import-boundaries.test.mjs
+      - scripts/validate-next.mjs
+      - tests/validate-next.test.mjs
+      - docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
+    notes:
+      - "Dedicated ADR-004 import-boundary scan blocks provider packages (`eve`, `node:sqlite`, `better-sqlite3`, `sqlite3`), host CLI entry points (`claude-code`, `codex-cli`, `kilo-cli`, `kiro-cli`, `opencode`, `windsurf`, `antigravity-cli`, `copilot-cli`, `cursor`, `aider`, `kilo-code`, `gemini-cli`), non-`@legion/protocol` workspace imports, deep workspace imports, and legacy prompt asset imports inside `packages/core/src/runtime/`."
+      - "Also blocks core source OUTSIDE `runtime/` from depending on `./runtime/*` until Phase 5 wires the board to the driver, with a single allowed re-export from `packages/core/src/index.ts`."
+      - "10 fixture-driven tests cover both the happy path and every violation. All 10 green."
+      - "Wired into `validate-next` as the `runtime-import-boundaries` step immediately after `default-runtime-scan` and before schema generation, so the gate order is: typecheck → package-boundaries → worker-bundles → default-runtime-scan → runtime-import-boundaries → schema-generation → artifact-schema-generation → protocol-docs → schema-doc-drift → package-contents → tests → npm-pack → pnpm-pack."
+  tsconfig_and_devdeps:
+    status: PASS
+    evidence:
+      - packages/core/package.json
+      - packages/core/tsconfig.json
+    notes:
+      - "`@types/node` ^24.0.0 added to `packages/core/devDependencies` so `node:crypto` is typed inside `local-driver.ts`."
+      - "`packages/core/tsconfig.json` now declares `types: [\"node\"]` to expose Node built-in types without leaking them into `@legion/protocol` or other workspace packages."
+  validate_next:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P05-T01/validate-next.log
+    notes:
+      - "`node scripts/validate-next.mjs` exits 0 with the new `runtime-import-boundaries` step in place."
+      - "88 top-level tests pass; 80 @legion/core tests pass (including 19 RuntimeDriver contract tests, 18 RuntimeDriverSkeleton + FakeRuntimeDriver smoke tests, 5 RuntimeDriver end-to-end tests, and focused start/resume + stream/approve scenario suites); 54 @legion/protocol tests pass; 59 @legion/artifacts tests pass; 130 @legion/store-sqlite tests pass; 34 @legion/legacy-bridge tests pass; 10 apps/cli-e2e tests pass."
+artifacts:
+  - packages/core/src/runtime/contract.ts
+  - packages/core/src/runtime/local-driver.ts
+  - packages/core/src/runtime/index.ts
+  - packages/core/src/runtime/skeleton.ts
+  - packages/core/src/runtime/fake-driver.ts
+  - packages/core/test/runtime-driver.test.mjs
+  - packages/core/test/runtime-e2e.test.mjs
+  - packages/core/test/runtime-skeleton.test.mjs
+  - packages/core/test/runtime-start-resume.test.mjs
+  - packages/core/test/runtime-stream-approve.test.mjs
+  - scripts/scan-runtime-import-boundaries.mjs
+  - tests/runtime-import-boundaries.test.mjs
+  - scripts/validate-next.mjs
+  - tests/validate-next.test.mjs
+  - packages/core/package.json
+  - packages/core/tsconfig.json
+  - pnpm-lock.yaml
+  - docs/next/evidence/P05-T01/validate-next.log
+  - docs/next/evidence/P05-T01/runtime-driver-test.log
+  - docs/next/evidence/P05-T01/runtime-e2e-test.log
+  - docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
+  - docs/next/evidence/P05-T01/checksums.txt
+backlog_acceptance:
+  P05_B001:
+    status: PASS
+    notes:
+      - "RuntimeDriver contract supports start, resume, cancel, inspect, stream, approve, and artifact — covered by `RuntimeDriver` in `contract.ts`, exercised by 19 deterministic runtime-local contract tests, 18 skeleton/Fake smoke tests, 5 end-to-end Fake lifecycle tests, and the focused start/resume + stream/approve scenario suites."
+      - "Local fake driver can produce deterministic run events for tests — `RuntimeLocalDriver` in `local-driver.ts` is the canonical implementation; the sibling `FakeRuntimeDriver` in `fake-driver.ts` provides a second small in-memory driver for additional unit tests."
+      - "Contract imports no Eve or host CLI implementation types — verified by `scan-runtime-import-boundaries.mjs` which is wired into `validate-next` and has 10 fixture-driven regression tests."
+      - "Verification: runtime contract tests + import-boundary scan — both wired into `pnpm run test` and `pnpm run validate:next`."
+blockers: []
+follow_ups:
+  - "P05-T02 (Eve adapter certification) depends on this contract; the Eve adapter must satisfy the same seven-method surface and pass the same import-boundary scan against Eve's public API only (no Eve private internals)."
+  - "P05-T03 (Fallback driver policy) must document the runtime-local → runtime-eve → runtime-legacy-cli precedence and the conditions under which each driver is invoked."

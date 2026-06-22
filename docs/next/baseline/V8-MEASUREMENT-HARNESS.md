@@ -14,6 +14,8 @@ The P00-T05 harness captures comparable v8 run evidence without changing v8 prom
 - Grader: `scripts/baseline/grade-run.ps1`
 - Redactor: `scripts/baseline/redact-output.ps1`
 - Usage notes: `scripts/baseline/README.md`
+- Manifest schema: `evals/baseline/schema/manifest.schema.json`
+- Oracle assertions schema: `evals/baseline/schema/oracle-assertions.schema.json`
 - Run manifest schema: `evals/baseline/schema/run-manifest.schema.json`
 - Scenario schema: `evals/baseline/schema/scenario.schema.json`
 - Score schema: `evals/baseline/schema/score.schema.json`
@@ -39,7 +41,7 @@ Each run directory contains `run-manifest.json`, `transcript.redacted.log`, `fix
 
 ## Redaction And Retention
 
-Raw private reasoning is not captured by default. Transcripts are redacted before retention. Secret canaries, OpenAI-style API keys, bearer tokens, and common credential assignments are masked before transcripts are committed as evidence.
+Raw private reasoning is not captured by default. Transcripts are redacted before retention. Secret canaries, OpenAI-style API keys, bearer tokens, and common credential assignments are masked before transcripts are committed as evidence. Fixture hashes are canonicalized as lowercase SHA-256 digests over LF-normalized UTF-8 text with POSIX-relative paths.
 
 ## Non-Goals
 

@@ -1,0 +1,118 @@
+{
+  "diagnostics": {
+    "databasePath": "/var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/legion-p03t04-evidence-Rg5B7H/board.sqlite",
+    "userVersion": 1,
+    "journalMode": "wal",
+    "foreignKeys": true,
+    "busyTimeoutMs": 7500,
+    "tables": [
+      "board_approvals",
+      "board_claims",
+      "board_idempotency_records",
+      "board_metadata",
+      "board_outbox",
+      "board_projections",
+      "board_schema_migrations",
+      "board_task_comments",
+      "board_task_events",
+      "board_task_links",
+      "board_task_runs",
+      "board_tasks"
+    ],
+    "indexes": [
+      "idx_board_approvals_run_id",
+      "idx_board_approvals_task_id",
+      "idx_board_claims_live_task_generation",
+      "idx_board_claims_task_id",
+      "idx_board_idempotency_scope_key",
+      "idx_board_outbox_status",
+      "idx_board_task_comments_task_id",
+      "idx_board_task_events_aggregate_sequence",
+      "idx_board_task_events_global_sequence",
+      "idx_board_task_links_depends_on",
+      "idx_board_task_runs_task",
+      "idx_board_tasks_status_priority"
+    ],
+    "missingTables": [],
+    "missingIndexes": [],
+    "migrations": [
+      {
+        "version": 1,
+        "name": "create-board-control-plane-schema",
+        "checksum": "8306f595d2fe54d75a09a2734907c30d427ad9c434fb67bdb7f27f1c130cd68b",
+        "appliedAt": "2026-06-21T21:13:19.478Z"
+      }
+    ]
+  },
+  "boardTasks": [
+    {
+      "task_id": "tsk_alpha",
+      "status": "ready",
+      "priority": 500,
+      "generation": 1
+    }
+  ],
+  "boardClaims": [
+    {
+      "lease_token": "lease_token_redacted_expired",
+      "task_id": "tsk_alpha",
+      "generation": 1,
+      "owner_id": "worker_beta",
+      "run_id": null,
+      "claimed_at": "2026-06-21T11:30:00.000Z",
+      "lease_expires_at": "2026-06-21T11:30:05.000Z",
+      "heartbeat_at": "2026-06-21T11:30:00.000Z",
+      "released_at": "2026-06-21T11:30:30.000Z",
+      "release_reason": "expired"
+    },
+    {
+      "lease_token": "lease_token_redacted_completed",
+      "task_id": "tsk_alpha",
+      "generation": 1,
+      "owner_id": "worker_alpha",
+      "run_id": "run_alpha_001",
+      "claimed_at": "2026-06-21T12:00:00.000Z",
+      "lease_expires_at": "2026-06-21T12:02:00.000Z",
+      "heartbeat_at": "2026-06-21T12:01:00.000Z",
+      "released_at": "2026-06-21T12:02:00.000Z",
+      "release_reason": "completed"
+    }
+  ],
+  "reclaimed": [
+    {
+      "leaseToken": "lease_token_redacted_expired",
+      "taskId": "tsk_alpha",
+      "generation": 1,
+      "ownerId": "worker_beta",
+      "releaseReason": "expired",
+      "releasedAt": "2026-06-21T11:30:30.000Z"
+    }
+  ],
+  "queryPlan": {
+    "claim insert": [],
+    "active lookup": [
+      "5 0 61 SEARCH board_claims USING INDEX idx_board_claims_task_id (task_id=?)",
+      "32 0 0 USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "by lease token": [
+      "3 0 39 SEARCH board_claims USING INDEX sqlite_autoindex_board_claims_1 (lease_token=?)"
+    ],
+    "expired scan": [
+      "3 0 213 SCAN board_claims USING INDEX idx_board_claims_live_task_generation"
+    ],
+    "heartbeat": [
+      "5 0 39 SEARCH board_claims USING INDEX sqlite_autoindex_board_claims_1 (lease_token=?)"
+    ],
+    "release": [
+      "5 0 39 SEARCH board_claims USING INDEX sqlite_autoindex_board_claims_1 (lease_token=?)"
+    ],
+    "expire one": [
+      "5 0 39 SEARCH board_claims USING INDEX sqlite_autoindex_board_claims_1 (lease_token=?)"
+    ],
+    "task generation lookup": [
+      "3 0 39 SEARCH board_tasks USING INDEX sqlite_autoindex_board_tasks_1 (task_id=?)"
+    ]
+  },
+  "requiredTablesPresent": true,
+  "requiredIndexesPresent": true
+}

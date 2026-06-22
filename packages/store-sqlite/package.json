@@ -18,6 +18,7 @@
     "test": "pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec \"test/**/*.test.mjs\""
   },
   "dependencies": {
+    "@legion/board": "workspace:*",
     "@legion/board-store": "workspace:*"
   },
   "devDependencies": {

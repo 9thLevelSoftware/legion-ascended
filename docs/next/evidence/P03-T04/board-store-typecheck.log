@@ -1,0 +1,2 @@
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json --noEmit

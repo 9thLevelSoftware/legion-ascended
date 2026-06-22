@@ -1,0 +1,89 @@
+branch: codex/p03-t02-board-task-repository
+head: d6616beb5c7d15f7e2b41c017d02f6efa03eac44
+base: 43d059902f5dc35fc2604e2bd22b076186d8f5d7
+
+## git status --short --branch
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository
+ M .legion/project/changes/LEGION-NEXT/implementation/phase-05/HANDOFF.md
+ M .legion/project/changes/LEGION-NEXT/implementation/phase-05/ledger.yaml
+ M docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+ M docs/next/runtime-fallback-policy.md
+?? .serena/
+?? docs/next/evidence/P05-CLOSEOUT/
+?? docs/next/reviews/PHASE-05-INDEPENDENT-REVIEW.md
+
+## recent commits
+d6616be record runtime-eve certification metadata
+4b77330 certify runtime-eve adapter and fallback precedence
+344749a feat(runtime): add fallback policy and legacy CLI driver
+3fd026a docs(P05-T01): refresh RuntimeDriver closeout evidence
+1a44cef fix(core): preserve runtime-local final-output state
+9fc6a9d feat(core): add artifact(handle) final-output mode + e2e lifecycle test
+8220e37 docs(P05-T01): Phase 5 closeout ledger, evidence index, and HANDOFF
+8cc5cc1 test(core): pin FakeRuntimeDriver stream/approve acceptance scenarios
+c2a1867 test(core): pin FakeRuntimeDriver start/resume acceptance scenarios
+49855db feat(core): add RuntimeDriverSkeleton base + FakeRuntimeDriver per ADR-004
+43d0599 fix: make workflow pack tests CRLF tolerant
+4501349 fix: stabilize worker bundle hashes on Windows
+
+## Phase 5 diff stat since base
+ .../LEGION-NEXT/implementation/phase-05/HANDOFF.md |   79 +
+ .../implementation/phase-05/evidence-index.yaml    |  141 ++
+ .../implementation/phase-05/ledger.yaml            |   74 +
+ docs/next/evidence/P05-T01/checksums.txt           |   17 +
+ docs/next/evidence/P05-T01/integration-report.yaml |   97 ++
+ docs/next/evidence/P05-T01/runtime-driver-test.log |   91 ++
+ docs/next/evidence/P05-T01/runtime-e2e-test.log    |   86 ++
+ .../P05-T01/runtime-import-boundaries-test.log     |   18 +
+ docs/next/evidence/P05-T01/validate-next.log       | 1494 ++++++++++++++++++
+ docs/next/evidence/P05-T02/checksums.txt           |   22 +
+ docs/next/evidence/P05-T02/integration-report.yaml |   75 +
+ docs/next/evidence/P05-T02/runtime-eve-test.log    |   41 +
+ docs/next/evidence/P05-T02/test.log                |  639 ++++++++
+ docs/next/evidence/P05-T02/typecheck.log           |   44 +
+ docs/next/evidence/P05-T02/validate-next.log       | 1588 ++++++++++++++++++++
+ docs/next/runtime-fallback-policy.md               |   18 +
+ packages/core/package.json                         |    6 +-
+ packages/core/src/index.ts                         |    1 +
+ packages/core/src/runtime/contract.ts              |  371 +++++
+ packages/core/src/runtime/fake-driver.ts           |  862 +++++++++++
+ packages/core/src/runtime/index.ts                 |    6 +
+ packages/core/src/runtime/legacy-cli-driver.ts     |  925 ++++++++++++
+ packages/core/src/runtime/local-driver.ts          |  775 ++++++++++
+ packages/core/src/runtime/selector.ts              |  408 +++++
+ packages/core/src/runtime/skeleton.ts              |  188 +++
+ packages/core/test/runtime-driver.test.mjs         |  413 +++++
+ packages/core/test/runtime-e2e.test.mjs            |  286 ++++
+ .../core/test/runtime-legacy-cli-driver.test.mjs   |  521 +++++++
+ packages/core/test/runtime-selector.test.mjs       |  331 ++++
+ packages/core/test/runtime-skeleton.test.mjs       |  353 +++++
+ packages/core/test/runtime-start-resume.test.mjs   |  208 +++
+ packages/core/test/runtime-stream-approve.test.mjs |  233 +++
+ packages/core/tsconfig.json                        |    3 +-
+ packages/runtime-eve/package.json                  |   45 +
+ .../runtime-eve/src/driver/runtime-eve-driver.ts   |  920 ++++++++++++
+ packages/runtime-eve/src/eval/run.ts               |   57 +
+ packages/runtime-eve/src/fallback/index.ts         |    1 +
+ packages/runtime-eve/src/fallback/select.ts        |  105 ++
+ packages/runtime-eve/src/index.ts                  |   29 +
+ packages/runtime-eve/src/sandbox/open.ts           |   70 +
+ packages/runtime-eve/src/subagent/invoke.ts        |   65 +
+ packages/runtime-eve/src/transport/contract.ts     |  278 ++++
+ .../runtime-eve/src/transport/fake-transport.ts    |  358 +++++
+ packages/runtime-eve/src/transport/index.ts        |    4 +
+ .../runtime-eve/src/transport/real-transport.ts    |  432 ++++++
+ packages/runtime-eve/test/public-contract.test.mjs |  579 +++++++
+ packages/runtime-eve/tsconfig.json                 |   14 +
+ pnpm-lock.yaml                                     |  721 +++++++++
+ scripts/scan-runtime-import-boundaries.mjs         |  303 ++++
+ scripts/validate-next.mjs                          |    4 +
+ tests/runtime-import-boundaries.test.mjs           |  206 +++
+ tests/validate-next.test.mjs                       |    1 +
+ 52 files changed, 14604 insertions(+), 2 deletions(-)
+
+## unstaged diff stat
+ .../LEGION-NEXT/implementation/phase-05/HANDOFF.md | 137 +++++++++------------
+ .../implementation/phase-05/ledger.yaml            |  76 ++++++------
+ docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md       |  17 +--
+ docs/next/runtime-fallback-policy.md               |  39 +++++-
+ 4 files changed, 145 insertions(+), 124 deletions(-)

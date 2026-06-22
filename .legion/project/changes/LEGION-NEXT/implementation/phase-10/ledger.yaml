@@ -1,0 +1,149 @@
+phase: 10
+phase_id: P10
+status: DONE
+source_document: "docs/rebuild/10-phase-release-observation-and-rollback.md"
+base_commit: "4fa01551bfe7abd5ce4715ed3c19c313d92a6c1a"
+started_at: "2026-06-22T10:00:00Z"
+completed_at: "2026-06-22T11:09:22Z"
+active_wave: 3
+tasks:
+  P10-T01:
+    status: DONE
+    run_id: "P10-T01-20260622-release-observation"
+    commit: "20fc8f0279e4f111507ab2ff20cfa9dfe57d68b0"
+    closeout_commit: "0168ff8f4e624e6adc85fd21ccfe7c4faf4fa6ed"
+    evidence: docs/next/evidence/P10-T01/integration-report.yaml
+    depends_on: ["P09-T03"]
+  P10-T02:
+    status: DONE
+    run_id: "P10-T02-20260622-cli-release-observation-wiring"
+    commit: "98fdcb773c993e0e65fbf26d21ceec8048512bb8"
+    closeout_commit: "c98c67781999c707734742379dcda8c00dd7d904"
+    evidence: docs/next/evidence/P10-T02/integration-report.yaml
+    depends_on: ["P10-T01"]
+  P10-T03:
+    status: DONE
+    run_id: "P10-T03-20260622-phase-10-closeout"
+    commit: "8cef646ce2b2912a49543510cc59ff3eb871432b"
+    evidence: docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
+    depends_on: ["P10-T02"]
+    assignee: otrlead
+decisions:
+  - task: P10-T01
+    decision: "Release observation lives in @legion/core (not @legion/board) because it consumes the merge queue's frozen MergeQueueOrchestratorResult and adds monitoring/health/regression/alert evidence on top — mirroring the P08-T01 / P09-T01 layering."
+    reason: "Mirrors the P08-T01 dispatch and P09-T01 merge layering: protocol owns entity schemas (TaskContract, MergeQueueOrchestratorResult), core owns the orchestrators that consume those entities, board owns the persistence/aggregation layer. Keeping release observation in core preserves the protocol -> core -> board/store-sqlite boundary."
+    decided_at: "2026-06-22T10:05:00Z"
+  - task: P10-T01
+    decision: "Release observation is keyed by (changeId, mergeQueueHash) and only consumes accepted whole-change state."
+    reason: "Phase 9 handoff explicitly states: 'WholeChangeAcceptanceState.status is the releaseability gate; only accepted whole-change states should enter release observation.' Phase 10 enforces this with a fail-closed validation that surfaces a typed ReleaseObservationIssue when the orchestrator result is not integrated."
+    decided_at: "2026-06-22T10:10:00Z"
+  - task: P10-T01
+    decision: "Release observation has four sequential phases (canary → health-check → regression-detection → alert). Each phase is independently auditable and content-addressed."
+    reason: "Mirrors the Phase 8 per-task review pipeline and the Phase 9 merge-queue pattern. Each phase is provider-neutral with an injected runner; the orchestrator is pure with respect to its inputs. Phase hashes are SHA-256 over a canonicalized representation so audit consumers can prove 'same inputs ⇒ same phase output'."
+    decided_at: "2026-06-22T10:15:00Z"
+  - task: P10-T01
+    decision: "Release observation status resolution is non-invertible: terminal statuses stay terminal."
+    reason: "Mirrors the P09-T02 non-invertible status rule. The orchestrator's resolveStatus collapses to observing | promoted | regressed | rolled_back. A fresh reportSha256 (e.g. from a new merge queue run) is required to surface a new status; in-place mutation of a terminal status is forbidden."
+    decided_at: "2026-06-22T10:20:00Z"
+  - task: P10-T01
+    decision: "Canary/Health/Alert runners are optional when all invocations are already resolved; the orchestrator accepts pre-resolved invocations for fixture/test use cases."
+    reason: "Production paths always inject a runner that performs the actual side-effecting monitoring work. For tests and dry-run CLI commands, the runner can be omitted if the caller has already populated the invocations with resolved outcomes. This keeps the orchestrator usable for both integration and unit tests."
+    decided_at: "2026-06-22T10:25:00Z"
+  - task: P10-T01
+    decision: "The release-observation event payload rides the full report as a nested object so the board adapter's reducer can rebuild the projection state from the event log without re-running the orchestrator."
+    reason: "Mirrors the P09-T02 pattern. The board adapter's reducer (reduceReleaseObservation) inspects the nested report field and rebuilds ReleaseObservationProjectionState from the event log. This guarantees replay determinism and drift-free verification."
+    decided_at: "2026-06-22T10:30:00Z"
+  - task: P10-T01
+    decision: "SqliteReleaseObservationProjector is keyed by (changeId, mergeQueueHash) and stored under the projection key 'release-observation:<changeId>:<mergeQueueHash>'."
+    reason: "Mirrors the P09-T02 SqliteWholeChangeAcceptanceProjector pattern: one projector instance per (change, merge queue) pair. The SQLite projection-store flow (replay / persist / verify) is reused unchanged; the projector is a thin adapter over the board's pure reducer."
+    decided_at: "2026-06-22T10:35:00Z"
+  - task: P10-T01
+    decision: "board-store BOARD_EVENT_TYPES and BOARD_EVENT_AGGREGATE_KINDS allowlists are extended with release.observing/observed/promoted/regressed/rolled_back and release_observation. No SQL schema changes are required because the existing CHECK constraint is length-based (length(aggregate_kind) > 0)."
+    reason: "Mirrors the P09-T02 extension to the same allowlists. The change is fully backward-compatible: existing consumers are unaffected, new consumers can pattern-match on the new event types and aggregate kind. SQL is intentionally permissive (TEXT + length check) so adding new event types never requires a migration."
+    decided_at: "2026-06-22T10:40:00Z"
+  - task: P10-T01
+    decision: "Provider-neutral boundaries: release-observation source in @legion/core never imports a runtime driver, eve, board-store, or reads process.env. The board adapter source in @legion/board never imports a runtime driver, eve, node:sqlite, or reads process.env."
+    reason: "Mirrors the P08 / P09 boundary scans. The release-observation module is the canonical producer of release-observation evidence; only the board adapter and the SQLite projector are allowed to touch persistence. The boundary scan is enforced by the package-boundary and runtime-import-boundary scripts that run in validate:next."
+    decided_at: "2026-06-22T10:45:00Z"
+  - task: P10-T02
+    decision: "Expose release observation through the existing board CLI as `legion next board release-observation aggregate|status|rebuild|verify`."
+    reason: "The CLI is the operator surface on top of P10-T01. The adapter appends the canonical board event, replays status without persistence, rebuilds projection state, and verifies drift while keeping all SQLite access inside @legion/store-sqlite."
+    decided_at: "2026-06-22T10:55:00Z"
+  - task: P10-T03
+    decision: "Close Phase 10 as the Production Lifecycle cut line."
+    reason: "P10-T01 and P10-T02 together establish release observation over accepted whole-change state, append-only release-observation board events, SQLite projection replay/rebuild/verify, CLI operator commands, and content-addressed release verdict evidence suitable for the Phase 11 dashboard/operator surface."
+    decided_at: "2026-06-22T11:09:22Z"
+  - task: P10-T03
+    decision: "Independent closeout review is actor-separated from both implementation and serialized release observation."
+    reason: "Implementation was performed by legionworker, the closeout reviewer is GPT-5.5 / otrlead, and the canonical P10 evidence snapshots record observedBy=ci-bot. No same-actor review issue blocks the cut line."
+    decided_at: "2026-06-22T11:09:22Z"
+  - task: P10-T03
+    decision: "Closeout reruns the full P10 gate stack and a final Phase 10 diff gitleaks scan excluding self-referential evidence artifacts."
+    reason: "The final evidence bundle records cli-e2e/core/board/store-sqlite/protocol/artifacts tests, workspace typecheck, workspace tests, validate-next, and gitleaks over the staged Phase 10 diff from base 4fa0155."
+    decided_at: "2026-06-22T11:09:22Z"
+  - task: P10-T03
+    decision: "Close release-observation projector tests' SQLite handles before temp directory cleanup."
+    reason: "GitHub Windows Phase 1 CI exposed EBUSY on board.sqlite / board.sqlite-wal cleanup. The P10 projector tests now mirror the P09 whole-change projector test pattern by closing the explicit DatabaseSync handle and the board store handle in finally blocks before rm(root)."
+    decided_at: "2026-06-22T11:31:00Z"
+blockers: []
+preserved_boundaries:
+  - "Phase 9 package boundaries remain fixed: core owns merge queue orchestration, board owns logical aggregation/reduction, store-sqlite owns SQLite projection persistence. Phase 10 follows the same layering for release observation."
+  - "Release observation never mutates accepted whole-change state in place; it appends new events/evidence through the board's event log."
+  - "Monitoring/health-check/alert command execution stays outside @legion/core and is injected through provider-neutral runner callbacks."
+  - "Phase 8 per-task, Phase 9 whole-change, and Phase 10 release-observation hashes are preserved so canary failures and dashboard anomalies can be traced back to exact task-run and release evidence."
+evidence:
+  - packages/core/src/release-observation/contract.ts
+  - packages/core/src/release-observation/hash.ts
+  - packages/core/src/release-observation/orchestrator.ts
+  - packages/core/src/release-observation/index.ts
+  - packages/core/test/release-observation.test.mjs
+  - packages/core/test/release-observation-fixture.mjs
+  - packages/board/src/release-observation/contract.ts
+  - packages/board/src/release-observation/hash.ts
+  - packages/board/src/release-observation/aggregator.ts
+  - packages/board/src/release-observation/reducer.ts
+  - packages/board/src/release-observation/index.ts
+  - packages/board/test/release-observation-aggregator.test.mjs
+  - packages/board/test/release-observation-fixture.mjs
+  - packages/store-sqlite/src/release-observation-projector.ts
+  - packages/store-sqlite/test/release-observation-projector.test.mjs
+  - packages/store-sqlite/test/release-observation-fixture.mjs
+  - packages/cli/src/commands/board/release-observation.ts
+  - packages/cli/src/commands/board/index.ts
+  - apps/cli-e2e/test/cli-e2e.test.mjs
+  - docs/next/evidence/P10-T01/release-observation-snapshot.json
+  - docs/next/evidence/P10-T01/integration-report.yaml
+  - docs/next/evidence/P10-T02/release-observation-cli-snapshot.json
+  - docs/next/evidence/P10-T02/integration-report.yaml
+  - docs/next/evidence/P10-CLOSEOUT/cli-e2e-test.log
+  - docs/next/evidence/P10-CLOSEOUT/core-test.log
+  - docs/next/evidence/P10-CLOSEOUT/board-test.log
+  - docs/next/evidence/P10-CLOSEOUT/store-sqlite-test.log
+  - docs/next/evidence/P10-CLOSEOUT/protocol-test.log
+  - docs/next/evidence/P10-CLOSEOUT/artifacts-test.log
+  - docs/next/evidence/P10-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P10-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P10-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P10-CLOSEOUT/gitleaks-p10-diff.log
+  - docs/next/evidence/P10-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P10-CLOSEOUT/command-results.tsv
+  - docs/next/evidence/P10-CLOSEOUT/git-status.log
+  - docs/next/evidence/P10-CLOSEOUT/git-diff-stat.log
+  - docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
+  - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+phase_11_handoff:
+  next_task: P11-T01
+  next_task_id: t_249912d8
+  summary: "Implement the Kanban dashboard and multi-project operator surface on top of the completed Production Lifecycle cut line."
+  contract_inputs_for_p11:
+    - "Release-observation projection state is keyed by release-observation:<changeId>:<mergeQueueHash>; dashboard/API surfaces should treat this as the canonical production-lifecycle projection handle."
+    - "ReleaseObservationReport.status is the operator-facing release verdict: promoted is release-ready; regressed/rolled_back require rollback or forward-fix; observing is non-terminal."
+    - "Dashboard traces should preserve changeId, mergeQueueHash, decisionSha256, reportSha256, lastEventType, stateHash, observedBy, and idempotencyKey."
+    - "Projection drift and missing projection states remain fail-closed operator diagnostics; do not silently treat absent production lifecycle evidence as green."
+  preserved_boundaries:
+    - "Do not mutate accepted whole-change state or release-observation state in place; append board events and rebuild projections."
+    - "Keep monitoring/probe command execution outside @legion/core and inject runtime-specific execution through provider-neutral adapters."
+    - "Carry Phase 8 per-task, Phase 9 whole-change, and Phase 10 release-observation hashes forward so dashboard anomalies can be traced to exact task and release evidence."

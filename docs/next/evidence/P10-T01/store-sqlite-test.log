@@ -1,0 +1,20 @@
+✔ P03-T02 deleteTask removes the row when the generation matches (2.676375ms)
+✔ P03-T02 deleteTask throws BoardConcurrencyError on generation mismatch (2.43275ms)
+✔ P03-T02 migration diagnostics surface every required table and index for board_tasks operations (2.306667ms)
+✔ P03-T02 concurrent priority writes preserve last-writer-wins via generation check (2.580834ms)
+✔ P03-T02 bumpGeneration + priority update interact correctly when generation changes mid-flight (2.368041ms)
+✔ P03-T02 board_task_events can be appended after CRUD with zero-based aggregate sequence per schema (2.515ms)
+✔ P03-T02 SQLite provider package exports every contract type the @legion/board package re-exports (1.944208ms)
+✔ projector replays an aggregator-emitted event into the projection store (8.879917ms)
+✔ projector produces state=null when no events have been emitted for the change (2.829125ms)
+✔ projector projection key matches the canonical whole_change.acceptance:<changeId> shape (0.05875ms)
+✔ projector exposes the bound changeId and the canonical projection key/version (0.075708ms)
+✔ projector throws on invalid constructor inputs (0.191875ms)
+ℹ tests 144
+ℹ suites 0
+ℹ pass 144
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 582.882417

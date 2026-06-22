@@ -1,0 +1,274 @@
+phase: 10
+phase_id: P10
+hash_basis: "SHA-256 over artifact bytes after P10-T03 closeout finalization, refreshed for PR #22 metadata/evidence hygiene follow-up; this index is excluded to avoid self-referential hashing. The final gitleaks/git-status/diff-stat evidence excludes this index and the generated gitleaks log for the same reason."
+entries:
+  - task: P10-T01
+    artifact: packages/core/src/release-observation/contract.ts
+    description: "Release observation contract — typed canary/health/regression/alert phases, status map, releaseability gate, idempotency keys, and provider-neutral contracts."
+    sha256: b914729f378964147de74eed72b3a5c6c438f97614f11cd746b8c53acd920c7d
+  - task: P10-T01
+    artifact: packages/core/src/release-observation/hash.ts
+    description: "Deterministic SHA-256 hashing for release-observation phase + report outputs."
+    sha256: fe212f63ae548a798b36f0f2e96b515b550060e5ee468bcd83177b84986c2d34
+  - task: P10-T01
+    artifact: packages/core/src/release-observation/orchestrator.ts
+    description: "Release observation orchestrator — fail-closed four-phase pipeline (canary → health → regression → alert) that resolves to observing/promoted/regressed/rolled_back status."
+    sha256: 036ef93c3ce0271297c523d2e44c2853f71a8ef83b002be6d85babbef83145b2
+  - task: P10-T01
+    artifact: packages/core/src/release-observation/index.ts
+    description: "Public barrel for the release-observation module."
+    sha256: 619c46a0ccdae5c0601ab9c88912d5dacda78c354b538cd0f83a737762899bed
+  - task: P10-T01
+    artifact: packages/board/src/release-observation/contract.ts
+    description: "Board adapter contract — typed release-observation BoardEvent payload + projection state + idempotency key."
+    sha256: 9f085f468c8474605b91d5824383f93d285cb8bb3eb4656af821797def174323
+  - task: P10-T01
+    artifact: packages/board/src/release-observation/hash.ts
+    description: "Deterministic SHA-256 hashing for the board adapter's event payloads and projection states."
+    sha256: 069da284e7e2703d0bd3ba4fd6e03d8dafab3ce6abb540710b76d4d65223908f
+  - task: P10-T01
+    artifact: packages/board/src/release-observation/aggregator.ts
+    description: "Release observation board aggregator — fail-closed validation, content-addressed event emission, frozen projection state."
+    sha256: f74ce79b5b1f276daabc9d81bf5de9da9667ab28304d8d2d2e774b284d5331b5
+  - task: P10-T01
+    artifact: packages/board/src/release-observation/reducer.ts
+    description: "Pure release-observation reducer + projection-key helpers + projection descriptor."
+    sha256: fd940d53e049693bd39d6e0c5340d4bda08a85826b4f954591f024b0b99c171a
+  - task: P10-T01
+    artifact: packages/board/src/release-observation/index.ts
+    description: "Public barrel for the release-observation board adapter."
+    sha256: 061957b46af3fee773e113bc00b698610584414e03dff033f7aec79c1b5da536
+  - task: P10-T01
+    artifact: packages/store-sqlite/src/release-observation-projector.ts
+    description: "SQLite adapter for the release-observation projection — replay/persist/verify, foreign-event filter, and content-addressed state hash."
+    sha256: 07e63656cc03fc560a266fde9e93cd3ffd931df3fc39ae1e6de43e71e33ea335
+  - task: P10-T01
+    artifact: packages/board-store/src/index.ts
+    description: "board-store allowlist extended with release.observing/observed/promoted/regressed/rolled_back event types and the release_observation aggregate kind."
+    sha256: 97458a87bbc40cd21f95abb177ac711f1fbbde59857f33a904a18c8268f05cc2
+  - task: P10-T01
+    artifact: packages/board/src/index.ts
+    description: "board barrel exports for the release-observation surface."
+    sha256: c56702830382320421c357d9a417de9194ede9df3abde5ee67bbdbde335c18e4
+  - task: P10-T01
+    artifact: packages/core/src/index.ts
+    description: "core barrel exports for the release-observation surface."
+    sha256: adbcb7963bc621c7f3511ef2c6102fd39b122cbe9c67eada6f3452e498524f18
+  - task: P10-T01
+    artifact: packages/store-sqlite/src/index.ts
+    description: "store-sqlite barrel exports for the release-observation projector."
+    sha256: 2e14da139ac9700b5e594b0b451800688977cbd6a1671a9435e3554891e99ff4
+  - task: P10-T01
+    artifact: packages/core/test/release-observation.test.mjs
+    description: "19 release-observation orchestrator tests (releaseability map, four phases, status resolution, determinism, frozen output, provider neutrality)."
+    sha256: 94265588f6f7cd5d367aac2a2305a0f2c3aee933da0d54ce6c0f1ce9b08a8a58
+  - task: P10-T01
+    artifact: packages/board/test/release-observation-aggregator.test.mjs
+    description: "21 release-observation board adapter tests (aggregator, reducer, idempotency, frozen output, projection keys, class equivalence, provider neutrality)."
+    sha256: 9a1f1e7220fa54b153dbdfc78ecc14fad7716965ce7dbd4f1dd89475c1294353
+  - task: P10-T01
+    artifact: packages/store-sqlite/test/release-observation-projector.test.mjs
+    description: "9 release-observation SQLite projector tests (envelope helpers, replay, rebuildAndSave, verify, foreign-event filter)."
+    sha256: b0602130ea4682d6b6d878fa60ba73aad27178ac8e5e2a97ff7a682039295358
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/release-observation-snapshot.json
+    description: "Canonical serialized release-observation report from the orchestrator (canary-passed + health-healthy → promoted status)."
+    sha256: 0411d24ca5b9b6b3e0edc1daaecd477c93c6e5bfb0b3197eaee5cccb22a77c0d
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/core-test.log
+    description: "core test transcript — 245/245 pass after P10-T01 (226 existing + 19 new)."
+    sha256: 47e0660dbd6cdfd82941cdd306ecc590dbd64700f2081e42c5b03a96148bface
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/board-test.log
+    description: "board test transcript — 53/53 pass after P10-T01 (32 existing + 21 new)."
+    sha256: feac43d65fd1fb0dd4e2adb1a15bf0e09a32e3f1ee5d753af05fc7dd75c94f4d
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/store-sqlite-test.log
+    description: "store-sqlite test transcript — 144/144 pass after P10-T01 (135 existing + 9 new)."
+    sha256: e401947cdba0c2452061c0cd1e12d85fee4eaf67cf8cf1aebaa9943534218de1
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/protocol-test.log
+    description: "protocol test transcript — 55/55 pass (no changes to protocol package)."
+    sha256: a6dd9c3e49ca6adb50c4916a74dab3c29e5e574ec369dae75619b83ae6fcafe9
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/artifacts-test.log
+    description: "artifacts test transcript — 59/59 pass (no changes to artifacts package)."
+    sha256: 668e1f12fcf6873ff84934af43704b41161f188a87ceaa44197e54f6521ed715
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/typecheck.log
+    description: "Root typecheck transcript — all 10 workspace projects typecheck clean."
+    sha256: 65d39c875b078f372e6568001a87c4afef3d0d21598fac3ddf05cb6c203978ac
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/validate-next.log
+    description: "validate-next transcript — all 12 gates pass: typecheck, package boundaries, worker bundles, default-runtime scan, runtime import boundaries, schema generation, protocol docs, schema-doc drift, package contents, tests, npm pack dry-run, pnpm pack dry-run."
+    sha256: 04788034590c0dbaa399db7f33fbc8154077be6202e226c0c80c7fae36db1000
+  - task: P10-T01
+    artifact: docs/next/evidence/P10-T01/gitleaks-p10-diff.log
+    description: "gitleaks scan of the final Phase 10 diff (excluding self-referential evidence index) — no leaks found."
+    sha256: e25df8d4e9c16c8e59370ed855dc00829c6d19fdbd10fee678cf643889ee957a
+
+  - task: P10-T02
+    artifact: packages/cli/src/commands/board/release-observation.ts
+    description: "CLI release-observation adapter — aggregate | status | rebuild | verify subcommands; fail-closed input validation; uses ReleaseObservationBoardAggregator + SqliteReleaseObservationProjector."
+    sha256: 3824cf5307bbd3c6c271a4b4aa51b522400182ed176431bc27af1f49735fe507
+  - task: P10-T02
+    artifact: packages/cli/src/commands/board/index.ts
+    description: "Board CLI dispatcher wired to handleReleaseObservationCommand; BOARD_HELP extended with release-observation domain entry."
+    sha256: 8efb479b5234f509b63cf904b068320bf4f6ab79ef821bdc1efd184628a58061
+  - task: P10-T02
+    artifact: packages/cli/package.json
+    description: "CLI dependencies extended with @legion/board, @legion/board-store, @legion/core."
+    sha256: 42d8fd9a462bba8337409b072148784e706aabd1c1ce78094c79983acd6f88e3
+  - task: P10-T02
+    artifact: packages/cli/tsconfig.json
+    description: "CLI TypeScript project references extended with board, board-store, core."
+    sha256: 4a513156475016a3b23360523a8a645af39685807c2a44dd465d3121931b7a52
+  - task: P10-T02
+    artifact: scripts/check-package-boundaries.mjs
+    description: "@legion/cli allowedWorkspaceImports extended with @legion/board, @legion/board-store, @legion/core so the CLI can consume the board adapter and the SQLite projector."
+    sha256: 3dc24bb8c589e7f26c639e694e2499e8c1982fbeff8e63684623a2e771c19d3a
+  - task: P10-T02
+    artifact: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: "CLI e2e test extended with three release-observation tests: aggregate/status/rebuild/verify idempotency, validation failure surface, verify fails closed on missing projection."
+    sha256: 4bb62197e08bd97cb34d48a6e67242754088d4e1596effea95826ffb33214bbc
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/integration-report.yaml
+    description: "Phase 10-T02 closeout integration report."
+    sha256: 7fa1b103968ee814d7d1948ec408c10b5bc24e256de5cee46c85bc12b1bd9a11
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/cli-e2e-test.log
+    description: "CLI e2e test transcript — 13/13 pass."
+    sha256: a75e6c2c559a8a97122c1332302b66c78764d9d5f06b3e3a965b425e3655efea
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/core-test.log
+    description: "core test transcript — 245/245 pass (no core changes)."
+    sha256: b685b014275f40e619417df431815f83e9d43603ec4cfec9ac2c240f4c3f005e
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/board-test.log
+    description: "board test transcript — 53/53 pass (no board changes)."
+    sha256: 316334f0bf309f2fed4ea3ab2a58d9310f04b2b75d57faa56c4bca101f2647a4
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/store-sqlite-test.log
+    description: "store-sqlite test transcript — 144/144 pass (no store-sqlite changes)."
+    sha256: b628dbd5245b17fd1361c904b63441966797327e8314dba7a911500a0f879632
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/protocol-test.log
+    description: "protocol test transcript — 55/55 pass (no protocol changes)."
+    sha256: 077a41d29476d12dd26e47e7a5a557da0fceef8969075e4f702a1dc1f2d1ca57
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/artifacts-test.log
+    description: "artifacts test transcript — 59/59 pass (no artifacts changes)."
+    sha256: c73a43e9e0ccdb0437342e55cc32993ec4c1b99e0d14e5b8fc371346eddc03e8
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/typecheck.log
+    description: "Root typecheck transcript — all 10 workspace projects typecheck clean."
+    sha256: 2959f908c058d74cab7de2189d51fbb5ae5eddabb95f8d1b0a4ff5ad6c33d0af
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/validate-next.log
+    description: "validate-next transcript — all 12 gates pass."
+    sha256: f988561c2dc5d5b74f11c16c10762771fdde069d6bc2e12cba14216ab4eba136
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/package-boundaries.log
+    description: "package-boundary check — passed."
+    sha256: bd798983e50e69201501bda183391d76bcb1c57b71f2aeaa9185f5376f5e5883
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/runtime-import-boundaries.log
+    description: "runtime-import-boundary scan — passed (7 runtime files, 36 core files)."
+    sha256: 32e8f36697c4c8bde527c5d764e5c2f4ccb52662d72d119fd504abe15cf08ba5
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/default-runtime-scan.log
+    description: "default-runtime scan — files=15 violations=0."
+    sha256: ddc9008de9aba8bfda32f287424956981763873aba4cd9bccbbad49e60b9a000
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/worker-bundles.log
+    description: "worker bundles check — all worker bundles pass."
+    sha256: 8c8752126058a0fd7bda85794b395871cbd006ae25c646f0c003314f0bf5e7e2
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/gitleaks-p10-t02-diff.log
+    description: "gitleaks scan of the Phase 10-T02 diff — no leaks found."
+    sha256: b757ae977b6da9f514ae5589c26d071367c30be879d26f54c5438250289dad66
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/release-observation-cli-snapshot.json
+    description: "canonical serialized release-observation CLI aggregate output from a happy-path run."
+    sha256: f202c6896b4d4dc12e8d79e76ac320c82938734b433edc4ab207a3c3f7647cbe
+  - task: P10-T02
+    artifact: docs/next/evidence/P10-T02/test.log
+    description: "Full workspace test transcript — all packages pass."
+    sha256: e76e2a798eb1105c19f2adfb2b790c80373ea190c7779f0a6358338056c18a37
+
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/cli-e2e-test.log
+    description: "P10 closeout CLI e2e transcript — 13/13 pass, including release-observation aggregate/status/rebuild/verify coverage."
+    sha256: df489c474004068c6a197529615f6c9233876ee2ad076cf1ce3b875554a09f35
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/core-test.log
+    description: "P10 closeout @legion/core test transcript — 245/245 pass."
+    sha256: 19d84d4c6f3ed14faca042819a9bfa38325afe9ef84f3170f72bf10e1c658b41
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/board-test.log
+    description: "P10 closeout @legion/board test transcript — 53/53 pass."
+    sha256: 8ce2ebe074b92c92fc08400c67df44e02aeb6b2279458f6b518fe13bb4fbed03
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/store-sqlite-test.log
+    description: "P10 closeout @legion/store-sqlite test transcript — 144/144 pass."
+    sha256: b4c585c2ffdca2ea9e076797c5b28a6d8bec9128e5ab95ac37e73a2a512bbbb2
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/protocol-test.log
+    description: "P10 closeout @legion/protocol test transcript — 55/55 pass."
+    sha256: 045b32c3ea0983b91fc593e52bc447f9e398f23da4deb8fb81e761836ebd613c
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/artifacts-test.log
+    description: "P10 closeout @legion/artifacts test transcript — 59/59 pass."
+    sha256: 621fc1b8487a83cae57441dfe895f14a9e7c3718d0c34c3f5a139f6b349ceee8
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/typecheck.log
+    description: "P10 closeout workspace typecheck transcript — all 10 workspace projects build/typecheck clean."
+    sha256: ece8a57514b0bb11850ca09300b2afe1baea414d5c3be8647b08a8ddb301cb8b
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/workspace-tests.log
+    description: "P10 closeout full workspace test transcript — root + recursive package suites passed, including apps/cli-e2e 13/13."
+    sha256: 9e3e4ae23aaee319d2c59e9dcc84431efabab1e9a145b01edff323d200083401
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/validate-next.log
+    description: "P10 closeout final validate-next transcript — all gates pass."
+    sha256: 00fa9165f61286898914e6d09458fb1ee2b2cd2a5b1a8f506e198ee528ec3f22
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/gitleaks-p10-diff.log
+    description: "P10 closeout final Phase 10 diff gitleaks pipe scan — no leaks found; evidence-index and generated gitleaks log excluded to avoid self-reference."
+    sha256: 55f93859a6160503528e59f48152da49a8e4d0f7a2256dc15292f7dc5d877551
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/command-summary.env
+    description: "P10 closeout command, version, branch, base, and timestamp summary."
+    sha256: 4415c28933b06f00ccc5e3bac7d033e60c00889a5b9c78b008c9ba44a619203e
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/command-results.tsv
+    description: "P10 closeout command exit-code table."
+    sha256: b8d49d8bbb562f5293d248eca8cfb79bfbfefcf87dd23b8e2f5b7245bf3bf708
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/git-status.log
+    description: "P10 closeout pre-commit git status evidence."
+    sha256: ba2bfa11d81947d532608404d6962b712c7882f6815aed2f1efd647fef98ee72
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/git-diff-stat.log
+    description: "P10 closeout staged diff stat evidence."
+    sha256: 99e95b2c39904ba040c6dbf8c04312a4db27f5b01227c7e7069c934d4902c4c7
+  - task: P10-CLOSEOUT
+    artifact: docs/next/evidence/P10-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 10 closeout integration report."
+    sha256: 20b4ccaebf556660b7a978e0b70d17f9bef7b00c9ec33712e0a8957bf7049bfb
+  - task: P10-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 10 closeout review with PASS verdict."
+    sha256: 82bd4c51bbc5cc38328165de32c55a305a6c0d56e992030ded2759bdeaf3fb86
+  - task: P10-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/ledger.yaml
+    description: "Final Phase 10 ledger marked DONE with P10-T01 through P10-T03 complete and blockers cleared."
+    sha256: dc2edd3c63ad499010d53de53f1b941e83e2ff01d083b6a8c9bb6fa616526145
+  - task: P10-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-10/HANDOFF.md
+    description: "Final Phase 10 handoff to Phase 11 and Production Lifecycle cut-line assumptions."
+    sha256: 126b1ff21b67d1519d6aa447fc61dfcb11d17bb0f4d6e9f7a29e74afc462526b
+  - task: P10-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 10 complete, Production Lifecycle reached, and P11-T01 current."
+    sha256: 4563955b7f36e84a3361123f459fdafd2b95ea96d39d32e912302941a55988a0

@@ -11,7 +11,10 @@ The Phase 0 corpus defines the frozen v8 comparison workload for Legion Next. It
 ## Canonical Artifacts
 
 - Corpus manifest: `evals/baseline/manifest.yaml`
-- Plan-compatible manifest alias: `evals/baseline/corpus-manifest.yaml`
+- Alias manifest: `evals/baseline/corpus-manifest.yaml`
+- Manifest schema: `evals/baseline/schema/manifest.schema.json`
+- Alias schema: `evals/baseline/schema/corpus-manifest.schema.json`
+- Oracle assertions schema: `evals/baseline/schema/oracle-assertions.schema.json`
 - Scenario manifests: `evals/baseline/scenarios/*.json`
 - Public inputs: `evals/fixtures/public/*/task.md`
 - Evaluator-only assertions: `evals/fixtures/evaluator/*/assertions.yaml`

@@ -1,0 +1,68 @@
+status: DONE
+phase: 3
+task: P03-T04
+summary: "Delivered the BoardClaimRepository contract and the SQLite-backed SqliteBoardClaimRepository covering atomic tryClaim, heartbeat, idempotent release, expired-lease reclaim, and a generation CAS that detects stale claims when supersedeTask bumps the task generation. Added the new claim types and SqliteBoardStoreWithClaimRepository helper to the @legion/board-store and @legion/store-sqlite surface, re-exported them from @legion/board, widened the board_claims CHECK constraint to include 'superseded' so the dispatcher can stamp claims whose generation was rotated, and shipped 17 focused P03-T04 tests that bring the @legion/store-sqlite suite to 55/55 with full workspace validation green (283/283 tests across 7 packages)."
+files_changed:
+  - packages/board-store/src/index.ts
+  - packages/board/src/index.ts
+  - packages/store-sqlite/src/index.ts
+  - schemas/sqlite/board-schema-v1.sql
+  - packages/store-sqlite/test/claims.test.mjs
+verification:
+  - command: "pnpm --filter @legion/store-sqlite test"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/store-sqlite-test.log (55/55 tests pass: 12 P03-T01 + 26 P03-T02 + 17 P03-T04)"
+  - command: "pnpm --filter @legion/board-store typecheck"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/board-store-typecheck.log"
+  - command: "pnpm --filter @legion/store-sqlite typecheck"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/store-sqlite-typecheck.log"
+  - command: "pnpm --filter @legion/board typecheck"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/board-typecheck.log"
+  - command: "pnpm -r typecheck"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/typecheck.log (all 9 packages green)"
+  - command: "pnpm run check:boundaries"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/package-boundaries.log"
+  - command: "pnpm run test"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/full-test-suite.log (283/283 tests pass across protocol, core, artifacts, store-sqlite, legacy-bridge, apps/cli-e2e, and the root tests directory)"
+  - command: "EXPLAIN QUERY PLAN review for board_claims hot paths"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/query-plan-review.md (all paths use the lease_token PK, idx_board_claims_task_id, or the partial unique index; no SCAN over board_tasks)"
+  - command: "Real-file board database inspection after exercising every claim code path"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T04/schema-diagnostics.json (12 tables, 12 indexes, missingTables=[], missingIndexes=[], user_version=1)"
+acceptance:
+  - criterion: "Provider-neutral BoardClaimRepository contract in @legion/board-store covering tryClaim/getClaim/getActiveClaimForTask/heartbeat/release/reclaimExpiredLeases with BoardClaimContendedError, BoardClaimGenerationError, and BoardClaimNotFoundError sentinels."
+    result: PASS
+  - criterion: "SqliteBoardClaimRepository runs every mutation inside BEGIN IMMEDIATE so a tryClaim cannot observe a stale task generation between the existence check and the live-claim probe."
+    result: PASS
+  - criterion: "tryClaim is atomic: a second concurrent claim on the same (task_id, generation) tuple raises BoardClaimContendedError with the holder's owner_id and lease_token, backed by the idx_board_claims_live_task_generation partial UNIQUE index."
+    result: PASS
+  - criterion: "tryClaim rejects mismatched or missing task generations with BoardClaimGenerationError carrying actualGeneration (or null when the task is absent)."
+    result: PASS
+  - criterion: "heartbeat advances leaseExpiresAt and refuses unknown lease tokens with BoardClaimNotFoundError; heartbeating a released claim returns the archived row without mutating it."
+    result: PASS
+  - criterion: "release is idempotent: a second release with a different reason returns the same archived row, preserving the original released_at and release_reason."
+    result: PASS
+  - criterion: "reclaimExpiredLeases stamps expired live rows with release_reason='expired' and returns the reclaimed claims; a no-op scan leaves active leases untouched."
+    result: PASS
+  - criterion: "supersedeTask advances the task generation so a fresh tryClaim on the new generation succeeds while the stale lease remains archived with release_reason='superseded'."
+    result: PASS
+  - criterion: "BOARD_LEASE_RELEASE_REASONS, BOARD_LEASE_TOKEN_MIN_LENGTH, the BoardClaim, BoardClaimRepository, CreateBoardClaimInput, HeartbeatBoardClaimInput, ReleaseBoardClaimInput, and ReclaimBoardClaimsOptions types are exported from @legion/board, @legion/board-store, and @legion/store-sqlite."
+    result: PASS
+  - criterion: "board_claims.release_reason CHECK constraint widened to include 'superseded' so the dispatcher can stamp claims whose generation was rotated by supersedeTask."
+    result: PASS
+commits: []
+risks_or_followups:
+  - "P03-T05 (outbox) and P03-T06 (comments) both reuse the same partial UNIQUE pattern over (parent_id, generation) for their own dedupe; P03-T04's leaseToken + released_at IS NULL index is the reference shape."
+  - "P03-T07 (approvals) may need to look up the active lease for a task before granting/revoking; the new getActiveClaimForTask helper is the read path to use."
+  - "P03-T09 (CLI) and P03-T10 (integration tests) should drive the new repository through real board-task + claim lifecycles; the current 17 focused tests cover the contract, not cross-surface flows."
+  - "When node:crypto.randomUUID is replaced with a non-UUID lease-token scheme, BOARD_LEASE_TOKEN_MIN_LENGTH=16 still provides a defensive floor, but consider switching to a typed Brand<string, 'LeaseToken'> wrapper to keep call sites honest."
+blocker:
+  condition: none
+  decision_needed: none

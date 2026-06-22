@@ -1,0 +1,66 @@
+captured_at=2026-06-22T04:30:15Z
+branch=codex/p03-t02-board-task-repository
+head=240ace3dd7a54444d04abdc81557994288729dae
+
+## git status --short --branch
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository
+A  .legion/project/changes/LEGION-NEXT/implementation/phase-06/HANDOFF.md
+A  .legion/project/changes/LEGION-NEXT/implementation/phase-06/evidence-index.yaml
+A  .legion/project/changes/LEGION-NEXT/implementation/phase-06/ledger.yaml
+M  docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+M  docs/next/baseline/BENCHMARK-CORPUS.md
+M  docs/next/baseline/SCORING-RUBRIC.md
+M  docs/next/baseline/V8-MEASUREMENT-HARNESS.md
+A  docs/next/evidence/P06-CLOSEOUT/artifacts-test.log
+AM docs/next/evidence/P06-CLOSEOUT/baseline-node-check.log
+A  docs/next/evidence/P06-CLOSEOUT/command-summary.env
+AM docs/next/evidence/P06-CLOSEOUT/git-status.log
+A  docs/next/evidence/P06-CLOSEOUT/gitleaks-p06-diff.log
+A  docs/next/evidence/P06-CLOSEOUT/gitleaks-worktree-diagnostic.log
+A  docs/next/evidence/P06-CLOSEOUT/integration-report.yaml
+A  docs/next/evidence/P06-CLOSEOUT/typecheck.log
+AM docs/next/evidence/P06-CLOSEOUT/validate-next.log
+AM docs/next/evidence/P06-CLOSEOUT/workspace-tests.log
+A  docs/next/evidence/P06-T02/completion-report.yaml
+A  docs/next/evidence/P06-T02/full-validation.log
+A  docs/next/evidence/P06-T02/oracle-taskgraph-evidence-test.log
+A  docs/next/evidence/P06-T02/oracle-taskgraph-proof.json
+A  docs/next/reviews/PHASE-06-INDEPENDENT-REVIEW.md
+M  evals/baseline/README.md
+M  evals/baseline/fixture-hashes.sha256
+M  evals/baseline/manifest.yaml
+M  evals/baseline/run-manifest-template.yaml
+M  evals/baseline/schema/corpus-manifest.schema.json
+A  evals/baseline/schema/manifest.schema.json
+A  evals/baseline/schema/oracle-assertions.schema.json
+M  evals/baseline/schema/score.schema.json
+M  scripts/baseline/README.md
+M  scripts/baseline/capture-run.ps1
+AM tests/baseline-spec.test.mjs
+
+## git diff --stat
+ .../evidence/P06-CLOSEOUT/baseline-node-check.log  |    4 +-
+ docs/next/evidence/P06-CLOSEOUT/git-status.log     |   93 +-
+ docs/next/evidence/P06-CLOSEOUT/validate-next.log  | 1112 ++++++++++----------
+ .../next/evidence/P06-CLOSEOUT/workspace-tests.log | 1104 +++++++++----------
+ tests/baseline-spec.test.mjs                       |  248 ++---
+ 5 files changed, 1268 insertions(+), 1293 deletions(-)
+
+## git diff --name-status
+M	docs/next/evidence/P06-CLOSEOUT/baseline-node-check.log
+M	docs/next/evidence/P06-CLOSEOUT/git-status.log
+M	docs/next/evidence/P06-CLOSEOUT/validate-next.log
+M	docs/next/evidence/P06-CLOSEOUT/workspace-tests.log
+M	tests/baseline-spec.test.mjs
+
+## recent commits
+240ace3 docs(P05): close runtime driver phase
+d6616be record runtime-eve certification metadata
+4b77330 certify runtime-eve adapter and fallback precedence
+344749a feat(runtime): add fallback policy and legacy CLI driver
+3fd026a docs(P05-T01): refresh RuntimeDriver closeout evidence
+1a44cef fix(core): preserve runtime-local final-output state
+9fc6a9d feat(core): add artifact(handle) final-output mode + e2e lifecycle test
+8220e37 docs(P05-T01): Phase 5 closeout ledger, evidence index, and HANDOFF
+8cc5cc1 test(core): pin FakeRuntimeDriver stream/approve acceptance scenarios
+c2a1867 test(core): pin FakeRuntimeDriver start/resume acceptance scenarios

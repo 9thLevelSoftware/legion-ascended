@@ -1,0 +1,92 @@
+phase: 3
+phase_id: P03
+task: P03-T11
+status: PASS
+reviewer: GPT-5.5 / otrlead
+reviewed_at: "2026-06-21T19:05:57-04:00"
+branch: codex/p03-t02-board-task-repository
+implementation_commit: "PR#22 final branch head (history rewritten/squashed after evidence sanitization)"
+base_commit: "f599745c873de91685dfcfbca0f92fe7c78a6939"
+summary: >-
+  Phase 3 delivered the transactional board control plane across provider-neutral
+  contracts, SQLite repositories, noninteractive board CLI operations, focused
+  repository suites, and closeout integration coverage. No critical or important
+  closeout findings remain.
+
+task_status:
+  P03-T01: DONE
+  P03-T02: DONE
+  P03-T03: DONE
+  P03-T04: DONE
+  P03-T05: DONE
+  P03-T06: DONE
+  P03-T07: DONE
+  P03-T08: DONE
+  P03-T09: DONE
+  P03-T10: DONE
+  P03-T11: DONE
+
+verification:
+  - command: "pnpm --filter @legion/store-sqlite test"
+    log: docs/next/evidence/P03-CLOSEOUT/store-sqlite-test.log
+    exit_code: 0
+    result: "130/130 @legion/store-sqlite tests passed"
+  - command: "pnpm --filter @legion/cli-e2e test"
+    log: docs/next/evidence/P03-CLOSEOUT/cli-e2e-test.log
+    exit_code: 0
+    result: "10/10 CLI E2E tests passed, including board task/claim/event/approval route coverage"
+  - command: "pnpm -r typecheck"
+    log: docs/next/evidence/P03-CLOSEOUT/typecheck.log
+    exit_code: 0
+    result: "9 workspace projects typechecked successfully"
+  - command: "pnpm run check:boundaries"
+    log: docs/next/evidence/P03-CLOSEOUT/package-boundaries.log
+    exit_code: 0
+    result: "Package boundary check passed"
+  - command: "pnpm run validate:next"
+    log: docs/next/evidence/P03-CLOSEOUT/validate-next.log
+    exit_code: 0
+    result: "Full validate-next gate passed"
+
+accepted_warnings:
+  - >-
+    Local verification emitted pnpm engine warnings because the machine is using
+    Node v26.0.0 while packages declare >=24.0.0 <26. The warnings did not affect
+    the passing TypeScript/test/validate gates; CI should continue to use the
+    declared Node engine range.
+  - >-
+    P03-T04 generated schema diagnostics redact synthetic lease-token UUIDs so
+    GitGuardian/gitleaks do not classify non-secret test evidence as credentials.
+
+ci_remediations:
+  - >-
+    Windows CI initially exposed EBUSY cleanup failures when tests removed temp
+    SQLite directories while repository DatabaseSync handles were still open.
+    The final test suite closes repository handles explicitly and uses retrying
+    temp-directory removal across store-sqlite tests.
+
+coverage_notes:
+  - "P03-T03: append-only event log, idempotency replay, event hooks from task mutations, deterministic projection rebuild, drift detection."
+  - "P03-T04: atomic claims, live-claim uniqueness, generation CAS, heartbeat/release/reclaim semantics."
+  - "P03-T05: transactional outbox enqueue, canonical payload hashing, idempotency reuse, claim/attempt lifecycle."
+  - "P03-T06: task comment CRUD with task association, timestamps, validation, and cascade behavior."
+  - "P03-T07: approvals requested/granted/denied/expired/revoked lifecycle, run association, expectedStatus CAS."
+  - "P03-T08: task dependency links, DAG cycle rejection for depends_on/blocks, topological ordering."
+  - "P03-T09: noninteractive `legion next board` CLI for task/event/claim/approval operations."
+  - "P03-T10: restore/recovery integration tests for claims, event replay, and outbox delivery state."
+
+closeout_artifacts:
+  - docs/next/evidence/P03-CLOSEOUT/store-sqlite-test.log
+  - docs/next/evidence/P03-CLOSEOUT/cli-e2e-test.log
+  - docs/next/evidence/P03-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P03-CLOSEOUT/package-boundaries.log
+  - docs/next/evidence/P03-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P03-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P03-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-03-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-03/HANDOFF.md
+
+handoff:
+  next_phase: P04
+  next_task: P04-T01
+  recommendation: "Proceed to Phase 4 after the closeout commit/PR is pushed and CI confirms the same gate set."

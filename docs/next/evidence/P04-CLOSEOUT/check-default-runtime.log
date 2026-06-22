@@ -1,0 +1,5 @@
+$ pnpm run check:default-runtime
+
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/scan-default-runtime.mjs
+[scan-default-runtime] files=15 violations=0

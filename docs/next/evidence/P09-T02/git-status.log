@@ -1,0 +1,26 @@
+On branch codex/p03-t02-board-task-repository
+Your branch is up to date with 'origin/codex/p03-t02-board-task-repository'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   packages/board-store/src/index.ts
+	modified:   packages/board/package.json
+	modified:   packages/board/src/index.ts
+	modified:   packages/board/tsconfig.json
+	modified:   packages/store-sqlite/package.json
+	modified:   packages/store-sqlite/src/index.ts
+	modified:   packages/store-sqlite/tsconfig.json
+	modified:   pnpm-lock.yaml
+	modified:   scripts/check-package-boundaries.mjs
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	docs/next/evidence/P09-T02/
+	packages/board/src/whole-change/
+	packages/board/test/
+	packages/store-sqlite/src/whole-change-projector.ts
+	packages/store-sqlite/test/whole-change-fixture.mjs
+	packages/store-sqlite/test/whole-change-projector.test.mjs
+
+no changes added to commit (use "git add" and/or "git commit -a")

@@ -1,0 +1,15 @@
+✔ P03-T02 board_task_events can be appended after CRUD with zero-based aggregate sequence per schema (2.701042ms)
+✔ P03-T02 SQLite provider package exports every contract type the @legion/board package re-exports (2.015417ms)
+✔ projector replays an aggregator-emitted event into the projection store (17.628209ms)
+✔ projector produces state=null when no events have been emitted for the change (3.395709ms)
+✔ projector projection key matches the canonical whole_change.acceptance:<changeId> shape (0.077458ms)
+✔ projector exposes the bound changeId and the canonical projection key/version (0.083583ms)
+✔ projector throws on invalid constructor inputs (0.222458ms)
+ℹ tests 171
+ℹ suites 0
+ℹ pass 171
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 633.819583

@@ -1,0 +1,75 @@
+phase: P05-T02
+status: PASS
+title: runtime-eve adapter certification — public-contract start/resume/cancel/inspect/stream/approve/artifact/subagent/sandbox/eval
+branch: codex/p03-t02-board-task-repository
+base_sha: 43d059902f5dc35fc2604e2bd22b076186d8f5d7
+head_sha: 4b77330
+reviewer: GPT-5.5 / otrlead
+assignee: legionworker
+completed_at: "2026-06-22T03:24:50Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but every validation gate passed."
+  - "The runtime-eve adapter uses a dynamic import boundary for Eve so the package can typecheck and test in this workspace without statically resolving the pinned eve type tree through TypeScript."
+acceptance:
+  public_contract_runtime_eve:
+    status: PASS
+    evidence:
+      - packages/runtime-eve/src/driver/runtime-eve-driver.ts
+      - packages/runtime-eve/src/transport/contract.ts
+      - packages/runtime-eve/src/transport/fake-transport.ts
+      - packages/runtime-eve/src/transport/real-transport.ts
+      - packages/runtime-eve/test/public-contract.test.mjs
+    notes:
+      - "RuntimeEveDriver implements the seven ADR-004 lifecycle methods and translates Eve transport operations into Legion protocol events."
+      - "Public-contract test suite covers start, resume, cancel, inspect, stream, approve, artifact, subagent, sandbox, and eval surfaces."
+      - "RealEveTransport wraps the pinned eve@0.11.7 peer dependency via a dynamic import; FakeEveTransport provides deterministic in-memory certification without a live Eve process."
+  fallback_policy:
+    status: PASS
+    evidence:
+      - packages/core/src/runtime/selector.ts
+      - packages/core/test/runtime-selector.test.mjs
+      - packages/runtime-eve/src/fallback/select.ts
+      - docs/next/runtime-fallback-policy.md
+    notes:
+      - "Fallback precedence updated to runtime-eve → runtime-local → runtime-legacy-cli, with explicit preferred-driver overrides still honored."
+      - "Selector regression test updated to pin the new considered-candidate order."
+      - "Fallback policy documented in a standalone doc and exercised by the runtime-eve public-contract test suite."
+  repo_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P05-T02/typecheck.log
+      - docs/next/evidence/P05-T02/test.log
+      - docs/next/evidence/P05-T02/validate-next.log
+    notes:
+      - "pnpm run typecheck passed across the workspace."
+      - "pnpm run test passed across the workspace, including @legion/runtime-eve and the updated runtime-selector regression."
+      - "pnpm run validate:next passed after the fallback precedence update was synchronized in @legion/core."
+artifacts:
+  - packages/runtime-eve/package.json
+  - packages/runtime-eve/tsconfig.json
+  - packages/runtime-eve/src/index.ts
+  - packages/runtime-eve/src/driver/runtime-eve-driver.ts
+  - packages/runtime-eve/src/transport/contract.ts
+  - packages/runtime-eve/src/transport/fake-transport.ts
+  - packages/runtime-eve/src/transport/real-transport.ts
+  - packages/runtime-eve/src/transport/index.ts
+  - packages/runtime-eve/src/fallback/select.ts
+  - packages/runtime-eve/src/fallback/index.ts
+  - packages/runtime-eve/src/sandbox/open.ts
+  - packages/runtime-eve/src/subagent/invoke.ts
+  - packages/runtime-eve/src/eval/run.ts
+  - packages/runtime-eve/test/public-contract.test.mjs
+  - packages/core/src/runtime/selector.ts
+  - packages/core/test/runtime-selector.test.mjs
+  - docs/next/runtime-fallback-policy.md
+  - docs/next/evidence/P05-T02/checksums.txt
+  - docs/next/evidence/P05-T02/runtime-eve-test.log
+  - docs/next/evidence/P05-T02/test.log
+  - docs/next/evidence/P05-T02/typecheck.log
+  - docs/next/evidence/P05-T02/validate-next.log
+blockers: []
+follow_ups:
+  - "P05-T03 can now document the final runtime-local / runtime-eve / runtime-legacy-cli selection policy using the synchronized selector implementation."
+  - "P05-T04 can aggregate the certified runtime-eve evidence alongside P05-T01 runtime-local evidence for the Phase 5 closeout."

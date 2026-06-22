@@ -1,0 +1,51 @@
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ P03-T01 migrates a real board database and reports schema diagnostics (7.366375ms)
+✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (3.607208ms)
+✔ P03-T01 schema accepts zero-based protocol event sequences (3.19675ms)
+✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (2.749959ms)
+✔ P03-T01 migration runner rejects applied versions without migration records (1.329916ms)
+✔ P03-T01 migration runner honors explicit target versions (2.909291ms)
+✔ P03-T01 migration runner rejects unsupported target versions (0.7005ms)
+✔ P03-T01 migration runner treats missing scalar pragma rows as empty rows (0.091167ms)
+✔ P03-T01 migration rollback preserves the original migration failure (0.154625ms)
+✔ P03-T01 backup hashing avoids whole-file reads (0.742458ms)
+✔ P03-T01 migration runner fails closed for unknown future schema versions (1.396792ms)
+✔ P03-T01 migration checksums are deterministic over ordered SQL statements (1.347625ms)
+✔ P03-T02 create + get round-trip persists every column of a new board task (8.547542ms)
+✔ P03-T02 create rejects duplicate task ids with a descriptive error (3.329625ms)
+✔ P03-T02 create rejects malformed contract hash, invalid priority, and unknown statuses (2.930625ms)
+✔ P03-T02 priority, status, and generation min/max constants agree with the protocol and schema (5.200917ms)
+✔ P03-T02 setPriority advances the task while preserving status, contract, and generation (2.993917ms)
+✔ P03-T02 setPriority throws BoardConcurrencyError on generation mismatch (2.476291ms)
+✔ P03-T02 setPriority throws BoardTaskNotFoundError when no expectedGeneration is provided and the task is missing (2.959ms)
+✔ P03-T02 transitionTaskStatus walks the queued → ready → claimed → running → completed path (4.855291ms)
+✔ P03-T02 transitionTaskStatus records a blocker for blocked status and rejects mismatched blockers (4.245166ms)
+✔ P03-T02 transitionTaskStatus refuses illegal status transitions with BoardIllegalStatusTransitionError (4.224708ms)
+✔ P03-T02 transitionTaskStatus refuses mutating terminal states with BoardTerminalTaskMutationError (4.346292ms)
+✔ P03-T02 failed tasks can be re-queued and run again to completion (4.477708ms)
+✔ P03-T02 bumpGeneration rotates the contract reference and increments generation atomically (3.221625ms)
+✔ P03-T02 bumpGeneration rejects generation mismatches with BoardConcurrencyError (2.941083ms)
+✔ P03-T02 bumpGeneration refuses to migrate terminal tasks (9.961875ms)
+✔ P03-T02 supersedeTask writes a board_task_links row keyed on relation='supersedes' and updates generation (4.474542ms)
+✔ P03-T02 supersedeTask fails on generation mismatch and does not write a successor (2.914666ms)
+✔ P03-T02 listTasks filters by status, project, change, and excludes terminal states by default (4.639334ms)
+✔ P03-T02 listTasks rejects invalid limits and honors bounded limits (3.66225ms)
+✔ P03-T02 deleteTask removes the row when the generation matches (3.503166ms)
+✔ P03-T02 deleteTask throws BoardConcurrencyError on generation mismatch (2.938375ms)
+✔ P03-T02 migration diagnostics surface every required table and index for board_tasks operations (4.356334ms)
+✔ P03-T02 concurrent priority writes preserve last-writer-wins via generation check (3.107125ms)
+✔ P03-T02 bumpGeneration + priority update interact correctly when generation changes mid-flight (3.538583ms)
+✔ P03-T02 board_task_events can be appended after CRUD with zero-based aggregate sequence per schema (3.176833ms)
+✔ P03-T02 SQLite provider package exports every contract type the @legion/board package re-exports (2.38925ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 185.381

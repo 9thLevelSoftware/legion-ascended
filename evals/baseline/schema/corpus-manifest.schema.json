@@ -1,13 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legion baseline corpus alias schema",
   "type": "object",
-  "required": ["schema_version", "corpus_id", "corpus_version", "baseline", "policy", "scenarios"],
+  "required": ["schema_version", "canonical_manifest", "corpus_id", "corpus_version", "baseline_commit", "fixture_hashes", "scenario_ids"],
   "properties": {
     "schema_version": { "const": 1 },
+    "canonical_manifest": { "type": "string", "minLength": 1 },
     "corpus_id": { "type": "string", "minLength": 1 },
     "corpus_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-    "baseline": { "type": "object" },
-    "policy": { "type": "object" },
-    "scenarios": { "type": "array", "minItems": 8 }
-  }
+    "baseline_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "fixture_hashes": { "type": "string", "minLength": 1 },
+    "scenario_ids": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+\\.v\\d+$" }
+    }
+  },
+  "additionalProperties": false
 }

@@ -10,19 +10,20 @@ import { fileURLToPath } from "node:url";
 import {
   BOARD_REQUIRED_INDEXES,
   BOARD_REQUIRED_TABLES,
-  BOARD_SCHEMA_VERSION,
+  SQLITE_BOARD_MIGRATIONS,
   openSqliteBoardStore,
   runSqliteMigrations
 } from "../dist/index.js";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
+const LATEST_SQLITE_BOARD_SCHEMA_VERSION = SQLITE_BOARD_MIGRATIONS.at(-1).version;
 
 async function withTempDatabase(fn) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-p03-t01-"));
   try {
     return await fn(path.join(root, "board.sqlite"), root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 }
 
@@ -39,11 +40,11 @@ test("P03-T01 migrates a real board database and reports schema diagnostics", as
       const report = store.migrate();
 
       assert.equal(report.fromVersion, 0);
-      assert.equal(report.toVersion, BOARD_SCHEMA_VERSION);
-      assert.deepEqual(report.appliedVersions, [1]);
+      assert.equal(report.toVersion, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
+      assert.deepEqual(report.appliedVersions, [1, 2, 3]);
 
       const diagnostics = store.inspect();
-      assert.equal(diagnostics.userVersion, BOARD_SCHEMA_VERSION);
+      assert.equal(diagnostics.userVersion, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
       assert.equal(diagnostics.foreignKeys, true);
       assert.equal(diagnostics.busyTimeoutMs, 7_500);
       assert.equal(diagnostics.journalMode, "wal");
@@ -66,11 +67,52 @@ test("P03-T01 migrates a real board database and reports schema diagnostics", as
       }
 
       const repeat = store.migrate();
-      assert.equal(repeat.fromVersion, BOARD_SCHEMA_VERSION);
-      assert.equal(repeat.toVersion, BOARD_SCHEMA_VERSION);
+      assert.equal(repeat.fromVersion, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
+      assert.equal(repeat.toVersion, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
       assert.deepEqual(repeat.appliedVersions, []);
     } finally {
       store.close();
+    }
+  });
+});
+
+test("P03-T04 release_reason superseded is added by a new migration without changing v1", async () => {
+  await withTempDatabase((databasePath) => {
+    const database = openRaw(databasePath);
+    try {
+      const v1Sql = SQLITE_BOARD_MIGRATIONS[0].statements.join("\n");
+      assert.match(v1Sql, /release_reason TEXT CHECK/);
+      assert.doesNotMatch(
+        v1Sql,
+        /release_reason TEXT CHECK \(release_reason IS NULL OR release_reason IN \([^)]*'superseded'/
+      );
+
+      const report = runSqliteMigrations(database, SQLITE_BOARD_MIGRATIONS, { targetVersion: 2 });
+      assert.deepEqual(report.appliedVersions, [1, 2]);
+      assert.equal(database.prepare("PRAGMA user_version").get().user_version, 2);
+
+      database.prepare(`
+        INSERT INTO board_tasks (task_id, project_id, change_id, contract_id, contract_revision, contract_hash, generation, status, priority, created_at, updated_at)
+        VALUES ('tsk_alpha', 'prj_alpha', 'chg_alpha', 'ctr_alpha', 1, ?, 1, 'ready', 500, '2026-06-21T00:00:00.000Z', '2026-06-21T00:00:00.000Z')
+      `).run("a".repeat(64));
+      assert.throws(() => {
+        database.prepare(`
+          INSERT INTO board_claims (lease_token, task_id, generation, owner_id, claimed_at, lease_expires_at, heartbeat_at, released_at, release_reason)
+          VALUES ('lease_alpha_superseded', 'tsk_alpha', 1, 'worker_alpha', '2026-06-21T00:00:00.000Z', '2026-06-21T00:01:00.000Z', '2026-06-21T00:00:00.000Z', '2026-06-21T00:00:30.000Z', 'superseded')
+        `).run();
+      }, /CHECK/);
+
+      const upgrade = runSqliteMigrations(database, SQLITE_BOARD_MIGRATIONS);
+      assert.deepEqual(upgrade.appliedVersions, [3]);
+      assert.equal(database.prepare("PRAGMA user_version").get().user_version, LATEST_SQLITE_BOARD_SCHEMA_VERSION);
+      assert.doesNotThrow(() => {
+        database.prepare(`
+          INSERT INTO board_claims (lease_token, task_id, generation, owner_id, claimed_at, lease_expires_at, heartbeat_at, released_at, release_reason)
+          VALUES ('lease_beta_superseded', 'tsk_alpha', 2, 'worker_beta', '2026-06-21T00:02:00.000Z', '2026-06-21T00:03:00.000Z', '2026-06-21T00:02:00.000Z', '2026-06-21T00:02:30.000Z', 'superseded')
+        `).run();
+      });
+    } finally {
+      database.close();
     }
   });
 });

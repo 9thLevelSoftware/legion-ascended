@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.9thlevelsoftware.com/legion/entities/worker-bundle.schema.json",
+  "title": "Legion protocol worker bundle manifest schema",
+  "description": "Standalone validator for the v9 worker bundle manifest. The same shape is referenced inline by task-run.schema.json so bundle manifests can be validated without a full task-run payload.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{1,63}$",
+      "description": "Stable worker bundle ID. Lowercase slug form, e.g. 'implementer'."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "description": "Major.minor.patch schema version without leading zeroes."
+    },
+    "role": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{1,63}$",
+      "description": "Functional worker role slug. Must match a known v9 default role."
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{1,63}$",
+      "description": "Domain slug the bundle specializes in (e.g. 'protocol-core', 'workflow-orchestration')."
+    },
+    "capabilities": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+      },
+      "description": "Capability slugs the bundle grants. Must be non-empty and unique within the bundle."
+    },
+    "promptContentContract": {
+      "type": "object",
+      "properties": {
+        "instructionsHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Lowercase SHA-256 of the rendered prompt content, with sha256: prefix."
+        },
+        "requiredSections": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": "Heading slugs that must appear in the rendered prompt content."
+        },
+        "forbiddenSections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": "Heading slugs that must NOT appear in the rendered prompt content."
+        }
+      },
+      "required": ["instructionsHash", "requiredSections", "forbiddenSections"],
+      "additionalProperties": false
+    },
+    "domainPacks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+      },
+      "description": "Optional list of workflow-common-* pack IDs the bundle depends on. Each must exist on disk and be at pack_version >= 1.0.0 with pack_status 'extracted'."
+    },
+    "promptFile": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9._@-]+\\.md$",
+      "description": "Filename of the bundle's prompt content Markdown file inside the bundles/ directory."
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "role",
+    "domain",
+    "capabilities",
+    "promptContentContract"
+  ],
+  "additionalProperties": false
+}

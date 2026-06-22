@@ -12,7 +12,9 @@ policy:
   public_inputs_root: evals/fixtures/public
   evaluator_material_root: evals/fixtures/evaluator
   hidden_material_visible_to_worker: false
+  evaluator_assertions_schema: evals/baseline/schema/oracle-assertions.schema.json
   fixture_hashes: evals/baseline/fixture-hashes.sha256
+  fixture_hash_normalization: LF-normalized UTF-8 text with POSIX-relative paths and lowercase SHA-256 digests
   scoring_rubric: docs/next/baseline/SCORING-RUBRIC.md
 scenarios:
   - { id: greenfield-feature.v1, family: greenfield-feature, manifest: evals/baseline/scenarios/greenfield-feature.v1.json, public_input: evals/fixtures/public/greenfield-feature/task.md, evaluator_material: evals/fixtures/evaluator/greenfield-feature/assertions.yaml, risk_tier: R2 }

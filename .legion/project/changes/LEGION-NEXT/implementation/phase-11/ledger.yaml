@@ -1,0 +1,166 @@
+phase: 11
+phase_id: P11
+status: DONE
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/11-phase-kanban-dashboard.md"
+base_commit: "4977cad89a29f1bbad60ee7e940a6f3825de7518"
+started_at: "2026-06-22T11:30:00Z"
+completed_at: "2026-06-22T13:56:28Z"
+active_wave: 3
+tasks:
+  P11-T01:
+    status: DONE
+    run_id: "P11-T01-20260622-dashboard-implementation"
+    commit: "67034a3"
+    closeout_commit: "67034a3"
+    evidence: docs/next/evidence/P11-T01/integration-report.yaml
+    depends_on: ["P10-T03"]
+    assignee: legionworker
+  P11-T02:
+    status: DONE
+    run_id: "P11-T02-20260622-portfolio-implementation"
+    commit: "1ca46c6"
+    closeout_commit: "1ca46c6"
+    evidence: docs/next/evidence/P11-T02/integration-report.yaml
+    depends_on: ["P11-T01"]
+    assignee: legionworker
+  P11-T03:
+    status: DONE
+    run_id: "P11-T03-20260622-phase-11-closeout"
+    commit: "P11-final-head"
+    evidence: docs/next/evidence/P11-CLOSEOUT/integration-report.yaml
+    depends_on: ["P11-T02"]
+    assignee: otrlead
+decisions:
+  - task: P11-T01
+    decision: "Dashboard projection lives in @legion/board (not @legion/core) and reads the append-only board event log; SQLite-backed projection in @legion/store-sqlite mirrors the P09-T02 / P10-T01 projector pattern."
+    reason: "Mirrors the established layering: core owns provider-neutral orchestration, board owns logical aggregation/reduction, store-sqlite owns SQLite persistence. The dashboard is a read projection across task.*, change.*, release.*, and approval.* board events — no new orchestration is introduced."
+    decided_at: "2026-06-22T11:30:00Z"
+  - task: P11-T01
+    decision: "Dashboard projection is project-scoped and content-addressed by `dashboard:<projectId>`. It exposes task status counts, aggregate-kind counts, a bounded event timeline, release-observation verdict pointers, and approval verdict pointers."
+    reason: "Operators need a deterministic project read model over the event log without introducing a separate dashboard app/package. Project scoping keeps multi-project boards collision-free."
+    decided_at: "2026-06-22T11:35:00Z"
+  - task: P11-T01
+    decision: "Approval-gate workflow lives in @legion/board as a pure reducer and projection key `approval-gate:<projectId>:<changeId>`, consuming whole-change and release-observation events into a fail-closed `approved | rejected | blocked | pending` verdict."
+    reason: "The Phase 10 handoff required approval workflow as a first-class operator concept while preserving deterministic replay from the audit log."
+    decided_at: "2026-06-22T11:40:00Z"
+  - task: P11-T01
+    decision: "Dashboard and approval-gate reducers are foreign-event-safe: mismatching aggregate kind, aggregate id, project id, change id, or malformed payloads are ignored silently."
+    reason: "The board event log is interleaved across tasks, changes, releases, approvals, and projects; projections must replay global logs without throwing on unrelated events."
+    decided_at: "2026-06-22T11:45:00Z"
+  - task: P11-T01
+    decision: "The CLI operator surface for P11-T01 is `legion next board dashboard {status|rebuild|verify}` and `legion next board approval-gate {status|rebuild|verify}`, routed through `SqliteBoardStoreWithEventRepository`."
+    reason: "Mirrors P10-T02 release-observation CLI wiring: CLI commands surface/rebuild/verify derived read state and do not mutate frozen whole-change or release-observation state."
+    decided_at: "2026-06-22T11:50:00Z"
+  - task: P11-T01
+    decision: "Provider-neutral boundaries: dashboard and approval-gate source in @legion/board never imports a runtime driver, Eve, board persistence, node:sqlite, or reads process.env; SQLite projectors stay in @legion/store-sqlite."
+    reason: "Preserves the Phase 8/9/10 package-boundary model while adding operator projections."
+    decided_at: "2026-06-22T11:55:00Z"
+  - task: P11-T02
+    decision: "Portfolio projection lives in @legion/board and reads the append-only board event log; SQLite-backed projection in @legion/store-sqlite mirrors the P11-T01 dashboard / P09-T02 whole-change / P10-T01 release-observation projector pattern."
+    reason: "Portfolio state is a logical cross-project read model over board events, not core orchestration."
+    decided_at: "2026-06-22T12:00:00Z"
+  - task: P11-T02
+    decision: "Portfolio projection is tenant-scoped: one projection key per tenantId (`portfolio:<tenantId>`), with optional projectIds scope included in the content-addressed projection hash inputs."
+    reason: "Tenant scoping and scope hashing let multi-tenant/multi-project boards host tenant-wide and sub-portfolio views without collisions."
+    decided_at: "2026-06-22T12:05:00Z"
+  - task: P11-T02
+    decision: "Per-project rollup is content-addressed and includes task status counts, aggregate-kind counts, task/terminal/active/blocked counts, priority bands, claim utilization, last event metadata, last release-observation status, and last approval verdict."
+    reason: "The portfolio surface must answer operator questions about multi-project load, readiness, blocking pressure, and release/approval status without scanning every project dashboard."
+    decided_at: "2026-06-22T12:10:00Z"
+  - task: P11-T02
+    decision: "Cross-project dependency edges with relation `depends_on` or `blocks` are surfaced only when fromProjectId and toProjectId differ; same-project edges stay out of the public portfolio dependency array."
+    reason: "Within-project edges are covered by project-level board/dashboard views. The portfolio adds the cross-project operator surface."
+    decided_at: "2026-06-22T12:15:00Z"
+  - task: P11-T02
+    decision: "Portfolio reducer accepts a priorEvents hint, mirroring the dashboard reducer, so incremental callers can reconstruct private live task state without leaking it into the public projection shape."
+    reason: "Incremental tests/projector flows and full-log replays must produce identical content-addressed public state."
+    decided_at: "2026-06-22T12:20:00Z"
+  - task: P11-T02
+    decision: "The CLI operator surface for P11-T02 is `legion next board portfolio {status|rebuild|verify}`; tenantId is required and projectIds optionally scopes the portfolio."
+    reason: "Mirrors the dashboard and release-observation status/rebuild/verify pattern while keeping the surface JSON-oriented for an eventual external UI."
+    decided_at: "2026-06-22T12:25:00Z"
+  - task: P11-T02
+    decision: "Provider-neutral boundaries: portfolio source in @legion/board never imports a runtime driver, Eve, board-store beyond types, node:sqlite, or reads process.env; SQLite portfolio persistence stays in @legion/store-sqlite."
+    reason: "Preserves the established board/store-sqlite layering for projection adapters."
+    decided_at: "2026-06-22T12:30:00Z"
+  - task: P11-T03
+    decision: "Close Phase 11 as the Operator/UI Beta cut line."
+    reason: "P11-T01 and P11-T02 together establish project dashboards, approval-gate verdicts, tenant-scoped portfolio rollups, cross-project dependency edges, resource allocation ledgers, SQLite replay/rebuild/verify adapters, and JSON CLI operator commands ready for Phase 12 host bridges."
+    decided_at: "2026-06-22T13:56:28Z"
+  - task: P11-T03
+    decision: "Independent closeout review is actor-separated from implementation."
+    reason: "P11 implementation tasks were executed by legionworker; the P11-T03 closeout reviewer is GPT-5.5 / otrlead. Serialized evidence was produced through local deterministic test/CLI gates, not by the implementing worker."
+    decided_at: "2026-06-22T13:56:28Z"
+  - task: P11-T03
+    decision: "Closeout reruns the full P11 gate stack and a final Phase 11 diff gitleaks scan excluding only self-referential evidence artifacts."
+    reason: "The P11-CLOSEOUT evidence bundle records cli-e2e/core/board/store-sqlite/protocol/artifacts tests, workspace typecheck, workspace tests, validate-next, and gitleaks over the final Phase 11 diff from base 4977cad89a29f1bbad60ee7e940a6f3825de7518."
+    decided_at: "2026-06-22T13:56:28Z"
+blockers: []
+preserved_boundaries:
+  - "Phase 10 package boundaries remain fixed: core owns production-lifecycle orchestration, board owns logical aggregation/reduction for whole-change, release-observation, dashboard, approval-gate, and portfolio projections, and store-sqlite owns SQLite projection persistence."
+  - "Dashboard, approval-gate, and portfolio projections never mutate frozen whole-change or release-observation state; they derive read-only aggregates from the append-only board event log."
+  - "Provider-specific command execution (canary probes, host monitoring, reviewer/approval workflows, and host bridge execution) stays outside @legion/core and @legion/board; the P11 CLI surface is status/rebuild/verify only."
+  - "Phase 8 per-task, Phase 9 whole-change, Phase 10 release-observation, and Phase 11 dashboard/approval-gate/portfolio hashes are preserved so operator anomalies can be traced back to exact task, change, release, dashboard, approval, and portfolio evidence."
+evidence:
+  - packages/board/src/dashboard/contract.ts
+  - packages/board/src/dashboard/hash.ts
+  - packages/board/src/dashboard/reducer.ts
+  - packages/board/src/dashboard/index.ts
+  - packages/board/src/approval-gate/contract.ts
+  - packages/board/src/approval-gate/reducer.ts
+  - packages/board/src/approval-gate/index.ts
+  - packages/board/src/portfolio/contract.ts
+  - packages/board/src/portfolio/hash.ts
+  - packages/board/src/portfolio/reducer.ts
+  - packages/board/src/portfolio/index.ts
+  - packages/board/test/dashboard-aggregator.test.mjs
+  - packages/board/test/approval-gate.test.mjs
+  - packages/board/test/portfolio-reducer.test.mjs
+  - packages/store-sqlite/src/dashboard-projector.ts
+  - packages/store-sqlite/src/approval-gate-projector.ts
+  - packages/store-sqlite/src/portfolio-projector.ts
+  - packages/store-sqlite/test/dashboard-projector.test.mjs
+  - packages/store-sqlite/test/approval-gate-projector.test.mjs
+  - packages/store-sqlite/test/portfolio-projector.test.mjs
+  - packages/cli/src/commands/board/dashboard.ts
+  - packages/cli/src/commands/board/approval-gate.ts
+  - packages/cli/src/commands/board/portfolio.ts
+  - packages/cli/src/commands/board/index.ts
+  - apps/cli-e2e/test/cli-e2e.test.mjs
+  - docs/next/evidence/P11-T01/integration-report.yaml
+  - docs/next/evidence/P11-T01/dashboard-snapshot.json
+  - docs/next/evidence/P11-T01/approval-gate-snapshot.json
+  - docs/next/evidence/P11-T02/integration-report.yaml
+  - docs/next/evidence/P11-T02/portfolio-snapshot.json
+  - docs/next/evidence/P11-CLOSEOUT/cli-e2e-test.log
+  - docs/next/evidence/P11-CLOSEOUT/core-test.log
+  - docs/next/evidence/P11-CLOSEOUT/board-test.log
+  - docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+  - docs/next/evidence/P11-CLOSEOUT/protocol-test.log
+  - docs/next/evidence/P11-CLOSEOUT/artifacts-test.log
+  - docs/next/evidence/P11-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P11-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P11-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log
+  - docs/next/evidence/P11-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P11-CLOSEOUT/command-results.tsv
+  - docs/next/evidence/P11-CLOSEOUT/git-status.log
+  - docs/next/evidence/P11-CLOSEOUT/git-diff-stat.log
+  - docs/next/evidence/P11-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-11-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-11/HANDOFF.md
+  - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+phase_12_handoff:
+  next_task: P12-T01
+  next_task_id: t_ca438233
+  summary: "Begin Host Bridges and V8 Migration on top of the completed Operator/UI Beta cut line."
+  contract_inputs_for_p12:
+    - "DashboardProjectionState under `dashboard:<projectId>` is the canonical project-scoped operator read surface: task status counts, aggregate-kind counts, bounded event timeline, release-observation pointers, approval pointers, and content-addressed stateHash."
+    - "ApprovalGateProjectionState under `approval-gate:<projectId>:<changeId>` is the canonical per-change operator verdict: approved/rejected/blocked/pending with trace-back to whole-change and release-observation hashes."
+    - "PortfolioProjectionState under `portfolio:<tenantId>` is the canonical tenant-scoped cross-project read surface: per-project rollups, cross-project dependency edges, resource allocation ledger, terminalProjectCount, and content-addressed stateHash."
+    - "Host bridge work may consume the JSON CLI status/rebuild/verify surfaces, but must keep provider/host-specific execution outside @legion/core and @legion/board."
+  preserved_boundaries:
+    - "Do not introduce hidden mutation of dashboard, approval-gate, portfolio, whole-change, or release-observation projections; append board events and rebuild/verify projections."
+    - "Keep host-specific probes, V8 migration execution, notifications, and bridge commands in adapter layers; board/core remain deterministic and provider-neutral."
+    - "Carry Phase 8/9/10/11 content hashes forward in P12 host bridge traces so UI/operator anomalies remain auditable back to exact evidence."

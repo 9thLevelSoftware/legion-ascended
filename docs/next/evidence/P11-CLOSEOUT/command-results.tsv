@@ -1,0 +1,11 @@
+name	command	exit_code	log
+cli-e2e-test	pnpm --filter @legion/cli-e2e test	0	docs/next/evidence/P11-CLOSEOUT/cli-e2e-test.log
+core-test	pnpm --filter @legion/core test	0	docs/next/evidence/P11-CLOSEOUT/core-test.log
+board-test	pnpm --filter @legion/board test	0	docs/next/evidence/P11-CLOSEOUT/board-test.log
+store-sqlite-test	pnpm --filter @legion/store-sqlite test	0	docs/next/evidence/P11-CLOSEOUT/store-sqlite-test.log
+protocol-test	pnpm --filter @legion/protocol test	0	docs/next/evidence/P11-CLOSEOUT/protocol-test.log
+artifacts-test	pnpm --filter @legion/artifacts test	0	docs/next/evidence/P11-CLOSEOUT/artifacts-test.log
+typecheck	pnpm run typecheck	0	docs/next/evidence/P11-CLOSEOUT/typecheck.log
+workspace-tests	pnpm run test	0	docs/next/evidence/P11-CLOSEOUT/workspace-tests.log
+validate-next	pnpm run validate:next	0	docs/next/evidence/P11-CLOSEOUT/validate-next.log
+gitleaks-p11-diff	git diff --cached --binary 4977cad89a29f1bbad60ee7e940a6f3825de7518 -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml' ':!docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log' | gitleaks detect --pipe --no-color --redact	0	docs/next/evidence/P11-CLOSEOUT/gitleaks-p11-diff.log

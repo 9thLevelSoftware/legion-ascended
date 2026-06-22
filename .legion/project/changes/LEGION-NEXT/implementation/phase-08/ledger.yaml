@@ -1,0 +1,110 @@
+phase: 8
+phase_id: P08
+status: DONE
+source_document: "docs/rebuild/08-phase-fresh-context-task-execution-and-per-task-review.md"
+base_commit: "ef0581f8803dc13e1975a8f049515afff21cec28"
+started_at: "2026-06-22T05:30:00-04:00"
+completed_at: "2026-06-22T06:49:50Z"
+active_wave: 3
+tasks:
+  P08-T01: { status: DONE, run_id: "P08-T01-20260622-fresh-context-dispatcher", commit: "3096d5ff66e61a6913982dd8d97f616db78b69f0" }
+  P08-T02: { status: DONE, run_id: "P08-T02-20260622-per-task-review-pipeline", commit: "8f549c9537967b1129f1b686ed4ec4d937482377", closeout_commit: "d459252353b4b06abb2a871c41c6d0affc844bb8", depends_on: ["P08-T01"] }
+  P08-T03: { status: DONE, run_id: "P08-T03-20260622-phase-08-closeout", commit: "c4a3fe9aec4de440a4c2f9e00d6f755f11ccafb9", depends_on: ["P08-T02"], assignee: otrlead }
+decisions:
+  - task: P08-T01
+    decision: "Fresh-context dispatcher lives in @legion/core (not @legion/protocol) because WorkerContext is a core-internal execution concept that derives from the protocol-level TaskContract."
+    reason: "Phase 7 established TaskContract as the protocol-level planning boundary. WorkerContext is the dispatcher-level execution surface that consumes a preflighted TaskContract and produces an isolated worker input. Keeping it in core preserves the protocol → core boundary from Phase 5 (ADR-004)."
+    decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T01
+    decision: "WorkerContext is deep-frozen (Object.freeze recursively) and exposes only the WORKER_CONTEXT_KEYS allowlist."
+    reason: "Phase 7 closeout required 'no cross-task memory bleed'. A deep-freeze on every dispatch prevents accidental mutation of the contract boundary and lets assertIsolatedWorkerContext verify isolation invariants on every consumed context."
+    decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T01
+    decision: "WorkerContext carries a content-addressed workerContextHash and an audit-friendly isolationTag (`fresh-context:v1:<prefix>`)."
+    reason: "workerContextHash is the proof-by-grep that two contexts share the same contract boundary; isolationTag is the readable surface operators grep for in logs. Together they give Phase 8 T02 reviewers and Phase 9 evidence indexers a stable handle without leaking contract content."
+    decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T01
+    decision: "Dispatcher source never imports runtime drivers, the board persistence package, or reads process.env."
+    reason: "Phase 5 RuntimeDriver neutrality is preserved by construction: the dispatcher is a pure function from preflighted TaskContract to WorkerContext. Provider-specific execution stays outside core."
+    decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T01
+    decision: "Structured preflight issues are mapped to board blockers with code + path encoded in the reason string."
+    reason: "Board persistence does not yet have a separate code column; encoding the code and path in the reason keeps structured diagnostics recoverable from the rendered blocker without changing the BoardTaskBlocker schema. P08-T02 review loop will parse these codes."
+    decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T01
+    decision: "Dispatcher adds a context_reference_out_of_scope issue code (separate from P07-T02 preflight codes) for specRefs/designRefs that are not in the ready artifact set."
+    reason: "P07-T02 preflight only checks predecessorArtifacts. specRefs and designRefs must also be resolvable for the worker to read them; the dispatcher enforces this with its own structured code so operators can distinguish 'dependency missing' from 'context reference missing'."
+    decided_at: "2026-06-22T05:33:00Z"
+  - task: P08-T02
+    decision: "Per-task review pipeline lives in @legion/core (not @legion/protocol) because the pipeline orchestrates protocol-level contracts AND core-level dispatcher outputs (WorkerContext)."
+    reason: "Mirrors the P08-T01 placement rule: dispatch = core-internal, WorkerContext = core-internal execution surface; review consumes both and produces an AcceptanceDecision that lives next to its inputs."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Reviewer surface enforces hard independence: same-actor reviews are flagged `independent: false` on the ReviewRecord and surface a `reviewer_is_implementer` issue."
+    reason: "ADR-006 mandates independent review at R1+. A worker cannot review its own work. The pipeline records the attempted review so audit consumers can see the rejection without losing context."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Per-task loop emits `escalated` (not `rejected`) for R3 because R3 requires explicit human approval which is out of scope for the loop."
+    reason: "The orchestrator uses `escalated` to route R3 tasks to a human owner; the per-task loop records the gate as `not_evaluable` so the operator can see why."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Deterministic verification runner is injected; the pipeline never spawns a child process."
+    reason: "Provider neutrality (ADR-004): the CLI adapter and runtime driver supply the actual command execution; core owns the deterministic record shape."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T02
+    decision: "Acceptance decision outcome is one of three values: `accepted`, `rejected`, `escalated`."
+    reason: "Three-valued outcome preserves the difference between 'gate failed ⇒ task must redo' and 'gate requires human ⇒ task must escalate' without conflating them."
+    decided_at: "2026-06-22T05:48:00Z"
+  - task: P08-T03
+    decision: "Close Phase 8 as the CLI-first MVP cut line with fresh-context dispatch plus per-task review/acceptance evidence finalized."
+    reason: "P08-T01 and P08-T02 together establish the minimal CLI-first worker lifecycle: a task is preflighted, isolated into a frozen WorkerContext, verified deterministically, independently reviewed, and mapped to accepted/rejected/escalated task outcomes before Phase 9 aggregates whole-change acceptance."
+    decided_at: "2026-06-22T06:49:50Z"
+  - task: P08-T03
+    decision: "Closeout reruns a full Phase 8 diff gitleaks scan instead of relying only on the P08-T02 task-level gitleaks transcript."
+    reason: "The P08-T02 task transcript recorded a mis-specified file-as-source invocation that scanned 0 bytes. The closeout gate compensates with `git diff --binary ef0581f...HEAD -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml' | gitleaks detect --pipe`, scanning 663.95 KB of Phase 8 diff with no leaks found while excluding this self-referential hash index."
+    decided_at: "2026-06-22T06:49:50Z"
+  - task: P08-T03
+    decision: "Provider-neutral source-scan tests resolve source paths through fileURLToPath for Windows CI portability."
+    reason: "GitHub Windows Phase 1 exposed that URL.pathname can render drive-letter paths as /D:/..., which path.join turns into D:\\D:\\... on Windows. The closeout follow-up switches the P08-T01 static source scan to fileURLToPath(new URL(...)) and reruns core/validate evidence."
+    decided_at: "2026-06-22T07:02:00Z"
+blockers: []
+evidence:
+  - packages/core/src/dispatch/contract.ts
+  - packages/core/src/dispatch/hash.ts
+  - packages/core/src/dispatch/selector.ts
+  - packages/core/src/dispatch/blocker.ts
+  - packages/core/src/dispatch/dispatcher.ts
+  - packages/core/src/dispatch/index.ts
+  - packages/core/src/review/contract.ts
+  - packages/core/src/review/hash.ts
+  - packages/core/src/review/verification.ts
+  - packages/core/src/review/reviewer.ts
+  - packages/core/src/review/gate.ts
+  - packages/core/src/review/pipeline.ts
+  - packages/core/src/review/index.ts
+  - packages/core/src/index.ts
+  - packages/core/test/dispatch.test.mjs
+  - packages/core/test/dispatch-fixture.mjs
+  - packages/core/test/review.test.mjs
+  - packages/core/test/review-fixture.mjs
+  - scripts/serialize-p08-worker-context.mjs
+  - scripts/serialize-p08-t02-review.mjs
+  - docs/next/evidence/P08-T01/worker-context.json
+  - docs/next/evidence/P08-T01/integration-report.yaml
+  - docs/next/evidence/P08-T02/review-pipeline-result.json
+  - docs/next/evidence/P08-T02/integration-report.yaml
+  - docs/next/evidence/P08-T02/evidence-index.yaml
+  - docs/next/evidence/P08-CLOSEOUT/core-test.log
+  - docs/next/evidence/P08-CLOSEOUT/protocol-test.log
+  - docs/next/evidence/P08-CLOSEOUT/artifacts-test.log
+  - docs/next/evidence/P08-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P08-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P08-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P08-CLOSEOUT/gitleaks-p08-diff.log
+  - docs/next/evidence/P08-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P08-CLOSEOUT/git-status.log
+  - docs/next/evidence/P08-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-08-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-08/evidence-index.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-08/HANDOFF.md
+  - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md

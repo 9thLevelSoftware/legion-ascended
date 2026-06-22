@@ -1,0 +1,24 @@
+phase: P06-T02
+status: PASS
+title: oracle pipeline — reviewable oracle artifacts, taskgraphs, evidence indexes, artifact manifest hashing, and provenance validation
+branch: codex/p03-t02-board-task-repository
+assignee: legionworker
+completed_at: "2026-06-22T00:00:00Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+acceptance:
+  oracle_artifacts_reviewable: true
+  taskgraphs_reviewable: true
+  evidence_indexes_reviewable: true
+  artifact_manifest_hashing_verified: true
+  provenance_validation_verified: true
+verification:
+  - command: pnpm --filter @legion/artifacts test
+    log: docs/next/evidence/P06-T02/oracle-taskgraph-evidence-test.log
+    result: pass
+  - command: pnpm run validate:next
+    log: docs/next/evidence/P06-T02/full-validation.log
+    result: pass
+notes:
+  - Existing artifact services already enforce revisioned oracle/taskgraph/evidence-index writes, manifest-hash revalidation, and provenance-aware evidence checks.
+  - The validation logs were captured from a clean rerun in this workspace; only the standard Node engine-range warning appeared.

@@ -1,20 +1,33 @@
 ---
 name: workflow-common-core
 description: Lean core conventions and path contracts used by all /legion: commands
+pack_id: workflow-common-core
+pack_version: 1.0.0
+pack_status: extracted
 triggers: [common, core, paths, state, conventions]
 token_cost: low
-summary: "Lean always-load core for command execution: CLI adapter detection, state file paths, settings resolution, agent path resolution, and base command mapping."
+summary: "Lean always-load core for command execution: CLI adapter detection, state file paths, settings resolution, worker bundle resolution, and base command mapping."
 ---
 
 # Legion Workflow Common Core
 
 Always-load core conventions for every `/legion:` command. This file is intentionally compact.
 
+## Versioned Domain Pack v1.0.0
+Reusable core bundle extracted from the v8 workflow-common-core skill.
+
+- Load the active runtime adapter before command-specific logic.
+- Resolve canonical state and settings paths under `.planning/`.
+- Resolve the worker bundle prompt content via the v9 contract hash; do not inject legacy persona prose.
+- Keep the shared contract: `read-before-write -> evidence-before-action -> minimal diff -> verify-before-report`.
+- Enforce explicit stop gates, state-file validation, and command-specific context ceilings.
+- Reuse this pack for planning, execution, review, advisory, and packaging flows.
+
 ## Core Responsibilities
 - Detect and load the active runtime adapter before command-specific logic.
 - Resolve canonical state file paths under `.planning/`.
 - Resolve `settings.json` defaults safely when file is missing or invalid.
-- Resolve `AGENTS_DIR` once per invocation before loading personality files.
+- Resolve the v9 worker bundle prompt content via its contract hash; do not inject legacy persona prose.
 - Provide baseline command-to-skill mapping and context budget ceilings.
 
 ## Execution Harness Contract (Core)
@@ -30,7 +43,7 @@ that asks an implementation agent to modify files must define:
 
 | Field | Required content |
 |-------|------------------|
-| Role | The agent role/persona responsible for the task and whether it is planner, executor, reviewer, or coordinator work |
+| Role | The functional worker role (explorer, specifier, oracle-author, architect, planner, implementer, task-reviewer, integration-evaluator, release-controller) responsible for the task and whether it is planner, executor, reviewer, or coordinator work |
 | Task | The exact outcome to produce, with requirement IDs or source references |
 | Scope | Exact read targets, exact write targets, files_forbidden, and any sequential_files constraints |
 | Allowed tools/actions | The tools/actions the agent may use, including verification commands and permitted file edits |
@@ -88,11 +101,12 @@ Read `settings.json` from repo root if available. If missing/invalid, use defaul
 Defaults:
 - `planning.max_tasks_per_plan = 3` (per-plan task cap only; not a phase plan-count cap)
 - `review.max_cycles = 3`
-- `execution.agent_personality_verbosity = "full"`
 - `integrations.github = "prompt"`
 - `memory.enabled = true`
 - `memory.project_scoped_only = true`
 - `control_mode = "guarded"`
+
+> `execution.agent_personality_verbosity` is a legacy v8 setting retained only for v8 persona routing. The v9 default runtime ignores it; v9 dispatches via functional worker bundles and never injects persona prose.
 
 ### Mode Profile Resolution
 
@@ -116,28 +130,27 @@ After resolving `control_mode` from settings (default: `"guarded"`), load the co
 
 The resolved profile is a set of 5 boolean flags: `authority_enforcement`, `domain_filtering`, `human_approval_required`, `file_scope_restriction`, `read_only`. This schema is the contract with downstream skills — adding or removing flags is a breaking change.
 
-## Agent Path Resolution (Core)
+## Worker Bundle Resolution (Core)
 
-Resolve once per command invocation by **actually reading the probe file** (not assuming):
+The v9 default runtime never injects biography, tone, or personality prose. Prompt content is loaded from a registered worker bundle identified by `id`, `version`, and a content hash pinned in the v9 `workerBundleManifest.promptContentContract.instructionsHash` (see `schemas/entities/task-run.schema.json`).
 
-1. **Use the Read tool** on `~/.claude/agents/agents-orchestrator.md` (global install — preferred path)
-   - If Read succeeds: set `AGENTS_DIR = ~/.claude/agents` and STOP resolution. This is the standard installed location and should work for all npm-installed Legion users.
-2. Only if step 1 returns a file-not-found error: **Use the Read tool** on `agents/agents-orchestrator.md` (local dev mode)
-   - If Read succeeds: set `AGENTS_DIR = agents` (relative to project root)
-3. Only if both fail: check manifests `~/.claude/legion/manifest.json` then `~/.legion/manifest.json` for an `agents_dir` key
-4. If none found: fail fast with: "Agent files not found. Run: npm install -g @anthropic/legion"
+Resolution rules:
 
-**CRITICAL**: Do NOT skip the Read probe. Do NOT assume a path doesn't exist without trying it. Do NOT claim "agent files aren't on disk" without a real file-not-found error from the Read tool. The global install path (`~/.claude/agents/`) contains all 48 agent files for any npm-installed Legion instance.
+1. Read `settings.json` for an optional `worker_bundles.root` override. If unset, use the bundled `bundles/` directory shipped in the v9 runtime.
+2. For each dispatch, look up `bundles/{workerBundle.id}/{workerBundle.version}/prompt.md` and compute the SHA-256 hash of its bytes.
+3. Compare the computed hash to `manifest.workerBundle.promptContentContract.instructionsHash`. If the hashes do not match, emit `BLOCKED` and refuse to dispatch — this prevents prompt-content tampering and undeclared prose.
+4. Reject any prompt that contains the forbidden sections declared in `promptContentContract.forbiddenSections` (biography, tone, personality, and any additional sections the contract lists). Use a deterministic scanner (see `tests/persona-purge.test.mjs`).
+5. If no bundle manifest exists for the requested functional role, emit `BLOCKED` with the missing role instead of falling back to legacy persona files. The v9 default runtime does not read `agents/*.md`.
 
-Use resolved path for all personality reads:
-`{AGENTS_DIR}/{agent-id}.md`
+Legacy v8 personas may exist on disk under `agents/` for migration imports only. They are NOT loaded by the v9 default runtime path and MUST NOT be read into a prompt by v9 dispatch.
 
-## Personality Injection (Core)
+## Prompt Injection Contract (Core)
 
-- **Retrieval-led reasoning**: ALWAYS read the agent personality file before spawning. Do NOT substitute pre-trained knowledge for the personality file contents. The Dynamic Knowledge Index in AGENTS.md provides the complete file map — use it to locate agent files by division, then Read the full file. This is non-negotiable.
-- Load full personality markdown for assigned agent.
-- Inject personality content + task instructions into adapter spawn prompt.
-- Use `adapter.model_execution` for execution agents unless command overrides it.
+- **Role and capabilities only**: the runtime injects only the functional role, capabilities, domain, required sections, and forbidden sections from `workerBundleManifest`. It does not inject identity fiction, motivational slogans, experience claims, or biography.
+- **Content-addressed prompt body**: the prompt body is the bytes of `bundles/{workerBundle.id}/{workerBundle.version}/prompt.md` whose SHA-256 matches `promptContentContract.instructionsHash`. Any drift triggers `BLOCKED`.
+- **Stop gates and verification**: every dispatch carries the execution harness contract `read-before-write -> evidence-before-action -> minimal diff -> verify-before-report` plus the role-specific stop gates and verification criteria defined in the worker bundle.
+- **No compatibility-map routing**: the v9 default runtime does not use the legacy `docs/next/migration/LEGACY-PERSONA-MAP.md` table to select a worker. Routing uses functional role, risk tier, artifact type, write authority, and required domain packs from the task contract.
+- **Legacy bridge is opt-in only**: a v8 persona may be loaded only when the user has explicitly opted into the legacy bridge (not the v9 default). The bridge is the surface that imports `agents/*.md` content; the default surface never does.
 
 ## Command-to-Skill Mapping (Core)
 

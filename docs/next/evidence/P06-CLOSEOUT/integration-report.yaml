@@ -1,0 +1,106 @@
+phase: P06
+status: PASS
+title: Baseline Specification and Oracle Pipeline closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: 240ace3dd7a54444d04abdc81557994288729dae
+head_before_closeout: 240ace3dd7a54444d04abdc81557994288729dae
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T04:20:48Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but every final local gate passed."
+  - "PowerShell is not installed locally, so scripts/baseline/capture-run.ps1 was verified by code inspection plus Node/Pnpm gates instead of direct pwsh execution."
+  - "A broad diagnostic gitleaks --no-git worktree scan reported three pre-existing findings in packaged agent/skill markdown outside the P06 diff; the targeted P06 diff scan passed with no leaks."
+acceptance:
+  baseline_manifest_contract:
+    status: PASS
+    evidence:
+      - evals/baseline/manifest.yaml
+      - evals/baseline/schema/manifest.schema.json
+      - evals/baseline/schema/corpus-manifest.schema.json
+      - docs/next/baseline/BENCHMARK-CORPUS.md
+      - tests/baseline-spec.test.mjs
+    notes:
+      - "The canonical manifest records corpus id/version, v8 baseline commit/package version, public/evaluator roots, fixture hash policy, scoring rubric, and exactly eight scenario families."
+      - "corpus-manifest.yaml remains a sealed alias pointer to the canonical manifest instead of a competing source of truth."
+  oracle_fixture_governance:
+    status: PASS
+    evidence:
+      - evals/baseline/schema/oracle-assertions.schema.json
+      - evals/fixtures/evaluator/*/assertions.yaml
+      - evals/baseline/fixture-hashes.sha256
+      - docs/next/baseline/SCORING-RUBRIC.md
+      - tests/baseline-spec.test.mjs
+    notes:
+      - "Oracle assertions require visible_to_worker: false and non-empty critical assertions."
+      - "Fixture hashes are lowercase SHA-256 over LF-normalized UTF-8 fixture bytes with POSIX-relative paths, and the baseline-spec test revalidates all 33 entries."
+  measurement_harness_contract:
+    status: PASS
+    evidence:
+      - docs/next/baseline/V8-MEASUREMENT-HARNESS.md
+      - evals/baseline/run-manifest-template.yaml
+      - evals/baseline/schema/score.schema.json
+      - scripts/baseline/README.md
+      - scripts/baseline/capture-run.ps1
+    notes:
+      - "Harness docs and run templates now point at the canonical baseline manifest/oracle schema and preserve redaction/hash-retention requirements."
+      - "PowerShell was unavailable in the local closeout environment; validation relied on static review plus the full Node/Pnpm gate stack."
+  oracle_pipeline_provenance:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P06-T02/oracle-taskgraph-proof.json
+      - docs/next/evidence/P06-T02/completion-report.yaml
+      - packages/artifacts/src/oracles/service.ts
+      - packages/artifacts/src/taskgraphs/service.ts
+      - packages/artifacts/src/evidence-index/service.ts
+      - packages/artifacts/test/change-support.test.mjs
+    notes:
+      - "P06-T02 proved existing artifact services enforce revisioned oracle/taskgraph/evidence-index writes, exact artifact-input binding, manifest-hash revalidation, run/review provenance, and durable accepted-evidence references."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-06/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-06/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-06/HANDOFF.md
+      - docs/next/reviews/PHASE-06-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P06-T01 through P06-T03 complete and blockers cleared."
+      - "Phase 7 handoff points to P07-T01 planner task contracts and preflight inputs."
+commands:
+  - name: baseline-node-check
+    command: "node --check tests/baseline-spec.test.mjs"
+    exit_code: 0
+    evidence: docs/next/evidence/P06-CLOSEOUT/baseline-node-check.log
+    result: "JavaScript syntax check passed"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P06-CLOSEOUT/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P06-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P06-CLOSEOUT/workspace-tests.log
+    result: "537 pass / 0 fail"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P06-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import-boundaries, schema/doc drift, package contents, tests, and pack dry-run passed"
+  - name: gitleaks-p06-diff
+    command: "gitleaks detect over git diff --binary worktree snapshot"
+    exit_code: 0
+    evidence: docs/next/evidence/P06-CLOSEOUT/gitleaks-p06-diff.log
+    result: "No leaks found in P06 diff"
+blockers: []
+phase_7_handoff:
+  next_task: P07-T01
+  next_task_id: t_8c382c22
+  summary: "Define planner task contracts and preflight checks against the Phase 6 canonical baseline/oracle artifacts, preserving hidden oracle boundaries, fixture-hash fail-closed behavior, and RuntimeDriver-neutral output references."

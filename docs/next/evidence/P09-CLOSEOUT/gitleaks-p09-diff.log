@@ -1,0 +1,16 @@
+=== gitleaks-p09-diff ===
+command: git diff --cached --binary 657f14ef52974efb0b72f009f536f7105884ad9c -- :!.legion/project/changes/LEGION-NEXT/implementation/phase-09/evidence-index.yaml | gitleaks detect --pipe --no-color --redact
+started_at_utc: 2026-06-22T09:44:00Z
+
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+5:44AM INF scanned ~1046352 bytes (1.05 MB) in 384ms
+5:44AM INF no leaks found
+
+finished_at_utc: 2026-06-22T09:44:01Z
+exit_code: 0

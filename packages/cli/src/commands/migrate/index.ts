@@ -20,7 +20,11 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const MIGRATE_HELP = `legion next migrate --from-planning|--from-codex-legion --dry-run|--apply|--rollback
+const MIGRATE_HELP = `legion next migrate --from-planning|--from-codex-legion --verify|--dry-run|--apply|--rollback
+
+Compatibility verify:
+  --from-planning --verify --planning-root <path> --staging-root <path> --run-id <id> --project <file>
+  --from-codex-legion --verify --staging-root <path> --run-id <id>
 
 Planning dry-run:
   --from-planning --dry-run --planning-root <path> --staging-root <path> --run-id <id> --project <file>
@@ -159,7 +163,7 @@ function migrationSource(context: CliContext): MigrationSource | CliResult {
 
 function migrationAction(context: CliContext): MigrationAction | CliResult {
   const actions: MigrationAction[] = [];
-  if (hasFlag(context, "dry-run")) actions.push("dry-run");
+  if (hasFlag(context, "dry-run") || hasFlag(context, "verify")) actions.push("dry-run");
   if (hasFlag(context, "apply")) actions.push("apply");
   if (hasFlag(context, "rollback")) actions.push("rollback");
   if (actions.length !== 1) {

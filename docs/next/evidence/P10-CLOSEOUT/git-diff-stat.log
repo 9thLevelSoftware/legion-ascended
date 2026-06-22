@@ -1,0 +1,10 @@
+ .../LEGION-NEXT/implementation/phase-10/HANDOFF.md |    2 +
+ .../implementation/phase-10/ledger.yaml            |    4 +
+ .../evidence/P10-CLOSEOUT/gitleaks-p10-diff.log    |    4 +-
+ .../evidence/P10-CLOSEOUT/integration-report.yaml  |   12 +
+ .../evidence/P10-CLOSEOUT/store-sqlite-test.log    |  290 ++--
+ docs/next/evidence/P10-CLOSEOUT/validate-next.log  | 1478 +++++++++----------
+ .../next/evidence/P10-CLOSEOUT/workspace-tests.log | 1482 ++++++++++----------
+ docs/next/reviews/PHASE-10-INDEPENDENT-REVIEW.md   |    2 +
+ .../test/release-observation-projector.test.mjs    |  219 +--
+ 9 files changed, 1771 insertions(+), 1722 deletions(-)

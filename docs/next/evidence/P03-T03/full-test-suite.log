@@ -1,0 +1,429 @@
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node --test "tests/**/*.test.mjs" "tests/**/*.test.cjs" && pnpm -r --if-present test
+✔ installer lazy-loads YAML support for Kilo Code mode merging (0.883667ms)
+✔ installer source keeps one update generator and rejects non-200 registry responses (0.389541ms)
+✔ Codex prompt installs concrete template context paths for runtimes without at-refs (479.255208ms)
+✔ Kilo uninstall preserves pre-existing user skill directories and files (341.091958ms)
+✔ uninstall tolerates older manifests without paths metadata (59.839708ms)
+✔ update removes stale artifacts from the previous manifest before reinstalling (450.354625ms)
+▶ installer local mode installs runtime-native artifacts for every supported runtime
+  ✔ claude local install + uninstall (175.806458ms)
+  ✔ codex local install + uninstall (194.008625ms)
+  ✔ cursor local install + uninstall (183.665209ms)
+  ✔ copilot local install + uninstall (217.641291ms)
+  ✔ gemini local install + uninstall (171.852125ms)
+  ✔ antigravity local install + uninstall (210.615834ms)
+  ✔ kiro local install + uninstall (197.359709ms)
+  ✔ windsurf local install + uninstall (284.510667ms)
+  ✔ opencode local install + uninstall (195.20175ms)
+  ✔ kilo local install + uninstall (161.460208ms)
+  ✔ kilocode local install + uninstall (284.963ms)
+✔ installer local mode installs runtime-native artifacts for every supported runtime (2280.740875ms)
+▶ installer global mode installs runtime-native artifacts for every globally supported runtime
+  ✔ claude global install + uninstall (258.54225ms)
+  ✔ codex global install + uninstall (202.588125ms)
+  ✔ copilot global install + uninstall (203.352042ms)
+  ✔ gemini global install + uninstall (229.544833ms)
+  ✔ antigravity global install + uninstall (316.541542ms)
+  ✔ kiro global install + uninstall (259.5755ms)
+  ✔ opencode global install + uninstall (218.17875ms)
+  ✔ kilo global install + uninstall (188.04275ms)
+  ✔ kilocode global install + uninstall (236.981958ms)
+✔ installer global mode installs runtime-native artifacts for every globally supported runtime (2115.009333ms)
+✔ Kilo Code custom mode merge preserves user modes across install, reinstall, and uninstall (315.740083ms)
+✔ Kilo Code global install seeds spaced extension storage from no-space compatibility path (168.858667ms)
+✔ installer rejects unsupported scope and manual-only runtime installs (228.178042ms)
+✔ deprecated --amazon-q alias installs the Kiro runtime contract (141.597042ms)
+✔ installer --verify validates checksums in local source installs (114.2295ms)
+✔ P01-T10 package contents preserve the approved v8 legacy path set (423.813333ms)
+✔ P01-T10 seeded package mutations fail the path contract (0.1085ms)
+✔ P01-T10 seeded persona checksum mutation fails the checksum contract (0.068917ms)
+✔ P01-T10 seeded installer path mutation fails the installer matrix contract (0.093ms)
+✔ P01-T10 legacy installer supports local Codex install, verify, and uninstall (282.920875ms)
+✔ accepts legal protocol, core, artifacts, board, store, and legacy bridge imports (73.923167ms)
+✔ rejects protocol imports from core (35.549417ms)
+✔ rejects deep imports across workspace package exports (48.71075ms)
+✔ rejects provider and storage imports outside the SQLite provider package (73.043792ms)
+✔ rejects workspace package imports of legacy prompt assets (45.383292ms)
+✔ P01-T11 validate-next plan is the shared CI/local gate order (1.541625ms)
+✔ P01-T11 CI workflow blocks Phase 1 gates on all supported platforms (5.617084ms)
+✔ P01-T11 protocol compatibility workflow uses pinned actions and generated schema checks (1.457375ms)
+✔ P01-T11 generated protocol docs match the current schema and transition sources (5722.488875ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6791.1815
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 9 of 10 workspace projects
+packages/protocol test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/protocol test: $ tsc -p tsconfig.json
+packages/protocol test: ✔ P01-T09 versioned records fail closed without a valid schemaVersion (1.127875ms)
+packages/protocol test: ✔ P01-T09 canonical compatibility fixtures remain readable (7.882875ms)
+packages/protocol test: ✔ P01-T09 protocol negotiation rejects unsupported old and future versions (0.8475ms)
+packages/protocol test: ✔ P01-T09 explicit migrations apply in order and are idempotent when repeated (2.746667ms)
+packages/protocol test: ✔ P01-T09 migration failures do not partially mutate caller input (1.908917ms)
+packages/protocol test: ✔ P01-T09 downcasts require explicit information-preservation evidence (0.5655ms)
+packages/protocol test: ✔ P01-T09 compatibility reports include matrix and evolution policy text (0.448416ms)
+packages/protocol test: ✔ P01-T04 valid entity fixture corpus parses and serializes identically (15.137208ms)
+packages/protocol test: ✔ P01-T04 entity schemas reject mutable operational state and missing required fields (3.38925ms)
+packages/protocol test: ✔ P01-T04 change schemas keep current truth and proposed metadata distinct (9.95775ms)
+packages/protocol test: ✔ P01-T04 trace references bind entity kind to matching ID prefix (2.002709ms)
+packages/protocol test: ✔ review feedback: project IDs must match project slugs (1.523291ms)
+packages/protocol test: ✔ review feedback: accepted, rejected, and blocked change acceptance states require audit fields (4.058625ms)
+packages/protocol test: ✔ review feedback: risk overrides must be internally consistent (2.415292ms)
+packages/protocol test: ✔ review feedback: superseded requirements require replacement references (1.564ms)
+packages/protocol test: ✔ review feedback: decisions enforce audit fields and selected alternative consistency (3.018584ms)
+packages/protocol test: ✔ review feedback: decision audit rules are preserved in generated JSON Schema (1.344333ms)
+packages/protocol test: ✔ review feedback: oracle type and execution mode must agree (3.317625ms)
+packages/protocol test: ✔ P01-T04 oracle ownership and protection are explicit (1.584292ms)
+packages/protocol test: ✔ P01-T04 decisions can be superseded without rewriting history (0.728667ms)
+packages/protocol test: ✔ P01-T04 invalid entity fixture cases are rejected (1.355083ms)
+packages/protocol test: ✔ P01-T04 generated entity JSON schemas match committed artifacts (10.483333ms)
+packages/protocol test: ✔ P01-T06 event fixture corpus parses and serializes identically (9.974792ms)
+packages/protocol test: ✔ P01-T06 event catalog is closed, factual, and exhaustively coverable (0.469542ms)
+packages/protocol test: ✔ P01-T06 event envelopes reject transport details and imperative payloads (1.830875ms)
+packages/protocol test: ✔ P01-T06 duplicate events are recognized by event ID or idempotency key (0.627334ms)
+packages/protocol test: ✔ P01-T06 prior minor event compatibility fixtures normalize to current envelopes (2.885125ms)
+packages/protocol test: ✔ P01-T06 API fixture corpus parses commands, results, and queries (4.581709ms)
+packages/protocol test: ✔ P01-T06 every state-changing command has success and typed rejection results (0.183792ms)
+packages/protocol test: ✔ review feedback: API refinements reject inconsistent command semantics (1.750166ms)
+packages/protocol test: ✔ review feedback: missing command catalog entries fail validation instead of throwing (2.716708ms)
+packages/protocol test: ✔ review feedback: unknown event and command discriminants fail without throwing (1.255083ms)
+packages/protocol test: ✔ P01-T06 API contracts reject transport-specific response fields (0.551417ms)
+packages/protocol test: ✔ P01-T06 generated event and API JSON schemas match committed artifacts (6.503459ms)
+packages/protocol test: ✔ P01-T06 generated contract documentation snapshots describe ordering and duplicates (0.449583ms)
+packages/protocol test: ✔ P01-T05 valid lifecycle fixture corpus parses and serializes identically (18.426791ms)
+packages/protocol test: ✔ P01-T05 keeps task contract, operational task, and run attempt separate (8.255625ms)
+packages/protocol test: ✔ P01-T05 task contracts reject unsafe scope and incomplete verification contracts (1.789208ms)
+packages/protocol test: ✔ P01-T05 task run manifests are frozen after start (2.556708ms)
+packages/protocol test: ✔ P01-T05 evidence and reviews can represent unknown or not verified results (1.445917ms)
+packages/protocol test: ✔ P01-T05 review findings require evidence for blocking severity (1.829708ms)
+packages/protocol test: ✔ P01-T05 approvals require explicit action scope and idempotency (0.826583ms)
+packages/protocol test: ✔ P01-T05 release and observation schemas represent rollback and forward-fix paths (1.11625ms)
+packages/protocol test: ✔ review feedback: lifecycle schemas reject impossible chronology and empty collected evidence (3.939625ms)
+packages/protocol test: ✔ review feedback: submitted review audit fields are represented in generated JSON Schema (1.280167ms)
+packages/protocol test: ✔ P01-T05 invalid lifecycle fixture cases are rejected (2.930459ms)
+packages/protocol test: ✔ P01-T05 generated lifecycle JSON schemas match committed artifacts (20.273833ms)
+packages/protocol test: ✔ entity IDs are kind-prefixed and reject cross-kind parsing (2.812834ms)
+packages/protocol test: ✔ canonical scalar primitives reject ambiguous representations (1.633875ms)
+packages/protocol test: ✔ artifact, correlation, cursor, and idempotency primitives are deterministic (1.525875ms)
+packages/protocol test: ✔ strict JSON value and metadata schemas reject non-JSON or over-limit data (1.147958ms)
+packages/protocol test: ✔ common protocol structures are strict and versioned (0.716041ms)
+packages/protocol test: ✔ generated primitive JSON schemas match committed artifacts (16.124167ms)
+packages/protocol test: ✔ fixture corpus captures valid and invalid primitive examples (5.64325ms)
+packages/protocol test: ℹ tests 54
+packages/protocol test: ℹ suites 0
+packages/protocol test: ℹ pass 54
+packages/protocol test: ℹ fail 0
+packages/protocol test: ℹ cancelled 0
+packages/protocol test: ℹ skipped 0
+packages/protocol test: ℹ todo 0
+packages/protocol test: ℹ duration_ms 295.049667
+packages/protocol test: Done
+packages/core test$ pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/artifacts test$ pnpm --filter @legion/protocol build && pnpm run generate:schemas && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/core test: $ tsc -p tsconfig.json
+packages/artifacts test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/artifacts test: $ tsc -p tsconfig.json
+packages/core test: ✔ P01-T08 ADR-006 golden examples classify into expected tiers and gates (1.967667ms)
+packages/core test: ✔ P01-T08 adding a high-risk signal never lowers the derived tier (0.3235ms)
+packages/core test: ✔ P01-T08 lower-tier overrides require decision-owner approval and cannot undercut hard floors (1.755875ms)
+packages/core test: ✔ P01-T08 explanations list normalized signals and overrides deterministically (0.13625ms)
+packages/core test: ✔ P01-T08 untrusted text cannot alter policy without an approved policy artifact (0.519417ms)
+packages/core test: ✔ P01-T08 gate derivation rejects malformed custom gate policy instead of emitting partial gates (0.168959ms)
+packages/core test: ✔ P01-T08 custom policy validation reports malformed policy objects without TypeErrors (0.27625ms)
+packages/core test: ✔ P01-T08 risk signal and override runtime validation rejects malformed JavaScript inputs (0.154375ms)
+packages/core test: ✔ P01-T08 lower-tier overrides enforce retained gates in the returned gate set (0.123625ms)
+packages/core test: ✔ P01-T08 risk profile reason strings stay within protocol limits (0.132667ms)
+packages/core test: ✔ P01-T07 lifecycle state catalogs include explicit control and terminal states (0.700625ms)
+packages/core test: ✔ P01-T07 transition matrices are exported for every aggregate (0.670708ms)
+packages/core test: ✔ P01-T07 legal transition table moves each aggregate through its protocol facts (1.285167ms)
+packages/core test: ✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.092583ms)
+packages/core test: ✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.09025ms)
+packages/core test: ✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.143125ms)
+packages/core test: ✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.297042ms)
+packages/core test: ✔ P01-T07 integration completions must match the recorded side-effect intent (0.070541ms)
+packages/core test: ✔ P01-T07 task blockers accumulate in reducer and command decision (0.234917ms)
+packages/core test: ✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.183584ms)
+packages/core test: ✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.112333ms)
+packages/core test: ✔ P01-T07 task replay is deterministic and equivalent from genesis (0.246916ms)
+packages/core test: ✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.066417ms)
+packages/core test: ✔ P01-T07 release guards reject stale observations and invalid rollback states (0.049458ms)
+packages/core test: ✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.155875ms)
+packages/core test: ℹ tests 25
+packages/core test: ℹ suites 0
+packages/core test: ℹ pass 25
+packages/core test: ℹ fail 0
+packages/core test: ℹ cancelled 0
+packages/core test: ℹ skipped 0
+packages/core test: ℹ todo 0
+packages/core test: ℹ duration_ms 181.542375
+packages/core test: Done
+packages/artifacts test: $ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+packages/artifacts test: $ tsc -p tsconfig.json
+packages/artifacts test: ✔ P02-T07 previews and archives an accepted change into current truth (557.616667ms)
+packages/artifacts test: ✔ P02-T07 archives removal of a primary requirement while preserving remaining requirements (537.312833ms)
+packages/artifacts test: ✔ P02-T07 refuses to archive changes that are not accepted (347.892292ms)
+packages/artifacts test: ✔ P02-T07 refuses stale current-spec bases before mutating current truth (382.226208ms)
+packages/artifacts test: ✔ P02-T07 rollback does not overwrite concurrent current truth updates (442.384084ms)
+packages/artifacts test: ✔ P02-T07 refuses missing accepted evidence (299.945667ms)
+packages/artifacts test: ✔ P02-T07 rolls back current truth when archive metadata write fails (386.930625ms)
+packages/artifacts test: ✔ P02-T07 retry after a recorded archive is idempotent (213.347709ms)
+packages/artifacts test: ✔ P02-T07 refuses idempotent archive retry when current truth drifted (154.14425ms)
+packages/artifacts test: ✔ canonical project artifact paths reject ambiguous or escaping input (1.355125ms)
+packages/artifacts test: ✔ stable protocol JSON sorts keys without locale-dependent ordering (0.127375ms)
+packages/artifacts test: ✔ repository discovery and path resolution stay beneath the real project root (33.690625ms)
+packages/artifacts test: ✔ JSON artifact reads return protocol validation diagnostics with source paths (56.851959ms)
+packages/artifacts test: ✔ revisioned writes hash content, enforce CAS, and preserve bytes on interruption (93.206333ms)
+packages/artifacts test: ✔ revisioned writes reject concurrent writers and stale superseded content (116.015875ms)
+packages/artifacts test: ✔ P02-T05 creates revisioned oracle metadata and manifest hashes change after oracle revision (395.484709ms)
+packages/artifacts test: ✔ P02-T05 oracle manifest reports invalid oracle filenames at their actual artifact path (132.716625ms)
+packages/artifacts test: ✔ P02-T05 oracle reads reject artifacts whose embedded oracle ID disagrees with the requested path (369.677375ms)
+packages/artifacts test: ✔ P02-T05 writes taskgraph JSON with exact artifact revisions and byte-stable canonical order (630.264ms)
+packages/artifacts test: ✔ P02-T05 taskgraph rejects empty or duplicate artifact inputs with diagnostics (301.450916ms)
+packages/artifacts test: ✔ P02-T05 taskgraph rejects copied identities and stale manifest hashes on read (357.007416ms)
+packages/artifacts test: ✔ P02-T05 evidence index rejects incomplete provenance and records accepted evidence references (254.543042ms)
+packages/artifacts test: ✔ P02-T05 evidence index rejects empty inputs, copied identities, and stale manifest hashes (321.93725ms)
+packages/artifacts test: ✔ P02-T04 creates, loads, validates, and diffs a complete change bundle (300.314375ms)
+packages/artifacts test: ✔ P02-T04 rejects conflicting delta operations before writing a bundle (145.552833ms)
+packages/artifacts test: ✔ P02-T04 detects stale current-spec bases during change validation (342.877166ms)
+packages/artifacts test: ✔ P02-T04 validates secondary-requirement deltas against the recorded base spec path (307.375583ms)
+packages/artifacts test: ✔ P02-T04 rejects proposed requirement IDs that differ from the delta target (108.062ms)
+packages/artifacts test: ✔ P02-T04 preflights bundle artifact paths before writing partial deltas (117.103458ms)
+packages/artifacts test: ✔ P02-T04 validates add deltas against current truth (286.10075ms)
+packages/artifacts test: ✔ P02-T04 rejects add bundle creation when the target already exists in unlisted current truth (151.125333ms)
+packages/artifacts test: ✔ P02-T04 rejects loaded bundles whose identity no longer matches their path (263.251208ms)
+packages/artifacts test: ✔ P02-T04 rejects side artifacts whose change IDs disagree with the bundle path (433.47875ms)
+packages/artifacts test: ✔ P02-T04 rejects delta frontmatter that disagrees with the bundle entry (249.673333ms)
+packages/artifacts test: ✔ P02-T04 returns typed diagnostics for invalid change bundle inputs (89.805ms)
+packages/artifacts test: ✔ P02-T02 initializes a committed project boundary idempotently and keeps var ignored (181.915792ms)
+packages/artifacts test: ✔ P02-T02 dry-run init reports planned writes and legacy .legion collisions preserve bytes (12.2715ms)
+packages/artifacts test: ✔ P02-T02 manifest schema reports malformed input without throwing (0.774042ms)
+packages/artifacts test: ✔ P02-T02 init ignores hidden .legion metadata without hiding visible legacy collisions (126.73775ms)
+packages/artifacts test: ✔ P02-T09 init allows migrated legacy protocol namespace while preserving collision checks (157.592708ms)
+packages/artifacts test: ✔ P02-T02 accepts common .legion var ignore patterns without appending duplicates (88.733583ms)
+packages/artifacts test: ✔ P02-T02 validates constitution integrity and updates it with manifest revision checks (325.120083ms)
+packages/artifacts test: ✔ P02-T03 creates, reads, lists, and deterministically indexes current specs (162.107625ms)
+packages/artifacts test: ✔ P02-T03 ignores non-file .md entries when listing current specs (97.051959ms)
+packages/artifacts test: ✔ P02-T03 returns invalid diagnostics for malformed current spec requirement IDs (87.168625ms)
+packages/artifacts test: ✔ P02-T03 preserves non-structural markdown headings inside current spec sections (148.574166ms)
+packages/artifacts test: ✔ P02-T03 rejects reserved current spec section headings inside section content (86.107959ms)
+packages/artifacts test: ✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (158.823375ms)
+packages/artifacts test: ✔ P02-T03 classifies semantic spec index diffs (0.282083ms)
+packages/artifacts test: ✔ P02-T03 blocks stale edits and supports rename and deprecate operations (241.866833ms)
+packages/artifacts test: ✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (112.003042ms)
+packages/artifacts test: ✔ P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically (525.822625ms)
+packages/artifacts test: ✔ P02-T06 accepts shared oracle coverage without false orphan diagnostics (422.849917ms)
+packages/artifacts test: ✔ P02-T06 reports calibrated broken traceability chains with exact diagnostics (372.206584ms)
+packages/artifacts test: ✔ P02-T06 applies trace integrity checks to evidence references (416.911792ms)
+packages/artifacts test: ✔ P02-T06 reports stale artifact input revisions after downstream sources change (438.821291ms)
+packages/artifacts test: ✔ P02-T06 cycle diagnostics name only nodes participating in the cycle (420.648333ms)
+packages/artifacts test: ✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (322.395542ms)
+packages/artifacts test: ✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (189.755625ms)
+packages/artifacts test: ℹ tests 59
+packages/artifacts test: ℹ suites 0
+packages/artifacts test: ℹ pass 59
+packages/artifacts test: ℹ fail 0
+packages/artifacts test: ℹ cancelled 0
+packages/artifacts test: ℹ skipped 0
+packages/artifacts test: ℹ todo 0
+packages/artifacts test: ℹ duration_ms 3703.108917
+packages/artifacts test: Done
+packages/store-sqlite test$ pnpm --filter @legion/board-store build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/legacy-bridge test$ pnpm --filter @legion/artifacts build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+packages/store-sqlite test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/legacy-bridge test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+packages/store-sqlite test: $ tsc -p tsconfig.json
+packages/legacy-bridge test: $ tsc -p tsconfig.json
+packages/store-sqlite test: $ tsc -p tsconfig.json
+packages/legacy-bridge test: $ tsc -p tsconfig.json
+packages/store-sqlite test: ✔ P03-T07 schema exposes board_approvals, indexes, and protocol-aligned status enum (11.671042ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval round-trips scope, requester, and expiresAt (5.410666ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval assigns approval_id when not provided and refuses duplicates (9.168583ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval rejects unknown task with a foreign-key error (5.218209ms)
+packages/store-sqlite test: ✔ P03-T07 grantApproval transitions requested -> granted with expectedStatus guard (39.4475ms)
+packages/store-sqlite test: ✔ P03-T07 denyApproval transitions requested -> denied with the same guards (8.131417ms)
+packages/store-sqlite test: ✔ P03-T07 expireApproval moves requested -> expired and rejects terminal transitions (5.121792ms)
+packages/store-sqlite test: ✔ P03-T07 revokeApproval is reachable from requested AND from granted; denied/expired/revoked reject revoke (9.138333ms)
+packages/store-sqlite test: ✔ P03-T07 listApprovals filters by taskId, runId, status, and lifecyclePhase (7.889167ms)
+packages/store-sqlite test: ✔ P03-T07 expectedStatus mismatches raise BoardApprovalConcurrencyError (5.355542ms)
+packages/store-sqlite test: ✔ P03-T07 missing approval raises BoardApprovalNotFoundError (4.270875ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval rejects malformed scope, requester, and timestamps (4.457666ms)
+packages/store-sqlite test: ✔ P03-T07 lifecycle phase map matches the documented pending/approved/revoked grouping (0.123833ms)
+packages/store-sqlite test: ✔ P03-T07 grantApproval then revokeApproval exercises the granted->revoked path explicitly (3.910709ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval with null runId is allowed when no run association exists (4.509459ms)
+packages/store-sqlite test: ✔ P03-T07 createApproval defaults approvalId to a UUID when not provided (46.247416ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim inserts an active lease and getClaim returns the same row (17.7755ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim refuses a second concurrent claim on the same task+generation with BoardClaimContendedError (5.192875ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim rejects a mismatched expectedGeneration with BoardClaimGenerationError (5.925167ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim rejects missing tasks with BoardClaimGenerationError(actualGeneration=null) (4.903833ms)
+packages/store-sqlite test: ✔ P03-T04 tryClaim validates owner, lease duration, and lease token shape (4.75225ms)
+packages/store-sqlite test: ✔ P03-T04 getActiveClaimForTask returns the only live lease and null when none exists (24.773209ms)
+packages/store-sqlite test: ✔ P03-T04 heartbeat advances leaseExpiresAt and rejects unknown lease tokens (10.752958ms)
+packages/store-sqlite test: ✔ P03-T04 heartbeat on a released claim is a no-op and returns the archived row unchanged (3.652417ms)
+packages/store-sqlite test: ✔ P03-T04 release is idempotent: a second release returns the same archived row (4.425042ms)
+packages/store-sqlite test: ✔ P03-T04 release with an unknown lease token raises BoardClaimNotFoundError (20.700167ms)
+packages/store-sqlite test: ✔ P03-T04 release validates the reason enum (4.264833ms)
+packages/store-sqlite test: ✔ P03-T04 reclaimExpiredLeases stamps 'expired' on stale leases and returns the reclaimed rows (5.673833ms)
+packages/store-sqlite test: ✔ P03-T04 reclaimExpiredLeases is a no-op when every lease is still valid (4.354416ms)
+packages/store-sqlite test: ✔ P03-T04 superseded task generations free the (task, generation) slot for new claims (5.95425ms)
+packages/store-sqlite test: ✔ P03-T04 release reasons cover every documented enum value (0.111959ms)
+packages/store-sqlite test: ✔ P03-T04 migration diagnostics include board_claims and both required indexes (4.678459ms)
+packages/store-sqlite test: ✔ P03-T04 SQLite provider package exports every claim contract the @legion/board package re-exports (9.418333ms)
+packages/store-sqlite test: ✔ P03-comments create + get round-trip persists comment with task association and timestamps (29.905042ms)
+packages/store-sqlite test: ✔ P03-comments list returns comments for a task ordered by creation time with task id (3.961875ms)
+packages/store-sqlite test: ✔ P03-comments update changes body and updatedAt while preserving task association and createdAt (3.830458ms)
+packages/store-sqlite test: ✔ P03-comments update can change actor without changing task association (5.859958ms)
+packages/store-sqlite test: ✔ P03-comments delete removes the comment from the task's comment list (4.86025ms)
+packages/store-sqlite test: ✔ P03-comments create and list for a missing task fail with BoardTaskNotFoundError (3.838209ms)
+packages/store-sqlite test: ✔ P03-comments get returns null and update/delete throw for unknown comment ids (30.708584ms)
+packages/store-sqlite test: ✔ P03-comments rejects empty, oversized, and invalid comment bodies (17.44825ms)
+packages/store-sqlite test: ✔ P03-comments rejects malformed actors (17.989917ms)
+packages/store-sqlite test: ✔ P03-comments deleting a task cascades and removes its comments (17.648833ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent persists an immutable event with monotonic aggregate and global sequences (21.134541ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent assigns independent aggregate sequences per aggregate (6.526459ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvents batches multiple events in one transaction (5.994375ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent supports explicit event id, causation, correlation, and occurredAt (3.266375ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent rejects duplicate event ids (20.425167ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent enforces expectedAggregateSequence (15.006ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent enforces expectedGlobalSequence (3.867375ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent supports idempotencyKey replay with identical payload (4.255125ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent rejects idempotencyKey replay with different payload (4.431916ms)
+packages/store-sqlite test: ✔ P03-T03 listEvents filters and orders by global_sequence (3.86225ms)
+packages/store-sqlite test: ✔ P03-T03 tail returns the most recent events (12.363667ms)
+packages/store-sqlite test: ✔ P03-T03 appendEvent rejects unknown aggregate kinds and event types (29.810334ms)
+packages/store-sqlite test: ✔ P03-T03 SQLite provider exports the event repository contracts (3.825ms)
+packages/store-sqlite test: ✔ P03-T03 task repository mutations emit board_task_events atomically through SqliteBoardStoreWithRepository (5.744292ms)
+packages/store-sqlite test: ✔ P03-T03 task supersede emits task.superseded and task.linked events (6.149625ms)
+packages/store-sqlite test: ✔ P03-T03 task delete emits task.deleted event (4.875584ms)
+packages/store-sqlite test: ✔ P03-T01 migrates a real board database and reports schema diagnostics (16.838875ms)
+packages/store-sqlite test: ✔ P03-T01 schema enforces ownership, foreign-key, unique, and check constraints (5.783875ms)
+packages/store-sqlite test: ✔ P03-T01 schema accepts zero-based protocol event sequences (5.293333ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rolls back interrupted migrations without advancing schema version (3.677333ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rejects applied versions without migration records (3.181667ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner honors explicit target versions (1.858375ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner rejects unsupported target versions (4.236375ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner treats missing scalar pragma rows as empty rows (0.142834ms)
+packages/store-sqlite test: ✔ P03-T01 migration rollback preserves the original migration failure (0.151417ms)
+packages/store-sqlite test: ✔ P03-T01 backup hashing avoids whole-file reads (1.256458ms)
+packages/store-sqlite test: ✔ P03-T01 migration runner fails closed for unknown future schema versions (2.318459ms)
+packages/store-sqlite test: ✔ P03-T01 migration checksums are deterministic over ordered SQL statements (31.060083ms)
+packages/store-sqlite test: ✔ P03-T03 saveProjection inserts and updates a projection with optimistic version CAS (21.069833ms)
+packages/store-sqlite test: ✔ P03-T03 saveProjection throws BoardProjectionDriftError on version mismatch (5.499333ms)
+packages/store-sqlite test: ✔ P03-T03 deleteProjection removes a projection and respects expected version (4.847542ms)
+packages/store-sqlite test: ✔ P03-T03 listStaleProjections returns projections behind a global sequence (17.800708ms)
+packages/store-sqlite test: ✔ P03-T03 rebuilder replays events in order to produce deterministic projection state (8.001875ms)
+packages/store-sqlite test: ✔ P03-T03 rebuilder replay is deterministic: same events produce same state hash (5.599041ms)
+packages/store-sqlite test: ✔ P03-T03 rebuild can recover a projection after its derived state is deleted (6.235667ms)
+packages/store-sqlite test: ✔ P03-T03 verify detects drift and confirms consistency (4.20425ms)
+packages/store-sqlite test: ✔ P03-T03 rebuilder rebuildAndSave advances projection version atomically (23.917291ms)
+packages/store-sqlite test: ✔ P03-T03 SQLite provider exports every projection contract the board package re-exports (23.288541ms)
+packages/store-sqlite test: ✔ P03-T02 create + get round-trip persists every column of a new board task (21.209458ms)
+packages/store-sqlite test: ✔ P03-T02 create rejects duplicate task ids with a descriptive error (20.518666ms)
+packages/store-sqlite test: ✔ P03-T02 create rejects malformed contract hash, invalid priority, and unknown statuses (4.535584ms)
+packages/store-sqlite test: ✔ P03-T02 priority, status, and generation min/max constants agree with the protocol and schema (3.333292ms)
+packages/store-sqlite test: ✔ P03-T02 setPriority advances the task while preserving status, contract, and generation (3.031667ms)
+packages/store-sqlite test: ✔ P03-T02 setPriority throws BoardConcurrencyError on generation mismatch (2.839292ms)
+packages/store-sqlite test: ✔ P03-T02 setPriority throws BoardTaskNotFoundError when no expectedGeneration is provided and the task is missing (26.649ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus walks the queued → ready → claimed → running → completed path (4.670916ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus records a blocker for blocked status and rejects mismatched blockers (5.71675ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus refuses illegal status transitions with BoardIllegalStatusTransitionError (8.820042ms)
+packages/store-sqlite test: ✔ P03-T02 transitionTaskStatus refuses mutating terminal states with BoardTerminalTaskMutationError (6.429ms)
+packages/store-sqlite test: ✔ P03-T02 failed tasks can be re-queued and run again to completion (4.638625ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration rotates the contract reference and increments generation atomically (6.879625ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration rejects generation mismatches with BoardConcurrencyError (7.376875ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration refuses to migrate terminal tasks (10.822917ms)
+packages/store-sqlite test: ✔ P03-T02 supersedeTask writes a board_task_links row keyed on relation='supersedes' and updates generation (11.120667ms)
+packages/store-sqlite test: ✔ P03-T02 supersedeTask fails on generation mismatch and does not write a successor (3.497208ms)
+packages/store-sqlite test: ✔ P03-T02 listTasks filters by status, project, change, and excludes terminal states by default (4.256625ms)
+packages/store-sqlite test: ✔ P03-T02 listTasks rejects invalid limits and honors bounded limits (6.196792ms)
+packages/store-sqlite test: ✔ P03-T02 deleteTask removes the row when the generation matches (4.258125ms)
+packages/store-sqlite test: ✔ P03-T02 deleteTask throws BoardConcurrencyError on generation mismatch (4.96475ms)
+packages/store-sqlite test: ✔ P03-T02 migration diagnostics surface every required table and index for board_tasks operations (3.962375ms)
+packages/store-sqlite test: ✔ P03-T02 concurrent priority writes preserve last-writer-wins via generation check (3.822125ms)
+packages/store-sqlite test: ✔ P03-T02 bumpGeneration + priority update interact correctly when generation changes mid-flight (5.537875ms)
+packages/store-sqlite test: ✔ P03-T02 board_task_events can be appended after CRUD with zero-based aggregate sequence per schema (4.620375ms)
+packages/store-sqlite test: ✔ P03-T02 SQLite provider package exports every contract type the @legion/board package re-exports (3.760875ms)
+packages/store-sqlite test: ℹ tests 107
+packages/store-sqlite test: ℹ suites 0
+packages/store-sqlite test: ℹ pass 107
+packages/store-sqlite test: ℹ fail 0
+packages/store-sqlite test: ℹ cancelled 0
+packages/store-sqlite test: ℹ skipped 0
+packages/store-sqlite test: ℹ todo 0
+packages/store-sqlite test: ℹ duration_ms 480.12825
+packages/store-sqlite test: Done
+packages/legacy-bridge test: ✔ P02-T09 dry-run inventories local and global Codex .legion protocol installs deterministically (320.73725ms)
+packages/legacy-bridge test: ✔ P02-T09 apply preserves customized bytes and unblocks v9 project initialization (192.378292ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback restores the exact pre-migration .legion layout (74.85675ms)
+packages/legacy-bridge test: ✔ P02-T09 partial installs without manifests are preserved as customized legacy data (42.099958ms)
+packages/legacy-bridge test: ✔ P02-T09 repeat migration is a no-op report without moving v9 project data (127.837833ms)
+packages/legacy-bridge test: ✔ P02-T09 apply resumes an interrupted legacy-protocol move with matching existing files (124.077083ms)
+packages/legacy-bridge test: ✔ P02-T09 apply removes empty legacy roots so v9 init is unblocked (48.051083ms)
+packages/legacy-bridge test: ✔ P02-T09 apply moves legacy migration roots so v9 init is unblocked (104.898ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects backup roots that overlap .legion before copying (20.431666ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects symlinked legacy entries instead of silently dropping them (22.893958ms)
+packages/legacy-bridge test: ✔ P02-T09 rejects unsafe staging paths and invalid apply timestamps without mutating the source (22.946875ms)
+packages/legacy-bridge test: ✔ P02-T09 backup manifests use absolute paths so rollback survives cwd changes (59.218375ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback rejects unusable backup manifests before deleting current .legion (8.138375ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback rejects backup manifests from another repository before deleting current .legion (23.872708ms)
+packages/legacy-bridge test: ✔ P02-T09 rollback verifies backup hashes before replacing current .legion (28.181584ms)
+packages/legacy-bridge test: ✔ P02-T09 apply rejects tampered migration report moves before cleanup (14.22075ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run stages deterministic v9 artifacts without mutating legacy .planning (293.429208ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run reports stale state, contradictory plan summaries, and missing requirements (86.254291ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run rejects staging paths that overlap repository or source roots (13.482ms)
+packages/legacy-bridge test: ✔ P02-T08 dry-run handles EOF summaries, malformed YAML, and invalid timestamps as diagnostics (131.83025ms)
+packages/legacy-bridge test: ✔ P02-T08 apply backs up destination and rollback restores exact pre-import .legion bytes (62.201584ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects tampered staging, bad reports, and invalid timestamps without mutating destination (61.152042ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects backup roots that overlap .legion before copying (61.0805ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects symlinked backup roots whose real path overlaps .legion (70.597666ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects backup roots that overlap planning source or staging roots (57.678917ms)
+packages/legacy-bridge test: ✔ P02-T08 apply rejects source-overlap backup roots after relative planning-root dry-runs (72.836458ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects malformed backup manifests without deleting current .legion (2.315375ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects unusable backup manifests before deleting current .legion (7.948458ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects backup manifests from another repository before deleting current .legion (61.424667ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback accepts backup manifests created through a symlinked repository root (64.357709ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects backup paths inside current .legion before deleting (2.8075ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback rejects relative manifest repository roots before deleting current .legion (1.582958ms)
+packages/legacy-bridge test: ✔ P02-T08 rollback verifies backup hashes before replacing current .legion (51.23175ms)
+packages/legacy-bridge test: ✔ P02-T08 repeated apply is rejected without changing destination (48.972ms)
+packages/legacy-bridge test: ℹ tests 34
+packages/legacy-bridge test: ℹ suites 0
+packages/legacy-bridge test: ℹ pass 34
+packages/legacy-bridge test: ℹ fail 0
+packages/legacy-bridge test: ℹ cancelled 0
+packages/legacy-bridge test: ℹ skipped 0
+packages/legacy-bridge test: ℹ todo 0
+packages/legacy-bridge test: ℹ duration_ms 1417.847625
+packages/legacy-bridge test: Done
+apps/cli-e2e test$ pnpm --filter @legion/protocol build && pnpm --filter @legion/artifacts build && pnpm --filter @legion/legacy-bridge build && pnpm --filter @legion/cli build && node --test --test-reporter=spec "test/**/*.test.mjs"
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+apps/cli-e2e test: $ tsc -p tsconfig.json
+apps/cli-e2e test: ✔ P02-T10 CLI E2E script builds protocol before packages that resolve protocol dist (2.276875ms)
+apps/cli-e2e test: ✔ P02-T10 valueless global flags remain flags before positional commands (327.274584ms)
+apps/cli-e2e test: ✔ P02-T10 valueless command flags remain flags before positional arguments (529.994958ms)
+apps/cli-e2e test: ✔ P02-T10 command subcommands honor help flags without requiring inputs (270.011041ms)
+apps/cli-e2e test: ✔ P02-T10 JSON input boundary failures return usage diagnostics (530.30125ms)
+apps/cli-e2e test: ✔ P02-T10 project commands initialize, validate, and report status as JSON without prompts (518.216291ms)
+apps/cli-e2e test: ✔ P02-T10 change commands create, validate, diff, and refuse unaccepted archive (1010.808375ms)
+apps/cli-e2e test: ✔ P02-T10 migrate planning commands dry-run, apply, and rollback without mutating source (655.208709ms)
+apps/cli-e2e test: ✔ P02-T10 migrate Codex Legion commands dry-run, apply, and rollback legacy protocol data (589.536292ms)
+apps/cli-e2e test: ℹ tests 9
+apps/cli-e2e test: ℹ suites 0
+apps/cli-e2e test: ℹ pass 9
+apps/cli-e2e test: ℹ fail 0
+apps/cli-e2e test: ℹ cancelled 0
+apps/cli-e2e test: ℹ skipped 0
+apps/cli-e2e test: ℹ todo 0
+apps/cli-e2e test: ℹ duration_ms 4568.132584
+apps/cli-e2e test: Done

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "approval-gate-snapshot",
+  "task": "P11-T01",
+  "capturedAt": "2026-06-22T06:00:00.000Z",
+  "projectId": "proj-p11-t01-snapshot-001",
+  "changeId": "chg-p11-t01-snapshot-001",
+  "projectionKey": "approval-gate:proj-p11-t01-snapshot-001:chg-p11-t01-snapshot-001",
+  "projectionVersion": 1,
+  "state": {
+    "schemaVersion": "1.0.0",
+    "kind": "approval-gate-adapter",
+    "projectId": "proj-p11-t01-snapshot-001",
+    "changeId": "chg-p11-t01-snapshot-001",
+    "verdict": "approved",
+    "mergeQueueHash": "sha256:e30030f88a07bc8f57fdd704b0546072c11de30d1bf3b00e28a5cbcde5beba0d",
+    "decisionSha256": "sha256:e12b4132f29f118cab773758cd021d2ca6c85ade97e0a2318270701d1e4a2964",
+    "aggregatorHash": "sha256:06bc422b38fb20928299eb7039c14ea4333ee20dab4bd3ba4ec3cfa92c9ffa0c",
+    "releaseObservationReportSha256": "sha256:17b139a24980b2971d33e233f87723717425a0b8eb98793cd8a88759b5199031",
+    "releaseObservationStatus": "promoted",
+    "lastEventType": "release.promoted",
+    "lastGlobalSequence": 2,
+    "lastOccurredAt": "2026-06-22T05:30:00.000Z",
+    "reason": "canary + health green",
+    "eventCount": 2,
+    "wholeChangeStatus": "accepted",
+    "wholeChangeOutcome": "integrated"
+  },
+  "verdict": "approved"
+}

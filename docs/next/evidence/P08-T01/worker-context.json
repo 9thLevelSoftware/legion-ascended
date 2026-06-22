@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "worker-context",
+  "protocolVersion": "0.1.0",
+  "workerContextHash": "sha256:8abe72b7e07f5b3f90d993857fc3099acc4b78abeede104f7e8d91592084b91e",
+  "isolationTag": "fresh-context:v1:8abe72b7e07f",
+  "createdAt": "2026-06-22T01:00:00.000Z",
+  "matchedAgentId": "legion-worker",
+  "contextRefs": {
+    "specRefs": [
+      {
+        "path": ".legion/project/specs/workflow-orchestration.md",
+        "sha256": "sha256:b3b8f2137c13df39cc4245be05bcf6bccae733f065d86cd17f5b688aae94b3fe",
+        "mediaType": "text/markdown"
+      }
+    ],
+    "designRefs": [
+      {
+        "path": ".legion/project/changes/chg_phase-08/design.md",
+        "sha256": "sha256:eb0a3b75e244b6c36497df5a2f2ce1d18f6d7cb436701ac08b739f5bf0be2539",
+        "mediaType": "text/markdown"
+      }
+    ],
+    "predecessorArtifacts": [
+      {
+        "path": "packages/protocol/src/entities/task-contract.ts",
+        "sha256": "sha256:4af3096364dc1189db73a2dd9de3857caeaa999bbdbfd405753539c4e6365056",
+        "mediaType": "text/typescript"
+      }
+    ],
+    "all": [
+      {
+        "path": ".legion/project/specs/workflow-orchestration.md",
+        "sha256": "sha256:b3b8f2137c13df39cc4245be05bcf6bccae733f065d86cd17f5b688aae94b3fe",
+        "mediaType": "text/markdown"
+      },
+      {
+        "path": ".legion/project/changes/chg_phase-08/design.md",
+        "sha256": "sha256:eb0a3b75e244b6c36497df5a2f2ce1d18f6d7cb436701ac08b739f5bf0be2539",
+        "mediaType": "text/markdown"
+      },
+      {
+        "path": "packages/protocol/src/entities/task-contract.ts",
+        "sha256": "sha256:4af3096364dc1189db73a2dd9de3857caeaa999bbdbfd405753539c4e6365056",
+        "mediaType": "text/typescript"
+      }
+    ]
+  },
+  "scope": {
+    "read": [
+      "packages/protocol/src/entities/task-contract.ts",
+      "packages/core/src/dispatch/dispatcher.ts"
+    ],
+    "write": [
+      "packages/core/src/dispatch/dispatcher.ts",
+      "packages/core/test/dispatch.test.mjs"
+    ],
+    "forbidden": [
+      "packages/core/src/runtime/local-driver.ts"
+    ],
+    "sequentialFiles": [
+      "packages/core/src/index.ts"
+    ]
+  },
+  "workerBundle": {
+    "id": "legion.core-worker",
+    "version": "1.0.0",
+    "role": "implementer",
+    "domain": "core",
+    "capabilities": [
+      "schema-definition",
+      "schema-validation",
+      "task-execution"
+    ],
+    "promptContentContract": {
+      "instructionsHash": "sha256:06358f32ea1b5421bedbf6be4e2954d0bc5a102bb2a455304dbb3b38c61ea94f",
+      "requiredSections": [
+        "workflow"
+      ],
+      "forbiddenSections": []
+    }
+  },
+  "model": {
+    "provider": "minimax",
+    "id": "MiniMax-M3",
+    "policyVersion": "1.0.0"
+  },
+  "taskContract": {
+    "id": "ctr_p08-t01-fresh-context",
+    "revision": 1,
+    "title": "P08-T01: Fresh context execution",
+    "wave": "A",
+    "agents": [
+      "legion-worker"
+    ]
+  }
+}

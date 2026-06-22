@@ -1,0 +1,112 @@
+phase: 12
+phase_id: P12
+status: DONE
+source_document: "docs/rebuild/12-phase-host-bridges-and-v8-migration.md"
+base_commit: "33ddf60180235dcb1a852838f6559a8cbecb7c11"
+started_at: "2026-06-22T14:19:19Z"
+completed_at: "2026-06-22T14:49:25Z"
+active_wave: 3
+tasks:
+  P12-T01:
+    status: DONE
+    run_id: "P12-T01-20260622-host-bridge-docs-alignment"
+    commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
+    evidence: docs/next/evidence/P12-T01/integration-report.yaml
+    depends_on: ["P11-T03"]
+    assignee: legionworker
+  P12-T02:
+    status: DONE
+    run_id: "P12-T02-20260622-legacy-migration-verify-alias"
+    commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
+    evidence: docs/next/evidence/P12-T02/integration-report.yaml
+    depends_on: ["P12-T01"]
+    assignee: legionworker
+  P12-T03:
+    status: DONE
+    run_id: "P12-T03-20260622-phase-12-closeout"
+    commit: "c0a751abf68c7952e1463c64c807c3d83102b967"
+    evidence: docs/next/evidence/P12-CLOSEOUT/integration-report.yaml
+    depends_on: ["P12-T02"]
+    assignee: otrlead
+decisions:
+  - task: P12-T01
+    decision: "Runtime bridge documentation uses runtime metadata as the canonical matrix and describes the supported install surface as 10 installable AI CLI runtimes plus the Kilo Code plugin."
+    reason: "Aider is present in the compatibility matrix but remains manual-only; calling it installable made the README inconsistent with the runtime metadata and installer behavior."
+    decided_at: "2026-06-22T14:20:00Z"
+  - task: P12-T01
+    decision: "README checksum is refreshed together with the host-bridge wording change."
+    reason: "The package verifier treats README.md as a shipped asset, so documentation edits must update checksums.sha256 or installer verification fails."
+    decided_at: "2026-06-22T14:25:00Z"
+  - task: P12-T01
+    decision: "A root regression test keeps README, runtime audit, and certification checklist labels aligned with bin/runtime-metadata."
+    reason: "The host bridge matrix spans README and docs; a metadata-driven test prevents future drift in runtime naming and installability claims."
+    decided_at: "2026-06-22T14:30:00Z"
+  - task: P12-T02
+    decision: "Compatibility verification is exposed as `legion next migrate --verify` and routes through the existing dry-run staging/report path."
+    reason: "The migration path already had the correct non-mutating verification semantics; adding an explicit alias makes the safety gate discoverable without introducing a second implementation path."
+    decided_at: "2026-06-22T14:35:00Z"
+  - task: P12-T02
+    decision: "Codex legacy migration e2e now exercises `--verify` before apply/rollback."
+    reason: "The test proves that verification preserves the source `.legion` tree, then apply still moves legacy protocol data and rollback restores the original hash."
+    decided_at: "2026-06-22T14:40:00Z"
+  - task: P12-T03
+    decision: "Close Phase 12 as the Migration/Host Beta cut line."
+    reason: "P12-T01 and P12-T02 together stabilize the host bridge support matrix, installability claims, package checksum verification, and explicit legacy migration compatibility verification/rollback path needed before release-grade behavioral evals."
+    decided_at: "2026-06-22T14:49:25Z"
+  - task: P12-T03
+    decision: "Independent closeout review is actor-separated from implementation."
+    reason: "P12 implementation tasks were executed by legionworker; the P12-T03 closeout reviewer is GPT-5.5 / otrlead, with additional read-only subagent audit support and local deterministic gate evidence."
+    decided_at: "2026-06-22T14:49:25Z"
+  - task: P12-T03
+    decision: "Closeout reruns the full P12 gate stack and a final Phase 12 diff gitleaks scan excluding only self-referential evidence artifacts."
+    reason: "The P12-CLOSEOUT evidence bundle records runtime bridge docs test, CLI e2e, package tests, workspace typecheck/tests, validate-next, and gitleaks over the final Phase 12 diff from base 33ddf60180235dcb1a852838f6559a8cbecb7c11."
+    decided_at: "2026-06-22T14:49:25Z"
+blockers: []
+preserved_boundaries:
+  - "Runtime metadata remains the source of truth for host bridge labels, support tiers, installability, and manual-only Aider behavior."
+  - "Compatibility verification is non-mutating: `--verify` uses the dry-run migration path and must preserve legacy source bytes."
+  - "Migration apply/rollback continues to preserve user artifacts through staging, backup manifests, and source hash checks."
+  - "Host-specific bridge behavior stays in installer/CLI/adapter documentation surfaces; @legion/core and @legion/board remain deterministic and provider-neutral."
+  - "Phase 8/9/10/11 evidence handles remain inputs for Phase 13 eval traces, and Phase 12 adds host-bridge matrix + migration verification evidence."
+evidence:
+  - README.md
+  - checksums.sha256
+  - tests/runtime-bridge-docs.test.mjs
+  - packages/cli/src/commands/migrate/index.ts
+  - packages/cli/src/index.ts
+  - apps/cli-e2e/test/cli-e2e.test.mjs
+  - docs/next/evidence/P12-T01/integration-report.yaml
+  - docs/next/evidence/P12-T02/integration-report.yaml
+  - docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
+  - docs/next/evidence/P12-CLOSEOUT/cli-e2e-test.log
+  - docs/next/evidence/P12-CLOSEOUT/core-test.log
+  - docs/next/evidence/P12-CLOSEOUT/board-test.log
+  - docs/next/evidence/P12-CLOSEOUT/store-sqlite-test.log
+  - docs/next/evidence/P12-CLOSEOUT/protocol-test.log
+  - docs/next/evidence/P12-CLOSEOUT/artifacts-test.log
+  - docs/next/evidence/P12-CLOSEOUT/typecheck.log
+  - docs/next/evidence/P12-CLOSEOUT/workspace-tests.log
+  - docs/next/evidence/P12-CLOSEOUT/validate-next.log
+  - docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log
+  - docs/next/evidence/P12-CLOSEOUT/command-summary.env
+  - docs/next/evidence/P12-CLOSEOUT/command-results.tsv
+  - docs/next/evidence/P12-CLOSEOUT/git-status.log
+  - docs/next/evidence/P12-CLOSEOUT/git-diff-stat.log
+  - docs/next/evidence/P12-CLOSEOUT/integration-report.yaml
+  - docs/next/reviews/PHASE-12-INDEPENDENT-REVIEW.md
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-12/evidence-index.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-12/HANDOFF.md
+  - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+phase_13_handoff:
+  next_task: P13-T01
+  next_task_id: t_12f977b4
+  summary: "Begin release-grade behavioral evals and security hardening on top of the completed Migration/Host Beta cut line."
+  contract_inputs_for_p13:
+    - "Runtime bridge matrix is metadata-aligned: 10 installable AI CLI runtimes plus Kilo Code plugin support; Aider remains manual-only."
+    - "Legacy migration compatibility verification is explicit through `legion next migrate --verify`, which is a dry-run alias and must preserve source bytes."
+    - "Codex legacy migration e2e covers verify/apply/rollback and proves rollback restores the original `.legion` hash."
+    - "Phase 8/9/10/11 content hashes and Phase 12 host/migration evidence should be included in sealed v8/v9 behavioral eval traces."
+  preserved_boundaries:
+    - "Do not treat absent, stale, or drifted host/migration evidence as green in release-grade evals."
+    - "Keep security/eval execution outside @legion/core and @legion/board unless it is deterministic protocol/core logic."
+    - "Continue preserving user artifacts and legacy source bytes during all migration/eval dry-runs."

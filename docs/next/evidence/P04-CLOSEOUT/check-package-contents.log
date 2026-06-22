@@ -1,0 +1,25 @@
+$ pnpm run check:package-contents
+
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/check-package-contents.mjs
+{
+  "ok": true,
+  "baselinePackage": {
+    "name": "@9thlevelsoftware/legion",
+    "version": "8.0.5",
+    "fileCount": 135
+  },
+  "currentPackage": {
+    "name": "@9thlevelsoftware/legion",
+    "version": "9.0.0-alpha.0",
+    "fileCount": 135
+  },
+  "bin": {
+    "legion": "bin/install.js"
+  },
+  "missingLegacyPaths": [],
+  "extraPackagePaths": [],
+  "workspacePackagePaths": [],
+  "missingChecksumPaths": [],
+  "legacyChecksumMismatches": []
+}

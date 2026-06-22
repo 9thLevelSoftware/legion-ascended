@@ -1,0 +1,128 @@
+phase: 12
+phase_id: P12
+hash_basis: "SHA-256 over artifact bytes after P12-T03 closeout finalization, refreshed for PR #22 metadata/evidence hygiene follow-up; this index is excluded to avoid self-referential hashing. The final gitleaks evidence excludes this index and the generated gitleaks log for the same reason."
+entries:
+  - task: P12-T01
+    artifact: README.md
+    description: "Host bridge support matrix wording: 10 installable AI CLI runtimes plus Kilo Code plugin support; Aider manual-only."
+    sha256: c32f8f911992a80797f5c5b8bb5d1e69a102cc7c9b8357b1d5097e36396b4f3f
+  - task: P12-T01
+    artifact: checksums.sha256
+    description: "Package checksum manifest refreshed for README.md."
+    sha256: 768d38388e44d59c34a475764d59b102b581d016a525c3f3d5470dc1eaa5c996
+  - task: P12-T01
+    artifact: tests/runtime-bridge-docs.test.mjs
+    description: "Runtime bridge docs/metadata alignment regression test."
+    sha256: 63d03edc49798beac73664821028170ec18e89728e06cf45dd08252c8c1dcc6b
+  - task: P12-T01
+    artifact: docs/next/evidence/P12-T01/integration-report.yaml
+    description: "Structured P12-T01 integration report."
+    sha256: 03c43de4245394280091313219d9958fa2abfc0bcd715a9839bbbedc2f90d4e8
+  - task: P12-T02
+    artifact: packages/cli/src/commands/migrate/index.ts
+    description: "Migration CLI help and action parsing for explicit --verify compatibility alias."
+    sha256: 9adc5ef352b2e0fb6507fbb6f3fc74d78967c37f2635ff61b21a4e174c4edaeb
+  - task: P12-T02
+    artifact: packages/cli/src/index.ts
+    description: "Root CLI help updated to list verify, dry-run, apply, and rollback migration flows."
+    sha256: eef691fddabcd290d0a622b0a28a49a2a47b736d986844305e31015d6e15357e
+  - task: P12-T02
+    artifact: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: "CLI e2e coverage for Codex migration --verify plus apply/rollback source preservation."
+    sha256: 63b6462717350d27d865f4f7c8007ee4e72f54e8813a85286ab669cad87efe2e
+  - task: P12-T02
+    artifact: docs/next/evidence/P12-T02/integration-report.yaml
+    description: "Structured P12-T02 integration report."
+    sha256: 8ab683f7cc47e31c6d74a981a113a9c98e2ac509faadf09cc498a49d70c484f2
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/runtime-bridge-docs-test.log
+    description: "P12 closeout runtime bridge docs test transcript: 1/1 pass."
+    sha256: 1c3dcd275f66edbcb6823cc6b48f8b8d7d5a36481d69a41fbf08e2d7e57546bb
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/cli-e2e-test.log
+    description: "P12 closeout CLI e2e transcript: 21/21 pass including migration verify coverage."
+    sha256: 5bfe8526ba53fa2cd6fe10df75b5984d4993e25ff47d4c137dc6864f151031b7
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/core-test.log
+    description: "P12 closeout @legion/core test transcript: 245/245 pass."
+    sha256: ed7a26af256da0427c67caf7df84a3934be6cf6fc962857f15960da4dd26beef
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/board-test.log
+    description: "P12 closeout @legion/board test transcript: 113/113 pass."
+    sha256: c5f5132c897b8c57f8561d06418ce35c047e084a8337bf1a71bbde30e9a704a1
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/store-sqlite-test.log
+    description: "P12 closeout @legion/store-sqlite test transcript: 171/171 pass."
+    sha256: e0b93fd0b4a6a1d186d3218648b0fc350ee2f28ab00c295cdf71e902df201170
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/protocol-test.log
+    description: "P12 closeout @legion/protocol test transcript: 55/55 pass."
+    sha256: 7dd6ded13247b4b3c34bc6df6b3419c1fc0587016ab743c40b912983bba8f155
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/artifacts-test.log
+    description: "P12 closeout @legion/artifacts test transcript: 59/59 pass."
+    sha256: 77f7b6b56070a9cf9dfd8fdb14f70e381d22b61c29a0bdd998eaf2dc21511f5b
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/typecheck.log
+    description: "P12 closeout workspace typecheck transcript: 10 workspace projects build/typecheck clean."
+    sha256: 0d003719d9d1f177c119af291ae6301118a23ecc7597efc9d5af27f3ea4e75f9
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/workspace-tests.log
+    description: "P12 closeout full workspace test transcript: root + recursive package suites pass, including cli-e2e 21/21."
+    sha256: 710abfc20a7db8e78c0017d7f1c9bbfa58d955e38d7405c8e404dec56e2c4f77
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/validate-next-precloseout.log
+    description: "P12 pre-closeout validate-next transcript captured immediately after implementation tasks."
+    sha256: 66b5a77229846bf1d8c11d10f30db4617486f8225d33067a48acc3fd623038d2
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/validate-next.log
+    description: "P12 final validate-next closeout transcript."
+    sha256: dbd62c5117c1b4396aa95d3a77e1c27b58042fb2e77d21dd90d10753d90eb90a
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/gitleaks-p12-diff.log
+    description: "P12 closeout final Phase 12 diff gitleaks pipe scan: no leaks found; evidence-index and generated gitleaks log excluded to avoid self-reference."
+    sha256: f59696d20b6156122e0a9377950c8c6c2feaeed132f9214f5c34e92b6f132ad1
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/command-summary.env
+    description: "P12 closeout command, version, branch, base, head, and timestamp summary."
+    sha256: d2183d0abc365c7163dfd7e9072a4f9309c6d4681045e3b641434f57304c4027
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/command-results.tsv
+    description: "P12 closeout command exit-code table."
+    sha256: 97fb54389565ab8626bac82dce31c49d3463b9933b6efc31b48d24a989e9e8fc
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/git-status.log
+    description: "P12 closeout pre-commit git status evidence."
+    sha256: 0e09097e8f934ae5cd97252e833422a49b14c0cf27dddc74420cd14ad9acb7cb
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/git-diff-stat.log
+    description: "P12 closeout staged diff stat evidence."
+    sha256: 2a786a3d06cfc007f6f5407ca441d2c840c7f45a7173cf7e204f30321316462e
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/git-status-after-gates.log
+    description: "P12 closeout git status after initial gate stack."
+    sha256: 8ba534affdcad69c798981036faf1657a775bd25f30d72cff5d937350e663acd
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/git-diff-stat-after-gates.log
+    description: "P12 closeout diff stat after initial gate stack."
+    sha256: b544e6ecb153a13f2d068053fd61cd1f53d56c38ac36a4eef99d4dd0189a63ff
+  - task: P12-CLOSEOUT
+    artifact: docs/next/evidence/P12-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 12 closeout integration report."
+    sha256: 9fbce50a080d18e8130599168404ede2e74d43e0ceb6d477e18e486fe765b4ef
+  - task: P12-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-12-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 12 closeout review with PASS verdict."
+    sha256: 16f59fcd6c4a7b23f6e1206dd3b182b288556d2df4a2e4cc9722919db800cdc8
+  - task: P12-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-12/ledger.yaml
+    description: "Final Phase 12 ledger marked DONE with P12-T01 through P12-T03 complete and blockers cleared."
+    sha256: f2569a4b4dee7998a120f9d877f536cce9f9770e8b9713fc3b7a1ce035023a39
+  - task: P12-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-12/HANDOFF.md
+    description: "Final Phase 12 handoff to Phase 13 and Migration/Host Beta cut-line assumptions."
+    sha256: 9e36fe21c4fad29b665302cc255ff7e0f23fa4339a7c881274eb0881cf8190fb
+  - task: P12-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 12 complete, Migration/Host Beta reached, and P13-T01 current."
+    sha256: a2a966ddd7302fff702a4c37d3ab92f11cfa9e1e08e186b9573060e9f85850e3

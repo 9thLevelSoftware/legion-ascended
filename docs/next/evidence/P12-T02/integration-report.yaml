@@ -1,0 +1,33 @@
+task: P12-T02
+phase: 12
+phase_id: P12
+status: DONE
+base_commit: "33ddf60180235dcb1a852838f6559a8cbecb7c11"
+evidence_branch: "codex/p03-t02-board-task-repository"
+branch_note: "Evidence was recorded on the reused PR integration branch, not a Phase 12-specific branch."
+summary: "Added an explicit compatibility-verify alias to the legacy migration CLI, documented it in the command help, and covered it with CLI e2e validation while preserving the existing dry-run/apply/rollback flow."
+verification:
+  local:
+    - name: cli-e2e-tests
+      command: "pnpm --filter @legion/cli-e2e test"
+      exit_code: 0
+      result: "21/21 pass; planning and Codex migrate flows still pass, and --verify is accepted as a dry-run alias"
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      result: "10 workspace projects typecheck clean"
+    - name: validate-next
+      command: "pnpm run validate:next"
+      exit_code: 0
+      result: "validate-next PASS; package boundaries, worker bundles, runtime scans, schemas, tests, npm pack, and pnpm pack all passed"
+deliverables:
+  - path: packages/cli/src/commands/migrate/index.ts
+    description: "Legacy migration help now advertises compatibility verify and treats --verify as a dry-run alias."
+  - path: packages/cli/src/index.ts
+    description: "Root CLI help now calls out verify-first legacy migration flows."
+  - path: apps/cli-e2e/test/cli-e2e.test.mjs
+    description: "Codex migration e2e now exercises --verify and asserts that it preserves the legacy source tree."
+findings:
+  - "Compatibility verification now has a first-class CLI flag while continuing to use the existing dry-run/report staging path."
+  - "The Codex migration path still preserves customized legacy bytes and rollback remains loss-free."
+  - "No package-boundary, typecheck, or validate-next regressions were introduced."

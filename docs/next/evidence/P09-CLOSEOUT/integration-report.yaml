@@ -1,0 +1,166 @@
+phase: P09
+status: PASS
+title: Merge Queue and Whole Change Acceptance closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: 657f14ef52974efb0b72f009f536f7105884ad9c
+head_before_closeout: 6a44c3259681d5b601907ffc62f40d660faf540d
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T09:43:20Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but the local core/protocol/artifacts/board/store-sqlite/typecheck/workspace/validate gates passed."
+  - "GitHub Windows Phase 1 CI initially exposed an EBUSY cleanup failure in packages/store-sqlite/test/whole-change-projector.test.mjs; the closeout fix closes the explicit DatabaseSync handle before temporary directory removal, and local store-sqlite + validate-next reruns passed."
+acceptance:
+  ordered_merge_queue:
+    status: PASS
+    evidence:
+      - packages/core/src/merge/contract.ts
+      - packages/core/src/merge/conflict.ts
+      - packages/core/src/merge/rebase.ts
+      - packages/core/src/merge/gate.ts
+      - packages/core/src/merge/orchestrator.ts
+      - packages/core/test/merge.test.mjs
+      - docs/next/evidence/P09-T01/merge-queue-snapshot.json
+    notes:
+      - "MergeQueueOrchestrator consumes accepted task-level review outputs, sorts sequence indices deterministically, detects duplicate/out-of-order entries, and returns a frozen snapshot/decision/result shape."
+      - "Path conflicts are detected before runner invocation; conflicts, rejected decisions, escalated decisions, missing runner, and empty queue states fail closed rather than silently integrating."
+      - "Each step carries stepSha256; the snapshot carries mergeQueueHash; the decision carries decisionSha256."
+  whole_change_acceptance_projection:
+    status: PASS
+    evidence:
+      - packages/board/src/whole-change/aggregator.ts
+      - packages/board/src/whole-change/reducer.ts
+      - packages/board/src/whole-change/projector.ts
+      - packages/store-sqlite/src/whole-change-projector.ts
+      - packages/board/test/whole-change-aggregator.test.mjs
+      - packages/store-sqlite/test/whole-change-projector.test.mjs
+      - docs/next/evidence/P09-T02/whole-change-snapshot.json
+    notes:
+      - "Outcome to board status map is non-invertible and canonical: integrated -> accepted, rejected -> rejected, escalated/blocked -> blocked."
+      - "Aggregator validation fails closed for empty queue, missing decision/snapshot, mergeQueueHash mismatch, missing workerContextHashes, or invalid acceptedBy."
+      - "Each run emits exactly one BoardEvent with aggregateKind=whole_change, payloadHash, aggregatorHash, mergeQueueHash, decisionSha256, workerContextHashes[], and idempotencyKey=<changeId>:<mergeQueueHash>:<eventType>."
+      - "Reducer replay is idempotent under duplicate events and ignores foreign aggregate kinds/ids; SQLite projector persists and verifies drift using the standard projection-store flow."
+  independent_review_actor_separation:
+    status: PASS
+    evidence:
+      - docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md
+      - docs/next/evidence/P09-T02/whole-change-snapshot.json
+      - docs/next/evidence/P09-CLOSEOUT/integration-report.yaml
+    notes:
+      - "P09 implementation assignee was legionworker; P09 closeout reviewer is GPT-5.5 / otrlead."
+      - "Serialized whole-change acceptedBy actor is ci-bot; reviewer is distinct from that actor."
+      - "No same-actor closeout/review issue blocks the Accepted Change Lifecycle cut line."
+  windows_ci_projector_cleanup:
+    status: PASS
+    evidence:
+      - packages/store-sqlite/test/whole-change-projector.test.mjs
+      - docs/next/evidence/P09-CLOSEOUT/store-sqlite-test.log
+      - docs/next/evidence/P09-CLOSEOUT/validate-next.log
+    notes:
+      - "GitHub Windows Phase 1 CI failed once with EBUSY while removing board.sqlite-wal from the P09 whole-change projector temporary database."
+      - "The test helper now closes the explicit DatabaseSync handle as well as the store handle in a finally block before temp directory cleanup."
+      - "Local store-sqlite and validate-next reruns passed after the cleanup fix."
+  phase_boundaries:
+    status: PASS
+    evidence:
+      - packages/core/test/merge.test.mjs
+      - packages/board/test/whole-change-aggregator.test.mjs
+      - packages/store-sqlite/test/whole-change-projector.test.mjs
+      - docs/next/evidence/P09-CLOSEOUT/validate-next.log
+    notes:
+      - "Core merge queue imports protocol types plus node:crypto hashing only; it does not import runtime drivers, Eve adapters, board persistence, node:sqlite, or process.env."
+      - "@legion/board owns logical whole-change aggregation/reduction and does not import @legion/store-sqlite."
+      - "@legion/store-sqlite wraps the board reducer/descriptor as the SQLite adapter layer; package-boundary checks pass."
+      - "Phase 8 fresh-context/per-task review and Phase 5 RuntimeDriver-neutrality assumptions are preserved."
+  verification_gates:
+    status: PASS
+    evidence:
+      - docs/next/evidence/P09-CLOSEOUT/core-test.log
+      - docs/next/evidence/P09-CLOSEOUT/protocol-test.log
+      - docs/next/evidence/P09-CLOSEOUT/artifacts-test.log
+      - docs/next/evidence/P09-CLOSEOUT/board-test.log
+      - docs/next/evidence/P09-CLOSEOUT/store-sqlite-test.log
+      - docs/next/evidence/P09-CLOSEOUT/typecheck.log
+      - docs/next/evidence/P09-CLOSEOUT/workspace-tests.log
+      - docs/next/evidence/P09-CLOSEOUT/validate-next.log
+      - docs/next/evidence/P09-CLOSEOUT/gitleaks-p09-diff.log
+    notes:
+      - "@legion/core: 226 pass / 0 fail."
+      - "@legion/protocol: 55 pass / 0 fail; @legion/artifacts: 59 pass / 0 fail."
+      - "@legion/board: 32 pass / 0 fail; @legion/store-sqlite: 135 pass / 0 fail after the Windows WAL-handle cleanup fix."
+      - "Workspace typecheck passed across 10 projects."
+      - "Workspace tests passed across root and recursive package suites including apps/cli-e2e 10/10."
+      - "validate-next passed all project gates."
+      - "Final Phase 9 diff gitleaks pipe scan found no leaks."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-09/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-09/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-09/HANDOFF.md
+      - docs/next/reviews/PHASE-09-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P09-T01 through P09-T03 complete and blockers cleared."
+      - "Accepted Change Lifecycle cut line is marked complete and Phase 10 begins at P10-T01 release observation."
+commands:
+  - name: core-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/core-test.log
+    result: "226 pass / 0 fail"
+  - name: protocol-test
+    command: "pnpm --filter @legion/protocol test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/protocol-test.log
+    result: "55 pass / 0 fail"
+  - name: artifacts-test
+    command: "pnpm --filter @legion/artifacts test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/artifacts-test.log
+    result: "59 pass / 0 fail"
+  - name: board-test
+    command: "pnpm --filter @legion/board test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/board-test.log
+    result: "32 pass / 0 fail"
+  - name: store-sqlite-test
+    command: "pnpm --filter @legion/store-sqlite test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/store-sqlite-test.log
+    result: "135 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/workspace-tests.log
+    result: "root + recursive package suites passed; cli-e2e 10/10 passed"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, and pack dry-run passed"
+  - name: gitleaks-p09-diff
+    command: "git diff --cached --binary 657f14ef52974efb0b72f009f536f7105884ad9c -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-09/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact"
+    exit_code: 0
+    evidence: docs/next/evidence/P09-CLOSEOUT/gitleaks-p09-diff.log
+    result: "No leaks found in final Phase 9 diff scan; phase-09/evidence-index.yaml excluded to avoid self-referential scan"
+blockers: []
+phase_10_handoff:
+  next_task: P10-T01
+  next_task_id: t_ec8b37af
+  summary: "Implement release observation canary monitoring, health checks, regression detection, and automated alerting on top of the accepted whole-change lifecycle."
+  contract_inputs_for_p10:
+    - "WholeChangeAcceptanceState.status is the releaseability gate; only accepted whole-change states should enter release observation."
+    - "Whole-change audit handles to preserve in release evidence: mergeQueueHash, decisionSha256, aggregatorHash, workerContextHashes[], payloadHash, idempotencyKey, finalHeadRef, acceptedAt, acceptedBy."
+    - "Blocked/rejected/escalated states remain non-releaseable until a fresh merge queue run emits a new event under a different mergeQueueHash."
+    - "P09 package boundaries remain fixed: core owns merge queue orchestration, board owns logical aggregation/reduction, store-sqlite owns SQLite projection persistence."
+  preserved_boundaries:
+    - "Do not mutate accepted whole-change state in place during release observation; append new events/evidence instead."
+    - "Keep monitoring/health-check command execution outside @legion/core and inject runtime-specific execution through provider-neutral adapters."
+    - "Carry Phase 8 per-task and Phase 9 whole-change hashes forward so canary failures can be traced back to the exact task run set."

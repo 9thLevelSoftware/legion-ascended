@@ -1869,16 +1869,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },
@@ -3907,16 +3954,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },
@@ -5947,16 +6041,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },
@@ -7988,16 +8129,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },
@@ -10029,16 +10217,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },
@@ -12070,16 +12305,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },
@@ -14111,16 +14393,63 @@
                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
                   "description": "Major.minor.patch schema version without leading zeroes."
                 },
-                "instructionsHash": {
+                "role": {
                   "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$",
-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "domain": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+                  }
+                },
+                "promptContentContract": {
+                  "type": "object",
+                  "properties": {
+                    "instructionsHash": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
+                    },
+                    "requiredSections": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "forbiddenSections": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "required": [
+                    "instructionsHash",
+                    "requiredSections",
+                    "forbiddenSections"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
                 "id",
                 "version",
-                "instructionsHash"
+                "role",
+                "domain",
+                "capabilities",
+                "promptContentContract"
               ],
               "additionalProperties": false
             },

@@ -1,0 +1,6 @@
+ M packages/core/src/index.ts
+?? docs/next/evidence/P08-T01/
+?? packages/core/src/dispatch/
+?? packages/core/test/dispatch-fixture.mjs
+?? packages/core/test/dispatch.test.mjs
+?? scripts/serialize-p08-worker-context.mjs

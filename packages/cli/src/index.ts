@@ -2,6 +2,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { handleBoardCommand } from "./commands/board/index.js";
 import { handleChangeCommand } from "./commands/change/index.js";
 import { handleMigrateCommand } from "./commands/migrate/index.js";
 import { handleProjectCommand } from "./commands/project/index.js";
@@ -20,7 +21,8 @@ const ROOT_HELP = `legion next <command>
 Commands:
   project   Initialize, validate, and inspect v9 project artifacts.
   change    Create, validate, diff, and archive v9 change bundles.
-  migrate   Dry-run, apply, and roll back legacy migration flows.
+  board     Create, inspect, and mutate board tasks, events, claims, and approvals.
+  migrate   Verify, dry-run, apply, and roll back legacy migration flows.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.
@@ -72,6 +74,8 @@ async function dispatch(context: CliContext): Promise<CliResult> {
       return handleProjectCommand(commandContext);
     case "change":
       return handleChangeCommand(commandContext);
+    case "board":
+      return handleBoardCommand(commandContext);
     case "migrate":
       return handleMigrateCommand(commandContext);
     default:

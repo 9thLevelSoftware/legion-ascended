@@ -1,0 +1,53 @@
+status: DONE
+phase: 3
+task: P03-T07
+summary: "Delivered the BoardApprovalRepository contract and the SQLite-backed SqliteBoardApprovalRepository covering create/get/list/grant/deny/expire/revoke with protocol-aligned statuses (requested/granted/denied/expired/revoked) mapped to lifecycle phases (pending/approved/revoked), run association via board_task_runs, idempotent creation via board_idempotency_records, expectedStatus CAS guards, and explicit terminal-status protection. Exported the approval surface from @legion/board-store and @legion/board, wired the board_approvals table and both required indexes into the v1 schema, bumped BOARD_SCHEMA_VERSION to 2 to reflect the v2 comment migration, and shipped 16 focused P03-T07 tests. Full workspace validation is green."
+files_changed:
+  - packages/board-store/src/index.ts
+  - packages/board/src/index.ts
+  - packages/store-sqlite/src/index.ts
+  - packages/store-sqlite/test/approvals.test.mjs
+  - packages/store-sqlite/test/migrations.test.mjs
+verification:
+  - command: "pnpm --filter @legion/store-sqlite test"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T07/store-sqlite-test.log (107/107 tests pass)"
+  - command: "pnpm -r typecheck"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T07/typecheck.log (all workspace packages green)"
+  - command: "pnpm run check:boundaries"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T07/package-boundaries.log"
+  - command: "pnpm run test"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T07/full-test-suite.log (root + 6 packages green)"
+  - command: "pnpm run validate:next"
+    result: PASS
+    evidence: "docs/next/evidence/P03-T07/full-validation.log"
+acceptance:
+  - criterion: "Provider-neutral BoardApprovalRepository contract in @legion/board-store with createApproval/getApproval/listApprovals/grantApproval/denyApproval/expireApproval/revokeApproval and the full set of approval status/lifecycle/transition/terminal constants and error sentinels."
+    result: PASS
+  - criterion: "SqliteBoardApprovalRepository stores requested/granted/denied/expired/revoked in board_approvals.status and derives pending/approved/revoked lifecyclePhase at read time."
+    result: PASS
+  - criterion: "Approvals are associated with a board task and an optional board_task_runs row; foreign keys enforce task existence and ON DELETE SET NULL for run association."
+    result: PASS
+  - criterion: "createApproval validates scope (effectClass, action, targetsJson), requester actor, and timestamps; supports caller-supplied approvalId or generates apv_<uuid>; rejects duplicates with BoardApprovalAlreadyExistsError; idempotency-key replays return the existing projection."
+    result: PASS
+  - criterion: "grantApproval/denyApproval/expireApproval/revokeApproval require expectedStatus and use WHERE status = ? CAS, surfacing BoardApprovalConcurrencyError on mismatch and BoardApprovalNotFoundError for missing rows."
+    result: PASS
+  - criterion: "Terminal statuses (denied/expired/revoked) reject further transitions with BoardApprovalIllegalStatusTransitionError or BoardApprovalTerminalStatusError; revoke is reachable from both requested and granted."
+    result: PASS
+  - criterion: "listApprovals filters by taskId, runId, status, and lifecyclePhase; terminal rows are included when any explicit filter is provided and excluded by default; includeTerminal and limit are honored."
+    result: PASS
+  - criterion: "All constants, types, and errors are re-exported from @legion/board."
+    result: PASS
+commits:
+  - "a7c6352 feat: P03-T07 board approvals lifecycle repository"
+  - "0c894c6 docs: P03-T07 update phase-03 ledger"
+risks_or_followups:
+  - "P03-T07 stores decisionReason on grant/deny/revoke input validation only; the v1 schema has no decision_reason column, so the read shape surfaces decisionReason=null. A future schema revision can add a persisted column if audit needs the exact reason text."
+  - "P03-T07 approvals currently do not check active board claims before grant; P03-T04's getActiveClaimForTask is available for callers that want to gate grants on a live lease."
+  - "The branch also contains in-progress P03-T03 event/projection, P03-T06 comment, and P03-T08 task-link surfaces that are not formally closed in the ledger but whose tests pass."
+blocker:
+  condition: none
+  decision_needed: none

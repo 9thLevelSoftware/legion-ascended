@@ -1,0 +1,9 @@
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository
+ M README.md
+ M apps/cli-e2e/test/cli-e2e.test.mjs
+ M checksums.sha256
+ M packages/cli/src/commands/migrate/index.ts
+ M packages/cli/src/index.ts
+?? docs/next/evidence/P12-CLOSEOUT/
+?? docs/next/evidence/P12-T02/
+?? tests/runtime-bridge-docs.test.mjs

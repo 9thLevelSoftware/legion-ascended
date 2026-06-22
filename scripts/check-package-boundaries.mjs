@@ -32,7 +32,7 @@ const DEFAULT_PACKAGES = [
     name: "@legion/store-sqlite",
     root: "packages/store-sqlite",
     src: "packages/store-sqlite/src",
-    allowedWorkspaceImports: ["@legion/board-store"],
+    allowedWorkspaceImports: ["@legion/board-store", "@legion/board"],
     allowedProviderOrStorageImports: ["node:sqlite"]
   },
   {
@@ -51,7 +51,15 @@ const DEFAULT_PACKAGES = [
     name: "@legion/cli",
     root: "packages/cli",
     src: "packages/cli/src",
-    allowedWorkspaceImports: ["@legion/protocol", "@legion/artifacts", "@legion/legacy-bridge"]
+    allowedWorkspaceImports: [
+      "@legion/protocol",
+      "@legion/artifacts",
+      "@legion/board",
+      "@legion/board-store",
+      "@legion/core",
+      "@legion/legacy-bridge",
+      "@legion/store-sqlite"
+    ]
   }
 ];
 

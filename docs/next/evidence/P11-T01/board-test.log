@@ -1,0 +1,15 @@
+✔ wholeChangeAcceptanceProjectionKey follows the whole_change.acceptance: prefix (0.146833ms)
+✔ parseWholeChangeAcceptanceProjectionKey round-trips the projection key (0.023708ms)
+✔ verifyWholeChangeAcceptanceState passes for aggregator-emitted state (0.072833ms)
+✔ verifyWholeChangeAcceptanceState fails for tampered state (0.061458ms)
+✔ WHOLE_CHANGE_ACCEPTANCE_KIND, WHOLE_CHANGE_EVENT_TYPES, and WHOLE_CHANGE_HASH_VERSION are exported (0.045875ms)
+✔ WholeChangeAcceptanceAggregator class is equivalent to buildWholeChangeAcceptance (0.086084ms)
+✔ sha256OfCanonical is order-independent (0.037458ms)
+ℹ tests 93
+ℹ suites 0
+ℹ pass 93
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 151.189375

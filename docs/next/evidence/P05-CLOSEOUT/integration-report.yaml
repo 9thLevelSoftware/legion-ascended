@@ -1,0 +1,104 @@
+phase: P05
+status: PASS
+title: Runtime Driver and Eve Integration closeout
+branch: codex/p03-t02-board-task-repository
+base_sha: 43d059902f5dc35fc2604e2bd22b076186d8f5d7
+head_before_closeout: d6616beb5c7d15f7e2b41c017d02f6efa03eac44
+reviewer: "GPT-5.5 / otrlead"
+completed_at: "2026-06-22T03:34:55Z"
+node_version: v26.0.0
+pnpm_version: 11.4.0
+accepted_warnings:
+  - "Local Node v26.0.0 is outside the declared package engine range >=24.0.0 <26; pnpm emitted warnings, but every final local gate passed."
+  - "runtime-legacy-cli is intentionally retained as a reduced-guarantee compatibility fallback; Phase 6+ must keep that degraded mode audit-visible."
+acceptance:
+  runtime_driver_contract:
+    status: PASS
+    evidence:
+      - packages/core/src/runtime/contract.ts
+      - packages/core/src/runtime/local-driver.ts
+      - packages/core/test/runtime-driver.test.mjs
+      - packages/core/test/runtime-e2e.test.mjs
+    notes:
+      - "RuntimeDriver exposes the seven ADR-004 lifecycle methods and imports only @legion/protocol types."
+      - "runtime-local emits provider-neutral protocol events and supports final-output artifact(handle) bundles."
+      - "Closeout review fixed final-output state/timestamp regressions before this phase cut."
+  runtime_eve_adapter:
+    status: PASS
+    evidence:
+      - packages/runtime-eve/src/driver/runtime-eve-driver.ts
+      - packages/runtime-eve/src/transport/contract.ts
+      - packages/runtime-eve/src/transport/fake-transport.ts
+      - packages/runtime-eve/src/transport/real-transport.ts
+      - packages/runtime-eve/test/public-contract.test.mjs
+    notes:
+      - "@legion/runtime-eve is isolated outside @legion/core and certified by 29 public-contract tests."
+      - "The adapter covers start/resume/cancel/inspect/stream/approve/artifact plus subagent, sandbox, and eval helpers."
+  fallback_policy:
+    status: PASS
+    evidence:
+      - packages/core/src/runtime/selector.ts
+      - packages/core/src/runtime/legacy-cli-driver.ts
+      - packages/core/test/runtime-selector.test.mjs
+      - packages/core/test/runtime-legacy-cli-driver.test.mjs
+      - packages/runtime-eve/src/fallback/select.ts
+      - docs/next/runtime-fallback-policy.md
+    notes:
+      - "Default precedence is runtime-eve -> runtime-local -> runtime-legacy-cli."
+      - "Requested-driver overrides fail closed when unavailable instead of silently downgrading."
+      - "runtime-legacy-cli satisfies the contract while advertising reduced guarantees."
+  runtime_import_boundary:
+    status: PASS
+    evidence:
+      - scripts/scan-runtime-import-boundaries.mjs
+      - tests/runtime-import-boundaries.test.mjs
+      - docs/next/evidence/P05-CLOSEOUT/validate-next.log
+    notes:
+      - "validate-next runs the runtime-import-boundaries step and reported: RuntimeDriver import-boundary scan passed (7 runtime files, 12 core files)."
+  phase_closeout_artifacts:
+    status: PASS
+    evidence:
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-05/ledger.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-05/evidence-index.yaml
+      - .legion/project/changes/LEGION-NEXT/implementation/phase-05/HANDOFF.md
+      - docs/next/reviews/PHASE-05-INDEPENDENT-REVIEW.md
+      - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    notes:
+      - "Ledger finalized with P05-T01 through P05-T04 complete and blockers cleared."
+      - "Phase 6 handoff points to P06-T01 baseline specification and oracle pipeline inputs."
+commands:
+  - name: core-runtime-test
+    command: "pnpm --filter @legion/core test"
+    exit_code: 0
+    evidence: docs/next/evidence/P05-CLOSEOUT/core-runtime-test.log
+    result: "127 pass / 0 fail"
+  - name: runtime-eve-test
+    command: "pnpm --filter @legion/runtime-eve test"
+    exit_code: 0
+    evidence: docs/next/evidence/P05-CLOSEOUT/runtime-eve-test.log
+    result: "29 pass / 0 fail"
+  - name: typecheck
+    command: "pnpm run typecheck"
+    exit_code: 0
+    evidence: docs/next/evidence/P05-CLOSEOUT/typecheck.log
+    result: "10 workspace projects built/typechecked"
+  - name: workspace-tests
+    command: "pnpm run test"
+    exit_code: 0
+    evidence: docs/next/evidence/P05-CLOSEOUT/workspace-tests.log
+    result: "532 pass / 0 fail"
+  - name: validate-next
+    command: "pnpm run validate:next"
+    exit_code: 0
+    evidence: docs/next/evidence/P05-CLOSEOUT/validate-next.log
+    result: "validate-next PASS; runtime-import-boundaries, schema/doc drift, package contents, tests, and pack dry-run passed"
+  - name: gitleaks-branch
+    command: "gitleaks detect --source . --log-opts=43d059902f5dc35fc2604e2bd22b076186d8f5d7..HEAD --redact --no-banner"
+    exit_code: 0
+    evidence: docs/next/evidence/P05-CLOSEOUT/gitleaks-branch.log
+    result: "10 commits scanned / no leaks found"
+blockers: []
+phase_6_handoff:
+  next_task: P06-T01
+  next_task_id: t_5008bcfb
+  summary: "Create baseline specification/oracle manifest artifacts against the Phase 5 RuntimeDriver/fallback surface, preserving artifact hashes and fail-closed oracle governance."

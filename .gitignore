@@ -8,3 +8,4 @@ coverage/
 .legion/var/
 .env
 .env.*
+.serena/

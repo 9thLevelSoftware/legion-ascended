@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "portfolio-adapter",
+  "tenantId": "tnt-portfolio-snapshot-001",
+  "scope": [],
+  "rebuiltThroughGlobalSequence": 8,
+  "eventCount": 8,
+  "projectRollups": {
+    "prj_portfolio_a": {
+      "projectId": "prj_portfolio_a",
+      "taskStatusCounts": {
+        "queued": 1,
+        "running": 1
+      },
+      "aggregateKindCounts": {
+        "task": 2,
+        "whole_change": 1,
+        "release_observation": 1
+      },
+      "taskCount": 2,
+      "terminalTaskCount": 0,
+      "activeTaskCount": 1,
+      "blockedTaskCount": 0,
+      "totalPriority": 1100,
+      "maxPriority": 800,
+      "priorityBands": {
+        "high": 1,
+        "mid": 1,
+        "low": 0
+      },
+      "claimedTaskCount": 0,
+      "lastEventType": "release.promoted",
+      "lastGlobalSequence": 6,
+      "lastOccurredAt": "2026-06-22T05:30:00.000Z",
+      "lastReleaseObservationStatus": "release.promoted",
+      "lastApprovalVerdict": "accepted"
+    },
+    "prj_portfolio_b": {
+      "projectId": "prj_portfolio_b",
+      "taskStatusCounts": {
+        "queued": 1
+      },
+      "aggregateKindCounts": {
+        "task": 1
+      },
+      "taskCount": 1,
+      "terminalTaskCount": 0,
+      "activeTaskCount": 0,
+      "blockedTaskCount": 0,
+      "totalPriority": 100,
+      "maxPriority": 100,
+      "priorityBands": {
+        "high": 0,
+        "mid": 0,
+        "low": 1
+      },
+      "claimedTaskCount": 0,
+      "lastEventType": "task.linked",
+      "lastGlobalSequence": 8,
+      "lastOccurredAt": "2026-06-22T05:03:00.000Z",
+      "lastReleaseObservationStatus": null,
+      "lastApprovalVerdict": null
+    }
+  },
+  "dependencyEdges": [
+    {
+      "relation": "depends_on",
+      "fromProjectId": "prj_portfolio_a",
+      "fromTaskId": "task-snap-a-1",
+      "toProjectId": "prj_portfolio_b",
+      "toTaskId": "task-snap-b-1",
+      "firstObservedAt": "1970-01-01T00:00:00.000Z",
+      "lastObservedAt": "1970-01-01T00:00:00.000Z",
+      "lastGlobalSequence": -1,
+      "eventCount": 1
+    },
+    {
+      "relation": "blocks",
+      "fromProjectId": "prj_portfolio_b",
+      "fromTaskId": "task-snap-b-1",
+      "toProjectId": "prj_portfolio_a",
+      "toTaskId": "task-snap-a-2",
+      "firstObservedAt": "1970-01-01T00:00:00.000Z",
+      "lastObservedAt": "1970-01-01T00:00:00.000Z",
+      "lastGlobalSequence": -1,
+      "eventCount": 1
+    }
+  ],
+  "resourceLedger": {
+    "priorityBands": {
+      "high": 1,
+      "mid": 1,
+      "low": 1
+    },
+    "priorityBandsByProject": {
+      "prj_portfolio_a": {
+        "high": 1,
+        "mid": 1,
+        "low": 0
+      },
+      "prj_portfolio_b": {
+        "high": 0,
+        "mid": 0,
+        "low": 1
+      }
+    },
+    "claimUtilizationByProject": {
+      "prj_portfolio_a": 0,
+      "prj_portfolio_b": 0
+    },
+    "blockedPressureByProject": {
+      "prj_portfolio_a": 0,
+      "prj_portfolio_b": 0
+    }
+  },
+  "crossProjectDependencyCount": 2,
+  "terminalProjectCount": 0,
+  "stateHash": "sha256:e5e8aee9932ecd5056ab85ac5ed63e597baee609784ab45d7ea05f04af611d82"
+}

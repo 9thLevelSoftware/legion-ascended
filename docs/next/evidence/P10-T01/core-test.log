@@ -1,0 +1,20 @@
+✔ P01-T07 matrices describe reducer outcomes for conditioned transitions (0.099875ms)
+✔ P01-T07 illegal transitions preserve state and emit no synthetic facts (0.090708ms)
+✔ P01-T07 retried tasks accept current-run evidence and review aggregate facts (0.156542ms)
+✔ P01-T07 stale and mismatched cross-aggregate task events are ignored (0.307959ms)
+✔ P01-T07 integration completions must match the recorded side-effect intent (0.075041ms)
+✔ P01-T07 task blockers accumulate in reducer and command decision (0.246792ms)
+✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.188125ms)
+✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.115792ms)
+✔ P01-T07 task replay is deterministic and equivalent from genesis (0.269625ms)
+✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.064792ms)
+✔ P01-T07 release guards reject stale observations and invalid rollback states (0.049125ms)
+✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.171042ms)
+ℹ tests 245
+ℹ suites 0
+ℹ pass 245
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 405.902

@@ -1,6 +1,8 @@
 # Baseline Harness Scripts
 
-These scripts are dependency-free PowerShell scaffolds for P00-T05 and P00-T06.
+The scripts are dependency-free PowerShell scaffolds for P00-T05 and P00-T06.
+
+The capture step writes `fixture-hashes.sha256` using lowercase SHA-256 digests over LF-normalized UTF-8 text with POSIX-relative paths so the corpus hash index stays stable across hosts.
 
 ## Capture
 

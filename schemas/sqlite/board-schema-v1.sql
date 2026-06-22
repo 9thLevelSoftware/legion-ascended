@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS board_claims (
   lease_expires_at TEXT NOT NULL,
   heartbeat_at TEXT NOT NULL,
   released_at TEXT,
-  release_reason TEXT CHECK (release_reason IS NULL OR release_reason IN ('completed', 'blocked', 'failed', 'canceled', 'expired')),
+  release_reason TEXT CHECK (release_reason IS NULL OR release_reason IN ('completed', 'blocked', 'failed', 'canceled', 'expired', 'superseded')),
   FOREIGN KEY (task_id) REFERENCES board_tasks(task_id) ON DELETE CASCADE
 );
 

@@ -1,0 +1,252 @@
+phase: 5
+phase_id: P05
+hash_basis: "SHA-256 over artifact bytes after P05-T04 closeout finalization; this index is excluded to avoid self-referential hashing."
+entries:
+  - task: P05-T01
+    artifact: packages/core/src/runtime/contract.ts
+    description: "Provider-neutral RuntimeDriver TypeScript interface with the seven ADR-004 lifecycle methods and result types"
+    sha256: d733cacc6f7afec5c934b6b2913db162941b9abce76174890cdedb422e56f65e
+  - task: P05-T01
+    artifact: packages/core/src/runtime/local-driver.ts
+    description: "Deterministic runtime-local driver emitting Legion protocol events and final-output artifact bundles"
+    sha256: 6d6c4625e58d4a25f20bbe0e5d84291ad5354bb26cde57ba924acfab30b66711
+  - task: P05-T01
+    artifact: packages/core/src/runtime/index.ts
+    description: "Public runtime barrel re-exporting the RuntimeDriver contract, local driver, fake/skeleton support, selector, and legacy driver"
+    sha256: 2d20beb56e7fb3e638f80b953c1fb5602dfad8cfd123827f74f3c633ab8e514b
+  - task: P05-T01
+    artifact: packages/core/src/runtime/skeleton.ts
+    description: "RuntimeDriverSkeleton abstract base declaring all seven ADR-004 methods and failing closed with NotImplementedError"
+    sha256: aac31646326a6a28c3bdd9a4925593c22b81f67281a77496d2ba2b1324ffca1a
+  - task: P05-T01
+    artifact: packages/core/src/runtime/fake-driver.ts
+    description: "FakeRuntimeDriver deterministic in-memory driver for unit and e2e contract tests"
+    sha256: 89bc5403515e01475b957cf2cda92dec600112893cee505caa1e64ef515c35fb
+  - task: P05-T01
+    artifact: packages/core/src/index.ts
+    description: "Core public barrel exposing the runtime module"
+    sha256: 72d13c433f02032b871889b7a45bfc4502fc45998e81e6c922cb6dd5a29c9a42
+  - task: P05-T01
+    artifact: packages/core/package.json
+    description: "Core package metadata with runtime driver build/test dependencies"
+    sha256: 9d19e3918e0c644e28c4d1890615ad3b4a23fa76de332d762d424ed7d9e5aed8
+  - task: P05-T01
+    artifact: packages/core/tsconfig.json
+    description: "Core TypeScript project configuration for runtime driver sources"
+    sha256: c37d74c7be7d8ba5167d1db83610986f9d3b11846c3d143dd565d7a20bb5e3ea
+  - task: P05-T01
+    artifact: packages/core/test/runtime-driver.test.mjs
+    description: "Runtime-local contract tests covering all ADR-004 lifecycle methods and error paths"
+    sha256: 936674baf36978d50a8a544fe135e0facba10d8d9a343c6a3884d50c94b618aa
+  - task: P05-T01
+    artifact: packages/core/test/runtime-e2e.test.mjs
+    description: "Runtime lifecycle e2e tests covering stream, approval, terminal, and artifact(handle) bundle flows"
+    sha256: 24a79fab2359bffc4295e7bfaf7ec00262dff9d28b1f279075e398ae265ea7cd
+  - task: P05-T01
+    artifact: packages/core/test/runtime-skeleton.test.mjs
+    description: "RuntimeDriverSkeleton and FakeRuntimeDriver smoke tests"
+    sha256: 178f0a0238ac2147cd2906f41ca666ffebd86dab33d1985f3466edc732c8215e
+  - task: P05-T01
+    artifact: packages/core/test/runtime-start-resume.test.mjs
+    description: "Focused start/resume acceptance scenario tests for FakeRuntimeDriver"
+    sha256: 0416de511f363e07f585489a6cddbc990f67c0bfe36ad340f032c4eb693c1f72
+  - task: P05-T01
+    artifact: packages/core/test/runtime-stream-approve.test.mjs
+    description: "Focused stream/approve acceptance scenario tests for FakeRuntimeDriver"
+    sha256: caf46053d6594dadd26bec804b2abae50b7485563399211ba2c328d2ed3c175a
+  - task: P05-T01
+    artifact: scripts/scan-runtime-import-boundaries.mjs
+    description: "ADR-004 import-boundary scan for core runtime isolation"
+    sha256: 2564b57afeceb3bd08bfdc5fb8227e22783cab7f098bfebee21cba313843b368
+  - task: P05-T01
+    artifact: tests/runtime-import-boundaries.test.mjs
+    description: "Fixture-driven regression tests pinning the runtime import-boundary rule catalog"
+    sha256: dddf33e44e66c4ad5c45d0ff05fcb8073feedfe15768d38449bfc696da2d561e
+  - task: P05-T01
+    artifact: scripts/validate-next.mjs
+    description: "validate-next pipeline with runtime-import-boundaries step wired into the gate order"
+    sha256: 6e7b7a7252afb27397557adb3f2fc692d986bcbcb15c12a9d4cd52183716229a
+  - task: P05-T01
+    artifact: tests/validate-next.test.mjs
+    description: "validate-next plan assertion covering the runtime-import-boundaries step"
+    sha256: 4bd63a88feba748786be8d86e3dd2d29965edcf601f574225036e5f234d64f0d
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/integration-report.yaml
+    description: "P05-T01 integration report for RuntimeDriver contract and runtime-local"
+    sha256: af3bc0e7332b91c3ae392dc6915bd927c37e5aa661a1ee487d8a1231f96ecacb
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/checksums.txt
+    description: "SHA-256 manifest for P05-T01 runtime source, tests, and evidence logs"
+    sha256: fbc8eb0056a3b845b688353eab3ad0a9009a1813d13cc7b7589c85c64b3d072f
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/runtime-driver-test.log
+    description: "P05-T01 @legion/core runtime-driver test transcript"
+    sha256: 86e87a47a662a9fcde5cb908869c75d2bf2731e7d32ab3cd5b25a058f5feb5b2
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/runtime-e2e-test.log
+    description: "P05-T01 runtime e2e test transcript"
+    sha256: e74899251f3955de8a1eb79b91112b5aac7530348d86d479f697d098b3d48154
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/runtime-import-boundaries-test.log
+    description: "P05-T01 runtime import-boundary unit-test transcript"
+    sha256: aff2ba5480bf9f9f9a86efcbe287f9a887476a1d441ac110cd4a26110461fbc8
+  - task: P05-T01
+    artifact: docs/next/evidence/P05-T01/validate-next.log
+    description: "P05-T01 validate-next transcript"
+    sha256: 74d2f68b48fad6358105f0a763d1ea004d627f51a671fe88cdca90af8c232209
+  - task: P05-T02
+    artifact: packages/runtime-eve/package.json
+    description: "@legion/runtime-eve package metadata with pinned Eve peer surface"
+    sha256: 4d3b614697181154cd3c1c324c05e1ebbc4edb66beb78619c30e28e2bee85398
+  - task: P05-T02
+    artifact: packages/runtime-eve/tsconfig.json
+    description: "@legion/runtime-eve TypeScript project configuration"
+    sha256: 00e41055f5eb460e3777d4477399bbe1669fe8e0a11b7e36b94029431dc65306
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/index.ts
+    description: "runtime-eve public barrel"
+    sha256: a8efafbd6eb569b3edaf43883a1e13be0c296ce94b33283d4f9f18ba85349adf
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/driver/runtime-eve-driver.ts
+    description: "Provider-neutral RuntimeEveDriver implementing the seven-method RuntimeDriver contract against the Eve transport boundary"
+    sha256: 517de2ed23e7f0ddce25e5d89fc16599037054c700c3566571e3efe6d7e28b70
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/contract.ts
+    description: "Transport boundary contract for Eve snapshots, authored results, pinned version checks, and sandbox/eval/subagent operations"
+    sha256: 3aa468621827087e01614c5631821d1a87fc2fd907e0879ae4c4c99b0f54bc2f
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/fake-transport.ts
+    description: "Deterministic in-memory Eve transport used by the public-contract certification suite"
+    sha256: 51863d2e5a94aa4ec4416af7b25fc998335b51ea7095e37f56861c47ff167487
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/real-transport.ts
+    description: "Pinned Eve transport wrapper using dynamic eve@0.11.7 import and dry-run synthetic authored results"
+    sha256: 91fca1f6d83ece0b5feb778a1facb60919245d0c2c774ab5659a2319438d1b98
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/transport/index.ts
+    description: "runtime-eve transport barrel"
+    sha256: 10e28c8373078c6d637517739c8baff583091fc6d43697c91f4c55f45fcec923
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/sandbox/open.ts
+    description: "runtime-eve sandbox helper preserving default-deny network policy assumptions"
+    sha256: 0ae09069bf44d195486eeced1921aefe4aca33cf130989d66a4d6cb001a12064
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/subagent/invoke.ts
+    description: "runtime-eve subagent helper built on the Eve transport boundary"
+    sha256: d7e09aae0eaf54851b330ab775671efd7cab042a6321763f610848f390e6b4fb
+  - task: P05-T02
+    artifact: packages/runtime-eve/src/eval/run.ts
+    description: "runtime-eve eval helper recording assertion-set evidence"
+    sha256: 1d236b982cd48f326830d48f0b9d0118f03097ee4ef034d6bb2b93cae521bfed
+  - task: P05-T02
+    artifact: packages/runtime-eve/test/public-contract.test.mjs
+    description: "Public-contract certification suite for runtime-eve lifecycle, subagent, sandbox, eval, and fallback surfaces"
+    sha256: f30fa01c3d5718bbd7d916486ed1db7e10ff77a0f72b40899977630ed7f23d64
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/integration-report.yaml
+    description: "P05-T02 integration report with PASS summary and artifact manifest"
+    sha256: c9b348f5b6c7a5fec2e8de8344eadbe2d5636bd6cefd5055d8e32e0da828b5d5
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/checksums.txt
+    description: "SHA-256 manifest for P05-T02 runtime-eve source, tests, and evidence logs"
+    sha256: df4d377f586dec4bd0872a73abcf1c8ff35752b761ea92a8d3b6a977e5235336
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/runtime-eve-test.log
+    description: "P05-T02 public-contract package test transcript"
+    sha256: 556b7d021da4d6884d1ccbaad4abcbde880da7dfc1f6ab5cc541abcc17a8c8da
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/test.log
+    description: "P05-T02 repo-wide test transcript"
+    sha256: 4a3e8a6be83fd56e7ad39f8dfe66faf5611de1def65a647f00e671cc53a4eb7f
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/typecheck.log
+    description: "P05-T02 repo-wide typecheck transcript"
+    sha256: ca10a1958c2ae0f9ee49501a73c6a940644b4ec571c2fb870d808ddf349a3881
+  - task: P05-T02
+    artifact: docs/next/evidence/P05-T02/validate-next.log
+    description: "P05-T02 validate-next transcript"
+    sha256: 148c20d655e2516eb5b8dbf7da6a593e613d1ce02812bface31a2eb0a123ac61
+  - task: P05-T03
+    artifact: packages/core/src/runtime/legacy-cli-driver.ts
+    description: "Reduced-guarantee runtime-legacy-cli compatibility driver satisfying the RuntimeDriver surface"
+    sha256: ca0f9280ef882fabc24456697b4625a4bfec59313ee1d67648824da6ee0b4762
+  - task: P05-T03
+    artifact: packages/core/src/runtime/selector.ts
+    description: "Core fallback selector pinning runtime-eve -> runtime-local -> runtime-legacy-cli precedence and forced-driver failure behavior"
+    sha256: 99466c6b74d523979cb7b503fd8bd9c957cdf383d71e7de90dde9da58b4965d3
+  - task: P05-T03
+    artifact: packages/core/test/runtime-legacy-cli-driver.test.mjs
+    description: "runtime-legacy-cli contract and reduced-guarantee regression tests"
+    sha256: 66431b7fa01859a0134084cc80fabe7de89b9a6105c2dbada5ee905869437937
+  - task: P05-T03
+    artifact: packages/core/test/runtime-selector.test.mjs
+    description: "Selector regression tests for precedence, forced-driver behavior, and failure cases"
+    sha256: 61b63b07b4fe063976b915a6bd35e3a7a4c8728ff03215c938fc47226f01c629
+  - task: P05-T03
+    artifact: packages/runtime-eve/src/fallback/select.ts
+    description: "runtime-eve package-level fallback selector for Eve/local driver selection"
+    sha256: 390bacda1376e4364a949931ae442d8c6db529484a554900a7a44d0b17b6b64d
+  - task: P05-T03
+    artifact: packages/runtime-eve/src/fallback/index.ts
+    description: "runtime-eve fallback selector barrel"
+    sha256: 5fb38ec034a1103618d170746e0d938ad3e638732e015d635ab849573c4cff9e
+  - task: P05-T03
+    artifact: docs/next/runtime-fallback-policy.md
+    description: "Runtime fallback policy documenting default precedence, overrides, and reduced legacy guarantees"
+    sha256: 19f1e89ffe9aca008f24c364ce36bd267511a0efdbddb3065cb02a07cdd3f69e
+  - task: P05-T03
+    artifact: pnpm-lock.yaml
+    description: "Workspace lockfile updated for the runtime-eve package and runtime driver dependencies"
+    sha256: 61ff22caf53034b5e553e91ac4a01255fc471d6b436e61ff1c076c10e95e945d
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/git-status.log
+    description: "Closeout git status, recent commits, Phase 5 diff stat, and unstaged diff stat"
+    sha256: 8eee2373e6732df8e963fe96f25a06ccc3685c78d9f31e67462574700de281b8
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/core-runtime-test.log
+    description: "Closeout @legion/core runtime test transcript showing 127 pass"
+    sha256: af6877afb4c4606092fb41875ef79ecfd05ab3234619b992c5a0ef77235114ea
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/runtime-eve-test.log
+    description: "Closeout @legion/runtime-eve public-contract test transcript showing 29 pass"
+    sha256: b71edd7b79289d82e87024a37b7679b15301517db7d08b34eeefbba67e276f8a
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/typecheck.log
+    description: "Closeout workspace typecheck transcript"
+    sha256: aa850b509898482831278e24197e6761274981880f1a54dabc05518e26b7019f
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/workspace-tests.log
+    description: "Closeout recursive workspace test transcript showing 532 pass"
+    sha256: 57ac302aae6bd04dd24e22faadc2e673a97750d523207e4d3a22ce4fe4e8e3cb
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/validate-next.log
+    description: "Closeout validate-next transcript with runtime-import-boundaries and all gates passing"
+    sha256: e183f0e5a1693a2e9ef5ae10a766303cfa74901405b844263e113b0a62d4a4a0
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/gitleaks-branch.log
+    description: "Closeout branch secret scan transcript showing no leaks"
+    sha256: c026fd0cfb1e78683133ccaade87d0477f93493851cdddc536a49de4d0cdd08a
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/command-summary.env
+    description: "Closeout command exit-code and timestamp summary"
+    sha256: 8d91540d826155eee82fb0c23ec3d3345642fb24b25bbe34cce58e60b755367b
+  - task: P05-CLOSEOUT
+    artifact: docs/next/evidence/P05-CLOSEOUT/integration-report.yaml
+    description: "Structured Phase 5 closeout integration report"
+    sha256: c195c89c43e3f2b34a2b50e54b719bf83117dd41755cc636fd10a747b03ba617
+  - task: P05-CLOSEOUT
+    artifact: docs/next/reviews/PHASE-05-INDEPENDENT-REVIEW.md
+    description: "Independent Phase 5 review with final PASS verdict"
+    sha256: f823c6981a2c4abdc8017b3e3d2c2b074dcd1707115c810c1b4386113d16333b
+  - task: P05-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-05/ledger.yaml
+    description: "Phase 5 ledger marked DONE with decisions, task statuses, evidence bundle, and blockers cleared"
+    sha256: e6f742de66171059b9052b12c1547e1fa889aea9db5acad6c1f1cb2070d1502f
+  - task: P05-CLOSEOUT
+    artifact: .legion/project/changes/LEGION-NEXT/implementation/phase-05/HANDOFF.md
+    description: "Phase 5 handoff to Phase 6 with durable operational kernel cut-line assumptions"
+    sha256: aa970d4fcee21cfd61052c9397b187e4c9187a556b2b08b999deb683f4940067
+  - task: P05-CLOSEOUT
+    artifact: docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+    description: "Kanban manifest updated to mark Phase 5 complete and point at P06-T01 as next work"
+    sha256: 00c07ec5aaebc5893f3aa8bf2b772fe2b9a2d2fe0d61567257b2479524af9674

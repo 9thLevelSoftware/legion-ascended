@@ -1,0 +1,15 @@
+✔ P01-T07 task blockers accumulate in reducer and command decision (0.248041ms)
+✔ P01-T07 task completion command requires expected generation, evidence, and passed review (0.176833ms)
+✔ P01-T07 task command decisions reject misrouted envelopes and terminal invalidation (0.131917ms)
+✔ P01-T07 task replay is deterministic and equivalent from genesis (0.287583ms)
+✔ P01-T07 terminal tasks do not resume without a higher-generation retry event (0.078583ms)
+✔ P01-T07 release guards reject stale observations and invalid rollback states (0.052541ms)
+✔ P01-T07 stable state stringify sorts keys bytewise and rejects non-serializable roots (0.18025ms)
+ℹ tests 185
+ℹ suites 0
+ℹ pass 185
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 357.050166

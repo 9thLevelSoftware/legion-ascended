@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legion baseline score schema",
   "type": "object",
   "required": ["schema_version", "run_id", "scenario_id", "deterministic_total", "judged_total", "total", "terminal_status", "critical_failure", "dimensions"],
   "properties": {
@@ -11,7 +12,32 @@
     "total": { "type": "number", "minimum": 0, "maximum": 100 },
     "terminal_status": { "enum": ["dry-run", "passed", "failed", "interrupted", "blocked"] },
     "critical_failure": { "type": "boolean" },
-    "dimensions": { "type": "object" }
+    "dimensions": {
+      "type": "object",
+      "required": [
+        "build_integrity",
+        "acceptance_behavior",
+        "regression_control",
+        "scope_discipline",
+        "recovery_behavior",
+        "duplicate_work_control",
+        "artifact_traceability",
+        "maintainability",
+        "requirement_fidelity"
+      ],
+      "properties": {
+        "build_integrity": { "type": ["number", "string", "null"] },
+        "acceptance_behavior": { "type": ["number", "string", "null"] },
+        "regression_control": { "type": ["number", "string", "null"] },
+        "scope_discipline": { "type": ["number", "string", "null"] },
+        "recovery_behavior": { "type": ["number", "string", "null"] },
+        "duplicate_work_control": { "type": ["number", "string", "null"] },
+        "artifact_traceability": { "type": ["number", "string", "null"] },
+        "maintainability": { "type": ["number", "string", "null"] },
+        "requirement_fidelity": { "type": ["number", "string", "null"] }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

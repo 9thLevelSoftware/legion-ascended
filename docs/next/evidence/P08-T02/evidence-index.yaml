@@ -1,0 +1,93 @@
+phase: 8
+phase_id: P08
+task: P08-T02
+hash_basis: "SHA-256 over artifact bytes after P08-T02 closeout finalization; this index is excluded to avoid self-referential hashing."
+entries:
+  - task: P08-T02
+    artifact: packages/core/src/review/contract.ts
+    description: "Per-task review pipeline typed contract: REVIEW_PIPELINE_KEYS allowlist, ReviewPipelineIssue codes, PerTaskReviewPolicy, ReviewGateId union, ReviewerVerdicts, AcceptanceDecision outcome."
+    sha256: 1c948e2a882c3ae31c196a98aec8fa29987fc78e843a4f9b19452ffa947f7726
+  - task: P08-T02
+    artifact: packages/core/src/review/hash.ts
+    description: "Deterministic SHA-256 derivation for verification reports, review records, acceptance decisions, and the top-level pipeline hash."
+    sha256: 6bd233479c47de34e4ab644b65110660cba063518dc1e08f81fd51d33d1c617c
+  - task: P08-T02
+    artifact: packages/core/src/review/verification.ts
+    description: "Deterministic verification runner: walks TaskContract.verification[], delegates to injected runner, captures per-command results, returns frozen VerificationReport."
+    sha256: 38851596676a62d445614cd9b51314c4a06a9c27edaebd135554bfc9fdbe6fc2
+  - task: P08-T02
+    artifact: packages/core/src/review/reviewer.ts
+    description: "Independent reviewer surface: enforces reviewer != implementer, blocking findings must reference evidence, derived summary, frozen ReviewRecord."
+    sha256: 760a0505188fef5a5f4869602862969c30a14adaa648d3cc095aa89b9416120e
+  - task: P08-T02
+    artifact: packages/core/src/review/gate.ts
+    description: "ADR-006 acceptance gate evaluator: maps risk tier to per-task-review gate set; emits AcceptanceDecision with outcome accepted/rejected/escalated."
+    sha256: 2961b7516a522a9ca453bba40416b63b3bfe17a083c9f7b2036158bcc3790657
+  - task: P08-T02
+    artifact: packages/core/src/review/pipeline.ts
+    description: "PerTaskReviewPipeline orchestrator: verification → review → acceptance gate; derives reviewPipelineHash; deeply freezes every output shape."
+    sha256: 8376df84512096918bdb50a423d03d6379fc4716fb118670400bee5772741ea7
+  - task: P08-T02
+    artifact: packages/core/src/review/index.ts
+    description: "Barrel re-exports for the per-task review pipeline surface."
+    sha256: bf4fee6c1c49446061246e2fd4921f74e394f772d735209e5966471a950fa8ae
+  - task: P08-T02
+    artifact: packages/core/src/index.ts
+    description: "@legion/core index now re-exports ./review/index.js alongside dispatch, gates, risk, runtime, and state-machines."
+    sha256: f7868bc11f4b84aa8e3d77a9255b5342def21e1b7d2d5824ad110364e1f40d07
+  - task: P08-T02
+    artifact: packages/core/test/review.test.mjs
+    description: "33 unit tests covering happy paths, all failure modes, R0-R3 tier handling, deterministic verification, reviewer independence, evidence anchoring, provider-neutrality static scan, output shape allowlist, deep-freeze invariants, hash determinism, and renderer stability."
+    sha256: ef1981758392a4ec2c1003b3680528a8d178f5a52a60d73ce1539f3e5a857774
+  - task: P08-T02
+    artifact: packages/core/test/review-fixture.mjs
+    description: "Fixture builders (reviewer input, implementer actor, passing/failing/throwing runner, dispatched WorkerContext factory)."
+    sha256: 339d035f9b3014dd6fd93900105d5ca47f7a6ad7f8cae4a53c2436f159971b3d
+  - task: P08-T02
+    artifact: scripts/serialize-p08-t02-review.mjs
+    description: "Reproducible script that serializes a real per-task review pipeline result to docs/next/evidence/P08-T02/review-pipeline-result.json."
+    sha256: 0b40133eab76f31e7b0ba10f3a97263cb4b72803276b704ed6a89d7f3d1241d3
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/review-pipeline-result.json
+    description: "Canonical per-task review pipeline result for an R2 task: schemaVersion, kind, workerContextHash, isolationTag, verification report (passed=true), review record (independent=true, three-pass verdicts, one minor finding), acceptance decision (outcome=accepted, tier=R2, decisionSha256, rationale)."
+    sha256: 9893dfcf0406b9c6502f5c82a409c85c264d9f470257a1514b85e1f0b48e2be5
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/core-test.log
+    description: "@legion/core test transcript showing 185 pass / 0 fail (33 new P08-T02 tests added)."
+    sha256: 24bce0fbdbb13e01161a9900ed6af95bb3c31e9aad17ae1c7d65a6e1e68d250f
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/protocol-test.log
+    description: "@legion/protocol test transcript showing 55 pass / 0 fail (no regression)."
+    sha256: 59ed587c04787d218ea18fc88f83582d8b6eb00115e58945a968f3772ce48891
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/artifacts-test.log
+    description: "@legion/artifacts test transcript showing 59 pass / 0 fail (no regression)."
+    sha256: 943af74f8b63b833c09f9cc6c0658a53fc684cf83ac2f0d7e0f5b10a32f40a22
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/typecheck.log
+    description: "Workspace typecheck transcript — 10/10 projects PASS."
+    sha256: 88b1e5b80deafebd4ee2b09b4e182be34fc18825ceff164f38ec41d6cc3c80ab
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/workspace-tests.log
+    description: "Full workspace test transcript — 596 pass / 0 fail across 9 packages."
+    sha256: c8db3a9e621c5dd77059dd2086f290fae678bd49b55aacaf1fba49d6b8de431b
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/validate-next.log
+    description: "validate-next closeout transcript — all 13 validate-next steps PASS (typecheck, package boundaries, worker bundles, default-runtime scan, runtime-import boundaries, schema/doc drift, package contents, workspace tests, pack dry-run)."
+    sha256: 039878cc3343c6dd8e8abc0a241eaab4f14a2636e7cdaf5767c71caf7b4492eb
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/gitleaks-p08-t02.log
+    description: "Targeted P08-T02 staged-diff secret scan transcript — no leaks found."
+    sha256: 05c049bd0ba41e7cd4bb420fceaeed45b26386e6b746524071449744a20daa5f
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/command-summary.env
+    description: "Per-step exit-code and version summary for the closeout verification commands."
+    sha256: 565b9e72ba1312214ee51af80d04124f2d66f73a5c1eb6a5d4fd95f4e211189a
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/git-status.log
+    description: "Pre-commit git status and untracked file capture for the P08-T02 worktree."
+    sha256: ee94644c94904807e916080a02edb7288bdaec71a72d883af2dd74e78a444e6b
+  - task: P08-T02
+    artifact: docs/next/evidence/P08-T02/git-diff-stat.log
+    description: "Pre-commit git diff stat against base commit 3096d5f."
+    sha256: df5738e3e39f7569790211088b36253694c491be9b474c9c2a0908b5046cc590

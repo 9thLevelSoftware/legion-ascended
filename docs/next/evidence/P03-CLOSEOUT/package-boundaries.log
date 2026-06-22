@@ -1,0 +1,7 @@
+# command: pnpm run check:boundaries
+# started_at: 2026-06-21T19:28:33-04:00
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+# exit_code: 0
+# ended_at: 2026-06-21T19:28:33-04:00

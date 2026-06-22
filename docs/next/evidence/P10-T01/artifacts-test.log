@@ -1,0 +1,20 @@
+✔ P02-T03 rejects duplicate requirement IDs across specs with both source locations (123.769ms)
+✔ P02-T03 classifies semantic spec index diffs (0.66125ms)
+✔ P02-T03 blocks stale edits and supports rename and deprecate operations (275.937ms)
+✔ P02-T03 validation reports unresolved placeholders, contradictory status, and orphan trace IDs (82.88725ms)
+✔ P02-T06 validates many-to-many requirement, oracle, task, evidence, and review coverage deterministically (465.947ms)
+✔ P02-T06 accepts shared oracle coverage without false orphan diagnostics (436.59275ms)
+✔ P02-T06 reports calibrated broken traceability chains with exact diagnostics (392.680667ms)
+✔ P02-T06 applies trace integrity checks to evidence references (370.295083ms)
+✔ P02-T06 reports stale artifact input revisions after downstream sources change (365.382083ms)
+✔ P02-T06 cycle diagnostics name only nodes participating in the cycle (385.964ms)
+✔ P02-T06 impact analysis names only downstream artifacts affected by the changed source (259.334166ms)
+✔ P02-T06 impact analysis carries changed design artifacts through tasks, evidence, and reviews (201.1285ms)
+ℹ tests 59
+ℹ suites 0
+ℹ pass 59
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3222.58025

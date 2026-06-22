@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "whole-change-acceptance",
+  "changeId": "chg-snapshot-evidence-001",
+  "mergeQueueHash": "sha256:7d56aaccc3a483b91df7de00516ff30ce29414cc9b13cdbc30e55ea59ff72d54",
+  "decisionSha256": "sha256:fa411fe6e33ef7c08721c5699cf0cf89f75d3e60311e82f4844d516018f29476",
+  "outcome": "integrated",
+  "status": "accepted",
+  "aggregatorHash": "sha256:9f1c15946ab90f2f810f53f6c76c748caa5e7ef4fe3cb259af0db9ef538223cf",
+  "acceptedAt": "2026-06-22T04:00:00.000Z",
+  "state": {
+    "schemaVersion": "1.0.0",
+    "kind": "whole-change-acceptance",
+    "changeId": "chg-snapshot-evidence-001",
+    "mergeQueueHash": "sha256:7d56aaccc3a483b91df7de00516ff30ce29414cc9b13cdbc30e55ea59ff72d54",
+    "decisionSha256": "sha256:fa411fe6e33ef7c08721c5699cf0cf89f75d3e60311e82f4844d516018f29476",
+    "outcome": "integrated",
+    "status": "accepted",
+    "acceptedEntries": [
+      0,
+      1
+    ],
+    "rejectedEntries": [],
+    "escalatedEntries": [],
+    "conflictEntries": [],
+    "finalHeadRef": "refs/heads/snapshot-evidence",
+    "acceptedAt": "2026-06-22T04:00:00.000Z",
+    "acceptedBy": "ci-bot",
+    "reason": "snapshot evidence aggregator run",
+    "workerContextHashes": [
+      "sha256:bd767e80eee63bc9d977625c0eeb6206c6185eaaa77decb9874daa5aee01855a",
+      "sha256:bd767e80eee63bc9d977625c0eeb6206c6185eaaa77decb9874daa5aee01855a"
+    ],
+    "aggregatorHash": "sha256:9f1c15946ab90f2f810f53f6c76c748caa5e7ef4fe3cb259af0db9ef538223cf"
+  },
+  "events": [
+    {
+      "schemaVersion": "0.1.0",
+      "aggregateKind": "whole_change",
+      "aggregateId": "chg-snapshot-evidence-001:sha256:7d56aaccc3a483b91df7de00516ff30ce29414cc9b13cdbc30e55ea59ff72d54",
+      "aggregateSequence": 1,
+      "globalSequence": 0,
+      "eventType": "change.accepted",
+      "eventVersion": "0.1.0",
+      "payload": {
+        "changeId": "chg-snapshot-evidence-001",
+        "mergeQueueHash": "sha256:7d56aaccc3a483b91df7de00516ff30ce29414cc9b13cdbc30e55ea59ff72d54",
+        "decisionSha256": "sha256:fa411fe6e33ef7c08721c5699cf0cf89f75d3e60311e82f4844d516018f29476",
+        "outcome": "integrated",
+        "status": "accepted",
+        "acceptedEntries": [
+          0,
+          1
+        ],
+        "rejectedEntries": [],
+        "escalatedEntries": [],
+        "conflictEntries": [],
+        "finalHeadRef": "refs/heads/snapshot-evidence",
+        "workerContextHashes": [
+          "sha256:bd767e80eee63bc9d977625c0eeb6206c6185eaaa77decb9874daa5aee01855a",
+          "sha256:bd767e80eee63bc9d977625c0eeb6206c6185eaaa77decb9874daa5aee01855a"
+        ],
+        "aggregatorHash": "sha256:9f1c15946ab90f2f810f53f6c76c748caa5e7ef4fe3cb259af0db9ef538223cf",
+        "acceptedAt": "2026-06-22T04:00:00.000Z",
+        "acceptedBy": "ci-bot",
+        "reason": "snapshot evidence aggregator run"
+      },
+      "payloadHash": "sha256:9620cc2fcc86b4af89ebfaccb6b7a01087c9c99cea9390b5cece35ae904be6b6",
+      "occurredAt": "2026-06-22T04:00:00.000Z",
+      "idempotencyKey": "chg-snapshot-evidence-001:sha256:7d56aaccc3a483b91df7de00516ff30ce29414cc9b13cdbc30e55ea59ff72d54:change.accepted",
+      "correlationId": null,
+      "causationId": null
+    }
+  ]
+}

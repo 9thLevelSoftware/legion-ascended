@@ -39,13 +39,29 @@ export const runtimeManifestSchema = z.strictObject({
 
 export type RuntimeManifest = z.infer<typeof runtimeManifestSchema>;
 
+const workerBundleRoleSchema = z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid worker role ID");
+const workerBundleDomainSchema = z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid worker domain ID");
+const workerBundleCapabilitySchema = z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid worker capability ID");
+
+export const workerBundlePromptContentContractSchema = z.strictObject({
+  instructionsHash: contentHashSchema,
+  requiredSections: z.array(z.string().min(1).max(128)).min(1),
+  forbiddenSections: z.array(z.string().min(1).max(128))
+});
+
+export type WorkerBundlePromptContentContract = z.infer<typeof workerBundlePromptContentContractSchema>;
+
 export const workerBundleManifestSchema = z.strictObject({
   id: z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid worker bundle ID"),
   version: schemaVersionSchema,
-  instructionsHash: contentHashSchema
+  role: workerBundleRoleSchema,
+  domain: workerBundleDomainSchema,
+  capabilities: z.array(workerBundleCapabilitySchema).min(1),
+  promptContentContract: workerBundlePromptContentContractSchema
 });
 
 export type WorkerBundleManifest = z.infer<typeof workerBundleManifestSchema>;
+export type WorkerBundle = WorkerBundleManifest;
 
 export const modelManifestSchema = z.strictObject({
   provider: z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid model provider ID"),

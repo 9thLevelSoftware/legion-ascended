@@ -1,0 +1,41 @@
+$ pnpm --filter @legion/core build && pnpm run build && node --test --test-reporter=spec "test/**/*.test.mjs"
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ tsc -p tsconfig.json
+$ tsc -p tsconfig.json
+✔ RuntimeEveDriver exports the same seven-method surface as the ADR-004 contract (1.152708ms)
+✔ start: defines the agent on Eve, freezes the manifest hash, and emits run.created + run.started (1.179834ms)
+✔ start: rejects requests that do not match the runtime-eve driver id (0.257459ms)
+✔ start: rejects duplicate run ids with a structured duplicate_run failure (0.127667ms)
+✔ resume: advances the checkpoint generation through Eve's continuation token (0.194083ms)
+✔ resume: rejects a stale checkpoint generation (0.101459ms)
+✔ cancel: terminates the Eve session and emits run.finished.v1 with status canceled (0.211709ms)
+✔ cancel: rejects a re-cancel with an already_canceled failure (0.121708ms)
+✔ inspect: returns provider-neutral status, sandbox, and artifact references (0.105041ms)
+✔ stream: yields the recorded progress and translated Eve events (0.327459ms)
+✔ approve: delivers the approval to Eve and emits approval.requested + approval.granted (0.218334ms)
+✔ approve: is idempotent for the same approvalId, decidedAt, and decidedBy (0.099583ms)
+✔ approve: rejects a run that is not in started or needs_human state (0.091291ms)
+✔ artifact: register mode appends to the run's artifact list and emits an artifact_registered stream event (0.068333ms)
+✔ artifact: final-output mode requires a terminal run and rejects non-terminal calls with state snapshot (0.059166ms)
+✔ artifact: final-output mode returns the terminal bundle after cancel (0.102083ms)
+✔ subagent: registerAndInvokeSubagent delegates to Eve's defineRemoteAgent and records the invocation (0.187333ms)
+✔ sandbox: openRunSandbox returns the Eve sandbox execution and asserts network egress is denied by default (0.084666ms)
+✔ sandbox: R0 policy tier gets a secret canary env on the Eve sandbox (0.054375ms)
+✔ eval: runRunEval records the assertion set and emits a progress stream event (0.119791ms)
+✔ fallback: selectDriver picks runtime-local when Eve is unavailable (0.048417ms)
+✔ fallback: selectDriver picks runtime-eve when Eve is installed and no preferred driver is set (0.020959ms)
+✔ fallback: preferredDriver falls back to runtime-local when the preferred driver is unavailable (0.060041ms)
+✔ fallback: checkEveTransportVersion returns null when the transport is pinned to the canonical version (0.024291ms)
+✔ runtime-eve produces the same seven-method shape that runtime-local satisfies (0.189334ms)
+✔ runtime-local and runtime-eve share the same driverId-version field semantics (0.039542ms)
+✔ runtime-eve derives a deterministic run id from the request seed (0.054875ms)
+✔ RealEveTransport returns a synthetic authored result in dry-run mode (no worktree root) (1.07475ms)
+✔ RealEveTransport: dynamic import works against the pinned eve@0.11.7 peer dependency (0.066291ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 123.687584

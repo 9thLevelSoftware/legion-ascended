@@ -1,0 +1,602 @@
+$ pnpm run validate:next
+
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/validate-next.mjs
+
+[validate:next] typecheck: pnpm run typecheck
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && pnpm -r typecheck
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm -r build
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 9 of 10 workspace projects
+packages/protocol build$ tsc -p tsconfig.json
+packages/protocol build: Done
+packages/board-store build$ tsc -p tsconfig.json
+packages/core build$ tsc -p tsconfig.json
+packages/artifacts build$ tsc -p tsconfig.json
+packages/board-store build: Done
+packages/core build: Done
+packages/artifacts build: Done
+packages/board build$ tsc -p tsconfig.json
+packages/legacy-bridge build$ tsc -p tsconfig.json
+packages/store-sqlite build$ tsc -p tsconfig.json
+packages/board build: Done
+packages/store-sqlite build: Done
+packages/legacy-bridge build: Done
+packages/cli build$ tsc -p tsconfig.json
+packages/cli build: Done
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+Scope: 9 of 10 workspace projects
+packages/protocol typecheck$ tsc -p tsconfig.json --noEmit
+packages/protocol typecheck: Done
+packages/artifacts typecheck$ tsc -p tsconfig.json --noEmit
+packages/board-store typecheck$ tsc -p tsconfig.json --noEmit
+packages/core typecheck$ tsc -p tsconfig.json --noEmit
+packages/board-store typecheck: Done
+packages/core typecheck: Done
+packages/artifacts typecheck: Done
+packages/legacy-bridge typecheck$ tsc -p tsconfig.json --noEmit
+packages/store-sqlite typecheck$ tsc -p tsconfig.json --noEmit
+packages/board typecheck$ tsc -p tsconfig.json --noEmit
+packages/board typecheck: Done
+packages/store-sqlite typecheck: Done
+packages/legacy-bridge typecheck: Done
+packages/cli typecheck$ tsc -p tsconfig.json --noEmit
+packages/cli typecheck: Done
+
+[validate:next] package-boundaries: pnpm run check:boundaries
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/check-package-boundaries.mjs
+Package boundary check passed.
+
+[validate:next] worker-bundles: pnpm run check:worker-bundles
+[WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ node scripts/validate-worker-bundles.mjs
+
+[validate-worker-bundles] schema validation
+  pass (0 violation(s))
+[validate-worker-bundles] capability completeness
+  pass (0 violation(s))
+[validate-worker-bundles] domain-pack integrity
+  pass (0 violation(s))
+
+[validate-worker-bundles] all worker bundles pass
+
+[validate:next] default-runtime-scan: node scripts/scan-default-runtime.mjs
+[scan-default-runtime] files=15 violations=0
+
+[validate:next] schema-generation: pnpm --filter @legion/protocol generate:schemas
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && node scripts/generate-primitives-json-schema.mjs
+$ tsc -p tsconfig.json
+
+[validate:next] artifact-schema-generation: pnpm --filter @legion/artifacts generate:schemas
+.                                        | [WARN] Unsupported engine: wanted: {"node":">=24.0.0 <26"} (current: {"node":"v26.0.0","pnpm":"11.4.0"})
+$ pnpm run build && node scripts/generate-artifacts-json-schema.mjs
+$ tsc -p tsconfig.json
+
+[validate:next] protocol-docs: node scripts/validate-next.mjs --generate-protocol-docs
+
+[validate:next] schema-doc-drift: node scripts/validate-next.mjs --check-generated-drift
+diff --git a/schemas/entities/fixtures/lifecycle-valid.json b/schemas/entities/fixtures/lifecycle-valid.json
+index d8eb340..fd97cd6 100644
+--- a/schemas/entities/fixtures/lifecycle-valid.json
++++ b/schemas/entities/fixtures/lifecycle-valid.json
+@@ -138,7 +138,26 @@
+       "workerBundle": {
+         "id": "implementer",
+         "version": "1.0.0",
+-        "instructionsHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "role": "implementer",
++        "domain": "protocol-core",
++        "capabilities": [
++          "schema-definition",
++          "schema-validation"
++        ],
++        "promptContentContract": {
++          "instructionsHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++          "requiredSections": [
++            "role",
++            "domain",
++            "capabilities",
++            "prompt-content-contract"
++          ],
++          "forbiddenSections": [
++            "biography",
++            "tone",
++            "personality"
++          ]
++        }
+       },
+       "model": {
+         "provider": "openai",
+diff --git a/schemas/entities/task-run.schema.json b/schemas/entities/task-run.schema.json
+index 169f596..305fc4e 100644
+--- a/schemas/entities/task-run.schema.json
++++ b/schemas/entities/task-run.schema.json
+@@ -1869,16 +1869,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+@@ -3907,16 +3954,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+@@ -5947,16 +6041,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+@@ -7988,16 +8129,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+@@ -10029,16 +10217,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+@@ -12070,16 +12305,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+@@ -14111,16 +14393,63 @@
+                   "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                   "description": "Major.minor.patch schema version without leading zeroes."
+                 },
+-                "instructionsHash": {
++                "role": {
+                   "type": "string",
+-                  "pattern": "^sha256:[0-9a-f]{64}$",
+-                  "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "domain": {
++                  "type": "string",
++                  "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                },
++                "capabilities": {
++                  "minItems": 1,
++                  "type": "array",
++                  "items": {
++                    "type": "string",
++                    "pattern": "^[a-z][a-z0-9._-]{1,63}$"
++                  }
++                },
++                "promptContentContract": {
++                  "type": "object",
++                  "properties": {
++                    "instructionsHash": {
++                      "type": "string",
++                      "pattern": "^sha256:[0-9a-f]{64}$",
++                      "description": "Lowercase SHA-256 content hash with sha256: prefix."
++                    },
++                    "requiredSections": {
++                      "minItems": 1,
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    },
++                    "forbiddenSections": {
++                      "type": "array",
++                      "items": {
++                        "type": "string",
++                        "minLength": 1,
++                        "maxLength": 128
++                      }
++                    }
++                  },
++                  "required": [
++                    "instructionsHash",
++                    "requiredSections",
++                    "forbiddenSections"
++                  ],
++                  "additionalProperties": false
+                 }
+               },
+               "required": [
+                 "id",
+                 "version",
+-                "instructionsHash"
++                "role",
++                "domain",
++                "capabilities",
++                "promptContentContract"
+               ],
+               "additionalProperties": false
+             },
+Error: Command failed (1): git diff --exit-code -- schemas docs/next/protocol
+    at ChildProcess.<anonymous> (file:///Users/christopherwilloughby/legion-ascended/scripts/validate-next.mjs:263:21)
+    at ChildProcess.emit (node:events:509:20)
+    at ChildProcess._handle.onexit (node:internal/child_process:294:12)
+Error: Command failed (1): node scripts/validate-next.mjs --check-generated-drift
+    at ChildProcess.<anonymous> (file:///Users/christopherwilloughby/legion-ascended/scripts/validate-next.mjs:263:21)
+    at ChildProcess.emit (node:events:509:20)
+    at ChildProcess._handle.onexit (node:internal/child_process:294:12)
+[ELIFECYCLE] Command failed with exit code 1.

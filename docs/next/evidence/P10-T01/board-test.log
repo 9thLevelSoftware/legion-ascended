@@ -1,0 +1,20 @@
+✔ reducer accepts events from the change.* family (change.rejected, change.blocked) (0.088834ms)
+✔ parseWholeChangeAggregatedPayload rejects missing fields (0.025459ms)
+✔ parseWholeChangeAggregatedPayload rejects non-content-hash mergeQueueHash (0.05575ms)
+✔ parseWholeChangeAggregatedPayload roundtrips the aggregator-emitted payload (0.062583ms)
+✔ deriveWholeChangeAggregateId pins the (changeId, mergeQueueHash) shape (0.021791ms)
+✔ wholeChangeAcceptanceProjectionKey follows the whole_change.acceptance: prefix (0.152ms)
+✔ parseWholeChangeAcceptanceProjectionKey round-trips the projection key (0.02375ms)
+✔ verifyWholeChangeAcceptanceState passes for aggregator-emitted state (0.078916ms)
+✔ verifyWholeChangeAcceptanceState fails for tampered state (0.054333ms)
+✔ WHOLE_CHANGE_ACCEPTANCE_KIND, WHOLE_CHANGE_EVENT_TYPES, and WHOLE_CHANGE_HASH_VERSION are exported (0.044125ms)
+✔ WholeChangeAcceptanceAggregator class is equivalent to buildWholeChangeAcceptance (0.091833ms)
+✔ sha256OfCanonical is order-independent (0.033916ms)
+ℹ tests 53
+ℹ suites 0
+ℹ pass 53
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 132.285917

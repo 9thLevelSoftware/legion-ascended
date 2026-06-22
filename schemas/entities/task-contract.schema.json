@@ -953,6 +953,22 @@
         "description": "Requirement ID"
       }
     },
+    "wave": {
+      "default": "LEGACY",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_-]{0,31}$"
+    },
+    "agents": {
+      "default": [
+        "legacy-agent"
+      ],
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+      }
+    },
     "dependencies": {
       "type": "array",
       "items": {
