@@ -226,6 +226,19 @@ test("skipped required observation blocks promotion", async () => {
   assert.match(result.report.failureReason ?? "", /required observation skipped/);
 });
 
+test("release observation input.now clocks phase timestamps", async () => {
+  const inputNow = () => "2026-06-22T05:12:34.000Z";
+  const constructorNow = () => "2026-06-22T05:29:59.000Z";
+  const result = await buildReleaseObservation(buildInput({
+    canary: { invocations: [] },
+    now: inputNow
+  }), { now: constructorNow });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.report.canary?.startedAt, inputNow());
+  assert.equal(result.report.canary?.finishedAt, inputNow());
+});
+
 // ---------------------------------------------------------------------------
 // Determinism
 // ---------------------------------------------------------------------------

@@ -278,6 +278,39 @@ test("portfolio reducer tracks priority changes", () => {
   assert.equal(state.resourceLedger.priorityBands.low, 0);
 });
 
+test("portfolio reducer recomputes maxPriority after priority decreases", () => {
+  const tenantId = asTenantId("tnt-r3-priority-decrease");
+  const high = makePortfolioTaskCreatedEvent({
+    taskId: "task-r3-high",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    priority: 900,
+    globalSequence: 1
+  });
+  const mid = makePortfolioTaskCreatedEvent({
+    taskId: "task-r3-mid",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    priority: 500,
+    globalSequence: 2
+  });
+  const lowered = makePortfolioTaskPriorityChangedEvent({
+    taskId: "task-r3-high",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    priority: 200,
+    globalSequence: 3
+  });
+  const state = replayPortfolio([high, mid, lowered], { tenantId });
+
+  const rollup = state.projectRollups[PORTFOLIO_FIXTURE_CONSTANTS.projectA];
+  assert.equal(rollup.totalPriority, 700);
+  assert.equal(rollup.maxPriority, 500);
+  assert.equal(rollup.priorityBands.high, 0);
+  assert.equal(rollup.priorityBands.mid, 1);
+  assert.equal(rollup.priorityBands.low, 1);
+});
+
 test("portfolio reducer exposes cross-project dependency edges", () => {
   const tenantId = asTenantId("tnt-r4-001");
   const initial = makeInitialPortfolioState(tenantId);
@@ -302,11 +335,23 @@ test("portfolio reducer exposes cross-project dependency edges", () => {
     dependsOnTaskId: "task-r4-2",
     toProjectId: PORTFOLIO_FIXTURE_CONSTANTS.projectB,
     relation: "depends_on",
-    globalSequence: 3
+    globalSequence: 3,
+    occurredAt: "2026-06-22T05:03:00.000Z"
+  });
+  const e4 = makePortfolioTaskLinkedEvent({
+    taskId: "task-r4-1",
+    projectId: PORTFOLIO_FIXTURE_CONSTANTS.projectA,
+    changeId: PORTFOLIO_FIXTURE_CONSTANTS.changeA1,
+    dependsOnTaskId: "task-r4-2",
+    toProjectId: PORTFOLIO_FIXTURE_CONSTANTS.projectB,
+    relation: "depends_on",
+    globalSequence: 4,
+    occurredAt: "2026-06-22T05:04:00.000Z"
   });
   let state = reducePortfolio(initial, e1);
   state = reducePortfolio(state, e2);
   state = reducePortfolio(state, e3);
+  state = reducePortfolio(state, e4);
   assert.equal(state.crossProjectDependencyCount, 1);
   assert.equal(state.dependencyEdges.length, 1);
   const edge = state.dependencyEdges[0];
@@ -315,7 +360,10 @@ test("portfolio reducer exposes cross-project dependency edges", () => {
   assert.equal(edge.toProjectId, PORTFOLIO_FIXTURE_CONSTANTS.projectB);
   assert.equal(edge.fromTaskId, "task-r4-1");
   assert.equal(edge.toTaskId, "task-r4-2");
-  assert.equal(edge.eventCount, 1);
+  assert.equal(edge.firstObservedAt, "2026-06-22T05:03:00.000Z");
+  assert.equal(edge.lastObservedAt, "2026-06-22T05:04:00.000Z");
+  assert.equal(edge.lastGlobalSequence, 4);
+  assert.equal(edge.eventCount, 2);
 });
 
 test("portfolio reducer drops same-project dependency edges", () => {

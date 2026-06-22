@@ -462,6 +462,7 @@ export class ReleaseObservationOrchestrator {
     input: ReleaseObservationInput
   ): Promise<ReleaseObservationResult> {
     const issues: ReleaseObservationIssue[] = [];
+    const now = input.now ?? this.#now;
 
     const orchestratorResult = input.orchestratorResult;
     if (!orchestratorResult.ok) {
@@ -562,7 +563,7 @@ export class ReleaseObservationOrchestrator {
     }
 
     // Phase 2: run canary / health / regression / alert in order
-    const phaseStartedAt = this.#now();
+    const phaseStartedAt = now();
     let canaryResult: CanaryPhaseResult | null = null;
     let healthResult: HealthCheckPhaseResult | null = null;
     let regressionResult: RegressionPhaseResult | null = null;

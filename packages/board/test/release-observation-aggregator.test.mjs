@@ -120,6 +120,25 @@ test("aggregator emits one event with the matching event type per status", () =>
   }
 });
 
+test("aggregator honors input.now over the constructor clock", () => {
+  const report = makeReleaseObservationReport({ status: "promoted" });
+  const inputNow = () => "2026-06-22T05:44:44.000Z";
+  const constructorNow = () => "2026-06-22T05:33:33.000Z";
+  const result = buildReleaseObservationBoardEvent(
+    {
+      changeId: FIX.changeId,
+      report,
+      now: inputNow
+    },
+    { now: constructorNow }
+  );
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.observedAt, inputNow());
+  assert.equal(result.events[0].occurredAt, inputNow());
+  assert.equal(result.state.lastObservedAt, inputNow());
+});
+
 // ---------------------------------------------------------------------------
 // Aggregator validation
 // ---------------------------------------------------------------------------

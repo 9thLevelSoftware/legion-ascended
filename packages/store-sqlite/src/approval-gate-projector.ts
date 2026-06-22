@@ -257,7 +257,7 @@ export class SqliteApprovalGateProjector {
     return {
       projectionKey: this.#projectionKey,
       projectionVersion: this.#projectionVersion,
-      rebuiltThroughGlobalSequence: lastSequence,
+      rebuiltThroughGlobalSequence: Math.max(lastSequence, 0),
       eventCount: events.length,
       state,
       stateHash: deriveApprovalGateStateHash(state),

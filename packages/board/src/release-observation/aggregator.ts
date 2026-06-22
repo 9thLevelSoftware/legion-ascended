@@ -328,7 +328,8 @@ export class ReleaseObservationBoardAggregator {
 
     const report: ReleaseObservationReport = input.report;
     const eventType = validated.eventType;
-    const observedAt = this.#now();
+    const now = input.now ?? this.#now;
+    const observedAt = now();
     const aggregateId = deriveReleaseObservationAggregateId({
       changeId: report.changeId,
       mergeQueueHash: report.mergeQueueHash,

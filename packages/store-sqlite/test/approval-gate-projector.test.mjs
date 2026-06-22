@@ -213,6 +213,31 @@ test("projector yields verdict=pending when no events present", async () => {
   });
 });
 
+test("projector rebuildAndSave persists an empty pending sentinel", async () => {
+  await withTempDatabase(async (databasePath) => {
+    const repositories = buildRepositories(databasePath);
+    const { eventRepository, projectionRepository } = repositories;
+    try {
+      const projector = new SqliteApprovalGateProjector({
+        projectId: APPROVAL_GATE_PROJECTOR_FIXTURE_CONSTANTS.projectId,
+        changeId: APPROVAL_GATE_PROJECTOR_FIXTURE_CONSTANTS.changeId,
+        eventRepository,
+        projectionRepository
+      });
+
+      const persisted = projector.rebuildAndSave();
+      assert.equal(persisted.state, null);
+      assert.equal(persisted.rebuiltThroughGlobalSequence, 0);
+
+      const verified = projector.verify();
+      assert.equal(verified.state, null);
+      assert.equal(verified.rebuiltThroughGlobalSequence, 0);
+    } finally {
+      closeRepositories(repositories);
+    }
+  });
+});
+
 test("projector rolls verdict back to rejected on release.regressed", async () => {
   await withTempDatabase(async (databasePath) => {
     const repositories = buildRepositories(databasePath);

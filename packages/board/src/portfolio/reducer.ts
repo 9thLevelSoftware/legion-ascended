@@ -447,6 +447,20 @@ function applyTaskTransitioned(
   working.currentTaskStatusByAggregateId.set(aggregateId, toStatus);
 }
 
+function recomputeMaxPriority(
+  working: MutablePortfolioWorkingState,
+  projectId: ProjectId
+): number {
+  let maxPriority = 0;
+  for (const [aggregateId, priority] of working.currentPriorityByAggregateId) {
+    if (working.currentProjectIdByAggregateId.get(aggregateId) !== projectId) {
+      continue;
+    }
+    if (priority > maxPriority) maxPriority = priority;
+  }
+  return maxPriority;
+}
+
 function applyTaskPriorityChanged(
   working: MutablePortfolioWorkingState,
   payload: Record<string, unknown>
@@ -464,7 +478,6 @@ function applyTaskPriorityChanged(
     working.currentPriorityByAggregateId.get(aggregateId) ?? null;
   if (previous !== null) {
     rollup.totalPriority = rollup.totalPriority - previous + priority;
-    if (priority > rollup.maxPriority) rollup.maxPriority = priority;
     const previousBand = portfolioPriorityBand(previous);
     const nextBand = portfolioPriorityBand(priority);
     if (previousBand !== nextBand) {
@@ -473,10 +486,14 @@ function applyTaskPriorityChanged(
     }
   } else {
     rollup.totalPriority += priority;
-    if (priority > rollup.maxPriority) rollup.maxPriority = priority;
     incrementPriorityBand(rollup, portfolioPriorityBand(priority), 1);
   }
   working.currentPriorityByAggregateId.set(aggregateId, priority);
+  working.currentProjectIdByAggregateId.set(
+    aggregateId,
+    projectId as ProjectId
+  );
+  rollup.maxPriority = recomputeMaxPriority(working, projectId as ProjectId);
 }
 
 function applyTaskDeleted(
@@ -506,6 +523,8 @@ function applyTaskDeleted(
     );
   }
   working.currentPriorityByAggregateId.delete(aggregateId);
+  working.currentProjectIdByAggregateId.delete(aggregateId);
+  rollup.maxPriority = recomputeMaxPriority(working, projectId as ProjectId);
 }
 
 function applyTaskSuperseded(
@@ -529,8 +548,9 @@ function applyTaskSuperseded(
 
 function applyTaskLinked(
   working: MutablePortfolioWorkingState,
-  payload: Record<string, unknown>
+  event: BoardEvent
 ): void {
+  const payload = event.payload as Record<string, unknown>;
   const fromProjectId = readProjectIdFromPayload(payload);
   const fromTaskId = readTaskIdFromPayload(payload);
   const toTaskId = readDependsOnTaskIdFromPayload(payload);
@@ -555,15 +575,9 @@ function applyTaskLinked(
     fromTaskId,
     toProjectId: rawToProjectId as ProjectId,
     toTaskId,
-    firstObservedAt:
-      typeof payload["occurredAt"] === "string"
-        ? (payload["occurredAt"] as UtcTimestamp)
-        : ("1970-01-01T00:00:00.000Z" as UtcTimestamp),
-    lastObservedAt:
-      typeof payload["occurredAt"] === "string"
-        ? (payload["occurredAt"] as UtcTimestamp)
-        : ("1970-01-01T00:00:00.000Z" as UtcTimestamp),
-    lastGlobalSequence: -1,
+    firstObservedAt: event.occurredAt as UtcTimestamp,
+    lastObservedAt: event.occurredAt as UtcTimestamp,
+    lastGlobalSequence: event.globalSequence,
     eventCount: 1
   };
   const key = portfolioEdgeKey(edge);
@@ -571,6 +585,7 @@ function applyTaskLinked(
   if (existing) {
     existing.eventCount += 1;
     existing.lastObservedAt = edge.lastObservedAt;
+    existing.lastGlobalSequence = edge.lastGlobalSequence;
   } else {
     working.dependencyEdges.set(key, edge);
     working.crossProjectDependencyCount += 1;
@@ -880,7 +895,7 @@ function applyEvent(
       applyTaskSuperseded(working, payload);
       break;
     case "task.linked":
-      applyTaskLinked(working, payload);
+      applyTaskLinked(working, event);
       break;
     default:
       if (isWholeChangeEventType(event.eventType)) {
