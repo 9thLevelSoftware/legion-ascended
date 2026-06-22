@@ -11,6 +11,10 @@ const VALIDATE_NEXT_PLAN = [
   { id: "typecheck", command: "pnpm run typecheck" },
   { id: "package-boundaries", command: "pnpm run check:boundaries" },
   { id: "worker-bundles", command: "pnpm run check:worker-bundles" },
+  {
+    id: "default-runtime-scan",
+    command: "node scripts/scan-default-runtime.mjs"
+  },
   { id: "schema-generation", command: "pnpm --filter @legion/protocol generate:schemas" },
   { id: "artifact-schema-generation", command: "pnpm --filter @legion/artifacts generate:schemas" },
   { id: "protocol-docs", command: "node scripts/validate-next.mjs --generate-protocol-docs" },

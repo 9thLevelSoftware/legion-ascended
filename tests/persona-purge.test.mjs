@@ -1,172 +1,56 @@
 import assert from "node:assert/strict";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { scanDefaultRuntime } from "../scripts/scan-default-runtime.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // The v9 default runtime path is the canonical worker bundle surface that
-// ships in the v9 package. Today it is the four workflow-common-* v1.0.0 packs
-// extracted in P04-T03. Future v9 worker bundle prompt content files (under
-// `bundles/`) will join this list once they are added.
+// ships in the v9 package. The exact file list and pattern vocabulary live
+// in `scripts/scan-default-runtime.mjs`. This file is the high-level
+// regression guard: it asserts the scanner passes on the current repo and
+// that the schema / fixture invariants the contract depends on are intact.
 //
-// The legacy v8 persona surface (`agents/*.md`, `commands/*.md`, `adapters/*.md`,
-// `skills/` outside the four packs listed below, and `.codex-plugin/`) is
-// explicitly preserved per `docs/next/V8-MAINTENANCE-POLICY.md` and is NOT
-// scanned here. A separate opt-in legacy bridge loads those files; the v9
-// default runtime path never does.
-
-const V9_DEFAULT_RUNTIME_FILES = [
-  "skills/workflow-common-core/SKILL.md",
-  "skills/workflow-common-github/SKILL.md",
-  "skills/workflow-common-memory/SKILL.md",
-  "skills/workflow-common-domains/SKILL.md"
-];
-
-const V9_DEFAULT_RUNTIME_DIRECTORIES = [
-  // Bundled worker bundle prompt content, once added. Empty today but reserved.
-  "bundles"
-];
-
-// Forbidden section labels declared by ADR-002 plus the v9 worker bundle
-// schema. These are the prose categories the v9 default runtime must not
-// inject. A scanner can look for headings, frontmatter, or feature phrases
-// that match these patterns.
-const FORBIDDEN_HEADING_PATTERNS = [
-  /^#{1,6}\s+(Your\s+)?(Identity|Memory|Experience|Personality|Tone)\b/im,
-  /^#{1,6}\s+(Your\s+)?Core\s+Beliefs?\b/im,
-  /^#{1,6}\s+(Your\s+)?Communication\s+Style\b/im,
-  /^#{1,6}\s+(Your\s+)?Success\s+Metrics\b/im,
-  /^#{1,6}\s+(Your\s+)?Personality\s+Injection\b/im
-];
-
-const FORBIDDEN_PROSE_PHRASES = [
-  /\b(?:you\s+are|you're)\s+(?:a|an)\s+[A-Z][\w-]*(?:\s+[A-Z][\w-]*){0,3},?\s+(?:a|an|the)\s+senior\b/i,
-  /\b(?:you\s+have|you've)\s+seen\s+too\s+many\b/i,
-  /\b(?:era\s+ends|era\s+begins)\s+with\s+you\b/i,
-  /\b(?:fantasy|fantasies)\b(?:\s+(?:reporting|approval|claim|score|language))?/i,
-  /\bA\+\s+certifications?\b/i,
-  /\b(?:zero\s+issues\s+found|perfect\s+scores?|NEEDS\s+WORK)\b/i,
-  /\b(?:I|we)\s+remember\s+(?:previous|all)\s+/i,
-  /\b(?:skeptical|forensic|skeptical,\s+forensic)\b/i
-];
-
-// Legacy v8 persona injection boilerplate. These phrases appear in the
-// deprecated `skills/workflow-common/SKILL.md` shim and in legacy agent files.
-// They MUST NOT appear in any v9 default runtime path file.
-const FORBIDDEN_V8_PERSONA_BOILERPLATE = [
-  /\b(?:AGENTS_DIR|agents-orchestrator\.md)\b/,
-  /\bInject\s+personality\s+content\b/i,
-  /\b(?:ALWAYS|always)\s+read\s+the\s+agent\s+personality\s+file\s+before\s+spawning\b/i,
-  /\b(?:personality\s+files?|personality\s+markdown)\b/i,
-  /\b(?:load\s+full\s+personality|loading\s+personality)\b/i
-];
+// Detailed scanner coverage (negative-case fixtures, governance vs runtime
+// rule split, structured violation rows, future bundles/ walking) lives in
+// `tests/default-runtime-scan.test.mjs`. The two tests together lock the
+// prompt-content contract end to end.
+//
+// The legacy v8 persona surface (`agents/*.md`, `commands/*.md`,
+// `adapters/*.md`, `skills/` outside the four packs listed in the scanner,
+// and `.codex-plugin/`) is explicitly preserved per
+// `docs/next/V8-MAINTENANCE-POLICY.md` and is NOT scanned here. A separate
+// opt-in legacy bridge loads those files; the v9 default runtime path
+// never does.
 
 async function readIfExists(relativePath) {
   try {
-    const contents = await readFile(path.join(ROOT, relativePath), "utf8");
-    return contents;
+    return await readFile(path.join(ROOT, relativePath), "utf8");
   } catch (error) {
     if (error && error.code === "ENOENT") return null;
     throw error;
   }
 }
 
-async function collectDefaultRuntimeFiles() {
-  const files = [...V9_DEFAULT_RUNTIME_FILES];
-  for (const directory of V9_DEFAULT_RUNTIME_DIRECTORIES) {
-    const absolute = path.join(ROOT, directory);
-    let exists = false;
-    try {
-      const info = await stat(absolute);
-      exists = info.isDirectory();
-    } catch (error) {
-      if (error && error.code === "ENOENT") exists = false;
-      else throw error;
-    }
-    if (!exists) continue;
-
-    async function walk(dir) {
-      const entries = await readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          await walk(full);
-        } else if (entry.isFile() && /\.md$/.test(entry.name)) {
-          files.push(path.relative(ROOT, full).split(path.sep).join("/"));
-        }
-      }
-    }
-
-    await walk(absolute);
-  }
-  return files;
-}
-
-function scanForForbiddenProse(file, contents) {
-  const violations = [];
-  const lines = contents.split(/\r?\n/);
-  lines.forEach((line, index) => {
-    const lineNumber = index + 1;
-    for (const pattern of FORBIDDEN_HEADING_PATTERNS) {
-      if (pattern.test(line)) {
-        violations.push({
-          file,
-          line: lineNumber,
-          category: "forbidden-heading",
-          excerpt: line.trim().slice(0, 160),
-          pattern: pattern.toString()
-        });
-      }
-    }
-    for (const pattern of FORBIDDEN_PROSE_PHRASES) {
-      if (pattern.test(line)) {
-        violations.push({
-          file,
-          line: lineNumber,
-          category: "forbidden-prose",
-          excerpt: line.trim().slice(0, 160),
-          pattern: pattern.toString()
-        });
-      }
-    }
-    for (const pattern of FORBIDDEN_V8_PERSONA_BOILERPLATE) {
-      if (pattern.test(line)) {
-        violations.push({
-          file,
-          line: lineNumber,
-          category: "forbidden-v8-persona-boilerplate",
-          excerpt: line.trim().slice(0, 160),
-          pattern: pattern.toString()
-        });
-      }
-    }
-  });
-  return violations;
-}
-
 test("v9 default runtime path contains no biography, tone, or personality prose", async () => {
-  const files = await collectDefaultRuntimeFiles();
+  // Single regression guard: delegate the scan to the canonical scanner.
+  // Detailed coverage of the scanner's rule set lives in
+  // `tests/default-runtime-scan.test.mjs`.
+  const report = await scanDefaultRuntime({ root: ROOT });
   assert.ok(
-    files.length > 0,
-    "expected at least one v9 default runtime path file; check V9_DEFAULT_RUNTIME_FILES"
+    report.files.length > 0,
+    "expected at least one v9 default runtime path file; the scanner found none"
   );
 
-  const allViolations = [];
-  for (const file of files) {
-    const contents = await readIfExists(file);
-    if (contents === null) continue;
-    const violations = scanForForbiddenProse(file, contents);
-    allViolations.push(...violations);
-  }
-
-  assert.deepEqual(
-    allViolations,
-    [],
+  assert.equal(
+    report.ok,
+    true,
     `v9 default runtime path must not contain biography, tone, or personality prose.\n` +
-      `Found ${allViolations.length} violation(s):\n` +
-      allViolations
+      `Found ${report.violations.length} violation(s) across ${report.files.length} file(s):\n` +
+      report.violations
         .map((v) => `  ${v.file}:${v.line} [${v.category}] ${v.excerpt}`)
         .join("\n")
   );
@@ -217,6 +101,53 @@ test("v9 worker bundle schema marks biography, tone, personality as forbidden", 
   assert.ok(forbiddens.has("biography"), "fixture must mark biography as forbidden");
   assert.ok(forbiddens.has("tone"), "fixture must mark tone as forbidden");
   assert.ok(forbiddens.has("personality"), "fixture must mark personality as forbidden");
+});
+
+test("v9 protocol source still exports the promptContentContract schema", async () => {
+  // The TypeScript source-of-truth for the WorkerBundle prompt-content
+  // contract lives in `packages/protocol/src/entities/task-run.ts`. If a
+  // future refactor removes the `promptContentContract` field from the
+  // source, the generated schema and fixture would still pass but the
+  // runtime contract would silently disappear. This guard catches that.
+  const sourcePath = "packages/protocol/src/entities/task-run.ts";
+  const source = await readIfExists(sourcePath);
+  assert.ok(source !== null, `missing protocol source: ${sourcePath}`);
+  assert.ok(
+    /workerBundlePromptContentContractSchema|promptContentContract/.test(source),
+    `protocol source ${sourcePath} must still define the promptContentContract schema`
+  );
+});
+
+test("v9 governance documents reference the contract without injecting it", async () => {
+  // ADR-002 and LEGACY-PERSONA-MAP are governance documents that govern the
+  // contract. They must reference the contract vocabulary (biography / tone
+  // / personality) so the contract has a written record, but they must not
+  // contain forbidden headings or v8 boilerplate. The scanner applies a
+  // reduced rule set to these paths.
+  const report = await scanDefaultRuntime({ root: ROOT });
+  assert.equal(
+    report.ok,
+    true,
+    "governance documents must remain free of forbidden headings and v8 boilerplate; violations:\n" +
+      report.violations
+        .filter((v) => v.file.startsWith("docs/next/"))
+        .map((v) => `  ${v.file}:${v.line} [${v.category}] ${v.excerpt}`)
+        .join("\n")
+  );
+
+  const adr = await readIfExists("docs/next/adr/ADR-002-functional-workers.md");
+  assert.ok(adr !== null, "ADR-002 must exist");
+  assert.ok(
+    /biography|tone|personality/.test(adr),
+    "ADR-002 must reference the contract vocabulary"
+  );
+
+  const map = await readIfExists("docs/next/migration/LEGACY-PERSONA-MAP.md");
+  assert.ok(map !== null, "LEGACY-PERSONA-MAP must exist");
+  assert.ok(
+    /biography|tone|personality/.test(map),
+    "LEGACY-PERSONA-MAP must reference the contract vocabulary"
+  );
 });
 
 test("package-boundary check still blocks v9 packages from importing legacy prompt assets", async () => {
