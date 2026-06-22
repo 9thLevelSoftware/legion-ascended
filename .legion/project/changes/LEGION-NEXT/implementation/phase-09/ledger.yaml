@@ -10,7 +10,7 @@ tasks:
   P09-T01:
     status: DONE
     run_id: "P09-T01-20260622-merge-queue-orchestrator"
-    commit: "pending"
+    commit: "47951a67aba58bfc03adf361e1b0a3e0dc0a5ab7"
     evidence: docs/next/evidence/P09-T01/integration-report.yaml
     depends_on: ["P08-T03"]
   P09-T02:

@@ -3,7 +3,7 @@ status: PASS
 title: Merge queue — ordered merge queue with conflict detection, rebase, and sequential integration
 branch: codex/p03-t02-board-task-repository
 base_sha: 657f14ef52974efb0b72f009f536f7105884ad9c
-head_sha: pending
+head_sha: 47951a67aba58bfc03adf361e1b0a3e0dc0a5ab7
 reviewer: "GPT-5.5 / otrlead"
 completed_at: "2026-06-22T07:36:40Z"
 node_version: v26.0.0
