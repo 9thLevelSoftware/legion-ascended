@@ -963,3 +963,383 @@ test("P10-T02 board CLI release-observation verify fails closed on missing proje
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+// =====================================================================
+// P11-T01 — Dashboard CLI tests.
+// =====================================================================
+
+function dashboardAppendInput(overrides = {}) {
+  return {
+    aggregateKind: "task",
+    aggregateId: `prj_cli_dashboard:chg_cli_dashboard:${overrides.taskId ?? "tsk_cli_dashboard"}`,
+    eventType: overrides.eventType ?? "task.created",
+    eventVersion: "0.1.0",
+    payload: {
+      projectId: "prj_cli_dashboard",
+      changeId: "chg_cli_dashboard",
+      taskId: overrides.taskId ?? "tsk_cli_dashboard",
+      contractId: "ctr_cli_dashboard",
+      contractRevision: 1,
+      contractHash: "a".repeat(64),
+      fromStatus: overrides.fromStatus ?? "queued",
+      toStatus: overrides.toStatus,
+      priority: overrides.priority ?? 500
+    },
+    occurredAt: overrides.occurredAt ?? "2026-06-22T05:00:00.000Z",
+    correlationId: null,
+    causationId: null,
+    idempotencyKey: overrides.idempotencyKey ?? `cli-e2e-dashboard-${overrides.taskId ?? "tsk_cli_dashboard"}-${overrides.eventType ?? "task.created"}`
+  };
+}
+
+test("P11-T01 board CLI dashboard status/rebuild/verify round-trip a task event log", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const dashboardInputPath = path.join(workspace, "dashboard-input.json");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    // Seed two task.* events so the dashboard projection has
+    // a non-null state to surface.
+    await writeJson(path.join(workspace, "dashboard-event-1.json"), dashboardAppendInput({
+      taskId: "tsk_cli_dashboard_1",
+      fromStatus: "queued"
+    }));
+    const append1 = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "event",
+      "append",
+      "--input",
+      path.join(workspace, "dashboard-event-1.json")
+    ]);
+    assert.equal(append1.exitCode, 0, append1.stderr);
+
+    await writeJson(path.join(workspace, "dashboard-event-2.json"), dashboardAppendInput({
+      taskId: "tsk_cli_dashboard_2",
+      eventType: "task.created",
+      fromStatus: "queued"
+    }));
+    const append2 = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "event",
+      "append",
+      "--input",
+      path.join(workspace, "dashboard-event-2.json")
+    ]);
+    assert.equal(append2.exitCode, 0, append2.stderr);
+
+    await writeJson(dashboardInputPath, { projectId: "prj_cli_dashboard" });
+
+    // status: replay without persisting.
+    const status = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "dashboard",
+      "status",
+      "--input",
+      dashboardInputPath
+    ]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    assert.equal(status.json.ok, true);
+    assert.equal(status.json.status, "replayed");
+    assert.equal(status.json.projectId, "prj_cli_dashboard");
+    assert.equal(status.json.projectionKey, "dashboard:prj_cli_dashboard");
+    assert.ok(status.json.state !== null);
+    assert.equal(status.json.state.taskStatusCounts.queued, 2);
+    assert.equal(status.json.state.aggregateKindCounts.task, 2);
+
+    // rebuild: persist the projection.
+    const rebuilt = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "dashboard",
+      "rebuild",
+      "--input",
+      dashboardInputPath
+    ]);
+    assert.equal(rebuilt.exitCode, 0, rebuilt.stderr);
+    assert.equal(rebuilt.json.ok, true);
+    assert.equal(rebuilt.json.status, "rebuilt");
+    assert.equal(rebuilt.json.state.taskStatusCounts.queued, 2);
+    assert.ok(typeof rebuilt.json.projection.stateHash === "string");
+
+    // verify: persisted projection matches the fresh replay.
+    const verified = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "dashboard",
+      "verify",
+      "--input",
+      dashboardInputPath
+    ]);
+    assert.equal(verified.exitCode, 0, verified.stderr);
+    assert.equal(verified.json.ok, true);
+    assert.equal(verified.json.status, "verified");
+    assert.equal(
+      verified.json.projection.stateHash,
+      rebuilt.json.projection.stateHash
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P11-T01 board CLI dashboard verify fails closed on missing projection", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const inputPath = path.join(workspace, "dashboard-empty.json");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    await writeJson(inputPath, { projectId: "prj_cli_dashboard_missing" });
+
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "dashboard",
+      "verify",
+      "--input",
+      inputPath
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.equal(result.json.code, "verify_failed");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// =====================================================================
+// P11-T01 — Approval-gate CLI tests.
+// =====================================================================
+
+function approvalGateChangeAggregatedInput(overrides = {}) {
+  const changeId = overrides.changeId ?? "chg_cli_approval_gate";
+  const mergeQueueHash = overrides.mergeQueueHash ?? sha256ContentHash(`cli-e2e-gate-${changeId}-mq`);
+  const decisionSha256 = overrides.decisionSha256 ?? sha256ContentHash(`cli-e2e-gate-${changeId}-decision`);
+  const aggregatorHash = overrides.aggregatorHash ?? sha256ContentHash(`cli-e2e-gate-${changeId}-aggregator`);
+  return {
+    aggregateKind: "whole_change",
+    aggregateId: `${changeId}:${mergeQueueHash}`,
+    eventType: "change.aggregated",
+    eventVersion: "0.1.0",
+    payload: {
+      schemaVersion: "1.0.0",
+      kind: "whole_change",
+      projectId: "prj_cli_approval_gate",
+      changeId,
+      mergeQueueHash,
+      decisionSha256,
+      aggregatorHash,
+      status: overrides.status ?? "accepted",
+      outcome: overrides.outcome ?? "integrated",
+      reason: "cli-e2e acceptance",
+      acceptedEntries: [1, 2, 3],
+      rejectedEntries: [],
+      escalatedEntries: [],
+      conflictEntries: [],
+      finalHeadRef: "abc123",
+      acceptedAt: "2026-06-22T05:10:00.000Z",
+      acceptedBy: "ci-bot",
+      workerContextHashes: []
+    },
+    occurredAt: "2026-06-22T05:10:00.000Z",
+    correlationId: null,
+    causationId: null,
+    idempotencyKey: `${changeId}:${mergeQueueHash}:change.aggregated:cli-e2e`
+  };
+}
+
+function approvalGateReleasePromotedInput(overrides = {}) {
+  const changeId = overrides.changeId ?? "chg_cli_approval_gate";
+  const mergeQueueHash = overrides.mergeQueueHash ?? sha256ContentHash(`cli-e2e-gate-${changeId}-mq`);
+  const reportSha256 = overrides.reportSha256 ?? sha256ContentHash(`cli-e2e-gate-${changeId}-report`);
+  return {
+    aggregateKind: "release_observation",
+    aggregateId: `${changeId}:${mergeQueueHash}:${reportSha256}`,
+    eventType: "release.promoted",
+    eventVersion: "0.1.0",
+    payload: {
+      schemaVersion: "1.0.0",
+      kind: "release-observation",
+      projectId: "prj_cli_approval_gate",
+      changeId,
+      mergeQueueHash,
+      decisionSha256: sha256ContentHash(`cli-e2e-gate-${changeId}-decision`),
+      reportSha256,
+      status: "promoted",
+      tier: "R0",
+      releaseability: "releaseable",
+      observedAt: "2026-06-22T05:30:00.000Z",
+      observedBy: { id: "ci-bot", type: "ci-bot", displayName: "ci-bot" },
+      canary: null,
+      healthCheck: null,
+      regression: null,
+      alert: null,
+      reason: "cli-e2e promotion",
+      report: {
+        schemaVersion: "1.0.0",
+        kind: "release-observation",
+        projectId: "prj_cli_approval_gate",
+        changeId,
+        mergeQueueHash,
+        decisionSha256: sha256ContentHash(`cli-e2e-gate-${changeId}-decision`),
+        tier: "R0",
+        releaseability: "releaseable",
+        status: "promoted",
+        windowStart: "2026-06-22T05:00:00.000Z",
+        windowEnd: "2026-06-22T05:30:00.000Z",
+        observedAt: "2026-06-22T05:30:00.000Z",
+        observedBy: { id: "ci-bot", type: "ci-bot", displayName: "ci-bot" },
+        canary: null,
+        healthCheck: null,
+        regression: null,
+        alert: null,
+        reportSha256,
+        failureReason: null
+      },
+      failureReason: null
+    },
+    occurredAt: "2026-06-22T05:30:00.000Z",
+    correlationId: null,
+    causationId: null,
+    idempotencyKey: `${changeId}:${mergeQueueHash}:${reportSha256}:release.promoted`
+  };
+}
+
+test("P11-T01 board CLI approval-gate status/rebuild/verify surface an approved verdict", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    // Seed whole-change accepted + release promoted events
+    // for the (prj_cli_approval_gate, chg_cli_approval_gate) pair.
+    await writeJson(
+      path.join(workspace, "gate-event-1.json"),
+      approvalGateChangeAggregatedInput()
+    );
+    await writeJson(
+      path.join(workspace, "gate-event-2.json"),
+      approvalGateReleasePromotedInput()
+    );
+
+    const append1 = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "event",
+      "append",
+      "--input",
+      path.join(workspace, "gate-event-1.json")
+    ]);
+    assert.equal(append1.exitCode, 0, append1.stderr);
+
+    const append2 = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "event",
+      "append",
+      "--input",
+      path.join(workspace, "gate-event-2.json")
+    ]);
+    assert.equal(append2.exitCode, 0, append2.stderr);
+
+    const inputPath = path.join(workspace, "approval-gate-input.json");
+    await writeJson(inputPath, {
+      projectId: "prj_cli_approval_gate",
+      changeId: "chg_cli_approval_gate"
+    });
+
+    // status
+    const status = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "approval-gate",
+      "status",
+      "--input",
+      inputPath
+    ]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    assert.equal(status.json.ok, true);
+    assert.equal(status.json.status, "replayed");
+    assert.equal(status.json.state.verdict, "approved");
+    assert.equal(status.json.state.wholeChangeStatus, "accepted");
+    assert.equal(status.json.state.releaseObservationStatus, "promoted");
+
+    // rebuild
+    const rebuilt = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "approval-gate",
+      "rebuild",
+      "--input",
+      inputPath
+    ]);
+    assert.equal(rebuilt.exitCode, 0, rebuilt.stderr);
+    assert.equal(rebuilt.json.ok, true);
+    assert.equal(rebuilt.json.status, "rebuilt");
+    assert.equal(rebuilt.json.state.verdict, "approved");
+
+    // verify
+    const verified = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "approval-gate",
+      "verify",
+      "--input",
+      inputPath
+    ]);
+    assert.equal(verified.exitCode, 0, verified.stderr);
+    assert.equal(verified.json.ok, true);
+    assert.equal(verified.json.status, "verified");
+    assert.equal(
+      verified.json.projection.stateHash,
+      rebuilt.json.projection.stateHash
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P11-T01 board CLI approval-gate status surfaces pending on no events", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    const inputPath = path.join(workspace, "approval-gate-empty.json");
+    await mkdir(repositoryRoot, { recursive: true });
+
+    await writeJson(inputPath, {
+      projectId: "prj_cli_approval_gate_empty",
+      changeId: "chg_cli_approval_gate_empty"
+    });
+
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "board",
+      "approval-gate",
+      "status",
+      "--input",
+      inputPath
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.ok, true);
+    assert.equal(result.json.status, "replayed");
+    assert.equal(result.json.state, null);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

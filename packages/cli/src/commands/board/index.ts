@@ -21,6 +21,8 @@ import {
 } from "../../runtime.js";
 
 import { handleReleaseObservationCommand } from "./release-observation.js";
+import { handleDashboardCommand } from "./dashboard.js";
+import { handleApprovalGateCommand } from "./approval-gate.js";
 
 const BOARD_HELP = `legion next board <domain>
 
@@ -30,6 +32,8 @@ Domains:
   claim               Create and manage task claim leases.
   approval            Create and manage approval records.
   release-observation Aggregate, replay, rebuild, and verify release-observation projection state.
+  dashboard           Replay, rebuild, and verify the project-scoped dashboard projection state.
+  approval-gate       Replay, rebuild, and verify the per-(projectId, changeId) approval-gate verdict.
 
 All non-help commands accept --input <path> with a JSON object.
 Global:
@@ -111,6 +115,10 @@ export async function handleBoardCommand(context: CliContext): Promise<CliResult
       return handleApprovalCommand(commandContext);
     case "release-observation":
       return handleReleaseObservationCommand(commandContext);
+    case "dashboard":
+      return handleDashboardCommand(commandContext);
+    case "approval-gate":
+      return handleApprovalGateCommand(commandContext);
     default:
       return helpResult(BOARD_HELP);
   }

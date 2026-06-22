@@ -1,0 +1,21 @@
+## codex/p03-t02-board-task-repository...origin/codex/p03-t02-board-task-repository
+ M apps/cli-e2e/test/cli-e2e.test.mjs
+ M packages/board/src/index.ts
+ M packages/cli/src/commands/board/index.ts
+ M packages/store-sqlite/src/index.ts
+?? .legion/project/changes/LEGION-NEXT/implementation/phase-11/
+?? docs/next/evidence/P11-T01/
+?? packages/board/src/approval-gate/
+?? packages/board/src/dashboard/
+?? packages/board/test/approval-gate-fixture.mjs
+?? packages/board/test/approval-gate.test.mjs
+?? packages/board/test/dashboard-aggregator.test.mjs
+?? packages/board/test/dashboard-fixture.mjs
+?? packages/cli/src/commands/board/approval-gate.ts
+?? packages/cli/src/commands/board/dashboard.ts
+?? packages/store-sqlite/src/approval-gate-projector.ts
+?? packages/store-sqlite/src/dashboard-projector.ts
+?? packages/store-sqlite/test/approval-gate-fixture.mjs
+?? packages/store-sqlite/test/approval-gate-projector.test.mjs
+?? packages/store-sqlite/test/dashboard-fixture.mjs
+?? packages/store-sqlite/test/dashboard-projector.test.mjs

@@ -1,0 +1,10 @@
+✔ generated primitive JSON schemas match committed artifacts (4.160958ms)
+✔ fixture corpus captures valid and invalid primitive examples (2.105459ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 179.365542

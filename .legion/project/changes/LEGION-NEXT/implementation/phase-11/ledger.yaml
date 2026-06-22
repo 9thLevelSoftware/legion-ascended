@@ -1,0 +1,93 @@
+phase: 11
+phase_id: P11
+status: IN_PROGRESS
+source_document: "C:/Users/dasbl/Documents/legion/docs/rebuild/11-phase-kanban-dashboard.md"
+base_commit: "4977cad89a29f1bbad60ee7e940a6f3825de7518"
+started_at: "2026-06-22T11:30:00Z"
+completed_at: null
+active_wave: 1
+tasks:
+  P11-T01:
+    status: IN_PROGRESS
+    run_id: "P11-T01-20260622-dashboard-implementation"
+    commit: null
+    closeout_commit: null
+    evidence: docs/next/evidence/P11-T01/integration-report.yaml
+    depends_on: ["P10-T03"]
+    assignee: legionworker
+  P11-T02:
+    status: todo
+    depends_on: ["P11-T01"]
+    assignee: legionworker
+  P11-T03:
+    status: todo
+    depends_on: ["P11-T02"]
+    assignee: otrlead
+decisions:
+  - task: P11-T01
+    decision: "Dashboard projection lives in @legion/board (not @legion/core) and reads the append-only board event log; SQLite-backed projection in @legion/store-sqlite mirrors the P09-T02 / P10-T01 projector pattern."
+    reason: "Mirrors the established layering: core owns provider-neutral orchestration, board owns logical aggregation/reduction, store-sqlite owns SQLite persistence. The dashboard is a *read* projection across the existing board event log (task.*, change.*, release.*, approval.*) — no new orchestration is introduced."
+    decided_at: "2026-06-22T11:30:00Z"
+  - task: P11-T01
+    decision: "Dashboard projection is global (one projection key per project) and content-addressed by `dashboard:<projectId>`. It exposes task status counts by `BoardTaskStatus`, a rolling event timeline (last N events), the most recent release-observation verdict, and the most recent approval verdict."
+    reason: "Mirrors the Phase 10 P10-T01 contract inputs (`release-observation:<changeId>:<mergeQueueHash>` projection handle) and adds the missing operator surfaces the kanban manifest promised after Phase 11: status aggregation, event timeline, and approval workflow. Scoping the projection by `projectId` keeps the dashboard read-side deterministic across multi-project boards."
+    decided_at: "2026-06-22T11:35:00Z"
+  - task: P11-T01
+    decision: "Approval-gate workflow lives in @legion/board as a typed pure decision function (and a corresponding projection key `approval-gate:<projectId>:<changeId>`) that consumes the change.*, release.*, and approval.* board events for a given change and emits a fail-closed `ApprovalGateVerdict` (`approved` / `rejected` / `pending` / `blocked`)."
+    reason: "The Phase 10 handoff calls out that the dashboard/operator surface must surface 'approval workflow' as a first-class concept. The approval-gate keeps the decision deterministic and replayable through the existing board event log so a green dashboard state is always derivable from the same audit trail."
+    decided_at: "2026-06-22T11:40:00Z"
+  - task: P11-T01
+    decision: "Dashboard and approval-gate reducers are foreign-event-safe: events with mismatching `aggregateKind`, `aggregateId`, or `eventType` are ignored silently (mirrors P09-T02 / P10-T01)."
+    reason: "Interleaved board event logs are the canonical replay surface. The reducer must not throw on foreign events because the global event log carries task.*, task_link.*, claim.*, approval.*, change.*, and release.* events in any order."
+    decided_at: "2026-06-22T11:45:00Z"
+  - task: P11-T01
+    decision: "The CLI operator surface for P11-T01 is `legion next board dashboard {status|rebuild|verify}` and `legion next board approval-gate status`. All five subcommands route through `SqliteBoardStoreWithEventRepository` so the SQLite handle is opened/closed atomically."
+    reason: "Mirrors the P10-T02 CLI wiring. The CLI does NOT mutate frozen whole-change or release-observation state; it only replays, rebuilds, and verifies the new dashboard/approval-gate projections."
+    decided_at: "2026-06-22T11:50:00Z"
+  - task: P11-T01
+    decision: "Provider-neutral boundaries: dashboard + approval-gate source in @legion/board never imports a runtime driver, eve, board-store, or reads process.env. The SQLite projectors never import a runtime driver, eve, or read process.env."
+    reason: "Mirrors the Phase 8 / 9 / 10 boundary scans. The dashboard and approval-gate modules are the canonical producers of operator-facing read-state; only the SQLite adapter layer touches persistence."
+    decided_at: "2026-06-22T11:55:00Z"
+blockers: []
+preserved_boundaries:
+  - "Phase 10 package boundaries remain fixed: core owns release-observation orchestration, board owns logical aggregation/reduction for whole-change + release-observation, store-sqlite owns SQLite projection persistence. Phase 11 extends board with two new projection families (dashboard + approval-gate) and adds two new SQLite adapters."
+  - "Dashboard and approval-gate projections never mutate frozen whole-change or release-observation state; they derive read-only aggregates from the same append-only event log."
+  - "Provider-specific command execution (canary probes, host monitoring) stays outside @legion/core and @legion/board; the CLI surface is status/rebuild/verify only."
+  - "Phase 8 per-task, Phase 9 whole-change, and Phase 10 release-observation hashes are preserved so dashboard anomalies and approval-gate decisions can be traced back to exact task and release evidence."
+evidence:
+  - packages/board/src/dashboard/contract.ts
+  - packages/board/src/dashboard/hash.ts
+  - packages/board/src/dashboard/reducer.ts
+  - packages/board/src/dashboard/index.ts
+  - packages/board/src/approval-gate/contract.ts
+  - packages/board/src/approval-gate/reducer.ts
+  - packages/board/src/approval-gate/index.ts
+  - packages/board/test/dashboard-aggregator.test.mjs
+  - packages/board/test/dashboard-fixture.mjs
+  - packages/board/test/approval-gate.test.mjs
+  - packages/board/test/approval-gate-fixture.mjs
+  - packages/store-sqlite/src/dashboard-projector.ts
+  - packages/store-sqlite/src/approval-gate-projector.ts
+  - packages/store-sqlite/test/dashboard-projector.test.mjs
+  - packages/store-sqlite/test/dashboard-fixture.mjs
+  - packages/store-sqlite/test/approval-gate-projector.test.mjs
+  - packages/store-sqlite/test/approval-gate-fixture.mjs
+  - packages/cli/src/commands/board/dashboard.ts
+  - packages/cli/src/commands/board/approval-gate.ts
+  - packages/cli/src/commands/board/index.ts
+  - apps/cli-e2e/test/cli-e2e.test.mjs
+  - docs/next/evidence/P11-T01/dashboard-snapshot.json
+  - docs/next/evidence/P11-T01/approval-gate-snapshot.json
+  - docs/next/evidence/P11-T01/integration-report.yaml
+  - .legion/project/changes/LEGION-NEXT/implementation/phase-11/HANDOFF.md
+  - docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md
+phase_12_handoff:
+  next_task: P11-T02
+  summary: "P11-T02 will build the multi-project routing, approval inbox, and operator-friendly JSON snapshots on top of the P11-T01 dashboard + approval-gate projector foundations."
+  contract_inputs_for_p11_t02:
+    - "Dashboard projection state under `dashboard:<projectId>` exposes BoardTaskStatus counts, rolling event timeline, and lastReleaseObservationVerdict."
+    - "Approval-gate projection state under `approval-gate:<projectId>:<changeId>` exposes ApprovalGateVerdict with trace-back to whole-change + release-observation hashes."
+    - "All projection state is replayable from the same append-only board event log; P11-T02 work should treat dashboard + approval-gate state as derived read-only state, not mutate frozen projections."
+  preserved_boundaries:
+    - "Do not introduce a new app/dashboard package; the dashboard surface lives inside the CLI adapter layer and JSON outputs that any external UI can consume."
+    - "Approval-gate decisions stay deterministic and replayable; provider-specific reviewer/approval execution is injected, never hardcoded into the board layer."

@@ -146,7 +146,7 @@ When implementing, compare against original Legion (v8) at:
 ### Phase 11: Kanban Dashboard and Multi-Project Operations
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
-| P11-T01 | t_249912d8 | legionworker | todo | P10-T03 |
+| P11-T01 | t_249912d8 | legionworker | **DONE** | P10-T03 |
 | P11-T02 | t_86857911 | legionworker | todo | T01 |
 | P11-T03 | t_d7c20b33 | **otrlead** | todo | T02 |
 
@@ -167,7 +167,7 @@ When implementing, compare against original Legion (v8) at:
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)
-- **Completed through Phase 10:** 37 tasks (P03-T01 through P10-T03)
-- **Remaining tasks:** 10 (7 worker tasks, 3 review/closeout tasks)
-- **Current:** P10-T03 is DONE; P11-T01 (Kanban dashboard and multi-project operations) is next, dependency-gated on P10-T03
+- **Completed through Phase 11:** 38 tasks (P03-T01 through P11-T01)
+- **Remaining tasks:** 9 (6 worker tasks, 3 review/closeout tasks)
+- **Current:** P11-T01 (Kanban dashboard and multi-project operations) is DONE; P11-T02 (multi-project routing + approval inbox + JSON snapshots) is next
 - **Final:** P13-T04 (GA decision)

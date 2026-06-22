@@ -5028,3 +5028,46 @@ export {
 export type {
   SqliteReleaseObservationProjectorReplayResult
 } from "./release-observation-projector.js";
+
+// =====================================================================
+// P11-T01 — Dashboard SQLite projector.
+//
+// Mirrors `SqliteReleaseObservationProjector` for the
+// dashboard projection. The board layer exposes the
+// *logical* projection descriptor and pure reducer; this
+// adapter wires that reducer into the standard SQLite
+// projection-store flow so the dashboard projection can be
+// persisted, replayed, and verified.
+// =====================================================================
+
+export {
+  SqliteDashboardProjector,
+  dashboardProjectionKey,
+  deriveDashboardProjectionStateHash,
+  reduceDashboard,
+  DASHBOARD_PROJECTION_VERSION
+} from "./dashboard-projector.js";
+export type {
+  SqliteDashboardProjectorReplayResult
+} from "./dashboard-projector.js";
+
+// =====================================================================
+// P11-T01 — Approval-gate SQLite projector.
+//
+// Mirrors `SqliteReleaseObservationProjector` for the
+// approval-gate projection. The board layer exposes the
+// *logical* projection descriptor and pure reducer; this
+// adapter wires that reducer into the standard SQLite
+// projection-store flow so the approval-gate projection
+// can be persisted, replayed, and verified.
+// =====================================================================
+
+export {
+  SqliteApprovalGateProjector,
+  approvalGateProjectionKey,
+  APPROVAL_GATE_PROJECTION_VERSION,
+  reduceApprovalGate
+} from "./approval-gate-projector.js";
+export type {
+  SqliteApprovalGateProjectorReplayResult
+} from "./approval-gate-projector.js";

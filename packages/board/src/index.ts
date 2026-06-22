@@ -258,3 +258,91 @@ export type {
   ReleaseObservationProjectionDescriptor,
   ReleaseObservationProjectionState
 } from "./release-observation/index.js";
+
+// =====================================================================
+// P11-T01 — Dashboard projection (board adapter layer).
+// Cross-aggregate read projection over the board event log:
+// task counts, event timeline, release-observation verdict
+// pointers, approval verdict pointers. Re-exports the typed
+// contract, the pure reducer, the hash helpers, and the
+// projection descriptor.
+// =====================================================================
+
+export {
+  DASHBOARD_ADAPTER_KEYS,
+  DASHBOARD_ADAPTER_KIND,
+  DASHBOARD_ADAPTER_SCHEMA_VERSION,
+  DASHBOARD_APPROVAL_VERDICTS,
+  DASHBOARD_DEFAULT_TAIL_LIMIT,
+  DASHBOARD_KNOWN_RELEASE_STATUSES,
+  DASHBOARD_MAX_TAIL_LIMIT,
+  DASHBOARD_PROJECTION_KEY_PREFIX,
+  DASHBOARD_PROJECTION_VERSION,
+  DASHBOARD_REDUCER_KIND,
+  DASHBOARD_REDUCER_KIND_LITERAL,
+  DASHBOARD_RELEASE_STATUSES,
+  DASHBOARD_TIMELINE_KEY,
+  dashboardProjectionKey,
+  deriveDashboardProjectionStateHash,
+  isDashboardProjectionState,
+  makeDashboardReducer,
+  makeInitialDashboardState,
+  parseDashboardProjectionKey,
+  reduceDashboard,
+  replayDashboard,
+  sha256OfCanonicalDashboardInput
+} from "./dashboard/index.js";
+
+export type {
+  DashboardAdapterKey,
+  DashboardAggregateKindCounts,
+  DashboardApprovalPointer,
+  DashboardApprovalVerdict,
+  DashboardEventTailEntry,
+  DashboardProjectionDescriptor,
+  DashboardProjectionState,
+  DashboardReducer,
+  DashboardReleaseObservationPointer,
+  DashboardReleaseStatus,
+  DashboardTaskStatusCounts,
+  ReduceDashboardOptions,
+  ProjectId
+} from "./dashboard/index.js";
+
+// =====================================================================
+// P11-T01 — Approval-gate projection (board adapter layer).
+// Per-(projectId, changeId) read projection that ties the
+// Phase 9 whole-change acceptance verdict and the Phase 10
+// release-observation verdict into a single operator-facing
+// ApprovalGateVerdict. Re-exports the typed contract, the
+// pure reducer, the projection descriptor, and the verdict
+// decision helper.
+// =====================================================================
+
+export {
+  APPROVAL_GATE_ADAPTER_KEYS,
+  APPROVAL_GATE_ADAPTER_KIND,
+  APPROVAL_GATE_ADAPTER_SCHEMA_VERSION,
+  APPROVAL_GATE_PROJECTION_KEY_PREFIX,
+  APPROVAL_GATE_PROJECTION_VERSION,
+  APPROVAL_GATE_REDUCER_KIND,
+  APPROVAL_GATE_REDUCER_KIND_LITERAL,
+  APPROVAL_GATE_VERDICTS,
+  approvalGateProjectionKey,
+  decideApprovalGateVerdict,
+  isApprovalGateProjectionState,
+  makeApprovalGateReducer,
+  makeInitialApprovalGateState,
+  parseApprovalGateProjectionKey,
+  reduceApprovalGate,
+  replayApprovalGate
+} from "./approval-gate/index.js";
+
+export type {
+  ApprovalGateAdapterKey,
+  ApprovalGateAggregateId,
+  ApprovalGateProjectionDescriptor,
+  ApprovalGateProjectionState,
+  ApprovalGateReducer,
+  ApprovalGateVerdict
+} from "./approval-gate/index.js";

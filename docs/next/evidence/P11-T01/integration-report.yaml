@@ -1,0 +1,152 @@
+task: P11-T01
+phase: 11
+phase_id: P11
+status: DONE
+base_commit: "4977cad89a29f1bbad60ee7e940a6f3825de7518"
+implementation_branch: "codex/p03-t02-board-task-repository"
+verification:
+  local:
+    - name: core-tests
+      command: "pnpm --filter @legion/core test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/core-test.log
+      result: "245/245 pass (no protocol changes)"
+    - name: board-tests
+      command: "pnpm --filter @legion/board test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/board-test.log
+      result: "93/93 pass (53 existing whole-change/release-observation + 21 new dashboard + 19 new approval-gate)"
+    - name: store-sqlite-tests
+      command: "pnpm --filter @legion/store-sqlite test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/store-sqlite-test.log
+      result: "163/163 pass (144 existing + 9 new dashboard projector + 10 new approval-gate projector)"
+    - name: protocol-tests
+      command: "pnpm --filter @legion/protocol test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/protocol-test.log
+      result: "55/55 pass (no protocol changes)"
+    - name: artifacts-tests
+      command: "pnpm --filter @legion/artifacts test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/artifacts-test.log
+      result: "59/59 pass (no artifacts changes)"
+    - name: cli-e2e-tests
+      command: "pnpm --filter @legion/cli-e2e test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/cli-e2e-test.log
+      result: "17/17 pass (14 existing + 1 new dashboard CLI + 2 new approval-gate CLI scenarios)"
+    - name: typecheck
+      command: "pnpm run typecheck"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/typecheck.log
+      result: "all 10 workspace projects typecheck clean"
+    - name: workspace-tests
+      command: "pnpm run test"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/workspace-tests.log
+      result: "all workspace package tests + cli-e2e pass"
+    - name: validate-next
+      command: "pnpm run validate:next"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/validate-next.log
+      result: "validate-next PASS; typecheck, package boundaries, worker bundles, default-runtime scan, runtime import boundaries, schema generation, protocol docs, schema-doc drift, package contents, tests, npm pack dry-run, pnpm pack dry-run passed"
+    - name: gitleaks-p11-diff
+      command: "git diff --cached --binary 4977cad89a29f1bbad60ee7e940a6f3825de7518 -- ':!.legion/project/changes/LEGION-NEXT/implementation/phase-10/evidence-index.yaml' ':!.legion/project/changes/LEGION-NEXT/implementation/phase-11/evidence-index.yaml' | gitleaks detect --pipe --no-color --redact"
+      exit_code: 0
+      evidence: docs/next/evidence/P11-T01/gitleaks-p11-diff.log
+      result: "no leaks found in final Phase 11 diff scan; phase-10/phase-11 evidence indexes excluded to avoid self-referential scan"
+blockers: []
+delivered_artifacts:
+  board:
+    - path: packages/board/src/dashboard/contract.ts
+      description: "typed dashboard projection contract — DashboardProjectionState, task status counts, rolling event timeline, release-observation verdict pointers, approval verdict pointers, projection key helpers"
+    - path: packages/board/src/dashboard/hash.ts
+      description: "deterministic SHA-256 helpers — deriveDashboardProjectionStateHash over canonical sorted JSON, sha256OfCanonicalDashboardInput"
+    - path: packages/board/src/dashboard/reducer.ts
+      description: "pure reduceDashboard + replayDashboard reducers; project-scoped counter surface, foreign-event-safe, tail-bounded timeline"
+    - path: packages/board/src/dashboard/index.ts
+      description: "public dashboard barrel"
+    - path: packages/board/test/dashboard-aggregator.test.mjs
+      description: "21 dashboard reducer tests covering projection key, foreign-event safety, replay determinism, status counts, tail bound, regression verdict"
+    - path: packages/board/test/dashboard-fixture.mjs
+      description: "deterministic task/change/release event builders"
+    - path: packages/board/src/approval-gate/contract.ts
+      description: "typed approval-gate projection contract — ApprovalGateProjectionState, ApprovalGateVerdict (approved|rejected|blocked|pending), projection key helpers"
+    - path: packages/board/src/approval-gate/reducer.ts
+      description: "pure reduceApprovalGate + replayApprovalGate + decideApprovalGateVerdict; fail-closed verdict reduction, foreign-event-safe, release.observed non-terminal handling"
+    - path: packages/board/src/approval-gate/index.ts
+      description: "public approval-gate barrel"
+    - path: packages/board/test/approval-gate.test.mjs
+      description: "19 approval-gate reducer tests covering verdict reduction, regression rollback, foreign-event safety, malformed payload rejection"
+    - path: packages/board/test/approval-gate-fixture.mjs
+      description: "deterministic change/release event builders"
+    - path: packages/board/src/index.ts
+      description: "board barrel extended with dashboard + approval-gate exports"
+  store-sqlite:
+    - path: packages/store-sqlite/src/dashboard-projector.ts
+      description: "SqliteDashboardProjector — replay/rebuild/verify for the dashboard projection, foreign-event-safe, threads priorEvents through reducer for per-task live state"
+    - path: packages/store-sqlite/src/approval-gate-projector.ts
+      description: "SqliteApprovalGateProjector — replay/rebuild/verify for the approval-gate projection"
+    - path: packages/store-sqlite/src/index.ts
+      description: "store-sqlite barrel extended with dashboard + approval-gate projector exports"
+    - path: packages/store-sqlite/test/dashboard-projector.test.mjs
+      description: "9 dashboard projector tests — replay, rebuild+verify, drift detection, foreign-project event filtering"
+    - path: packages/store-sqlite/test/dashboard-fixture.mjs
+      description: "deterministic task/change/release append-input builders"
+    - path: packages/store-sqlite/test/approval-gate-projector.test.mjs
+      description: "10 approval-gate projector tests — verdict=approved/rejected/pending, regression rollback, rebuild+verify, drift detection"
+    - path: packages/store-sqlite/test/approval-gate-fixture.mjs
+      description: "deterministic change/release append-input builders"
+  cli:
+    - path: packages/cli/src/commands/board/dashboard.ts
+      description: "legion next board dashboard {status|rebuild|verify} CLI adapter"
+    - path: packages/cli/src/commands/board/approval-gate.ts
+      description: "legion next board approval-gate {status|rebuild|verify} CLI adapter"
+    - path: packages/cli/src/commands/board/index.ts
+      description: "board command tree extended with dashboard and approval-gate domains"
+  cli-e2e:
+    - path: apps/cli-e2e/test/cli-e2e.test.mjs
+      description: "4 new CLI e2e tests — dashboard status/rebuild/verify round-trip, dashboard verify fails closed, approval-gate status/rebuild/verify, approval-gate pending on no events"
+  docs:
+    - path: docs/next/evidence/P11-T01/dashboard-snapshot.json
+      description: "canonical dashboard projection snapshot for (proj-p11-t01-snapshot-001, chg-p11-t01-snapshot-001) with frozen task status counts, release-observation pointer, approval pointer, and content-addressed stateHash"
+    - path: docs/next/evidence/P11-T01/approval-gate-snapshot.json
+      description: "canonical approval-gate snapshot for (proj-p11-t01-snapshot-001, chg-p11-t01-snapshot-001) with verdict=approved after whole-change accepted + release.promoted"
+    - path: docs/next/evidence/P11-T01/integration-report.yaml
+      description: "this file"
+    - path: .legion/project/changes/LEGION-NEXT/implementation/phase-11/ledger.yaml
+      description: "phase-11 ledger tracking P11-T01 + P11-T02 + P11-T03 tasks and decisions"
+    - path: .legion/project/changes/LEGION-NEXT/implementation/phase-11/HANDOFF.md
+      description: "phase-11 handoff documenting delivered surface, verification evidence, dashboard cut-line invariants, and Phase 12 starting point"
+decisions:
+  - decision: "Dashboard projection lives in @legion/board (not @legion/core) and reads the append-only board event log; SQLite-backed projection in @legion/store-sqlite mirrors the P09-T02 / P10-T01 projector pattern."
+    reason: "Mirrors the established layering: core owns provider-neutral orchestration, board owns logical aggregation/reduction, store-sqlite owns SQLite persistence. The dashboard is a *read* projection across the existing board event log (task.*, change.*, release.*, approval.*) — no new orchestration is introduced."
+  - decision: "Dashboard projection is global within a project (one projection key per projectId) and content-addressed by `dashboard:<projectId>`. It exposes task status counts by BoardTaskStatus, a rolling event timeline (last N events), the most recent release-observation verdict per change, and the most recent approval verdict per change."
+    reason: "Mirrors the Phase 10 P10-T01 contract inputs and adds the missing operator surfaces the kanban manifest promised after Phase 11: status aggregation, event timeline, and approval workflow. Scoping the projection by projectId keeps the dashboard read-side deterministic across multi-project boards."
+  - decision: "Approval-gate workflow lives in @legion/board as a typed pure decision function (and a corresponding projection key `approval-gate:<projectId>:<changeId>`) that consumes the change.*, release.* board events for a given change and emits a fail-closed ApprovalGateVerdict (`approved` / `rejected` / `blocked` / `pending`)."
+    reason: "The Phase 10 handoff calls out that the dashboard/operator surface must surface 'approval workflow' as a first-class concept. The approval-gate keeps the decision deterministic and replayable through the existing board event log so a green dashboard state is always derivable from the same audit trail."
+  - decision: "Dashboard and approval-gate reducers are foreign-event-safe: events with mismatching aggregateKind, aggregateId, projectId (dashboard) or changeId (approval-gate) are ignored silently."
+    reason: "Interleaved board event logs are the canonical replay surface. The reducer must not throw on foreign events because the global event log carries task.*, task_link.*, claim.*, approval.*, change.*, and release.* events in any order across multiple projects."
+  - decision: "Dashboard reducer threads priorEvents through reduceDashboard so the per-task live state map can be reconstructed for incremental callers (tests), while replayDashboard drives the same reconstruction internally for production callers (CLI projector)."
+    reason: "Per-task status counters require a live state map keyed by taskId. The map is private to the reducer (not part of the public DashboardProjectionState) so it must be reconstructed on every reducer call from the prior event stream. This keeps the public projection state shape immutable and content-addressable while still supporting incremental test assertions."
+  - decision: "The CLI operator surface for P11-T01 is `legion next board dashboard {status|rebuild|verify}` and `legion next board approval-gate {status|rebuild|verify}`. All six subcommands route through `SqliteBoardStoreWithEventRepository` so the SQLite handle is opened/closed atomically."
+    reason: "Mirrors the P10-T02 CLI wiring. The CLI does NOT mutate frozen whole-change or release-observation state; it only replays, rebuilds, and verifies the new dashboard/approval-gate projections."
+  - decision: "Provider-neutral boundaries: dashboard + approval-gate source in @legion/board never imports a runtime driver, eve, board-store (only types), or reads process.env. The SQLite projectors never import a runtime driver, eve, or read process.env."
+    reason: "Mirrors the Phase 8 / 9 / 10 boundary scans. The dashboard and approval-gate modules are the canonical producers of operator-facing read-state; only the SQLite adapter layer touches persistence."
+preserved_boundaries:
+  - "Phase 10 package boundaries remain fixed: core owns release-observation orchestration, board owns logical aggregation/reduction for whole-change + release-observation, store-sqlite owns SQLite projection persistence. Phase 11 extends board with two new projection families (dashboard + approval-gate) and adds two new SQLite adapters."
+  - "Dashboard and approval-gate projections never mutate frozen whole-change or release-observation state; they derive read-only aggregates from the same append-only event log."
+  - "Provider-specific command execution (canary probes, host monitoring) stays outside @legion/core and @legion/board; the CLI surface is status/rebuild/verify only."
+  - "Phase 8 per-task, Phase 9 whole-change, and Phase 10 release-observation hashes are preserved so dashboard anomalies and approval-gate decisions can be traced back to exact task and release evidence."
+phase_12_handoff:
+  next_task: P11-T02
+  next_task_id: t_86857911
+  summary: "P11-T02 will build the multi-project routing, approval inbox, and operator-friendly JSON snapshots on top of the P11-T01 dashboard + approval-gate projector foundations."
+  contract_inputs_for_p11_t02:
+    - "Dashboard projection state under `dashboard:<projectId>` exposes BoardTaskStatus counts, rolling event timeline, lastReleaseObservationVerdict, and lastApprovalVerdict per changeId."
+    - "Approval-gate projection state under `approval-gate:<projectId>:<changeId>` exposes ApprovalGateVerdict with trace-back to whole-change + release-observation hashes."
+    - "All projection state is replayable from the same append-only board event log; P11-T02 work should treat dashboard + approval-gate state as derived read-only state, not mutate frozen projections."
+  preserved_boundaries:
+    - "Do not introduce a new app/dashboard package; the dashboard surface lives inside the CLI adapter layer and JSON outputs that any external UI can consume."
+    - "Approval-gate decisions stay deterministic and replayable; provider-specific reviewer/approval execution is injected, never hardcoded into the board layer."

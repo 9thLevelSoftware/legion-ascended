@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "dashboard-snapshot",
+  "task": "P11-T01",
+  "capturedAt": "2026-06-22T06:00:00.000Z",
+  "projectId": "proj-p11-t01-snapshot-001",
+  "projectionKey": "dashboard:proj-p11-t01-snapshot-001",
+  "projectionVersion": 1,
+  "state": {
+    "schemaVersion": "1.0.0",
+    "kind": "dashboard-adapter",
+    "projectId": "proj-p11-t01-snapshot-001",
+    "rebuiltThroughGlobalSequence": 8,
+    "eventCount": 8,
+    "taskStatusCounts": {
+      "ready": 2,
+      "running": 1
+    },
+    "aggregateKindCounts": {
+      "task": 6,
+      "whole_change": 1,
+      "release_observation": 1
+    },
+    "releaseObservationPointers": [
+      {
+        "changeId": "chg-p11-t01-snapshot-001",
+        "mergeQueueHash": "sha256:e30030f88a07bc8f57fdd704b0546072c11de30d1bf3b00e28a5cbcde5beba0d",
+        "reportSha256": "sha256:17b139a24980b2971d33e233f87723717425a0b8eb98793cd8a88759b5199031",
+        "status": "promoted",
+        "observedAt": "2026-06-22T05:30:00.000Z",
+        "lastEventType": "release.promoted",
+        "globalSequence": 8
+      }
+    ],
+    "approvalPointers": [
+      {
+        "changeId": "chg-p11-t01-snapshot-001",
+        "verdict": "approved",
+        "mergeQueueHash": "sha256:e30030f88a07bc8f57fdd704b0546072c11de30d1bf3b00e28a5cbcde5beba0d",
+        "lastEventType": "change.aggregated",
+        "lastGlobalSequence": 7,
+        "lastOccurredAt": "2026-06-22T05:10:00.000Z",
+        "reason": "all entries integrated"
+      }
+    ],
+    "eventTimeline": [
+      {
+        "eventId": "evt-snap-tsk-snap-1-1",
+        "aggregateKind": "task",
+        "aggregateId": "proj-p11-t01-snapshot-001:chg-p11-t01-snapshot-001:tsk-snap-1",
+        "eventType": "task.created",
+        "globalSequence": 1,
+        "occurredAt": "2026-06-22T05:00:01.000Z",
+        "summary": "task tsk-snap-1 event"
+      },
+      {
+        "eventId": "evt-snap-tsk-snap-2-2",
+        "aggregateKind": "task",
+        "aggregateId": "proj-p11-t01-snapshot-001:chg-p11-t01-snapshot-001:tsk-snap-2",
+        "eventType": "task.created",
+        "globalSequence": 2,
+        "occurredAt": "2026-06-22T05:00:02.000Z",
+        "summary": "task tsk-snap-2 event"
+      },
+      {
+        "eventId": "evt-snap-tsk-snap-3-3",
+        "aggregateKind": "task",
+        "aggregateId": "proj-p11-t01-snapshot-001:chg-p11-t01-snapshot-001:tsk-snap-3",
+        "eventType": "task.created",
+        "globalSequence": 3,
+        "occurredAt": "2026-06-22T05:00:03.000Z",
+        "summary": "task tsk-snap-3 event"
+      },
+      {
+        "eventId": "evt-snap-tsk-snap-1-2",
+        "aggregateKind": "task",
+        "aggregateId": "proj-p11-t01-snapshot-001:chg-p11-t01-snapshot-001:tsk-snap-1",
+        "eventType": "task.transitioned",
+        "globalSequence": 4,
+        "occurredAt": "2026-06-22T05:00:02.000Z",
+        "summary": "task tsk-snap-1 → ready"
+      },
+      {
+        "eventId": "evt-snap-tsk-snap-3-2",
+        "aggregateKind": "task",
+        "aggregateId": "proj-p11-t01-snapshot-001:chg-p11-t01-snapshot-001:tsk-snap-3",
+        "eventType": "task.transitioned",
+        "globalSequence": 6,
+        "occurredAt": "2026-06-22T05:00:02.000Z",
+        "summary": "task tsk-snap-3 → running"
+      },
+      {
+        "eventId": "evt-snap-change-aggregated-7",
+        "aggregateKind": "whole_change",
+        "aggregateId": "chg-p11-t01-snapshot-001:sha256:e30030f88a07bc8f57fdd704b0546072c11de30d1bf3b00e28a5cbcde5beba0d",
+        "eventType": "change.aggregated",
+        "globalSequence": 7,
+        "occurredAt": "2026-06-22T05:10:00.000Z",
+        "summary": "change chg-p11-t01-snapshot-001 approved"
+      },
+      {
+        "eventId": "evt-snap-release-promoted-8",
+        "aggregateKind": "release_observation",
+        "aggregateId": "chg-p11-t01-snapshot-001:sha256:e30030f88a07bc8f57fdd704b0546072c11de30d1bf3b00e28a5cbcde5beba0d:sha256:17b139a24980b2971d33e233f87723717425a0b8eb98793cd8a88759b5199031",
+        "eventType": "release.promoted",
+        "globalSequence": 8,
+        "occurredAt": "2026-06-22T05:30:00.000Z",
+        "summary": "release chg-p11-t01-snapshot-001 promoted"
+      }
+    ]
+  },
+  "stateHash": "sha256:193771a6643d726f43799ef15d2ea59f43ce6d14dc7173928dda84df52de136d"
+}
