@@ -7,6 +7,7 @@ import { handleChangeCommand } from "./commands/change/index.js";
 import { handleEvalsCommand } from "./commands/evals/index.js";
 import { handleMigrateCommand } from "./commands/migrate/index.js";
 import { handleProjectCommand } from "./commands/project/index.js";
+import { handleReleaseCommand } from "./commands/release/index.js";
 import {
   helpResult,
   parseCliArgs,
@@ -25,6 +26,7 @@ Commands:
   board     Create, inspect, and mutate board tasks, events, claims, and approvals.
   migrate   Verify, dry-run, apply, and roll back legacy migration flows.
   evals     Capture, grade, and compare sealed v8/v9 behavioral eval runs.
+  release   Run the GA release checklist and the rollback-policy verifier.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.
@@ -82,6 +84,8 @@ async function dispatch(context: CliContext): Promise<CliResult> {
       return handleMigrateCommand(commandContext);
     case "evals":
       return handleEvalsCommand(commandContext);
+    case "release":
+      return handleReleaseCommand(commandContext);
     default:
       return usageError(`Unknown legion next command: ${command}.`);
   }

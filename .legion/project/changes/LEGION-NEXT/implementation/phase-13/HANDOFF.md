@@ -304,3 +304,168 @@ Recommended first checks for P13-T03:
 4. Preserve user artifacts and legacy bytes during eval dry-runs; the
    redaction step must mask secrets without dropping the failure
    context.
+
+## Delivered Surface — P13-T03
+
+### Fail-closed GA gates
+
+- `scripts/release/release-checklist.mjs` — fail-closed verifier that
+  confirms ten preconditions for the v9 GA promotion:
+  CHANGELOG entry, the four companion documents under
+  `docs/next/ga/` cross-linked from `RELEASE-RECORD.md`, the Phase 13
+  ledger state (P13-T01 / P13-T02 / P13-T03 all DONE), the P13-T02
+  threat-model verdict, the P13-T01 A/B comparison, and the
+  `validate-next` log. Emits a stable JSON verdict; non-zero exit on
+  any precondition. Honours `--repository-root` and `--report`.
+- `scripts/release/rollback-policy.mjs` — backup-manifest verifier
+  that confirms the most recent apply step is restorable. Re-hashes
+  the backup directory (matching `@legion/legacy-bridge`'s `hashTree`
+  format: sorted POSIX paths, sha256 `path\0bytes\0`), rejects
+  schema drift, missing fields, repositoryRoot mismatch, missing
+  backup directory, and manifests older than 365 days. Honours
+  `--repository-root` and `--source` for cross-source rejection.
+  Emits a stable JSON verdict with per-source findings; non-zero exit
+  when any fail-closed check fires.
+
+### CLI surface
+
+- `packages/cli/src/commands/release/index.ts` — `legion next release
+  {checklist,rollback-verify}` adapter. The CLI parses the JSON
+  verdict regardless of exit code so structured findings surface to
+  CI gates. The `runScript` path resolver recognises the two new
+  helpers alongside the existing capture/grade/compare/threat-model
+  helpers.
+- `packages/cli/src/index.ts` — root CLI dispatch advertises the new
+  `release` command alongside `project`, `change`, `board`,
+  `migrate`, and `evals`.
+
+### GA decision package
+
+- `docs/next/ga/RELEASE-RECORD.md` — consolidated GA decision
+  package pointing at every companion document, the fail-closed gates,
+  the implementation evidence, and the preserved-boundary contract.
+- `docs/next/ga/MIGRATION-POLICY.md` — operator-facing v8 → v9
+  migration policy. Pins the `--from-<source>` / `--verify|
+  --dry-run|--apply|--rollback` matrix, the source class preservation
+  rules, the review gates, and the operator runbook.
+- `docs/next/ga/ROLLBACK-POLICY.md` — rollback policy and procedure.
+  Pins the backup-manifest contract (`schemaVersion: "0.1.0"`, kind
+  in `{codex-legion-migration-backup, planning-import-backup}`,
+  pre-migration hash, repositoryRoot match), the rollback procedure,
+  and the cross-source rejection rule.
+- `docs/next/ga/V8-HANDOFF.md` — v8 / v9 coexistence rules. Pins
+  the v8 maintenance branch policy, the deprecation timeline
+  (v9 GA → +90d v9.1 → +180d sunset notice → +270d v8 final → +365d
+  EOL), and the rollback triggers.
+- `docs/next/ga/STABLE-CHANNEL-APPROVAL.md` — sign-off gate. Pins the
+  decision owner (`dasbl`) sign-off block, the approval routing
+  matrix, and the post-approval actions.
+
+### Tests
+
+- `tests/release-checklist.test.mjs` — 15 regression tests pinning
+  every fail-closed path (well-formed, CHANGELOG entry / keyword,
+  release-record link, missing companion docs, ledger task state,
+  threat-model verdict, ab-comparison, validate-next log, semver
+  validation).
+- `tests/rollback-policy.test.mjs` — 13 regression tests pinning
+  every fail-closed path (well-formed codex / planning manifests,
+  schema drift, unknown kind, source mismatch, missing fields,
+  repositoryRoot mismatch, backupPath missing, hash drift, manifest
+  age, well-formed checks map).
+- `apps/cli-e2e/test/cli-e2e.test.mjs` — 6 CLI e2e tests for the
+  new release subcommands (checklist-blocked, per-check breakdown,
+  rollback-verify-blocked, rollback-verify-restorable, missing
+  --release-version, missing --backup-manifest).
+
+## Verification Evidence
+
+- `node --test tests/release-checklist.test.mjs` — PASS, 15/15 tests.
+- `node --test tests/rollback-policy.test.mjs` — PASS, 13/13 tests.
+- `pnpm --filter @legion/cli-e2e test` — PASS, 35/35 tests (was 29
+  before P13-T03; +6 P13-T03 release CLI tests added).
+- `pnpm --filter @legion/core test` — PASS, 245/245 tests.
+- `pnpm --filter @legion/board test` — PASS, 113/113 tests.
+- `pnpm --filter @legion/store-sqlite test` — PASS, 171/171 tests.
+- `pnpm --filter @legion/protocol test` — PASS, 55/55 tests.
+- `pnpm --filter @legion/artifacts test` — PASS, 59/59 tests.
+- `pnpm run typecheck` — PASS across 10 workspace projects.
+- `pnpm run test` — PASS, 143/143 root tests (was 115 before P13-T03;
+  +13 P13-T03 rollback-policy + 15 P13-T03 release-checklist = 28 new
+  root tests).
+- `pnpm run validate:next` — PASS, package boundaries, worker bundles,
+  runtime scans, schemas, tests, npm/pnpm pack all green.
+- `node scripts/release/release-checklist.mjs --release-version 9.0.0`
+  — PASS, status: ready (zero findings) against the canonical v9 GA
+  evidence under docs/next/ga/.
+- `node scripts/release/rollback-policy.mjs --backup-manifest <path>`
+  — PASS, status: restorable against a synthetic well-formed codex
+  backup-manifest produced during CLI e2e.
+
+Full closeout transcripts are under `docs/next/evidence/P13-T03/`.
+The structured report is
+`docs/next/evidence/P13-T03/integration-report.yaml`; the release
+verdict is `docs/next/evidence/P13-T03/release-checklist.json`; the
+rollback verifier smoke-test verdict is
+`docs/next/evidence/P13-T03/rollback-policy.json`. The SHA-256
+artifact index is
+`.legion/project/changes/LEGION-NEXT/implementation/phase-13/evidence-index.yaml`.
+
+## Captured Sealed Evidence
+
+The P13-T03 evidence directory captures the gate transcripts plus
+two verifier JSON outputs:
+
+- `docs/next/evidence/P13-T03/release-checklist.json` — the
+  P13-T03 release checklist verdict against the canonical v9 GA
+  evidence (status: ready, zero findings).
+- `docs/next/evidence/P13-T03/rollback-policy.json` — the
+  P13-T03 rollback-policy verifier verdict against a synthetic
+  well-formed codex backup-manifest (status: restorable, zero
+  blocking findings).
+- `docs/next/evidence/P13-T03/typecheck.log` — `pnpm run typecheck`
+  transcript: 10 workspace projects typecheck clean.
+- `docs/next/evidence/P13-T03/validate-next.log` — `pnpm run
+  validate:next` transcript: PASS (boundaries, worker bundles,
+  runtime scans, schemas, tests, npm/pnpm pack all green).
+- `docs/next/evidence/P13-T03/workspace-tests.log` — `pnpm run test`
+  transcript: 143/143 root tests pass (28 new P13-T03 tests).
+- `docs/next/evidence/P13-T03/cli-e2e-test.log` — `@legion/cli-e2e`
+  transcript: 35/35 pass (6 new P13-T03 release CLI tests).
+- `docs/next/evidence/P13-T03/{core,board,protocol,store-sqlite,
+  artifacts}-test.log` — per-package test transcripts.
+- `docs/next/evidence/P13-T03/gitleaks-p13-t03-diff.log` — final P13-T03
+  diff gitleaks scan.
+
+## Phase 13 Starting Point
+
+Proceed to P13-T04 (`t_50860be4`): GA closeout / independent review.
+P13-T04 should consume these inputs:
+
+- `legion next release checklist` composes ten preconditions into a
+  single JSON verdict; treat non-zero exit as a hard fail in CI.
+- `legion next release rollback-verify` confirms the most recent
+  apply step is restorable; treat non-zero exit as a hard fail.
+- `legion next evals threat-model` continues to gate v9 evidence;
+  the held-out security-sensitive.v1 contract is pinned by
+  tests/evals-baseline.test.mjs.
+- P00-T06 v8 baseline execution remains blocked. The release
+  checklist does not gate v8 — it gates the v9 evidence. The GA
+  promotion is approved with full visibility into the absent v8
+  evidence (`docs/next/ga/RELEASE-RECORD.md` outstanding-items list).
+
+Recommended first checks for P13-T04:
+
+1. Read this handoff,
+   `docs/next/evidence/P13-T03/integration-report.yaml`,
+   `docs/next/ga/RELEASE-RECORD.md`, and
+   `docs/next/evidence/P13-T03/release-checklist.json` before editing.
+2. Treat a non-zero `legion next release checklist` exit code as a
+   hard fail. Do not weaken the contract to accommodate stale GA
+   evidence.
+3. Independent review must be actor-separated from implementation
+   (P12-T03 / P11-T03 established the rule); record the review in
+   `docs/next/reviews/PHASE-13-INDEPENDENT-REVIEW.md`.
+4. Do not move GA gating into `@legion/core` or `@legion/board`; the
+   release checklist and rollback verifier are operator-facing
+   governance gates, not core workflow logic.

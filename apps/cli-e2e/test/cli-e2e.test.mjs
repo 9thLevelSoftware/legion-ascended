@@ -2181,3 +2181,197 @@ test("P13-T02 evals CLI threat-model requires --run-dir and --output-root", asyn
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test("P13-T03 release CLI checklist reports blocked when the GA evidence is missing", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "checklist",
+      "--release-version",
+      "9.0.0"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.equal(result.json.status, "blocked");
+    assert.ok(result.json.verdict, "verdict should be parsed");
+    assert.ok(Array.isArray(result.json.verdict.findings));
+    // The empty repo must surface at least the changelog and the
+    // companion-document findings.
+    const codes = result.json.verdict.findings.map((f) => f.code);
+    assert.ok(
+      codes.includes("changelog_missing") || codes.includes("changelog_missing_ga_entry"),
+      "expected a changelog_missing* finding"
+    );
+    assert.ok(codes.includes("release_record_missing"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI checklist surfaces a stable per-check breakdown", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "checklist",
+      "--release-version",
+      "9.0.0"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    // Each precondition is exposed as a sub-check under verdict.checks
+    // so CI dashboards can render the per-gate status without parsing
+    // the findings list.
+    const checks = result.json.verdict.checks;
+    for (const name of [
+      "changelog",
+      "release_record",
+      "migration_policy",
+      "rollback_policy",
+      "v8_handoff",
+      "stable_channel_approval",
+      "ledger",
+      "threat_model_verdict",
+      "ab_comparison"
+    ]) {
+      assert.ok(checks[name], `missing check ${name}`);
+      assert.equal(typeof checks[name].ok, "boolean");
+    }
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI rollback-verify reports blocked when the manifest is missing", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "rollback-verify",
+      "--backup-manifest",
+      "/no/such/path/backup-manifest.json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.equal(result.json.status, "blocked");
+    assert.ok(result.json.verdict, "verdict should be parsed");
+    const codes = result.json.verdict.findings.map((f) => f.code);
+    assert.ok(codes.includes("manifest_present"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI rollback-verify reports restorable for a well-formed codex manifest", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const backupPath = path.join(workspace, "backup");
+    await mkdir(path.join(backupPath, "legacy-protocol"), { recursive: true });
+    await writeFile(path.join(backupPath, "legacy-protocol", "agents.json"), "{}", "utf8");
+    await writeFile(path.join(backupPath, "manifest.json"), "{\"version\":\"8.0.5\"}", "utf8");
+
+    // Recompute the pre-migration hash using the same algorithm the
+    // verifier expects (sorted POSIX paths, sha256 path\0bytes\0).
+    const { createHash } = await import("node:crypto");
+    const fileList = [];
+    async function walk(dir) {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (entry.isFile()) fileList.push({ rel: path.relative(backupPath, full).split(path.sep).join("/"), full });
+      }
+    }
+    await walk(backupPath);
+    fileList.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+    const hash = createHash("sha256");
+    for (const entry of fileList) {
+      hash.update(entry.rel);
+      hash.update("\0");
+      hash.update(await readFile(entry.full));
+      hash.update("\0");
+    }
+    const preMigrationHash = `sha256:${hash.digest("hex")}`;
+
+    const manifest = {
+      schemaVersion: "0.1.0",
+      kind: "codex-legion-migration-backup",
+      createdAt: "2026-06-22T15:00:00.000Z",
+      repositoryRoot,
+      backupPath,
+      preMigrationHash,
+      sourceHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      existingLegionRoot: true
+    };
+    const manifestPath = path.join(workspace, "backup-manifest.json");
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "rollback-verify",
+      "--backup-manifest",
+      manifestPath,
+      "--source",
+      "codex-legion"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.ok, true);
+    assert.equal(result.json.status, "restorable");
+    assert.equal(result.json.verdict.kind, "codex-legion-migration-backup");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI checklist requires --release-version", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "checklist"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("P13-T03 release CLI rollback-verify requires --backup-manifest", async () => {
+  const workspace = await tempRoot();
+  try {
+    const repositoryRoot = path.join(workspace, "repo");
+    await mkdir(repositoryRoot, { recursive: true });
+    const result = await runCli([
+      "--repository-root",
+      repositoryRoot,
+      "release",
+      "rollback-verify"
+    ]);
+    assert.equal(result.exitCode, 1, result.stderr);
+    assert.equal(result.json.ok, false);
+    assert.ok(result.json.diagnostics.some((diag) => diag.code === "usage_error"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

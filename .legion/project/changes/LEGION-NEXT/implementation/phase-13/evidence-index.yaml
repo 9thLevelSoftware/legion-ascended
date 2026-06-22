@@ -230,3 +230,95 @@ entries:
     artifact: docs/next/evidence/P13-T02/gitleaks-p13-t02-diff.log
     description: "P13-T02 final diff gitleaks scan: 6 pre-existing leaks from P03-T04 evidence + skills/agents docs (out of scope for P13-T02); 0 new leaks introduced by P13-T02."
     sha256: fa8c960657b7d7a50ce963a7669a77c0dc0516c1f27d74467b291938da471138
+  - task: P13-T03
+    artifact: scripts/release/release-checklist.mjs
+    description: "P13-T03 release checklist verifier (fail-closed GA gate, 10 preconditions)."
+    sha256: 26dc830163f239f3f08dc1dd9d4b55417486792b025d3089a42ba04bb8c6feb6
+  - task: P13-T03
+    artifact: scripts/release/rollback-policy.mjs
+    description: "P13-T03 rollback-policy verifier (backup-manifest integrity + restore-target audit)."
+    sha256: 0642cfc795308f767f3681f57e71e6fed23f8fd42aa9af042a91992b076d4159
+  - task: P13-T03
+    artifact: packages/cli/src/commands/release/index.ts
+    description: "P13-T03 `legion next release {checklist,rollback-verify}` CLI adapter."
+    sha256: a67c7a87a37ebd1b4aa0dd08db6a4829aa40fac2025b7cd395275e5320f42585
+  - task: P13-T03
+    artifact: tests/release-checklist.test.mjs
+    description: "P13-T03 release-checklist verifier regression tests (15 cases)."
+    sha256: 0037b31576cfbe7e75ff9f85b306617d899d4bf22a5477a1b3a17362e5abf2aa
+  - task: P13-T03
+    artifact: tests/rollback-policy.test.mjs
+    description: "P13-T03 rollback-policy verifier regression tests (13 cases)."
+    sha256: c2d1af00e149d91829016207ebb9c4e37d23fc6674fa84a951e00f66cabaae2b
+  - task: P13-T03
+    artifact: docs/next/ga/RELEASE-RECORD.md
+    description: "P13-T03 consolidated GA decision package."
+    sha256: 1abf42057f278db665bbaecce6db5d4030da4540cdb1581a5dbff2f199034594
+  - task: P13-T03
+    artifact: docs/next/ga/MIGRATION-POLICY.md
+    description: "P13-T03 operator-facing migration policy."
+    sha256: ccb958dec3b2e4050a48812c237d23c36be780b83a61fee6ff03446e22f790f5
+  - task: P13-T03
+    artifact: docs/next/ga/ROLLBACK-POLICY.md
+    description: "P13-T03 rollback policy and procedure."
+    sha256: dbbde6c442197376ed12b3b71af2087111f4fcaec5e8e20935a7e8e9ab4461ad
+  - task: P13-T03
+    artifact: docs/next/ga/V8-HANDOFF.md
+    description: "P13-T03 v8 / v9 coexistence rules and deprecation timeline."
+    sha256: f001210590773cfbdc683e9e668e9133db671925e9b73b0c927e94581ed03bcb
+  - task: P13-T03
+    artifact: docs/next/ga/STABLE-CHANNEL-APPROVAL.md
+    description: "P13-T03 sign-off gate (decision owner: dasbl)."
+    sha256: 4934f2823b965f24b07cf7b4fa489e0b8a85255e75fe78a03794bb59275a22d6
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/integration-report.yaml
+    description: "P13-T03 structured integration report."
+    sha256: 51353a18a3a3f4b817730809764ec4890df586006332b1c90adead6d10af8b9e
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/release-checklist.json
+    description: "P13-T03 release checklist verdict: status: ready, zero findings."
+    sha256: 02b9f67dcdef0730ef3253789c328c336f9eb43f077be75989f66c1e95ed570a
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/rollback-policy.json
+    description: "P13-T03 rollback-policy verdict: status: restorable, zero blocking findings."
+    sha256: 02e597bc7555e51213d30f14fd16a92a2f99bdac8a6c01bc55462d5e23f49ad7
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/workspace-tests.log
+    description: "P13-T03 root test transcript: 143/143 pass (+28 P13-T03 tests)."
+    sha256: 07adad37a48afaf524fd16584b57fd37f2cfbf5b1034b02e13761d62059cb4c2
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/cli-e2e-test.log
+    description: "P13-T03 cli-e2e transcript: 35/35 pass (+6 P13-T03 release CLI tests)."
+    sha256: d7f82b2193b609c9c968b7e562641434089caccaf0c1a84bb89e33c4ccaf21a6
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/typecheck.log
+    description: "P13-T03 typecheck transcript: 10 workspace projects typecheck clean."
+    sha256: dc5d6319f2c49aadf63a2899c278deecbb17fe55aa99b600cebc1138ead59d6e
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/validate-next.log
+    description: "P13-T03 validate-next transcript: PASS."
+    sha256: ad21cdf33d24e3fb50def6f57b4e93c1dbc82d25f52a43472239a0017a23a238
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/core-test.log
+    description: "P13-T03 @legion/core transcript: 245/245 pass."
+    sha256: f4a258d5b27d34820fb7515a7cb747eb8352e94cc033bf2d1ae584a665672d7c
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/board-test.log
+    description: "P13-T03 @legion/board transcript: 113/113 pass."
+    sha256: eb9b71457da3303ebe16e588bed1ffbe7d285176072e3e06c054b313f32a8194
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/protocol-test.log
+    description: "P13-T03 @legion/protocol transcript: 55/55 pass."
+    sha256: 8a5da72d9a2d864e5a1c30be1416af211a7d30e70f4927f62f9b3a6a968df304
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/store-sqlite-test.log
+    description: "P13-T03 @legion/store-sqlite transcript: 171/171 pass."
+    sha256: cab80ad83eb482bd9ff902c860ebba6ef5478b0bf07956d87d76389f781e5618
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/artifacts-test.log
+    description: "P13-T03 @legion/artifacts transcript: 59/59 pass."
+    sha256: 1e8a18b831dd4233fd9bcb3cb161c1d5084bc0092098802fd0628df1bbb8f1c7
+  - task: P13-T03
+    artifact: docs/next/evidence/P13-T03/gitleaks-p13-t03-diff.log
+    description: "P13-T03 final diff gitleaks scan: no leaks found."
+    sha256: c4cc41dfe23557380fa782ab01e60d2e40f2892e2d8e2c6c1e3a13d9f1fab28f

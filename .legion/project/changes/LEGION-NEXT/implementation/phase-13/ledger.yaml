@@ -20,7 +20,10 @@ tasks:
     depends_on: ["P13-T01"]
     assignee: legionworker
   P13-T03:
-    status: todo
+    status: DONE
+    run_id: "P13-T03-20260622-ga-release-preparation"
+    commit: "726a70c"
+    evidence: docs/next/evidence/P13-T03/integration-report.yaml
     depends_on: ["P13-T02"]
     assignee: legionworker
   P13-T04:
@@ -64,6 +67,22 @@ decisions:
     decision: "threat-model.mjs, sandbox-guard.mjs, and retention-audit.mjs all accept a --repository-root argument so the operator's repo root (different from the v9 source tree in CLI e2e workspaces) is honoured when resolving fixture-hash paths."
     reason: "The P13-T01 fixtures are captured against the operator's --repository-root, which is not always the v9 source tree (CLI e2e workspaces use a tmp dir). Without the override, retention-audit cannot resolve the recorded fixture paths and fails closed on every e2e capture."
     decided_at: "2026-06-22T16:00:00Z"
+  - task: P13-T03
+    decision: "GA gating lives in scripts/release/ + the @legion/cli release subcommand; @legion/core and @legion/board remain provider-neutral."
+    reason: "The release checklist and rollback verifier are operator-facing governance gates, not core workflow logic. Keeping them out of @legion/core and @legion/board preserves the deterministic, host-agnostic invariants those packages already satisfy."
+    decided_at: "2026-06-22T17:00:00Z"
+  - task: P13-T03
+    decision: "The release checklist and rollback-policy verifier emit stable finding codes (changelog_missing_ga_entry, manifest_backup_hash_match, etc.) so CI gates and operator dashboards can grep without parsing free-form text."
+    reason: "Phase 12 established the finding-code convention for the migration verify alias and P13-T02 reused it for the threat-model verdict. P13-T03 extends the same convention to the GA cut-over so all three fail-closed gates share a single diagnostic surface."
+    decided_at: "2026-06-22T17:00:00Z"
+  - task: P13-T03
+    decision: "The GA decision package pins four companion documents (MIGRATION-POLICY, ROLLBACK-POLICY, V8-HANDOFF, STABLE-CHANNEL-APPROVAL) and links them from the consolidated RELEASE-RECORD.md so reviewers find every artefact from a single entry point."
+    reason: "The REWRITE-CHARTER rule for GA promotion requires the decision owner to approve the release record, migration policy, rollback policy, and v8 handoff. Cross-linking them in the release record prevents drift between the consolidated record and the underlying artefacts."
+    decided_at: "2026-06-22T17:00:00Z"
+  - task: P13-T03
+    decision: "v8 evidence remains fail-closed (null cells in the A/B comparison) and the GA promotion is approved without v8 baseline execution because P00-T06 v8 baseline remains blocked."
+    reason: "The Phase 13 fail-closed contract specifies that absent, stale, or drifted evidence must not pass as green. The GA approval documents the absent v8 evidence in the outstanding-items list of RELEASE-RECORD.md so the decision owner signs the GA promotion with full visibility."
+    decided_at: "2026-06-22T17:00:00Z"
 blockers: []
 preserved_boundaries:
   - "Eval execution stays in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral and deterministic."
@@ -72,6 +91,7 @@ preserved_boundaries:
   - "v8 capture still requires the operator-approved --command flag; --dry-run is the only path that runs without invoking the host CLI."
   - "Threat-model validation lives in scripts/baseline/ + the @legion/cli evals subcommand; @legion/core and @legion/board remain provider-neutral."
   - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
+  - "GA gating lives in scripts/release/ + the @legion/cli release subcommand; @legion/core and @legion/board remain provider-neutral. The release checklist and rollback-policy verifier are governance gates, not core workflow logic."
 evidence:
   - scripts/baseline/capture-run.mjs
   - scripts/baseline/grade-run.mjs
@@ -80,6 +100,8 @@ evidence:
   - scripts/baseline/sandbox-guard.mjs
   - scripts/baseline/retention-audit.mjs
   - scripts/baseline/threat-model.mjs
+  - scripts/release/release-checklist.mjs
+  - scripts/release/rollback-policy.mjs
   - packages/cli/src/commands/evals/index.ts
   - packages/cli/src/index.ts
   - apps/cli-e2e/test/cli-e2e.test.mjs
@@ -87,7 +109,14 @@ evidence:
   - tests/evals-redaction.test.mjs
   - tests/evals-sandbox.test.mjs
   - tests/evals-threat-model.test.mjs
+  - tests/release-checklist.test.mjs
+  - tests/rollback-policy.test.mjs
   - docs/next/baseline/SECURITY-MODEL.md
+  - docs/next/ga/RELEASE-RECORD.md
+  - docs/next/ga/MIGRATION-POLICY.md
+  - docs/next/ga/ROLLBACK-POLICY.md
+  - docs/next/ga/V8-HANDOFF.md
+  - docs/next/ga/STABLE-CHANNEL-APPROVAL.md
   - docs/next/evidence/P13-T01/integration-report.yaml
   - docs/next/evidence/P13-T01/ab-comparison/ab-comparison.json
   - docs/next/evidence/P13-T01/ab-comparison/ab-comparison.md
@@ -112,19 +141,35 @@ evidence:
   - docs/next/evidence/P13-T02/store-sqlite-test.log
   - docs/next/evidence/P13-T02/artifacts-test.log
   - docs/next/evidence/P13-T02/gitleaks-p13-t02-diff.log
+  - docs/next/evidence/P13-T03/integration-report.yaml
+  - docs/next/evidence/P13-T03/release-checklist.json
+  - docs/next/evidence/P13-T03/rollback-policy.json
+  - docs/next/evidence/P13-T03/workspace-tests.log
+  - docs/next/evidence/P13-T03/cli-e2e-test.log
+  - docs/next/evidence/P13-T03/typecheck.log
+  - docs/next/evidence/P13-T03/validate-next.log
+  - docs/next/evidence/P13-T03/core-test.log
+  - docs/next/evidence/P13-T03/board-test.log
+  - docs/next/evidence/P13-T03/protocol-test.log
+  - docs/next/evidence/P13-T03/store-sqlite-test.log
+  - docs/next/evidence/P13-T03/artifacts-test.log
+  - docs/next/evidence/P13-T03/gitleaks-p13-t03-diff.log
 phase_13_handoff:
-  next_task: P13-T03
-  next_task_id: TBD
+  next_task: P13-T04
+  next_task_id: t_50860be4
   summary: |
-    Begin Phase 13 task 3 (GA decision) on top of the P13-T01 behavioral
-    eval surface and the P13-T02 security hardening. The threat-model
-    validator should be the highest-level fail-closed gate for Phase 13
+    Begin Phase 13 task 4 (closeout) on top of the P13-T01 behavioral
+    eval surface, the P13-T02 security hardening, and the P13-T03 GA
+    decision package. The release checklist and rollback-policy
+    verifier are the highest-level fail-closed gates for Phase 13
     acceptance.
-  contract_inputs_for_p13_t03:
-    - "`legion next evals threat-model` composes sandbox-guard + retention-audit + in-process redaction scan into a single JSON verdict; treat non-zero exit as a hard fail in CI."
-    - "capture-run.mjs auto-grades so every sealed run carries a fresh score.json; the held-out security-sensitive.v1 contract is pinned by tests/evals-baseline.test.mjs."
-    - "P00-T06 v8 baseline execution remains blocked. The threat-model validator does not gate v8 — it gates the v9 evidence. P13-T03 may decide to ship v9 evidence without v8 if P00-T06 cannot be unblocked."
+  contract_inputs_for_p13_t04:
+    - "`legion next release checklist` composes ten preconditions into a single JSON verdict; treat non-zero exit as a hard fail in CI."
+    - "`legion next release rollback-verify` confirms the most recent apply step is restorable; treat non-zero exit as a hard fail."
+    - "`legion next evals threat-model` continues to gate v9 evidence; the held-out security-sensitive.v1 contract is pinned by tests/evals-baseline.test.mjs."
+    - "P00-T06 v8 baseline execution remains blocked. The release checklist does not gate v8 — it gates the v9 evidence. The GA promotion is approved with full visibility into the absent v8 evidence (RELEASE-RECORD.md outstanding-items list)."
   preserved_boundaries:
     - "Eval harness scripts live under scripts/baseline/ and the @legion/cli evals subcommand; do not move eval execution into @legion/core or @legion/board."
+    - "GA gating lives in scripts/release/ and the @legion/cli release subcommand; do not move GA gating into @legion/core or @legion/board."
     - "Redaction must keep the transcript inspectable for failure context while masking the configured secret canary, OpenAI-style API keys, bearer tokens, URL credentials, JWT tokens, PEM-encoded private keys, JSON-embedded secrets, and common credential assignments."
     - "v8 evidence remains fail-closed: absent P00-T06 v8 runs surface as null cells rather than fabricated values."

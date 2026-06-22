@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "status": "restorable",
+  "backup_manifest_path": "/var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/tmpamcjw11f/backup-manifest.json",
+  "repository_root": "/var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/tmpamcjw11f",
+  "source": "codex-legion",
+  "kind": "codex-legion-migration-backup",
+  "manifest": {
+    "schemaVersion": "0.1.0",
+    "kind": "codex-legion-migration-backup",
+    "createdAt": "2026-06-22T15:00:00.000Z",
+    "repositoryRoot": "/var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/tmpamcjw11f",
+    "backupPath": "/var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/tmpamcjw11f/backup",
+    "preMigrationHash": "sha256:b4fef1f97e972ac91d21bc8bff9f8595951dd6167a1148f852d826ac61842617",
+    "sourceHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "existingLegionRoot": true
+  },
+  "findings": [
+    {
+      "code": "restore_target_absent",
+      "message": "No live .legion directory at /var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/tmpamcjw11f/.legion; rollback would create one from the backup.",
+      "severity": "info"
+    }
+  ],
+  "checks": {
+    "manifest": {
+      "name": "manifest",
+      "ok": true,
+      "findings": []
+    },
+    "restore_target": {
+      "name": "restore_target",
+      "ok": true,
+      "findings": [
+        {
+          "code": "restore_target_absent",
+          "message": "No live .legion directory at /var/folders/3h/0b2xvsws05g5_ddczh11v8n40000gn/T/tmpamcjw11f/.legion; rollback would create one from the backup.",
+          "severity": "info"
+        }
+      ]
+    }
+  }
+}

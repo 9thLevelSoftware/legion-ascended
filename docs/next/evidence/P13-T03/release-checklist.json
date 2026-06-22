@@ -1,0 +1,59 @@
+{
+  "ok": true,
+  "status": "ready",
+  "release_version": "9.0.0",
+  "repository_root": "/Users/christopherwilloughby/legion-ascended",
+  "findings": [],
+  "checks": {
+    "changelog": {
+      "name": "changelog",
+      "ok": true,
+      "findings": []
+    },
+    "release_record": {
+      "name": "release_record",
+      "ok": true,
+      "findings": []
+    },
+    "migration_policy": {
+      "name": "migration_policy",
+      "ok": true,
+      "findings": []
+    },
+    "rollback_policy": {
+      "name": "rollback_policy",
+      "ok": true,
+      "findings": []
+    },
+    "v8_handoff": {
+      "name": "v8_handoff",
+      "ok": true,
+      "findings": []
+    },
+    "stable_channel_approval": {
+      "name": "stable_channel_approval",
+      "ok": true,
+      "findings": []
+    },
+    "ledger": {
+      "name": "ledger",
+      "ok": true,
+      "findings": []
+    },
+    "threat_model_verdict": {
+      "name": "threat_model_verdict",
+      "ok": true,
+      "findings": []
+    },
+    "ab_comparison": {
+      "name": "ab_comparison",
+      "ok": true,
+      "findings": []
+    },
+    "validate_next_log": {
+      "name": "validate_next_log",
+      "ok": true,
+      "findings": []
+    }
+  }
+}
