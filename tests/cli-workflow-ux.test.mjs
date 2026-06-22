@@ -256,6 +256,92 @@ test("workflow helper state blocks invalid project state instead of suggesting s
   }
 });
 
+test("workflow helper state blocks unknown .legion entries before start", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, ".legion", "unexpected"), { recursive: true });
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "blocked");
+    assert.equal(workflowState.projectId, null);
+    assert.equal(workflowState.currentSpecCount, 0);
+    assert.equal(workflowState.nextAction.command, "legion validate");
+    assert.equal(workflowState.diagnostics[0]?.code, "migration_required");
+    assert.equal(
+      workflowState.diagnostics[0]?.message,
+      "Existing .legion entries require explicit migration before initialization: unexpected."
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper state blocks .legion project data without manifest before start", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, ".legion", "project"), { recursive: true });
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "blocked");
+    assert.equal(workflowState.projectId, null);
+    assert.equal(workflowState.currentSpecCount, 0);
+    assert.equal(workflowState.nextAction.command, "legion validate");
+    assert.equal(workflowState.diagnostics[0]?.code, "migration_required");
+    assert.equal(
+      workflowState.diagnostics[0]?.message,
+      "Existing .legion/project data has no project manifest; explicit migration or reconciliation is required before initialization."
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper state treats .legion var alone as uninitialized", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, ".legion", "var"), { recursive: true });
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "uninitialized");
+    assert.equal(workflowState.nextAction.command, "legion start");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("root help leads with workflow commands and hides next namespace", async () => {
   const result = await runCliCapture(["--help"]);
   assert.equal(result.exitCode, 0);
