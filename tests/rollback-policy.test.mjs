@@ -290,6 +290,46 @@ test("P13-T03 rollback-policy fails closed when backupPath is missing", async ()
   });
 });
 
+test("P13-T03 rollback-policy accepts greenfield manifests without a backup directory", async () => {
+  await withWorkspace(async (workspace) => {
+    const manifestPath = path.join(workspace, "backup-manifest.json");
+    writeManifest(
+      manifestPath,
+      freshManifest(CODEX_MANIFEST_KIND, {
+        backupPath: path.join(workspace, "no-preexisting-legion-backup"),
+        preMigrationHash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        repositoryRoot: workspace,
+        existingLegionRoot: false
+      })
+    );
+    const result = run(["--backup-manifest", manifestPath, "--repository-root", workspace, "--source", "codex-legion"]);
+    assert.equal(result.status, 0, `unexpected stderr: ${result.stderr}`);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "restorable");
+  });
+});
+
+test("P13-T03 rollback-policy fails closed when the expected backup hash is empty", async () => {
+  await withWorkspace(async (workspace) => {
+    const backupPath = path.join(workspace, "backup");
+    writeBackup(backupPath, { "manifest.json": "{\"version\":\"8.0.5\"}\n" });
+    const manifestPath = path.join(workspace, "backup-manifest.json");
+    writeManifest(
+      manifestPath,
+      freshManifest(CODEX_MANIFEST_KIND, {
+        backupPath,
+        preMigrationHash: "",
+        repositoryRoot: workspace
+      })
+    );
+    const result = run(["--backup-manifest", manifestPath, "--repository-root", workspace, "--source", "codex-legion"]);
+    assert.notEqual(result.status, 0);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.ok(payload.findings.some((f) => f.code === "manifest_backup_hash_expected"));
+  });
+});
+
 test("P13-T03 rollback-policy fails closed on backupPath hash drift", async () => {
   await withWorkspace(async (workspace) => {
     const backupPath = path.join(workspace, "backup");

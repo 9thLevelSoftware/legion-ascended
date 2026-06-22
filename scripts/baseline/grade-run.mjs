@@ -185,11 +185,25 @@ function deterministicTotal(dims) {
   return clamp(total, 0, 95);
 }
 
-function buildScore(manifest, dims) {
+function criticalArtifactMissing(manifest, runDir) {
+  const required = [
+    manifest.artifacts.transcript,
+    manifest.artifacts.git_before,
+    manifest.artifacts.git_after
+  ];
+  return required.some((rel) => !existsSync(path.join(runDir, rel)));
+}
+
+function zeroDeterministicDimensions() {
+  return Object.fromEntries(Object.keys(DIMENSION_WEIGHTS).map((key) => [key, 0]));
+}
+
+function buildScore(manifest, dims, options = {}) {
   const terminal = manifest.terminal_status;
   const isGradeable = GRADEABLE_TERMINAL_STATUSES.has(terminal);
-  const criticalFailure = !isGradeable;
-  const deterministicTotalScore = criticalFailure ? 0 : deterministicTotal(dims);
+  const criticalFailure = !isGradeable || options.criticalArtifactMissing === true;
+  const deterministicDims = criticalFailure ? zeroDeterministicDimensions() : dims;
+  const deterministicTotalScore = criticalFailure ? 0 : deterministicTotal(deterministicDims);
   return {
     schema_version: 1,
     run_id: manifest.run_id,
@@ -200,13 +214,13 @@ function buildScore(manifest, dims) {
     terminal_status: terminal,
     critical_failure: criticalFailure,
     dimensions: {
-      build_integrity: dims.build_integrity,
-      acceptance_behavior: dims.acceptance_behavior,
-      regression_control: dims.regression_control,
-      scope_discipline: dims.scope_discipline,
-      recovery_behavior: dims.recovery_behavior,
-      duplicate_work_control: dims.duplicate_work_control,
-      artifact_traceability: dims.artifact_traceability,
+      build_integrity: deterministicDims.build_integrity,
+      acceptance_behavior: deterministicDims.acceptance_behavior,
+      regression_control: deterministicDims.regression_control,
+      scope_discipline: deterministicDims.scope_discipline,
+      recovery_behavior: deterministicDims.recovery_behavior,
+      duplicate_work_control: deterministicDims.duplicate_work_control,
+      artifact_traceability: deterministicDims.artifact_traceability,
       maintainability: "judge_not_run",
       requirement_fidelity: "judge_not_run"
     }
@@ -261,7 +275,7 @@ async function main() {
   const dims = await gradeDeterministic(manifest, runDir, {});
   const collision = siblingRunIds.has(manifest.run_id);
   dims.duplicate_work_control = collision ? 0 : DIMENSION_WEIGHTS.duplicate_work_control;
-  const score = buildScore(manifest, dims);
+  const score = buildScore(manifest, dims, { criticalArtifactMissing: criticalArtifactMissing(manifest, runDir) });
 
   // Numeric sanity: deterministic_total must be an integer in [0, 95].
   ensureInteger(score.deterministic_total, "deterministic_total", 0);

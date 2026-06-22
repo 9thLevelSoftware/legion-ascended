@@ -261,22 +261,29 @@ async function auditManifest({ backupManifestPath, repositoryRoot, source }) {
       });
     }
   }
-  // backupPath absolute + present + hash match.
+  // backupPath absolute + present + hash match. Greenfield migrations
+  // still record a backupPath in the manifest, but no backup directory is
+  // created when there was no pre-existing .legion tree to preserve.
   if (typeof manifest["backupPath"] === "string") {
     if (!path.isAbsolute(manifest["backupPath"])) {
       findings.push({
         code: "manifest_backup_path_absolute",
         message: `Backup manifest backupPath must be absolute: ${manifest["backupPath"]}`
       });
-    } else if (!existsSync(manifest["backupPath"])) {
+    } else if (manifest["existingLegionRoot"] === true && !existsSync(manifest["backupPath"])) {
       findings.push({
         code: "manifest_backup_path_present",
         message: `Backup manifest backupPath does not exist on disk: ${manifest["backupPath"]}`
       });
-    } else {
+    } else if (manifest["existingLegionRoot"] === true) {
       const computed = await hashTree(manifest["backupPath"]);
       const expected = manifest[KNOWN_KINDS[kind].preHashField];
-      if (expected && computed !== expected) {
+      if (typeof expected !== "string" || expected.length === 0) {
+        findings.push({
+          code: "manifest_backup_hash_expected",
+          message: `Backup manifest ${KNOWN_KINDS[kind].preHashField} must be a non-empty hash.`
+        });
+      } else if (computed !== expected) {
         findings.push({
           code: "manifest_backup_hash_match",
           message: `Backup directory hash drift: expected ${expected}, computed ${computed}.`

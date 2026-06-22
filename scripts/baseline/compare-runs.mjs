@@ -96,6 +96,7 @@ function countEventsByType(manifest, types) {
 }
 
 function defectsFromScore(score) {
+  if (score === null) return 1;
   if (score?.critical_failure === true) return 1;
   // Each zero-scored deterministic dimension counts as a defect for A/B.
   let defects = 0;
@@ -144,9 +145,10 @@ async function collectSide(label, runDir) {
       recovery: recoveryFromManifest(manifest),
       defects: defectsFromScore(score),
       deterministic_total: score?.deterministic_total ?? null,
-      critical_failure: score?.critical_failure ?? null,
+      critical_failure: score?.critical_failure ?? true,
       manifest_path: path.relative(REPO_ROOT, path.join(dir, "run-manifest.json")),
-      score_path: score ? path.relative(REPO_ROOT, scorePath) : null
+      score_path: score ? path.relative(REPO_ROOT, scorePath) : null,
+      score_missing: score === null
     });
   }
   rows.sort((a, b) => (a.scenario_id < b.scenario_id ? -1 : a.scenario_id > b.scenario_id ? 1 : 0));
@@ -218,7 +220,9 @@ function compare(v8Rows, v9Rows) {
       v8_tokens_status: v8?.tokens?.status ?? null,
       v9_tokens_status: v9?.tokens?.status ?? null,
       v8_cost_status: v8?.cost?.status ?? null,
-      v9_cost_status: v9?.cost?.status ?? null
+      v9_cost_status: v9?.cost?.status ?? null,
+      v8_score_missing: v8?.score_missing ?? null,
+      v9_score_missing: v9?.score_missing ?? null
     });
   }
   scenarioRows.sort((a, b) => (a.scenario_id < b.scenario_id ? -1 : a.scenario_id > b.scenario_id ? 1 : 0));
@@ -314,7 +318,7 @@ function renderMarkdown(report, label) {
   lines.push("");
   lines.push("- Missing v8 runs surface as `null` cells; the comparison is fail-closed (no value is invented).");
   lines.push("- Tokens/cost columns reflect telemetry `status` (`available` / `unavailable`) rather than estimated values.");
-  lines.push("- Defects are scored per-row from `score.json`: `critical_failure === true` contributes 1; each zero-scored deterministic dimension contributes 1.");
+  lines.push("- Defects are scored per-row from `score.json`: a missing score contributes 1, `critical_failure === true` contributes 1, and each zero-scored deterministic dimension contributes 1.");
   lines.push("- Recovery counts `interrupted` and `recovered` terminal states from `run-manifest.json`.");
   lines.push("");
   return `${lines.join("\n")}\n`;
