@@ -22,10 +22,25 @@ export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
   "dist/legion-cli.mjs.map"
 ]);
 
+export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
+  "evals/baseline/corpus-manifest.yaml",
+  "evals/baseline/fixture-hashes.sha256",
+  "evals/baseline/manifest.yaml"
+]);
+
+export const CLI_RUNTIME_PACKAGE_PREFIXES = Object.freeze([
+  "evals/baseline/scenarios/",
+  "evals/baseline/schema/",
+  "evals/fixtures/public/",
+  "scripts/baseline/",
+  "scripts/release/"
+]);
+
 export const LEGACY_CHECKSUM_FILES = Object.freeze([
   "bin/install.js",
   "bin/runtime-metadata.js",
   ...ROOT_ROUTER_PACKAGE_PATHS,
+  ...CLI_RUNTIME_PACKAGE_FILES,
   "docs/control-modes.md",
   "docs/runtime-audit.md",
   "docs/runtime-certification-checklists.md",
@@ -99,13 +114,16 @@ export function comparePackagePathSets(input) {
   const baselinePaths = uniqueSorted(input.baselinePaths);
   const currentPaths = uniqueSorted(input.currentPaths);
   const approvedExtraPaths = new Set(input.approvedExtraPaths ?? []);
+  const approvedExtraPrefixes = input.approvedExtraPrefixes ?? [];
   const currentSet = new Set(currentPaths);
   const baselineSet = new Set(baselinePaths);
+  const hasApprovedPrefix = (filePath) => approvedExtraPrefixes.some((prefix) => filePath.startsWith(prefix));
 
   return {
     missingLegacyPaths: baselinePaths.filter((filePath) => !currentSet.has(filePath)),
     missingApprovedPackagePaths: sortPaths(input.approvedExtraPaths ?? []).filter((filePath) => !currentSet.has(filePath)),
-    extraPackagePaths: currentPaths.filter((filePath) => !baselineSet.has(filePath) && !approvedExtraPaths.has(filePath)),
+    missingApprovedPackagePrefixes: sortPaths(approvedExtraPrefixes).filter((prefix) => !currentPaths.some((filePath) => filePath.startsWith(prefix))),
+    extraPackagePaths: currentPaths.filter((filePath) => !baselineSet.has(filePath) && !approvedExtraPaths.has(filePath) && !hasApprovedPrefix(filePath)),
     workspacePackagePaths: currentPaths.filter((filePath) => filePath.startsWith("packages/"))
   };
 }
@@ -202,7 +220,11 @@ export async function checkLegacyPackageContents(input = {}) {
   const packageComparison = comparePackagePathSets({
     baselinePaths: baseline.files,
     currentPaths: current.files,
-    approvedExtraPaths: ROOT_ROUTER_PACKAGE_PATHS
+    approvedExtraPaths: [
+      ...ROOT_ROUTER_PACKAGE_PATHS,
+      ...CLI_RUNTIME_PACKAGE_FILES
+    ],
+    approvedExtraPrefixes: CLI_RUNTIME_PACKAGE_PREFIXES
   });
   const baselineChecksums = readChecksumFile(checksumPath);
   const currentChecksums = computeChecksumMap(root, current.files.filter((filePath) => filePath !== DEFAULT_CHECKSUM_PATH));
@@ -216,6 +238,7 @@ export async function checkLegacyPackageContents(input = {}) {
     ok:
       packageComparison.missingLegacyPaths.length === 0 &&
       packageComparison.missingApprovedPackagePaths.length === 0 &&
+      packageComparison.missingApprovedPackagePrefixes.length === 0 &&
       packageComparison.extraPackagePaths.length === 0 &&
       packageComparison.workspacePackagePaths.length === 0 &&
       checksumComparison.missingChecksumPaths.length === 0 &&

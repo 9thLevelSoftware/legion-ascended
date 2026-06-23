@@ -6,8 +6,8 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path23 from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
+import path24 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
 import path6 from "node:path";
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path24) {
-  if (!path24)
+function getElementAtPath(obj, path25) {
+  if (!path25)
     return obj;
-  return path24.reduce((acc, key) => acc?.[key], obj);
+  return path25.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path24, issues) {
+function prefixIssues(path25, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path24);
+    iss.path.unshift(path25);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path24 = []) => {
+  const processError = (error3, path25 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path24, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path25, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path24, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path25, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path24, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path25, ...issue2.path]);
       } else {
-        const fullpath = [...path24, ...issue2.path];
+        const fullpath = [...path25, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -15445,14 +15445,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path24) {
-  if (path24.endsWith(".json"))
+function mediaTypeForArtifactPath(path25) {
+  if (path25.endsWith(".json"))
     return "application/json";
-  if (path24.endsWith(".yaml") || path24.endsWith(".yml"))
+  if (path25.endsWith(".yaml") || path25.endsWith(".yml"))
     return "application/yaml";
-  if (path24.endsWith(".md"))
+  if (path25.endsWith(".md"))
     return "text/markdown";
-  if (path24.endsWith(".txt"))
+  if (path25.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -15495,16 +15495,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path24, issues) {
+function schemaDiagnostics(path25, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path24 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path25 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path24
+      path: path25
     });
   });
 }
@@ -16462,7 +16462,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path24 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path25 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -16476,7 +16476,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path24
+        path: path25
       }))
     };
   }
@@ -17224,13 +17224,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path24) {
+function parseRequirementId2(input, path25) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path24
+      path: path25
     })));
   }
   return parsed.data;
@@ -17246,24 +17246,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path24) {
+function parseBaseGitSha(input, path25) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path24
+      path: path25
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path24) {
+function parseOwners(input, path25) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path24
+        path: path25
       })
     ]);
   }
@@ -17275,7 +17275,7 @@ function parseOwners(input, path24) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path24
+        path: path25
       })));
       continue;
     }
@@ -17563,7 +17563,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path24) {
+function conflictDiagnostics(deltas, path25) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -17572,7 +17572,7 @@ function conflictDiagnostics(deltas, path24) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path24
+        path: path25
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -18349,18 +18349,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path24) {
+function parseOracleId2(input, path25) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path24
+      path: path25
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path24) {
+function parseBaseGitSha2(input, path25) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18368,7 +18368,7 @@ function parseBaseGitSha2(input, path24) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path24
+      path: path25
     })));
   }
   return parsed.data;
@@ -18712,7 +18712,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path24) {
+function parseBaseGitSha3(input, path25) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18720,18 +18720,18 @@ function parseBaseGitSha3(input, path24) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path24
+      path: path25
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path24) {
+function assertExpectedRevision(value, path25) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path24
+        path: path25
       })
     ]);
   }
@@ -19176,8 +19176,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path24) {
-  return nodeId("artifact", path24);
+function artifactNodeId(path25) {
+  return nodeId("artifact", path25);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -19213,8 +19213,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path24) {
-  const fileName = path24.split("/").at(-1);
+function oracleIdFromPath(path25) {
+  const fileName = path25.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -19329,13 +19329,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path24 = [];
+  const path25 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path24.indexOf(node);
+      const cycleStartIndex = path25.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path24.length; index++) {
-          const cyclicNode = path24[index];
+        for (let index = cycleStartIndex; index < path25.length; index++) {
+          const cyclicNode = path25[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -19345,11 +19345,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path24.push(node);
+    path25.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path24.pop();
+    path25.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -19377,10 +19377,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path24 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path25 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path24,
+        path: path25,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -20026,13 +20026,13 @@ function parseChangeId7(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path24) {
+function parseArchivedAt(input, path25) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path24
+      path: path25
     })));
   }
   return parsed.data;
@@ -20061,7 +20061,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path24) {
+function archiveHashDiagnostics(record2, path25) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -20069,11 +20069,11 @@ function archiveHashDiagnostics(record2, path24) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path24
+      path: path25
     })
   ];
 }
-async function assertWorktreeTarget(input, path24) {
+async function assertWorktreeTarget(input, path25) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -20087,7 +20087,7 @@ async function assertWorktreeTarget(input, path24) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path24
+        path: path25
       })
     ]);
   } catch (error2) {
@@ -20095,7 +20095,7 @@ async function assertWorktreeTarget(input, path24) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path24
+        path: path25
       })
     ]);
   }
@@ -20174,11 +20174,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path24 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path24 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path24)) : remaining;
+    const path25 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path25 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path25)) : remaining;
     return {
-      path: path24,
+      path: path25,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -20241,9 +20241,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path24, document) {
+function validatePlannedDocument(path25, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path24,
+    artifactPath: path25,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -20254,7 +20254,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path24, document]) => [path24, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path25, document]) => [path25, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -20278,17 +20278,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path24 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path24)) {
+      const path25 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path25)) {
         return failure9("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path24}.`,
-            path: path24
+            message: `Archive add target already exists: ${path25}.`,
+            path: path25
           })
         ]);
       }
-      plannedDocs.set(path24, {
+      plannedDocs.set(path25, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -20301,7 +20301,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path24);
+      touchedPaths.add(path25);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -20486,8 +20486,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path24 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path24);
+  const path25 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path25);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -20725,10 +20725,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path24 = archivePath(changeId);
+  const path25 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path24,
+    artifactPath: path25,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -20740,22 +20740,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path24
+        path: path25
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path24);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path25);
   if (hashDiagnostics.length > 0)
     return failure9("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path24,
+    artifactPath: path25,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path24,
+      path: path25,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -21000,11 +21000,30 @@ async function archive(context) {
 
 // packages/cli/src/commands/evals/index.ts
 import { execFile as execFileCb } from "node:child_process";
-import { existsSync as existsSync2 } from "node:fs";
+import { existsSync as existsSync3 } from "node:fs";
 import { readFile as readFile8 } from "node:fs/promises";
+import path13 from "node:path";
+import { promisify as promisify2 } from "node:util";
+
+// packages/cli/src/source-root.ts
+import { existsSync as existsSync2 } from "node:fs";
 import path12 from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify as promisify2 } from "node:util";
+function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
+  const moduleDirectory = path12.dirname(fileURLToPath(importMetaUrl));
+  const candidates = [
+    // Bundled root CLI: dist/legion-cli.mjs -> package root.
+    path12.resolve(moduleDirectory, ".."),
+    // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
+    path12.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+  ];
+  for (const candidate of candidates) {
+    if (existsSync2(path12.join(candidate, requiredRelativePath))) return candidate;
+  }
+  return candidates[0] ?? process.cwd();
+}
+
+// packages/cli/src/commands/evals/index.ts
 var execFile2 = promisify2(execFileCb);
 var EVALS_HELP = `legion dev evals <command>
 
@@ -21059,7 +21078,7 @@ Threat-model required options:
 
 Threat-model optional:
   --report <path>           Where to write the JSON verdict (in addition to stdout).`;
-var V9_SOURCE_ROOT = path12.resolve(path12.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..");
+var V9_SOURCE_ROOT = resolveCliSourceRoot(import.meta.url, "scripts/baseline/capture-run.mjs");
 async function handleEvalsCommand(context) {
   if (hasFlag(context, "help") || context.args.positionals.length === 0) {
     return helpResult(EVALS_HELP);
@@ -21123,23 +21142,23 @@ async function capture(context) {
       "capture script did not return a run directory."
     );
   }
-  const resolvedRunDir = path12.isAbsolute(runDir) ? runDir : path12.join(context.repositoryRoot, runDir);
-  if (!existsSync2(resolvedRunDir)) {
+  const resolvedRunDir = path13.isAbsolute(runDir) ? runDir : path13.join(context.repositoryRoot, runDir);
+  if (!existsSync3(resolvedRunDir)) {
     return failure(
       { ok: false, status: "error", diagnostics: [{ code: "capture_failed", message: `captured run directory not found: ${resolvedRunDir}` }] },
       `captured run directory not found: ${resolvedRunDir}`
     );
   }
-  const manifestPath = path12.join(resolvedRunDir, "run-manifest.json");
-  const scorePath = path12.join(resolvedRunDir, "score.json");
+  const manifestPath = path13.join(resolvedRunDir, "run-manifest.json");
+  const scorePath = path13.join(resolvedRunDir, "score.json");
   const manifest = JSON.parse(await readFile8(manifestPath, "utf8"));
   return success(
     {
       ok: true,
       status: "captured",
-      runDirectory: path12.relative(context.repositoryRoot, resolvedRunDir),
-      runManifest: path12.relative(context.repositoryRoot, manifestPath),
-      score: existsSync2(scorePath) ? path12.relative(context.repositoryRoot, scorePath) : null,
+      runDirectory: path13.relative(context.repositoryRoot, resolvedRunDir),
+      runManifest: path13.relative(context.repositoryRoot, manifestPath),
+      score: existsSync3(scorePath) ? path13.relative(context.repositoryRoot, scorePath) : null,
       manifest
     },
     `Captured run to ${resolvedRunDir}.`
@@ -21149,7 +21168,7 @@ async function grade(context) {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const resolvedRunDirectory = path12.resolve(context.repositoryRoot, runDirectory);
+  const resolvedRunDirectory = path13.resolve(context.repositoryRoot, runDirectory);
   const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
@@ -21157,7 +21176,7 @@ async function grade(context) {
     {
       ok: true,
       status: "graded",
-      score: scorePath ? path12.relative(context.repositoryRoot, scorePath) : scorePath
+      score: scorePath ? path13.relative(context.repositoryRoot, scorePath) : scorePath
     },
     `Graded ${runDirectory} -> ${scorePath}.`
   );
@@ -21173,11 +21192,11 @@ async function compare(context) {
     "--repository-root",
     context.repositoryRoot,
     "--v8-dir",
-    path12.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
+    path13.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
     "--v9-dir",
-    path12.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
+    path13.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
     "--output",
-    path12.resolve(context.repositoryRoot, context.args.options.get("output"))
+    path13.resolve(context.repositoryRoot, context.args.options.get("output"))
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -21188,8 +21207,8 @@ async function compare(context) {
     {
       ok: true,
       status: "compared",
-      abComparisonJson: jsonPath ? path12.relative(context.repositoryRoot, jsonPath) : jsonPath,
-      abComparisonMarkdown: mdPath ? path12.relative(context.repositoryRoot, mdPath) : mdPath
+      abComparisonJson: jsonPath ? path13.relative(context.repositoryRoot, jsonPath) : jsonPath,
+      abComparisonMarkdown: mdPath ? path13.relative(context.repositoryRoot, mdPath) : mdPath
     },
     `Compared v8/v9 sealed runs -> ${jsonPath}.`
   );
@@ -21203,13 +21222,13 @@ async function threatModel(context) {
   const args = [
     "scripts/baseline/threat-model.mjs",
     "--run-dir",
-    path12.resolve(context.repositoryRoot, runDir),
+    path13.resolve(context.repositoryRoot, runDir),
     "--output-root",
-    path12.resolve(context.repositoryRoot, outputRoot)
+    path13.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path12.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path13.resolve(context.repositoryRoot, report));
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -21260,7 +21279,7 @@ function parseJsonVerdict(stdout) {
 }
 async function runScript(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path12.join(V9_SOURCE_ROOT, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path13.join(V9_SOURCE_ROOT, arg) : arg
   );
   try {
     const result = await execFile2(process.execPath, resolvedArgs, {
@@ -21307,7 +21326,7 @@ async function runScript(context, scriptArgs) {
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash15 } from "node:crypto";
 import { cp, mkdir as mkdir9, readFile as readFile9, readdir as readdir4, rename as rename2, rm as rm3, stat as stat4, writeFile as writeFile3 } from "node:fs/promises";
-import path13 from "node:path";
+import path14 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
 var LEGION_ROOT = ".legion";
@@ -21316,7 +21335,7 @@ function compareStrings6(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath(value) {
-  return value.split(path13.sep).join("/");
+  return value.split(path14.sep).join("/");
 }
 function isEnoent4(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
@@ -21356,13 +21375,13 @@ async function listFiles(root) {
       throw error2;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings6(left.name, right.name))) {
-      const absolutePath = path13.join(directory, entry.name);
+      const absolutePath = path14.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath(path13.relative(root, absolutePath)));
+        files.push(toPosixPath(path14.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -21380,8 +21399,8 @@ async function listSymbolicLinks(root, displayedRoot) {
       throw error2;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings6(left.name, right.name))) {
-      const absolutePath = path13.join(directory, entry.name);
-      const displayedPath = `${displayedRoot}/${toPosixPath(path13.relative(root, absolutePath))}`;
+      const absolutePath = path14.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path14.relative(root, absolutePath))}`;
       if (entry.isSymbolicLink()) {
         links.push(displayedPath);
         continue;
@@ -21410,7 +21429,7 @@ async function hashFiles(root, files) {
   for (const file of files) {
     hash.update(file);
     hash.update("\0");
-    hash.update(await readFile9(path13.join(root, ...file.split("/"))));
+    hash.update(await readFile9(path14.join(root, ...file.split("/"))));
     hash.update("\0");
   }
   return `sha256:${hash.digest("hex")}`;
@@ -21419,23 +21438,23 @@ async function hashTree(root) {
   return hashFiles(root, await listFiles(root));
 }
 function containsPath(parent, child) {
-  const relative = path13.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path13.isAbsolute(relative);
+  const relative = path14.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path14.isAbsolute(relative);
 }
 function pathsOverlap2(left, right) {
   return containsPath(left, right) || containsPath(right, left);
 }
 function sameResolvedPath(left, right) {
-  const resolvedLeft = path13.resolve(left);
-  const resolvedRight = path13.resolve(right);
+  const resolvedLeft = path14.resolve(left);
+  const resolvedRight = path14.resolve(right);
   if (process.platform === "win32")
     return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot(input) {
-  const repositoryRoot = path13.resolve(input.repositoryRoot);
-  const stagingRoot = path13.resolve(input.stagingRoot);
-  const legacyRoot = path13.join(repositoryRoot, ".legion");
+  const repositoryRoot = path14.resolve(input.repositoryRoot);
+  const stagingRoot = path14.resolve(input.stagingRoot);
+  const legacyRoot = path14.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
     return failure10("invalid", [
       diagnostic({
@@ -21448,9 +21467,9 @@ function safeResolvedStagingRoot(input) {
   return stagingRoot;
 }
 function safeResolvedBackupRoot(input) {
-  const repositoryRoot = path13.resolve(input.repositoryRoot);
-  const backupRoot = path13.resolve(input.backupRoot);
-  const legacyRoot = path13.join(repositoryRoot, ".legion");
+  const repositoryRoot = path14.resolve(input.repositoryRoot);
+  const backupRoot = path14.resolve(input.backupRoot);
+  const legacyRoot = path14.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
     return failure10("invalid", [
       diagnostic({
@@ -21484,9 +21503,9 @@ function readString(value) {
 }
 function normalizeReportedPath(repositoryRoot, value) {
   const normalized = value.replace(/\\/g, "/");
-  if (path13.isAbsolute(value)) {
-    const relative = path13.relative(repositoryRoot, value);
-    if (relative.length > 0 && !relative.startsWith("..") && !path13.isAbsolute(relative)) {
+  if (path14.isAbsolute(value)) {
+    const relative = path14.relative(repositoryRoot, value);
+    if (relative.length > 0 && !relative.startsWith("..") && !path14.isAbsolute(relative)) {
       return toPosixPath(relative);
     }
   }
@@ -21511,7 +21530,7 @@ function nativeSurface(input) {
   return { path: normalized, source: input.source };
 }
 async function parseCodexManifest(repositoryRoot, legionRoot) {
-  const manifestPath = path13.join(legionRoot, "manifest.json");
+  const manifestPath = path14.join(legionRoot, "manifest.json");
   let parsed;
   try {
     parsed = JSON.parse(await readFile9(manifestPath, "utf8"));
@@ -21672,7 +21691,7 @@ function classifySourceFile(relativePath, generatedPaths) {
 async function sourceInventory(input) {
   const files = [];
   for (const file of await listFiles(input.legionRoot)) {
-    const bytes = await readFile9(path13.join(input.legionRoot, ...file.split("/")));
+    const bytes = await readFile9(path14.join(input.legionRoot, ...file.split("/")));
     const relativePath = `.legion/${file}`;
     files.push({
       path: relativePath,
@@ -21722,18 +21741,18 @@ function validateReportMoves(report) {
   ]);
 }
 async function stageLegacyProtocol(input) {
-  const targetRoot = path13.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path14.join(input.stagingRoot, ".legion", "legacy-protocol");
   await rm3(input.stagingRoot, { recursive: true, force: true });
   await mkdir9(targetRoot, { recursive: true });
   for (const move of input.moves) {
-    const sourcePath = path13.join(input.repositoryRoot, ...move.sourcePath.split("/"));
-    const targetPath = path13.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir9(path13.dirname(targetPath), { recursive: true });
+    const sourcePath = path14.join(input.repositoryRoot, ...move.sourcePath.split("/"));
+    const targetPath = path14.join(input.stagingRoot, ...move.targetPath.split("/"));
+    await mkdir9(path14.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
   for (const file of await listFiles(targetRoot)) {
-    const bytes = await readFile9(path13.join(targetRoot, ...file.split("/")));
+    const bytes = await readFile9(path14.join(targetRoot, ...file.split("/")));
     files.push({
       path: `${LEGACY_PROTOCOL_ROOT}/${file}`,
       sha256: bytesHash(bytes),
@@ -21748,8 +21767,8 @@ async function stageLegacyProtocol(input) {
   };
 }
 async function writeReport(stagingRoot, report) {
-  const reportPath = path13.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir9(path13.dirname(reportPath), { recursive: true });
+  const reportPath = path14.join(stagingRoot, ...REPORT_PATH.split("/"));
+  await mkdir9(path14.dirname(reportPath), { recursive: true });
   await writeFile3(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
@@ -21776,8 +21795,8 @@ async function createCodexLegionMigrationDryRun(input) {
   });
   if (typeof createdAt !== "string")
     return createdAt;
-  const repositoryRoot = path13.resolve(input.repositoryRoot);
-  const legionRoot = path13.join(repositoryRoot, ".legion");
+  const repositoryRoot = path14.resolve(input.repositoryRoot);
+  const legionRoot = path14.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
     return failure10("invalid", [
       diagnostic({
@@ -21830,7 +21849,7 @@ async function createCodexLegionMigrationDryRun(input) {
   };
 }
 async function readReport(stagingRoot) {
-  const reportPath = path13.join(stagingRoot, ...REPORT_PATH.split("/"));
+  const reportPath = path14.join(stagingRoot, ...REPORT_PATH.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile9(reportPath, "utf8"));
@@ -21867,7 +21886,7 @@ function isBackupManifest(value) {
   return isRecord5(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
-  const targetRoot = path13.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path14.join(input.stagingRoot, ".legion", "legacy-protocol");
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
@@ -21880,7 +21899,7 @@ async function validateStagedTargetHash(input) {
   ]);
 }
 async function validateCurrentSourceHash(input) {
-  const currentHash = await hashTree(path13.join(input.repositoryRoot, ".legion"));
+  const currentHash = await hashTree(path14.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
   return failure10("invalid", [
@@ -21896,11 +21915,11 @@ function backupId(appliedAt, sourceHash) {
   return `codex-legion-migration-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
 }
 async function backupLegionRoot(input) {
-  const legionRoot = path13.join(input.repositoryRoot, ".legion");
+  const legionRoot = path14.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path13.resolve(input.backupRoot, id);
-  const backupPath = path13.resolve(backupDirectory, "legion");
+  const backupDirectory = path14.resolve(input.backupRoot, id);
+  const backupPath = path14.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
   await rm3(backupDirectory, { recursive: true, force: true });
   await mkdir9(backupDirectory, { recursive: true });
@@ -21917,7 +21936,7 @@ async function backupLegionRoot(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path13.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path14.resolve(backupDirectory, "backup-manifest.json");
   await writeFile3(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -21927,9 +21946,9 @@ async function backupLegionRoot(input) {
   };
 }
 async function installStagedLegacyProtocol(input) {
-  const legionRoot = path13.join(input.repositoryRoot, ".legion");
-  const destination = path13.join(legionRoot, "legacy-protocol");
-  const stagedLegacyProtocolRoot = path13.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const legionRoot = path14.join(input.repositoryRoot, ".legion");
+  const destination = path14.join(legionRoot, "legacy-protocol");
+  const stagedLegacyProtocolRoot = path14.join(input.stagingRoot, ".legion", "legacy-protocol");
   if (input.report.moves.length > 0) {
     if (await pathExists3(destination)) {
       await mergeStagedLegacyProtocol({
@@ -21937,7 +21956,7 @@ async function installStagedLegacyProtocol(input) {
         destinationRoot: destination
       });
     } else {
-      const temporary = path13.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      const temporary = path14.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
       await rm3(temporary, { recursive: true, force: true });
       await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
       await rename2(temporary, destination);
@@ -21948,13 +21967,13 @@ async function installStagedLegacyProtocol(input) {
     report: input.report
   });
   for (const root of roots) {
-    await rm3(path13.join(legionRoot, root), { recursive: true, force: true });
+    await rm3(path14.join(legionRoot, root), { recursive: true, force: true });
   }
 }
 async function mergeStagedLegacyProtocol(input) {
   for (const file of await listFiles(input.stagedRoot)) {
-    const stagedPath = path13.join(input.stagedRoot, ...file.split("/"));
-    const destinationPath = path13.join(input.destinationRoot, ...file.split("/"));
+    const stagedPath = path14.join(input.stagedRoot, ...file.split("/"));
+    const destinationPath = path14.join(input.destinationRoot, ...file.split("/"));
     const stagedBytes = await readFile9(stagedPath);
     let destinationStat;
     try {
@@ -21965,20 +21984,20 @@ async function mergeStagedLegacyProtocol(input) {
     }
     if (destinationStat !== void 0) {
       if (!destinationStat.isFile()) {
-        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path13.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path14.relative(input.destinationRoot, destinationPath))}.`);
       }
       const destinationBytes = await readFile9(destinationPath);
       if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
-        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path13.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path14.relative(input.destinationRoot, destinationPath))}.`);
       }
       continue;
     }
-    await mkdir9(path13.dirname(destinationPath), { recursive: true });
+    await mkdir9(path14.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
 async function cleanupRoots(input) {
-  const legionRoot = path13.join(input.repositoryRoot, ".legion");
+  const legionRoot = path14.join(input.repositoryRoot, ".legion");
   const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
   for (const entry of await readdir4(legionRoot, { withFileTypes: true })) {
     if (!isReservedLegionRootEntry(entry.name))
@@ -21987,7 +22006,7 @@ async function cleanupRoots(input) {
   return [...roots].filter((entry) => entry.length > 0).sort(compareStrings6);
 }
 async function installedLegacyProtocolFiles(repositoryRoot) {
-  const targetRoot = path13.join(repositoryRoot, ".legion", "legacy-protocol");
+  const targetRoot = path14.join(repositoryRoot, ".legion", "legacy-protocol");
   return (await listFiles(targetRoot)).map((file) => `${LEGACY_PROTOCOL_ROOT}/${file}`);
 }
 async function applyCodexLegionMigration(input) {
@@ -22016,12 +22035,12 @@ async function applyCodexLegionMigration(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const repositoryRoot = path13.resolve(input.repositoryRoot);
+  const repositoryRoot = path14.resolve(input.repositoryRoot);
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string")
     return backupRoot;
   const symlinkFailure = await validateNoSymbolicLinks({
-    root: path13.join(repositoryRoot, ".legion"),
+    root: path14.join(repositoryRoot, ".legion"),
     displayedRoot: LEGION_ROOT
   });
   if (symlinkFailure !== void 0)
@@ -22073,7 +22092,7 @@ async function applyCodexLegionMigration(input) {
 }
 async function rollbackCodexLegionMigration(input) {
   let manifest;
-  const backupManifestPath = path13.resolve(input.backupManifestPath);
+  const backupManifestPath = path14.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile9(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
@@ -22089,8 +22108,8 @@ async function rollbackCodexLegionMigration(input) {
       })
     ]);
   }
-  const repositoryRoot = path13.resolve(input.repositoryRoot);
-  const legionRoot = path13.join(repositoryRoot, ".legion");
+  const repositoryRoot = path14.resolve(input.repositoryRoot);
+  const legionRoot = path14.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
     return failure10("invalid", [
       diagnostic({
@@ -22101,7 +22120,7 @@ async function rollbackCodexLegionMigration(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path13.isAbsolute(manifest.backupPath)) {
+    if (!path14.isAbsolute(manifest.backupPath)) {
       return failure10("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
@@ -22144,7 +22163,7 @@ async function rollbackCodexLegionMigration(input) {
 // packages/legacy-bridge/dist/import-planning/index.js
 import { createHash as createHash16 } from "node:crypto";
 import { cp as cp2, mkdir as mkdir10, readFile as readFile10, readdir as readdir5, realpath as realpath2, rm as rm4, stat as stat5, writeFile as writeFile4 } from "node:fs/promises";
-import path14 from "node:path";
+import path15 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
 var EMPTY_TREE_HASH2 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -22152,7 +22171,7 @@ function compareStrings7(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath2(value) {
-  return value.split(path14.sep).join("/");
+  return value.split(path15.sep).join("/");
 }
 function failure11(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
@@ -22175,7 +22194,7 @@ function hashFiles2(root, files) {
     for (const file of files) {
       hash.update(file);
       hash.update("\0");
-      hash.update(await readFile10(path14.join(root, ...file.split("/"))));
+      hash.update(await readFile10(path15.join(root, ...file.split("/"))));
       hash.update("\0");
     }
     return `sha256:${hash.digest("hex")}`;
@@ -22203,13 +22222,13 @@ async function listFiles2(root) {
       throw error2;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path14.join(directory, entry.name);
+      const absolutePath = path15.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath2(path14.relative(root, absolutePath)));
+        files.push(toPosixPath2(path15.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -22259,9 +22278,9 @@ async function sourceInventory2(planningRoot) {
   }
   const files = [];
   for (const file of await listFiles2(planningRoot)) {
-    const absolutePath = path14.join(planningRoot, ...file.split("/"));
+    const absolutePath = path15.join(planningRoot, ...file.split("/"));
     const bytes = await readFile10(absolutePath);
-    const relativePath = toPosixPath2(path14.join(".planning", file));
+    const relativePath = toPosixPath2(path15.join(".planning", file));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -22363,7 +22382,7 @@ async function parsePlans(planningRoot, inventory) {
     if (file.classification !== "phase-plan")
       continue;
     const relativeToPlanning = file.path.slice(".planning/".length);
-    const content = await readFile10(path14.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
+    const content = await readFile10(path15.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
     const frontmatter = parsePlanFrontmatter(content);
     plans.push({
       sourcePath: file.path,
@@ -22376,7 +22395,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   const conflicts = [];
   for (const plan of plans) {
     const summaryPath = plan.sourcePath.replace(/-PLAN\.md$/, "-SUMMARY.md");
-    const summaryContent = await readUtf8IfExists(path14.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
+    const summaryContent = await readUtf8IfExists(path15.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
     if (summaryContent === void 0)
       continue;
     const summaryFiles = summaryFilesModified(summaryContent);
@@ -22395,7 +22414,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   return conflicts;
 }
 async function stateUncertainties(planningRoot) {
-  const state = await readUtf8IfExists(path14.join(planningRoot, "STATE.md"));
+  const state = await readUtf8IfExists(path15.join(planningRoot, "STATE.md"));
   if (state === void 0)
     return [];
   const uncertainties = [
@@ -22469,18 +22488,18 @@ function sectionsForRequirement(requirement) {
   };
 }
 async function writeReport2(stagingRoot, report) {
-  const reportPath = path14.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir10(path14.dirname(reportPath), { recursive: true });
+  const reportPath = path15.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  await mkdir10(path15.dirname(reportPath), { recursive: true });
   await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
-  const projectRoot = path14.join(stagingRoot, ".legion", "project");
+  const projectRoot = path15.join(stagingRoot, ".legion", "project");
   const files = [];
   for (const file of await listFiles2(projectRoot)) {
     if (file === "migration/planning-import-report.json")
       continue;
-    const bytes = await readFile10(path14.join(projectRoot, ...file.split("/")));
-    const relativePath = toPosixPath2(path14.join(".legion/project", file));
+    const bytes = await readFile10(path15.join(projectRoot, ...file.split("/")));
+    const relativePath = toPosixPath2(path15.join(".legion/project", file));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -22495,24 +22514,24 @@ async function targetInventory(stagingRoot) {
   };
 }
 function containsPath2(parent, child) {
-  const relative = path14.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path14.isAbsolute(relative);
+  const relative = path15.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path15.isAbsolute(relative);
 }
 function pathsOverlap3(left, right) {
   return containsPath2(left, right) || containsPath2(right, left);
 }
 async function resolveExistingPathComponents(inputPath) {
-  const resolved = path14.resolve(inputPath);
+  const resolved = path15.resolve(inputPath);
   const suffix = [];
   let candidate = resolved;
   while (!await pathExists4(candidate)) {
-    const parent = path14.dirname(candidate);
+    const parent = path15.dirname(candidate);
     if (parent === candidate)
-      return path14.resolve(candidate, ...suffix);
-    suffix.unshift(path14.basename(candidate));
+      return path15.resolve(candidate, ...suffix);
+    suffix.unshift(path15.basename(candidate));
     candidate = parent;
   }
-  return path14.resolve(await realpath2(candidate), ...suffix);
+  return path15.resolve(await realpath2(candidate), ...suffix);
 }
 async function sameCanonicalPath(left, right) {
   const resolvedLeft = await resolveExistingPathComponents(left);
@@ -22522,9 +22541,9 @@ async function sameCanonicalPath(left, right) {
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot2(input) {
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const planningRoot = path14.resolve(input.planningRoot);
-  const stagingRoot = path14.resolve(input.stagingRoot);
+  const repositoryRoot = path15.resolve(input.repositoryRoot);
+  const planningRoot = path15.resolve(input.planningRoot);
+  const stagingRoot = path15.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
     return failure11("invalid", [
       diagnostic2({
@@ -22536,11 +22555,11 @@ function safeResolvedStagingRoot2(input) {
   return stagingRoot;
 }
 async function safeResolvedBackupRoot2(input) {
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const backupRoot = path14.resolve(input.backupRoot);
-  const legionRoot = path14.join(repositoryRoot, ".legion");
-  const planningRoot = path14.resolve(input.planningRoot);
-  const stagingRoot = path14.resolve(input.stagingRoot);
+  const repositoryRoot = path15.resolve(input.repositoryRoot);
+  const backupRoot = path15.resolve(input.backupRoot);
+  const legionRoot = path15.join(repositoryRoot, ".legion");
+  const planningRoot = path15.resolve(input.planningRoot);
+  const stagingRoot = path15.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
@@ -22586,7 +22605,7 @@ async function createPlanningImportDryRun(input) {
   const inventory = await sourceInventory2(planningRoot);
   if ("diagnostics" in inventory)
     return inventory;
-  const projectMarkdown = await readUtf8IfExists(path14.join(planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path15.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
     return failure11("invalid", [
       diagnostic2({
@@ -22702,7 +22721,7 @@ async function createPlanningImportDryRun(input) {
   };
 }
 async function readReport2(stagingRoot) {
-  const reportPath = path14.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  const reportPath = path15.join(stagingRoot, ...REPORT_PATH2.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(reportPath, "utf8"));
@@ -22732,11 +22751,11 @@ function backupId2(appliedAt, sourceHash) {
 }
 async function backupLegionRoot2(input) {
   const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
-  const legionRoot = path14.join(repositoryRoot, ".legion");
+  const legionRoot = path15.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree2(legionRoot);
   const id = backupId2(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path14.resolve(input.backupRoot, id);
-  const backupPath = path14.resolve(backupDirectory, "legion");
+  const backupDirectory = path15.resolve(input.backupRoot, id);
+  const backupPath = path15.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
   await rm4(backupDirectory, { recursive: true, force: true });
   await mkdir10(backupDirectory, { recursive: true });
@@ -22753,7 +22772,7 @@ async function backupLegionRoot2(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path14.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path15.resolve(backupDirectory, "backup-manifest.json");
   await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -22763,9 +22782,9 @@ async function backupLegionRoot2(input) {
   };
 }
 async function installStagedProject(input) {
-  const stagedProject = path14.join(input.stagingRoot, ".legion", "project");
-  const destinationProject = path14.join(input.repositoryRoot, ".legion", "project");
-  await mkdir10(path14.dirname(destinationProject), { recursive: true });
+  const stagedProject = path15.join(input.stagingRoot, ".legion", "project");
+  const destinationProject = path15.join(input.repositoryRoot, ".legion", "project");
+  await mkdir10(path15.dirname(destinationProject), { recursive: true });
   await rm4(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
@@ -22786,7 +22805,7 @@ function isBackupManifest2(value) {
   return isRecord6(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
-  const stagedProject = path14.join(input.stagingRoot, ".legion", "project");
+  const stagedProject = path15.join(input.stagingRoot, ".legion", "project");
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
@@ -22817,7 +22836,7 @@ async function applyPlanningImport(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const destinationProject = path14.join(input.repositoryRoot, ".legion", "project");
+  const destinationProject = path15.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
     return failure11("conflict", [
       diagnostic2({
@@ -22873,13 +22892,13 @@ async function applyPlanningImport(input) {
     ok: true,
     status: "applied",
     backup,
-    installedFiles: (await listFiles2(path14.join(input.repositoryRoot, ".legion", "project"))).map((file) => toPosixPath2(path14.join(".legion/project", file))),
+    installedFiles: (await listFiles2(path15.join(input.repositoryRoot, ".legion", "project"))).map((file) => toPosixPath2(path15.join(".legion/project", file))),
     policy: report.policy
   };
 }
 async function rollbackPlanningImport(input) {
   let manifest;
-  const backupManifestPath = path14.resolve(input.backupManifestPath);
+  const backupManifestPath = path15.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
     if (!isBackupManifest2(parsed)) {
@@ -22895,9 +22914,9 @@ async function rollbackPlanningImport(input) {
       })
     ]);
   }
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const legionRoot = path14.join(repositoryRoot, ".legion");
-  if (!path14.isAbsolute(manifest.repositoryRoot)) {
+  const repositoryRoot = path15.resolve(input.repositoryRoot);
+  const legionRoot = path15.join(repositoryRoot, ".legion");
+  if (!path15.isAbsolute(manifest.repositoryRoot)) {
     return failure11("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
@@ -22916,7 +22935,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path14.isAbsolute(manifest.backupPath)) {
+    if (!path15.isAbsolute(manifest.backupPath)) {
       return failure11("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
@@ -23183,8 +23202,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path15 from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import path16 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -23218,7 +23236,7 @@ Rollback-verify optional:
   --source codex-legion|planning   Confirms the manifest kind matches the
                                    source the operator used during apply.
   --report <path>                  Where to write the JSON verdict.`;
-var V9_SOURCE_ROOT2 = path15.resolve(path15.dirname(fileURLToPath2(import.meta.url)), "..", "..", "..", "..", "..");
+var V9_SOURCE_ROOT2 = resolveCliSourceRoot(import.meta.url, "scripts/release/release-checklist.mjs");
 async function handleReleaseCommand(context) {
   if (hasFlag(context, "help") || context.args.positionals.length === 0) {
     return helpResult(RELEASE_HELP);
@@ -23242,10 +23260,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path15.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path16.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path15.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -23272,13 +23290,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path15.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path16.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path15.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -23329,7 +23347,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path15.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path16.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -23444,7 +23462,7 @@ async function handleDevCommand(context) {
 
 // packages/cli/src/workflow/input.ts
 import { execFileSync } from "node:child_process";
-import path16 from "node:path";
+import path17 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -23622,11 +23640,11 @@ ${rendered}` : "Project initialization failed.";
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir7 } from "node:fs/promises";
-import path18 from "node:path";
+import path19 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir6, stat as stat6 } from "node:fs/promises";
-import path17 from "node:path";
+import path18 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -23652,7 +23670,7 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const legionRoot = path18.join(repositoryRoot, ".legion");
   if (!await pathExists5(legionRoot)) return [];
   const entries = await readdir6(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
@@ -23661,8 +23679,8 @@ async function detectPreInitCollision2(repositoryRoot) {
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path17.join(legionRoot, "project");
-  const manifestPath = path17.join(projectRoot, "project.json");
+  const projectRoot = path18.join(legionRoot, "project");
+  const manifestPath = path18.join(projectRoot, "project.json");
   if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -23735,16 +23753,48 @@ async function resolveWorkflowState(context) {
       diagnostics: specs.diagnostics
     };
   }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    if (latestChange.diagnostics.every((diagnostic3) => diagnostic3.code === "change_missing")) {
+      return {
+        stage: "started",
+        projectId: project.loaded.project.id,
+        currentSpecCount: specs.documents.length,
+        nextAction: nextAction("legion plan 1", "Project is initialized and ready for the first planned change."),
+        diagnostics: []
+      };
+    }
+    return {
+      stage: "blocked",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion validate", "Workflow change state must be repaired before build can continue."),
+      diagnostics: latestChange.diagnostics
+    };
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return {
+      stage: "blocked",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion validate", "The latest workflow change must have a valid taskgraph before build can continue."),
+      diagnostics: taskgraph.diagnostics
+    };
+  }
   return {
-    stage: "started",
+    stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion plan 1", "Project is initialized and ready for the first planned change."),
+    nextAction: nextAction("legion build --dry-run", "Latest planned change is ready for build readiness checks."),
     diagnostics: []
   };
 }
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path18.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path19.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir7(changesRoot, { withFileTypes: true });
@@ -23841,7 +23891,7 @@ async function handleStatusCommand(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import path19 from "node:path";
+import path20 from "node:path";
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -23929,8 +23979,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path19.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path19.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path20.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path20.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function buildChangeBundleInput(options) {
@@ -24097,7 +24147,7 @@ function buildOracleArtifactInput(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile11 } from "node:fs/promises";
-import path20 from "node:path";
+import path21 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -24145,13 +24195,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path20.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path20.join(context.repositoryRoot, "ROADMAP.md")
+    path21.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path21.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path20.isAbsolute(roadmapPath) ? roadmapPath : path20.resolve(repositoryRoot, roadmapPath);
+  return path21.isAbsolute(roadmapPath) ? roadmapPath : path21.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -24615,7 +24665,7 @@ function blockedReview(diagnostics, action, extras = {}) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir11, writeFile as writeFile5 } from "node:fs/promises";
-import path21 from "node:path";
+import path22 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -24661,12 +24711,12 @@ async function recordStandaloneWorkflow(context, options) {
 }
 async function writeUniqueWorkflowRecord(input) {
   const artifactDirectory = `.legion/project/workflow/${input.workflow}`;
-  const absoluteDirectory = path21.join(input.repositoryRoot, ...artifactDirectory.split("/"));
+  const absoluteDirectory = path22.join(input.repositoryRoot, ...artifactDirectory.split("/"));
   await mkdir11(absoluteDirectory, { recursive: true });
   for (let index = 0; index < 1e3; index += 1) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const artifactPath = `${artifactDirectory}/${input.safeTimestamp}-${input.slug}${suffix}.json`;
-    const absolutePath = path21.join(input.repositoryRoot, ...artifactPath.split("/"));
+    const absolutePath = path22.join(input.repositoryRoot, ...artifactPath.split("/"));
     try {
       await writeFile5(absolutePath, input.content, { encoding: "utf8", flag: "wx" });
       return artifactPath;
@@ -24874,7 +24924,7 @@ async function handleShipWorkflow(context) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
-import path22 from "node:path";
+import path23 from "node:path";
 async function handleValidateCommand(context) {
   const result = await validateWorkflowProject(context);
   const payload = {
@@ -24915,22 +24965,21 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path22.join(root, relativePath));
+    await stat7(path23.join(root, relativePath));
     return {
       ok: true,
       status: "present",
       path: relativePath
     };
   } catch (error2) {
-    if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
-      return {
-        ok: false,
-        status: "missing",
-        path: relativePath,
-        message: `${relativePath} was not found.`
-      };
-    }
-    throw error2;
+    const isMissing = error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT";
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return {
+      ok: false,
+      status: isMissing ? "missing" : "error",
+      path: relativePath,
+      message: isMissing ? `${relativePath} was not found.` : `Failed to check ${relativePath}: ${message}`
+    };
   }
 }
 function doctorHuman(checks) {
@@ -25021,7 +25070,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path23.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path24.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -25073,8 +25122,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path23.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path23.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path24.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path24.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

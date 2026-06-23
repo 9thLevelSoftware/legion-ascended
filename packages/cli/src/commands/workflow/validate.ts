@@ -60,7 +60,7 @@ function validationFailureHuman(diagnostics: readonly unknown[]): string {
   return rendered.length > 0 ? `Project validation failed.\n${rendered}` : "Project validation failed.";
 }
 
-async function pathCheck(root: string, relativePath: string): Promise<ShallowCheck> {
+export async function pathCheck(root: string, relativePath: string): Promise<ShallowCheck> {
   try {
     await stat(path.join(root, relativePath));
     return {
@@ -69,15 +69,14 @@ async function pathCheck(root: string, relativePath: string): Promise<ShallowChe
       path: relativePath
     };
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return {
-        ok: false,
-        status: "missing",
-        path: relativePath,
-        message: `${relativePath} was not found.`
-      };
-    }
-    throw error;
+    const isMissing = error && typeof error === "object" && "code" in error && error.code === "ENOENT";
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      status: isMissing ? "missing" : "error",
+      path: relativePath,
+      message: isMissing ? `${relativePath} was not found.` : `Failed to check ${relativePath}: ${message}`
+    };
   }
 }
 

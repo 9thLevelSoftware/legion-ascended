@@ -540,6 +540,45 @@ test("workflow helper context and state load initialized and uninitialized proje
   }
 });
 
+test("workflow helper state advances to build readiness after planning", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const plan = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(plan.exitCode, 0, plan.stderr);
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "planned");
+    assert.equal(workflowState.projectId, "prj_asset-mapper");
+    assert.equal(workflowState.currentSpecCount, 1);
+    assert.deepEqual(workflowState.nextAction, {
+      command: "legion build --dry-run",
+      reason: "Latest planned change is ready for build readiness checks."
+    });
+    assert.deepEqual(workflowState.diagnostics, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("workflow helper state blocks invalid project state instead of suggesting start", async () => {
   const state = await importWorkflowModule("state");
   const root = await tempRepo();
@@ -1872,6 +1911,16 @@ test("legion doctor checks worker bundles from repository root when cwd differs"
     await rm(root, { recursive: true, force: true });
     await rm(otherCwd, { recursive: true, force: true });
   }
+});
+
+test("legion doctor returns structured diagnostics for path check errors", async () => {
+  const validateCommand = await import("../packages/cli/dist/commands/workflow/validate.js");
+  const check = await validateCommand.pathCheck(`invalid\u0000root`, ".legion/var");
+
+  assert.equal(check.ok, false);
+  assert.equal(check.status, "error");
+  assert.equal(check.path, ".legion/var");
+  assert.match(check.message, /Failed to check \.legion\/var:/);
 });
 
 test("unknown workflow commands return usage errors", async () => {

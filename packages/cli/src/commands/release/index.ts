@@ -26,8 +26,8 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
+import { resolveCliSourceRoot } from "../../source-root.js";
 import {
   failure,
   hasFlag,
@@ -74,11 +74,9 @@ Rollback-verify optional:
                                    source the operator used during apply.
   --report <path>                  Where to write the JSON verdict.`;
 
-// The v9 source root for the scripts/release/ tree. Computed from the
-// compiled CLI's location (dist/commands/release/index.js -> ../../../..).
-// The release scripts live alongside the eval scripts, so we pin them
-// at the v9 source root rather than at the operator's --repository-root.
-const V9_SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..");
+// The release scripts live beside the packaged CLI root, not under the
+// operator's --repository-root.
+const V9_SOURCE_ROOT = resolveCliSourceRoot(import.meta.url, "scripts/release/release-checklist.mjs");
 
 export async function handleReleaseCommand(context: CliContext): Promise<CliResult> {
   if (hasFlag(context, "help") || context.args.positionals.length === 0) {

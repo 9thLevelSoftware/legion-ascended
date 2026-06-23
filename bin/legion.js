@@ -45,6 +45,10 @@ function installerArgsFor(args) {
   return args;
 }
 
+function normalizeWorkflowArgs(args) {
+  return args.map((arg) => arg === '-h' ? '--help' : arg);
+}
+
 async function main(args = process.argv.slice(2)) {
   if (shouldRouteToInstaller(args)) {
     const installer = require('./install.js');
@@ -55,7 +59,7 @@ async function main(args = process.argv.slice(2)) {
   const sourceCli = path.resolve(__dirname, '..', 'packages', 'cli', 'dist', 'index.js');
   const cliUrl = pathToFileURL(require('node:fs').existsSync(bundledCli) ? bundledCli : sourceCli).href;
   const { runCli } = await import(cliUrl);
-  return runCli(args);
+  return runCli(normalizeWorkflowArgs(args));
 }
 
 main().then((exitCode) => {

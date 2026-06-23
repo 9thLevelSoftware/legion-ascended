@@ -48,6 +48,15 @@ test("root bin shows workflow help", async () => {
   assert.doesNotMatch(result.stdout, /legion next <command>/);
 });
 
+test("root bin preserves -h as workflow help", async () => {
+  const result = await execFileAsync(process.execPath, ["bin/legion.js", "-h"], {
+    ...EXEC_OPTIONS
+  });
+  assert.match(result.stdout, /legion <command>/);
+  assert.match(result.stdout, /start\s+Initialize/);
+  assert.doesNotMatch(result.stdout, /Usage:/);
+});
+
 test("root bin routes install help to the installer", async () => {
   const result = await execFileAsync(process.execPath, ["bin/legion.js", "install", "--help"], {
     ...EXEC_OPTIONS
@@ -79,6 +88,31 @@ test("workflow and dev commands keep their own flags", async () => {
   });
   assert.match(result.stdout, /legion dev migrate/);
   assert.doesNotMatch(result.stdout, /Usage:/);
+});
+
+test("bundled dev release commands resolve helper scripts from package root", async () => {
+  await withTempProject(async ({ env, project }) => {
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        LEGION_BIN,
+        "--repository-root", project,
+        "--json",
+        "dev", "release", "checklist",
+        "--release-version", "1.0.0"
+      ], {
+        ...EXEC_OPTIONS,
+        cwd: project,
+        env
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        const payload = JSON.parse(error.stdout);
+        assert.equal(payload.status, "blocked");
+        assert.doesNotMatch(JSON.stringify(payload), /MODULE_NOT_FOUND|Cannot find module|scripts[\\/]release[\\/]release-checklist\.mjs'$/);
+        return true;
+      }
+    );
+  });
 });
 
 test("imported installer main returns failure code instead of exiting process", async () => {

@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { listCurrentSpecs, loadChangeBundle } from "@legion/artifacts";
+import { listCurrentSpecs, loadChangeBundle, readTaskGraph } from "@legion/artifacts";
 
 import type { CliContext } from "../runtime.js";
 import { loadWorkflowProject, validateWorkflowProject } from "./context.js";
@@ -86,11 +86,46 @@ export async function resolveWorkflowState(context: CliContext): Promise<Workflo
     };
   }
 
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    if (latestChange.diagnostics.every((diagnostic) => diagnostic.code === "change_missing")) {
+      return {
+        stage: "started",
+        projectId: project.loaded.project.id,
+        currentSpecCount: specs.documents.length,
+        nextAction: nextAction("legion plan 1", "Project is initialized and ready for the first planned change."),
+        diagnostics: []
+      };
+    }
+
+    return {
+      stage: "blocked",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion validate", "Workflow change state must be repaired before build can continue."),
+      diagnostics: latestChange.diagnostics
+    };
+  }
+
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return {
+      stage: "blocked",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion validate", "The latest workflow change must have a valid taskgraph before build can continue."),
+      diagnostics: taskgraph.diagnostics
+    };
+  }
+
   return {
-    stage: "started",
+    stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion plan 1", "Project is initialized and ready for the first planned change."),
+    nextAction: nextAction("legion build --dry-run", "Latest planned change is ready for build readiness checks."),
     diagnostics: []
   };
 }
