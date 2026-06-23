@@ -5,11 +5,13 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const readline = require('readline');
+const { spawnSync } = require('child_process');
 const {
   LEGION_COMMANDS,
   RUNTIME_METADATA,
   RUNTIME_ORDER,
   installableRuntimeKeys,
+  recommendedRuntimeKeys,
   resolveRuntimeKey,
 } = require('./runtime-metadata');
 
@@ -24,18 +26,36 @@ const {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const result = { runtime: null, scope: 'global', action: 'install', verify: false };
+  const result = {
+    runtime: null,
+    scope: 'global',
+    action: 'install',
+    verify: false,
+    dryRun: false,
+    allTargets: false
+  };
 
-  for (const arg of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
     const runtimeKey = resolveRuntimeKey(arg);
     if (runtimeKey) result.runtime = runtimeKey;
+    if (arg === '--target' || arg === '--runtime') {
+      const target = argv[++index];
+      result.runtime = resolveRuntimeTarget(target);
+      continue;
+    }
     // Scope
     if (arg === '--global') result.scope = 'global';
     if (arg === '--local')  result.scope = 'local';
     if (arg === '--verify') result.verify = true;
+    if (arg === '--dry-run') result.dryRun = true;
+    if (arg === '--all-targets') result.allTargets = true;
     // Actions
     if (arg === '--uninstall') result.action = 'uninstall';
     if (arg === '--update')    result.action = 'update';
+    if (arg === '--list-targets') result.action = 'list-targets';
+    if (arg === '--detect') result.action = 'detect';
+    if (arg === '--explain') result.action = 'explain';
     if (arg === '--help' || arg === '-h')    result.action = 'help';
     if (arg === '--version' || arg === '-v') result.action = 'version';
   }
@@ -43,9 +63,25 @@ function parseArgs(argv) {
   return result;
 }
 
-function promptRuntimeSelection(scope) {
+function resolveRuntimeTarget(target) {
+  if (!target) {
+    throw new Error('--target requires a runtime id such as codex, claude, or kilocode.');
+  }
+  const normalized = target.startsWith('--') ? target : `--${target}`;
+  const resolved = RUNTIME_METADATA[target] ? target : resolveRuntimeKey(normalized);
+  if (!resolved) {
+    throw new Error(`Unknown target: ${target}`);
+  }
+  return resolved;
+}
+
+function runtimeKeysForPrompt(includeAll = false) {
+  return includeAll ? installableRuntimeKeys() : recommendedRuntimeKeys();
+}
+
+function promptRuntimeSelection(scope, includeAll = false) {
   return new Promise((resolve) => {
-    const entries = installableRuntimeKeys()
+    const entries = runtimeKeysForPrompt(includeAll)
       .filter((runtimeKey) => RUNTIME_METADATA[runtimeKey].scopeSupport[scope])
       .map((runtimeKey) => [runtimeKey, RUNTIME_METADATA[runtimeKey]]);
 
@@ -53,10 +89,13 @@ function promptRuntimeSelection(scope) {
       throw new Error(`No Legion runtimes support ${scope} installs.`);
     }
 
-    console.log('\nSelect your AI CLI runtime:\n');
+    console.log(`\nSelect your AI CLI runtime${includeAll ? '' : ' (first-class targets)'}:\n`);
     entries.forEach(([key, rt], i) => {
-      console.log(`  ${i + 1}) ${rt.label}`);
+      console.log(`  ${i + 1}) ${rt.label} (${key})`);
     });
+    if (!includeAll) {
+      console.log('\nUse --all-targets to show compatibility, legacy, and manual-only targets.');
+    }
     console.log();
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -81,33 +120,41 @@ function printHelp() {
 
 
 Usage:
-  npx @9thlevelsoftware/legion [options]
+  npx @9thlevelsoftware/legion [runtime] [options]
+  legion install --target <runtime> [options]
 
-Runtime (pick one):
+Runtime (first-class targets are shown by default):
   --claude      Claude Code
   --codex       OpenAI Codex CLI
-  --cursor      Cursor
   --copilot     GitHub Copilot CLI
-  --gemini      Google Gemini CLI
   --antigravity Antigravity CLI
-  --agy         Alias for --antigravity
-  --kiro        Kiro CLI (preferred)
-  --amazon-q    Deprecated alias for --kiro
-  --windsurf    Windsurf
   --opencode    OpenCode
-  --kilo        Kilo CLI
   --kilo-code   Kilo Code Plugin
   --kilocode    Alias for --kilo-code
+
+Compatibility, legacy, and manual-only targets:
+  --cursor      Cursor
+  --gemini      Google Gemini CLI (legacy / enterprise-only)
+  --kiro        Kiro CLI
+  --amazon-q    Deprecated alias for --kiro
+  --windsurf    Windsurf
+  --kilo        Kilo CLI
   --aider       Aider (manual-only guidance; native install disabled)
 
-  If no runtime flag is given, you'll be prompted to select one.
+  You can also use --target <runtime>, for example --target codex.
+  If no runtime flag is given, you'll be prompted to select a first-class target.
 
 Scope:
   --global      Install to home directory (default)
   --local       Install to current project directory
   --verify      Verify package file hashes before installation
+  --dry-run     Print the install plan without writing files
+  --all-targets Include compatibility, legacy, and manual-only targets in prompts/lists
 
 Actions:
+  --list-targets Show supported target matrix
+  --detect       Detect known runtimes on PATH
+  --explain      Explain a target before installing
   --uninstall   Remove all Legion files
   --update      Check for updates and re-install if newer version available
   --help, -h    Show this help
@@ -118,6 +165,132 @@ Actions:
 function printVersion() {
   const pkg = readPackageJson();
   console.log(`Legion v${pkg.version}`);
+}
+
+function targetListKeys(includeAll = false) {
+  return includeAll ? RUNTIME_ORDER : recommendedRuntimeKeys();
+}
+
+function docsList(runtime) {
+  return (runtime.evidence || []).map((entry) => entry.url).filter(Boolean);
+}
+
+function formatScopeSupport(runtime) {
+  return ['local', 'global']
+    .filter((scope) => runtime.scopeSupport[scope])
+    .join(', ') || 'none';
+}
+
+function formatEntrypoints(runtime) {
+  const entry = runtime.canonicalEntrypoint || runtime.entrypoints || {};
+  const local = entry.local || 'none';
+  const global = entry.global || 'none';
+  return local === global ? local : `local: ${local}; global: ${global}`;
+}
+
+function printTargetList(includeAll = false) {
+  const keys = targetListKeys(includeAll);
+  console.log('\nLegion installation targets\n');
+  console.log(includeAll
+    ? 'Showing all known targets.'
+    : 'Showing first-class targets. Use --all-targets to include compatibility, legacy, and manual-only targets.');
+  console.log();
+  console.log('Target        Tier          Scope         Canonical entry');
+  console.log('------------  ------------  ------------  ----------------');
+  for (const runtimeKey of keys) {
+    const runtime = RUNTIME_METADATA[runtimeKey];
+    const target = runtimeKey.padEnd(12, ' ');
+    const tier = runtime.supportTier.padEnd(12, ' ');
+    const scope = formatScopeSupport(runtime).padEnd(12, ' ');
+    console.log(`${target}  ${tier}  ${scope}  ${formatEntrypoints(runtime)}`);
+  }
+  console.log('\nInstall with: legion install --target <target> --local');
+  console.log('Explain a target with: legion install --target <target> --explain');
+  console.log();
+}
+
+function printRuntimeExplanation(runtimeKey, scope = 'global') {
+  const runtime = RUNTIME_METADATA[runtimeKey];
+  if (!runtime) {
+    throw new Error(`Unknown runtime target: ${runtimeKey}`);
+  }
+  console.log(`\n${runtime.label} (${runtimeKey})`);
+  console.log(`  Tier:              ${runtime.supportTier}`);
+  console.log(`  Disposition:       ${runtime.disposition}`);
+  console.log(`  Install surface:   ${runtime.installSurface}`);
+  console.log(`  Scope support:     ${formatScopeSupport(runtime)}`);
+  console.log(`  Canonical entry:   ${formatEntrypoints(runtime)}`);
+  console.log(`  Selected scope:    ${scope}`);
+  console.log(`  Smoke status:      ${runtime.smokeTestStatus}`);
+  console.log(`  Last verified:     ${runtime.lastVerified}`);
+  if (runtime.parityGaps?.length) {
+    console.log('  Parity gaps:');
+    for (const gap of runtime.parityGaps) console.log(`    - ${gap}`);
+  } else {
+    console.log('  Parity gaps:       none');
+  }
+  const docs = docsList(runtime);
+  if (docs.length > 0) {
+    console.log('  Official docs:');
+    for (const url of docs) console.log(`    - ${url}`);
+  }
+  console.log();
+}
+
+function commandForRuntime(runtimeKey) {
+  return {
+    claude: 'claude',
+    codex: 'codex',
+    cursor: 'cursor',
+    copilot: 'gh',
+    gemini: 'gemini',
+    antigravity: 'antigravity',
+    kiro: 'kiro-cli',
+    windsurf: 'windsurf',
+    opencode: 'opencode',
+    kilo: 'kilo',
+    kilocode: 'code',
+    aider: 'aider'
+  }[runtimeKey];
+}
+
+function commandExists(commandName) {
+  if (!commandName) return false;
+  const command = process.platform === 'win32' ? 'where.exe' : 'sh';
+  const args = process.platform === 'win32' ? [commandName] : ['-c', `command -v ${JSON.stringify(commandName)}`];
+  const result = spawnSync(command, args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  });
+  return result.status === 0;
+}
+
+function printDetectedTargets(includeAll = false) {
+  const keys = targetListKeys(includeAll);
+  console.log('\nDetected Legion targets\n');
+  for (const runtimeKey of keys) {
+    const runtime = RUNTIME_METADATA[runtimeKey];
+    const commandName = commandForRuntime(runtimeKey);
+    const detected = commandExists(commandName);
+    console.log(`${runtimeKey.padEnd(12, ' ')} ${detected ? 'detected ' : 'missing  '} ${commandName || 'n/a'} (${runtime.supportTier})`);
+  }
+  console.log('\nDetection only checks common executable names on PATH. It does not authenticate or launch runtimes.');
+  console.log();
+}
+
+function printTierWarning(runtimeKey) {
+  const runtime = RUNTIME_METADATA[runtimeKey];
+  if (runtime.supportTier === 'first-class') return;
+
+  console.log(`WARNING: ${runtime.label} is ${runtime.supportTier} in Legion, not first-class.`);
+  if (runtime.parityGaps?.length) {
+    for (const gap of runtime.parityGaps) {
+      console.log(`         ${gap}`);
+    }
+  }
+  console.log('         Use --list-targets for the recommended first-class installation targets.');
+  console.log();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -464,10 +637,88 @@ function transformCommand(content, runtimeKey, installedSkillsDir, installedAgen
   return content;
 }
 
+function commandMappingLines(paths) {
+  return LEGION_COMMANDS
+    .map((commandName) => `- \`legion ${commandName}\` -> \`${legionCommandFile(paths, commandName)}\``)
+    .join('\n');
+}
+
+function generateLegionRouterBody(paths, runtimeLabel, argumentHint = '$ARGUMENTS') {
+  return `# Legion
+
+You are the single Legion entry point for ${runtimeLabel}. The user should be able to say or invoke \`legion <command>\` with the same command names as the terminal CLI.
+
+## Canonical Command Mapping
+
+${commandMappingLines(paths)}
+
+## How To Route
+
+1. Read \`${paths.manifestFile}\` if installed paths need to be resolved.
+2. Treat the first word after \`legion\` as the workflow command. If no command is provided, route to \`start\` for new projects or \`status\` for existing Legion projects.
+3. Read only the matching command file under \`${paths.commandsDir}\` and treat it as authoritative.
+4. Load only the files named by that command in \`<execution_context>\` and \`<context>\`.
+5. Treat \`${argumentHint}\` as user-supplied arguments or clarification when the host provides it.
+6. Preserve the human-in-loop boundary: planning, build, review, acceptance, and ship-readiness stay explicit.
+
+## Compatibility
+
+Legacy host-specific aliases can remain installed, but they must route back to this same workflow contract. Do not invent alternate command names or claim \`/legion:*\` is native unless the host actually resolves it.
+`;
+}
+
+function generateLegionPrompt(paths, runtimeLabel) {
+  return `---
+description: "Route legion <command> requests through the installed Legion workflow bundle"
+argument-hint: "<command> [args]"
+---
+
+${generateLegionRouterBody(paths, runtimeLabel)}
+`;
+}
+
+function generateLegionSkill(paths, runtimeLabel, allowedToolsLine = null) {
+  const frontmatter = [
+    '---',
+    'name: legion',
+    `description: Route legion <command> requests through the installed Legion workflow bundle for ${runtimeLabel}.`,
+    ...(allowedToolsLine ? [allowedToolsLine] : []),
+    '---'
+  ].join('\n');
+  return `${frontmatter}
+
+${generateLegionRouterBody(paths, runtimeLabel)}
+`;
+}
+
+function generateLegionMarkdownCommand(paths, runtimeLabel, agentName = null) {
+  const frontmatter = [
+    '---',
+    'description: "Route legion <command> requests through the installed Legion workflow bundle"',
+    ...(agentName ? [`agent: ${agentName}`] : []),
+    '---'
+  ].join('\n');
+  return `${frontmatter}
+
+${generateLegionRouterBody(paths, runtimeLabel)}
+`;
+}
+
+function generateGeminiLegionCommand(paths) {
+  const prompt = generateLegionRouterBody(paths, 'Gemini CLI', '$ARGUMENTS').replace(/"""/g, '\\"""');
+  return [
+    'description = "Route legion <command> requests through the installed Legion workflow bundle"',
+    'prompt = """',
+    prompt,
+    '"""',
+    '',
+  ].join('\n');
+}
+
 function generateCodexBridgeSkill(paths) {
   const mappingLines = LEGION_COMMANDS
     .map((commandName) => {
-      return `- \`/legion:${commandName}\` -> \`${codexPromptInvocation(paths, commandName)}\` -> \`${paths.promptsDir}/${codexPromptFileName(commandName)}\``;
+      return `- \`legion ${commandName}\` -> \`${codexPromptInvocation(paths, commandName)}\` -> \`${paths.promptsDir}/${codexPromptFileName(commandName)}\``;
     })
     .join('\n');
 
@@ -478,16 +729,19 @@ description: Bridge Codex requests to the Legion workflow installed at ${paths.m
 
 # Legion for Codex
 
-Codex supports custom prompt commands. Legion installs native prompt files at \`${paths.promptsDir}\` and keeps this bridge skill so plain-language Legion requests and legacy \`/legion:*\` aliases still route to the right workflow.
+Legion's canonical Codex entry point is \`${paths.promptNamespace}legion\`. It accepts the same workflow language as the terminal CLI: \`legion start\`, \`legion plan\`, \`legion build\`, \`legion review\`, and related commands.
+
+Codex custom prompts are kept as compatibility aliases because current Codex guidance prefers skills for reusable workflows. This bridge skill keeps plain-language Legion requests and legacy \`/legion:*\` aliases routed to the same workflow contract.
 
 ## Native Prompt Mapping
 
+- \`legion <command>\` -> \`${paths.promptNamespace}legion\` -> \`${paths.promptsDir}/legion.md\`
 ${mappingLines}
 
 ## How To Use
 
-1. Prefer the installed native prompt files when the user wants slash commands. For this install, the canonical entry point is \`${codexPromptInvocation(paths, 'start')}\`.
-2. If the user types a legacy \`/legion:*\` alias and Codex reports it as unrecognized, map it to the matching native prompt command above.
+1. Prefer the installed \`legion\` skill or \`${paths.promptNamespace}legion\` prompt when the user wants Legion.
+2. If the user types a legacy \`/legion:*\` alias and Codex reports it as unrecognized, map it to the matching command above.
 3. If the user mentions Legion in plain language, treat it as the same intent and follow the matching Legion workflow.
 4. Load only the matching Legion command markdown and only the files named in its \`<execution_context>\`.
 5. Use the current project's \`.planning/PROJECT.md\`, \`.planning/ROADMAP.md\`, and \`.planning/STATE.md\` when the Legion workflow expects project state.
@@ -496,7 +750,7 @@ ${mappingLines}
 ## Guardrails
 
 - Do not claim that legacy \`/legion:*\` aliases are native Codex commands unless the runtime explicitly resolves them.
-- Prefer the native Codex prompt commands at \`${paths.promptsDir}\` for slash-command entry points.
+- Prefer \`${paths.promptNamespace}legion\` and the \`legion\` skill before per-command prompt aliases.
 - Do not bulk-load all Legion skills. Follow the target command's execution context and keep context narrow.
 - Prefer the Codex adapter at \`${paths.adaptersDir}/codex-cli.md\` when Legion behavior depends on runtime capabilities.
 `;
@@ -543,11 +797,12 @@ description: "Coordinate Legion workflows using the installed Legion bundle"
 mode: subagent
 ---
 
-You are Legion's orchestrator for OpenCode.
+You are the Legion subagent for OpenCode.
 
 - Use \`${paths.manifestFile}\` to find the installed Legion bundle.
 - Read only the matching command file under \`${paths.commandsDir}\`.
-- Route legacy \`/legion:*\` aliases to the corresponding flat OpenCode commands such as \`/legion-start\`.
+- Treat \`/legion\` as the canonical host command and \`legion <command>\` as the canonical workflow language.
+- Route legacy \`/legion:*\` aliases and \`/legion-start\` style commands back to the same command files.
 - Coordinate through artifacts in \`.planning/\`; do not assume direct inter-agent messaging.
 `;
 }
@@ -557,7 +812,7 @@ function generateOpenCodeCommand(paths, commandName, commandContent) {
     || `Run the Legion ${commandName} workflow`;
   return `---
 description: ${JSON.stringify(description)}
-agent: legion-orchestrator
+agent: legion
 ---
 
 ${legionRuntimeWrapperPreamble('OpenCode', commandName, paths)}
@@ -571,17 +826,17 @@ function generateKiloCommand(paths, commandName, commandContent) {
     || `Run the Legion ${commandName} workflow`;
   return `---
 description: ${JSON.stringify(description)}
-agent: legion-orchestrator
+agent: legion
 subtask: true
 ---
 
 ${legionRuntimeWrapperPreamble('Kilo Code', commandName, paths)}
 
-Kilo Code workflows discover this file under \`.kilo/commands/\` (project) or
+Kilo workflows discover this file under \`.kilo/commands/\` (project) or
 \`~/.config/kilo/commands/\` (global). Kilo supports \`$ARGUMENTS\` (and
 positional \`$1\`, \`$2\`, ...) substitution — when the user includes extra text
-after \`/legion-${commandName}\`, treat \`$ARGUMENTS\` as additional clarification
-for the workflow.
+after \`/legion-${commandName}\`, treat \`$ARGUMENTS\` as additional clarification.
+Prefer the canonical \`/legion\` command for new documentation and onboarding.
 `;
 }
 
@@ -602,6 +857,7 @@ the plugin/legacy workflow surface. This workflow runs through the single
 \`Legion\` mode bridge and leaves model selection to Kilo Code sticky models or
 user settings. Treat \`$ARGUMENTS\` as additional clarification when the user
 includes extra text after \`/legion-${commandName}\` or \`/legion-${commandName}.md\`.
+Prefer the canonical \`/legion\` workflow for new documentation and onboarding.
 `;
 }
 
@@ -611,14 +867,15 @@ description: "Coordinate Legion workflows using the installed Legion bundle"
 mode: subagent
 ---
 
-You are Legion's orchestrator for Kilo Code (VS Code extension and Kilo CLI).
+You are the Legion subagent for Kilo Code (VS Code extension and Kilo CLI).
 
 - Use \`${paths.manifestFile}\` to find the installed Legion bundle.
 - Read only the matching command file under \`${paths.commandsDir}\`.
 - Native discovery paths: workflows at \`.kilo/commands/\` (or \`~/.config/kilo/commands/\`),
   this agent at \`.kilo/agents/\` (or \`~/.config/kilo/agents/\`), and skills at
   \`.kilo/skills/<name>/SKILL.md\` (or \`~/.kilo/skills/<name>/SKILL.md\`).
-- Route legacy \`/legion:*\` aliases to the corresponding flat Kilo commands such as \`/legion-start\`.
+- Treat \`/legion\` as the canonical host command and \`legion <command>\` as the canonical workflow language.
+- Route legacy \`/legion:*\` aliases and \`/legion-start\` style commands back to the same command files.
 - Coordinate through artifacts in \`.planning/\`; do not assume direct inter-agent messaging.
 `;
 }
@@ -647,8 +904,8 @@ ${mappingLines}
 2. Read only the matching Legion command file under \`${paths.commandsDir}\`.
 3. Load only the files named in that command's \`<execution_context>\` and \`<context>\`.
 4. Use the current project's \`.planning/PROJECT.md\`, \`.planning/ROADMAP.md\`, and \`.planning/STATE.md\` when the workflow expects project state.
-5. Prefer the native Kilo workflow files \`/legion-start\`, \`/legion-plan\`, \`/legion-board\`, and related \`/legion-*\` commands when the CLI-backed surface is available.
-6. On the plugin/legacy workflow surface, use the matching \`/legion-start.md\`, \`/legion-plan.md\`, \`/legion-board.md\`, and related \`/legion-*.md\` workflow entries.
+5. Prefer the native \`/legion\` workflow or the Legion mode for new interactions.
+6. Use \`/legion-start\`, \`/legion-plan\`, \`/legion-board\`, and related \`/legion-*\` entries only as compatibility aliases.
 7. Treat Kilo Code workflows, Agent Skills, and the single Legion mode as the native plugin surface; do not look for old Kilo CLI command wrappers unless the user explicitly asks for the CLI.
 
 ## Guardrails
@@ -682,8 +939,8 @@ function generateKiloCodeMode(paths, scope) {
       `Read the matching workflow file under ${paths.commandsDir} before acting.`,
       'Load only the files named by that workflow in <execution_context> and <context>.',
       'Use .planning/PROJECT.md, .planning/ROADMAP.md, and .planning/STATE.md when the workflow expects project state.',
-      'Use native Kilo workflows such as /legion-start, /legion-plan, /legion-board, and /legion-review as user-facing command entry points when the CLI-backed surface is available.',
-      'Use /legion-start.md, /legion-plan.md, /legion-board.md, and /legion-review.md when Kilo Code exposes the plugin/legacy workflow surface.',
+      'Use the /legion workflow and Legion mode as the primary user-facing entry points.',
+      'Use /legion-start.md, /legion-plan.md, /legion-board.md, /legion-review.md, and /legion-* only as compatibility aliases.',
       'Use installed Agent Skills for reusable internals such as planning, wave execution, review panels, board governance, and memory.',
       'Treat the single Legion mode as the coordinator bridge; do not create one mode per Legion command or personality.',
       'Leave model selection to Kilo Code sticky models or user settings; do not pin a model from this mode.'
@@ -711,14 +968,15 @@ If the user invoked this skill with extra text after \`/legion-${commandName}\`,
 
 function generateCopilotAgent(paths) {
   return `---
-name: legion-orchestrator
+name: legion
 description: "Coordinate Legion workflows using the installed Legion bundle"
 tools: [read, search, edit, write, bash]
 ---
 
-You are Legion's orchestrator for GitHub Copilot.
+You are the Legion agent for GitHub Copilot.
 
-- Skills such as \`/legion-start\` and \`/legion-plan\` are the primary Legion entry points.
+- The \`/legion\` skill is the primary Legion entry point.
+- Skills such as \`/legion-start\` and \`/legion-plan\` are compatibility aliases.
 - When the user selects this agent directly, read the matching command file under \`${paths.commandsDir}\` and execute it faithfully.
 - Use \`${paths.manifestFile}\` if you need to resolve the rest of the Legion bundle.
 - Prefer Legion's workflow files over ad-hoc improvisation.
@@ -773,15 +1031,16 @@ Execution rules:
 
 function generateKiroAgent(paths) {
   return `---
-name: legion-orchestrator
+name: legion
 description: "Coordinate Legion workflows using the installed Legion bundle"
 tools: [read, edit, write, bash]
 ---
 
-You are Legion's orchestrator for Kiro CLI.
+You are the Legion agent for Kiro CLI.
 
 - Read \`${paths.manifestFile}\` if you need to locate the installed Legion bundle.
 - For any Legion request, read the matching command file under \`${paths.commandsDir}\` first and treat it as authoritative.
+- Treat \`@legion\` as the canonical Kiro entry point and \`legion <command>\` as the canonical workflow language.
 - Coordinate through artifacts in \`.planning/\`; do not invent hidden cross-agent state.
 - If the user types a legacy \`/legion:*\` alias, map it to the matching command file instead of claiming Kiro supports that slash command natively.
 `;
@@ -796,7 +1055,7 @@ function generateKiroSteering(paths) {
 
 Legion is installed for this Kiro environment.
 
-Use the custom agent \`@legion-orchestrator\` when the user asks to work in Legion.
+Use the custom agent \`@legion\` when the user asks to work in Legion.
 
 Legacy alias mapping:
 ${mappingLines}
@@ -1050,6 +1309,11 @@ function writeManifest(paths, runtimeKey, agentFiles, scope, source, verified, p
     supportTier: runtime.supportTier,
     disposition: runtime.disposition,
     installSurface: runtime.installSurface,
+    canonicalEntrypoint: runtime.canonicalEntrypoint,
+    parityGaps: runtime.parityGaps || [],
+    lastVerified: runtime.lastVerified,
+    smokeTestStatus: runtime.smokeTestStatus,
+    installLifecycle: runtime.installLifecycle,
     paths: {
       agents: paths.agentsDir,
       commands: paths.commandsDir,
@@ -1099,7 +1363,29 @@ function assertInstallSupported(runtimeKey, scope) {
   );
 }
 
-function install(runtimeKey, scope, verify = false) {
+function printInstallPlan(runtimeKey, scope, verify, paths) {
+  const runtime = RUNTIME_METADATA[runtimeKey];
+  printRuntimeExplanation(runtimeKey, scope);
+  console.log('Install plan:');
+  console.log(`  Runtime:          ${runtime.label}`);
+  console.log(`  Scope:            ${scope}`);
+  console.log(`  Verify package:   ${verify ? 'yes' : 'no'}`);
+  console.log(`  Manifest:         ${paths.manifestFile}`);
+  console.log(`  Commands:         ${paths.commandsDir}`);
+  console.log(`  Skills:           ${paths.skillsDir}`);
+  console.log(`  Agents:           ${paths.agentsDir}`);
+  if (paths.nativeSurfaces.length > 0) {
+    console.log('  Native surfaces:');
+    for (const surface of paths.nativeSurfaces) {
+      console.log(`    - ${surface.key}: ${surface.path}`);
+    }
+  } else {
+    console.log('  Native surfaces:  none');
+  }
+  console.log('\nDry run only. No files were written.\n');
+}
+
+function install(runtimeKey, scope, verify = false, dryRun = false) {
   const home = resolveHome();
   const paths = resolvePaths(runtimeKey, scope, home);
   const src = resolveSourceRoot();
@@ -1108,6 +1394,13 @@ function install(runtimeKey, scope, verify = false) {
   const pkg = readPackageJson();
 
   assertInstallSupported(runtimeKey, scope);
+  printTierWarning(runtimeKey);
+
+  if (dryRun) {
+    if (verify) verifyPackageIntegrity(src.root);
+    printInstallPlan(runtimeKey, scope, verify, paths);
+    return;
+  }
 
   if (verify) {
     verifyPackageIntegrity(src.root);
@@ -1119,7 +1412,7 @@ function install(runtimeKey, scope, verify = false) {
     console.log('         Use --verify to validate file integrity before install.');
   }
 
-  console.log(`\nInstalling Legion for ${rt.label} (${scope} mode, ${rt.supportTier} runtime)...\n`);
+  console.log(`\nInstalling Legion for ${rt.label} (${scope} mode, ${rt.supportTier} target)...\n`);
 
   const nativeDirs = paths.nativeSurfaces.map((surface) => {
     return surface.pathKind === 'dir' ? surface.path : dirnamePath(surface.path);
@@ -1235,16 +1528,32 @@ function install(runtimeKey, scope, verify = false) {
 
   for (const surface of paths.nativeSurfaces) {
     switch (surface.type) {
+      case 'claude-skill': {
+        const backedUp = writeManagedFile(surface.path, generateLegionSkill(paths, 'Claude Code'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up ${path.basename(surface.path)}.bak`);
+        }
+        console.log(`  ${surface.key}: ${surface.path}`);
+        break;
+      }
+
       case 'codex-prompts': {
+        const promptPath = joinPath(surface.path, 'legion.md');
+        const backedUp = writeManagedFile(promptPath, generateLegionPrompt(paths, 'Codex'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up legion.md.bak`);
+        }
+        installedPromptFiles.push('legion.md');
+        console.log(`  ${surface.key}: ${promptPath}`);
         for (const [commandName, commandContent] of transformedCommands.entries()) {
           const promptFile = codexPromptFileName(commandName);
-          const promptPath = joinPath(surface.path, promptFile);
-          const backedUp = writeManagedFile(promptPath, commandContent, nativeArtifacts);
-          if (backedUp) {
+          const aliasPath = joinPath(surface.path, promptFile);
+          const aliasBackedUp = writeManagedFile(aliasPath, commandContent, nativeArtifacts);
+          if (aliasBackedUp) {
             console.log(`  ${surface.key}: backed up ${promptFile}.bak`);
           }
           installedPromptFiles.push(promptFile);
-          console.log(`  ${surface.key}: ${promptPath}`);
+          console.log(`  ${surface.key}: ${aliasPath}`);
         }
         break;
       }
@@ -1260,14 +1569,20 @@ function install(runtimeKey, scope, verify = false) {
       }
 
       case 'gemini-commands': {
+        const commandPath = joinPath(surface.path, 'legion.toml');
+        const backedUp = writeManagedFile(commandPath, generateGeminiLegionCommand(paths), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up legion.toml.bak`);
+        }
+        console.log(`  ${surface.key}: ${commandPath}`);
         for (const [commandName, commandContent] of transformedCommands.entries()) {
-          const commandPath = joinPath(surface.path, `${commandName}.toml`);
+          const aliasPath = joinPath(surface.path, `${commandName}.toml`);
           const wrappedContent = generateGeminiCommand(paths, commandName, commandContent);
-          const backedUp = writeManagedFile(commandPath, wrappedContent, nativeArtifacts);
-          if (backedUp) {
-            console.log(`  ${surface.key}: backed up ${path.basename(commandPath)}.bak`);
+          const aliasBackedUp = writeManagedFile(aliasPath, wrappedContent, nativeArtifacts);
+          if (aliasBackedUp) {
+            console.log(`  ${surface.key}: backed up ${path.basename(aliasPath)}.bak`);
           }
-          console.log(`  ${surface.key}: ${commandPath}`);
+          console.log(`  ${surface.key}: ${aliasPath}`);
         }
         break;
       }
@@ -1342,6 +1657,8 @@ function install(runtimeKey, scope, verify = false) {
         // 4. Copy transformed commands/ to surface.path/commands
         const destCommandsDir = joinPath(surface.path, 'commands');
         ensureDirs([destCommandsDir]);
+        const legionCommandPath = joinPath(destCommandsDir, 'legion.md');
+        writeManagedFile(legionCommandPath, generateLegionMarkdownCommand(paths, 'Antigravity CLI'), nativeArtifacts);
         for (const [commandName, commandContent] of transformedCommands.entries()) {
           const commandPath = joinPath(destCommandsDir, `${commandName}.md`);
           writeManagedFile(commandPath, commandContent, nativeArtifacts);
@@ -1360,14 +1677,20 @@ function install(runtimeKey, scope, verify = false) {
       }
 
       case 'opencode-commands': {
+        const commandPath = joinPath(surface.path, 'legion.md');
+        const backedUp = writeManagedFile(commandPath, generateLegionMarkdownCommand(paths, 'OpenCode', 'legion'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up legion.md.bak`);
+        }
+        console.log(`  ${surface.key}: ${commandPath}`);
         for (const [commandName, commandContent] of transformedCommands.entries()) {
-          const commandPath = joinPath(surface.path, `legion-${commandName}.md`);
+          const aliasPath = joinPath(surface.path, `legion-${commandName}.md`);
           const wrappedContent = generateOpenCodeCommand(paths, commandName, commandContent);
-          const backedUp = writeManagedFile(commandPath, wrappedContent, nativeArtifacts);
-          if (backedUp) {
-            console.log(`  ${surface.key}: backed up ${path.basename(commandPath)}.bak`);
+          const aliasBackedUp = writeManagedFile(aliasPath, wrappedContent, nativeArtifacts);
+          if (aliasBackedUp) {
+            console.log(`  ${surface.key}: backed up ${path.basename(aliasPath)}.bak`);
           }
-          console.log(`  ${surface.key}: ${commandPath}`);
+          console.log(`  ${surface.key}: ${aliasPath}`);
         }
         break;
       }
@@ -1382,16 +1705,25 @@ function install(runtimeKey, scope, verify = false) {
       }
 
       case 'kilo-commands': {
+        const commandPath = joinPath(surface.path, 'legion.md');
+        const primary = runtimeKey === 'kilocode'
+          ? generateLegionMarkdownCommand(paths, 'Kilo Code', 'legion')
+          : generateLegionMarkdownCommand(paths, 'Kilo CLI', 'legion');
+        const backedUp = writeManagedFile(commandPath, primary, nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up legion.md.bak`);
+        }
+        console.log(`  ${surface.key}: ${commandPath}`);
         for (const [commandName, commandContent] of transformedCommands.entries()) {
-          const commandPath = joinPath(surface.path, `legion-${commandName}.md`);
+          const aliasPath = joinPath(surface.path, `legion-${commandName}.md`);
           const wrapped = runtimeKey === 'kilocode'
             ? generateKiloCodeWorkflow(paths, commandName, commandContent)
             : generateKiloCommand(paths, commandName, commandContent);
-          const backedUp = writeManagedFile(commandPath, wrapped, nativeArtifacts);
-          if (backedUp) {
-            console.log(`  ${surface.key}: backed up ${path.basename(commandPath)}.bak`);
+          const aliasBackedUp = writeManagedFile(aliasPath, wrapped, nativeArtifacts);
+          if (aliasBackedUp) {
+            console.log(`  ${surface.key}: backed up ${path.basename(aliasPath)}.bak`);
           }
-          console.log(`  ${surface.key}: ${commandPath}`);
+          console.log(`  ${surface.key}: ${aliasPath}`);
         }
         break;
       }
@@ -1428,8 +1760,8 @@ function install(runtimeKey, scope, verify = false) {
               copyDirRecursiveManaged(srcPath, destPath, nativeArtifacts);
             } else if (entry === 'SKILL.md') {
               const raw = fs.readFileSync(srcPath, 'utf8');
-              const rewritten = runtimeKey === 'kilocode' && skillName === 'legion'
-                ? generateKiloCodeSkill(paths)
+              const rewritten = skillName === 'legion'
+                ? (runtimeKey === 'kilocode' ? generateKiloCodeSkill(paths) : generateLegionSkill(paths, 'Kilo CLI'))
                 : normalizeAgentSkillName(raw, skillName);
               writeManagedFile(destPath, rewritten, nativeArtifacts);
             } else {
@@ -1443,15 +1775,23 @@ function install(runtimeKey, scope, verify = false) {
       }
 
       case 'copilot-skills': {
+        const skillDir = joinPath(surface.path, 'legion');
+        const skillPath = joinPath(skillDir, 'SKILL.md');
+        ensureDirs([skillDir]);
+        const backedUp = writeManagedFile(skillPath, generateLegionSkill(paths, 'GitHub Copilot CLI', 'allowed-tools: [read, search, edit, write, bash]'), nativeArtifacts);
+        if (backedUp) {
+          console.log(`  ${surface.key}: backed up legion/SKILL.md.bak`);
+        }
+        console.log(`  ${surface.key}: ${skillPath}`);
         for (const [commandName, commandContent] of transformedCommands.entries()) {
-          const skillDir = joinPath(surface.path, `legion-${commandName}`);
-          const skillPath = joinPath(skillDir, 'SKILL.md');
-          ensureDirs([skillDir]);
-          const backedUp = writeManagedFile(skillPath, generateCopilotSkill(paths, commandName, commandContent), nativeArtifacts);
-          if (backedUp) {
+          const aliasSkillDir = joinPath(surface.path, `legion-${commandName}`);
+          const aliasSkillPath = joinPath(aliasSkillDir, 'SKILL.md');
+          ensureDirs([aliasSkillDir]);
+          const aliasBackedUp = writeManagedFile(aliasSkillPath, generateCopilotSkill(paths, commandName, commandContent), nativeArtifacts);
+          if (aliasBackedUp) {
             console.log(`  ${surface.key}: backed up legion-${commandName}/SKILL.md.bak`);
           }
-          console.log(`  ${surface.key}: ${skillPath}`);
+          console.log(`  ${surface.key}: ${aliasSkillPath}`);
         }
         break;
       }
@@ -1526,9 +1866,9 @@ ${'='.repeat(48)}
   Source:   ${sourceInfo.source}
   Verified: ${verify ? 'yes' : 'no'}`);
 
-  if (rt.supportTier !== 'certified') {
+  if (rt.supportTier !== 'first-class') {
     console.log(`\n  NOTE: ${rt.label} is currently marked ${rt.supportTier} in Legion.`);
-    console.log('  Advanced coordination features may vary by CLI runtime and version.');
+    console.log('  Host-native parity varies by runtime and version.');
     runRuntimeDiagnostics(runtimeKey, scope, paths);
   }
   if (conflicts.length > 0) {
@@ -1542,22 +1882,22 @@ ${'='.repeat(48)}
 
   if (runtimeKey === 'codex') {
     console.log(`  Restart Codex to pick up the Legion prompt files and bridge skill.`);
-    console.log(`  Native prompt entry point: ${codexPromptInvocation(paths, 'start')}`);
-    console.log('  Legacy /legion:* aliases remain bridge-only fallbacks.');
+    console.log(`  Canonical Legion entry point: ${rt.entrypoints[scope]}`);
+    console.log('  Per-command prompt files remain compatibility aliases.');
     console.log();
     return;
   }
 
   if (runtimeKey === 'kilocode') {
     console.log('  Restart Kilo Code or reload the IDE window to pick up the Legion mode, workflows, and skills.');
-    console.log(`  Native Legion entry point: ${rt.entrypoints[scope]}`);
+    console.log(`  Canonical Legion entry point: ${rt.entrypoints[scope]}`);
     console.log();
     return;
   }
 
   if (rt.entrypoints[scope]) {
     console.log(`  Restart your CLI to pick up the new Legion artifacts.`);
-    console.log(`  Native Legion entry point: ${rt.entrypoints[scope]}`);
+    console.log(`  Canonical Legion entry point: ${rt.entrypoints[scope]}`);
   } else {
     console.log(`  ${rt.label} does not expose a native Legion command entry point for ${scope} installs.`);
     console.log('  Use the installed native rules or steering files and ask the runtime to use Legion in plain language.');
@@ -1770,6 +2110,9 @@ function uninstall(runtimeKey, scope) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchNpmLatest(packageName) {
+  if (process.env.LEGION_TEST_NPM_LATEST) {
+    return process.env.LEGION_TEST_NPM_LATEST;
+  }
   const https = require('https');
   return new Promise((resolve, reject) => {
     const url = `https://registry.npmjs.org/${packageName}/latest`;
@@ -1842,16 +2185,24 @@ async function update(runtimeKey, scope, verify = false) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (err) {
+    console.error(`Legion installer failed: ${err.message}`);
+    return 1;
+  }
 
   if (args.action === 'help')    { printHelp(); return 0; }
   if (args.action === 'version') { printVersion(); return 0; }
+  if (args.action === 'list-targets') { printTargetList(args.allTargets); return 0; }
+  if (args.action === 'detect') { printDetectedTargets(args.allTargets); return 0; }
 
   let runtime = args.runtime;
 
   // Interactive runtime selection if no flag given
   if (!runtime && args.action === 'install') {
-    runtime = await promptRuntimeSelection(args.scope);
+    runtime = await promptRuntimeSelection(args.scope, args.allTargets);
   } else if (!runtime) {
     console.error('Runtime flag required for this action. Use --claude, --codex, --kiro, etc.');
     console.error('Run with --help for full usage.');
@@ -1863,6 +2214,11 @@ async function main(argv = process.argv.slice(2)) {
     return 1;
   }
 
+  if (args.action === 'explain') {
+    printRuntimeExplanation(runtime, args.scope);
+    return 0;
+  }
+
   try {
     switch (args.action) {
       case 'uninstall':
@@ -1872,7 +2228,7 @@ async function main(argv = process.argv.slice(2)) {
         await update(runtime, args.scope, args.verify);
         break;
       default:
-        install(runtime, args.scope, args.verify);
+        install(runtime, args.scope, args.verify, args.dryRun);
     }
     return 0;
   } catch (err) {

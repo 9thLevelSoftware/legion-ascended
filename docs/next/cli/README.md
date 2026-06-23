@@ -21,6 +21,20 @@ Guidance commands are also workflow-first. `legion explore`, `legion advise`, `l
 
 Ad-hoc commands prepare real work instead of mutating code directly. `legion quick <task>` and `legion polish [target]` create typed changes and taskgraphs, then route to `legion build`.
 
+## Install Targets
+
+Installer support is tiered by host parity. The default target prompt and `legion install --list-targets` show only first-class targets: Claude Code, Codex, GitHub Copilot CLI, Antigravity, OpenCode, and Kilo Code Plugin.
+
+```powershell
+legion install --list-targets
+legion install --list-targets --all-targets
+legion install --target codex --explain
+legion install --target codex --local --dry-run
+legion install --target codex --local
+```
+
+Compatibility, legacy, and manual-only hosts stay available by explicit target, but docs should not present them as the normal happy path. The install policy and host matrix live in `docs/cli/INSTALL-MATRIX.md`.
+
 Advanced operator and developer commands live under `legion dev`:
 
 ```powershell

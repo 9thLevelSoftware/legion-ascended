@@ -23,6 +23,7 @@ test("npm package dry-run includes workflow CLI and packaged quickstart", async 
   assert.equal(files.has("dist/legion-cli.mjs"), true);
   assert.equal(files.has("dist/legion-cli.mjs.map"), true);
   assert.equal(files.has("docs/cli/WORKFLOW-QUICKSTART.md"), true);
+  assert.equal(files.has("docs/cli/INSTALL-MATRIX.md"), true);
   assert.equal(files.has("adapters/codex-cli.md"), true);
 });
 
