@@ -57,6 +57,11 @@ test("static site is self-contained and describes the current workflow", async (
   assert.match(html, /legion retro/);
   assert.match(html, /legion milestone/);
   assert.match(html, /legion council/);
+  assert.match(html, /Core Steps/);
+  assert.match(html, /Guidance Commands/);
+  assert.match(html, /Command Surface/);
+  assert.doesNotMatch(html, /49<\/div><div class="label">Agents/);
+  assert.doesNotMatch(html, /<div class="label">Divisions<\/div>/);
   assert.match(html, /The Tithe/);
   assert.match(html, /Make an Offering/);
   assert.match(html, new RegExp(DONATION_URL.replaceAll("/", "\\/")));
