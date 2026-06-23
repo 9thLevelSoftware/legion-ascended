@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -44,6 +44,21 @@ async function writeValidRoadmap(root) {
     "utf8"
   );
   return roadmapPath;
+}
+
+async function assertFileExists(filePath) {
+  const fileStat = await stat(filePath);
+  assert.equal(fileStat.isFile(), true, `${filePath} should be a file`);
+}
+
+async function assertPathMissing(filePath) {
+  try {
+    await stat(filePath);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
+  assert.fail(`${filePath} should not exist`);
 }
 
 async function importWorkflowModule(name) {
@@ -878,6 +893,40 @@ test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", asyn
       sourcePath: roadmapPath
     });
     assert.equal(payload.nextAction.command, "legion build");
+    await assertPathMissing(path.join(root, ".legion", "project", "specs", "req_phase-1-editor-mvp.md"));
+    await assertPathMissing(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "change.yaml"));
+    await assertPathMissing(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "oracle", "orc_phase-1-editor-mvp.yaml"));
+    await assertPathMissing(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "taskgraph.json"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion plan phase creates typed artifacts from an explicit roadmap", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "planned");
+    assert.equal(payload.change.changeId, "chg_phase-1-editor-mvp");
+    assert.equal(payload.oracle.oracleId, "orc_phase-1-editor-mvp");
+    assert.equal(payload.taskgraph.artifactPath, ".legion/project/changes/chg_phase-1-editor-mvp/taskgraph.json");
+    assert.equal(payload.nextAction.command, "legion build");
+    assert.deepEqual(payload.diagnostics, []);
+
+    await assertFileExists(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "change.yaml"));
+    await assertFileExists(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "oracle", "orc_phase-1-editor-mvp.yaml"));
+    await assertFileExists(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "taskgraph.json"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

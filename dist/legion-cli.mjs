@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path20 from "node:path";
+import path21 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path21) {
-  if (!path21)
+function getElementAtPath(obj, path22) {
+  if (!path22)
     return obj;
-  return path21.reduce((acc, key) => acc?.[key], obj);
+  return path22.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path21, issues) {
+function prefixIssues(path22, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path21);
+    iss.path.unshift(path22);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path21 = []) => {
+  const processError = (error3, path22 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path21, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path22, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path21, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path21, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
       } else {
-        const fullpath = [...path21, ...issue2.path];
+        const fullpath = [...path22, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -14918,14 +14918,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path21) {
-  if (path21.endsWith(".json"))
+function mediaTypeForArtifactPath(path22) {
+  if (path22.endsWith(".json"))
     return "application/json";
-  if (path21.endsWith(".yaml") || path21.endsWith(".yml"))
+  if (path22.endsWith(".yaml") || path22.endsWith(".yml"))
     return "application/yaml";
-  if (path21.endsWith(".md"))
+  if (path22.endsWith(".md"))
     return "text/markdown";
-  if (path21.endsWith(".txt"))
+  if (path22.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -14968,16 +14968,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path21, issues) {
+function schemaDiagnostics(path22, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path21 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path22 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path21
+      path: path22
     });
   });
 }
@@ -15880,7 +15880,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path21 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path22 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -15894,7 +15894,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path21
+        path: path22
       }))
     };
   }
@@ -16642,13 +16642,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path21) {
+function parseRequirementId2(input, path22) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path21
+      path: path22
     })));
   }
   return parsed.data;
@@ -16664,24 +16664,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path21) {
+function parseBaseGitSha(input, path22) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path21
+      path: path22
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path21) {
+function parseOwners(input, path22) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path21
+        path: path22
       })
     ]);
   }
@@ -16693,7 +16693,7 @@ function parseOwners(input, path21) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path21
+        path: path22
       })));
       continue;
     }
@@ -16981,7 +16981,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path21) {
+function conflictDiagnostics(deltas, path22) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -16990,7 +16990,7 @@ function conflictDiagnostics(deltas, path21) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path21
+        path: path22
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -17747,6 +17747,16 @@ function oracleDiagnostic(input) {
     path: input.path ?? INVALID_ORACLE_PATH
   });
 }
+function schemaDiagnostics2(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [oracleDiagnostic({ code: input.code, message: "Oracle artifact failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => oracleDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
 function parseChangeId3(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
@@ -17757,19 +17767,65 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path21) {
+function parseOracleId2(input, path22) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path21
+      path: path22
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha2(input, path22) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path22
     })));
   }
   return parsed.data;
 }
 function oraclePath(changeId, oracleId) {
   return artifactPathForRole({ role: "oracle", changeId, oracleId });
+}
+function normalizeOracle(input) {
+  const parsed = oracleSchema.safeParse(input.oracle);
+  if (!parsed.success) {
+    return failure5("invalid", schemaDiagnostics2({ code: "invalid_oracle", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  const diagnostics = [];
+  for (const protectedPath of parsed.data.protectedPaths) {
+    try {
+      canonicalProjectArtifactPath(protectedPath);
+    } catch (error2) {
+      diagnostics.push(oracleDiagnostic({
+        code: "invalid_protected_path",
+        message: error2 instanceof Error ? error2.message : String(error2),
+        path: input.artifactPath
+      }));
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure5("invalid", diagnostics);
+  return parsed.data;
+}
+function oracleArtifactDocument(input) {
+  const parsed = oracleArtifactDocumentSchema.safeParse({
+    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
+    kind: "oracle-artifact",
+    revision: input.revision,
+    oracle: input.oracle
+  });
+  if (!parsed.success) {
+    return failure5("invalid", schemaDiagnostics2({ code: "invalid_oracle_artifact", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  return parsed.data;
 }
 function manifestFor(changeId, oracles) {
   const sortedOracles = [...oracles].sort(compareOracleRevisions);
@@ -17782,6 +17838,75 @@ function manifestFor(changeId, oracles) {
   return oracleManifestSchema.parse({
     ...manifestInput,
     manifestHash: hashContent(stableProtocolJson(manifestInput))
+  });
+}
+async function writeOracleArtifact(input) {
+  const artifactDocument = oracleArtifactDocument({
+    oracle: input.oracle,
+    revision: input.currentRevision + 1,
+    artifactPath: input.artifactPath
+  });
+  if ("diagnostics" in artifactDocument)
+    return artifactDocument;
+  const content = stableProtocolJson(artifactDocument);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath,
+      role: "oracle",
+      content,
+      expectedRevision: input.expectedRevision,
+      currentRevision: input.currentRevision,
+      mediaType: "application/json",
+      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha },
+      ...input.supersedes === void 0 ? {} : { supersedes: input.supersedes }
+    });
+    return {
+      ok: true,
+      status: input.status,
+      document: input.oracle,
+      artifactDocument,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error2) {
+    if (error2 instanceof ArtifactRevisionConflictError) {
+      return failure5("conflict", [
+        oracleDiagnostic({
+          code: "revision_conflict",
+          message: error2.message,
+          path: input.artifactPath
+        })
+      ]);
+    }
+    throw error2;
+  }
+}
+async function createOracleArtifact(input) {
+  const changeId = parseChangeId3(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleId = parseOracleId2(input.oracle.id, INVALID_ORACLE_PATH);
+  if (typeof oracleId !== "string")
+    return oracleId;
+  const artifactPath = oraclePath(changeId, oracleId);
+  const oracle = normalizeOracle({ oracle: input.oracle, artifactPath });
+  if ("diagnostics" in oracle)
+    return oracle;
+  const baseGitSha = parseBaseGitSha2(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  return writeOracleArtifact({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    oracle,
+    artifactPath,
+    expectedRevision: 0,
+    currentRevision: 0,
+    ...baseGitSha === void 0 ? {} : { baseGitSha },
+    status: "created"
   });
 }
 async function readOracleArtifact(input) {
@@ -17954,7 +18079,7 @@ function artifactInputDiagnostics(input) {
   for (const [index, artifactInput] of input.artifactInputs.entries()) {
     const parsed = artifactRevisionSchema.safeParse(artifactInput);
     if (!parsed.success) {
-      diagnostics.push(...schemaDiagnostics2({
+      diagnostics.push(...schemaDiagnostics3({
         code: "invalid_artifact_inputs",
         path: input.artifactPath,
         issues: parsed.error.issues.map((issue2) => ({
@@ -17985,7 +18110,7 @@ function taskGraphDiagnostic(input) {
     path: input.path ?? INVALID_TASKGRAPH_PATH
   });
 }
-function schemaDiagnostics2(input) {
+function schemaDiagnostics3(input) {
   if (input.issues === void 0 || input.issues.length === 0) {
     return [taskGraphDiagnostic({ code: input.code, message: "Taskgraph failed schema validation.", path: input.path })];
   }
@@ -18005,8 +18130,49 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
+function parseBaseGitSha3(input, path22) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path22
+    })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision(value, path22) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure6("invalid", [
+      taskGraphDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: path22
+      })
+    ]);
+  }
+  return void 0;
+}
 function taskgraphPath(changeId) {
   return artifactPathForRole({ role: "taskgraph", changeId });
+}
+function deriveChangeArtifactManifest(input) {
+  const changeId = changeIdSchema.parse(input.changeId);
+  const inputs = [...input.inputs].sort(compareArtifactRevisions);
+  const evidenceRefs = [...input.evidenceRefs ?? []].sort(compareReferences);
+  const manifestInput = {
+    schemaVersion: TASKGRAPH_SCHEMA_VERSION,
+    kind: "change-artifact-manifest",
+    changeId,
+    inputs,
+    evidenceRefs
+  };
+  return changeArtifactManifestSchema.parse({
+    ...manifestInput,
+    manifestHash: hashContent(stableProtocolJson(manifestInput))
+  });
 }
 function expectedChangeArtifactManifestHash(manifest) {
   return hashContent(stableProtocolJson({
@@ -18041,6 +18207,111 @@ function manifestInputDiagnostics(input) {
       path: input.artifactPath
     })
   ];
+}
+function normalizeTaskGraph(input) {
+  const artifactInputs = [...input.artifactInputs].sort(compareArtifactRevisions);
+  const artifactInputIssues = artifactInputDiagnostics({
+    artifactInputs,
+    artifactPath: input.artifactPath
+  });
+  if (artifactInputIssues.length > 0)
+    return failure6("invalid", artifactInputIssues);
+  const tasks = [...input.tasks].sort((left, right) => compareStrings3(left.id, right.id));
+  const documentInput = {
+    schemaVersion: TASKGRAPH_SCHEMA_VERSION,
+    kind: "taskgraph",
+    changeId: input.changeId,
+    revision: input.revision,
+    artifactInputs,
+    tasks,
+    artifactManifest: deriveChangeArtifactManifest({
+      changeId: input.changeId,
+      inputs: artifactInputs
+    })
+  };
+  const parsed = taskGraphDocumentSchema.safeParse(documentInput);
+  if (!parsed.success) {
+    return failure6("invalid", schemaDiagnostics3({ code: "invalid_taskgraph", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  return parsed.data;
+}
+async function currentTaskGraph(input) {
+  return readTaskGraph(input);
+}
+async function writeTaskGraph(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const artifactPath = taskgraphPath(changeId);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha3(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await currentTaskGraph({
+      repositoryRoot: input.repositoryRoot,
+      changeId
+    });
+    if (!current.ok)
+      return current;
+    if (current.document.revision !== expectedRevision) {
+      return failure6("conflict", [
+        taskGraphDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.document.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = normalizeTaskGraph({
+    changeId,
+    revision: expectedRevision + 1,
+    tasks: input.tasks,
+    artifactInputs: input.artifactInputs,
+    artifactPath
+  });
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "taskgraph",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error2) {
+    if (error2 instanceof ArtifactRevisionConflictError) {
+      return failure6("conflict", [
+        taskGraphDiagnostic({
+          code: "revision_conflict",
+          message: error2.message,
+          path: artifactPath
+        })
+      ]);
+    }
+    throw error2;
+  }
 }
 async function readTaskGraph(input) {
   const changeId = parseChangeId4(input.changeId);
@@ -18323,8 +18594,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path21) {
-  return nodeId("artifact", path21);
+function artifactNodeId(path22) {
+  return nodeId("artifact", path22);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -18360,8 +18631,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path21) {
-  const fileName = path21.split("/").at(-1);
+function oracleIdFromPath(path22) {
+  const fileName = path22.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -18476,13 +18747,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path21 = [];
+  const path22 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path21.indexOf(node);
+      const cycleStartIndex = path22.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path21.length; index++) {
-          const cyclicNode = path21[index];
+        for (let index = cycleStartIndex; index < path22.length; index++) {
+          const cyclicNode = path22[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -18492,11 +18763,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path21.push(node);
+    path22.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path21.pop();
+    path22.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -18524,10 +18795,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path21 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path22 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path21,
+        path: path22,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -19173,13 +19444,13 @@ function parseChangeId7(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path21) {
+function parseArchivedAt(input, path22) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path21
+      path: path22
     })));
   }
   return parsed.data;
@@ -19208,7 +19479,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path21) {
+function archiveHashDiagnostics(record2, path22) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -19216,11 +19487,11 @@ function archiveHashDiagnostics(record2, path21) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path21
+      path: path22
     })
   ];
 }
-async function assertWorktreeTarget(input, path21) {
+async function assertWorktreeTarget(input, path22) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -19234,7 +19505,7 @@ async function assertWorktreeTarget(input, path21) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path21
+        path: path22
       })
     ]);
   } catch (error2) {
@@ -19242,7 +19513,7 @@ async function assertWorktreeTarget(input, path21) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path21
+        path: path22
       })
     ]);
   }
@@ -19321,11 +19592,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path21 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path21 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path21)) : remaining;
+    const path22 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path22 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path22)) : remaining;
     return {
-      path: path21,
+      path: path22,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -19388,9 +19659,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path21, document) {
+function validatePlannedDocument(path22, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path21,
+    artifactPath: path22,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -19401,7 +19672,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path21, document]) => [path21, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path22, document]) => [path22, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -19425,17 +19696,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path21 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path21)) {
+      const path22 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path22)) {
         return failure9("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path21}.`,
-            path: path21
+            message: `Archive add target already exists: ${path22}.`,
+            path: path22
           })
         ]);
       }
-      plannedDocs.set(path21, {
+      plannedDocs.set(path22, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -19448,7 +19719,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path21);
+      touchedPaths.add(path22);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -19633,8 +19904,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path21 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path21);
+  const path22 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path22);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -19872,10 +20143,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path21 = archivePath(changeId);
+  const path22 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path21,
+    artifactPath: path22,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -19887,22 +20158,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path21
+        path: path22
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path21);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path22);
   if (hashDiagnostics.length > 0)
     return failure9("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path21,
+    artifactPath: path22,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path21,
+      path: path22,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -22906,9 +23177,265 @@ async function handleStatusCommand(context) {
   );
 }
 
+// packages/cli/src/workflow/change-input.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import path18 from "node:path";
+var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
+function phasePlanIds(phase) {
+  const suffix = phaseIdSuffix(phase);
+  return {
+    suffix,
+    changeId: formatEntityId("change", suffix),
+    requirementId: formatEntityId("requirement", suffix),
+    oracleId: formatEntityId("oracle", suffix),
+    contractId: formatEntityId("contract", suffix)
+  };
+}
+function phaseRiskProfile(phase) {
+  return riskProfileSchema.parse({
+    tier: "R2",
+    reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]
+  });
+}
+function buildPhaseCurrentSpecInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const currentSpecPath = artifactPathForRole({
+    role: "current-spec",
+    requirementId: ids.requirementId
+  });
+  const requirement = requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: ids.requirementId,
+    projectId: options.project.id,
+    priority: "must",
+    category: "behavior",
+    status: "accepted",
+    statement: `Phase ${options.phase.number} (${options.phase.name}) has a resolved planning source.`,
+    acceptance: {
+      language: `Phase ${options.phase.number} planning starts from a resolved source artifact.`,
+      criteria: [`${options.phase.name} source is available for typed planning.`],
+      oracleRefs: []
+    },
+    traceRefs: [
+      {
+        path: currentSpecPath,
+        anchor: ids.requirementId,
+        relation: "defines",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    supersedes: []
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    document: {
+      primaryRequirementId: ids.requirementId,
+      capability: {
+        id: ids.suffix,
+        title: `Phase ${options.phase.number}: ${options.phase.name}`,
+        status: "active"
+      },
+      requirements: [requirement],
+      sections: {
+        purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
+        behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
+        constraints: "The baseline current spec is limited to planning-source availability.",
+        scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
+        interfaces: "legion plan",
+        compatibility: "The current spec exists so change bundles have explicit current truth.",
+        failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
+        traceIds: [ids.requirementId]
+      }
+    }
+  };
+}
+function currentUtcTimestamp() {
+  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+}
+function resolveBaseGitSha(repositoryRoot) {
+  try {
+    const value = execFileSync2("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim().toLowerCase();
+    return gitShaSchema.parse(value);
+  } catch {
+    return gitShaSchema.parse(ZERO_GIT_SHA);
+  }
+}
+function phaseSourceArtifactPath(repositoryRoot, phase) {
+  const relative = path18.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path18.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  return artifactPathSchema.parse(candidate);
+}
+function buildChangeBundleInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
+  const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
+  const owner = firstDecisionOwner(options.project);
+  const requirement = requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: ids.requirementId,
+    projectId: options.project.id,
+    priority: "must",
+    category: "behavior",
+    status: "accepted",
+    statement: requirementStatement(options.phase),
+    acceptance: {
+      language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
+      criteria: acceptanceCriteria(options.phase),
+      oracleRefs: [ids.oracleId]
+    },
+    traceRefs: [
+      {
+        path: sourcePath,
+        anchor: `phase-${options.phase.number}`,
+        relation: "defines",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    supersedes: []
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    changeId: ids.changeId,
+    projectId: options.project.id,
+    title: `Plan phase ${options.phase.number}: ${options.phase.name}`,
+    summary: summarizePhase(options.phase),
+    owners: [owner],
+    baseGitSha,
+    risk: phaseRiskProfile(options.phase),
+    createdAt,
+    currentSpecs: [
+      {
+        requirementId: options.currentSpec.document.primaryRequirementId,
+        expectedRevision: options.currentSpec.document.revision
+      }
+    ],
+    deltaSpecs: [
+      {
+        operation: "modify",
+        requirementId: ids.requirementId,
+        proposedRequirement: requirement,
+        sections: {
+          purpose: summarizePhase(options.phase),
+          behaviors: options.phase.body || `Implement ${options.phase.name}.`,
+          constraints: "Preserve initialized project truth and create reviewable Legion plan artifacts.",
+          scenarios: `A maintainer runs legion plan ${options.phase.number} and receives a change, oracle, and taskgraph for ${options.phase.name}.`,
+          interfaces: "legion plan",
+          compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
+          failureModes: "Artifact service validation failures are returned with typed diagnostics.",
+          traceIds: [ids.requirementId]
+        },
+        rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
+      }
+    ],
+    design: {
+      title: `Phase ${options.phase.number} implementation plan`,
+      body: [
+        `Source: ${sourcePath}`,
+        "",
+        options.phase.body || `Implement ${options.phase.name}.`
+      ].join("\n")
+    }
+  };
+}
+function firstDecisionOwner(project) {
+  const owner = project.policy.decisionOwners[0];
+  if (owner === void 0) {
+    throw new Error("Project policy must include at least one decision owner.");
+  }
+  return owner;
+}
+function phaseIdSuffix(phase) {
+  const prefix = `phase-${phase.number}-`;
+  const maxNameLength = Math.max(1, 63 - prefix.length);
+  const nameSlug = slugFromText(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
+  return `${prefix}${nameSlug || "plan"}`;
+}
+function slugFromText(value) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "plan";
+}
+function requirementStatement(phase) {
+  return truncate2(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
+}
+function summarizePhase(phase) {
+  return truncate2(phase.body || `Implement ${phase.name}.`, 512);
+}
+function acceptanceCriteria(phase) {
+  const bullets = phase.body.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.slice(2).trim()).filter((line) => line.length > 0).slice(0, 8);
+  return bullets.length > 0 ? bullets : [`${phase.name} is implemented and reviewable.`];
+}
+function truncate2(value, maxLength) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return normalized.slice(0, maxLength - 1).trimEnd();
+}
+
+// packages/cli/src/workflow/oracle-input.ts
+function buildOracleArtifactInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const owner = firstDecisionOwner(options.project);
+  const oraclePath2 = artifactPathForRole({
+    role: "oracle",
+    changeId: ids.changeId,
+    oracleId: ids.oracleId
+  });
+  const oracle = oracleSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "oracle",
+    id: ids.oracleId,
+    projectId: options.project.id,
+    title: `Phase ${options.phase.number} acceptance oracle`,
+    owner,
+    protectedPaths: [options.change.artifactPath],
+    sourceArtifacts: [options.change.reference],
+    expected: {
+      preconditions: ["The phase change bundle exists and validates."],
+      postconditions: [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`],
+      evidence: ["Build and verification evidence is attached during legion build."]
+    },
+    requirementCoverage: [
+      {
+        requirementId: ids.requirementId,
+        coverage: "primary",
+        criteria: [`Phase ${options.phase.number} acceptance criteria are satisfied.`]
+      }
+    ],
+    traceRefs: [
+      {
+        path: oraclePath2,
+        anchor: ids.oracleId,
+        relation: "verifies",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    type: "inspectable",
+    execution: {
+      mode: "manual-inspection",
+      instructions: `Review implementation and evidence for phase ${options.phase.number}: ${options.phase.name}.`
+    }
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    changeId: ids.changeId,
+    oracle,
+    baseGitSha: options.baseGitSha
+  };
+}
+
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile11 } from "node:fs/promises";
-import path18 from "node:path";
+import path19 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -22956,13 +23483,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path18.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path18.join(context.repositoryRoot, "ROADMAP.md")
+    path19.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path19.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path18.isAbsolute(roadmapPath) ? roadmapPath : path18.resolve(repositoryRoot, roadmapPath);
+  return path19.isAbsolute(roadmapPath) ? roadmapPath : path19.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -22974,6 +23501,89 @@ async function readOptionalRoadmap(sourcePath) {
 }
 function isEnoent6(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
+}
+
+// packages/cli/src/workflow/taskgraph-input.ts
+function buildTaskGraphInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const taskgraphPath2 = artifactPathForRole({ role: "taskgraph", changeId: ids.changeId });
+  const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
+  const artifactInputs = [options.change.revision, options.oracle.revision];
+  const task = taskContractSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "task-contract",
+    id: ids.contractId,
+    projectId: options.project.id,
+    changeId: ids.changeId,
+    revision: 1,
+    title: `Build phase ${options.phase.number}: ${options.phase.name}`,
+    objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
+    requirementIds: [ids.requirementId],
+    wave: "A",
+    agents: ["taskgraph-planner"],
+    dependencies: [],
+    context: {
+      specRefs: [],
+      designRefs: [designRevision.artifact],
+      predecessorArtifacts: artifactInputs.map((entry) => entry.artifact)
+    },
+    scope: {
+      read: [options.change.artifactPath, options.oracle.artifactPath],
+      write: [taskgraphPath2],
+      forbidden: [".legion/var/runtime.sqlite"],
+      sequentialFiles: [taskgraphPath2]
+    },
+    interfaces: {
+      consumes: [
+        {
+          name: "ChangeBundle",
+          description: "The phase change bundle created by legion plan."
+        },
+        {
+          name: "OracleArtifact",
+          description: "The phase acceptance oracle created by legion plan."
+        }
+      ],
+      produces: [
+        {
+          name: "BuildEvidence",
+          description: "Implementation and verification evidence for the planned phase."
+        }
+      ]
+    },
+    oracleRefs: [ids.oracleId],
+    verification: [
+      {
+        command: "legion",
+        args: ["build", String(options.phase.number)],
+        expectedExitCode: 0,
+        timeoutMs: 36e5
+      }
+    ],
+    risk: phaseRiskProfile(options.phase),
+    approvals: [],
+    completion: {
+      expectedArtifacts: [options.change.reference],
+      requiredEvidence: ["legion build verification output"],
+      blockedConditions: ["Build evidence is missing or fails oracle review."]
+    }
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    changeId: ids.changeId,
+    tasks: [task],
+    artifactInputs,
+    baseGitSha: options.baseGitSha
+  };
+}
+function revisionForRole(revisions, role) {
+  const revision = revisions.find((entry) => entry.role === role);
+  if (revision === void 0) {
+    throw new Error(`Change bundle is missing a ${role} artifact revision.`);
+  }
+  return revision;
 }
 
 // packages/cli/src/commands/workflow/plan.ts
@@ -23017,12 +23627,90 @@ async function handlePlanWorkflow(context) {
     "The phase source is resolved; build is the next workflow step after task artifacts exist."
   );
   const dryRun = hasFlag(context, "dry-run");
+  if (dryRun) {
+    return success(
+      {
+        ok: true,
+        status: "planned",
+        dryRun,
+        phase: resolved.phase,
+        autoRefine: hasFlag(context, "auto-refine"),
+        nextAction: action,
+        diagnostics: []
+      },
+      planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action)
+    );
+  }
+  const loadedProject = await loadWorkflowProject(context);
+  if (!loadedProject.ok) {
+    return blockedPlan(loadedProject.diagnostics, workflowState.nextAction);
+  }
+  const createdAt = currentUtcTimestamp();
+  const baseGitSha = resolveBaseGitSha(context.repositoryRoot);
+  const currentSpec = await ensurePhaseCurrentSpec({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    createdAt
+  });
+  if (!currentSpec.ok) {
+    return artifactCreationFailure("current-spec", currentSpec.status, currentSpec.diagnostics, action);
+  }
+  const change = await createChangeBundle(buildChangeBundleInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    currentSpec,
+    baseGitSha,
+    createdAt
+  }));
+  if (!change.ok) {
+    return artifactCreationFailure("change", change.status, change.diagnostics, action);
+  }
+  const oracle = await createOracleArtifact(buildOracleArtifactInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    change,
+    baseGitSha,
+    createdAt
+  }));
+  if (!oracle.ok) {
+    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
+  }
+  const taskgraph = await writeTaskGraph(buildTaskGraphInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    change,
+    oracle,
+    baseGitSha,
+    createdAt
+  }));
+  if (!taskgraph.ok) {
+    return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);
+  }
   return success(
     {
       ok: true,
       status: "planned",
       dryRun,
       phase: resolved.phase,
+      change: {
+        changeId: change.bundle.change.id,
+        artifactPath: change.artifactPath,
+        status: change.status
+      },
+      oracle: {
+        oracleId: oracle.document.id,
+        artifactPath: oracle.artifactPath,
+        status: oracle.status
+      },
+      taskgraph: {
+        artifactPath: taskgraph.artifactPath,
+        status: taskgraph.status,
+        taskIds: taskgraph.document.tasks.map((task) => task.id)
+      },
       autoRefine: hasFlag(context, "auto-refine"),
       nextAction: action,
       diagnostics: []
@@ -23060,15 +23748,42 @@ function blockedPlan(diagnostics, action) {
     ].join("\n")
   );
 }
+function artifactCreationFailure(kind, status2, diagnostics, action) {
+  const label = kind === "current-spec" ? "Current spec" : kind === "taskgraph" ? "Taskgraph" : kind[0]?.toUpperCase() + kind.slice(1);
+  return failure(
+    {
+      ok: false,
+      status: status2,
+      failedStep: kind,
+      diagnostics,
+      nextAction: action
+    },
+    [
+      `${label} creation failed during planning.`,
+      renderDiagnostics(diagnostics),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function ensurePhaseCurrentSpec(input) {
+  const specInput = buildPhaseCurrentSpecInput(input);
+  const existing = await readCurrentSpec({
+    repositoryRoot: input.repositoryRoot,
+    requirementId: specInput.document.primaryRequirementId
+  });
+  if (existing.ok) return existing;
+  if (existing.status !== "not_found") return existing;
+  return createCurrentSpec(specInput);
+}
 function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
-  const summary = `Planning preview for phase ${phaseNumber}: ${phaseName}.`;
-  const mode = dryRun ? "Dry run: no task graph was written." : "Compatibility preview: task graph writing is not wired until Task 9, so no artifacts were written.";
+  const summary = dryRun ? `Planning preview for phase ${phaseNumber}: ${phaseName}.` : `Created typed planning artifacts for phase ${phaseNumber}: ${phaseName}.`;
+  const mode = dryRun ? "Dry run: no task graph was written." : "Change, oracle, and taskgraph artifacts were written.";
   return [summary, mode, renderNextAction(action)].join("\n");
 }
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
-import path19 from "node:path";
+import path20 from "node:path";
 async function handleValidateCommand(context) {
   const result = await validateWorkflowProject(context);
   const payload = {
@@ -23109,7 +23824,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path19.join(root, relativePath));
+    await stat7(path20.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -23183,7 +23898,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path20.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path21.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -23235,8 +23950,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path20.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path20.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path21.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path21.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }
