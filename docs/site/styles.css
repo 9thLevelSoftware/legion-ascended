@@ -1,0 +1,638 @@
+:root {
+  color-scheme: dark;
+  --blood: #8b0000;
+  --blood-glow: #ff2222;
+  --crimson: #a01030;
+  --void: #050508;
+  --abyss: #0d0d14;
+  --shadow: #15151e;
+  --bone: #e8e8e2;
+  --ash: #a0a0a0;
+  --gold: #d4af37;
+  --gold-dim: #9a845a;
+  --ember: #cc4422;
+  --fire: #ff8a1f;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--void); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, transparent, var(--blood), transparent);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--blood-glow); }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--void);
+  color: var(--bone);
+  font-family: "Crimson Text", Georgia, serif;
+  line-height: 1.7;
+}
+
+a { color: inherit; }
+
+.sigil-bg,
+.sigil-bg-2 {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sigil-bg {
+  opacity: 0.03;
+  background-image: url("./assets/tithe-sigil.svg");
+  background-size: 500px 500px;
+  animation: drift 120s linear infinite;
+}
+
+.sigil-bg-2 {
+  opacity: 0.02;
+  background-image: url("./assets/tithe-sigil.svg");
+  background-size: 700px 700px;
+  animation: driftReverse 180s linear infinite;
+}
+
+@keyframes drift {
+  from { background-position: 0 0; }
+  to { background-position: 500px 500px; }
+}
+
+@keyframes driftReverse {
+  from { background-position: 0 0; }
+  to { background-position: -700px 700px; }
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(ellipse at center, transparent 0%, var(--void) 100%);
+  animation: breathe 10s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.cursor-glow {
+  position: fixed;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle at center, rgba(139, 0, 0, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.5s ease;
+  opacity: 0;
+}
+
+.container {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 960px);
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+header {
+  text-align: center;
+  padding: 4rem 0 3rem;
+}
+
+.legion-sigil {
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 2rem;
+  color: var(--blood);
+  animation: pulseGlow 4s ease-in-out infinite;
+  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.legion-sigil:hover {
+  transform: scale(1.15);
+}
+
+@keyframes pulseGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px var(--blood)) drop-shadow(0 0 20px rgba(139, 0, 0, 0.3)); }
+  50% { filter: drop-shadow(0 0 25px var(--blood-glow)) drop-shadow(0 0 50px rgba(255, 34, 34, 0.4)); }
+}
+
+h1,
+h2,
+h3,
+h4,
+.grimoire-btn,
+.tithe-btn {
+  font-family: "Cinzel", Georgia, serif;
+}
+
+h1 {
+  margin-bottom: 0.35rem;
+  color: var(--bone);
+  font-size: 4.5rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(139, 0, 0, 0.6);
+}
+
+h1 span { color: var(--blood); }
+
+.ascended-flame {
+  margin-bottom: 0.75rem;
+  color: var(--gold);
+  font-family: "Cinzel", Georgia, serif;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 10px rgba(255, 138, 31, 0.9),
+    0 0 24px rgba(255, 34, 34, 0.5),
+    0 -8px 18px rgba(255, 138, 31, 0.25);
+  animation: ascendedFlame 2.8s ease-in-out infinite;
+}
+
+@keyframes ascendedFlame {
+  0%, 100% {
+    color: #f6d260;
+    filter: drop-shadow(0 0 8px rgba(255, 138, 31, 0.7));
+    transform: translateY(0);
+  }
+  45% {
+    color: #fff1a6;
+    filter: drop-shadow(0 0 16px rgba(255, 34, 34, 0.85));
+    transform: translateY(-2px);
+  }
+  70% {
+    color: var(--fire);
+    filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.75));
+    transform: translateY(1px);
+  }
+}
+
+.tagline {
+  color: var(--ash);
+  font-size: 1.3rem;
+  font-style: italic;
+  letter-spacing: 0.08em;
+}
+
+.sub-tagline {
+  margin-top: 0.75rem;
+  color: var(--gold-dim);
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 3rem 0;
+}
+
+.divider-line {
+  width: 200px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blood), var(--gold), var(--blood), transparent);
+}
+
+section { margin-bottom: 4rem; }
+
+h2 {
+  margin-bottom: 1.5rem;
+  color: var(--gold);
+  font-size: 1.8rem;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+.intro-text {
+  max-width: 750px;
+  margin: 0 auto;
+  color: var(--bone);
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.intro-text strong,
+.intro-text em { color: var(--gold); }
+
+.reveal-section {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 1s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.reveal-section.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.stats-bar {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin: 2rem 0;
+}
+
+.stat { text-align: center; }
+.stat .num {
+  color: var(--blood-glow);
+  font-family: "Cinzel", Georgia, serif;
+  font-size: 2.5rem;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(139, 0, 0, 0.4);
+}
+.stat .label {
+  color: var(--ash);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.grimoire-section {
+  position: relative;
+  overflow: hidden;
+  padding: 3rem 2rem;
+  border: 1px solid rgba(139, 0, 0, 0.4);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--abyss) 0%, rgba(139, 0, 0, 0.15) 50%, var(--abyss) 100%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+
+.grimoire-section::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(139, 0, 0, 0.1), transparent);
+  animation: scan 8s linear infinite;
+}
+
+@keyframes scan {
+  0% { left: -100%; }
+  20%, 100% { left: 200%; }
+}
+
+.grimoire-section p {
+  margin-bottom: 1.5rem;
+  color: var(--ash);
+}
+
+.ritual-code {
+  position: relative;
+  z-index: 1;
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  overflow-x: auto;
+  border: 1px solid rgba(139, 0, 0, 0.3);
+  border-radius: 8px;
+  background: var(--abyss);
+  text-align: left;
+}
+
+.ritual-code pre {
+  color: var(--bone);
+  font-family: "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.comment { color: var(--ash); }
+.command { color: var(--gold); }
+.string { color: #98c379; }
+.flag { color: var(--ember); }
+
+.grimoire-buttons {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.grimoire-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 54px;
+  padding: 0 2.5rem;
+  overflow: hidden;
+  border: 1px solid var(--blood-glow);
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--blood) 0%, #4a0000 100%);
+  box-shadow: 0 0 20px rgba(139, 0, 0, 0.4);
+  color: var(--bone);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.grimoire-btn:hover {
+  transform: translateY(-5px) scale(1.04);
+  box-shadow: 0 0 40px rgba(255, 34, 34, 0.55);
+}
+
+.features,
+.division-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.feature-card,
+.division-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--abyss) 0%, var(--shadow) 100%);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  backdrop-filter: blur(5px);
+}
+
+.feature-card {
+  padding: 1.75rem;
+  border: 1px solid rgba(139, 0, 0, 0.2);
+}
+
+.feature-card:hover,
+.division-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: var(--blood-glow);
+  box-shadow: 0 10px 40px rgba(139, 0, 0, 0.3);
+}
+
+.feature-card h3,
+.division-card h4 {
+  margin-bottom: 0.5rem;
+  color: var(--gold);
+  font-size: 1.1rem;
+}
+
+.feature-card p,
+.division-card p {
+  color: var(--ash);
+  font-size: 0.95rem;
+}
+
+.command-table {
+  width: 100%;
+  margin-top: 1.5rem;
+  border-collapse: collapse;
+}
+
+.command-table th {
+  padding: 0.75rem;
+  border-bottom: 2px solid rgba(139, 0, 0, 0.4);
+  color: var(--gold);
+  font-family: "Cinzel", Georgia, serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-align: left;
+}
+
+.command-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(139, 0, 0, 0.15);
+  font-size: 0.95rem;
+}
+
+.command-table td:first-child {
+  color: var(--bone);
+  font-family: "Courier New", monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.command-table td:last-child { color: var(--ash); }
+.command-table tr:hover td { background: rgba(139, 0, 0, 0.05); }
+
+.workflow-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 2rem 0;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: min(100%, 660px);
+  min-height: 58px;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid rgba(139, 0, 0, 0.25);
+  border-radius: 8px;
+  background: var(--abyss);
+  transition: all 0.3s ease;
+}
+
+.workflow-step.optional { opacity: 0.7; }
+
+.workflow-step:hover {
+  transform: scale(1.03);
+  border-color: var(--blood-glow);
+  box-shadow: 0 0 20px rgba(139, 0, 0, 0.2);
+}
+
+.step-cmd {
+  min-width: 140px;
+  color: var(--gold);
+  font-family: "Courier New", monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.step-desc {
+  color: var(--ash);
+  font-size: 0.9rem;
+}
+
+.workflow-arrow {
+  color: var(--blood);
+  font-size: 1.2rem;
+  opacity: 0.6;
+}
+
+.tithe-section {
+  position: relative;
+  overflow: hidden;
+  padding: 4rem 2rem;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--void) 0%, rgba(212, 175, 55, 0.08) 50%, var(--void) 100%);
+  text-align: center;
+}
+
+.tithe-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.tithe-sigil-img {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  opacity: 0.7;
+  animation: pulseGold 4s ease-in-out infinite;
+}
+
+@keyframes pulseGold {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.05); }
+}
+
+.tithe-section h2 {
+  color: var(--gold);
+  font-size: 2rem;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+}
+
+.tithe-text {
+  margin-bottom: 2rem;
+  color: var(--ash);
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.tithe-text em { color: var(--gold-dim); }
+
+.tithe-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 58px;
+  padding: 0 3rem;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--gold-dim) 0%, #7a6530 100%);
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  color: var(--void);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tithe-btn:hover {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 0 40px rgba(212, 175, 55, 0.6);
+}
+
+.tithe-icon { font-size: 1.4rem; }
+
+.tithe-subtext {
+  margin-top: 1.5rem;
+  color: var(--ash);
+  font-size: 0.9rem;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+footer {
+  margin-top: 4rem;
+  padding: 3rem 0;
+  border-top: 1px solid rgba(139, 0, 0, 0.2);
+  text-align: center;
+}
+
+footer p {
+  color: var(--ash);
+  font-size: 0.9rem;
+}
+
+footer a {
+  color: var(--gold-dim);
+  text-decoration: none;
+}
+
+footer a:hover { color: var(--gold); }
+
+.footer-quote {
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .container { padding: 1rem; }
+  header { padding: 3rem 0 2rem; }
+  .legion-sigil { width: 130px; height: 130px; }
+  h1 { font-size: 2.9rem; letter-spacing: 0.12em; }
+  .ascended-flame { font-size: 1.45rem; letter-spacing: 0.14em; }
+  .tagline { font-size: 1.05rem; }
+  .sub-tagline,
+  .intro-text { font-size: 1rem; }
+  .grimoire-section,
+  .tithe-section { padding: 2rem 1rem; }
+  .ritual-code { padding: 1rem; }
+  .ritual-code pre { font-size: 0.78rem; }
+  .command-table {
+    display: block;
+    overflow-x: auto;
+  }
+  .workflow-step {
+    flex-direction: column;
+    gap: 0.25rem;
+    text-align: center;
+  }
+  .step-cmd { min-width: 0; }
+  .stats-bar { gap: 1.25rem; }
+  .stat .num { font-size: 2rem; }
+}
+
+@media (max-width: 420px) {
+  h1 { font-size: 2.45rem; letter-spacing: 0.08em; }
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 0.75rem;
+  }
+  .stat .label { font-size: 0.7rem; }
+  .tithe-btn,
+  .grimoire-btn {
+    width: 100%;
+    justify-content: center;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
