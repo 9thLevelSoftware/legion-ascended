@@ -512,6 +512,86 @@ test("legion status gives the next workflow action for a new project", async () 
   }
 });
 
+test("legion start reports friendly usage and supports dry-run", async () => {
+  const root = await tempRepo();
+  try {
+    const missingName = await runCliCapture(["--repository-root", root, "start", "--json"]);
+    assert.equal(missingName.exitCode, 1);
+    const missingNamePayload = parseJsonOutput(missingName);
+    assert.equal(missingNamePayload.status, "usage_error");
+    assert.match(missingNamePayload.diagnostics[0].message, /legion start --name "My Project"/);
+
+    const dryRun = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--summary", "Metadata authoring and deterministic asset resolution",
+      "--owner", "dasbl",
+      "--created-at", "2026-06-22T12:00:00.000Z",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(dryRun.exitCode, 0, dryRun.stderr);
+    const dryRunPayload = parseJsonOutput(dryRun);
+    assert.equal(dryRunPayload.status, "dry_run");
+    assert.equal(dryRunPayload.nextAction.command, "legion start");
+
+    const status = await runCliCapture(["--repository-root", root, "status", "--json"]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    const statusPayload = parseJsonOutput(status);
+    assert.equal(statusPayload.workflowState.stage, "uninitialized");
+    assert.equal(statusPayload.nextAction.command, "legion start");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion validate and doctor report project health", async () => {
+  const root = await tempRepo();
+  try {
+    const missing = await runCliCapture(["--repository-root", root, "validate", "--json"]);
+    assert.equal(missing.exitCode, 1);
+    const missingPayload = parseJsonOutput(missing);
+    assert.equal(missingPayload.ok, false);
+    assert.equal(missingPayload.status, "not_found");
+
+    const start = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--summary", "Metadata authoring and deterministic asset resolution",
+      "--owner", "dasbl",
+      "--created-at", "2026-06-22T12:00:00.000Z",
+      "--json"
+    ]);
+    assert.equal(start.exitCode, 0, start.stderr);
+
+    const valid = await runCliCapture(["--repository-root", root, "validate", "--json"]);
+    assert.equal(valid.exitCode, 0, valid.stderr);
+    const validPayload = parseJsonOutput(valid);
+    assert.equal(validPayload.ok, true);
+    assert.equal(validPayload.status, "valid");
+
+    const doctor = await runCliCapture(["--repository-root", root, "doctor", "--json"]);
+    assert.equal(doctor.exitCode, 0, doctor.stderr);
+    const doctorPayload = parseJsonOutput(doctor);
+    assert.equal(doctorPayload.ok, true);
+    assert.equal(doctorPayload.checks.project.ok, true);
+    assert.equal(doctorPayload.checks.operationalStore.ok, true);
+    assert.equal(doctorPayload.checks.workerBundles.path, "bundles/index.json");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("unknown workflow commands return usage errors", async () => {
+  const result = await runCliCapture(["frobnicate", "--json"]);
+  assert.equal(result.exitCode, 1);
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.status, "usage_error");
+  assert.match(payload.diagnostics[0].message, /Unknown workflow command: legion frobnicate/);
+});
+
 test("worker authoring is not in user help", async () => {
   const result = await runCliCapture(["--help"]);
   assert.equal(result.exitCode, 0);
