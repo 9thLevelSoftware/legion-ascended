@@ -22670,10 +22670,22 @@ function renderDiagnostics(diagnostics) {
 // packages/cli/src/commands/workflow/start.ts
 var START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
 async function handleStartCommand(context) {
+  const nameValueless = valuelessStartOption(
+    context,
+    "name",
+    `Missing required option --name. ${START_EXAMPLE}`
+  );
+  if (nameValueless !== void 0) return nameValueless;
   const name = stringOption(context, "name")?.trim();
   if (name === void 0 || name.length === 0) {
     return usageError(`Missing required option --name. ${START_EXAMPLE}`);
   }
+  const createdAtValueless = valuelessStartOption(
+    context,
+    "created-at",
+    "Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z."
+  );
+  if (createdAtValueless !== void 0) return createdAtValueless;
   let createdAt;
   try {
     createdAt = createdAtOption(context);
@@ -22681,6 +22693,12 @@ async function handleStartCommand(context) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
   }
+  const ownerValueless = valuelessStartOption(
+    context,
+    "owner",
+    "Missing required value for --owner. Use a human-readable owner up to 128 characters."
+  );
+  if (ownerValueless !== void 0) return ownerValueless;
   const owner = stringOption(context, "owner") ?? "operator";
   let decisionOwner;
   try {
@@ -22689,6 +22707,12 @@ async function handleStartCommand(context) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     return usageError(`Invalid --owner value. Use a human-readable owner up to 128 characters. ${message}`);
   }
+  const slugValueless = valuelessStartOption(
+    context,
+    "slug",
+    "Missing required value for --slug. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number."
+  );
+  if (slugValueless !== void 0) return slugValueless;
   const slugValue = stringOption(context, "slug")?.trim() ?? slugFromName(name);
   let slug;
   try {
@@ -22726,6 +22750,10 @@ async function handleStartCommand(context) {
     `${result.project.id}: ${result.status}.
 ${renderNextAction(action)}`
   );
+}
+function valuelessStartOption(context, key, valuelessMessage) {
+  const value = context.args.options.get(key);
+  return value === true ? usageError(valuelessMessage) : void 0;
 }
 function startFailureHuman(diagnostics) {
   const rendered = renderDiagnostics(diagnostics);

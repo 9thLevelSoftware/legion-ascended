@@ -21,11 +21,23 @@ import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/
 const START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
 
 export async function handleStartCommand(context: CliContext): Promise<CliResult> {
+  const nameValueless = valuelessStartOption(
+    context,
+    "name",
+    `Missing required option --name. ${START_EXAMPLE}`
+  );
+  if (nameValueless !== undefined) return nameValueless;
   const name = stringOption(context, "name")?.trim();
   if (name === undefined || name.length === 0) {
     return usageError(`Missing required option --name. ${START_EXAMPLE}`);
   }
 
+  const createdAtValueless = valuelessStartOption(
+    context,
+    "created-at",
+    "Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z."
+  );
+  if (createdAtValueless !== undefined) return createdAtValueless;
   let createdAt: ReturnType<typeof createdAtOption>;
   try {
     createdAt = createdAtOption(context);
@@ -34,6 +46,12 @@ export async function handleStartCommand(context: CliContext): Promise<CliResult
     return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
   }
 
+  const ownerValueless = valuelessStartOption(
+    context,
+    "owner",
+    "Missing required value for --owner. Use a human-readable owner up to 128 characters."
+  );
+  if (ownerValueless !== undefined) return ownerValueless;
   const owner = stringOption(context, "owner") ?? "operator";
   let decisionOwner: Actor;
   try {
@@ -43,6 +61,12 @@ export async function handleStartCommand(context: CliContext): Promise<CliResult
     return usageError(`Invalid --owner value. Use a human-readable owner up to 128 characters. ${message}`);
   }
 
+  const slugValueless = valuelessStartOption(
+    context,
+    "slug",
+    "Missing required value for --slug. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number."
+  );
+  if (slugValueless !== undefined) return slugValueless;
   const slugValue = stringOption(context, "slug")?.trim() ?? slugFromName(name);
   let slug: string;
   try {
@@ -85,6 +109,11 @@ export async function handleStartCommand(context: CliContext): Promise<CliResult
     },
     `${result.project.id}: ${result.status}.\n${renderNextAction(action)}`
   );
+}
+
+function valuelessStartOption(context: CliContext, key: string, valuelessMessage: string): CliResult | undefined {
+  const value = context.args.options.get(key);
+  return value === true ? usageError(valuelessMessage) : undefined;
 }
 
 function startFailureHuman(diagnostics: readonly unknown[]): string {

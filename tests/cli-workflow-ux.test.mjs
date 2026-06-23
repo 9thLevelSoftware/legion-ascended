@@ -546,6 +546,28 @@ test("legion start reports friendly usage and supports dry-run", async () => {
     assert.equal(missingNamePayload.status, "usage_error");
     assert.match(missingNamePayload.diagnostics[0].message, /legion start --name "My Project"/);
 
+    const valuelessName = await runCliCapture(["--repository-root", root, "start", "--name", "--dry-run", "--json"]);
+    assert.equal(valuelessName.exitCode, 1);
+    const valuelessNamePayload = parseJsonOutput(valuelessName);
+    assert.equal(valuelessNamePayload.status, "usage_error");
+    assert.equal(valuelessNamePayload.diagnostics[0].code, "usage_error");
+    assert.match(valuelessNamePayload.diagnostics[0].message, /legion start --name "My Project"/);
+
+    for (const option of ["owner", "created-at", "slug"]) {
+      const result = await runCliCapture([
+        "--repository-root", root,
+        "start",
+        "--name", "Asset Mapper",
+        `--${option}`,
+        "--dry-run",
+        "--json"
+      ]);
+      assert.equal(result.exitCode, 1, `--${option} should require an explicit value`);
+      const payload = parseJsonOutput(result);
+      assert.equal(payload.status, "usage_error");
+      assert.equal(payload.diagnostics[0].code, "usage_error");
+    }
+
     const invalidOwner = await runCliCapture([
       "--repository-root", root,
       "start",
