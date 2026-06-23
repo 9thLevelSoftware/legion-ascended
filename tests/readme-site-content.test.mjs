@@ -23,6 +23,8 @@ test("README presents Legion Ascended as the current product front door", async 
   assert.match(readme, /legion start -> legion plan -> legion build -> legion review -> legion ship/);
   assert.match(readme, /Recommended first-class targets/);
   assert.match(readme, /Compatibility, legacy, and manual-only targets/);
+  assert.match(readme, /npx @9thlevelsoftware\/legion install --list-targets/);
+  assert.match(readme, /npx @9thlevelsoftware\/legion install --target codex --local/);
   assert.match(readme, /docs\/site\/index\.html/);
   assert.match(readme, /Claude Code/);
   assert.match(readme, /OpenAI Codex CLI/);
@@ -76,4 +78,6 @@ test("site CSS avoids remote dependencies and supports reduced motion", async ()
   assert.doesNotMatch(css, /@import/);
   assert.doesNotMatch(css, /https?:\/\//);
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /\.reveal-section\s*\{\s*opacity: 0;/);
+  assert.match(css, /\.reveal-section\.active\s*\{\s*opacity: 1;/);
 });

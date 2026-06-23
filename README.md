@@ -24,7 +24,14 @@ The static product page lives at [docs/site/index.html](docs/site/index.html). T
 
 ## Install
 
-Start by asking Legion what it can install into:
+First-run bootstrap, before `legion` is on `PATH`:
+
+```powershell
+npx @9thlevelsoftware/legion install --list-targets
+npx @9thlevelsoftware/legion install --target codex --local
+```
+
+After installation, use the installed `legion` command:
 
 ```powershell
 legion install --list-targets
