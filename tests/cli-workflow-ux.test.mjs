@@ -803,6 +803,40 @@ test("legion status gives the next workflow action for a new project", async () 
   }
 });
 
+test("legion build blocks clearly when no planned change exists", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const result = await runCliCapture(["--repository-root", root, "build", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "taskgraph_missing");
+    assert.equal(payload.nextAction.command, "legion plan 1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion review blocks clearly when build has not run", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const result = await runCliCapture(["--repository-root", root, "review", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "task_run_missing");
+    assert.equal(payload.nextAction.command, "legion build");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("legion plan phase blocks initialized projects without a roadmap source", async () => {
   const root = await tempRepo();
   try {

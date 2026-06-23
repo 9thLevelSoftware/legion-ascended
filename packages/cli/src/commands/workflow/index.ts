@@ -10,6 +10,8 @@ import {
 import { handleStartCommand } from "./start.js";
 import { handleStatusCommand } from "./status.js";
 import { handlePlanWorkflow } from "./plan.js";
+import { handleBuildWorkflow } from "./build.js";
+import { handleReviewWorkflow } from "./review.js";
 import { handleDoctorCommand, handleValidateCommand } from "./validate.js";
 
 const WORKFLOW_HELP = `legion <workflow>
@@ -31,6 +33,10 @@ export async function handleWorkflowCommand(context: CliContext): Promise<CliRes
       return handleStatusCommand(commandContext);
     case "plan":
       return handlePlanWorkflow(commandContext);
+    case "build":
+      return handleBuildWorkflow(commandContext);
+    case "review":
+      return handleReviewWorkflow(commandContext);
     case "validate":
       return handleValidateCommand(commandContext);
     case "doctor":

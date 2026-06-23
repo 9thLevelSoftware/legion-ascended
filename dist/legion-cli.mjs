@@ -23781,6 +23781,55 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
   return [summary, mode, renderNextAction(action)].join("\n");
 }
 
+// packages/cli/src/commands/workflow/build.ts
+async function handleBuildWorkflow(_context) {
+  const action = nextAction(
+    "legion plan 1",
+    "No executable task graph was found for the current workflow state."
+  );
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      diagnostics: [
+        {
+          code: "taskgraph_missing",
+          message: "No executable task graph was found. Run legion plan 1 first."
+        }
+      ],
+      nextAction: action
+    },
+    [
+      "Build blocked.",
+      "No executable task graph was found. Run legion plan 1 first.",
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+// packages/cli/src/commands/workflow/review.ts
+async function handleReviewWorkflow(_context) {
+  const action = nextAction("legion build", "No completed task run was found for review.");
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      diagnostics: [
+        {
+          code: "task_run_missing",
+          message: "No completed task run was found. Run legion build first."
+        }
+      ],
+      nextAction: action
+    },
+    [
+      "Review blocked.",
+      "No completed task run was found. Run legion build first.",
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
 import path20 from "node:path";
@@ -23869,6 +23918,10 @@ async function handleWorkflowCommand(context) {
       return handleStatusCommand(commandContext);
     case "plan":
       return handlePlanWorkflow(commandContext);
+    case "build":
+      return handleBuildWorkflow(commandContext);
+    case "review":
+      return handleReviewWorkflow(commandContext);
     case "validate":
       return handleValidateCommand(commandContext);
     case "doctor":
