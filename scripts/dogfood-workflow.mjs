@@ -364,12 +364,12 @@ function runLegion(workspace, args, options) {
 
 function runProcess(command, args, options) {
   const timeoutMs = options.timeoutMs ?? 60_000;
-  const windowsShellShim = process.platform === "win32" && command === "codex";
-  const result = spawnSync(windowsShellShim ? windowsShellCommand(command, args) : command, windowsShellShim ? [] : args, {
+  const useWindowsShell = process.platform === "win32" && command === "codex";
+  const result = spawnSync(command, args, {
     cwd: options.cwd,
     encoding: "utf8",
     windowsHide: true,
-    shell: windowsShellShim,
+    shell: useWindowsShell,
     timeout: timeoutMs,
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -400,15 +400,6 @@ function runProcess(command, args, options) {
     ].filter((line) => line.length > 0).join("\n"));
   }
   return output;
-}
-
-function windowsShellCommand(command, args) {
-  return [command, ...args].map(windowsShellQuote).join(" ");
-}
-
-function windowsShellQuote(value) {
-  if (/^[A-Za-z0-9_./:=+-]+$/u.test(value)) return value;
-  return `"${value.replace(/(["^&|<>])/gu, "^$1")}"`;
 }
 
 function assertArtifact(workspace, artifactPath, label) {

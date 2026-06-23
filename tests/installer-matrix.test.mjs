@@ -117,6 +117,26 @@ test("installer target list can show compatibility, legacy, and manual-only targ
   assert.match(result.stdout, /aider\s+manual-only/);
 });
 
+test("installer rejects unknown and missing target values", async () => {
+  await assert.rejects(
+    execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "not-a-runtime", "--local"], EXEC_OPTIONS),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /Unknown target: not-a-runtime/);
+      return true;
+    }
+  );
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "--local"], EXEC_OPTIONS),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /Unknown target: --local/);
+      return true;
+    }
+  );
+});
+
 test("installer explain reports official docs and parity gaps", async () => {
   const result = await execFileAsync(process.execPath, [LEGION_BIN, "install", "--target", "gemini", "--explain"], EXEC_OPTIONS);
 
