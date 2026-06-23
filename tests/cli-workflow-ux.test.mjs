@@ -837,6 +837,30 @@ test("legion review blocks clearly when build has not run", async () => {
   }
 });
 
+for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "council"]) {
+  test(`legion ${command} has a user-facing contract`, async () => {
+    const result = await runCliCapture([command, "--help"]);
+    assert.equal(result.exitCode, 0);
+    assert.match(result.stdout, new RegExp(`legion ${command}`));
+    assert.doesNotMatch(result.stdout, /worker bundle manifest/i);
+    assert.doesNotMatch(result.stdout, /legion next/);
+  });
+}
+
+for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "council"]) {
+  test(`legion ${command} non-help invocation returns a clear contract error`, async () => {
+    const result = await runCliCapture([command, "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "usage_error");
+    assert.equal(payload.diagnostics[0]?.code, "usage_error");
+    assert.match(payload.diagnostics[0]?.message, new RegExp(`legion ${command}`));
+    assert.doesNotMatch(payload.diagnostics[0]?.message, /legion next/);
+    assert.doesNotMatch(payload.diagnostics[0]?.message, /worker bundle manifest/i);
+  });
+}
+
 test("legion plan phase blocks initialized projects without a roadmap source", async () => {
   const root = await tempRepo();
   try {

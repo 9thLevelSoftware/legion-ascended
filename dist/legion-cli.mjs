@@ -23830,6 +23830,48 @@ async function handleReviewWorkflow(_context) {
   );
 }
 
+// packages/cli/src/commands/workflow/ad-hoc.ts
+var HELP = {
+  quick: "legion quick <task>\n\nRun one ad-hoc task with a task record and risk classification.",
+  advise: "legion advise <topic>\n\nRun read-only advisory analysis.",
+  polish: "legion polish [target]\n\nRun scoped cleanup as an ad-hoc workflow.",
+  learn: "legion learn <lesson>\n\nRecord project-specific operational learning."
+};
+async function handleAdHocWorkflow(context, command) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(HELP[command]);
+  }
+  return usageError(
+    `legion ${command} requires project/runtime support covered by the workflow implementation tasks. Use --help to see the command contract.`
+  );
+}
+
+// packages/cli/src/commands/workflow/contextual.ts
+var HELP2 = {
+  explore: "legion explore\n\nCreate a design discovery artifact before start or planning.",
+  map: "legion map [--check|--refresh|--query <text>]\n\nGenerate, refresh, check, or query codebase context.",
+  retro: "legion retro [--phase N|--milestone M]\n\nRecord retrospective evidence for future planning.",
+  milestone: "legion milestone\n\nManage milestone status, summaries, and archives.",
+  council: "legion council <topic>\n\nRun governance deliberation formerly exposed as /legion:board."
+};
+async function handleContextualWorkflow(context, command) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(HELP2[command]);
+  }
+  return usageError(
+    `legion ${command} requires project/runtime support covered by the workflow implementation tasks. Use --help to see the command contract.`
+  );
+}
+
+// packages/cli/src/commands/workflow/ship.ts
+var SHIP_HELP = "legion ship [--canary]\n\nRun release readiness, promotion, and observation gates.";
+async function handleShipWorkflow(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(SHIP_HELP);
+  }
+  return usageError("legion ship requires a reviewed change. Run legion review first.");
+}
+
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
 import path20 from "node:path";
@@ -23905,9 +23947,24 @@ var WORKFLOW_HELP = `legion <workflow>
 
 Workflow commands:
 ${WORKFLOW_COMMANDS.map((entry) => `  ${entry.name.padEnd(10)} ${entry.summary}`).join("\n")}`;
+var COMMAND_SPECIFIC_HELP = /* @__PURE__ */ new Set([
+  "quick",
+  "advise",
+  "polish",
+  "learn",
+  "explore",
+  "map",
+  "retro",
+  "milestone",
+  "council",
+  "ship"
+]);
 async function handleWorkflowCommand(context) {
   const [command] = context.args.positionals;
-  if (command === void 0 || command === "help" || hasFlag(context, "help")) {
+  if (command === void 0 || command === "help") {
+    return helpResult(WORKFLOW_HELP);
+  }
+  if (hasFlag(context, "help") && !COMMAND_SPECIFIC_HELP.has(command)) {
     return helpResult(WORKFLOW_HELP);
   }
   const commandContext = stripCommand(context, 1);
@@ -23922,10 +23979,23 @@ async function handleWorkflowCommand(context) {
       return handleBuildWorkflow(commandContext);
     case "review":
       return handleReviewWorkflow(commandContext);
+    case "ship":
+      return handleShipWorkflow(commandContext);
     case "validate":
       return handleValidateCommand(commandContext);
     case "doctor":
       return handleDoctorCommand(commandContext);
+    case "quick":
+    case "advise":
+    case "polish":
+    case "learn":
+      return handleAdHocWorkflow(commandContext, command);
+    case "explore":
+    case "map":
+    case "retro":
+    case "milestone":
+    case "council":
+      return handleContextualWorkflow(commandContext, command);
     default:
       return usageError(`Unknown workflow command: legion ${command}. Run legion --help for supported workflow commands.`);
   }
