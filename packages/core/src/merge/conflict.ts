@@ -55,7 +55,7 @@ export function normalizePath(path: string): string {
  */
 export function pathsOverlap(a: string, b: string): boolean {
   if (a === b) return true;
-  if (a.length === 0 || b.length === 0) return false;
+  if (a.length === 0 || b.length === 0) return true;
   return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 }
 

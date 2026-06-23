@@ -140,7 +140,7 @@ test("quick and polish create typed taskgraphs consumable by build", async () =>
     assert.deepEqual(quickTaskgraph.tasks[0].scope.write, ["."], "quick tasks should be able to write implementation files");
     assert.deepEqual(
       quickTaskgraph.tasks[0].scope.read,
-      [quickPayload.requestArtifactPath],
+      [".", quickPayload.requestArtifactPath],
       "quick task text should not be parsed as a source path"
     );
 

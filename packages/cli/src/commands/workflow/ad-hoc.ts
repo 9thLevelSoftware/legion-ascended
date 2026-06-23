@@ -129,7 +129,7 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
     sourceArtifactPath: requestArtifactPath,
     idSlug: paths.runId,
     createdAt,
-    readScope: targetPath === undefined ? [requestArtifactPath] : [targetPath, requestArtifactPath],
+    readScope: targetPath === undefined ? [".", requestArtifactPath] : [targetPath, requestArtifactPath],
     ...(targetPath === undefined ? {} : { writeScope: [targetPath] }),
     verificationCommand: ["legion", "validate"]
   });

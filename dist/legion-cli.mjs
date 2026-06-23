@@ -28305,7 +28305,7 @@ async function createTypedAdHocWorkflow(context, kind) {
     sourceArtifactPath: requestArtifactPath,
     idSlug: paths.runId,
     createdAt,
-    readScope: targetPath === void 0 ? [requestArtifactPath] : [targetPath, requestArtifactPath],
+    readScope: targetPath === void 0 ? [".", requestArtifactPath] : [targetPath, requestArtifactPath],
     ...targetPath === void 0 ? {} : { writeScope: [targetPath] },
     verificationCommand: ["legion", "validate"]
   });
