@@ -813,8 +813,67 @@ test("legion build blocks clearly when no planned change exists", async () => {
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, false);
     assert.equal(payload.status, "blocked");
-    assert.equal(payload.diagnostics[0]?.code, "taskgraph_missing");
+    assert.equal(payload.diagnostics[0]?.code, "change_missing");
     assert.equal(payload.nextAction.command, "legion plan 1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion build dry-run reports readiness for the latest typed taskgraph", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const plan = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(plan.exitCode, 0, plan.stderr);
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "build",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "ready");
+    assert.equal(payload.driver.driver, "runtime-local");
+    assert.equal(payload.taskgraph.taskCount, 1);
+    assert.equal(payload.nextAction.command, "legion build");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion build without dry-run stays honest until runtime execution is wired", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const plan = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(plan.exitCode, 0, plan.stderr);
+
+    const result = await runCliCapture(["--repository-root", root, "build", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "runtime_start_not_implemented");
+    assert.equal(payload.driver.driver, "runtime-local");
+    assert.equal(payload.nextAction.command, "legion build --dry-run");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

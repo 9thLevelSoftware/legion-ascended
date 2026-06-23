@@ -1,3 +1,7 @@
+import type { Dirent } from "node:fs";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
+
 import { listCurrentSpecs } from "@legion/artifacts";
 
 import type { CliContext } from "../runtime.js";
@@ -20,6 +24,22 @@ export interface WorkflowState {
   readonly nextAction: NextAction;
   readonly diagnostics: readonly unknown[];
 }
+
+export interface LatestWorkflowChangeSuccess {
+  readonly ok: true;
+  readonly changeId: string;
+}
+
+export interface LatestWorkflowChangeFailure {
+  readonly ok: false;
+  readonly diagnostics: readonly {
+    readonly code: string;
+    readonly message: string;
+    readonly path?: string;
+  }[];
+}
+
+export type LatestWorkflowChangeResult = LatestWorkflowChangeSuccess | LatestWorkflowChangeFailure;
 
 export async function resolveWorkflowState(context: CliContext): Promise<WorkflowState> {
   const project = await loadWorkflowProject(context);
@@ -72,4 +92,59 @@ export async function resolveWorkflowState(context: CliContext): Promise<Workflo
     nextAction: nextAction("legion plan 1", "Project is initialized and ready for the first planned change."),
     diagnostics: []
   };
+}
+
+export async function findLatestWorkflowChangeId(repositoryRoot: string): Promise<LatestWorkflowChangeResult> {
+  const changesRoot = path.join(repositoryRoot, ".legion", "project", "changes");
+  let entries: Dirent[];
+  try {
+    entries = await readdir(changesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeErrorCode(error, "ENOENT")) {
+      return noWorkflowChange(changesRoot);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "change_discovery_failed",
+          message: `Failed to inspect workflow changes: ${message}`,
+          path: changesRoot
+        }
+      ]
+    };
+  }
+
+  const changeIds = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+  const changeId = changeIds.at(-1);
+  if (changeId === undefined) return noWorkflowChange(changesRoot);
+
+  return {
+    ok: true,
+    changeId
+  };
+}
+
+function noWorkflowChange(changesRoot: string): LatestWorkflowChangeFailure {
+  return {
+    ok: false,
+    diagnostics: [
+      {
+        code: "change_missing",
+        message: "No planned change exists. Run legion plan 1 first.",
+        path: changesRoot
+      }
+    ]
+  };
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { readonly code?: unknown }).code === code;
 }

@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path21 from "node:path";
+import path22 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path22) {
-  if (!path22)
+function getElementAtPath(obj, path23) {
+  if (!path23)
     return obj;
-  return path22.reduce((acc, key) => acc?.[key], obj);
+  return path23.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path22, issues) {
+function prefixIssues(path23, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path22);
+    iss.path.unshift(path23);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path22 = []) => {
+  const processError = (error3, path23 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path22, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path23, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
       } else {
-        const fullpath = [...path22, ...issue2.path];
+        const fullpath = [...path23, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8117,6 +8117,533 @@ var OBSERVATION_LIFECYCLE_STATES = [
 // packages/core/dist/runtime/local-driver.js
 import * as crypto from "node:crypto";
 var RUNTIME_LOCAL_DRIVER_ID = "runtime-local";
+var RUNTIME_LOCAL_DRIVER_VERSION = "0.1.0";
+var FIXED_RUNTIME_LOCAL_CLOCK = {
+  now: () => "2026-06-21T20:00:00.000Z"
+};
+var RuntimeLocalDriver = class {
+  driverId;
+  clock;
+  runs = /* @__PURE__ */ new Map();
+  streams = /* @__PURE__ */ new Map();
+  approvals = /* @__PURE__ */ new Map();
+  constructor(options = {}) {
+    this.driverId = options.driverId ?? {
+      driver: RUNTIME_LOCAL_DRIVER_ID,
+      version: RUNTIME_LOCAL_DRIVER_VERSION
+    };
+    this.clock = options.clock ?? FIXED_RUNTIME_LOCAL_CLOCK;
+  }
+  async start(request) {
+    assertRequestContract(request, this.driverId);
+    const runId = deriveRunId(request);
+    if (this.runs.has(runId)) {
+      throw new RuntimeLocalDriverError("duplicate_run", `Run ${runId} already exists for ${request.idempotencyKey}`);
+    }
+    const startedAt = this.clock.now();
+    const checkpoint = deriveCheckpoint(runId, request, startedAt, 1);
+    const events = buildRunCreatedEvents(request, runId, startedAt, checkpoint);
+    const state = {
+      request,
+      runId,
+      status: "started",
+      startedAt,
+      checkpoint,
+      artifacts: [],
+      generation: 1
+    };
+    this.runs.set(runId, state);
+    this.streams.set(runId, [
+      {
+        kind: "progress",
+        runId,
+        at: startedAt,
+        sequence: 0,
+        note: `runtime-local: started ${request.taskId} on attempt ${request.attempt}`
+      }
+    ]);
+    return {
+      runId,
+      status: "started",
+      manifestHash: checkpoint.fingerprint,
+      startedAt,
+      checkpoint,
+      events
+    };
+  }
+  async resume(runId, checkpointRef) {
+    const state = this.requireRun(runId);
+    if (isTerminalStatus(state.status)) {
+      throw new RuntimeLocalDriverError("terminal_run", `Run ${runId} is ${state.status} and cannot be resumed`, false, { state: state.status, startedAt: state.startedAt, checkpoint: state.checkpoint });
+    }
+    if (checkpointRef.generation !== state.checkpoint.generation) {
+      throw new RuntimeLocalDriverError("stale_checkpoint", `Checkpoint generation ${checkpointRef.generation} does not match run ${runId} generation ${state.checkpoint.generation}`);
+    }
+    if (checkpointRef.fingerprint !== state.checkpoint.fingerprint) {
+      throw new RuntimeLocalDriverError("checkpoint_mismatch", `Checkpoint fingerprint for ${runId} does not match recorded fingerprint`);
+    }
+    const resumedAt = this.clock.now();
+    state.generation += 1;
+    state.checkpoint = deriveCheckpoint(runId, state.request, resumedAt, state.generation);
+    state.status = "started";
+    const events = buildRunResumedEvents(state, resumedAt);
+    this.appendStream(state.runId, {
+      kind: "progress",
+      runId,
+      at: resumedAt,
+      sequence: this.nextSequence(runId),
+      note: `runtime-local: resumed ${state.request.taskId} at generation ${state.generation}`
+    });
+    return {
+      runId,
+      status: "started",
+      resumedAt,
+      checkpoint: state.checkpoint,
+      events
+    };
+  }
+  async cancel(runId, reason) {
+    const state = this.requireRun(runId);
+    if (state.status === "canceled") {
+      throw new RuntimeLocalDriverError("already_canceled", `Run ${runId} is already canceled`);
+    }
+    state.status = "canceled";
+    const finishedAt = this.clock.now();
+    state.finishedAt = finishedAt;
+    const events = buildRunFinishedEvents(state, finishedAt, "canceled");
+    this.appendStream(state.runId, {
+      kind: "terminal",
+      runId,
+      at: finishedAt,
+      sequence: this.nextSequence(runId),
+      status: "canceled",
+      evidenceRefs: []
+    });
+    return {
+      runId,
+      status: "canceled",
+      finishedAt,
+      reason,
+      events
+    };
+  }
+  async inspect(runId) {
+    const state = this.requireRun(runId);
+    const sandbox = {
+      sandboxDriver: state.request.workspace.sandboxDriver,
+      worktreePath: state.request.workspace.worktreePath,
+      generation: state.generation,
+      sealed: state.status === "succeeded" || state.status === "canceled" || state.status === "failed"
+    };
+    const inspection = {
+      runId,
+      status: state.status,
+      startedAt: state.startedAt,
+      checkpoint: state.checkpoint,
+      sandbox,
+      artifacts: [...state.artifacts],
+      ...state.finishedAt ? { finishedAt: state.finishedAt } : {}
+    };
+    return inspection;
+  }
+  async *stream(runId) {
+    const events = this.streams.get(runId);
+    if (!events) {
+      throw new RuntimeLocalDriverError("unknown_run", `Run ${runId} has no recorded stream`);
+    }
+    for (const event of events) {
+      yield event;
+    }
+  }
+  async approve(approvalRef) {
+    const state = this.requireRun(approvalRef.runId);
+    if (state.status !== "started" && state.status !== "needs_human") {
+      throw new RuntimeLocalDriverError("approval_not_acceptable", `Run ${approvalRef.runId} is ${state.status} and cannot accept approval`);
+    }
+    const approvalId = approvalRef.approvalId;
+    if (this.approvals.has(approvalId)) {
+      const previous = this.approvals.get(approvalId);
+      if (previous && previous.decidedAt === approvalRef.decidedAt && previous.decidedBy.id === approvalRef.decidedBy.id) {
+        return {
+          runId: approvalRef.runId,
+          approvalId,
+          status: "delivered",
+          deliveredAt: approvalRef.decidedAt,
+          reason: "duplicate approval is idempotent",
+          events: []
+        };
+      }
+      throw new RuntimeLocalDriverError("duplicate_approval", `Approval ${approvalId} already delivered with a different decision`);
+    }
+    this.approvals.set(approvalId, approvalRef);
+    const deliveredAt = this.clock.now();
+    const events = buildApprovalGrantedEvents(state, approvalRef, deliveredAt);
+    this.appendStream(state.runId, {
+      kind: "approval_requested",
+      runId: state.runId,
+      at: approvalRef.decidedAt,
+      sequence: this.nextSequence(state.runId),
+      approvalId,
+      scope: approvalRef.scope,
+      requestedBy: approvalRef.decidedBy
+    });
+    return {
+      runId: approvalRef.runId,
+      approvalId,
+      status: "delivered",
+      deliveredAt,
+      reason: approvalRef.reason,
+      events
+    };
+  }
+  async artifact(runId, artifactRef) {
+    const state = this.requireRun(runId);
+    const resolvedAt = this.clock.now();
+    if (artifactRef === void 0) {
+      if (!isTerminalStatus(state.status)) {
+        throw new RuntimeLocalDriverError("not_terminal", `Run ${runId} is ${state.status} and not yet terminal; artifact(handle) requires a terminal run`, false, { state: state.status, startedAt: state.startedAt, checkpoint: state.checkpoint });
+      }
+      const terminalStatus = state.status === "succeeded" || state.status === "failed" || state.status === "blocked" || state.status === "canceled" ? state.status : "canceled";
+      const finishedAt = state.finishedAt ?? resolvedAt;
+      const files = [...state.artifacts];
+      const metadata = {
+        attempt: state.request.attempt,
+        contractId: state.request.contractId,
+        contractRevision: state.request.contractRevision,
+        generation: state.generation,
+        workerBundleId: state.request.workerBundle.id,
+        sandboxDriver: state.request.workspace.sandboxDriver,
+        worktreePath: state.request.workspace.worktreePath,
+        terminalStatus: state.status
+      };
+      const finalOutputRef = {
+        path: `.runtime-local/${runId}/final-output.json`,
+        sha256: sha256ContentHash(`${runId}|${terminalStatus}|${finishedAt}|${files.length}`)
+      };
+      this.appendStream(state.runId, {
+        kind: "artifact_registered",
+        runId,
+        at: resolvedAt,
+        sequence: this.nextSequence(runId),
+        reference: finalOutputRef
+      });
+      return {
+        runId,
+        reference: finalOutputRef,
+        kind: "fetch",
+        resolvedAt,
+        status: terminalStatus,
+        files,
+        metadata,
+        startedAt: state.startedAt,
+        finishedAt,
+        checkpoint: state.checkpoint,
+        events: []
+      };
+    }
+    const reference = artifactRef.reference;
+    if (artifactRef.kind === "register") {
+      state.artifacts.push(reference);
+    }
+    const evidenceId = artifactRef.evidenceId;
+    const events = buildArtifactEvents(state, reference, resolvedAt, evidenceId);
+    const streamEvent = evidenceId ? {
+      kind: "artifact_registered",
+      runId,
+      at: resolvedAt,
+      sequence: this.nextSequence(runId),
+      reference,
+      evidenceId
+    } : {
+      kind: "artifact_registered",
+      runId,
+      at: resolvedAt,
+      sequence: this.nextSequence(runId),
+      reference
+    };
+    this.appendStream(state.runId, streamEvent);
+    const handle = evidenceId ? {
+      runId,
+      reference,
+      kind: artifactRef.kind,
+      resolvedAt,
+      evidenceId,
+      events
+    } : {
+      runId,
+      reference,
+      kind: artifactRef.kind,
+      resolvedAt,
+      events
+    };
+    return handle;
+  }
+  // -------------------------------------------------------------------------
+  // Test introspection helpers (not part of the public RuntimeDriver shape)
+  // -------------------------------------------------------------------------
+  /** Visible for tests only — returns the count of events recorded. */
+  __streamLength(runId) {
+    return this.streams.get(runId)?.length ?? 0;
+  }
+  /** Visible for tests only — current generation of the run. */
+  __generation(runId) {
+    return this.requireRun(runId).generation;
+  }
+  requireRun(runId) {
+    const state = this.runs.get(runId);
+    if (!state) {
+      throw new RuntimeLocalDriverError("unknown_run", `Run ${runId} is not registered with runtime-local`);
+    }
+    return state;
+  }
+  appendStream(runId, event) {
+    const events = this.streams.get(runId);
+    if (!events)
+      return;
+    events.push(event);
+  }
+  nextSequence(runId) {
+    const events = this.streams.get(runId);
+    return events ? events.length : 0;
+  }
+};
+function isTerminalStatus(status2) {
+  return status2 === "succeeded" || status2 === "failed" || status2 === "blocked" || status2 === "canceled" || status2 === "superseded";
+}
+var RuntimeLocalDriverError = class extends Error {
+  code;
+  retryable;
+  state;
+  constructor(code, message, retryable = false, state) {
+    super(message);
+    this.code = code;
+    this.retryable = retryable;
+    if (state) {
+      this.state = state;
+    }
+    this.name = "RuntimeLocalDriverError";
+  }
+};
+function assertRequestContract(request, driverId) {
+  if (request.driver.driver !== driverId.driver) {
+    throw new RuntimeLocalDriverError("driver_mismatch", `Request driver ${request.driver.driver} does not match loaded driver ${driverId.driver}`);
+  }
+  if (request.contractRevision <= 0) {
+    throw new RuntimeLocalDriverError("invalid_request", `contractRevision must be positive, received ${request.contractRevision}`);
+  }
+  if (request.attempt <= 0) {
+    throw new RuntimeLocalDriverError("invalid_request", `attempt must be positive, received ${request.attempt}`);
+  }
+}
+function deriveRunId(request) {
+  const seed = `${request.projectId}|${request.changeId}|${request.taskId}|${request.attempt}|${request.idempotencyKey}`;
+  return deterministicRunId(seed);
+}
+function deterministicRunId(seed) {
+  const hash = sha256Hex(seed);
+  const suffix = hash.slice(0, 22);
+  return `run_${suffix}`;
+}
+function deriveCheckpoint(runId, request, at, generation) {
+  const payload = JSON.stringify({
+    runId,
+    contractId: request.contractId,
+    contractRevision: request.contractRevision,
+    attempt: request.attempt,
+    workerBundleId: request.workerBundle.id,
+    workerBundleVersion: request.workerBundle.version,
+    generation,
+    at
+  });
+  const fingerprint = sha256ContentHash(payload);
+  return {
+    runId,
+    generation,
+    fingerprint,
+    note: `runtime-local checkpoint for ${request.taskId} attempt ${request.attempt}`
+  };
+}
+function buildRunCreatedEvents(request, runId, startedAt, checkpoint) {
+  const actor = request.requestedBy;
+  const changeId = request.changeId;
+  const taskId = request.taskId;
+  const runAggregate2 = { kind: "run", id: runId };
+  const created = buildEvent({
+    type: "run.created.v1",
+    runId,
+    aggregate: runAggregate2,
+    actor,
+    changeId,
+    projectId: request.projectId,
+    generation: 1,
+    sequence: 0,
+    occurredAt: startedAt,
+    payload: {
+      runId,
+      taskId,
+      contractId: request.contractId,
+      attempt: request.attempt
+    }
+  });
+  const started = buildEvent({
+    type: "run.started.v1",
+    runId,
+    aggregate: runAggregate2,
+    actor,
+    changeId,
+    projectId: request.projectId,
+    generation: 1,
+    sequence: 1,
+    occurredAt: startedAt,
+    payload: {
+      runId,
+      taskId,
+      startedAt
+    },
+    causationId: created.id
+  });
+  return [created, started];
+}
+function buildRunResumedEvents(state, resumedAt) {
+  return [
+    buildEvent({
+      type: "run.started.v1",
+      runId: state.runId,
+      aggregate: { kind: "run", id: state.runId },
+      actor: state.request.requestedBy,
+      changeId: state.request.changeId,
+      projectId: state.request.projectId,
+      generation: state.generation,
+      sequence: 0,
+      occurredAt: resumedAt,
+      payload: {
+        runId: state.runId,
+        taskId: state.request.taskId,
+        startedAt: resumedAt
+      }
+    })
+  ];
+}
+function buildRunFinishedEvents(state, finishedAt, status2) {
+  return [
+    buildEvent({
+      type: "run.finished.v1",
+      runId: state.runId,
+      aggregate: { kind: "run", id: state.runId },
+      actor: state.request.requestedBy,
+      changeId: state.request.changeId,
+      projectId: state.request.projectId,
+      generation: state.generation,
+      sequence: 0,
+      occurredAt: finishedAt,
+      payload: {
+        runId: state.runId,
+        taskId: state.request.taskId,
+        status: status2,
+        finishedAt,
+        evidenceRefs: []
+      }
+    })
+  ];
+}
+function buildApprovalGrantedEvents(state, approvalRef, deliveredAt) {
+  const approvalAggregate = { kind: "approval", id: approvalRef.approvalId };
+  const approvalId = approvalRef.approvalId;
+  return [
+    buildEvent({
+      type: "approval.requested.v1",
+      runId: state.runId,
+      aggregate: approvalAggregate,
+      actor: approvalRef.decidedBy,
+      changeId: state.request.changeId,
+      projectId: state.request.projectId,
+      generation: state.generation,
+      sequence: 0,
+      occurredAt: deliveredAt,
+      payload: {
+        approvalId,
+        requestedBy: approvalRef.decidedBy,
+        scope: approvalRef.scope
+      }
+    }),
+    buildEvent({
+      type: "approval.granted.v1",
+      runId: state.runId,
+      aggregate: approvalAggregate,
+      actor: approvalRef.decidedBy,
+      changeId: state.request.changeId,
+      projectId: state.request.projectId,
+      generation: state.generation,
+      sequence: 1,
+      occurredAt: deliveredAt,
+      payload: {
+        approvalId,
+        decidedBy: approvalRef.decidedBy,
+        reason: approvalRef.reason
+      }
+    })
+  ];
+}
+function buildArtifactEvents(state, reference, resolvedAt, evidenceId) {
+  const actor = state.request.requestedBy;
+  if (!evidenceId)
+    return [];
+  void reference;
+  void resolvedAt;
+  return [
+    buildEvent({
+      type: "evidence.collected.v1",
+      runId: state.runId,
+      aggregate: { kind: "evidence", id: evidenceId },
+      actor,
+      changeId: state.request.changeId,
+      projectId: state.request.projectId,
+      generation: state.generation,
+      sequence: 0,
+      occurredAt: resolvedAt,
+      payload: {
+        evidenceId,
+        taskId: state.request.taskId,
+        runId: state.runId,
+        verdict: "pass"
+      }
+    })
+  ];
+}
+function buildEvent(input) {
+  const id = deterministicEventId(input.type, input.runId, input.aggregate, input.sequence, input.generation);
+  const base = {
+    schemaVersion: "0.1.0",
+    id,
+    type: input.type,
+    version: 1,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    aggregate: input.aggregate,
+    generation: input.generation,
+    sequence: input.sequence,
+    actor: input.actor,
+    occurredAt: input.occurredAt,
+    payload: input.payload
+  };
+  if (input.causationId) {
+    return { ...base, causationId: input.causationId };
+  }
+  if (input.correlationId) {
+    return { ...base, correlationId: input.correlationId };
+  }
+  return base;
+}
+function deterministicEventId(type, runId, aggregate, sequence, generation) {
+  const hash = sha256Hex(`${type}|${runId}|${aggregate.kind}|${aggregate.id}|${sequence}|${generation}`);
+  return `evt_${hash.slice(0, 26)}`;
+}
+function sha256Hex(input) {
+  return crypto.createHash("sha256").update(input, "utf8").digest("hex");
+}
+function sha256ContentHash(input) {
+  return `sha256:${sha256Hex(input)}`;
+}
 
 // packages/core/dist/runtime/legacy-cli-driver.js
 import * as crypto2 from "node:crypto";
@@ -8531,11 +9058,11 @@ function canonicalize(value) {
   const keys = Object.keys(value).sort();
   return "{" + keys.map((key) => JSON.stringify(key) + ":" + canonicalize(value[key])).join(",") + "}";
 }
-function sha256Hex(payload) {
+function sha256Hex2(payload) {
   return createHash10("sha256").update(payload, "utf8").digest("hex");
 }
-function sha256ContentHash(payload) {
-  return `sha256:${sha256Hex(payload)}`;
+function sha256ContentHash2(payload) {
+  return `sha256:${sha256Hex2(payload)}`;
 }
 function sortedTaskStatusCounts(state) {
   const entries = Object.entries(state.taskStatusCounts).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
@@ -8580,7 +9107,7 @@ function deriveDashboardProjectionStateHash(state) {
     approvalPointers: sortedApprovalPointers(state.approvalPointers),
     eventTimeline: sortedTimeline(state.eventTimeline)
   });
-  return sha256ContentHash(canonical3);
+  return sha256ContentHash2(canonical3);
 }
 
 // packages/board/dist/dashboard/reducer.js
@@ -9332,11 +9859,11 @@ function canonicalize2(value) {
   const keys = Object.keys(value).sort();
   return "{" + keys.map((key) => JSON.stringify(key) + ":" + canonicalize2(value[key])).join(",") + "}";
 }
-function sha256Hex2(payload) {
+function sha256Hex3(payload) {
   return createHash11("sha256").update(payload, "utf8").digest("hex");
 }
-function sha256ContentHash2(payload) {
-  return `sha256:${sha256Hex2(payload)}`;
+function sha256ContentHash3(payload) {
+  return `sha256:${sha256Hex3(payload)}`;
 }
 function sortedProjectRollups(state) {
   const entries = Object.entries(state.projectRollups).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
@@ -9383,7 +9910,7 @@ function sortedScope(state) {
 }
 function derivePortfolioProjectionStateHash(state) {
   if (state === null) {
-    return sha256ContentHash2(JSON.stringify({ kind: "portfolio-adapter-empty", schemaVersion: "1.0.0" }));
+    return sha256ContentHash3(JSON.stringify({ kind: "portfolio-adapter-empty", schemaVersion: "1.0.0" }));
   }
   const canonical3 = canonicalize2({
     schemaVersion: state.schemaVersion,
@@ -9398,7 +9925,7 @@ function derivePortfolioProjectionStateHash(state) {
     crossProjectDependencyCount: state.crossProjectDependencyCount,
     terminalProjectCount: state.terminalProjectCount
   });
-  return sha256ContentHash2(canonical3);
+  return sha256ContentHash3(canonical3);
 }
 
 // packages/board/dist/portfolio/reducer.js
@@ -11267,7 +11794,7 @@ function loadBoardTaskRow(database, taskId) {
   const row = database.prepare(STATEMENTS.selectById).get(taskId);
   return row;
 }
-function isTerminalStatus(status2) {
+function isTerminalStatus2(status2) {
   return TERMINAL_BOARD_TASK_STATUSES2.has(status2);
 }
 function assertTransitionLegal(taskId, currentStatus, nextStatus) {
@@ -11457,7 +11984,7 @@ var SqliteBoardTaskRepository = class {
       throw new Error("Board task expected generation must be a positive integer.");
     }
     return this.#mutateTask(taskId, expectedGeneration, "update_priority", (current) => {
-      if (isTerminalStatus(current.status)) {
+      if (isTerminalStatus2(current.status)) {
         throw new BoardTerminalTaskMutationError(taskId, current.status);
       }
       const now = this.#now();
@@ -11484,7 +12011,7 @@ var SqliteBoardTaskRepository = class {
       throw new Error("Board task transition to " + transition.toStatus + " must not include a blocker.");
     }
     return this.#mutateTask(taskId, expectedGeneration, "transition_status", (current) => {
-      if (isTerminalStatus(current.status) && current.status !== transition.toStatus) {
+      if (isTerminalStatus2(current.status) && current.status !== transition.toStatus) {
         throw new BoardTerminalTaskMutationError(taskId, current.status);
       }
       assertTransitionLegal(taskId, current.status, transition.toStatus);
@@ -11517,7 +12044,7 @@ var SqliteBoardTaskRepository = class {
       throw new Error("Board task expected generation must be a positive integer.");
     }
     return this.#mutateTask(input.taskId, input.expectedGeneration, "bump_generation", (current) => {
-      if (isTerminalStatus(current.status)) {
+      if (isTerminalStatus2(current.status)) {
         throw new BoardTerminalTaskMutationError(input.taskId, current.status);
       }
       const now = input.updatedAt ?? this.#now();
@@ -11546,7 +12073,7 @@ var SqliteBoardTaskRepository = class {
         throw new BoardConcurrencyError(input.taskId, input.expectedGeneration, actual?.generation ?? null);
       }
       const current = rowToBoardTask(currentRow);
-      if (isTerminalStatus(current.status)) {
+      if (isTerminalStatus2(current.status)) {
         throw new BoardTerminalTaskMutationError(input.taskId, current.status);
       }
       const now = input.supersededAt ?? this.#now();
@@ -11841,7 +12368,7 @@ var SqliteBoardClaimRepository = class {
       if (taskRow.generation !== input.expectedGeneration) {
         throw new BoardClaimGenerationError(input.taskId, input.expectedGeneration, taskRow.generation);
       }
-      if (isTerminalStatus(taskRow.status)) {
+      if (isTerminalStatus2(taskRow.status)) {
         throw new BoardTerminalTaskMutationError(input.taskId, taskRow.status);
       }
       const existing = this.#database.prepare(BOARD_CLAIM_STATEMENTS.selectActiveForTaskGeneration).get(taskId, input.expectedGeneration);
@@ -14918,14 +15445,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path22) {
-  if (path22.endsWith(".json"))
+function mediaTypeForArtifactPath(path23) {
+  if (path23.endsWith(".json"))
     return "application/json";
-  if (path22.endsWith(".yaml") || path22.endsWith(".yml"))
+  if (path23.endsWith(".yaml") || path23.endsWith(".yml"))
     return "application/yaml";
-  if (path22.endsWith(".md"))
+  if (path23.endsWith(".md"))
     return "text/markdown";
-  if (path22.endsWith(".txt"))
+  if (path23.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -14968,16 +15495,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path22, issues) {
+function schemaDiagnostics(path23, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path22 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path23 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path22
+      path: path23
     });
   });
 }
@@ -15880,7 +16407,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path22 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path23 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -15894,7 +16421,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path22
+        path: path23
       }))
     };
   }
@@ -16642,13 +17169,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path22) {
+function parseRequirementId2(input, path23) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path22
+      path: path23
     })));
   }
   return parsed.data;
@@ -16664,24 +17191,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path22) {
+function parseBaseGitSha(input, path23) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path22
+      path: path23
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path22) {
+function parseOwners(input, path23) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path22
+        path: path23
       })
     ]);
   }
@@ -16693,7 +17220,7 @@ function parseOwners(input, path22) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path22
+        path: path23
       })));
       continue;
     }
@@ -16981,7 +17508,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path22) {
+function conflictDiagnostics(deltas, path23) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -16990,7 +17517,7 @@ function conflictDiagnostics(deltas, path22) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path22
+        path: path23
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -17767,18 +18294,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path22) {
+function parseOracleId2(input, path23) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path22
+      path: path23
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path22) {
+function parseBaseGitSha2(input, path23) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -17786,7 +18313,7 @@ function parseBaseGitSha2(input, path22) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path22
+      path: path23
     })));
   }
   return parsed.data;
@@ -18130,7 +18657,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path22) {
+function parseBaseGitSha3(input, path23) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18138,18 +18665,18 @@ function parseBaseGitSha3(input, path22) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path22
+      path: path23
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path22) {
+function assertExpectedRevision(value, path23) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path22
+        path: path23
       })
     ]);
   }
@@ -18594,8 +19121,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path22) {
-  return nodeId("artifact", path22);
+function artifactNodeId(path23) {
+  return nodeId("artifact", path23);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -18631,8 +19158,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path22) {
-  const fileName = path22.split("/").at(-1);
+function oracleIdFromPath(path23) {
+  const fileName = path23.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -18747,13 +19274,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path22 = [];
+  const path23 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path22.indexOf(node);
+      const cycleStartIndex = path23.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path22.length; index++) {
-          const cyclicNode = path22[index];
+        for (let index = cycleStartIndex; index < path23.length; index++) {
+          const cyclicNode = path23[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -18763,11 +19290,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path22.push(node);
+    path23.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path22.pop();
+    path23.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -18795,10 +19322,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path22 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path23 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path22,
+        path: path23,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -19444,13 +19971,13 @@ function parseChangeId7(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path22) {
+function parseArchivedAt(input, path23) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path22
+      path: path23
     })));
   }
   return parsed.data;
@@ -19479,7 +20006,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path22) {
+function archiveHashDiagnostics(record2, path23) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -19487,11 +20014,11 @@ function archiveHashDiagnostics(record2, path22) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path22
+      path: path23
     })
   ];
 }
-async function assertWorktreeTarget(input, path22) {
+async function assertWorktreeTarget(input, path23) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -19505,7 +20032,7 @@ async function assertWorktreeTarget(input, path22) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path22
+        path: path23
       })
     ]);
   } catch (error2) {
@@ -19513,7 +20040,7 @@ async function assertWorktreeTarget(input, path22) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path22
+        path: path23
       })
     ]);
   }
@@ -19592,11 +20119,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path22 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path22 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path22)) : remaining;
+    const path23 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path23 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path23)) : remaining;
     return {
-      path: path22,
+      path: path23,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -19659,9 +20186,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path22, document) {
+function validatePlannedDocument(path23, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path22,
+    artifactPath: path23,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -19672,7 +20199,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path22, document]) => [path22, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path23, document]) => [path23, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -19696,17 +20223,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path22 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path22)) {
+      const path23 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path23)) {
         return failure9("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path22}.`,
-            path: path22
+            message: `Archive add target already exists: ${path23}.`,
+            path: path23
           })
         ]);
       }
-      plannedDocs.set(path22, {
+      plannedDocs.set(path23, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -19719,7 +20246,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path22);
+      touchedPaths.add(path23);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -19904,8 +20431,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path22 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path22);
+  const path23 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path23);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -20143,10 +20670,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path22 = archivePath(changeId);
+  const path23 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path22,
+    artifactPath: path23,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -20158,22 +20685,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path22
+        path: path23
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path22);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path23);
   if (hashDiagnostics.length > 0)
     return failure9("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path22,
+    artifactPath: path23,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path22,
+      path: path23,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -23038,6 +23565,10 @@ function startFailureHuman(diagnostics) {
 ${rendered}` : "Project initialization failed.";
 }
 
+// packages/cli/src/workflow/state.ts
+import { readdir as readdir7 } from "node:fs/promises";
+import path18 from "node:path";
+
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir6, stat as stat6 } from "node:fs/promises";
 import path17 from "node:path";
@@ -23156,6 +23687,50 @@ async function resolveWorkflowState(context) {
     diagnostics: []
   };
 }
+async function findLatestWorkflowChangeId(repositoryRoot) {
+  const changesRoot = path18.join(repositoryRoot, ".legion", "project", "changes");
+  let entries;
+  try {
+    entries = await readdir7(changesRoot, { withFileTypes: true });
+  } catch (error2) {
+    if (isNodeErrorCode(error2, "ENOENT")) {
+      return noWorkflowChange(changesRoot);
+    }
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "change_discovery_failed",
+          message: `Failed to inspect workflow changes: ${message}`,
+          path: changesRoot
+        }
+      ]
+    };
+  }
+  const changeIds = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+  const changeId = changeIds.at(-1);
+  if (changeId === void 0) return noWorkflowChange(changesRoot);
+  return {
+    ok: true,
+    changeId
+  };
+}
+function noWorkflowChange(changesRoot) {
+  return {
+    ok: false,
+    diagnostics: [
+      {
+        code: "change_missing",
+        message: "No planned change exists. Run legion plan 1 first.",
+        path: changesRoot
+      }
+    ]
+  };
+}
+function isNodeErrorCode(error2, code) {
+  return error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === code;
+}
 
 // packages/cli/src/commands/workflow/status.ts
 async function handleStatusCommand(context) {
@@ -23179,7 +23754,7 @@ async function handleStatusCommand(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import path18 from "node:path";
+import path19 from "node:path";
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -23267,8 +23842,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path18.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path18.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path19.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path19.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function buildChangeBundleInput(options) {
@@ -23435,7 +24010,7 @@ function buildOracleArtifactInput(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile11 } from "node:fs/promises";
-import path19 from "node:path";
+import path20 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -23483,13 +24058,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path19.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path19.join(context.repositoryRoot, "ROADMAP.md")
+    path20.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path20.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path19.isAbsolute(roadmapPath) ? roadmapPath : path19.resolve(repositoryRoot, roadmapPath);
+  return path20.isAbsolute(roadmapPath) ? roadmapPath : path20.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -23782,26 +24357,87 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
-async function handleBuildWorkflow(_context) {
-  const action = nextAction(
+async function handleBuildWorkflow(context) {
+  const planAction = nextAction(
     "legion plan 1",
-    "No executable task graph was found for the current workflow state."
+    "A typed task graph is required before build can run."
   );
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedBuild(latestChange.diagnostics, planAction);
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedBuild(taskgraph.diagnostics, planAction);
+  }
+  const driver = new RuntimeLocalDriver();
+  const driverId = driver.driverId;
+  if (hasFlag(context, "dry-run")) {
+    const action2 = nextAction(
+      "legion build",
+      "The latest task graph is ready for runtime-local execution."
+    );
+    const taskCount = taskgraph.document.tasks.length;
+    return success(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: {
+          changeId: latestChange.changeId
+        },
+        taskgraph: {
+          artifactPath: taskgraph.artifactPath,
+          taskCount,
+          taskIds: taskgraph.document.tasks.map((task) => task.id)
+        },
+        driver: driverId,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Build ready.",
+        `Dry run: ${driverId.driver} can start ${taskCount} task${taskCount === 1 ? "" : "s"} from ${latestChange.changeId}.`,
+        "No implementation was run.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const action = nextAction(
+    "legion build --dry-run",
+    "Only build readiness checks are wired in this CLI layer right now."
+  );
+  return blockedBuild(
+    [
+      {
+        code: "runtime_start_not_implemented",
+        message: "Runtime execution is not wired yet. Run legion build --dry-run to verify readiness without claiming implementation success.",
+        path: taskgraph.artifactPath
+      }
+    ],
+    action,
+    {
+      changeId: latestChange.changeId,
+      taskgraphPath: taskgraph.artifactPath,
+      driver: driverId
+    }
+  );
+}
+function blockedBuild(diagnostics, action, extras = {}) {
   return failure(
     {
       ok: false,
       status: "blocked",
-      diagnostics: [
-        {
-          code: "taskgraph_missing",
-          message: "No executable task graph was found. Run legion plan 1 first."
-        }
-      ],
+      ...extras,
+      diagnostics,
       nextAction: action
     },
     [
       "Build blocked.",
-      "No executable task graph was found. Run legion plan 1 first.",
+      renderDiagnostics(diagnostics),
       renderNextAction(action)
     ].join("\n")
   );
@@ -23874,7 +24510,7 @@ async function handleShipWorkflow(context) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
-import path20 from "node:path";
+import path21 from "node:path";
 async function handleValidateCommand(context) {
   const result = await validateWorkflowProject(context);
   const payload = {
@@ -23915,7 +24551,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path20.join(root, relativePath));
+    await stat7(path21.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -24021,7 +24657,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path21.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path22.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -24073,8 +24709,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path21.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path21.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path22.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path22.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }
