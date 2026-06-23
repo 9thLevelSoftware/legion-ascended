@@ -258,18 +258,21 @@ async function workflowRecordDirectoryStats(
 
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name)) continue;
-    if (!entry.isFile() || !entry.name.endsWith(".json")) return { valid: false, recordCount: 0 };
+    const absolutePath = entry.isDirectory()
+      ? path.join(absoluteDirectory, entry.name, "workflow-run.json")
+      : path.join(absoluteDirectory, entry.name);
+    if (!entry.isDirectory() && (!entry.isFile() || !entry.name.endsWith(".json"))) return { valid: false, recordCount: 0 };
 
-    const absolutePath = path.join(absoluteDirectory, entry.name);
-    const raw = await readFile(absolutePath, "utf8");
+    let raw: string;
     let parsed: unknown;
     try {
+      raw = await readFile(absolutePath, "utf8");
       parsed = JSON.parse(raw);
     } catch {
       return { valid: false, recordCount: 0 };
     }
 
-    if (!isRecognizedWorkflowRecord(parsed, workflow)) return { valid: false, recordCount: 0 };
+    if (!isRecognizedWorkflowRecord(parsed, workflow) && !isRecognizedWorkflowRun(parsed, workflow)) return { valid: false, recordCount: 0 };
     recordCount += 1;
   }
 
@@ -287,6 +290,29 @@ function isRecognizedWorkflowRecord(value: unknown, workflow: string): boolean {
     typeof value["createdAt"] === "string" &&
     value["createdAt"].trim().length > 0 &&
     isJsonObject(value["input"]) &&
+    isJsonObject(nextAction) &&
+    typeof nextAction["command"] === "string" &&
+    nextAction["command"].trim().length > 0 &&
+    typeof nextAction["reason"] === "string" &&
+    nextAction["reason"].trim().length > 0
+  );
+}
+
+function isRecognizedWorkflowRun(value: unknown, workflow: string): boolean {
+  if (!isJsonObject(value)) return false;
+  const nextAction = value["nextAction"];
+
+  return (
+    value["schemaVersion"] === 1 &&
+    value["kind"] === "workflow_run" &&
+    value["workflow"] === workflow &&
+    typeof value["runId"] === "string" &&
+    value["runId"].trim().length > 0 &&
+    typeof value["createdAt"] === "string" &&
+    value["createdAt"].trim().length > 0 &&
+    typeof value["status"] === "string" &&
+    isJsonObject(value["input"]) &&
+    isJsonObject(value["outputs"]) &&
     isJsonObject(nextAction) &&
     typeof nextAction["command"] === "string" &&
     nextAction["command"].trim().length > 0 &&

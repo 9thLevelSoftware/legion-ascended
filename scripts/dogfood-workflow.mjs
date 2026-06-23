@@ -11,6 +11,8 @@ const LEGION_BIN = path.join(REPO_ROOT, "bin", "legion.js");
 const DOGFOOD_ROADMAP = "LEGION-DOGFOOD-ROADMAP.md";
 const CODEX_SMOKE_ARTIFACT = ".legion/project/workflow/build/2026-06-23T120000Z-codex-smoke.md";
 const CREATED_AT = "2026-06-23T12:00:00.000Z";
+const LIVE_CODEX_COMMAND_TIMEOUT_MS = 360_000;
+const LIVE_CODEX_EXEC_TIMEOUT_MS = 300_000;
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -22,6 +24,7 @@ async function main() {
     if (codex.exitCode !== 0) {
       throw new DogfoodError(`Codex executor is unavailable: ${firstNonEmpty(codex.stderr, codex.stdout, "codex exec --help failed")}`);
     }
+    process.env.LEGION_CODEX_EXEC_TIMEOUT_MS ??= String(LIVE_CODEX_EXEC_TIMEOUT_MS);
   }
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "legion-dogfood-"));
@@ -42,6 +45,13 @@ async function main() {
     assertEqual(initialStatus?.nextAction?.command, "legion start", "initial next action should be legion start", initialStatus);
 
     const projectName = options.target === undefined ? "Legion Dogfood" : path.basename(path.resolve(options.target));
+    const explore = runLegion(workspace, ["explore", "dogfood workflow guidance", "--executor", options.executor], {
+      expectExitCode: 0,
+      timeoutMs: options.executor === "codex" ? LIVE_CODEX_COMMAND_TIMEOUT_MS : 120_000
+    });
+    assertEqual(explore.status, "completed", "explore should complete");
+    assertArtifact(workspace, explore.markdownArtifactPath, "explore design artifact");
+
     const start = runLegion(workspace, [
       "start",
       "--name", projectName,
@@ -52,6 +62,24 @@ async function main() {
     assertEqual(start.ok, true, "start should succeed");
     assertEqual(start.nextAction.command, "legion plan 1", "start should route to planning");
     assertFile(path.join(workspace, ".legion", "project", "project.json"), "project artifact");
+
+    const mapRefresh = runLegion(workspace, ["map", "--refresh"], { expectExitCode: 0 });
+    assertEqual(mapRefresh.status, "completed", "map refresh should complete");
+    assertArtifact(workspace, mapRefresh.mapArtifactPath, "codebase map artifact");
+
+    const mapCheck = runLegion(workspace, ["map", "--check"], { expectExitCode: 0 });
+    assertEqual(mapCheck.status, "fresh", "map check should report fresh map");
+
+    const advise = runLegion(workspace, ["advise", "dogfood release risk", "--executor", options.executor], {
+      expectExitCode: 0,
+      timeoutMs: options.executor === "codex" ? LIVE_CODEX_COMMAND_TIMEOUT_MS : 120_000
+    });
+    assertEqual(advise.status, "completed", "advise should complete");
+    assertArtifact(workspace, advise.markdownArtifactPath, "advice artifact");
+
+    const learn = runLegion(workspace, ["learn", "dogfood runs must preserve the human review boundary"], { expectExitCode: 0 });
+    assertEqual(learn.status, "completed", "learn should complete");
+    assertArtifact(workspace, learn.indexArtifactPath, "learn index artifact");
 
     await writeDogfoodRoadmap(workspace);
 
@@ -70,7 +98,7 @@ async function main() {
 
     const build = runLegion(workspace, ["build", "--executor", options.executor, "--allow-dirty"], {
       expectExitCode: 0,
-      timeoutMs: options.executor === "codex" ? 600_000 : 120_000
+      timeoutMs: options.executor === "codex" ? LIVE_CODEX_COMMAND_TIMEOUT_MS : 120_000
     });
     assertEqual(build.status, "executed", "build should execute");
     assertEqual(build.nextAction.command, "legion review", "build should route to review");
@@ -91,7 +119,7 @@ async function main() {
 
     const review = runLegion(workspace, ["review", "--executor", options.executor], {
       expectExitCode: 0,
-      timeoutMs: options.executor === "codex" ? 600_000 : 120_000
+      timeoutMs: options.executor === "codex" ? LIVE_CODEX_COMMAND_TIMEOUT_MS : 120_000
     });
     assertEqual(review.status, "submitted", "review should submit");
     assertEqual(review.nextAction.command, "legion review --accept", "passing review should require manual acceptance");
@@ -109,6 +137,13 @@ async function main() {
     const ship = runLegion(workspace, ["ship"], { expectExitCode: 0 });
     assertEqual(ship.status, "ready", "ship readiness should pass");
 
+    const retro = runLegion(workspace, ["retro", "--executor", options.executor], {
+      expectExitCode: 0,
+      timeoutMs: options.executor === "codex" ? LIVE_CODEX_COMMAND_TIMEOUT_MS : 120_000
+    });
+    assertEqual(retro.status, "completed", "retro should complete");
+    assertArtifact(workspace, retro.markdownArtifactPath, "retro artifact");
+
     const summary = {
       ok: true,
       executor: options.executor,
@@ -117,6 +152,7 @@ async function main() {
       projectId: start.project.id,
       changeId: plan.change.changeId,
       taskRuns: build.taskRuns.length,
+      guidanceRuns: 6,
       finalStage: finalStatus.workflowState.stage,
       shipStatus: ship.status
     };
@@ -327,27 +363,34 @@ function runLegion(workspace, args, options) {
 }
 
 function runProcess(command, args, options) {
-  const invocation = commandInvocation(command, args);
-  const result = spawnSync(invocation.command, invocation.args, {
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const windowsShellShim = process.platform === "win32" && command === "codex";
+  const result = spawnSync(windowsShellShim ? windowsShellCommand(command, args) : command, windowsShellShim ? [] : args, {
     cwd: options.cwd,
     encoding: "utf8",
     windowsHide: true,
-    timeout: options.timeoutMs ?? 60_000,
+    shell: windowsShellShim,
+    timeout: timeoutMs,
     stdio: ["ignore", "pipe", "pipe"]
   });
+  const timedOut = result.error?.code === "ETIMEDOUT";
   const output = {
-    exitCode: result.status ?? 1,
+    exitCode: timedOut ? 124 : result.status ?? 1,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? ""
   };
   if (result.error !== undefined) {
+    const stderr = firstNonEmpty(
+      output.stderr,
+      timedOut ? `${command} ${args.join(" ")} timed out after ${timeoutMs}ms.` : result.error.message
+    );
     if (options.allowFailure) {
       return {
         ...output,
-        stderr: firstNonEmpty(output.stderr, result.error.message)
+        stderr
       };
     }
-    throw result.error;
+    throw new DogfoodError(stderr);
   }
   if (!options.allowFailure && output.exitCode !== 0) {
     throw new DogfoodError([
@@ -359,14 +402,13 @@ function runProcess(command, args, options) {
   return output;
 }
 
-function commandInvocation(command, args) {
-  if (process.platform === "win32" && command === "codex") {
-    return {
-      command: "cmd.exe",
-      args: ["/d", "/s", "/c", "codex", ...args]
-    };
-  }
-  return { command, args };
+function windowsShellCommand(command, args) {
+  return [command, ...args].map(windowsShellQuote).join(" ");
+}
+
+function windowsShellQuote(value) {
+  if (/^[A-Za-z0-9_./:=+-]+$/u.test(value)) return value;
+  return `"${value.replace(/(["^&|<>])/gu, "^$1")}"`;
 }
 
 function assertArtifact(workspace, artifactPath, label) {

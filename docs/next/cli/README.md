@@ -8,12 +8,18 @@ legion plan 1
 legion build
 legion review
 legion status
+legion map --refresh
+legion advise "release risk"
 legion quick "fix the failing tests"
 ```
 
 The CLI preserves the original Legion workflow verbs while routing them through the v9 typed control plane. Normal users should not need `project`, `change`, `board`, extension manifests, prompt hashes, or hidden compatibility aliases to begin work.
 
 `legion build` executes the latest typed taskgraph through an executor adapter and records pending evidence. `legion review` submits structured review decisions, and `legion review --accept` is the default human approval boundary before `legion ship` reports readiness.
+
+Guidance commands are also workflow-first. `legion explore`, `legion advise`, `legion council`, and `legion retro` create executor-backed workflow runs with markdown output, prompts, results, and redacted logs when an executor is used. `legion map --refresh` writes `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`, and `map.json` under `.legion/project/workflow/map/<runId>/`; `legion map --check` reports freshness, and `legion map --query <text>` searches the latest map. `legion learn` updates `.legion/project/workflow/learn/knowledge-index.json`, while `legion milestone` manages `.legion/project/workflow/milestone/milestones.json`.
+
+Ad-hoc commands prepare real work instead of mutating code directly. `legion quick <task>` and `legion polish [target]` create typed changes and taskgraphs, then route to `legion build`.
 
 Advanced operator and developer commands live under `legion dev`:
 
@@ -71,7 +77,7 @@ Use `--no-color` for deterministic snapshots. The current implementation does no
 
 ## Dogfood Verification
 
-Run the full workflow loop in a disposable temp workspace:
+Run the full workflow loop in a disposable temp workspace. The harness exercises guidance commands, map freshness/query artifacts, the normal build/review/accept/ship loop, and retrospective output:
 
 ```powershell
 pnpm workflow:dogfood

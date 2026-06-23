@@ -122,8 +122,8 @@ This repository now also ships a repo-native Codex plugin manifest at `.codex-pl
 
 1. Install Legion (see above)
 2. Run `legion start`
-3. Answer the guided questions, or run `legion explore` first to record a design discovery artifact
-4. Review the generated PROJECT.md and ROADMAP.md
+3. Optionally run `legion explore "topic"` first to create a design discovery artifact
+4. Review the initialized `.legion/project/project.json` and any project roadmap input you plan to use
 5. Plan the first phase with `legion plan 1`
 6. Commit or stash the generated workflow artifacts, or decide the current dirty worktree is intentional
 7. Run `legion build --executor codex` for live execution, or add `--allow-dirty` when the dirty state is intentional
@@ -137,19 +137,19 @@ These are the canonical Legion CLI command names. Runtime slash commands and pro
 | Command | Description | Usage |
 |---------|-------------|-------|
 | `legion start` | Initialize project state and route to first planning step | Run once at project start |
-| `legion explore <topic>` | Record design discovery before start or planning | Before `start`, or when a phase needs research |
-| `legion map --check` / `legion map --refresh` | Check or refresh codebase context records | Before planning in existing codebases |
+| `legion explore <topic>` | Create a design discovery workflow run with handoff notes | Before `start`, or when a phase needs research |
+| `legion map --check` / `legion map --refresh` | Check or refresh deterministic codebase map artifacts | Before planning in existing codebases |
 | `legion plan <N>` | Turn roadmap phase N into typed task contracts | After start, or after completing a phase |
 | `legion build` | Execute planned task contracts and collect pending evidence | Use `--executor codex`, `--executor manual`, or `--executor fake` |
 | `legion review` | Submit review decisions and accept passing evidence | Use `--accept` only after a passing submitted review |
 | `legion ship` | Release readiness gate | After accepted review evidence is available |
-| `legion retro` | Record retrospective evidence | After phases or milestones |
+| `legion retro` | Analyze recent evidence and write retrospective guidance | After phases or milestones |
 | `legion status` | Show workflow state and next action | Anytime |
-| `legion quick <task>` | Record an ad-hoc task request | Anytime for one-off work |
-| `legion advise <topic>` | Record read-only advisory analysis | Anytime, no phase context needed |
-| `legion polish <target>` | Record scoped cleanup work | After review, or as an ad-hoc workflow |
-| `legion learn <lesson>` | Record project-specific operational learning | Anytime |
-| `legion milestone` | Record milestone status and summaries | At project milestones |
+| `legion quick <task>` | Create a typed ad-hoc taskgraph for `legion build` | Anytime for one-off work |
+| `legion advise <topic>` | Run read-only advisory guidance and write artifacts | Anytime, no phase context needed |
+| `legion polish <target>` | Create a typed polish taskgraph for `legion build` | After review, or as an ad-hoc workflow |
+| `legion learn <lesson>` | Record a durable lesson and update the knowledge index | Anytime |
+| `legion milestone` | Manage milestone status, completion, and archival records | At project milestones |
 | `legion validate` | Validate committed Legion project state | Anytime, especially before planning |
 | `legion doctor` | Run shallow path and project-state checks | When diagnosing setup issues |
 | `legion council` | Record governance deliberation | For architecture decisions and go/no-go calls |
@@ -157,33 +157,33 @@ These are the canonical Legion CLI command names. Runtime slash commands and pro
 ## How It Works
 
 ```
-legion start             Guided questioning → PROJECT.md + ROADMAP.md
+legion start             Project initialization → .legion/project/project.json
        ↓
-legion plan 1            Phase decomposition → typed task contracts
+legion plan 1            Phase source → current spec + change + oracle + typed taskgraph
        ↓                       ↓ (optional)
        ↓                 Plan critique → Pre-mortem + assumption hunting
        ↓
-legion build             Implementation gate → runtime readiness now, execution backend later
+legion build             Executor-backed task run → context pack + result + pending evidence
        ↓
-legion review            Quality gate → review readiness now, evidence pipeline later
+legion review            Executor-backed review → submitted decision + human accept/reject
        ↓                       ↓ (optional)
        ↓                 Panel mode → 2-4 domain-weighted reviewers with rubrics
        ↓                       ↓ (post-review, configurable)
        ↓                 Code polish → 4-pass cleanup (comments, simplification, readability, consistency)
        ↓
-legion ship              Ship pipeline → Pre-ship gates → PR creation → deployment verification
+legion ship              Readiness gate → accepted evidence + accepted review required
        ↓
-legion retro             Retrospective → What worked, what didn't, reusable patterns
+legion retro             Retrospective → lessons, risks, reusable patterns
        ↓
 legion plan 2 → ...      Repeat for each phase until project complete
 
 
-legion map               Standalone → Codebase documentation + semantic index
-legion explore           Standalone → Research + questions + design doc before optional start
-legion advise <topic>    Standalone → Read-only expert consultation record
-legion quick <task>      Standalone → One-off task record
-legion polish [target]   Standalone → 4-pass cleanup request
-legion learn <lesson>    Standalone → Record patterns, pitfalls, and preferences
+legion map               Standalone → Deterministic codebase docs + queryable index
+legion explore           Standalone → Design discovery workflow run before optional start/plan
+legion advise <topic>    Standalone → Read-only expert guidance artifacts
+legion quick <task>      Standalone → One-task ad-hoc taskgraph for build/review
+legion polish [target]   Standalone → Scoped polish taskgraph for build/review
+legion learn <lesson>    Standalone → Durable lesson + context-pack knowledge index
 ```
 
 ## Claude Opus 4.7 Hardening
@@ -207,42 +207,29 @@ Slash-form names such as `/legion:start` are runtime compatibility aliases for h
 
 #### `legion start` (alias: `/legion:start`) — Project Initialization
 
-Guides you through an adaptive conversation (5-8 exchanges) to capture project vision, requirements, and constraints before generating any plans.
+Initializes the typed project state that the rest of the CLI uses. It is intentionally explicit and scriptable: pass the project name, summary, owner, and optional slug instead of editing hidden manifests by hand.
 
 **Key steps:**
-1. Pre-flight check — detects existing projects and offers to reinitialize or continue
-2. Design document input — optionally consumes `.planning/explorations/*-design.md` from `legion explore`
-3. Codebase map pre-flight — if source code is found, checks for a fresh `legion map` dataset and asks whether to use, refresh, skip, or abort
-4. Vision exploration — 3-stage adaptive conversation via `questioning-flow`: vision → requirements → constraints, targeting 5-8 natural exchanges
-5. Agent recommendation — `agent-registry` scores all 49 agents to recommend 2-4 per phase based on keyword match and division affinity
-6. Document generation — produces `PROJECT.md`, `ROADMAP.md`, and `STATE.md` using questioning-flow templates
-7. Portfolio registration — registers the project in the global portfolio via `portfolio-manager` at `~/.claude/legion/portfolio.md`
+1. Validate required project metadata (`--name`, optional `--summary`, `--owner`, `--slug`, and `--created-at`)
+2. Write the project artifact through `@legion/artifacts`
+3. Return the next workflow action, normally `legion plan 1`
 
-**Skills invoked:** `workflow-common-core` → `questioning-flow` → `agent-registry` → `portfolio-manager` | `codebase-mapper` (optional map pre-flight)
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
-**Produces:** `.planning/PROJECT.md`, `.planning/ROADMAP.md`, `.planning/STATE.md` | optional `.planning/CODEBASE.md` and `.planning/codebase/` map artifacts
-**User interaction:** Guided Q&A throughout; confirms generated documents before finalizing
+**Produces:** `.legion/project/project.json`
+**User interaction:** Review the initialized project artifact, then plan from a roadmap or phase source
 
 #### `legion plan <N>` (alias: `/legion:plan <N>`) — Phase Planning
 
-Decomposes a roadmap phase into as many wave-structured plans as needed, using the default max of 3 tasks per plan only as a per-plan task cap (configurable via settings). Recommends agents from the 49-agent registry for each plan and gets your confirmation.
+Turns a roadmap phase or phase source into the typed artifacts that `legion build` can execute. Use `--from-roadmap ROADMAP.md` when the phase source lives outside `.legion/project`.
 
 **Key steps:**
-1. Parse or auto-detect the next unplanned phase from STATE.md
-2. Load phase context — reads ROADMAP.md requirements, prior phase summaries, and the codebase map if present (retrieves relevant chunks, risk areas, and conventions)
-3. Detect domain-specific workflows — `marketing-workflows` activates for MKT-* requirements (campaign briefs, content calendars), `design-workflows` activates for DSN-* requirements (design systems, three-lens review)
-4. *(Optional)* Architecture proposals — spawns 2-3 read-only Explore agents with competing philosophies (Minimal, Clean, Pragmatic) for complex phases; user selects an approach
-5. *(Optional)* Spec pipeline — 5-stage specification process (gather → research → write → critique → assess) producing a structured spec at `.planning/specs/`
-6. Decompose into plans via `phase-decomposer` — any number of plans per phase, with the default max 3 tasks per plan applying only inside each plan, grouped into dependency waves (parallel within, sequential between)
-7. Recommend agents per plan using `agent-registry` scoring (keyword match 3pts, division affinity 2pts, partial match 1pt, memory boost from past outcomes)
-8. *(Optional)* Plan critique — spawns 2 read-only Explore agents (`testing-qa-verification-specialist` for pre-mortem, `product-sprint-prioritizer` for assumption hunting) with PASS/CAUTION/REWORK verdicts
-9. Generate plan files with full task instructions, verification commands, and YAML frontmatter
-10. *(Optional)* GitHub issue creation via `github-sync` — creates a labeled issue with plan checklist
+1. Resolve the requested phase number and optional roadmap source
+2. Load initialized project state
+3. Create or reuse the current spec for the phase
+4. Create the change bundle and oracle artifact
+5. Write a taskgraph with scoped task contracts and verification commands
 
-**Skills invoked:** `workflow-common-core` → `phase-decomposer` → `agent-registry` → `memory-manager` | `codebase-mapper` (map context) | `marketing-workflows` | `design-workflows` | `spec-pipeline` | `plan-critique` | `github-sync` (all optional)
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
-**Produces:** `.planning/phases/{NN}-{slug}/CONTEXT.md` and `{NN}-{PP}-PLAN.md` files | `.planning/specs/` (optional) | `.planning/campaigns/` (marketing) | `.planning/designs/` (design)
-**User interaction:** Confirms agent recommendations; opts into architecture proposals, spec pipeline, and plan critique; reviews critique findings
+**Produces:** `.legion/project/current-specs/...`, `.legion/project/changes/<changeId>/change.json`, `.legion/project/changes/<changeId>/oracle.json`, and `.legion/project/changes/<changeId>/taskgraph.json`
+**User interaction:** Review the taskgraph if needed, then run `legion build`
 
 #### `legion build` (alias: `/legion:build`) — Phase Execution
 
@@ -254,19 +241,13 @@ Checks the current phase's typed taskgraph and executes it through the selected 
 3. Generate a context pack and executor prompt per task
 4. Run the selected executor adapter and write task-run, executor-result, redacted-log, and pending evidence artifacts
 
-**Runtime execution contract:**
-1. Create a runtime team (`phase-{NN}-execution`) with tasks for each plan and cross-wave dependencies
-2. Execute plans wave by wave; agents within a wave run in parallel
-3. Give each worker the selected agent contract plus the plan file; autonomous plans skip personality injection
-4. Auto-remediate environment issues once, classifying errors as BLOCKER vs ENVIRONMENT
-5. Collect structured summaries and write `{NN}-{PP}-SUMMARY.md` files
-6. Track progress via `execution-tracker`, update STATE.md/ROADMAP.md, and create atomic commits per successful plan
-7. Record optional outcomes via `memory-manager`, detect manual corrective edits, and shut down the runtime team
+**Executor modes:**
+- `codex` runs `codex exec` against the repository with workspace-write sandboxing
+- `manual` writes prompt and evidence placeholders for a human-run path
+- `fake` produces deterministic test evidence
 
-**Skills invoked:** `workflow-common-core` -> `wave-executor` -> `execution-tracker` -> `memory-manager` | `codebase-mapper` (map context injection) | `github-sync` (issue checklist + PR creation)
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion
-**Produces:** Task-run artifacts, executor prompts/results, redacted logs, context packs, and pending evidence index entries
-**User interaction:** Confirms pre-execution plan; monitors progress; resolves blockers if agents get stuck
+**Produces:** `.legion/project/changes/<changeId>/runs/<runId>/task-run.json`, `context-pack.md`, `executor-prompt.md`, `executor-result.json`, redacted logs, and pending entries in `evidence-index.json`
+**User interaction:** Resolve blockers or review the generated evidence, then run `legion review`
 
 #### `legion review` (alias: `/legion:review`) — Quality Review
 
@@ -278,20 +259,14 @@ Checks review readiness for the current phase and submits structured review deci
 3. Leave evidence pending until a human runs `legion review --accept`
 4. Support bounded `--auto` cycles for explicit fix/re-review flows
 
-**Runtime review contract:**
-1. Detect manual edits before review and store corrective preference signals through `memory-manager`
-2. Choose review mode: **classic** (`review-loop` — static phase-type-to-agent mapping) or **panel** (`review-panel` — dynamic 2-4 reviewer composition with domain-weighted rubrics)
-   - Classic mapping: code -> `testing-qa-verification-specialist`; API -> `testing-api-tester`; design -> three-lens review (`brand-guardian` + `ux-architect` + `ux-researcher`); marketing -> `testing-workflow-optimizer`
-   - Panel mode: scores review-capable agents via `agent-registry`, caps panel size, enforces Testing coverage, and assigns non-overlapping rubrics
-3. Create a runtime review team and spawn review agents in parallel
-4. Collect findings, parse severity, deduplicate, and synthesize panel-level risks
-5. Route fixes, run bounded re-review cycles, and escalate unresolved blockers
-6. On PASS, write `{NN}-REVIEW.md`, mark the phase complete, and optionally close linked GitHub work
+**Executor modes:**
+- Default mode submits a review decision and leaves evidence pending
+- `--accept` accepts the latest passing submitted review and marks evidence accepted
+- `--reject-reason <text>` rejects the latest submitted review with a human reason
+- `--auto --max-cycles <N>` runs bounded fix/re-review cycles before accepting only a clean review
 
-**Skills invoked:** `workflow-common-core` -> `review-loop` | `review-panel` -> `execution-tracker` -> `memory-manager` | `design-workflows` (three-lens) | `github-sync`
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion
-**Produces:** Dry-run review readiness output today; live runtime review produces `{NN}-REVIEW.md`, fix commits, and updated STATE.md/ROADMAP.md
-**User interaction:** Chooses review mode; confirms reviewer selection; reviews findings; approves fixes; decides escalation path
+**Produces:** `.legion/project/changes/<changeId>/reviews/<reviewId>.json`, review executor artifacts when an executor is used, and updated evidence acceptance state after `--accept`
+**User interaction:** Read the submitted decision and explicitly accept or reject it
 
 ---
 
@@ -302,17 +277,14 @@ Checks review readiness for the current phase and submits structured review deci
 Single command to understand where the project is and what to do next. Reads all project state and displays a clear dashboard with session resume context.
 
 **Key steps:**
-1. Load project state — reads PROJECT.md, STATE.md, ROADMAP.md, REQUIREMENTS.md (if exists)
-2. Calculate progress via `execution-tracker` — 20-char progress bar from ROADMAP.md plan counts
-3. Display milestone progress via `milestone-tracker` (if milestones defined)
-4. Load memory briefing via `memory-manager` (if OUTCOMES.md exists) — last 5 outcomes, top 3 agents by success rate
-5. Check codebase map status (CODEBASE.md plus `.planning/codebase/` artifacts; suggest `legion map --refresh` if stale or partial)
-6. Fetch GitHub status via `github-sync` (if STATE.md has GitHub section) — live issue/PR/milestone state via `gh` CLI
-7. Route to next action — decision tree: no project → start; pending → plan; planned → build; executed → review; complete → next phase or finish
+1. Load typed project state from `.legion/project`
+2. Resolve the workflow stage (`uninitialized`, `planned`, `built`, `reviewed`, `ship_ready`, or blocked)
+3. Report the latest taskgraph, evidence, task runs, and review decisions
+4. Show codebase map freshness and latest guidance artifacts
+5. Show milestone state when milestones exist
+6. Route to the exact next command
 
-**Skills invoked:** `workflow-common-core` → `execution-tracker` → `milestone-tracker` | `memory-manager` | `github-sync` | `codebase-mapper` (staleness check)
-**Tools:** Read, Grep, Glob (read-only — no file modifications)
-**Produces:** Dashboard display (no file changes)
+**Produces:** Dashboard display and JSON status output (no file changes)
 **User interaction:** Follow the suggested next action, or run any command
 
 ---
@@ -321,36 +293,31 @@ Single command to understand where the project is and what to do next. Reads all
 
 #### `legion quick <task>` (alias: `/legion:quick <task>`) — One-off Task Execution
 
-Record a one-off task outside the normal phase workflow. Runtime installs can use the same command contract for automatic agent selection and execution when an execution bridge is available.
+Create a one-task ad-hoc change that enters the same `build -> review -> accept -> ship` path as a planned phase.
 
 **Key steps:**
-1. Parse the task description from arguments — works with or without an initialized project
-2. Load project context (optional) — reads PROJECT.md for tech stack awareness if available
-3. Score agents via `agent-registry` (keyword match 3pts, division affinity 2pts, partial match 1pt) and recommend top 2 candidates
-4. Current CLI records the structured workflow request; runtime adapters can spawn the selected agent or run autonomously if user prefers
-5. Runtime execution returns results with an optional conventional commit (auto-detects type: feat/fix/test/docs/refactor from task description)
+1. Parse the task description
+2. Require initialized `.legion/project` state
+3. Write a request markdown artifact under `.legion/project/workflow/quick/<runId>/`
+4. Create a typed current spec, change, oracle, and taskgraph for the ad-hoc work
+5. Return `legion build` as the next action
 
-**Skills invoked:** `workflow-common-core` → `agent-registry`
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion
-**Produces:** Structured command record today; runtime execution produces task output plus optional git commit (does NOT update STATE.md or ROADMAP.md)
-**User interaction:** Confirms agent selection; approves commit
+**Produces:** `.legion/project/workflow/quick/<runId>/workflow-run.json`, `request.md`, and a consumable taskgraph under `.legion/project/changes/<changeId>/taskgraph.json`
+**User interaction:** Run `legion build`, then review and accept the evidence like any other change
 
 #### `legion advise <topic>` (alias: `/legion:advise <topic>`) — Expert Consultation
 
-Get read-only strategic advice from any of the 49 agent personalities. The advisor can explore your codebase and ask clarifying questions but cannot modify any files.
+Get read-only strategic advice without changing code or workflow acceptance state.
 
 **Key steps:**
-1. Parse the topic (architecture, UX, marketing strategy, etc.) — provides a topic reference table spanning Engineering, Design, Business, Marketing, Testing, Product, and Spatial Computing
-2. Load project context from PROJECT.md if available (works without it for pure domain expertise)
-3. Score and recommend the best advisor via `agent-registry` — top 2 candidates presented with match rationale
-4. Current CLI records the structured advisory request; runtime adapters can spawn the advisor as a read-only **Explore** subagent (tool-level enforcement: no Write, no Edit, no Bash)
-5. Display structured advice: Assessment → Recommendations → Trade-offs → Next Steps
-6. Interactive follow-up loop — ask another question (same advisor, carries prior context), switch topics (new advisor), or end session
+1. Parse the topic
+2. Generate a focused read-only guidance prompt
+3. Run the selected guidance executor (`codex`, `manual`, or `fake`)
+4. Write advice markdown plus prompt/result/log artifacts
+5. Return `legion status` as the next action
 
-**Skills invoked:** `workflow-common-core` → `agent-registry`
-**Tools:** Read, Grep, Glob, Agent, AskUserQuestion (advisor spawned as Explore — cannot modify files)
-**Produces:** Structured command record today; runtime execution produces advisory output (no file changes, no state updates)
-**User interaction:** Selects advisor agent; asks follow-up questions; ends session when satisfied
+**Produces:** `.legion/project/workflow/advise/<runId>/workflow-run.json`, `advice.md`, and executor artifacts when applicable
+**User interaction:** Convert the advice into `legion plan`, `legion quick`, or no action after human review
 
 #### `legion map` (alias: `/legion:map`) — Codebase Mapping
 
@@ -359,32 +326,26 @@ Generate, refresh, check, or query the codebase map dataset used by planning, bu
 **Key steps:**
 1. Detect source code and existing map artifacts
 2. In `--check`, report freshness/completeness without writing files
-3. In default or `--refresh`, generate architecture documentation, functionality inventory, dependency graph, API surface, test map, risk hotspots, setup/runbook, and conventions
-4. Write `.planning/CODEBASE.md`, `.planning/codebase/index.jsonl`, `.planning/codebase/symbols.json`, `.planning/codebase/search.md`, and `.planning/config/directory-mappings.yaml`
+3. In default or `--refresh`, generate deterministic architecture documentation, source summaries, symbol extraction, and search hints
+4. Write `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`, and `map.json` under a map workflow run directory
 5. In `--query`, search the existing index and return matching chunks plus source files to read next
 
-**Skills invoked:** `workflow-common-core` → `codebase-mapper`
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
-**Produces:** `.planning/CODEBASE.md`, `.planning/codebase/`, `.planning/config/directory-mappings.yaml`
-**User interaction:** Confirms refresh when a fresh map already exists; mapping remains user-approved during `legion start`
+**Produces:** `.legion/project/workflow/map/<runId>/workflow-run.json`, `codebase.md`, `index.jsonl`, `symbols.json`, `search.md`, and `map.json`
+**User interaction:** Use `legion map --query <text>` to retrieve map context for planning or review
 
 #### `legion explore` (alias: `/legion:explore`) — Design Discovery
 
-Run research-first product/design discovery with Polymath before committing to formal project initialization. Explore inspects current project context, researches the initial ask, asks focused clarifying questions, compares approaches, and saves a design document.
+Run read-only product/design discovery before committing to a plan or project initialization.
 
 **Key steps:**
-1. Inspect local project context, codebase map, and prior exploration docs
-2. Capture or resume the initial ask
-3. Run bounded local/web research where available
-4. Ask one material clarifying question at a time via structured choices
-5. Compare 2-3 viable approaches and capture the selected direction
-6. Save `.planning/explorations/YYYY-MM-DD-<slug>-design.md`
-7. Ask whether to start with the design, keep discussing, or park it
+1. Parse the topic
+2. Generate a read-only discovery prompt with required sections
+3. Run the selected guidance executor (`codex`, `manual`, or `fake`)
+4. Write a design document with framing, constraints, open questions, approaches, recommendation, and handoff notes
+5. Route to `legion start` when no project exists, or `legion plan 1` when one does
 
-**Skills invoked:** `workflow-common-core` → `polymath-engine` → `questioning-flow`
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
-**Produces:** `.planning/explorations/*-design.md`
-**User interaction:** Answers focused design questions; explicitly chooses whether to hand off to `legion start <design-doc-path>`
+**Produces:** `.legion/project/workflow/explore/<runId>/workflow-run.json`, `design.md`, and executor artifacts when applicable
+**User interaction:** Decide whether the artifact should become project initialization, a plan input, or parked context
 
 ---
 
@@ -409,19 +370,17 @@ Cross-project visibility when managing multiple Legion projects. Shows dependenc
 
 #### `legion milestone` (alias: `/legion:milestone`) — Milestone Lifecycle
 
-Handles the full milestone lifecycle: define milestone groupings, track status, mark milestones complete with summaries, and archive completed artifacts.
+Handles a noninteractive milestone lifecycle: status, define, complete, and archive.
 
 **Key steps:**
-1. Load project state — checks for existing `## Milestones` section in ROADMAP.md; offers to define milestones if none exist
-2. Display milestone dashboard via `milestone-tracker` — phase-level progress with 10-char progress bars per milestone
-3. Define milestones — analyzes phases for logical groupings (theme clusters, dependency chains), proposing as many milestones as the roadmap needs with no fixed phase-count limit
-4. Complete milestone — validates all phases are Complete, generates summary at `.planning/milestones/MILESTONE-{N}.md` with metrics (plans, requirements, files, agents), closes GitHub milestone via `github-sync` (optional)
-5. Archive milestone — moves phase directories from `.planning/phases/` to `.planning/archive/milestone-{N}/`, condenses STATE.md, updates ROADMAP.md
+1. `--status` displays the milestone index
+2. `--define <name> --phases <range>` adds a defined milestone
+3. `--complete <id> --summary <text>` records completion and summary text
+4. `--archive <id>` marks a completed or defined milestone as archived
+5. Every mode writes a workflow run for traceability
 
-**Skills invoked:** `workflow-common-core` → `milestone-tracker` → `execution-tracker` | `github-sync`
-**Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
-**Produces:** Updated ROADMAP.md, milestone summaries at `.planning/milestones/`, archived phase directories at `.planning/archive/`
-**User interaction:** Selects milestone operation; confirms completion and archiving
+**Produces:** `.legion/project/workflow/milestone/milestones.json`, `.legion/project/workflow/milestone/<runId>/workflow-run.json`, and `milestones.md`
+**User interaction:** Use explicit lifecycle flags; no hidden publishing or deployment happens here
 
 #### `legion agent` (alias: `/legion:agent`) — Agent Creator
 
@@ -538,7 +497,7 @@ The recommendation engine scores against these fields (not just keywords and div
 
 ### Codebase Mapper Enrichment
 
-The codebase map (`/legion:map` → codebase-mapper) produces `.planning/CODEBASE.md` plus semantic index artifacts under `.planning/codebase/`:
+The codebase map (`legion map`) produces a workflow run with `codebase.md` plus semantic index artifacts under `.legion/project/workflow/map/<runId>/`:
 
 - **Dependency Risk** — Identifies outdated packages, unmaintained dependencies, and heavy transitive dependency trees. Ranks by risk score (staleness + popularity + security advisories).
 - **Test Coverage Correlation** — Maps untested files against fan-in (how many other files depend on them) and complexity. High fan-in + no tests = highest risk. Degrades gracefully when coverage data is unavailable.
@@ -546,7 +505,7 @@ The codebase map (`/legion:map` → codebase-mapper) produces `.planning/CODEBAS
 
 ### Polymath Design Discovery
 
-`/legion:explore` now uses a single research-first design discovery flow. It saves a design document under `.planning/explorations/` and offers `/legion:start <design-doc-path>` only after the user explicitly chooses to start.
+`legion explore` now uses a single research-first design discovery flow. It saves a design document under `.legion/project/workflow/explore/<runId>/design.md` and routes to `legion start` or `legion plan 1` only as an explicit next action.
 
 ### Authority & Conflict Resolution
 
@@ -592,9 +551,9 @@ v7.1.0 completes the core workflow loop with three new commands and tightens the
 
 ### New Commands
 
-- **`/legion:ship`** — Pre-ship checklist, PR creation, deployment verification, and canary monitoring. The formal shipping stage between review and the next phase.
-- **`/legion:retro`** — Structured retrospective on completed phases or milestones. Captures what worked, what didn't, and reusable patterns. Feeds learnings back into future planning via RETRO.md consumption.
-- **`/legion:learn`** — Record, recall, and manage project-specific patterns, pitfalls, and preferences. Operationalizes cross-session memory outside the build/review cycle.
+- **`legion ship`** — Readiness gate that passes only when accepted build evidence and an accepted review exist. It does not publish, deploy, or create PRs.
+- **`legion retro`** — Structured retrospective on completed phases or milestones. Captures what worked, what did not, and reusable patterns. Feeds learnings back into future context packs.
+- **`legion learn`** — Record, recall, and manage project-specific patterns, pitfalls, and preferences. Operationalizes cross-session memory outside the build/review cycle.
 
 ### Agent Consolidation (53→49→48)
 
@@ -615,13 +574,13 @@ v7.2.0 is the largest single release: 61 files changed across agent enrichment, 
 - **Supply chain checks** — Lockfile integrity, typosquatting detection, unmaintained dependency flagging
 - **Post-execution boundary verification** — Authority-enforcer now validates that agents stayed within their `files_modified` scope after execution. Guarded mode warns; surgical mode auto-reverts
 
-### New Command: `/legion:validate`
+### Command: `legion validate`
 
-State file integrity checker for `.planning/` artifacts. Validates schema conformance, cross-references between plans and state, and detects corruption. Supports `--ci` flag for pipeline integration and `--fix` for auto-remediation.
+Project artifact integrity checker for `.legion/project` artifacts. Validates schema conformance, cross-references between changes, taskgraphs, evidence, and reviews, and reports corruption through typed diagnostics.
 
 ### Quick Command Enhancement
 
-- **`--fix` flag** — Inline review + PR creation in a single command (replaces the proposed `/legion:hotfix` command). Includes GitHub issue linking support.
+- **Typed ad-hoc taskgraphs** — `legion quick <task>` creates a current spec, change, oracle, and one-task taskgraph, then routes the work through the normal build/review approval loop.
 
 ### Plan Auto-refinement
 
@@ -679,7 +638,7 @@ Standalone command for ad-hoc code cleanup on any target path, phase files, or t
 - **4-pass rubric** — Comment Cleanup → Code Simplification → Readability Refactoring → Consistency Normalization
 - **Severity split** — Each pass has auto-apply actions (safe mechanical fixes) and flag-for-review actions (judgment calls presented to the user)
 - **Safety rails** — Runs project tests before and after polish. Any file that causes test regression is reverted automatically. Type checker verification when available
-- **Convention detection** — Merges conventions from three sources: CLAUDE.md explicit rules > CODEBASE.md detected patterns > code sampling implicit conventions
+- **Convention detection** — Merges conventions from three sources: CLAUDE.md explicit rules > `legion map` detected patterns > code sampling implicit conventions
 - **Scope control** — `--scope=changed` (current phase files only), `--scope=dependents` (changed + direct importers, default), `--scope=directory` (full directory tree). Hard cap at 50 files
 
 ### Review Pipeline Integration
@@ -699,18 +658,18 @@ v8.0.3 separates codebase understanding from idea exploration. Codebase mapping 
 `/legion:map` owns architecture documentation and retrieval context for existing codebases.
 
 - **Modes** — default full map, `--check` freshness check, `--refresh` rebuild, `--scope <path>` focused mapping, and `--query <text>` readback against the existing index.
-- **Dataset** — writes `.planning/CODEBASE.md` for human readers plus `.planning/codebase/index.jsonl`, `.planning/codebase/symbols.json`, `.planning/codebase/search.md`, and `.planning/config/directory-mappings.yaml`.
+- **Dataset** — writes `codebase.md` for human readers plus `index.jsonl`, `symbols.json`, `search.md`, and `map.json` under `.legion/project/workflow/map/<runId>/`.
 - **Freshness metadata** — records generated time, analyzed commit, source file count, source fingerprint, scope, and map schema version so commands can detect stale or partial maps.
 - **Semantic search without services** — no embeddings, vector database, or API key dependency. Commands search summaries, aliases, symbols, keywords, and paths with `rg`, then read original source lines for evidence.
-- **Consumer protocol** — `/legion:plan`, `/legion:build`, `/legion:review`, `/legion:status`, and `/legion:quick` retrieve relevant chunks instead of assuming all context comes from CODEBASE.md.
+- **Consumer protocol** — `legion plan`, `legion build`, `legion review`, `legion status`, and `legion quick` retrieve relevant chunks instead of assuming all context comes from a single markdown file.
 
 ### `/legion:start` Map Preflight
 
-`/legion:start` now checks for source code before project setup. If a codebase exists, it checks map freshness and asks whether to use the current map, refresh it, skip mapping for this start, or abort and run mapping manually. Start can also consume a saved exploration design document via `/legion:start <design-doc-path>`.
+Run `legion map --check` before project setup when source code already exists. If the map is stale or missing, `legion map --refresh` generates the context that later context packs consume.
 
 ### `/legion:explore`
 
-`/legion:explore` is no longer a mode picker and no longer starts projects automatically. Polymath now runs one design-discovery path: inspect context, research the ask when tools are available, ask one high-signal clarification at a time, compare 2-3 viable approaches, and save `.planning/explorations/YYYY-MM-DD-<slug>-design.md`. The final choice is explicit: start with the design, keep discussing, or park it.
+`legion explore` is no longer a mode picker and no longer starts projects automatically. It runs one design-discovery path, compares 2-3 viable approaches, and saves `.legion/project/workflow/explore/<runId>/design.md`. The final choice is explicit: start with the design, plan from it, or park it.
 
 ### Release Coverage
 
@@ -896,6 +855,10 @@ legion/                     <- Project root
 ├── package.json           <- npm package manifest (name, version, engines)
 ├── bin/
 │   └── install.js         <- Cross-runtime installer (npx entry point)
+├── packages/
+│   ├── cli/               <- Workflow-first CLI, executor adapters, guidance runs, dogfood UX
+│   ├── artifacts/         <- Typed .legion/project artifact services
+│   └── protocol/          <- Shared schemas and protocol entities
 ├── CLAUDE.md               <- Project instructions (injected into Claude Code context)
 ├── commands/               <- 19 /legion: command entry points
 │   ├── start.md
@@ -941,17 +904,23 @@ legion/                     <- Project root
 ├── adapters/               <- Per-CLI adapter files (claude-code.md, codex-cli.md, etc.)
 ├── docs/
 │   ├── control-modes.md   <- Control mode usage guide (v6.0)
+│   ├── cli/               <- Packaged CLI quickstart
+│   ├── next/              <- Typed protocol and implementation docs
 │   ├── schemas/           <- JSON Schema validation (plan frontmatter, summaries, outcomes, review findings)
 │   ├── security/          <- Install integrity verification docs
 │   └── settings.schema.json <- Settings JSON schema
-└── .planning/              <- Project state (generated per-project, not part of package)
-    ├── PROJECT.md
-    ├── ROADMAP.md
-    ├── STATE.md
-    ├── config/             <- Authority matrix, control modes, escalation protocol, agent communication
-    ├── phases/             <- Active phase plans and summaries
-    ├── memory/             <- OUTCOMES.md (optional cross-session memory)
-    └── archive/            <- Archived phases from completed milestones
+└── .legion/project/        <- Generated per-project workflow state
+    ├── project.json
+    ├── current-specs/
+    ├── changes/
+    │   └── <changeId>/     <- change, oracle, taskgraph, task runs, evidence, reviews
+    └── workflow/
+        ├── map/
+        ├── explore/
+        ├── advise/
+        ├── learn/
+        ├── milestone/
+        └── retro/
 ```
 
 ## Design Principles
@@ -980,17 +949,17 @@ These activate automatically when their prerequisites are met:
 
 | Feature | Activates When | What It Does |
 |---------|---------------|--------------|
-| **GitHub Integration** | `gh` CLI authenticated + git remote exists | Links phases to issues, creates PRs, syncs milestones |
-| **Cross-Session Memory** | `.planning/memory/OUTCOMES.md` exists | Boosts agent recommendations based on past performance |
-| **Codebase Map** | `/legion:map` or existing codebase detected during `/legion:start` | Maps architecture, functionality, risks, semantic index, and directory mappings before planning |
+| **GitHub Integration** | `gh` CLI authenticated + git remote exists | Provides external context where supported; ship remains a readiness gate |
+| **Cross-Session Memory** | `legion learn` entries exist | Feeds durable lessons into future context packs |
+| **Codebase Map** | `legion map --refresh` has generated a fresh map | Maps architecture, functionality, risks, semantic index, and directory context before planning |
 | **Marketing Workflows** | `MKT-*` phase requirements OR `workflow_type: marketing` in CONTEXT.md | Campaign planning, content calendars, channel coordination |
 | **Design Workflows** | `DSN-*` phase requirements OR `workflow_type: design` in CONTEXT.md | Design systems, UX research, three-lens review (brand + accessibility + usability) |
 | **Plan Critique** | User selects critique during `/legion:plan` | Pre-mortem analysis, assumption hunting, PASS/CAUTION/REWORK verdicts |
 | **Review Panels** | User selects panel mode in `/legion:review` | 2-4 domain-weighted reviewers with non-overlapping rubrics |
 | **Control Modes** | `control_mode` set in `settings.json` | Adjusts authority enforcement: autonomous, guarded, advisory, surgical |
 | **Intent Routing** | Ambiguous input to any command | Natural language parsing routes to the right command + flags |
-| **Design Discovery** | `/legion:explore` | Research-first brainstorming that saves a design doc before optional `/legion:start` |
-| **Board of Directors** | `/legion:board meet <topic>` or `/legion:board review` | Governance deliberation with dynamic agent panels, voting, and audit trail |
+| **Design Discovery** | `legion explore <topic>` | Research-first brainstorming that saves a design doc before optional `legion start` or `legion plan` |
+| **Council** | `legion council <topic>` | Governance deliberation with structured decision artifacts and audit trail |
 | **Cross-CLI Dispatch** | `dispatch.enabled` in `settings.json` + external CLI installed | Routes work to Gemini/Codex/Copilot via capability matching |
 | **Multi-Pass Evaluators** | `review.evaluator_depth: "multi-pass"` in settings | Deep evaluation with 4 specialized evaluator types (6-7 passes each) |
 | **Git Worktrees** | `execution.use_worktrees: true` in `settings.json` | Filesystem isolation during parallel waves with automatic merge and conflict detection |
@@ -998,7 +967,7 @@ These activate automatically when their prerequisites are met:
 | **Extended Thinking** | `models.planning_reasoning: true` in `settings.json` | Deeper requirement analysis and wave ordering rationale in planning |
 | **Memory Pruning** | `memory.auto_prune: true` in `settings.json` | Automatic archiving of old OUTCOMES.md entries to keep active memory lean |
 | **Code Polish** | `review.polish: true` in `settings.json` (default) | 4-pass post-review cleanup: comments, simplification, readability, consistency. Non-blocking with safety rails |
-| **State Validation** | `/legion:validate` command | Schema conformance, cross-reference checking, integrity verification for `.planning/` files |
+| **State Validation** | `legion validate` command | Schema conformance, cross-reference checking, integrity verification for `.legion/project` artifacts |
 
 <!-- legion-metrics:start -->
 - Commands: 19

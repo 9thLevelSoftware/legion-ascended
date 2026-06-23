@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path28 from "node:path";
+import path32 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path29) {
-  if (!path29)
+function getElementAtPath(obj, path33) {
+  if (!path33)
     return obj;
-  return path29.reduce((acc, key) => acc?.[key], obj);
+  return path33.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path29, issues) {
+function prefixIssues(path33, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path29);
+    iss.path.unshift(path33);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path29 = []) => {
+  const processError = (error3, path33 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path33, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path33, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path33, ...issue2.path]);
       } else {
-        const fullpath = [...path29, ...issue2.path];
+        const fullpath = [...path33, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -15403,8 +15403,8 @@ async function nearestExistingAncestor(targetPath) {
 }
 async function rejectFinalSymlink(absolutePath, repositoryPath) {
   try {
-    const stat8 = await lstat(absolutePath);
-    if (stat8.isSymbolicLink()) {
+    const stat9 = await lstat(absolutePath);
+    if (stat9.isSymbolicLink()) {
       throw new ArtifactPathError(`Project artifact path cannot be a symbolic link: ${repositoryPath}`);
     }
   } catch (error2) {
@@ -15474,14 +15474,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path29) {
-  if (path29.endsWith(".json"))
+function mediaTypeForArtifactPath(path33) {
+  if (path33.endsWith(".json"))
     return "application/json";
-  if (path29.endsWith(".yaml") || path29.endsWith(".yml"))
+  if (path33.endsWith(".yaml") || path33.endsWith(".yml"))
     return "application/yaml";
-  if (path29.endsWith(".md"))
+  if (path33.endsWith(".md"))
     return "text/markdown";
-  if (path29.endsWith(".txt"))
+  if (path33.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -15524,16 +15524,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path29, issues) {
+function schemaDiagnostics(path33, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path29 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path33 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path29
+      path: path33
     });
   });
 }
@@ -16064,17 +16064,18 @@ async function workflowRecordDirectoryStats(absoluteDirectory, workflow) {
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name))
       continue;
-    if (!entry.isFile() || !entry.name.endsWith(".json"))
+    const absolutePath = entry.isDirectory() ? path9.join(absoluteDirectory, entry.name, "workflow-run.json") : path9.join(absoluteDirectory, entry.name);
+    if (!entry.isDirectory() && (!entry.isFile() || !entry.name.endsWith(".json")))
       return { valid: false, recordCount: 0 };
-    const absolutePath = path9.join(absoluteDirectory, entry.name);
-    const raw = await readFile4(absolutePath, "utf8");
+    let raw;
     let parsed;
     try {
+      raw = await readFile4(absolutePath, "utf8");
       parsed = JSON.parse(raw);
     } catch {
       return { valid: false, recordCount: 0 };
     }
-    if (!isRecognizedWorkflowRecord(parsed, workflow))
+    if (!isRecognizedWorkflowRecord(parsed, workflow) && !isRecognizedWorkflowRun(parsed, workflow))
       return { valid: false, recordCount: 0 };
     recordCount += 1;
   }
@@ -16083,8 +16084,14 @@ async function workflowRecordDirectoryStats(absoluteDirectory, workflow) {
 function isRecognizedWorkflowRecord(value, workflow) {
   if (!isJsonObject(value))
     return false;
-  const nextAction2 = value["nextAction"];
-  return value["schemaVersion"] === 1 && value["kind"] === "workflow_record" && value["workflow"] === workflow && typeof value["createdAt"] === "string" && value["createdAt"].trim().length > 0 && isJsonObject(value["input"]) && isJsonObject(nextAction2) && typeof nextAction2["command"] === "string" && nextAction2["command"].trim().length > 0 && typeof nextAction2["reason"] === "string" && nextAction2["reason"].trim().length > 0;
+  const nextAction3 = value["nextAction"];
+  return value["schemaVersion"] === 1 && value["kind"] === "workflow_record" && value["workflow"] === workflow && typeof value["createdAt"] === "string" && value["createdAt"].trim().length > 0 && isJsonObject(value["input"]) && isJsonObject(nextAction3) && typeof nextAction3["command"] === "string" && nextAction3["command"].trim().length > 0 && typeof nextAction3["reason"] === "string" && nextAction3["reason"].trim().length > 0;
+}
+function isRecognizedWorkflowRun(value, workflow) {
+  if (!isJsonObject(value))
+    return false;
+  const nextAction3 = value["nextAction"];
+  return value["schemaVersion"] === 1 && value["kind"] === "workflow_run" && value["workflow"] === workflow && typeof value["runId"] === "string" && value["runId"].trim().length > 0 && typeof value["createdAt"] === "string" && value["createdAt"].trim().length > 0 && typeof value["status"] === "string" && isJsonObject(value["input"]) && isJsonObject(value["outputs"]) && isJsonObject(nextAction3) && typeof nextAction3["command"] === "string" && nextAction3["command"].trim().length > 0 && typeof nextAction3["reason"] === "string" && nextAction3["reason"].trim().length > 0;
 }
 function isJsonObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -16491,7 +16498,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path29 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path33 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -16505,7 +16512,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path29
+        path: path33
       }))
     };
   }
@@ -17253,13 +17260,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path29) {
+function parseRequirementId2(input, path33) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
@@ -17275,24 +17282,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path29) {
+function parseBaseGitSha(input, path33) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path29) {
+function parseOwners(input, path33) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path29
+        path: path33
       })
     ]);
   }
@@ -17304,7 +17311,7 @@ function parseOwners(input, path29) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path29
+        path: path33
       })));
       continue;
     }
@@ -17592,7 +17599,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path29) {
+function conflictDiagnostics(deltas, path33) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -17601,7 +17608,7 @@ function conflictDiagnostics(deltas, path29) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path29
+        path: path33
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -18378,18 +18385,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path29) {
+function parseOracleId2(input, path33) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path29) {
+function parseBaseGitSha2(input, path33) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18397,7 +18404,7 @@ function parseBaseGitSha2(input, path29) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
@@ -18741,7 +18748,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path29) {
+function parseBaseGitSha3(input, path33) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18749,18 +18756,18 @@ function parseBaseGitSha3(input, path29) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path29) {
+function assertExpectedRevision(value, path33) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path29
+        path: path33
       })
     ]);
   }
@@ -19078,7 +19085,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path29) {
+function parseBaseGitSha4(input, path33) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -19086,18 +19093,18 @@ function parseBaseGitSha4(input, path29) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path29) {
+function assertExpectedRevision2(value, path33) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path29
+        path: path33
       })
     ]);
   }
@@ -19496,13 +19503,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path29) {
+function assertExpectedRevision3(value, path33) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path29
+        path: path33
       })
     ]);
   }
@@ -19774,13 +19781,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path29) {
+function assertExpectedRevision4(value, path33) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path29
+        path: path33
       })
     ]);
   }
@@ -20021,8 +20028,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path29) {
-  return nodeId("artifact", path29);
+function artifactNodeId(path33) {
+  return nodeId("artifact", path33);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -20058,8 +20065,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path29) {
-  const fileName = path29.split("/").at(-1);
+function oracleIdFromPath(path33) {
+  const fileName = path33.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -20174,13 +20181,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path29 = [];
+  const path33 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path29.indexOf(node);
+      const cycleStartIndex = path33.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path29.length; index++) {
-          const cyclicNode = path29[index];
+        for (let index = cycleStartIndex; index < path33.length; index++) {
+          const cyclicNode = path33[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -20190,11 +20197,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path29.push(node);
+    path33.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path29.pop();
+    path33.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -20222,10 +20229,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path29 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path33 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path29,
+        path: path33,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -20871,13 +20878,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path29) {
+function parseArchivedAt(input, path33) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path29
+      path: path33
     })));
   }
   return parsed.data;
@@ -20906,7 +20913,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path29) {
+function archiveHashDiagnostics(record2, path33) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -20914,11 +20921,11 @@ function archiveHashDiagnostics(record2, path29) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path29
+      path: path33
     })
   ];
 }
-async function assertWorktreeTarget(input, path29) {
+async function assertWorktreeTarget(input, path33) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -20932,7 +20939,7 @@ async function assertWorktreeTarget(input, path29) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path29
+        path: path33
       })
     ]);
   } catch (error2) {
@@ -20940,7 +20947,7 @@ async function assertWorktreeTarget(input, path29) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path29
+        path: path33
       })
     ]);
   }
@@ -21019,11 +21026,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path29 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path29 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path29)) : remaining;
+    const path33 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path33 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path33)) : remaining;
     return {
-      path: path29,
+      path: path33,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -21086,9 +21093,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path29, document) {
+function validatePlannedDocument(path33, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path29,
+    artifactPath: path33,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -21099,7 +21106,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path29, document]) => [path29, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path33, document]) => [path33, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -21123,17 +21130,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path29 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path29)) {
+      const path33 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path33)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path29}.`,
-            path: path29
+            message: `Archive add target already exists: ${path33}.`,
+            path: path33
           })
         ]);
       }
-      plannedDocs.set(path29, {
+      plannedDocs.set(path33, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -21146,7 +21153,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path29);
+      touchedPaths.add(path33);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -21331,8 +21338,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path29 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path29);
+  const path33 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path33);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -21570,10 +21577,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path29 = archivePath(changeId);
+  const path33 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path29,
+    artifactPath: path33,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -21585,22 +21592,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path29
+        path: path33
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path29);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path33);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path29,
+    artifactPath: path33,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path29,
+      path: path33,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -24497,13 +24504,978 @@ function startFailureHuman(diagnostics) {
 ${rendered}` : "Project initialization failed.";
 }
 
-// packages/cli/src/workflow/state.ts
-import { readdir as readdir9 } from "node:fs/promises";
+// packages/cli/src/workflow/codebase-map.ts
+import { createHash as createHash17 } from "node:crypto";
+import { readdir as readdir9, readFile as readFile13, stat as stat6 } from "node:fs/promises";
 import path21 from "node:path";
 
-// packages/cli/src/workflow/context.ts
-import { readdir as readdir8, stat as stat6 } from "node:fs/promises";
+// packages/cli/src/workflow/executor/result.ts
+import { readFile as readFile11, writeFile as writeFile5 } from "node:fs/promises";
+var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
+var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
+function redactTranscript(text) {
+  return text.replace(JSON_CREDENTIAL_RE, (match) => match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"')).replace(SECRET_ASSIGNMENT_RE, (_match, key) => `${key}=[REDACTED_SECRET]`);
+}
+async function writeProjectTextFile(input) {
+  const absolutePath = await prepareProjectTextFile(input);
+  await writeFile5(absolutePath, input.text, "utf8");
+  return absolutePath;
+}
+async function prepareProjectTextFile(input) {
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath
+  });
+  return resolved.absolutePath;
+}
+async function writeProjectExecutionResult(input) {
+  return writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: stableProtocolJson(input.result)
+  });
+}
+async function readOptionalText(filePath) {
+  try {
+    return await readFile11(filePath, "utf8");
+  } catch (error2) {
+    if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") return "";
+    throw error2;
+  }
+}
+function normalizeExecutionResult(input, fallback) {
+  const value = isRecord8(input) ? input : {};
+  const status2 = parseStatus(value["status"]) ?? fallback.status;
+  const commandsRun = parseCommands(value["commandsRun"]);
+  const findings = parseFindings(value["findings"]);
+  const reviewVerdicts = parseReviewVerdicts(value["reviewVerdicts"]);
+  return {
+    ok: status2 === "succeeded",
+    status: status2,
+    summary: parseString(value["summary"]) ?? fallback.summary,
+    filesChanged: parseStringArray(value["filesChanged"]),
+    commandsRun,
+    findings,
+    ...reviewVerdicts === void 0 ? {} : { reviewVerdicts },
+    ...fallback.rawOutput === void 0 ? {} : { rawOutput: fallback.rawOutput },
+    ...fallback.exitCode === void 0 ? {} : { exitCode: fallback.exitCode }
+  };
+}
+function parseResultFromText(text) {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return void 0;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = /\{[\s\S]*\}/.exec(trimmed);
+    if (match?.[0] === void 0) return void 0;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return void 0;
+    }
+  }
+}
+function isRecord8(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseString(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function parseStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry) => typeof entry === "string" && entry.length > 0);
+}
+function parseStatus(value) {
+  return value === "succeeded" || value === "failed" || value === "blocked" ? value : void 0;
+}
+function parseCommands(value) {
+  if (!Array.isArray(value)) return [];
+  const commands = [];
+  for (const entry of value) {
+    if (!isRecord8(entry)) continue;
+    const command = parseString(entry["command"]);
+    const args = parseStringArray(entry["args"]);
+    const exitCode = entry["exitCode"];
+    if (command === void 0 || typeof exitCode !== "number" || !Number.isInteger(exitCode)) continue;
+    commands.push({ command, args, exitCode });
+  }
+  return commands;
+}
+function parseFindings(value) {
+  if (!Array.isArray(value)) return [];
+  const findings = [];
+  for (const entry of value) {
+    if (!isRecord8(entry)) continue;
+    const id = parseString(entry["id"]);
+    const title = parseString(entry["title"]);
+    const body = parseString(entry["body"]);
+    const severity = entry["severity"];
+    if (id === void 0 || title === void 0 || body === void 0 || severity !== "minor" && severity !== "major" && severity !== "blocking") {
+      continue;
+    }
+    const evidenceRefs = parseStringArray(entry["evidenceRefs"]);
+    findings.push({
+      id,
+      title,
+      body,
+      severity,
+      ...evidenceRefs.length === 0 ? {} : { evidenceRefs }
+    });
+  }
+  return findings;
+}
+function parseReviewVerdicts(value) {
+  if (!isRecord8(value)) return void 0;
+  const specification = parseReviewVerdict(value["specification"]);
+  const integration = parseReviewVerdict(value["integration"]);
+  const evidence = parseReviewVerdict(value["evidence"]);
+  if (specification === void 0 || integration === void 0 || evidence === void 0) return void 0;
+  return { specification, integration, evidence };
+}
+function parseReviewVerdict(value) {
+  return value === "pass" || value === "fail" || value === "unknown" || value === "not_verified" || value === "not_applicable" ? value : void 0;
+}
+
+// packages/cli/src/workflow/guidance-run.ts
+import { mkdir as mkdir11, readdir as readdir8, readFile as readFile12 } from "node:fs/promises";
 import path20 from "node:path";
+
+// packages/cli/src/workflow/executor/adapters.ts
+import { execFile as execFile4, spawn } from "node:child_process";
+import { promisify as promisify4 } from "node:util";
+var execFileAsync2 = promisify4(execFile4);
+var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
+function codexExecArgs(input) {
+  return [
+    "exec",
+    "-c",
+    'approval_policy="never"',
+    "-C",
+    input.repositoryRoot,
+    "--sandbox",
+    input.sandbox,
+    "--json",
+    "--output-last-message",
+    input.outputLastMessagePath,
+    "-"
+  ];
+}
+async function selectExecutionAdapterKind(explicit) {
+  if (explicit !== void 0) {
+    if (explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
+    return {
+      ok: false,
+      diagnostic: {
+        code: "invalid_executor",
+        message: `Unsupported executor "${explicit}". Use codex, manual, or fake.`
+      }
+    };
+  }
+  return await codexAvailable() ? "codex" : "manual";
+}
+function adapterForKind(kind) {
+  switch (kind) {
+    case "codex":
+      return codexAdapter;
+    case "manual":
+      return manualAdapter;
+    case "fake":
+      return fakeAdapter;
+  }
+}
+async function codexAvailable() {
+  try {
+    const invocation = codexInvocation(["exec", "--help"]);
+    await execFileAsync2(invocation.command, invocation.args, {
+      timeout: 5e3,
+      windowsHide: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+var fakeAdapter = {
+  kind: "fake",
+  async run(request) {
+    const result = {
+      ok: true,
+      status: "succeeded",
+      summary: fakeSummary(request),
+      filesChanged: [],
+      commandsRun: [
+        {
+          command: "legion-executor",
+          args: ["fake", request.mode],
+          exitCode: 0
+        }
+      ],
+      findings: [],
+      ...request.mode === "review" ? {
+        reviewVerdicts: {
+          specification: "pass",
+          integration: "pass",
+          evidence: "pass"
+        }
+      } : {}
+    };
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}
+`) });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+var manualAdapter = {
+  kind: "manual",
+  async run(request) {
+    const summary = `Manual executor prepared ${request.mode} instructions at ${request.promptArtifactPath}.`;
+    const result = {
+      ok: false,
+      status: "blocked",
+      summary,
+      filesChanged: [],
+      commandsRun: [
+        {
+          command: "legion-executor",
+          args: ["manual", request.mode],
+          exitCode: 1
+        }
+      ],
+      findings: [
+        {
+          id: "manual-execution-required",
+          title: "Manual execution required",
+          body: "No executable adapter was selected. Review the prompt and run the requested work manually, then rerun the command with an executor.",
+          severity: "blocking"
+        }
+      ]
+    };
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+var codexAdapter = {
+  kind: "codex",
+  async run(request) {
+    const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
+    const outputLastMessagePath = await prepareProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: outputLastMessageArtifactPath
+    });
+    const args = codexExecArgs({
+      repositoryRoot: request.repositoryRoot,
+      sandbox: request.readOnly ? "read-only" : "workspace-write",
+      outputLastMessagePath
+    });
+    const invocation = codexInvocation(args);
+    const processResult = await spawnWithInput(
+      invocation.command,
+      invocation.args,
+      request.prompt,
+      request.repositoryRoot,
+      codexExecTimeoutMs()
+    );
+    const rawOutput = [
+      processResult.stdout,
+      processResult.stderr
+    ].filter((entry) => entry.length > 0).join("\n");
+    const lastMessage = await readOptionalText(outputLastMessagePath);
+    const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
+    const status2 = processResult.timedOut ? "blocked" : processResult.exitCode === 0 ? "succeeded" : "failed";
+    const normalized = normalizeExecutionResult(parsed, {
+      status: status2,
+      summary: processResult.timedOut ? `Codex executor timed out after ${processResult.timeoutMs}ms.` : processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    const result = processResult.timedOut ? {
+      ...normalized,
+      ok: false,
+      status: "blocked",
+      findings: [
+        ...normalized.findings,
+        {
+          id: "codex-executor-timeout",
+          title: "Codex executor timed out",
+          body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
+          severity: "blocking"
+        }
+      ]
+    } : normalized;
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+function codexInvocation(args) {
+  if (process.platform !== "win32") {
+    return { command: "codex", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "codex", ...args]
+  };
+}
+function fakeSummary(request) {
+  if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;
+  if (request.mode === "fix") return `Fake fix cycle completed for ${request.task.id}.`;
+  return `Fake build executed ${request.task.id}.`;
+}
+function codexExecTimeoutMs() {
+  const configured = process.env["LEGION_CODEX_EXEC_TIMEOUT_MS"];
+  if (configured === void 0) return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+}
+async function spawnWithInput(command, args, input, cwd, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    const settle = (exitCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({
+        exitCode,
+        stdout,
+        stderr,
+        timedOut,
+        timeoutMs
+      });
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      stderr += `${stderr.length === 0 ? "" : "\n"}Codex executor timed out after ${timeoutMs}ms.`;
+      terminateProcessTree(child.pid);
+      setTimeout(() => settle(124), 1e3).unref();
+    }, timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.stdin.on("error", () => {
+    });
+    child.on("error", (error2) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error2);
+    });
+    child.on("close", (code) => {
+      settle(timedOut ? 124 : code ?? 1);
+    });
+    child.stdin.end(input);
+  });
+}
+function terminateProcessTree(pid) {
+  if (pid === void 0) return;
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    killer.on("error", () => {
+    });
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+  }
+  setTimeout(() => {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+    }
+  }, 1e3).unref();
+}
+
+// packages/cli/src/workflow/guidance-run.ts
+function guidanceCreatedAt(context) {
+  if (context.args.options.get("created-at") === true) {
+    return usageError("Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z.");
+  }
+  try {
+    return createdAtOption(context) ?? (/* @__PURE__ */ new Date()).toISOString();
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
+  }
+}
+async function createGuidanceRunPaths(input) {
+  const workflowRoot = path20.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  await mkdir11(workflowRoot, { recursive: true });
+  const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
+  const slug = slugFromName(input.slugSource);
+  for (let index = 0; index < 1e3; index += 1) {
+    const suffix = index === 0 ? "" : `-${index + 1}`;
+    const runId = `${safeTimestamp}-${slug}${suffix}`;
+    const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
+    const absoluteRunRoot = path20.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    try {
+      await mkdir11(absoluteRunRoot);
+      return {
+        workflow: input.workflow,
+        runId,
+        createdAt: input.createdAt,
+        artifactRoot,
+        workflowRunArtifactPath: artifactPathSchema.parse(`${artifactRoot}/workflow-run.json`)
+      };
+    } catch (error2) {
+      if (isNodeErrorCode(error2, "EEXIST")) continue;
+      throw error2;
+    }
+  }
+  throw new Error(`Unable to create a unique workflow run for ${input.workflow} after 1000 attempts.`);
+}
+function guidanceArtifactPath(paths, fileName) {
+  return artifactPathSchema.parse(`${paths.artifactRoot}/${fileName}`);
+}
+async function writeGuidanceRun(input) {
+  const document = {
+    schemaVersion: 1,
+    kind: "workflow_run",
+    workflow: input.paths.workflow,
+    runId: input.paths.runId,
+    createdAt: input.paths.createdAt,
+    status: input.status,
+    input: input.runInput,
+    outputs: input.outputs,
+    nextAction: input.nextAction,
+    ...input.executor === void 0 ? {} : { executor: input.executor },
+    diagnostics: input.diagnostics ?? []
+  };
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.paths.workflowRunArtifactPath,
+    text: stableProtocolJson(document)
+  });
+  return document;
+}
+async function runGuidanceExecutor(input) {
+  const selected = await selectExecutionAdapterKind(input.explicitExecutor);
+  if (typeof selected !== "string") return usageError(selected.diagnostic.message);
+  const contextPackArtifactPath = guidanceArtifactPath(input.paths, "guidance-context.md");
+  const promptArtifactPath = guidanceArtifactPath(input.paths, "executor-prompt.md");
+  const resultArtifactPath = guidanceArtifactPath(input.paths, "executor-result.json");
+  const rawLogArtifactPath = guidanceArtifactPath(input.paths, "executor-raw.log");
+  const redactedLogArtifactPath = guidanceArtifactPath(input.paths, "executor-redacted.log");
+  const contextPack = [
+    `# Legion ${input.workflow} Context`,
+    "",
+    `Workflow: ${input.workflow}`,
+    `Topic: ${input.topic}`,
+    `Repository: ${input.context.repositoryRoot}`,
+    `Run: ${input.paths.runId}`,
+    ""
+  ].join("\n");
+  await writeProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: contextPackArtifactPath,
+    text: contextPack
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: input.prompt
+  });
+  const contextPackAbsolutePath = await prepareProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: contextPackArtifactPath
+  });
+  const promptAbsolutePath = await prepareProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: promptArtifactPath
+  });
+  const resultAbsolutePath = await prepareProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: resultArtifactPath
+  });
+  const rawLogAbsolutePath = await prepareProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: rawLogArtifactPath
+  });
+  const redactedLogAbsolutePath = await prepareProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: redactedLogArtifactPath
+  });
+  const projectId = await guidanceProjectId(input.context.repositoryRoot);
+  const changeId = formatEntityId("change", `guidance-${input.workflow}`);
+  const requirementId = formatEntityId("requirement", `guidance-${input.workflow}`);
+  const oracleId = formatEntityId("oracle", `guidance-${input.workflow}`);
+  const task = taskContractSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: input.paths.createdAt,
+    kind: "task-contract",
+    id: formatEntityId("contract", `guidance-${input.workflow}`),
+    projectId,
+    changeId,
+    revision: 1,
+    title: `Legion ${input.workflow}: ${input.topic}`,
+    objective: input.prompt,
+    requirementIds: [requirementId],
+    wave: "A",
+    agents: ["workflow-guide"],
+    dependencies: [],
+    context: {
+      specRefs: [],
+      designRefs: [],
+      predecessorArtifacts: []
+    },
+    scope: {
+      read: [contextPackArtifactPath],
+      write: [resultArtifactPath],
+      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      sequentialFiles: []
+    },
+    interfaces: {
+      consumes: [{ name: "GuidanceRequest", description: "The workflow guidance request." }],
+      produces: [{ name: "GuidanceResult", description: "The structured guidance result." }]
+    },
+    oracleRefs: [oracleId],
+    verification: [
+      {
+        command: "legion",
+        args: ["status"],
+        expectedExitCode: 0,
+        timeoutMs: 12e4
+      }
+    ],
+    risk: {
+      tier: "R1",
+      reasons: ["Guidance commands are human-in-loop and do not publish or release."]
+    },
+    approvals: [],
+    completion: {
+      expectedArtifacts: [],
+      requiredEvidence: ["guidance markdown artifact"],
+      blockedConditions: ["The executor cannot produce guidance."]
+    }
+  });
+  const result = await adapterForKind(selected).run({
+    repositoryRoot: input.context.repositoryRoot,
+    changeId,
+    runId: formatEntityId("run", guidanceEntitySuffix(input.workflow, input.paths.runId)),
+    task,
+    mode: input.workflow === "retro" ? "review" : "build",
+    executor: selected,
+    readOnly: input.readOnly,
+    prompt: input.prompt,
+    contextPackArtifactPath,
+    contextPackAbsolutePath,
+    promptArtifactPath,
+    promptAbsolutePath,
+    resultArtifactPath,
+    resultAbsolutePath,
+    rawLogArtifactPath,
+    rawLogAbsolutePath,
+    redactedLogArtifactPath,
+    redactedLogAbsolutePath
+  });
+  return {
+    executor: selected,
+    result,
+    promptArtifactPath,
+    resultArtifactPath,
+    rawLogArtifactPath,
+    redactedLogArtifactPath
+  };
+}
+async function latestGuidanceRuns(input) {
+  const workflows = input.workflows ?? ["explore", "map", "advise", "council", "retro", "learn", "milestone", "quick", "polish"];
+  const limit = input.limitPerWorkflow ?? 3;
+  const runs = [];
+  for (const workflow of workflows) {
+    const workflowRoot = path20.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    let entries;
+    try {
+      entries = await readdir8(workflowRoot, { withFileTypes: true });
+    } catch (error2) {
+      if (isNodeErrorCode(error2, "ENOENT")) continue;
+      throw error2;
+    }
+    const workflowRuns = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const runPath = path20.join(workflowRoot, entry.name, "workflow-run.json");
+      try {
+        const parsed = JSON.parse(await readFile12(runPath, "utf8"));
+        if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
+      } catch {
+        continue;
+      }
+    }
+    workflowRuns.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.runId.localeCompare(left.runId));
+    runs.push(...workflowRuns.slice(0, limit));
+  }
+  runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.runId.localeCompare(left.runId));
+  return runs;
+}
+async function guidanceProjectId(repositoryRoot) {
+  const project = await loadProject({ repositoryRoot });
+  if (project.ok) return project.project.id;
+  return formatEntityId("project", "guidance");
+}
+function guidanceEntitySuffix(workflow, runId) {
+  const prefix = `guidance-${workflow}-`;
+  const maxSlugLength = Math.max(2, 63 - prefix.length);
+  return `${prefix}${slugFromName(runId).slice(0, maxSlugLength).replace(/-+$/g, "")}`;
+}
+function guidancePrompt(input) {
+  return [
+    `# Legion ${input.workflow}`,
+    "",
+    "You are preparing human-in-loop workflow guidance. Do not publish, deploy, release, or mutate unrelated project files.",
+    "",
+    `Topic: ${input.topic}`,
+    "",
+    "Return a JSON object compatible with the Legion executor result schema:",
+    '{ "status": "succeeded", "summary": "...", "filesChanged": [], "commandsRun": [], "findings": [] }',
+    "",
+    "The summary must cover these sections:",
+    ...input.requiredSections.map((section) => `- ${section}`),
+    ""
+  ].join("\n");
+}
+function renderGuidanceMarkdown(input) {
+  const lines = [`# ${input.title}`, "", `Topic: ${input.topic}`, "", "## Summary", "", input.summary, ""];
+  for (const section of input.sections) {
+    lines.push(`## ${section.heading}`, "");
+    if (typeof section.body === "string") {
+      lines.push(section.body, "");
+    } else {
+      lines.push(...section.body.map((entry) => `- ${entry}`), "");
+    }
+  }
+  return `${lines.join("\n").trimEnd()}
+`;
+}
+function isNodeErrorCode(error2, code) {
+  return error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === code;
+}
+
+// packages/cli/src/workflow/codebase-map.ts
+var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  ".legion",
+  ".worktrees",
+  "node_modules",
+  "dist",
+  "coverage",
+  ".turbo",
+  ".cache",
+  "target",
+  "build",
+  ".next"
+]);
+var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".c",
+  ".cc",
+  ".cpp",
+  ".cs",
+  ".css",
+  ".go",
+  ".h",
+  ".hpp",
+  ".html",
+  ".java",
+  ".js",
+  ".json",
+  ".jsx",
+  ".kt",
+  ".kts",
+  ".md",
+  ".mjs",
+  ".py",
+  ".rs",
+  ".sql",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".yaml",
+  ".yml"
+]);
+async function refreshCodebaseMap(input) {
+  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  const files = await collectSourceFiles(input.repositoryRoot, scope);
+  const map = {
+    schemaVersion: 1,
+    kind: "codebase_map",
+    generatedAt: input.paths.createdAt,
+    scope,
+    sourceFingerprint: fingerprintFiles(files),
+    sourceFileCount: files.length,
+    files
+  };
+  const codebaseArtifactPath = guidanceArtifactPath(input.paths, "codebase.md");
+  const indexArtifactPath = guidanceArtifactPath(input.paths, "index.jsonl");
+  const symbolsArtifactPath = guidanceArtifactPath(input.paths, "symbols.json");
+  const searchArtifactPath = guidanceArtifactPath(input.paths, "search.md");
+  const mapArtifactPath = guidanceArtifactPath(input.paths, "map.json");
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: codebaseArtifactPath,
+    text: renderCodebaseMarkdown(map)
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: indexArtifactPath,
+    text: `${files.map((file) => stableProtocolJson(file).trimEnd()).join("\n")}
+`
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: symbolsArtifactPath,
+    text: stableProtocolJson({
+      schemaVersion: 1,
+      kind: "codebase_symbols",
+      generatedAt: map.generatedAt,
+      symbols: files.flatMap((file) => file.symbols.map((symbol) => ({ symbol, path: file.path })))
+    })
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: searchArtifactPath,
+    text: renderSearchMarkdown(map)
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: mapArtifactPath,
+    text: stableProtocolJson(map)
+  });
+  return {
+    map,
+    codebaseArtifactPath,
+    indexArtifactPath,
+    symbolsArtifactPath,
+    searchArtifactPath,
+    mapArtifactPath
+  };
+}
+async function getLatestCodebaseMap(repositoryRoot) {
+  const runs = await latestGuidanceRuns({ repositoryRoot, workflows: ["map"], limitPerWorkflow: 20 });
+  for (const run of runs) {
+    const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
+    if (artifactPath === void 0) continue;
+    try {
+      return JSON.parse(await readFile13(path21.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+    } catch {
+      continue;
+    }
+  }
+  return void 0;
+}
+async function currentCodebaseFingerprint(input) {
+  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  const files = await collectSourceFiles(input.repositoryRoot, scope);
+  return {
+    scope,
+    sourceFingerprint: fingerprintFiles(files),
+    sourceFileCount: files.length
+  };
+}
+function queryCodebaseMap(map, query, limit = 10) {
+  const terms = tokenize(query);
+  if (terms.length === 0) return [];
+  return map.files.map((file) => {
+    const haystack = [
+      file.path,
+      file.summary,
+      ...file.symbols,
+      ...file.headings
+    ].join(" ").toLowerCase();
+    const score = terms.reduce((total, term) => total + occurrences(haystack, term), 0);
+    return { file, score };
+  }).filter((entry) => entry.score > 0).sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path)).slice(0, limit).map((entry) => ({
+    path: entry.file.path,
+    score: entry.score,
+    symbols: entry.file.symbols.slice(0, 8),
+    summary: entry.file.summary
+  }));
+}
+function normalizeScope(repositoryRoot, scope) {
+  if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
+  const absolute = path21.resolve(repositoryRoot, scope);
+  const relative = path21.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  if (relative.length === 0) return ".";
+  if (relative.startsWith("../") || path21.isAbsolute(relative)) {
+    throw new Error(`Map scope must stay inside the repository: ${scope}`);
+  }
+  return relative;
+}
+async function collectSourceFiles(repositoryRoot, scope) {
+  const root = scope === "." ? repositoryRoot : path21.join(repositoryRoot, ...scope.split("/"));
+  const rootStat = await stat6(root);
+  const candidates = rootStat.isFile() ? [root] : await walk(root);
+  const files = [];
+  for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
+    const relative = path21.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path21.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path21.basename(relative))) continue;
+    const fileStat = await stat6(absolutePath);
+    if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
+    const bytes = await readFile13(absolutePath);
+    if (bytes.includes(0)) continue;
+    const text = bytes.toString("utf8");
+    const lines = text.split(/\r?\n/u);
+    const symbols = extractSymbols(text);
+    const headings = extractHeadings(text);
+    files.push({
+      path: relative,
+      sha256: sha256(bytes),
+      sizeBytes: fileStat.size,
+      lineCount: lines.length,
+      symbols,
+      headings,
+      summary: summarizeFile(relative, lines, symbols, headings)
+    });
+  }
+  return files;
+}
+async function walk(root) {
+  const files = [];
+  const entries = await readdir9(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
+    const absolute = path21.join(root, entry.name);
+    if (entry.isDirectory()) {
+      if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
+      files.push(...await walk(absolute));
+      continue;
+    }
+    if (entry.isFile()) files.push(absolute);
+  }
+  return files;
+}
+function extractSymbols(text) {
+  const symbols = /* @__PURE__ */ new Set();
+  const patterns = [
+    /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?class\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?type\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gmu,
+    /^\s*def\s+([A-Za-z_][\w]*)/gmu,
+    /^\s*class\s+([A-Za-z_][\w]*)/gmu
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[1] !== void 0) symbols.add(match[1]);
+    }
+  }
+  return [...symbols].sort((left, right) => left.localeCompare(right)).slice(0, 50);
+}
+function extractHeadings(text) {
+  return text.split(/\r?\n/u).map((line) => /^#{1,6}\s+(.+)$/u.exec(line.trim())?.[1]?.trim()).filter((value) => value !== void 0 && value.length > 0).slice(0, 20);
+}
+function summarizeFile(relative, lines, symbols, headings) {
+  const firstContent = lines.map((line) => line.trim()).find((line) => line.length > 0 && !line.startsWith("//") && !line.startsWith("#"));
+  const parts = [`${relative} has ${lines.length} lines`];
+  if (symbols.length > 0) parts.push(`symbols: ${symbols.slice(0, 6).join(", ")}`);
+  if (headings.length > 0) parts.push(`headings: ${headings.slice(0, 3).join(", ")}`);
+  if (firstContent !== void 0) parts.push(`first content: ${firstContent.slice(0, 120)}`);
+  return parts.join("; ");
+}
+function fingerprintFiles(files) {
+  return sha256(Buffer.from(files.map((file) => `${file.path}\0${file.sha256}`).join("\n"), "utf8"));
+}
+function renderCodebaseMarkdown(map) {
+  const byExtension = /* @__PURE__ */ new Map();
+  for (const file of map.files) {
+    const extension = path21.extname(file.path).toLowerCase() || "(none)";
+    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
+  }
+  const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
+  return [
+    "# Codebase Map",
+    "",
+    `Generated: ${map.generatedAt}`,
+    `Scope: ${map.scope}`,
+    `Source fingerprint: ${map.sourceFingerprint}`,
+    `Source files: ${map.sourceFileCount}`,
+    "",
+    "## File Types",
+    "",
+    ...extensionRows,
+    "",
+    "## Files",
+    "",
+    ...map.files.slice(0, 200).map((file) => `- ${file.path} (${file.lineCount} lines): ${file.summary}`),
+    ""
+  ].join("\n");
+}
+function renderSearchMarkdown(map) {
+  return [
+    "# Codebase Search Index",
+    "",
+    "Use `legion map --query <text>` to search this deterministic index.",
+    "",
+    ...map.files.map((file) => [
+      `## ${file.path}`,
+      "",
+      file.summary,
+      file.symbols.length > 0 ? `Symbols: ${file.symbols.join(", ")}` : "Symbols: none",
+      ""
+    ].join("\n")),
+    ""
+  ].join("\n");
+}
+function tokenize(value) {
+  return value.toLowerCase().split(/[^a-z0-9_/-]+/u).map((entry) => entry.trim()).filter((entry) => entry.length >= 2);
+}
+function occurrences(value, term) {
+  let count = 0;
+  let index = value.indexOf(term);
+  while (index !== -1) {
+    count += 1;
+    index = value.indexOf(term, index + term.length);
+  }
+  return count;
+}
+function isTextLikeName(name) {
+  return [
+    "README",
+    "LICENSE",
+    "CHANGELOG",
+    "Dockerfile"
+  ].includes(name);
+}
+function sha256(bytes) {
+  return createHash17("sha256").update(bytes).digest("hex");
+}
+
+// packages/cli/src/workflow/state.ts
+import { readdir as readdir11 } from "node:fs/promises";
+import path23 from "node:path";
+
+// packages/cli/src/workflow/context.ts
+import { readdir as readdir10, stat as stat7 } from "node:fs/promises";
+import path22 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -24529,17 +25501,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path20.join(repositoryRoot, ".legion");
+  const legionRoot = path22.join(repositoryRoot, ".legion");
   if (!await pathExists5(legionRoot)) return [];
-  const entries = await readdir8(legionRoot, { withFileTypes: true });
+  const entries = await readdir10(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path20.join(legionRoot, "project");
-  const manifestPath = path20.join(projectRoot, "project.json");
+  const projectRoot = path22.join(legionRoot, "project");
+  const manifestPath = path22.join(projectRoot, "project.json");
   if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -24550,7 +25522,7 @@ async function detectPreInitCollision2(repositoryRoot) {
 }
 async function pathExists5(absolutePath) {
   try {
-    await stat6(absolutePath);
+    await stat7(absolutePath);
     return true;
   } catch (error2) {
     if (isEnoent5(error2)) return false;
@@ -24694,12 +25666,12 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path21.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path23.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir9(changesRoot, { withFileTypes: true });
+    entries = await readdir11(changesRoot, { withFileTypes: true });
   } catch (error2) {
-    if (isNodeErrorCode(error2, "ENOENT")) {
+    if (isNodeErrorCode2(error2, "ENOENT")) {
       return noWorkflowChange(changesRoot);
     }
     const message = error2 instanceof Error ? error2.message : String(error2);
@@ -24765,7 +25737,7 @@ function noWorkflowChange(changesRoot) {
     ]
   };
 }
-function isNodeErrorCode(error2, code) {
+function isNodeErrorCode2(error2, code) {
   return error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === code;
 }
 
@@ -24782,11 +25754,24 @@ async function handleStatusCommand(context) {
     return helpResult(STATUS_HELP);
   }
   const workflowState = await resolveWorkflowState(context);
+  const [guidanceRuns, mapStatus] = await Promise.all([
+    latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 1 }),
+    resolveMapStatus(context)
+  ]);
   return success(
     {
       ok: true,
       status: "workflow_status",
       workflowState,
+      guidance: {
+        latestRuns: guidanceRuns.map((run) => ({
+          workflow: run.workflow,
+          runId: run.runId,
+          status: run.status,
+          nextAction: run.nextAction
+        }))
+      },
+      map: mapStatus,
       nextAction: workflowState.nextAction,
       diagnostics: workflowState.diagnostics
     },
@@ -24794,14 +25779,35 @@ async function handleStatusCommand(context) {
       `Stage: ${workflowState.stage}`,
       `Project: ${workflowState.projectId ?? "not initialized"}`,
       `Current specs: ${workflowState.currentSpecCount}`,
+      `Map: ${mapStatus.status}`,
+      `Guidance runs: ${guidanceRuns.length}`,
       renderNextAction(workflowState.nextAction)
     ].join("\n")
   );
 }
+async function resolveMapStatus(context) {
+  const latest = await getLatestCodebaseMap(context.repositoryRoot);
+  if (latest === void 0) return { status: "missing" };
+  try {
+    const current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, scope: latest.scope });
+    return {
+      status: current.sourceFingerprint === latest.sourceFingerprint ? "fresh" : "stale",
+      sourceFileCount: current.sourceFileCount,
+      scope: latest.scope,
+      sourceFingerprint: latest.sourceFingerprint
+    };
+  } catch {
+    return {
+      status: "unknown",
+      scope: latest.scope,
+      sourceFingerprint: latest.sourceFingerprint
+    };
+  }
+}
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import path22 from "node:path";
+import path24 from "node:path";
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -24889,8 +25895,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path22.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path22.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path24.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path24.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function buildChangeBundleInput(options) {
@@ -25056,8 +26062,8 @@ function buildOracleArtifactInput(options) {
 }
 
 // packages/cli/src/workflow/phase-compat.ts
-import { readFile as readFile11 } from "node:fs/promises";
-import path23 from "node:path";
+import { readFile as readFile14 } from "node:fs/promises";
+import path25 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -25105,17 +26111,17 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path23.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path23.join(context.repositoryRoot, "ROADMAP.md")
+    path25.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path25.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path23.isAbsolute(roadmapPath) ? roadmapPath : path23.resolve(repositoryRoot, roadmapPath);
+  return path25.isAbsolute(roadmapPath) ? roadmapPath : path25.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
-    return await readFile11(sourcePath, "utf8");
+    return await readFile14(sourcePath, "utf8");
   } catch (error2) {
     if (isEnoent6(error2)) return void 0;
     throw error2;
@@ -25415,141 +26421,11 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
 
 // packages/cli/src/commands/workflow/build.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
-import { readFile as readFile14 } from "node:fs/promises";
+import { readFile as readFile16 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir10, readFile as readFile13 } from "node:fs/promises";
-import path24 from "node:path";
-
-// packages/cli/src/workflow/executor/result.ts
-import { readFile as readFile12, writeFile as writeFile5 } from "node:fs/promises";
-var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
-var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
-function redactTranscript(text) {
-  return text.replace(JSON_CREDENTIAL_RE, (match) => match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"')).replace(SECRET_ASSIGNMENT_RE, (_match, key) => `${key}=[REDACTED_SECRET]`);
-}
-async function writeProjectTextFile(input) {
-  const absolutePath = await prepareProjectTextFile(input);
-  await writeFile5(absolutePath, input.text, "utf8");
-  return absolutePath;
-}
-async function prepareProjectTextFile(input) {
-  const resolved = await ensureProjectArtifactParent({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: input.artifactPath
-  });
-  return resolved.absolutePath;
-}
-async function writeProjectExecutionResult(input) {
-  return writeProjectTextFile({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: input.artifactPath,
-    text: stableProtocolJson(input.result)
-  });
-}
-async function readOptionalText(filePath) {
-  try {
-    return await readFile12(filePath, "utf8");
-  } catch (error2) {
-    if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") return "";
-    throw error2;
-  }
-}
-function normalizeExecutionResult(input, fallback) {
-  const value = isRecord8(input) ? input : {};
-  const status2 = parseStatus(value["status"]) ?? fallback.status;
-  const commandsRun = parseCommands(value["commandsRun"]);
-  const findings = parseFindings(value["findings"]);
-  const reviewVerdicts = parseReviewVerdicts(value["reviewVerdicts"]);
-  return {
-    ok: status2 === "succeeded",
-    status: status2,
-    summary: parseString(value["summary"]) ?? fallback.summary,
-    filesChanged: parseStringArray(value["filesChanged"]),
-    commandsRun,
-    findings,
-    ...reviewVerdicts === void 0 ? {} : { reviewVerdicts },
-    ...fallback.rawOutput === void 0 ? {} : { rawOutput: fallback.rawOutput },
-    ...fallback.exitCode === void 0 ? {} : { exitCode: fallback.exitCode }
-  };
-}
-function parseResultFromText(text) {
-  const trimmed = text.trim();
-  if (trimmed.length === 0) return void 0;
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const match = /\{[\s\S]*\}/.exec(trimmed);
-    if (match?.[0] === void 0) return void 0;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return void 0;
-    }
-  }
-}
-function isRecord8(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function parseString(value) {
-  return typeof value === "string" && value.length > 0 ? value : void 0;
-}
-function parseStringArray(value) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((entry) => typeof entry === "string" && entry.length > 0);
-}
-function parseStatus(value) {
-  return value === "succeeded" || value === "failed" || value === "blocked" ? value : void 0;
-}
-function parseCommands(value) {
-  if (!Array.isArray(value)) return [];
-  const commands = [];
-  for (const entry of value) {
-    if (!isRecord8(entry)) continue;
-    const command = parseString(entry["command"]);
-    const args = parseStringArray(entry["args"]);
-    const exitCode = entry["exitCode"];
-    if (command === void 0 || typeof exitCode !== "number" || !Number.isInteger(exitCode)) continue;
-    commands.push({ command, args, exitCode });
-  }
-  return commands;
-}
-function parseFindings(value) {
-  if (!Array.isArray(value)) return [];
-  const findings = [];
-  for (const entry of value) {
-    if (!isRecord8(entry)) continue;
-    const id = parseString(entry["id"]);
-    const title = parseString(entry["title"]);
-    const body = parseString(entry["body"]);
-    const severity = entry["severity"];
-    if (id === void 0 || title === void 0 || body === void 0 || severity !== "minor" && severity !== "major" && severity !== "blocking") {
-      continue;
-    }
-    const evidenceRefs = parseStringArray(entry["evidenceRefs"]);
-    findings.push({
-      id,
-      title,
-      body,
-      severity,
-      ...evidenceRefs.length === 0 ? {} : { evidenceRefs }
-    });
-  }
-  return findings;
-}
-function parseReviewVerdicts(value) {
-  if (!isRecord8(value)) return void 0;
-  const specification = parseReviewVerdict(value["specification"]);
-  const integration = parseReviewVerdict(value["integration"]);
-  const evidence = parseReviewVerdict(value["evidence"]);
-  if (specification === void 0 || integration === void 0 || evidence === void 0) return void 0;
-  return { specification, integration, evidence };
-}
-function parseReviewVerdict(value) {
-  return value === "pass" || value === "fail" || value === "unknown" || value === "not_verified" || value === "not_applicable" ? value : void 0;
-}
-
-// packages/cli/src/workflow/context-pack.ts
+import { readdir as readdir12, readFile as readFile15 } from "node:fs/promises";
+import path26 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -25594,13 +26470,13 @@ function buildExecutionPrompt(input) {
     "## Scope",
     "",
     "Read scope:",
-    ...input.task.scope.read.map((entry) => `- ${entry}`),
+    ...(input.task.scope?.read ?? []).map((entry) => `- ${entry}`),
     "",
     writeScopeLabel,
-    ...input.task.scope.write.map((entry) => `- ${entry}`),
+    ...(input.task.scope?.write ?? []).map((entry) => `- ${entry}`),
     "",
     "Forbidden scope:",
-    ...input.task.scope.forbidden.map((entry) => `- ${entry}`),
+    ...(input.task.scope?.forbidden ?? []).map((entry) => `- ${entry}`),
     "",
     "## Harness Rules",
     "",
@@ -25613,11 +26489,14 @@ function buildExecutionPrompt(input) {
   ].join("\n");
 }
 async function renderContextPack(input) {
-  const [project, change, specs, workflowRecords] = await Promise.all([
+  const [project, change, specs, workflowRecords, guidanceRuns, codebaseMap, learnIndex] = await Promise.all([
     loadProject({ repositoryRoot: input.repositoryRoot }),
     loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId }),
     listCurrentSpecs({ repositoryRoot: input.repositoryRoot }),
-    readRecentWorkflowRecords(input.repositoryRoot)
+    readRecentWorkflowRecords(input.repositoryRoot),
+    latestGuidanceRuns({ repositoryRoot: input.repositoryRoot, limitPerWorkflow: 2 }),
+    getLatestCodebaseMap(input.repositoryRoot),
+    readKnowledgeIndex(input.repositoryRoot)
   ]);
   return [
     `# Legion Context Pack: ${input.runId}`,
@@ -25661,6 +26540,34 @@ async function renderContextPack(input) {
     "",
     workflowRecords.length === 0 ? "No recent workflow records found." : workflowRecords.join("\n\n"),
     "",
+    "## Guidance Runs",
+    "",
+    guidanceRuns.length === 0 ? "No guidance runs found." : fencedJson(guidanceRuns.map((run) => ({
+      workflow: run.workflow,
+      runId: run.runId,
+      status: run.status,
+      outputs: run.outputs,
+      nextAction: run.nextAction
+    }))),
+    "",
+    "## Codebase Map",
+    "",
+    codebaseMap === void 0 ? "No codebase map found. Run legion map --refresh when source context is needed." : fencedJson({
+      generatedAt: codebaseMap.generatedAt,
+      scope: codebaseMap.scope,
+      sourceFingerprint: codebaseMap.sourceFingerprint,
+      sourceFileCount: codebaseMap.sourceFileCount,
+      topFiles: codebaseMap.files.slice(0, 20).map((file) => ({
+        path: file.path,
+        summary: file.summary,
+        symbols: file.symbols.slice(0, 8)
+      }))
+    }),
+    "",
+    "## Learned Project Guidance",
+    "",
+    learnIndex,
+    "",
     "## Verification Commands",
     "",
     ...input.task.verification.map((entry) => `- ${[entry.command, ...entry.args].join(" ")} (expected ${entry.expectedExitCode})`),
@@ -25679,22 +26586,22 @@ function diagnosticMessage(value) {
   return String(value);
 }
 async function readRecentWorkflowRecords(repositoryRoot) {
-  const workflows = ["learn", "map", "explore", "advise"];
+  const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path24.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path26.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir10(workflowRoot, { withFileTypes: true });
+      entries = await readdir12(workflowRoot, { withFileTypes: true });
     } catch (error2) {
       if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") continue;
       throw error2;
     }
-    for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = path24.join(workflowRoot, entry.name);
+    for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
+      const absolutePath = entry.isDirectory() ? path26.join(workflowRoot, entry.name, "workflow-run.json") : path26.join(workflowRoot, entry.name);
       let text = "";
       try {
-        text = await readFile13(absolutePath, "utf8");
+        text = await readFile15(absolutePath, "utf8");
       } catch {
         continue;
       }
@@ -25709,216 +26616,24 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   }
   return records;
 }
+async function readKnowledgeIndex(repositoryRoot) {
+  const indexPath = path26.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  try {
+    const text = await readFile15(indexPath, "utf8");
+    return ["```json", truncate3(text.trim(), 4e3), "```"].join("\n");
+  } catch {
+    return "No learned project guidance found.";
+  }
+}
 function truncate3(text, maxLength) {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}
 ... [truncated]`;
 }
 
-// packages/cli/src/workflow/executor/adapters.ts
-import { execFile as execFile4, spawn } from "node:child_process";
-import { promisify as promisify4 } from "node:util";
-var execFileAsync2 = promisify4(execFile4);
-function codexExecArgs(input) {
-  return [
-    "exec",
-    "-c",
-    'approval_policy="never"',
-    "-C",
-    input.repositoryRoot,
-    "--sandbox",
-    input.sandbox,
-    "--json",
-    "--output-last-message",
-    input.outputLastMessagePath,
-    "-"
-  ];
-}
-async function selectExecutionAdapterKind(explicit) {
-  if (explicit !== void 0) {
-    if (explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
-    return {
-      ok: false,
-      diagnostic: {
-        code: "invalid_executor",
-        message: `Unsupported executor "${explicit}". Use codex, manual, or fake.`
-      }
-    };
-  }
-  return await codexAvailable() ? "codex" : "manual";
-}
-function adapterForKind(kind) {
-  switch (kind) {
-    case "codex":
-      return codexAdapter;
-    case "manual":
-      return manualAdapter;
-    case "fake":
-      return fakeAdapter;
-  }
-}
-async function codexAvailable() {
-  try {
-    const invocation = codexInvocation(["exec", "--help"]);
-    await execFileAsync2(invocation.command, invocation.args, {
-      timeout: 5e3,
-      windowsHide: true
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-var fakeAdapter = {
-  kind: "fake",
-  async run(request) {
-    const result = {
-      ok: true,
-      status: "succeeded",
-      summary: fakeSummary(request),
-      filesChanged: [],
-      commandsRun: [
-        {
-          command: "legion-executor",
-          args: ["fake", request.mode],
-          exitCode: 0
-        }
-      ],
-      findings: [],
-      ...request.mode === "review" ? {
-        reviewVerdicts: {
-          specification: "pass",
-          integration: "pass",
-          evidence: "pass"
-        }
-      } : {}
-    };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}
-`) });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
-    return result;
-  }
-};
-var manualAdapter = {
-  kind: "manual",
-  async run(request) {
-    const summary = `Manual executor prepared ${request.mode} instructions at ${request.promptArtifactPath}.`;
-    const result = {
-      ok: false,
-      status: "blocked",
-      summary,
-      filesChanged: [],
-      commandsRun: [
-        {
-          command: "legion-executor",
-          args: ["manual", request.mode],
-          exitCode: 1
-        }
-      ],
-      findings: [
-        {
-          id: "manual-execution-required",
-          title: "Manual execution required",
-          body: "No executable adapter was selected. Review the prompt and run the requested work manually, then rerun the command with an executor.",
-          severity: "blocking"
-        }
-      ]
-    };
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
-    return result;
-  }
-};
-var codexAdapter = {
-  kind: "codex",
-  async run(request) {
-    const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
-    const outputLastMessagePath = await prepareProjectTextFile({
-      repositoryRoot: request.repositoryRoot,
-      artifactPath: outputLastMessageArtifactPath
-    });
-    const args = codexExecArgs({
-      repositoryRoot: request.repositoryRoot,
-      sandbox: request.readOnly ? "read-only" : "workspace-write",
-      outputLastMessagePath
-    });
-    const invocation = codexInvocation(args);
-    const processResult = await spawnWithInput(invocation.command, invocation.args, request.prompt, request.repositoryRoot);
-    const rawOutput = [
-      processResult.stdout,
-      processResult.stderr
-    ].filter((entry) => entry.length > 0).join("\n");
-    const lastMessage = await readOptionalText(outputLastMessagePath);
-    const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status2 = processResult.exitCode === 0 ? "succeeded" : "failed";
-    const result = normalizeExecutionResult(parsed, {
-      status: status2,
-      summary: processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
-      rawOutput,
-      exitCode: processResult.exitCode
-    });
-    const redacted = redactTranscript(rawOutput);
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
-` });
-    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
-` });
-    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
-    return result;
-  }
-};
-function codexInvocation(args) {
-  if (process.platform !== "win32") {
-    return { command: "codex", args };
-  }
-  return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", "codex", ...args]
-  };
-}
-function fakeSummary(request) {
-  if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;
-  if (request.mode === "fix") return `Fake fix cycle completed for ${request.task.id}.`;
-  return `Fake build executed ${request.task.id}.`;
-}
-async function spawnWithInput(command, args, input, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.stdin.on("error", () => {
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      resolve({
-        exitCode: code ?? 1,
-        stdout,
-        stderr
-      });
-    });
-    child.stdin.end(input);
-  });
-}
-
 // packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash17 } from "node:crypto";
-import path25 from "node:path";
+import { createHash as createHash18 } from "node:crypto";
+import path27 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -25936,7 +26651,7 @@ function reviewIdForChange(input) {
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash17("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const digest = createHash18("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   const reservedLength = tail.length + digest.length + 1;
   const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
   if (prefixLength < 1) {
@@ -25952,7 +26667,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path25.join(repositoryRoot, ...artifactPath.split("/"));
+  return path27.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -26363,7 +27078,7 @@ function taskRunDocument(input) {
 async function evidenceEntryForExecution(input) {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
-  const logBytes = await readFile14(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
+  const logBytes = await readFile16(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
   const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
   const traceRefs = [
     {
@@ -26423,7 +27138,7 @@ function commandForEvidence(result, logBytes, startedAt, endedAt) {
   };
 }
 async function referenceForFile(repositoryRoot, artifactPath) {
-  const bytes = await readFile14(absoluteArtifactPath(repositoryRoot, artifactPath));
+  const bytes = await readFile16(absoluteArtifactPath(repositoryRoot, artifactPath));
   return artifactReferenceForContent({
     path: artifactPath,
     content: bytes
@@ -27258,228 +27973,1040 @@ function blockedReview(diagnostics, action, extras = {}) {
   );
 }
 
+// packages/cli/src/commands/workflow/ad-hoc.ts
+import { readFile as readFile17 } from "node:fs/promises";
+import path29 from "node:path";
+
+// packages/cli/src/workflow/ad-hoc-taskgraph.ts
+async function createAdHocTaskgraph(input) {
+  const createdAt = input.createdAt ?? currentUtcTimestamp();
+  const baseGitSha = resolveBaseGitSha(input.repositoryRoot);
+  const owner = firstDecisionOwner(input.project);
+  const suffix = adHocSuffix(input.kind, input.title, createdAt, input.idSlug);
+  const requirementId = formatEntityId("requirement", suffix);
+  const changeId = formatEntityId("change", suffix);
+  const oracleId = formatEntityId("oracle", suffix);
+  const contractId = formatEntityId("contract", suffix);
+  const currentSpecPath = artifactPathForRole({ role: "current-spec", requirementId });
+  const taskgraphPath2 = artifactPathForRole({ role: "taskgraph", changeId });
+  const verification = commandParts(input.verificationCommand ?? ["legion", "validate"]);
+  const requirement = requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: requirementId,
+    projectId: input.project.id,
+    priority: "must",
+    category: input.kind === "polish" ? "quality" : "behavior",
+    status: "accepted",
+    statement: input.objective,
+    acceptance: {
+      language: `${input.title} is complete when the requested work is implemented, verified, and reviewed.`,
+      criteria: [
+        input.objective,
+        "Build evidence is collected by legion build.",
+        "Review evidence is accepted by a human before ship readiness."
+      ],
+      oracleRefs: [oracleId]
+    },
+    traceRefs: [
+      {
+        path: currentSpecPath,
+        anchor: requirementId,
+        relation: "defines",
+        entity: { kind: "requirement", id: requirementId }
+      },
+      {
+        path: input.sourceArtifactPath,
+        anchor: suffix,
+        relation: "defines",
+        entity: { kind: "requirement", id: requirementId }
+      }
+    ],
+    supersedes: []
+  });
+  const currentSpecInput = {
+    repositoryRoot: input.repositoryRoot,
+    document: {
+      primaryRequirementId: requirementId,
+      capability: {
+        id: suffix,
+        title: input.title,
+        status: "active"
+      },
+      requirements: [requirement],
+      sections: {
+        purpose: input.objective,
+        behaviors: input.objective,
+        constraints: "Ad-hoc Legion work must remain scoped, evidence-backed, and human-reviewed.",
+        scenarios: `A maintainer runs legion ${input.kind} and then legion build to execute this work.`,
+        interfaces: `legion ${input.kind}`,
+        compatibility: "The generated taskgraph uses the same build/review path as roadmap phases.",
+        failureModes: "If artifacts cannot be written or validated, the command returns typed diagnostics.",
+        traceIds: [requirementId]
+      }
+    }
+  };
+  const currentSpec = await readCurrentSpec({
+    repositoryRoot: input.repositoryRoot,
+    requirementId
+  });
+  const spec = currentSpec.ok ? currentSpec : await createCurrentSpec(currentSpecInput);
+  if (!spec.ok) return spec;
+  const change = await createChangeBundle({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    projectId: input.project.id,
+    title: input.title,
+    summary: input.objective,
+    owners: [owner],
+    baseGitSha,
+    risk: {
+      tier: input.kind === "polish" ? "R1" : "R2",
+      reasons: [`${input.kind} work is explicitly requested and remains review-gated.`]
+    },
+    createdAt,
+    currentSpecs: [
+      {
+        requirementId: spec.document.primaryRequirementId,
+        expectedRevision: spec.document.revision
+      }
+    ],
+    deltaSpecs: [
+      {
+        operation: "modify",
+        requirementId,
+        proposedRequirement: requirement,
+        sections: currentSpecInput.document.sections,
+        rationale: `Create a typed ${input.kind} taskgraph for guided execution.`
+      }
+    ],
+    design: {
+      title: input.title,
+      body: [
+        `Source: ${input.sourceArtifactPath}`,
+        "",
+        input.objective
+      ].join("\n")
+    }
+  });
+  if (!change.ok) return change;
+  const oraclePath2 = artifactPathForRole({ role: "oracle", changeId, oracleId });
+  const oracle = await createOracleArtifact({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    baseGitSha,
+    oracle: oracleSchema.parse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "oracle",
+      id: oracleId,
+      projectId: input.project.id,
+      title: `${input.title} acceptance oracle`,
+      owner,
+      protectedPaths: [change.artifactPath],
+      sourceArtifacts: [change.reference],
+      expected: {
+        preconditions: ["The ad-hoc taskgraph exists and validates."],
+        postconditions: ["The requested work is implemented and backed by build evidence."],
+        evidence: ["Build and review evidence is attached through the standard Legion loop."]
+      },
+      requirementCoverage: [
+        {
+          requirementId,
+          coverage: "primary",
+          criteria: ["The ad-hoc request has been implemented, verified, and reviewed."]
+        }
+      ],
+      traceRefs: [
+        {
+          path: oraclePath2,
+          anchor: oracleId,
+          relation: "verifies",
+          entity: { kind: "requirement", id: requirementId }
+        }
+      ],
+      type: "inspectable",
+      execution: {
+        mode: "manual-inspection",
+        instructions: `Review implementation and evidence for: ${input.objective}`
+      }
+    })
+  });
+  if (!oracle.ok) return oracle;
+  const task = taskContractSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "task-contract",
+    id: contractId,
+    projectId: input.project.id,
+    changeId,
+    revision: 1,
+    title: input.title,
+    objective: input.objective,
+    requirementIds: [requirementId],
+    wave: "A",
+    agents: [input.kind === "polish" ? "code-polisher" : "workflow-implementer"],
+    dependencies: [],
+    context: {
+      specRefs: [],
+      designRefs: [change.bundle.artifactRevisions.find((entry) => entry.role === "design")?.artifact ?? change.reference],
+      predecessorArtifacts: [change.revision, oracle.revision].map((entry) => entry.artifact)
+    },
+    scope: {
+      read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
+      write: input.writeScope ?? [taskgraphPath2],
+      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      sequentialFiles: []
+    },
+    interfaces: {
+      consumes: [{ name: "AdHocRequest", description: `The ${input.kind} request prepared by Legion.` }],
+      produces: [{ name: "BuildEvidence", description: "Implementation and verification evidence." }]
+    },
+    oracleRefs: [oracleId],
+    verification: [
+      {
+        command: verification.command,
+        args: verification.args,
+        expectedExitCode: 0,
+        timeoutMs: 12e4
+      }
+    ],
+    risk: {
+      tier: input.kind === "polish" ? "R1" : "R2",
+      reasons: [`${input.kind} work is bounded by a generated task contract.`]
+    },
+    approvals: [],
+    completion: {
+      expectedArtifacts: [change.reference],
+      requiredEvidence: [`${verification.command} ${verification.args.join(" ")}`.trim()],
+      blockedConditions: ["Build evidence is missing or review rejects the result."]
+    }
+  });
+  const taskgraph = await writeTaskGraph({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    tasks: [task],
+    artifactInputs: [change.revision, oracle.revision],
+    baseGitSha
+  });
+  if (!taskgraph.ok) return taskgraph;
+  return {
+    ok: true,
+    status: "planned",
+    change,
+    oracle,
+    taskgraph,
+    taskgraphPath: taskgraphPath2,
+    taskId: task.id
+  };
+}
+function adHocSuffix(kind, title, createdAt, idSlug) {
+  if (idSlug !== void 0) {
+    return `${kind}-${slugFromName(idSlug).slice(0, 56).replace(/-+$/g, "")}`.slice(0, 63).replace(/-+$/g, "");
+  }
+  const timestamp = createdAt.replace(/[^0-9]/g, "").slice(0, 14);
+  const slug = slugFromName(title).slice(0, 48).replace(/-+$/g, "") || "task";
+  return `${kind}-${timestamp}-${slug}`.slice(0, 63).replace(/-+$/g, "");
+}
+function commandParts(parts) {
+  const command = parts[0] ?? "legion";
+  return {
+    command,
+    args: parts.slice(1)
+  };
+}
+
 // packages/cli/src/commands/workflow/record.ts
-import { mkdir as mkdir11, writeFile as writeFile6 } from "node:fs/promises";
-import path26 from "node:path";
+import { mkdir as mkdir12, writeFile as writeFile6 } from "node:fs/promises";
+import path28 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
 }
-async function recordStandaloneWorkflow(context, options) {
-  const createdAt = recordCreatedAt(context);
-  if (typeof createdAt !== "string") return createdAt;
-  const slug = slugFromName(options.slugSource);
-  const safeTimestamp = createdAt.replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+$/g, "");
-  const record2 = {
-    schemaVersion: 1,
-    kind: "workflow_record",
-    workflow: options.workflow,
-    createdAt,
-    input: options.input,
-    nextAction: options.nextAction
-  };
-  const recordContent = `${JSON.stringify(record2, null, 2)}
-`;
-  const artifactPath = await writeUniqueWorkflowRecord({
-    repositoryRoot: context.repositoryRoot,
-    workflow: options.workflow,
-    safeTimestamp,
-    slug,
-    content: recordContent
-  });
-  return success(
-    {
-      ok: true,
-      status: "recorded",
-      workflow: options.workflow,
-      createdAt,
-      artifactPath,
-      nextAction: options.nextAction,
-      diagnostics: []
-    },
-    [
-      `Recorded ${options.workflow} request.`,
-      `Artifact: ${artifactPath}`,
-      renderNextAction(options.nextAction)
-    ].join("\n")
-  );
-}
-async function writeUniqueWorkflowRecord(input) {
-  const artifactDirectory = `.legion/project/workflow/${input.workflow}`;
-  const absoluteDirectory = path26.join(input.repositoryRoot, ...artifactDirectory.split("/"));
-  await mkdir11(absoluteDirectory, { recursive: true });
-  for (let index = 0; index < 1e3; index += 1) {
-    const suffix = index === 0 ? "" : `-${index + 1}`;
-    const artifactPath = `${artifactDirectory}/${input.safeTimestamp}-${input.slug}${suffix}.json`;
-    const absolutePath = path26.join(input.repositoryRoot, ...artifactPath.split("/"));
-    try {
-      await writeFile6(absolutePath, input.content, { encoding: "utf8", flag: "wx" });
-      return artifactPath;
-    } catch (error2) {
-      if (isEexist(error2)) continue;
-      throw error2;
-    }
-  }
-  throw new Error(`Unable to create a unique workflow record for ${input.workflow} after 1000 attempts.`);
-}
-function recordCreatedAt(context) {
-  if (context.args.options.get("created-at") === true) {
-    return usageError("Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z.");
-  }
-  try {
-    return createdAtOption(context) ?? (/* @__PURE__ */ new Date()).toISOString();
-  } catch (error2) {
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
-  }
-}
-function isEexist(error2) {
-  return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "EEXIST");
-}
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
 var HELP = {
-  quick: "legion quick <task>\n\nRun one ad-hoc task with a task record and risk classification.",
-  advise: "legion advise <topic>\n\nRun read-only advisory analysis.",
-  polish: "legion polish [target]\n\nRun scoped cleanup as an ad-hoc workflow.",
-  learn: "legion learn <lesson>\n\nRecord project-specific operational learning."
+  quick: "legion quick <task>\n\nCreate a typed ad-hoc taskgraph and route it through legion build.",
+  advise: "legion advise <topic> [--executor codex|manual|fake]\n\nRun read-only advisory analysis and write guidance artifacts.",
+  polish: "legion polish [target]\n\nCreate a typed polish taskgraph scoped to the target or current worktree.",
+  learn: "legion learn <lesson>\n\nRecord project-specific operational learning and update the knowledge index."
 };
 async function handleAdHocWorkflow(context, command) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(HELP[command]);
   }
-  const text = positionalText(context);
   switch (command) {
     case "quick":
-      if (text === void 0) return usageError('legion quick requires a task. Example: legion quick "fix the failing tests".');
-      return recordStandaloneWorkflow(context, {
-        workflow: "quick",
-        input: { text },
-        nextAction: nextAction("legion build", "The task request is recorded and ready for implementation."),
-        slugSource: text
-      });
-    case "advise":
-      if (text === void 0) return usageError('legion advise requires a topic. Example: legion advise "release risk".');
-      return recordStandaloneWorkflow(context, {
-        workflow: "advise",
-        input: { text },
-        nextAction: nextAction("legion status", "The advisory request is recorded; check workflow state before acting on it."),
-        slugSource: text
-      });
+      return createTypedAdHocWorkflow(context, "quick");
     case "polish":
-      return recordStandaloneWorkflow(context, {
-        workflow: "polish",
-        input: { target: text ?? null },
-        nextAction: nextAction("legion review", "The cleanup request is recorded and should be reviewed before shipping."),
-        slugSource: text ?? "polish"
-      });
+      return createTypedAdHocWorkflow(context, "polish");
+    case "advise":
+      return runAdviceWorkflow(context);
     case "learn":
-      if (text === void 0) return usageError('legion learn requires a lesson. Example: legion learn "prefer artifact-backed plans".');
-      return recordStandaloneWorkflow(context, {
-        workflow: "learn",
-        input: { text },
-        nextAction: nextAction("legion status", "The lesson is recorded; review workflow state for the next durable action."),
-        slugSource: text
-      });
+      return runLearnWorkflow(context);
   }
+}
+async function createTypedAdHocWorkflow(context, kind) {
+  const text = positionalText(context);
+  if (kind === "quick" && text === void 0) return usageError('legion quick requires a task. Example: legion quick "fix the failing tests".');
+  const loadedProject = await loadWorkflowProject(context);
+  if (!loadedProject.ok) {
+    const action2 = nextAction("legion start", "Ad-hoc work requires initialized project state.");
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        diagnostics: loadedProject.diagnostics,
+        nextAction: action2
+      },
+      ["Ad-hoc task creation is blocked.", renderDiagnostics(loadedProject.diagnostics), renderNextAction(action2)].join("\n")
+    );
+  }
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const target = text ?? "current changed files";
+  const title = kind === "quick" ? `Quick task: ${target}` : `Polish: ${target}`;
+  const objective = kind === "quick" ? `Complete this ad-hoc task with minimal, verified changes: ${target}` : `Polish ${target} for clarity, simplicity, naming, comments, and consistency without changing intended behavior.`;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: kind,
+    slugSource: target,
+    createdAt
+  });
+  const requestArtifactPath = guidanceArtifactPath(paths, "request.md");
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: requestArtifactPath,
+    text: [
+      `# ${title}`,
+      "",
+      "## Objective",
+      "",
+      objective,
+      "",
+      "## Human Boundary",
+      "",
+      "This command prepares typed work. Execution still happens through `legion build`, and acceptance still requires `legion review --accept`.",
+      ""
+    ].join("\n")
+  });
+  const targetArtifactPath = text === void 0 ? void 0 : optionalArtifactPath(text);
+  const planned = await createAdHocTaskgraph({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    kind,
+    title,
+    objective,
+    sourceArtifactPath: requestArtifactPath,
+    idSlug: paths.runId,
+    createdAt,
+    readScope: targetArtifactPath === void 0 ? [requestArtifactPath] : [targetArtifactPath, requestArtifactPath],
+    ...targetArtifactPath === void 0 ? {} : { writeScope: [targetArtifactPath] },
+    verificationCommand: ["legion", "validate"]
+  });
+  if (!planned.ok) {
+    const action2 = nextAction("legion validate", "Ad-hoc task artifacts must be repaired before build.");
+    return failure(
+      {
+        ...planned,
+        nextAction: action2
+      },
+      ["Ad-hoc taskgraph creation failed.", renderDiagnostics(planned.diagnostics), renderNextAction(action2)].join("\n")
+    );
+  }
+  const action = nextAction("legion build", "The ad-hoc taskgraph is ready for guided execution.");
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: "planned",
+    runInput: { text: text ?? null, kind },
+    outputs: {
+      requestArtifactPath,
+      changeId: planned.change.bundle.change.id,
+      changeArtifactPath: planned.change.artifactPath,
+      oracleArtifactPath: planned.oracle.artifactPath,
+      taskgraphArtifactPath: planned.taskgraph.artifactPath,
+      taskIds: planned.taskgraph.document.tasks.map((task) => task.id)
+    },
+    nextAction: action
+  });
+  return success(
+    {
+      ok: true,
+      status: "planned",
+      workflow: kind,
+      runId: paths.runId,
+      artifactPath: paths.workflowRunArtifactPath,
+      requestArtifactPath,
+      change: {
+        changeId: planned.change.bundle.change.id,
+        artifactPath: planned.change.artifactPath
+      },
+      taskgraph: {
+        artifactPath: planned.taskgraph.artifactPath,
+        taskIds: planned.taskgraph.document.tasks.map((task) => task.id)
+      },
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `${kind === "quick" ? "Quick task" : "Polish task"} planned.`,
+      `Taskgraph: ${planned.taskgraph.artifactPath}`,
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function optionalArtifactPath(value) {
+  try {
+    return artifactPathSchema.parse(value.trim());
+  } catch {
+    return void 0;
+  }
+}
+async function runAdviceWorkflow(context) {
+  const topic = positionalText(context);
+  if (topic === void 0) return usageError('legion advise requires a topic. Example: legion advise "release risk".');
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "advise",
+    slugSource: topic,
+    createdAt
+  });
+  const prompt = guidancePrompt({
+    workflow: "advise",
+    topic,
+    requiredSections: ["Context", "Recommendation", "Risks", "Next Actions"]
+  });
+  const executed = await runGuidanceExecutor({
+    context,
+    paths,
+    workflow: "advise",
+    topic,
+    prompt,
+    readOnly: true,
+    explicitExecutor: stringOption(context, "executor")
+  });
+  if ("exitCode" in executed) return executed;
+  const markdownArtifactPath = guidanceArtifactPath(paths, "advice.md");
+  const markdown = renderGuidanceMarkdown({
+    title: "Advisory Analysis",
+    topic,
+    summary: executed.result.summary,
+    sections: [
+      { heading: "Recommendation", body: executed.result.summary },
+      { heading: "Risks", body: executed.result.findings.length === 0 ? ["No blocking findings were reported by the executor."] : executed.result.findings.map((finding) => finding.body) },
+      { heading: "Next Actions", body: ["Convert the advice into `legion plan`, `legion quick`, or no action after human review."] }
+    ]
+  });
+  await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
+  const action = nextAction("legion status", "Review the advisory artifact before changing workflow state.");
+  const status2 = executed.result.ok ? "completed" : "blocked";
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: status2,
+    runInput: { topic },
+    outputs: {
+      markdownArtifactPath,
+      promptArtifactPath: executed.promptArtifactPath,
+      resultArtifactPath: executed.resultArtifactPath,
+      rawLogArtifactPath: executed.rawLogArtifactPath,
+      redactedLogArtifactPath: executed.redactedLogArtifactPath
+    },
+    nextAction: action,
+    executor: executed.executor,
+    diagnostics: executed.result.findings
+  });
+  const payload = {
+    ok: executed.result.ok,
+    status: status2,
+    workflow: "advise",
+    runId: paths.runId,
+    artifactPath: paths.workflowRunArtifactPath,
+    markdownArtifactPath,
+    executor: executed.executor,
+    nextAction: action,
+    diagnostics: executed.result.findings
+  };
+  const human = [`Advice: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n");
+  return executed.result.ok ? success(payload, human) : failure(payload, human);
+}
+async function runLearnWorkflow(context) {
+  const lesson = positionalText(context);
+  if (lesson === void 0) return usageError('legion learn requires a lesson. Example: legion learn "prefer artifact-backed plans".');
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "learn",
+    slugSource: lesson,
+    createdAt
+  });
+  const lessonArtifactPath = guidanceArtifactPath(paths, "lesson.md");
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: lessonArtifactPath,
+    text: [`# Lesson`, "", lesson, ""].join("\n")
+  });
+  const index = await readLessonIndex(context.repositoryRoot);
+  const nextIndex = {
+    ...index,
+    lessons: [
+      ...index.lessons,
+      {
+        id: paths.runId,
+        lesson,
+        createdAt,
+        artifactPath: lessonArtifactPath
+      }
+    ]
+  };
+  const indexArtifactPath = artifactPathSchema.parse(".legion/project/workflow/learn/knowledge-index.json");
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: indexArtifactPath,
+    text: stableProtocolJson(nextIndex)
+  });
+  const action = nextAction("legion status", "The lesson is available to future context packs.");
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: "completed",
+    runInput: { lesson },
+    outputs: {
+      lessonArtifactPath,
+      indexArtifactPath,
+      lessonCount: nextIndex.lessons.length
+    },
+    nextAction: action
+  });
+  return success(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      runId: paths.runId,
+      artifactPath: paths.workflowRunArtifactPath,
+      lessonArtifactPath,
+      indexArtifactPath,
+      lessonCount: nextIndex.lessons.length,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      "Lesson recorded.",
+      `Artifact: ${lessonArtifactPath}`,
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function readLessonIndex(repositoryRoot) {
+  const indexPath = path29.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  try {
+    const parsed = JSON.parse(await readFile17(indexPath, "utf8"));
+    if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
+  } catch {
+  }
+  return {
+    schemaVersion: 1,
+    kind: "lesson_index",
+    lessons: []
+  };
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
+import { readFile as readFile18 } from "node:fs/promises";
+import path30 from "node:path";
 var HELP2 = {
-  explore: "legion explore <topic>\n\nCreate a design discovery artifact before start or planning.",
-  map: "legion map [--check|--refresh]\n\nGenerate, refresh, or check codebase context.",
-  retro: "legion retro [--phase N|--milestone M]\n\nRecord retrospective evidence for future planning.",
-  milestone: "legion milestone\n\nManage milestone status, summaries, and archives.",
-  council: "legion council <topic>\n\nRun governance deliberation formerly exposed as /legion:board."
+  explore: "legion explore <topic> [--executor codex|manual|fake]\n\nCreate a design discovery artifact before start or planning.",
+  map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
+  retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
+  milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
+  council: "legion council <topic> [--executor codex|manual|fake]\n\nRun governance deliberation formerly exposed as /legion:board."
 };
 async function handleContextualWorkflow(context, command) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(HELP2[command]);
   }
-  const text = positionalText(context);
   switch (command) {
     case "explore":
-      if (text === void 0) return usageError('legion explore requires a topic. Example: legion explore "asset metadata editor".');
-      return recordStandaloneWorkflow(context, {
+      return runExecutorBackedGuidance(context, {
         workflow: "explore",
-        input: { text },
-        nextAction: nextAction("legion start", "Use the exploration record to initialize the project workflow."),
-        slugSource: text
+        requiredText: true,
+        title: "Design Discovery",
+        markdownFile: "design.md",
+        nextCommand: nextProjectAwareAction(context, "legion start", "legion plan 1"),
+        sections: [
+          "Problem Framing",
+          "Constraints",
+          "Open Questions",
+          "Viable Approaches",
+          "Recommended Next Action",
+          "Start Or Plan Handoff"
+        ],
+        markdownSections: (topic, summary) => [
+          { heading: "Problem Framing", body: `Clarify what "${topic}" should accomplish before changing implementation artifacts.` },
+          { heading: "Constraints", body: ["Keep a human in the loop.", "Preserve existing project state.", "Record durable decisions before build work."] },
+          { heading: "Open Questions", body: ["Which user workflow must be improved first?", "What existing artifacts should constrain the next plan?", "What evidence proves the outcome?"] },
+          { heading: "Viable Approaches", body: ["Plan a narrow implementation phase.", "Refresh the codebase map first, then plan.", "Create a prototype task with legion quick and review the evidence."] },
+          { heading: "Recommended Next Action", body: summary },
+          { heading: "Start Or Plan Handoff", body: "Use this design artifact as context for `legion start` on a new project or `legion plan 1` on an initialized project." }
+        ]
       });
     case "map":
       return handleMapWorkflow(context);
-    case "retro": {
-      const phase = optionalStringInput(context, "phase");
-      if (phase !== null && typeof phase === "object" && isCliResult(phase)) return phase;
-      const milestone = optionalStringInput(context, "milestone");
-      if (milestone !== null && typeof milestone === "object" && isCliResult(milestone)) return milestone;
-      return recordStandaloneWorkflow(context, {
-        workflow: "retro",
-        input: {
-          phase,
-          milestone
-        },
-        nextAction: nextAction("legion plan 1", "Use the retrospective record when planning the next phase."),
-        slugSource: phase ?? milestone ?? "retro"
-      });
-    }
+    case "retro":
+      return runRetroWorkflow(context);
     case "milestone":
-      return recordStandaloneWorkflow(context, {
-        workflow: "milestone",
-        input: { target: text ?? null },
-        nextAction: nextAction("legion status", "The milestone request is recorded; check workflow state before changing release posture."),
-        slugSource: text ?? "milestone"
-      });
+      return handleMilestoneWorkflow(context);
     case "council":
-      if (text === void 0) return usageError('legion council requires a topic. Example: legion council "release readiness".');
-      return recordStandaloneWorkflow(context, {
+      return runExecutorBackedGuidance(context, {
         workflow: "council",
-        input: { text },
-        nextAction: nextAction("legion status", "The council request is recorded; check workflow state before acting on it."),
-        slugSource: text
+        requiredText: true,
+        title: "Council Decision",
+        markdownFile: "decision.md",
+        nextCommand: nextAction("legion status", "Review the council decision before changing workflow posture."),
+        sections: ["Decision Topic", "Options Considered", "Recommendation", "Risks", "Required Human Decision"],
+        markdownSections: (topic, summary) => [
+          { heading: "Decision Topic", body: topic },
+          { heading: "Options Considered", body: ["Proceed with the smallest reversible change.", "Pause until missing evidence is collected.", "Escalate to a broader plan if risk is cross-cutting."] },
+          { heading: "Recommendation", body: summary },
+          { heading: "Risks", body: ["Consensus without evidence can hide implementation risk.", "Council output is advisory until a human accepts a concrete next action."] },
+          { heading: "Required Human Decision", body: "Choose whether to convert this decision into a plan, quick task, or no-op." }
+        ]
       });
   }
 }
-function handleMapWorkflow(context) {
-  const check = context.args.options.get("check");
-  const refresh = context.args.options.get("refresh");
-  if (check !== void 0 && refresh !== void 0) {
-    return usageError("legion map accepts only one mode at a time. Use either --check or --refresh.");
+async function runExecutorBackedGuidance(context, input) {
+  const topic = positionalText(context);
+  if (input.requiredText && topic === void 0) {
+    return usageError(`legion ${input.workflow} requires a topic. Example: legion ${input.workflow} "release readiness".`);
   }
-  if (check !== void 0 && check !== true) {
-    return usageError("legion map --check does not accept a value.");
-  }
-  if (refresh !== void 0 && refresh !== true) {
-    return usageError("legion map --refresh does not accept a value.");
-  }
-  if (check === true) {
-    const action = nextAction("legion map --refresh", "Refresh the context map if the check shows stale project context.");
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: input.workflow,
+    slugSource: topic ?? input.workflow,
+    createdAt
+  });
+  const prompt = guidancePrompt({
+    workflow: input.workflow,
+    topic: topic ?? input.workflow,
+    requiredSections: input.sections
+  });
+  const executed = await runGuidanceExecutor({
+    context,
+    paths,
+    workflow: input.workflow,
+    topic: topic ?? input.workflow,
+    prompt,
+    readOnly: true,
+    explicitExecutor: stringOption(context, "executor")
+  });
+  if ("exitCode" in executed) return executed;
+  const action = await input.nextCommand;
+  const summary = executed.result.summary;
+  const markdown = renderGuidanceMarkdown({
+    title: input.title,
+    topic: topic ?? input.workflow,
+    summary,
+    sections: input.markdownSections(topic ?? input.workflow, summary)
+  });
+  const markdownArtifactPath = guidanceArtifactPath(paths, input.markdownFile);
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: markdownArtifactPath,
+    text: markdown
+  });
+  const status2 = executed.result.ok ? "completed" : "blocked";
+  const run = await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: status2,
+    runInput: { topic: topic ?? null },
+    outputs: {
+      markdownArtifactPath,
+      promptArtifactPath: executed.promptArtifactPath,
+      resultArtifactPath: executed.resultArtifactPath,
+      rawLogArtifactPath: executed.rawLogArtifactPath,
+      redactedLogArtifactPath: executed.redactedLogArtifactPath
+    },
+    nextAction: action,
+    executor: executed.executor,
+    diagnostics: executed.result.findings
+  });
+  const payload = {
+    ok: executed.result.ok,
+    status: status2,
+    workflow: input.workflow,
+    runId: paths.runId,
+    artifactPath: paths.workflowRunArtifactPath,
+    markdownArtifactPath,
+    executor: executed.executor,
+    nextAction: action,
+    diagnostics: executed.result.findings
+  };
+  const human = [
+    `${input.title}: ${status2}.`,
+    `Artifact: ${markdownArtifactPath}`,
+    renderNextAction(action)
+  ].join("\n");
+  return run.status === "completed" ? success(payload, human) : failure(payload, human);
+}
+async function handleMapWorkflow(context) {
+  const check = hasFlag(context, "check");
+  const refresh = hasFlag(context, "refresh");
+  const query = stringOption(context, "query")?.trim();
+  const scope = stringOption(context, "scope")?.trim();
+  const modes = [check, refresh, query !== void 0].filter(Boolean).length;
+  if (modes > 1) return usageError("legion map accepts one mode at a time: --refresh, --check, or --query <text>.");
+  if (context.args.options.get("query") === true || query === "") return usageError("Missing required value for --query. Example: legion map --query taskgraph.");
+  if (context.args.options.get("scope") === true || scope === "") return usageError("Missing required value for --scope. Example: legion map --refresh --scope packages/cli.");
+  if (check) return mapCheck(context, scope);
+  if (query !== void 0) return mapQuery(context, query);
+  return mapRefresh(context, scope);
+}
+async function mapRefresh(context, scope) {
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "map",
+    slugSource: scope === void 0 ? "refresh" : `refresh ${scope}`,
+    createdAt
+  });
+  try {
+    const artifacts = await refreshCodebaseMap({
+      repositoryRoot: context.repositoryRoot,
+      paths,
+      ...scope === void 0 ? {} : { scope }
+    });
+    const action = nextAction("legion plan 1", "Use refreshed map context when planning the next change.");
+    await writeGuidanceRun({
+      repositoryRoot: context.repositoryRoot,
+      paths,
+      status: "completed",
+      runInput: { mode: "refresh", scope: artifacts.map.scope },
+      outputs: {
+        codebaseArtifactPath: artifacts.codebaseArtifactPath,
+        indexArtifactPath: artifacts.indexArtifactPath,
+        symbolsArtifactPath: artifacts.symbolsArtifactPath,
+        searchArtifactPath: artifacts.searchArtifactPath,
+        mapArtifactPath: artifacts.mapArtifactPath,
+        sourceFingerprint: artifacts.map.sourceFingerprint,
+        sourceFileCount: artifacts.map.sourceFileCount
+      },
+      nextAction: action
+    });
     return success(
       {
         ok: true,
-        status: "ready",
+        status: "completed",
         workflow: "map",
-        mode: "check",
-        artifactRoot: ".legion/project/workflow/map",
+        mode: "refresh",
+        runId: paths.runId,
+        artifactPath: paths.workflowRunArtifactPath,
+        mapArtifactPath: artifacts.mapArtifactPath,
+        sourceFingerprint: artifacts.map.sourceFingerprint,
+        sourceFileCount: artifacts.map.sourceFileCount,
         nextAction: action,
         diagnostics: []
       },
       [
-        "Map check ready.",
-        "No workflow record was written.",
+        `Codebase map refreshed for ${artifacts.map.sourceFileCount} source files.`,
+        `Artifact: ${artifacts.codebaseArtifactPath}`,
         renderNextAction(action)
       ].join("\n")
     );
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Unable to refresh codebase map. ${message}`);
   }
-  if (refresh === true) {
-    return recordStandaloneWorkflow(context, {
+}
+async function mapCheck(context, scope) {
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "map",
+    slugSource: "check",
+    createdAt
+  });
+  const latest = await getLatestCodebaseMap(context.repositoryRoot);
+  const current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  const fresh = latest !== void 0 && latest.scope === current.scope && latest.sourceFingerprint === current.sourceFingerprint;
+  const action = fresh ? nextAction("legion plan 1", "The codebase map is fresh enough for planning.") : nextAction("legion map --refresh", "Refresh the codebase map before relying on mapped context.");
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: fresh ? "completed" : "stale",
+    runInput: { mode: "check", scope: current.scope },
+    outputs: {
+      currentSourceFingerprint: current.sourceFingerprint,
+      latestSourceFingerprint: latest?.sourceFingerprint ?? null,
+      sourceFileCount: current.sourceFileCount
+    },
+    nextAction: action
+  });
+  return success(
+    {
+      ok: true,
+      status: fresh ? "fresh" : "stale",
       workflow: "map",
-      input: { mode: "refresh" },
-      nextAction: nextAction("legion plan 1", "Use refreshed context when planning the next change."),
-      slugSource: "refresh"
-    });
+      mode: "check",
+      runId: paths.runId,
+      artifactPath: paths.workflowRunArtifactPath,
+      scope: current.scope,
+      sourceFingerprint: current.sourceFingerprint,
+      latestSourceFingerprint: latest?.sourceFingerprint ?? null,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      fresh ? "Codebase map is fresh." : "Codebase map is stale or missing.",
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function mapQuery(context, query) {
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const latest = await getLatestCodebaseMap(context.repositoryRoot);
+  if (latest === void 0) {
+    const action2 = nextAction("legion map --refresh", "A query requires an existing codebase map.");
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        workflow: "map",
+        mode: "query",
+        diagnostics: [{ code: "map_missing", message: "No codebase map exists. Run legion map --refresh first." }],
+        nextAction: action2
+      },
+      ["Map query is blocked.", renderNextAction(action2)].join("\n")
+    );
   }
-  return usageError("legion map requires --check or --refresh.");
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "map",
+    slugSource: `query ${query}`,
+    createdAt
+  });
+  const matches = queryCodebaseMap(latest, query);
+  const queryArtifactPath = guidanceArtifactPath(paths, "query-results.json");
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: queryArtifactPath,
+    text: stableProtocolJson({ query, matches })
+  });
+  const action = nextAction("legion status", "Use the query result as context for the next workflow action.");
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: "completed",
+    runInput: { mode: "query", query },
+    outputs: { queryArtifactPath, matchCount: matches.length },
+    nextAction: action
+  });
+  return success(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "map",
+      mode: "query",
+      runId: paths.runId,
+      artifactPath: paths.workflowRunArtifactPath,
+      queryArtifactPath,
+      matches,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Map query returned ${matches.length} matches.`,
+      ...matches.slice(0, 5).map((match) => `- ${match.path}: ${match.summary}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function runRetroWorkflow(context) {
+  const phase = optionalStringInput(context, "phase");
+  if (phase !== null && typeof phase !== "string") return phase;
+  const milestone = optionalStringInput(context, "milestone");
+  if (milestone !== null && typeof milestone !== "string") return milestone;
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "retro",
+    slugSource: phase ?? milestone ?? "retro",
+    createdAt
+  });
+  const state = await resolveWorkflowState(context);
+  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
+  const topic = phase === null && milestone === null ? `workflow stage ${state.stage}` : `phase ${phase ?? ""} milestone ${milestone ?? ""}`.trim();
+  const prompt = guidancePrompt({
+    workflow: "retro",
+    topic,
+    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"]
+  });
+  const executed = await runGuidanceExecutor({
+    context,
+    paths,
+    workflow: "retro",
+    topic,
+    prompt,
+    readOnly: true,
+    explicitExecutor: stringOption(context, "executor")
+  });
+  if ("exitCode" in executed) return executed;
+  const markdown = renderGuidanceMarkdown({
+    title: "Workflow Retrospective",
+    topic,
+    summary: executed.result.summary,
+    sections: [
+      { heading: "Workflow State", body: `Current stage: ${state.stage}` },
+      { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
+      { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },
+      { heading: "Follow-Up Actions", body: [state.nextAction.command] }
+    ]
+  });
+  const markdownArtifactPath = guidanceArtifactPath(paths, "retro.md");
+  await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
+  const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
+  const status2 = executed.result.ok ? "completed" : "blocked";
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: status2,
+    runInput: { phase, milestone },
+    outputs: {
+      markdownArtifactPath,
+      promptArtifactPath: executed.promptArtifactPath,
+      resultArtifactPath: executed.resultArtifactPath,
+      rawLogArtifactPath: executed.rawLogArtifactPath,
+      redactedLogArtifactPath: executed.redactedLogArtifactPath
+    },
+    nextAction: action,
+    executor: executed.executor,
+    diagnostics: executed.result.findings
+  });
+  const payload = {
+    ok: executed.result.ok,
+    status: status2,
+    workflow: "retro",
+    runId: paths.runId,
+    artifactPath: paths.workflowRunArtifactPath,
+    markdownArtifactPath,
+    executor: executed.executor,
+    nextAction: action,
+    diagnostics: executed.result.findings
+  };
+  return executed.result.ok ? success(payload, [`Retrospective: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n")) : failure(payload, [`Retrospective: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n"));
+}
+async function handleMilestoneWorkflow(context) {
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const define = stringOption(context, "define")?.trim();
+  const phases = stringOption(context, "phases")?.trim();
+  const complete = stringOption(context, "complete")?.trim();
+  const summary = stringOption(context, "summary")?.trim();
+  const archive2 = stringOption(context, "archive")?.trim();
+  const statusMode = hasFlag(context, "status") || define === void 0 && complete === void 0 && archive2 === void 0;
+  const modeCount = [define !== void 0, complete !== void 0, archive2 !== void 0, statusMode].filter(Boolean).length;
+  if (modeCount !== 1) return usageError("legion milestone accepts one mode: --status, --define, --complete, or --archive.");
+  if (context.args.options.get("define") === true || define === "") return usageError("Missing required value for --define. Example: legion milestone --define MVP --phases 1-3.");
+  if (context.args.options.get("phases") === true || phases === "") return usageError("Missing required value for --phases. Example: legion milestone --define MVP --phases 1-3.");
+  if (context.args.options.get("complete") === true || complete === "") return usageError('Missing required value for --complete. Example: legion milestone --complete milestone-mvp --summary "Done".');
+  if (context.args.options.get("archive") === true || archive2 === "") return usageError("Missing required value for --archive. Example: legion milestone --archive milestone-mvp.");
+  if (context.args.options.get("summary") === true || summary === "") return usageError('Missing required value for --summary. Example: legion milestone --complete milestone-mvp --summary "Done".');
+  if (define !== void 0 && phases === void 0) return usageError("legion milestone --define requires --phases <range>.");
+  if (complete !== void 0 && summary === void 0) return usageError("legion milestone --complete requires --summary <text>.");
+  const current = await readMilestoneIndex(context.repositoryRoot);
+  let next = current;
+  let status2 = "completed";
+  let slugSource = "status";
+  if (define !== void 0 && phases !== void 0) {
+    const id = milestoneId(define);
+    if (current.milestones.some((entry) => entry.id === id)) return usageError(`Milestone already exists: ${id}`);
+    next = {
+      ...current,
+      milestones: [
+        ...current.milestones,
+        { id, name: define, phases, status: "defined", createdAt }
+      ]
+    };
+    slugSource = id;
+  } else if (complete !== void 0 && summary !== void 0) {
+    next = updateMilestone(current, complete, (milestone) => ({
+      ...milestone,
+      status: "completed",
+      summary,
+      completedAt: createdAt
+    }));
+    status2 = "accepted";
+    slugSource = complete;
+  } else if (archive2 !== void 0) {
+    next = updateMilestone(current, archive2, (milestone) => ({
+      ...milestone,
+      status: "archived",
+      archivedAt: createdAt
+    }));
+    slugSource = archive2;
+  }
+  const paths = await createGuidanceRunPaths({
+    repositoryRoot: context.repositoryRoot,
+    workflow: "milestone",
+    slugSource,
+    createdAt
+  });
+  const indexArtifactPath = artifactPathSchema.parse(".legion/project/workflow/milestone/milestones.json");
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: indexArtifactPath,
+    text: stableProtocolJson(next)
+  });
+  const markdownArtifactPath = guidanceArtifactPath(paths, "milestones.md");
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: markdownArtifactPath,
+    text: renderMilestones(next)
+  });
+  const action = nextAction("legion status", "Review milestone state before changing release posture.");
+  await writeGuidanceRun({
+    repositoryRoot: context.repositoryRoot,
+    paths,
+    status: status2,
+    runInput: { define: define ?? null, phases: phases ?? null, complete: complete ?? null, archive: archive2 ?? null },
+    outputs: { indexArtifactPath, markdownArtifactPath, milestoneCount: next.milestones.length },
+    nextAction: action
+  });
+  return success(
+    {
+      ok: true,
+      status: status2,
+      workflow: "milestone",
+      runId: paths.runId,
+      artifactPath: paths.workflowRunArtifactPath,
+      indexArtifactPath,
+      markdownArtifactPath,
+      milestones: next.milestones,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Milestones: ${next.milestones.length}.`,
+      `Artifact: ${markdownArtifactPath}`,
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function nextProjectAwareAction(context, uninitializedCommand, initializedCommand) {
+  const project = await loadProject({ repositoryRoot: context.repositoryRoot });
+  return !project.ok ? nextAction(uninitializedCommand, "Use the exploration artifact to initialize the project workflow.") : nextAction(initializedCommand, "Use the exploration artifact when planning the next change.");
 }
 function optionalStringInput(context, key) {
   if (!context.args.options.has(key)) return null;
@@ -27488,6 +29015,49 @@ function optionalStringInput(context, key) {
     return usageError(`Missing required value for --${key}. Example: legion retro --${key} <value>.`);
   }
   return value.trim();
+}
+async function readMilestoneIndex(repositoryRoot) {
+  const indexPath = path30.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  try {
+    const parsed = JSON.parse(await readFile18(indexPath, "utf8"));
+    if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
+  } catch {
+  }
+  return {
+    schemaVersion: 1,
+    kind: "milestone_index",
+    milestones: []
+  };
+}
+function updateMilestone(index, id, update) {
+  let found = false;
+  const milestones = index.milestones.map((milestone) => {
+    if (milestone.id !== id) return milestone;
+    found = true;
+    return update(milestone);
+  });
+  if (!found) {
+    throw new Error(`Milestone not found: ${id}`);
+  }
+  return { ...index, milestones };
+}
+function milestoneId(name) {
+  return `milestone-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed"}`;
+}
+function renderMilestones(index) {
+  return [
+    "# Milestones",
+    "",
+    index.milestones.length === 0 ? "No milestones defined." : index.milestones.map((milestone) => [
+      `## ${milestone.name}`,
+      "",
+      `ID: ${milestone.id}`,
+      `Phases: ${milestone.phases}`,
+      `Status: ${milestone.status}`,
+      milestone.summary === void 0 ? "" : `Summary: ${milestone.summary}`
+    ].filter((line) => line.length > 0).join("\n")).join("\n\n"),
+    ""
+  ].join("\n");
 }
 
 // packages/cli/src/commands/workflow/ship.ts
@@ -27570,8 +29140,8 @@ function blockedShip(diagnostics, action) {
 }
 
 // packages/cli/src/commands/workflow/validate.ts
-import { stat as stat7 } from "node:fs/promises";
-import path27 from "node:path";
+import { stat as stat8 } from "node:fs/promises";
+import path31 from "node:path";
 var VALIDATE_HELP = `legion validate
 
 Validate committed Legion project state under .legion/project.
@@ -27632,7 +29202,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path27.join(root, relativePath));
+    await stat8(path31.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -27744,7 +29314,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path28.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path32.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -27796,8 +29366,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path28.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path28.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path32.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path32.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

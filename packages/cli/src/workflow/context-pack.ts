@@ -11,7 +11,9 @@ import {
 } from "@legion/artifacts";
 import type { ArtifactPath, ChangeId, RunId, TaskContract } from "@legion/protocol";
 
+import { getLatestCodebaseMap } from "./codebase-map.js";
 import { writeProjectTextFile } from "./executor/result.js";
+import { latestGuidanceRuns } from "./guidance-run.js";
 
 export interface ContextPackInput {
   readonly repositoryRoot: string;
@@ -80,13 +82,13 @@ export function buildExecutionPrompt(input: {
     "## Scope",
     "",
     "Read scope:",
-    ...input.task.scope.read.map((entry) => `- ${entry}`),
+    ...(input.task.scope?.read ?? []).map((entry) => `- ${entry}`),
     "",
     writeScopeLabel,
-    ...input.task.scope.write.map((entry) => `- ${entry}`),
+    ...(input.task.scope?.write ?? []).map((entry) => `- ${entry}`),
     "",
     "Forbidden scope:",
-    ...input.task.scope.forbidden.map((entry) => `- ${entry}`),
+    ...(input.task.scope?.forbidden ?? []).map((entry) => `- ${entry}`),
     "",
     "## Harness Rules",
     "",
@@ -100,11 +102,14 @@ export function buildExecutionPrompt(input: {
 }
 
 async function renderContextPack(input: ContextPackInput): Promise<string> {
-  const [project, change, specs, workflowRecords] = await Promise.all([
+  const [project, change, specs, workflowRecords, guidanceRuns, codebaseMap, learnIndex] = await Promise.all([
     loadProject({ repositoryRoot: input.repositoryRoot }),
     loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId }),
     listCurrentSpecs({ repositoryRoot: input.repositoryRoot }),
-    readRecentWorkflowRecords(input.repositoryRoot)
+    readRecentWorkflowRecords(input.repositoryRoot),
+    latestGuidanceRuns({ repositoryRoot: input.repositoryRoot, limitPerWorkflow: 2 }),
+    getLatestCodebaseMap(input.repositoryRoot),
+    readKnowledgeIndex(input.repositoryRoot)
   ]);
 
   return [
@@ -153,6 +158,38 @@ async function renderContextPack(input: ContextPackInput): Promise<string> {
     "",
     workflowRecords.length === 0 ? "No recent workflow records found." : workflowRecords.join("\n\n"),
     "",
+    "## Guidance Runs",
+    "",
+    guidanceRuns.length === 0
+      ? "No guidance runs found."
+      : fencedJson(guidanceRuns.map((run) => ({
+          workflow: run.workflow,
+          runId: run.runId,
+          status: run.status,
+          outputs: run.outputs,
+          nextAction: run.nextAction
+        }))),
+    "",
+    "## Codebase Map",
+    "",
+    codebaseMap === undefined
+      ? "No codebase map found. Run legion map --refresh when source context is needed."
+      : fencedJson({
+          generatedAt: codebaseMap.generatedAt,
+          scope: codebaseMap.scope,
+          sourceFingerprint: codebaseMap.sourceFingerprint,
+          sourceFileCount: codebaseMap.sourceFileCount,
+          topFiles: codebaseMap.files.slice(0, 20).map((file) => ({
+            path: file.path,
+            summary: file.summary,
+            symbols: file.symbols.slice(0, 8)
+          }))
+        }),
+    "",
+    "## Learned Project Guidance",
+    "",
+    learnIndex,
+    "",
     "## Verification Commands",
     "",
     ...input.task.verification.map((entry) => `- ${[entry.command, ...entry.args].join(" ")} (expected ${entry.expectedExitCode})`),
@@ -175,7 +212,7 @@ function diagnosticMessage(value: unknown): string {
 }
 
 async function readRecentWorkflowRecords(repositoryRoot: string): Promise<readonly string[]> {
-  const workflows = ["learn", "map", "explore", "advise"] as const;
+  const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"] as const;
   const records: string[] = [];
   for (const workflow of workflows) {
     const workflowRoot = path.join(repositoryRoot, ".legion", "project", "workflow", workflow);
@@ -186,8 +223,10 @@ async function readRecentWorkflowRecords(repositoryRoot: string): Promise<readon
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") continue;
       throw error;
     }
-    for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = path.join(workflowRoot, entry.name);
+    for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
+      const absolutePath = entry.isDirectory()
+        ? path.join(workflowRoot, entry.name, "workflow-run.json")
+        : path.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile(absolutePath, "utf8");
@@ -204,6 +243,16 @@ async function readRecentWorkflowRecords(repositoryRoot: string): Promise<readon
     }
   }
   return records;
+}
+
+async function readKnowledgeIndex(repositoryRoot: string): Promise<string> {
+  const indexPath = path.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  try {
+    const text = await readFile(indexPath, "utf8");
+    return ["```json", truncate(text.trim(), 4_000), "```"].join("\n");
+  } catch {
+    return "No learned project guidance found.";
+  }
 }
 
 function truncate(text: string, maxLength: number): string {
