@@ -69,17 +69,18 @@ test("user docs do not present worker bundle authoring as typical usage", async 
   }
 });
 
-test("README workflow reference stays CLI-first and honest about dry-run gates", async () => {
+test("README workflow reference stays CLI-first and honest about live gates", async () => {
   const readme = await readFile("README.md", "utf8");
   const workflowReference = requiredSection(readme, "## Workflow Reference", "## v2.0 Advisory Features");
 
   assert.match(workflowReference, /#### `legion start` \(alias: `\/legion:start`\)/);
   assert.match(workflowReference, /#### `legion build` \(alias: `\/legion:build`\)/);
   assert.match(workflowReference, /#### `legion review` \(alias: `\/legion:review`\)/);
-  assert.match(workflowReference, /non-dry-run execution blocks instead of pretending agents ran/);
-  assert.match(workflowReference, /non-dry-run review blocks instead of marking a phase complete without evidence/);
+  assert.match(workflowReference, /executes it through the selected executor adapter with durable evidence/);
+  assert.match(workflowReference, /submits structured review decisions against collected build evidence/);
 
   assert.doesNotMatch(workflowReference, /^#### `\/legion:/m);
+  assert.doesNotMatch(workflowReference, /until runtime execution and review evidence backends are connected/);
   assert.doesNotMatch(workflowReference, /The main loop for any project/);
   assert.doesNotMatch(workflowReference, /Spawns agents with full personality injection/);
   assert.doesNotMatch(workflowReference, /marks the phase complete only after review passes/);

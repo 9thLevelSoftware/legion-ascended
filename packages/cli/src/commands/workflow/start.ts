@@ -4,6 +4,7 @@ import { projectSchema, type Actor } from "@legion/protocol";
 import {
   failure,
   hasFlag,
+  helpResult,
   stringOption,
   success,
   usageError,
@@ -19,8 +20,19 @@ import {
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 
 const START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
+const START_HELP = `legion start --name <name> [--summary <text>] [--owner <name>] [--created-at <utc>] [--slug <slug>] [--dry-run]
+
+Initialize .legion project state and route to the first planning step.
+
+Examples:
+  legion start --name "Asset Mapper" --summary "Metadata authoring and deterministic asset resolution" --owner dasbl
+  legion start --name "Asset Mapper" --dry-run --json`;
 
 export async function handleStartCommand(context: CliContext): Promise<CliResult> {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(START_HELP);
+  }
+
   const nameValueless = valuelessStartOption(
     context,
     "name",

@@ -17,7 +17,7 @@ import {
   type TaskContract
 } from "@legion/protocol";
 
-import { failure, hasFlag, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
+import { failure, hasFlag, helpResult, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
@@ -33,7 +33,20 @@ import {
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
+const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+
+Review collected build evidence. A submitted passing review still requires explicit human acceptance.
+
+Examples:
+  legion review --executor fake
+  legion review --accept
+  legion review --auto --max-cycles 3 --executor codex`;
+
 export async function handleReviewWorkflow(context: CliContext): Promise<CliResult> {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(REVIEW_HELP);
+  }
+
   const planAction = nextAction(
     "legion plan 1",
     "A typed task graph is required before review readiness can be checked."
@@ -231,6 +244,7 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
       runId: reviewId,
       taskgraph: input.taskgraph,
       task,
+      evidenceEntries,
       artifactPath: contextPackArtifactPath,
       absolutePath: contextPackAbsolutePath
     });

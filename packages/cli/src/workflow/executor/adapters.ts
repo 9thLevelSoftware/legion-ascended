@@ -23,12 +23,12 @@ export function codexExecArgs(input: {
 }): readonly string[] {
   return [
     "exec",
+    "-c",
+    "approval_policy=\"never\"",
     "-C",
     input.repositoryRoot,
     "--sandbox",
     input.sandbox,
-    "--ask-for-approval",
-    "never",
     "--json",
     "--output-last-message",
     input.outputLastMessagePath,
@@ -66,7 +66,8 @@ export function adapterForKind(kind: ExecutionAdapterKind): ExecutionAdapter {
 
 async function codexAvailable(): Promise<boolean> {
   try {
-    await execFileAsync("codex", ["exec", "--help"], {
+    const invocation = codexInvocation(["exec", "--help"]);
+    await execFileAsync(invocation.command, invocation.args, {
       timeout: 5_000,
       windowsHide: true
     });
@@ -154,7 +155,8 @@ const codexAdapter: ExecutionAdapter = {
       sandbox: request.readOnly ? "read-only" : "workspace-write",
       outputLastMessagePath
     });
-    const processResult = await spawnWithInput("codex", args, request.prompt, request.repositoryRoot);
+    const invocation = codexInvocation(args);
+    const processResult = await spawnWithInput(invocation.command, invocation.args, request.prompt, request.repositoryRoot);
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
@@ -175,6 +177,16 @@ const codexAdapter: ExecutionAdapter = {
     return result;
   }
 };
+
+function codexInvocation(args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
+  if (process.platform !== "win32") {
+    return { command: "codex", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "codex", ...args]
+  };
+}
 
 function fakeSummary(request: ExecutionRequest): string {
   if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;

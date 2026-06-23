@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   failure,
+  helpResult,
   success,
   type CliContext,
   type CliResult
@@ -17,7 +18,27 @@ interface ShallowCheck {
   readonly message?: string;
 }
 
+const VALIDATE_HELP = `legion validate
+
+Validate committed Legion project state under .legion/project.
+
+Examples:
+  legion validate
+  legion validate --json`;
+
+const DOCTOR_HELP = `legion doctor
+
+Validate project state and check shallow operational paths such as .legion/var and bundles/index.json.
+
+Examples:
+  legion doctor
+  legion doctor --json`;
+
 export async function handleValidateCommand(context: CliContext): Promise<CliResult> {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(VALIDATE_HELP);
+  }
+
   const result = await validateWorkflowProject(context);
   const payload = {
     ...result,
@@ -32,6 +53,10 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
 }
 
 export async function handleDoctorCommand(context: CliContext): Promise<CliResult> {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(DOCTOR_HELP);
+  }
+
   const result = await validateWorkflowProject(context);
   const checks = {
     project: {

@@ -23,6 +23,13 @@ Workflow commands:
 ${WORKFLOW_COMMANDS.map((entry) => `  ${entry.name.padEnd(10)} ${entry.summary}`).join("\n")}`;
 
 const COMMAND_SPECIFIC_HELP = new Set([
+  "start",
+  "status",
+  "plan",
+  "build",
+  "review",
+  "validate",
+  "doctor",
   "quick",
   "advise",
   "polish",

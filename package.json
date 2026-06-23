@@ -24,6 +24,7 @@
     "docs:protocol": "pnpm run typecheck && node scripts/validate-next.mjs --generate-protocol-docs",
     "validate": "pnpm run validate:next",
     "validate:next": "node scripts/validate-next.mjs",
+    "workflow:dogfood": "node scripts/dogfood-workflow.mjs",
     "pack:dry-run": "npm pack --dry-run && pnpm pack --dry-run",
     "prepublishOnly": "pnpm run validate:next"
   },
@@ -36,6 +37,7 @@
     "commands/",
     "skills/",
     "scripts/baseline/*.mjs",
+    "scripts/dogfood-workflow.mjs",
     "scripts/release/*.mjs",
     "evals/baseline/corpus-manifest.yaml",
     "evals/baseline/fixture-hashes.sha256",
@@ -47,6 +49,7 @@
     "settings.json",
     "checksums.sha256",
     "docs/control-modes.md",
+    "docs/cli/",
     "docs/runtime-audit.md",
     "docs/runtime-certification-checklists.md",
     "docs/security/",
