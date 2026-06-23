@@ -195,20 +195,22 @@ Recent releases rewrote large parts of Legion to behave better on Claude Opus 4.
 - **Smaller coordinator context**: spawned agents report structured summaries and downstream waves receive focused handoff context rather than full execution traces.
 - **More deterministic control flow**: the v7.3.3 audit replaced vague triggers, free-form gates, and underspecified dispatch wording with concrete activation rules, closed-set AskUserQuestion flows, completion gates, and explicit dispatch tables.
 
-## Workflows
+## Workflow Reference
 
-### Core Workflow: start → plan → build → review
+### Core Workflow: `legion start` -> `legion plan` -> `legion build` -> `legion review`
 
-The main loop for any project. Run through these four commands in order, repeating plan → build → review for each phase.
+This is the normal project loop. Use the top-level CLI commands for current work, repeating `legion plan` -> `legion build` -> `legion review` for each phase.
 
-#### `/legion:start` — Project Initialization
+Slash-form names such as `/legion:start` are runtime compatibility aliases for hosts that still expose Legion through prompt commands. The workflow descriptions below preserve the original command contract, while current CLI build/review execution stays fail-closed until runtime execution and review evidence backends are connected.
+
+#### `legion start` (alias: `/legion:start`) — Project Initialization
 
 Guides you through an adaptive conversation (5-8 exchanges) to capture project vision, requirements, and constraints before generating any plans.
 
 **Key steps:**
 1. Pre-flight check — detects existing projects and offers to reinitialize or continue
-2. Design document input — optionally consumes `.planning/explorations/*-design.md` from `/legion:explore`
-3. Codebase map pre-flight — if source code is found, checks for a fresh `/legion:map` dataset and asks whether to use, refresh, skip, or abort
+2. Design document input — optionally consumes `.planning/explorations/*-design.md` from `legion explore`
+3. Codebase map pre-flight — if source code is found, checks for a fresh `legion map` dataset and asks whether to use, refresh, skip, or abort
 4. Vision exploration — 3-stage adaptive conversation via `questioning-flow`: vision → requirements → constraints, targeting 5-8 natural exchanges
 5. Agent recommendation — `agent-registry` scores all 49 agents to recommend 2-4 per phase based on keyword match and division affinity
 6. Document generation — produces `PROJECT.md`, `ROADMAP.md`, and `STATE.md` using questioning-flow templates
@@ -219,7 +221,7 @@ Guides you through an adaptive conversation (5-8 exchanges) to capture project v
 **Produces:** `.planning/PROJECT.md`, `.planning/ROADMAP.md`, `.planning/STATE.md` | optional `.planning/CODEBASE.md` and `.planning/codebase/` map artifacts
 **User interaction:** Guided Q&A throughout; confirms generated documents before finalizing
 
-#### `/legion:plan <N>` — Phase Planning
+#### `legion plan <N>` (alias: `/legion:plan <N>`) — Phase Planning
 
 Decomposes a roadmap phase into as many wave-structured plans as needed, using the default max of 3 tasks per plan only as a per-plan task cap (configurable via settings). Recommends agents from the 49-agent registry for each plan and gets your confirmation.
 
@@ -240,58 +242,60 @@ Decomposes a roadmap phase into as many wave-structured plans as needed, using t
 **Produces:** `.planning/phases/{NN}-{slug}/CONTEXT.md` and `{NN}-{PP}-PLAN.md` files | `.planning/specs/` (optional) | `.planning/campaigns/` (marketing) | `.planning/designs/` (design)
 **User interaction:** Confirms agent recommendations; opts into architecture proposals, spec pipeline, and plan critique; reviews critique findings
 
-#### `/legion:build` — Phase Execution
+#### `legion build` (alias: `/legion:build`) — Phase Execution
 
-Spawns agents with full personality injection to execute all plans for the current phase. Runs waves in parallel, tracks progress, and commits completed work.
+Checks the current phase's typed taskgraph and, when a runtime execution backend is connected, executes those plans with evidence. During the current CLI hardening window, `legion build --dry-run --json` reports readiness and non-dry-run execution blocks instead of pretending agents ran.
 
-**Key steps:**
+**Current CLI steps:**
 1. Determine target phase from STATE.md or `--phase N` flag; validate plan files exist
 2. Discover plans via `wave-executor` — parse YAML frontmatter, build wave map, validate no circular dependencies or file conflicts
-3. Create a Claude Code Team via TeamCreate (`phase-{NN}-execution`) with TaskCreate for each plan and cross-wave dependencies via TaskUpdate
-4. Execute plans wave by wave via `wave-executor` — all agents within a wave spawn in parallel via Agent tool with `model: "sonnet"`
-5. Each agent receives its complete personality .md (currently 156-472 lines) concatenated with the plan file as its prompt; autonomous plans skip personality injection
-6. Agents auto-remediate environment issues (missing deps, wrong versions) — classify errors as BLOCKER vs ENVIRONMENT, retry once after remediation
-7. Collect results via SendMessage — parse structured summaries, write `{NN}-{PP}-SUMMARY.md` files
-8. Track progress via `execution-tracker` — update STATE.md, ROADMAP.md progress table, create atomic git commits per successful plan
-9. Record outcomes via `memory-manager` (optional) — agent, task type, success/failure, importance score with time-decay
-10. Detect manual edits — intersect agent-modified files with `git diff` to capture corrective preference signals
-11. Shutdown team via SendMessage shutdown_request + TeamDelete
+3. In dry-run mode, emit the wave/taskgraph, required evidence paths, and blocking readiness findings
+4. In live mode, fail closed until a runtime execution backend can write summaries, commits, and evidence
 
-**Skills invoked:** `workflow-common-core` → `wave-executor` → `execution-tracker` → `memory-manager` | `codebase-mapper` (map context injection) | `github-sync` (issue checklist + PR creation)
+**Runtime execution contract:**
+1. Create a runtime team (`phase-{NN}-execution`) with tasks for each plan and cross-wave dependencies
+2. Execute plans wave by wave; agents within a wave run in parallel
+3. Give each worker the selected agent contract plus the plan file; autonomous plans skip personality injection
+4. Auto-remediate environment issues once, classifying errors as BLOCKER vs ENVIRONMENT
+5. Collect structured summaries and write `{NN}-{PP}-SUMMARY.md` files
+6. Track progress via `execution-tracker`, update STATE.md/ROADMAP.md, and create atomic commits per successful plan
+7. Record optional outcomes via `memory-manager`, detect manual corrective edits, and shut down the runtime team
+
+**Skills invoked:** `workflow-common-core` -> `wave-executor` -> `execution-tracker` -> `memory-manager` | `codebase-mapper` (map context injection) | `github-sync` (issue checklist + PR creation)
 **Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion
-**Produces:** Implementation artifacts plus `{NN}-{PP}-SUMMARY.md` files, atomic git commits, optional GitHub PR
+**Produces:** Dry-run readiness output today; live runtime execution produces implementation artifacts plus `{NN}-{PP}-SUMMARY.md` files, atomic git commits, and optional GitHub PR
 **User interaction:** Confirms pre-execution plan; monitors progress; resolves blockers if agents get stuck
 
-#### `/legion:review` — Quality Review
+#### `legion review` (alias: `/legion:review`) — Quality Review
 
-Selects appropriate review agents for the phase, runs a structured dev-QA loop (default max 3 cycles, configurable), and marks the phase complete only after review passes.
+Checks review readiness for the current phase and, when review evidence wiring is connected, runs the structured dev-QA loop. During the current CLI hardening window, `legion review --dry-run --json` reports the review taskgraph and non-dry-run review blocks instead of marking a phase complete without evidence.
 
-**Key steps:**
+**Current CLI steps:**
 1. Determine target phase and load build summaries — reads CONTEXT.md, all PLAN.md and SUMMARY.md files, builds deduplicated file list for review
-2. Detect manual edits — intersects `git diff` with agent-modified files before review begins, stores corrective preferences via `memory-manager`
-3. Choose review mode: **classic** (`review-loop` — static phase-type-to-agent mapping) or **panel** (`review-panel` — dynamic 2-4 reviewer composition with domain-weighted rubrics)
-   - Classic mapping: code → `testing-qa-verification-specialist`; API → `testing-api-tester`; design → three-lens review (`brand-guardian` + `ux-architect` + `ux-researcher`); marketing → `testing-workflow-optimizer`
-   - Panel mode: scores all review-capable agents via `agent-registry`, caps panel size (2 single-domain, 3 standard, 4 cross-domain), enforces max 2 per division + at least 1 Testing agent, assigns non-overlapping rubrics
-4. Create a Claude Code Team via TeamCreate (`phase-{NN}-review`)
-5. Spawn review agents in parallel — each receives full personality .md + phase context + rubric (panel mode); all agents spawn in a single response via Agent tool with `model: "sonnet"`
-6. Collect findings via SendMessage — parse severity (BLOCKER/WARNING/SUGGESTION), deduplicate across reviewers, triage into must-fix and nice-to-have
-7. Panel synthesis (panel mode only) — cross-cutting themes, hot spots (files flagged by 2+ reviewers), aggregate verdict
-8. Route fixes — group findings by file type, spawn appropriate fix agents (frontend → `engineering-frontend-developer`, backend → `engineering-backend-architect`, etc.), create fix commits
-9. Re-review — scoped to modified files, bounded by configured max cycles (default 3); escalate to user if blockers persist
-10. On PASS: write `{NN}-REVIEW.md`, mark phase complete in STATE.md + ROADMAP.md, close GitHub issue (optional)
-11. On ESCALATE: present remaining blockers with fix attempt history, offer manual fix / accept-as-is / investigate options
-12. Shutdown team via SendMessage + TeamDelete
+2. Validate required review inputs and evidence references
+3. In dry-run mode, emit the reviewer/taskgraph plan and blocking readiness findings
+4. In live mode, fail closed until review findings and phase-completion evidence can be written
 
-**Skills invoked:** `workflow-common-core` → `review-loop` | `review-panel` → `execution-tracker` → `memory-manager` | `design-workflows` (three-lens) | `github-sync`
+**Runtime review contract:**
+1. Detect manual edits before review and store corrective preference signals through `memory-manager`
+2. Choose review mode: **classic** (`review-loop` — static phase-type-to-agent mapping) or **panel** (`review-panel` — dynamic 2-4 reviewer composition with domain-weighted rubrics)
+   - Classic mapping: code -> `testing-qa-verification-specialist`; API -> `testing-api-tester`; design -> three-lens review (`brand-guardian` + `ux-architect` + `ux-researcher`); marketing -> `testing-workflow-optimizer`
+   - Panel mode: scores review-capable agents via `agent-registry`, caps panel size, enforces Testing coverage, and assigns non-overlapping rubrics
+3. Create a runtime review team and spawn review agents in parallel
+4. Collect findings, parse severity, deduplicate, and synthesize panel-level risks
+5. Route fixes, run bounded re-review cycles, and escalate unresolved blockers
+6. On PASS, write `{NN}-REVIEW.md`, mark the phase complete, and optionally close linked GitHub work
+
+**Skills invoked:** `workflow-common-core` -> `review-loop` | `review-panel` -> `execution-tracker` -> `memory-manager` | `design-workflows` (three-lens) | `github-sync`
 **Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion
-**Produces:** `{NN}-REVIEW.md`, fix commits, updated STATE.md and ROADMAP.md
+**Produces:** Dry-run review readiness output today; live runtime review produces `{NN}-REVIEW.md`, fix commits, and updated STATE.md/ROADMAP.md
 **User interaction:** Chooses review mode; confirms reviewer selection; reviews findings; approves fixes; decides escalation path
 
 ---
 
 ### Navigation
 
-#### `/legion:status` — Progress Dashboard
+#### `legion status` (alias: `/legion:status`) — Progress Dashboard
 
 Single command to understand where the project is and what to do next. Reads all project state and displays a clear dashboard with session resume context.
 
@@ -300,7 +304,7 @@ Single command to understand where the project is and what to do next. Reads all
 2. Calculate progress via `execution-tracker` — 20-char progress bar from ROADMAP.md plan counts
 3. Display milestone progress via `milestone-tracker` (if milestones defined)
 4. Load memory briefing via `memory-manager` (if OUTCOMES.md exists) — last 5 outcomes, top 3 agents by success rate
-5. Check codebase map status (CODEBASE.md plus `.planning/codebase/` artifacts; suggest `/legion:map --refresh` if stale or partial)
+5. Check codebase map status (CODEBASE.md plus `.planning/codebase/` artifacts; suggest `legion map --refresh` if stale or partial)
 6. Fetch GitHub status via `github-sync` (if STATE.md has GitHub section) — live issue/PR/milestone state via `gh` CLI
 7. Route to next action — decision tree: no project → start; pending → plan; planned → build; executed → review; complete → next phase or finish
 
@@ -313,23 +317,23 @@ Single command to understand where the project is and what to do next. Reads all
 
 ### Ad-hoc
 
-#### `/legion:quick <task>` — One-off Task Execution
+#### `legion quick <task>` (alias: `/legion:quick <task>`) — One-off Task Execution
 
-Run any task outside the normal phase workflow with automatic agent selection. No phase planning required.
+Record a one-off task outside the normal phase workflow. Runtime installs can use the same command contract for automatic agent selection and execution when an execution bridge is available.
 
 **Key steps:**
 1. Parse the task description from arguments — works with or without an initialized project
 2. Load project context (optional) — reads PROJECT.md for tech stack awareness if available
 3. Score agents via `agent-registry` (keyword match 3pts, division affinity 2pts, partial match 1pt) and recommend top 2 candidates
-4. Spawn the selected agent via Agent tool with `model: "sonnet"` and full personality injection — or run autonomously if user prefers
-5. Return results with an optional conventional commit (auto-detects type: feat/fix/test/docs/refactor from task description)
+4. Current CLI records the structured workflow request; runtime adapters can spawn the selected agent or run autonomously if user prefers
+5. Runtime execution returns results with an optional conventional commit (auto-detects type: feat/fix/test/docs/refactor from task description)
 
 **Skills invoked:** `workflow-common-core` → `agent-registry`
 **Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion
-**Produces:** Task output plus optional git commit (does NOT update STATE.md or ROADMAP.md)
+**Produces:** Structured command record today; runtime execution produces task output plus optional git commit (does NOT update STATE.md or ROADMAP.md)
 **User interaction:** Confirms agent selection; approves commit
 
-#### `/legion:advise <topic>` — Expert Consultation
+#### `legion advise <topic>` (alias: `/legion:advise <topic>`) — Expert Consultation
 
 Get read-only strategic advice from any of the 49 agent personalities. The advisor can explore your codebase and ask clarifying questions but cannot modify any files.
 
@@ -337,16 +341,16 @@ Get read-only strategic advice from any of the 49 agent personalities. The advis
 1. Parse the topic (architecture, UX, marketing strategy, etc.) — provides a topic reference table spanning Engineering, Design, Business, Marketing, Testing, Product, and Spatial Computing
 2. Load project context from PROJECT.md if available (works without it for pure domain expertise)
 3. Score and recommend the best advisor via `agent-registry` — top 2 candidates presented with match rationale
-4. Spawn the advisor as a read-only **Explore** subagent (tool-level enforcement: no Write, no Edit, no Bash) with full personality injection and `model: "sonnet"`
+4. Current CLI records the structured advisory request; runtime adapters can spawn the advisor as a read-only **Explore** subagent (tool-level enforcement: no Write, no Edit, no Bash)
 5. Display structured advice: Assessment → Recommendations → Trade-offs → Next Steps
 6. Interactive follow-up loop — ask another question (same advisor, carries prior context), switch topics (new advisor), or end session
 
 **Skills invoked:** `workflow-common-core` → `agent-registry`
 **Tools:** Read, Grep, Glob, Agent, AskUserQuestion (advisor spawned as Explore — cannot modify files)
-**Produces:** Advisory output (no file changes, no state updates)
+**Produces:** Structured command record today; runtime execution produces advisory output (no file changes, no state updates)
 **User interaction:** Selects advisor agent; asks follow-up questions; ends session when satisfied
 
-#### `/legion:map` — Codebase Mapping
+#### `legion map` (alias: `/legion:map`) — Codebase Mapping
 
 Generate, refresh, check, or query the codebase map dataset used by planning, build, review, and status workflows.
 
@@ -360,9 +364,9 @@ Generate, refresh, check, or query the codebase map dataset used by planning, bu
 **Skills invoked:** `workflow-common-core` → `codebase-mapper`
 **Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
 **Produces:** `.planning/CODEBASE.md`, `.planning/codebase/`, `.planning/config/directory-mappings.yaml`
-**User interaction:** Confirms refresh when a fresh map already exists; mapping remains user-approved during `/legion:start`
+**User interaction:** Confirms refresh when a fresh map already exists; mapping remains user-approved during `legion start`
 
-#### `/legion:explore` — Design Discovery
+#### `legion explore` (alias: `/legion:explore`) — Design Discovery
 
 Run research-first product/design discovery with Polymath before committing to formal project initialization. Explore inspects current project context, researches the initial ask, asks focused clarifying questions, compares approaches, and saves a design document.
 
@@ -378,13 +382,13 @@ Run research-first product/design discovery with Polymath before committing to f
 **Skills invoked:** `workflow-common-core` → `polymath-engine` → `questioning-flow`
 **Tools:** Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
 **Produces:** `.planning/explorations/*-design.md`
-**User interaction:** Answers focused design questions; explicitly chooses whether to hand off to `/legion:start <design-doc-path>`
+**User interaction:** Answers focused design questions; explicitly chooses whether to hand off to `legion start <design-doc-path>`
 
 ---
 
 ### Management
 
-#### `/legion:portfolio` — Multi-Project Dashboard
+#### `legion portfolio` (alias: `/legion:portfolio`) — Multi-Project Dashboard
 
 Cross-project visibility when managing multiple Legion projects. Shows dependency tracking, agent allocation, and offers strategic coordination from the Studio Producer agent.
 
@@ -401,7 +405,7 @@ Cross-project visibility when managing multiple Legion projects. Shows dependenc
 **Produces:** Dashboard display; optional portfolio registry updates and Studio Producer analysis
 **User interaction:** Reviews dashboard; adds dependencies; requests strategic coordination; exits when done
 
-#### `/legion:milestone` — Milestone Lifecycle
+#### `legion milestone` (alias: `/legion:milestone`) — Milestone Lifecycle
 
 Handles the full milestone lifecycle: define milestone groupings, track status, mark milestones complete with summaries, and archive completed artifacts.
 
@@ -417,7 +421,7 @@ Handles the full milestone lifecycle: define milestone groupings, track status, 
 **Produces:** Updated ROADMAP.md, milestone summaries at `.planning/milestones/`, archived phase directories at `.planning/archive/`
 **User interaction:** Selects milestone operation; confirms completion and archiving
 
-#### `/legion:agent` — Agent Creator
+#### `legion agent` (alias: `/legion:agent`) — Agent Creator
 
 Create a new specialist agent when the 49 existing personalities don't cover your needs. Guided conversation produces a validated agent .md file and registers it in the catalog.
 
