@@ -52,7 +52,11 @@ export async function handleStartCommand(context: CliContext): Promise<CliResult
     "Missing required value for --owner. Use a human-readable owner up to 128 characters."
   );
   if (ownerValueless !== undefined) return ownerValueless;
-  const owner = stringOption(context, "owner") ?? "operator";
+  const explicitOwner = stringOption(context, "owner");
+  if (explicitOwner !== undefined && explicitOwner.trim().length === 0) {
+    return usageError("Invalid --owner value. Use a human-readable owner up to 128 characters.");
+  }
+  const owner = explicitOwner ?? "operator";
   let decisionOwner: Actor;
   try {
     decisionOwner = ownerActor(owner);

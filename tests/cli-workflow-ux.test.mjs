@@ -582,6 +582,25 @@ test("legion start reports friendly usage and supports dry-run", async () => {
     assert.equal(invalidOwnerPayload.diagnostics[0].code, "usage_error");
     assert.match(invalidOwnerPayload.diagnostics[0].message, /Invalid --owner value/);
 
+    for (const [label, ownerArgs] of [
+      ["empty owner", ["--owner="]],
+      ["blank owner", ["--owner", "   "]]
+    ]) {
+      const result = await runCliCapture([
+        "--repository-root", root,
+        "start",
+        "--name", "Asset Mapper",
+        ...ownerArgs,
+        "--dry-run",
+        "--json"
+      ]);
+      assert.equal(result.exitCode, 1, `${label} should reject explicit blank owner input`);
+      const payload = parseJsonOutput(result);
+      assert.equal(payload.status, "usage_error");
+      assert.equal(payload.diagnostics[0].code, "usage_error");
+      assert.match(payload.diagnostics[0].message, /Invalid --owner value/);
+    }
+
     const invalidSlug = await runCliCapture([
       "--repository-root", root,
       "start",
@@ -595,6 +614,19 @@ test("legion start reports friendly usage and supports dry-run", async () => {
     assert.equal(invalidSlugPayload.status, "usage_error");
     assert.equal(invalidSlugPayload.diagnostics[0].code, "usage_error");
     assert.match(invalidSlugPayload.diagnostics[0].message, /Invalid --slug value/);
+
+    const omittedOwner = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(omittedOwner.exitCode, 0, omittedOwner.stderr);
+    const omittedOwnerPayload = parseJsonOutput(omittedOwner);
+    assert.equal(omittedOwnerPayload.status, "dry_run");
+    assert.equal(omittedOwnerPayload.project.policy.decisionOwners[0].id, "operator");
+    assert.equal(omittedOwnerPayload.project.policy.decisionOwners[0].displayName, "operator");
 
     const dryRun = await runCliCapture([
       "--repository-root", root,

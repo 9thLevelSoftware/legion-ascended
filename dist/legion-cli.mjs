@@ -22699,7 +22699,11 @@ async function handleStartCommand(context) {
     "Missing required value for --owner. Use a human-readable owner up to 128 characters."
   );
   if (ownerValueless !== void 0) return ownerValueless;
-  const owner = stringOption(context, "owner") ?? "operator";
+  const explicitOwner = stringOption(context, "owner");
+  if (explicitOwner !== void 0 && explicitOwner.trim().length === 0) {
+    return usageError("Invalid --owner value. Use a human-readable owner up to 128 characters.");
+  }
+  const owner = explicitOwner ?? "operator";
   let decisionOwner;
   try {
     decisionOwner = ownerActor(owner);
