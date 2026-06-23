@@ -2,6 +2,18 @@
 
 This is the normal CLI path for a human-in-loop Legion project. The CLI writes durable state under `.legion/project`; typed engine operations remain available under `legion dev` for maintainers.
 
+## Install
+
+Use a first-class target unless you have a specific compatibility need:
+
+```powershell
+legion install --list-targets
+legion install --target codex --local --dry-run
+legion install --target codex --local
+```
+
+First-class targets expose one primary Legion entry point: `legion <command>` in the terminal, or a single `legion` skill/command/mode in the host. Compatibility, legacy, and manual-only targets are documented in `docs/cli/INSTALL-MATRIX.md` and shown with `legion install --list-targets --all-targets`.
+
 ## First Project Setup
 
 ```powershell

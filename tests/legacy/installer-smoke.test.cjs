@@ -80,7 +80,11 @@ function expectedNativeFiles(runtimeKey, scope, projectDir, homeDir) {
     if (!surfacePath) continue;
 
     switch (surface.type) {
+      case 'claude-skill':
+        expected.push(surfacePath);
+        break;
       case 'codex-prompts':
+        expected.push(path.join(surfacePath, 'legion.md'));
         expected.push(path.join(surfacePath, 'legion-start.md'));
         expected.push(path.join(surfacePath, 'legion-map.md'));
         expected.push(path.join(surfacePath, 'legion-update.md'));
@@ -95,21 +99,25 @@ function expectedNativeFiles(runtimeKey, scope, projectDir, homeDir) {
         expected.push(surfacePath);
         break;
       case 'gemini-commands':
+        expected.push(path.join(surfacePath, 'legion.toml'));
         expected.push(path.join(surfacePath, 'start.toml'));
         expected.push(path.join(surfacePath, 'map.toml'));
         expected.push(path.join(surfacePath, 'update.toml'));
         break;
       case 'copilot-skills':
+        expected.push(path.join(surfacePath, 'legion', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'legion-start', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'legion-map', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'legion-update', 'SKILL.md'));
         break;
       case 'opencode-commands':
+        expected.push(path.join(surfacePath, 'legion.md'));
         expected.push(path.join(surfacePath, 'legion-start.md'));
         expected.push(path.join(surfacePath, 'legion-map.md'));
         expected.push(path.join(surfacePath, 'legion-update.md'));
         break;
       case 'kilo-commands':
+        expected.push(path.join(surfacePath, 'legion.md'));
         expected.push(path.join(surfacePath, 'legion-start.md'));
         expected.push(path.join(surfacePath, 'legion-map.md'));
         expected.push(path.join(surfacePath, 'legion-plan.md'));
@@ -137,6 +145,7 @@ function expectedNativeFiles(runtimeKey, scope, projectDir, homeDir) {
         expected.push(path.join(surfacePath, 'skills', 'phase-decomposer', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'skills', 'board-of-directors', 'SKILL.md'));
         expected.push(path.join(surfacePath, 'skills', 'wave-executor', 'SKILL.md'));
+        expected.push(path.join(surfacePath, 'commands', 'legion.md'));
         break;
       default:
         throw new Error(`Unhandled native surface type in tests: ${surface.type}`);
@@ -197,11 +206,11 @@ function assertManifest(runtimeKey, scope, projectDir, homeDir) {
 
 function assertKiloCommandUsesSubtask(commandFile) {
   const content = fs.readFileSync(commandFile, 'utf8');
-  assert.match(content, /^agent:\s+legion-orchestrator$/m, `${commandFile}: should route through the Legion orchestrator`);
+  assert.match(content, /^agent:\s+legion$/m, `${commandFile}: should route through the Legion wrapper`);
   assert.match(
     content,
     /^subtask:\s+true$/m,
-    `${commandFile}: commands routed to the subagent orchestrator must run as subtasks`
+    `${commandFile}: commands routed to the Legion wrapper must run as subtasks`
   );
 }
 
@@ -245,7 +254,7 @@ function assertKiloCodeSkill(skillFile, manifestFile) {
   assert.match(content, /\/legion:board/, `${skillFile}: should map the board workflow`);
   assert.match(content, /\/legion:map/, `${skillFile}: should map the map workflow`);
   assert.match(content, /\/legion:validate/, `${skillFile}: should map the validate workflow`);
-  assert.match(content, /native Kilo workflow files/, `${skillFile}: should mention native Kilo workflows`);
+  assert.match(content, /\/legion/, `${skillFile}: should mention the unified Legion entrypoint`);
 }
 
 function assertKiloCodeMode(modeFile, expectedSource) {
@@ -822,7 +831,7 @@ test('deprecated --amazon-q alias installs the Kiro runtime contract', () => {
 
     const { manifestFile, manifest } = assertManifest('kiro', 'local', projectDir, homeDir);
     assert.equal(manifest.runtime, 'kiro', 'amazon-q alias should write kiro runtime in manifest');
-    assert.ok(fs.existsSync(path.join(projectDir, '.kiro', 'agents', 'legion-orchestrator.md')), 'kiro custom agent should exist');
+    assert.ok(fs.existsSync(path.join(projectDir, '.kiro', 'agents', 'legion.md')), 'kiro custom agent should exist');
 
     const uninstallResult = runInstaller(['--kiro', '--local', '--uninstall'], projectDir, homeDir);
     assertRunOk(uninstallResult, 'kiro uninstall after amazon-q alias install');

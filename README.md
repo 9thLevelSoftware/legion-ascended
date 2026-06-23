@@ -1,12 +1,14 @@
 # Legion
 
-Orchestrate 49 AI specialist personalities across 10 installable AI CLI runtimes plus the Kilo Code plugin.
+Orchestrate guided planning, execution, review, and project memory through one workflow-first CLI and a smaller set of verified host integrations.
 
 > *"My name is Legion, for we are many."*
 
 ## What It Does
 
-Turn 49 isolated agent personalities into a coordinated legion. The native Legion entry point now depends on the runtime you install into. See the audited compatibility matrix in [docs/runtime-audit.md](docs/runtime-audit.md) before assuming `/legion:*` works everywhere.
+Turn guided Legion workflows into durable project artifacts: plans, taskgraphs, execution evidence, review decisions, codebase maps, lessons, milestones, and retrospectives. The canonical flow is the CLI: `legion start`, `legion plan`, `legion build`, `legion review`, and `legion ship`.
+
+Host integrations are install surfaces over the same workflow language. Legion now recommends only first-class targets by default; compatibility and legacy targets remain documented in [docs/cli/INSTALL-MATRIX.md](docs/cli/INSTALL-MATRIX.md).
 
 ## CLI Workflow
 
@@ -29,47 +31,52 @@ Runtime slash-command installs remain supported, but they are compatibility and 
 
 ## Installation
 
-### Quick install (recommended)
+### Quick install
 
 ```bash
-npx @9thlevelsoftware/legion --claude
+npx @9thlevelsoftware/legion --target claude
 ```
 
-Replace `--claude` with your runtime of choice:
+Recommended first-class targets:
 
 | Flag | Runtime |
 |------|---------|
 | `--claude` | Claude Code |
 | `--codex` | OpenAI Codex CLI |
-| `--cursor` | Cursor |
 | `--copilot` | GitHub Copilot CLI |
-| `--gemini` | Google Gemini CLI |
 | `--antigravity` | Antigravity CLI |
-| `--kiro` | Kiro CLI (preferred) |
-| `--amazon-q` | Deprecated alias for `--kiro` |
-| `--windsurf` | Windsurf |
 | `--opencode` | OpenCode |
-| `--kilo` | Kilo CLI |
 | `--kilo-code` | Kilo Code Plugin |
 | `--kilocode` | Alias for `--kilo-code` |
-| `--aider` | Aider (manual-only; native install disabled) |
+
+Use the target-oriented installer commands for clarity:
+
+```powershell
+legion install --list-targets
+legion install --list-targets --all-targets
+legion install --target codex --explain
+legion install --target codex --local --dry-run
+legion install --target codex --local
+```
+
+Compatibility, legacy, and manual-only targets are still available by explicit target or `--all-targets`: Cursor, Kiro CLI, Windsurf, Kilo CLI, Google Gemini CLI, Aider, and Claude Desktop. See [docs/cli/INSTALL-MATRIX.md](docs/cli/INSTALL-MATRIX.md) before choosing one.
 
 ### Runtime Support Tiers
 
 | Runtime | Status | Notes |
 |---------|--------|-------|
-| Claude Code | Certified | Control runtime with native Legion slash commands, agents, and skills |
-| OpenAI Codex CLI | Beta | Native prompt commands plus a Legion bridge skill; use `/project:legion-start` or `/prompts:legion-start` |
-| GitHub Copilot CLI | Beta | Native `/legion-start` skills plus a `legion-orchestrator` agent profile |
-| Google Gemini CLI | Beta | Native `/legion:start` custom commands in `.gemini/commands/legion/` |
-| Antigravity CLI | Certified | Native `/legion:start` plugins in `.agents/plugins/legion/` (local) or `~/.gemini/config/plugins/legion/` (global) |
-| Kiro CLI (formerly Amazon Q Developer CLI) | Beta | Native `@legion-orchestrator` custom agent plus steering files |
-| OpenCode | Beta | Native `/legion-start` custom commands plus a Legion subagent |
-| Kilo CLI | Beta | Native `/legion-start` custom commands plus a Legion subagent |
-| Kilo Code Plugin | Beta | Native `Legion` custom mode plus Legion workflows and Agent Skills in both `.kilocode/` and CLI-backed `.kilo/` paths; use `--kilo-code` instead of `--kilo` |
-| Cursor | Experimental | Local-only rules install in `.cursor/rules/`; plain-language Legion requests only |
-| Windsurf | Experimental | Local-only rules install in `.windsurf/rules/`; plain-language Legion requests only |
-| Aider | Experimental | Manual-only fallback; automated native install is intentionally disabled |
+| Claude Code | First-class | Native `/legion` skill plus command aliases, agents, and supporting skills |
+| OpenAI Codex CLI | First-class | Native `legion` skill plus `/project:legion` or `/prompts:legion`; per-command prompts are aliases |
+| GitHub Copilot CLI | First-class | Native `/legion` skill plus a `legion` custom agent profile |
+| Antigravity CLI | First-class | Native `legion` plugin with skills, agents, and command aliases |
+| OpenCode | First-class | Native `/legion` command plus a Legion subagent |
+| Kilo Code Plugin | First-class | Native `Legion` mode or `/legion` workflow plus Agent Skills |
+| Cursor | Compatible | Local-only rules install; plain-language Legion requests only |
+| Kiro CLI (formerly Amazon Q Developer CLI) | Compatible | `@legion` custom agent plus steering files |
+| Windsurf | Compatible | Local-only rules install; plain-language Legion requests only |
+| Kilo CLI | Compatible | CLI-backed `/legion`; use `--kilo-code` for the preferred Kilo Code path |
+| Google Gemini CLI | Legacy | Kept for enterprise/pinned Gemini CLI users after consumer migration to Antigravity |
+| Aider | Manual-only | Automated native install is intentionally disabled |
 
 ### Local development
 
@@ -82,14 +89,15 @@ node bin/install.js --claude
 
 - Node.js `>=24 <26`
 - pnpm `>=11.4 <12` for source development
-- One of the 10 installable AI CLI runtimes listed above or Kilo Code plugin support via `--kilo-code` (Aider remains manual-only; support tier varies by runtime)
+- One first-class target listed above for the recommended host integration path
 
 ### Codex note
 
-If you install with `--codex`, Legion writes its workflow files into `.legion/`, installs native prompt commands into `.codex/prompts/` for local installs or `~/.codex/prompts/` for global installs, and also installs a `legion` bridge skill into `.agents/skills/legion/`.
+If you install with `--codex`, Legion writes its workflow files into `.legion/`, installs a canonical `legion` prompt into `.codex/prompts/` for local installs or `~/.codex/prompts/` for global installs, installs compatibility prompt aliases, and also installs a `legion` bridge skill into `.agents/skills/legion/`.
 
-- Local Codex installs appear as `/project:legion-start`, `/project:legion-plan`, `/project:legion-build`, and so on
-- Global Codex installs appear as `/prompts:legion-start`, `/prompts:legion-plan`, `/prompts:legion-build`, and so on
+- Local Codex installs use `/project:legion`
+- Global Codex installs use `/prompts:legion`
+- Per-command prompt files such as `/project:legion-start` or `/prompts:legion-start` remain compatibility aliases
 - Legacy `/legion:*` aliases remain bridge-only fallbacks, and plain-language Legion intents still work
 
 ### Repo-native Codex plugin
@@ -105,15 +113,15 @@ This repository now also ships a repo-native Codex plugin manifest at `.codex-pl
 
 | Runtime | Local install | Global install |
 |---------|---------------|----------------|
-| Claude Code | `/legion:start` | `/legion:start` |
-| OpenAI Codex CLI | `/project:legion-start` | `/prompts:legion-start` |
-| GitHub Copilot CLI | `/legion-start` or `/agent legion-orchestrator` | `/legion-start` or `/agent legion-orchestrator` |
-| Google Gemini CLI | `/legion:start` | `/legion:start` |
-| Antigravity CLI | `/legion:start` | `/legion:start` |
-| Kiro CLI | `@legion-orchestrator` | `@legion-orchestrator` |
-| OpenCode | `/legion-start` | `/legion-start` |
-| Kilo CLI | `/legion-start` | `/legion-start` |
-| Kilo Code Plugin | Select `Legion` mode or run `/legion-start.md` or `/legion-start` | Select `Legion` mode or run `/legion-start.md` or `/legion-start` |
+| Claude Code | `/legion` | `/legion` |
+| OpenAI Codex CLI | `/project:legion` | `/prompts:legion` |
+| GitHub Copilot CLI | `/legion` | `/legion` |
+| Antigravity CLI | `/legion` | `/legion` |
+| OpenCode | `/legion` | `/legion` |
+| Kilo Code Plugin | Select `Legion` mode or run `/legion` | Select `Legion` mode or run `/legion` |
+| Google Gemini CLI | `/legion` (legacy) | `/legion` (legacy) |
+| Kiro CLI | `@legion` | `@legion` |
+| Kilo CLI | `/legion` | `/legion` |
 | Cursor | Plain-language request after local rules install | Not supported |
 | Windsurf | Plain-language request after local rules install | Not supported |
 | Aider | Manual-only | Manual-only |
