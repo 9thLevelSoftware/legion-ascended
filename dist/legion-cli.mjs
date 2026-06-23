@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path19 from "node:path";
+import path20 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path20) {
-  if (!path20)
+function getElementAtPath(obj, path21) {
+  if (!path21)
     return obj;
-  return path20.reduce((acc, key) => acc?.[key], obj);
+  return path21.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path20, issues) {
+function prefixIssues(path21, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path20);
+    iss.path.unshift(path21);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path20 = []) => {
+  const processError = (error3, path21 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path20, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path21, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else {
-        const fullpath = [...path20, ...issue2.path];
+        const fullpath = [...path21, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -13250,6 +13250,8 @@ import { readFile } from "node:fs/promises";
 var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "allow-replace-existing-project",
   "apply",
+  "auto",
+  "auto-refine",
   "dry-run",
   "from-codex-legion",
   "from-planning",
@@ -14916,14 +14918,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path20) {
-  if (path20.endsWith(".json"))
+function mediaTypeForArtifactPath(path21) {
+  if (path21.endsWith(".json"))
     return "application/json";
-  if (path20.endsWith(".yaml") || path20.endsWith(".yml"))
+  if (path21.endsWith(".yaml") || path21.endsWith(".yml"))
     return "application/yaml";
-  if (path20.endsWith(".md"))
+  if (path21.endsWith(".md"))
     return "text/markdown";
-  if (path20.endsWith(".txt"))
+  if (path21.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -14966,16 +14968,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path20, issues) {
+function schemaDiagnostics(path21, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path20 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path21 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path20
+      path: path21
     });
   });
 }
@@ -15878,7 +15880,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path20 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path21 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -15892,7 +15894,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path20
+        path: path21
       }))
     };
   }
@@ -16640,13 +16642,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path20) {
+function parseRequirementId2(input, path21) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path20
+      path: path21
     })));
   }
   return parsed.data;
@@ -16662,24 +16664,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path20) {
+function parseBaseGitSha(input, path21) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path20
+      path: path21
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path20) {
+function parseOwners(input, path21) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path20
+        path: path21
       })
     ]);
   }
@@ -16691,7 +16693,7 @@ function parseOwners(input, path20) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path20
+        path: path21
       })));
       continue;
     }
@@ -16979,7 +16981,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path20) {
+function conflictDiagnostics(deltas, path21) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -16988,7 +16990,7 @@ function conflictDiagnostics(deltas, path20) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path20
+        path: path21
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -17755,13 +17757,13 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path20) {
+function parseOracleId2(input, path21) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path20
+      path: path21
     })));
   }
   return parsed.data;
@@ -18321,8 +18323,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path20) {
-  return nodeId("artifact", path20);
+function artifactNodeId(path21) {
+  return nodeId("artifact", path21);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -18358,8 +18360,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path20) {
-  const fileName = path20.split("/").at(-1);
+function oracleIdFromPath(path21) {
+  const fileName = path21.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -18474,13 +18476,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path20 = [];
+  const path21 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path20.indexOf(node);
+      const cycleStartIndex = path21.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path20.length; index++) {
-          const cyclicNode = path20[index];
+        for (let index = cycleStartIndex; index < path21.length; index++) {
+          const cyclicNode = path21[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -18490,11 +18492,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path20.push(node);
+    path21.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path20.pop();
+    path21.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -18522,10 +18524,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path20 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path21 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path20,
+        path: path21,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -19171,13 +19173,13 @@ function parseChangeId7(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path20) {
+function parseArchivedAt(input, path21) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path20
+      path: path21
     })));
   }
   return parsed.data;
@@ -19206,7 +19208,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path20) {
+function archiveHashDiagnostics(record2, path21) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -19214,11 +19216,11 @@ function archiveHashDiagnostics(record2, path20) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path20
+      path: path21
     })
   ];
 }
-async function assertWorktreeTarget(input, path20) {
+async function assertWorktreeTarget(input, path21) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -19232,7 +19234,7 @@ async function assertWorktreeTarget(input, path20) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path20
+        path: path21
       })
     ]);
   } catch (error2) {
@@ -19240,7 +19242,7 @@ async function assertWorktreeTarget(input, path20) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path20
+        path: path21
       })
     ]);
   }
@@ -19319,11 +19321,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path20 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path20 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path20)) : remaining;
+    const path21 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path21 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path21)) : remaining;
     return {
-      path: path20,
+      path: path21,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -19386,9 +19388,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path20, document) {
+function validatePlannedDocument(path21, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path20,
+    artifactPath: path21,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -19399,7 +19401,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path20, document]) => [path20, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path21, document]) => [path21, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -19423,17 +19425,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path20 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path20)) {
+      const path21 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path21)) {
         return failure9("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path20}.`,
-            path: path20
+            message: `Archive add target already exists: ${path21}.`,
+            path: path21
           })
         ]);
       }
-      plannedDocs.set(path20, {
+      plannedDocs.set(path21, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -19446,7 +19448,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path20);
+      touchedPaths.add(path21);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -19631,8 +19633,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path20 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path20);
+  const path21 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path21);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -19870,10 +19872,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path20 = archivePath(changeId);
+  const path21 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path20,
+    artifactPath: path21,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -19885,22 +19887,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path20
+        path: path21
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path20);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path21);
   if (hashDiagnostics.length > 0)
     return failure9("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path20,
+    artifactPath: path21,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path20,
+      path: path21,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -22904,9 +22906,138 @@ async function handleStatusCommand(context) {
   );
 }
 
+// packages/cli/src/workflow/phase-compat.ts
+import { readFile as readFile11 } from "node:fs/promises";
+import path18 from "node:path";
+async function resolvePhaseSource(context, phaseNumber) {
+  for (const sourcePath of roadmapCandidates(context)) {
+    const text = await readOptionalRoadmap(sourcePath);
+    if (text === void 0) continue;
+    const phase = parseRoadmapPhase(text, phaseNumber, sourcePath);
+    if (phase !== void 0) {
+      return { ok: true, phase };
+    }
+  }
+  return {
+    ok: false,
+    diagnostic: {
+      code: "phase_source_missing",
+      message: `No phase ${phaseNumber} source was found. Run legion explore or pass --from-roadmap <path>.`
+    }
+  };
+}
+function parseRoadmapPhase(text, phaseNumber, sourcePath) {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const headingPattern = new RegExp(`^(#{2,3})\\s+Phase\\s+${phaseNumber}\\s*:\\s*(.+?)\\s*$`, "im");
+  const match = headingPattern.exec(normalized);
+  const headingMarker = match?.[1];
+  const phaseName = match?.[2];
+  if (match === null || phaseName === void 0) return void 0;
+  const headingEnd = match.index + match[0].length;
+  const headingLevel = headingMarker?.length ?? 2;
+  const nextHeadingPattern = /^(#{2,3})\s+Phase\s+\d+\s*:/gm;
+  nextHeadingPattern.lastIndex = headingEnd;
+  let nextHeading = nextHeadingPattern.exec(normalized);
+  while (nextHeading !== null && (nextHeading[1]?.length ?? 0) > headingLevel) {
+    nextHeading = nextHeadingPattern.exec(normalized);
+  }
+  const bodyStart = normalized[headingEnd] === "\n" ? headingEnd + 1 : headingEnd;
+  const bodyEnd = nextHeading?.index ?? normalized.length;
+  return {
+    number: phaseNumber,
+    name: phaseName.trim(),
+    body: normalized.slice(bodyStart, bodyEnd).trim(),
+    sourcePath
+  };
+}
+function roadmapCandidates(context) {
+  const fromRoadmap = stringOption(context, "from-roadmap");
+  if (fromRoadmap !== void 0) {
+    return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
+  }
+  const candidates = [
+    path18.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path18.join(context.repositoryRoot, "ROADMAP.md")
+  ];
+  return candidates.filter((candidate) => candidate !== void 0);
+}
+function resolveRoadmapPath(repositoryRoot, roadmapPath) {
+  return path18.isAbsolute(roadmapPath) ? roadmapPath : path18.resolve(repositoryRoot, roadmapPath);
+}
+async function readOptionalRoadmap(sourcePath) {
+  try {
+    return await readFile11(sourcePath, "utf8");
+  } catch (error2) {
+    if (isEnoent6(error2)) return void 0;
+    throw error2;
+  }
+}
+function isEnoent6(error2) {
+  return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
+}
+
+// packages/cli/src/commands/workflow/plan.ts
+var PLAN_USAGE = "Use: legion plan 1";
+async function handlePlanWorkflow(context) {
+  const phaseNumberResult = parsePhaseNumber(context.args.positionals[0]);
+  if (typeof phaseNumberResult !== "number") return phaseNumberResult;
+  const resolved = await resolvePhaseSource(context, phaseNumberResult);
+  if (!resolved.ok) {
+    const diagnostics = [resolved.diagnostic];
+    const action2 = nextAction(
+      "legion explore",
+      "A phase source is required before planning can produce a task graph."
+    );
+    return failure(
+      {
+        ok: false,
+        status: "blocked",
+        diagnostics,
+        nextAction: action2
+      },
+      [
+        "Planning is blocked.",
+        renderDiagnostics(diagnostics),
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const action = nextAction(
+    "legion build",
+    "The phase source is resolved; build is the next workflow step after task artifacts exist."
+  );
+  const dryRun = hasFlag(context, "dry-run");
+  return success(
+    {
+      ok: true,
+      status: "planned",
+      dryRun,
+      phase: resolved.phase,
+      autoRefine: hasFlag(context, "auto-refine"),
+      nextAction: action,
+      diagnostics: []
+    },
+    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action)
+  );
+}
+function parsePhaseNumber(value) {
+  if (value === void 0) {
+    return usageError(`Missing phase number. ${PLAN_USAGE}`);
+  }
+  if (!/^[1-9]\d*$/.test(value)) {
+    return usageError(`Invalid phase number "${value}". Use a positive integer. ${PLAN_USAGE}`);
+  }
+  return Number.parseInt(value, 10);
+}
+function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
+  const summary = `Planning preview for phase ${phaseNumber}: ${phaseName}.`;
+  const mode = dryRun ? "Dry run: no task graph was written." : "Compatibility preview: task graph writing is not wired until Task 9, so no artifacts were written.";
+  return [summary, mode, renderNextAction(action)].join("\n");
+}
+
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
-import path18 from "node:path";
+import path19 from "node:path";
 async function handleValidateCommand(context) {
   const result = await validateWorkflowProject(context);
   const payload = {
@@ -22947,7 +23078,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path18.join(root, relativePath));
+    await stat7(path19.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -22990,6 +23121,8 @@ async function handleWorkflowCommand(context) {
       return handleStartCommand(commandContext);
     case "status":
       return handleStatusCommand(commandContext);
+    case "plan":
+      return handlePlanWorkflow(commandContext);
     case "validate":
       return handleValidateCommand(commandContext);
     case "doctor":
@@ -23019,7 +23152,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path19.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path20.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -23071,8 +23204,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path19.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path19.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path20.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path20.resolve(fileURLToPath3(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

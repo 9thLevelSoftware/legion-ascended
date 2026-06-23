@@ -29,6 +29,8 @@ export type CommandHandler = (context: CliContext) => Promise<CliResult>;
 const VALUELESS_OPTIONS = new Set([
   "allow-replace-existing-project",
   "apply",
+  "auto",
+  "auto-refine",
   "dry-run",
   "from-codex-legion",
   "from-planning",

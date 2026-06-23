@@ -809,7 +809,7 @@ test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", asyn
 
     const result = await runCliCapture([
       "--repository-root", root,
-      "plan", "1",
+      "plan", "--auto", "--auto-refine", "1",
       "--from-roadmap", "ROADMAP.md",
       "--dry-run",
       "--json"
@@ -818,6 +818,9 @@ test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", asyn
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, true);
     assert.equal(payload.status, "planned");
+    assert.equal(payload.dryRun, true);
+    assert.equal(payload.autoRefine, true);
+    assert.deepEqual(payload.diagnostics, []);
     assert.deepEqual(payload.phase, {
       number: 1,
       name: "Editor MVP",
@@ -827,6 +830,22 @@ test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", asyn
     assert.equal(payload.nextAction.command, "legion build");
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion plan phase requires a strict positive integer", async () => {
+  const missing = await runCliCapture(["plan", "--json"]);
+  assert.equal(missing.exitCode, 1);
+  const missingPayload = parseJsonOutput(missing);
+  assert.equal(missingPayload.status, "usage_error");
+  assert.equal(missingPayload.diagnostics[0].message, "Missing phase number. Use: legion plan 1");
+
+  for (const value of ["0", "-1", "1abc"]) {
+    const result = await runCliCapture(["plan", value, "--json"]);
+    assert.equal(result.exitCode, 1, `${value} should be rejected`);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.status, "usage_error");
+    assert.match(payload.diagnostics[0].message, /Invalid phase number/);
   }
 });
 
