@@ -38,8 +38,8 @@ async function main() {
     }
 
     const initialStatus = runLegion(workspace, ["status"], { expectExitCode: 0 });
-    assertEqual(initialStatus.workflowState.stage, "uninitialized", "initial status should be uninitialized");
-    assertEqual(initialStatus.nextAction.command, "legion start", "initial next action should be legion start");
+    assertEqual(initialStatus?.workflowState?.stage, "uninitialized", "initial status should be uninitialized", initialStatus);
+    assertEqual(initialStatus?.nextAction?.command, "legion start", "initial next action should be legion start", initialStatus);
 
     const projectName = options.target === undefined ? "Legion Dogfood" : path.basename(path.resolve(options.target));
     const start = runLegion(workspace, [
@@ -134,7 +134,11 @@ async function main() {
     }
   } finally {
     if ((ok || !options.keepTemp) && !options.keepTemp) {
-      await rm(tempRoot, { recursive: true, force: true });
+      try {
+        await rm(tempRoot, { recursive: true, force: true });
+      } catch (cleanupError) {
+        process.stderr.write(`Warning: Failed to clean up temp directory ${tempRoot}: ${errorMessage(cleanupError)}\n`);
+      }
     } else if (!ok) {
       process.stderr.write(`Dogfood workspace preserved for debugging: ${workspace}\n`);
     }
@@ -388,6 +392,10 @@ function assertEqual(actual, expected, message, context) {
 
 function firstNonEmpty(...values) {
   return values.find((value) => value !== undefined && String(value).trim().length > 0) ?? "";
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 class DogfoodError extends Error {

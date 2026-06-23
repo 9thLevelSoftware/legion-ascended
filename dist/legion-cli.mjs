@@ -25722,6 +25722,8 @@ var execFileAsync2 = promisify4(execFile4);
 function codexExecArgs(input) {
   return [
     "exec",
+    "-c",
+    'approval_policy="never"',
     "-C",
     input.repositoryRoot,
     "--sandbox",

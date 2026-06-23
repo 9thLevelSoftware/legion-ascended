@@ -17,6 +17,8 @@ Use `legion explore` or `legion map` before `legion plan` when the project needs
 
 ```powershell
 legion build --dry-run --json
+git status
+# Commit/stash generated workflow artifacts, or use --allow-dirty when the dirty state is intentional.
 legion build --executor codex
 legion review --executor codex
 legion review --accept

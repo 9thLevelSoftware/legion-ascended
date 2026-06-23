@@ -341,6 +341,8 @@ test("workflow codex executor args match current codex exec surface", async () =
 
   assert.deepEqual(args, [
     "exec",
+    "-c",
+    "approval_policy=\"never\"",
     "-C",
     "C:\\repo\\asset-mapper",
     "--sandbox",
@@ -350,6 +352,7 @@ test("workflow codex executor args match current codex exec surface", async () =
     "C:\\tmp\\executor-last-message.txt",
     "-"
   ]);
+  assert.equal(args.includes("approval_policy=\"never\""), true);
   assert.equal(args.includes("--ask-for-approval"), false);
   assert.equal(args.includes("--dangerously-bypass-approvals-and-sandbox"), false);
   assert.equal(args.includes("--dangerously-bypass-hook-trust"), false);

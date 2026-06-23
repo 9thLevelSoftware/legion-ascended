@@ -23,6 +23,8 @@ export function codexExecArgs(input: {
 }): readonly string[] {
   return [
     "exec",
+    "-c",
+    "approval_policy=\"never\"",
     "-C",
     input.repositoryRoot,
     "--sandbox",

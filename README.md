@@ -125,9 +125,10 @@ This repository now also ships a repo-native Codex plugin manifest at `.codex-pl
 3. Answer the guided questions, or run `legion explore` first to record a design discovery artifact
 4. Review the generated PROJECT.md and ROADMAP.md
 5. Plan the first phase with `legion plan 1`
-6. Run `legion build --executor codex` for live execution, or `legion build --executor manual` to prepare prompts without executing
-7. Run `legion review --executor codex`, then accept a passing submitted review with `legion review --accept`
-8. Repeat plan → build → review for each phase
+6. Commit or stash the generated workflow artifacts, or decide the current dirty worktree is intentional
+7. Run `legion build --executor codex` for live execution, or add `--allow-dirty` when the dirty state is intentional
+8. Run `legion review --executor codex`, then accept a passing submitted review with `legion review --accept`
+9. Repeat plan → build → review for each phase
 
 ## Commands
 
