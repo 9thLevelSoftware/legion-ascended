@@ -19,7 +19,7 @@ export const WORKFLOW_COMMANDS: readonly CommandHelpEntry[] = Object.freeze([
   { name: "learn", summary: "Record project-specific operational learning." },
   { name: "milestone", summary: "Manage milestone status, summaries, and archives." },
   { name: "validate", summary: "Validate committed Legion project state." },
-  { name: "doctor", summary: "Validate project, operational, runtime, and packaging health." },
+  { name: "doctor", summary: "Validate project state plus shallow .legion/var and bundle-index path presence." },
   { name: "council", summary: "Run governance deliberation formerly exposed as /legion:board." }
 ]);
 

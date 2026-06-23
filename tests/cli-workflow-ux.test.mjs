@@ -441,6 +441,8 @@ test("root help leads with workflow commands and hides next namespace", async ()
   assert.match(result.stdout, /plan\s+Plan/);
   assert.match(result.stdout, /build\s+Execute/);
   assert.match(result.stdout, /review\s+Review/);
+  assert.match(result.stdout, /doctor\s+Validate project state plus shallow \.legion\/var and bundle-index path presence\./);
+  assert.doesNotMatch(result.stdout, /doctor\s+Validate project, operational, runtime, and packaging health\./);
   assert.match(result.stdout, /dev\s+Advanced/);
   assert.doesNotMatch(result.stdout, /install\s+Install Legion workflows/);
   assert.doesNotMatch(result.stdout, /legion next <command>/);
@@ -546,7 +548,7 @@ test("legion start reports friendly usage and supports dry-run", async () => {
   }
 });
 
-test("legion validate and doctor report project health", async () => {
+test("legion validate and doctor report project and shallow path checks", async () => {
   const root = await tempRepo();
   try {
     const missing = await runCliCapture(["--repository-root", root, "validate", "--json"]);
