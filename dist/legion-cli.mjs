@@ -22978,9 +22978,19 @@ function isEnoent6(error2) {
 
 // packages/cli/src/commands/workflow/plan.ts
 var PLAN_USAGE = "Use: legion plan 1";
+var PLAN_FROM_ROADMAP_USAGE = "Use: legion plan 1 --from-roadmap ROADMAP.md";
 async function handlePlanWorkflow(context) {
   const phaseNumberResult = parsePhaseNumber(context.args.positionals[0]);
   if (typeof phaseNumberResult !== "number") return phaseNumberResult;
+  const fromRoadmapResult = validateFromRoadmapOption(context);
+  if (fromRoadmapResult !== void 0) return fromRoadmapResult;
+  const workflowState = await resolveWorkflowState(context);
+  if (workflowState.stage === "uninitialized") {
+    return blockedPlan(workflowState.diagnostics, workflowState.nextAction);
+  }
+  if (workflowState.stage === "blocked") {
+    return blockedPlan(workflowState.diagnostics, workflowState.nextAction);
+  }
   const resolved = await resolvePhaseSource(context, phaseNumberResult);
   if (!resolved.ok) {
     const diagnostics = [resolved.diagnostic];
@@ -23028,6 +23038,27 @@ function parsePhaseNumber(value) {
     return usageError(`Invalid phase number "${value}". Use a positive integer. ${PLAN_USAGE}`);
   }
   return Number.parseInt(value, 10);
+}
+function validateFromRoadmapOption(context) {
+  if (!context.args.options.has("from-roadmap")) return void 0;
+  const value = context.args.options.get("from-roadmap");
+  if (typeof value === "string" && value.trim().length > 0) return void 0;
+  return usageError(`Missing required option --from-roadmap. ${PLAN_FROM_ROADMAP_USAGE}`);
+}
+function blockedPlan(diagnostics, action) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      diagnostics,
+      nextAction: action
+    },
+    [
+      "Planning is blocked.",
+      renderDiagnostics(diagnostics),
+      renderNextAction(action)
+    ].join("\n")
+  );
 }
 function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
   const summary = `Planning preview for phase ${phaseNumber}: ${phaseName}.`;

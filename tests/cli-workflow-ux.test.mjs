@@ -25,6 +25,27 @@ async function initializeAssetMapperProject(root) {
   return parseJsonOutput(result);
 }
 
+async function writeValidRoadmap(root) {
+  const roadmapPath = path.join(root, "ROADMAP.md");
+  await writeFile(
+    roadmapPath,
+    [
+      "# Roadmap\n",
+      "\n",
+      "## Phase 1: Editor MVP\n",
+      "Build the editor surface.\n",
+      "\n",
+      "### Acceptance\n",
+      "- Asset metadata can be edited.\n",
+      "\n",
+      "## Phase 2: Package\n",
+      "Ship the app.\n"
+    ].join(""),
+    "utf8"
+  );
+  return roadmapPath;
+}
+
 async function importWorkflowModule(name) {
   try {
     return await import(`../packages/cli/dist/workflow/${name}.js`);
@@ -785,27 +806,56 @@ test("legion plan phase blocks initialized projects without a roadmap source", a
   }
 });
 
+test("legion plan phase blocks uninitialized projects before using a roadmap source", async () => {
+  const root = await tempRepo();
+  try {
+    await writeValidRoadmap(root);
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.nextAction.command, "legion start");
+    assert.ok(payload.diagnostics.length > 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion plan phase blocks invalid project state before using a roadmap source", async () => {
+  const root = await tempRepo();
+  try {
+    await writeValidRoadmap(root);
+    await mkdir(path.join(root, ".legion", "project"), { recursive: true });
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.nextAction.command, "legion validate");
+    assert.equal(payload.diagnostics[0]?.code, "migration_required");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
-    const roadmapPath = path.join(root, "ROADMAP.md");
-    await writeFile(
-      roadmapPath,
-      [
-        "# Roadmap\n",
-        "\n",
-        "## Phase 1: Editor MVP\n",
-        "Build the editor surface.\n",
-        "\n",
-        "### Acceptance\n",
-        "- Asset metadata can be edited.\n",
-        "\n",
-        "## Phase 2: Package\n",
-        "Ship the app.\n"
-      ].join(""),
-      "utf8"
-    );
+    const roadmapPath = await writeValidRoadmap(root);
 
     const result = await runCliCapture([
       "--repository-root", root,
@@ -828,6 +878,34 @@ test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", asyn
       sourcePath: roadmapPath
     });
     assert.equal(payload.nextAction.command, "legion build");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion plan phase rejects missing or blank from-roadmap values", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    for (const [label, roadmapArgs] of [
+      ["valueless from-roadmap", ["--from-roadmap"]],
+      ["empty from-roadmap", ["--from-roadmap="]],
+      ["blank from-roadmap", ["--from-roadmap", "   "]]
+    ]) {
+      const result = await runCliCapture([
+        "--repository-root", root,
+        "plan", "1",
+        ...roadmapArgs,
+        "--json"
+      ]);
+      assert.equal(result.exitCode, 1, `${label} should be rejected`);
+      const payload = parseJsonOutput(result);
+      assert.equal(payload.status, "usage_error");
+      assert.equal(payload.diagnostics[0]?.code, "usage_error");
+      assert.match(payload.diagnostics[0]?.message, /--from-roadmap/);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
