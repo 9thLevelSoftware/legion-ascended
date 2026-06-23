@@ -1,5 +1,5 @@
 /**
- * P11-T01 — `legion next board dashboard` CLI adapter.
+ * P11-T01 — `legion dev board dashboard` CLI adapter.
  *
  * Wires the dashboard projector into the CLI's existing
  * board command tree. The CLI is the operator surface for
@@ -54,7 +54,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const DASHBOARD_HELP = `legion next board dashboard <action>
+const DASHBOARD_HELP = `legion dev board dashboard <action>
 
 Actions:
   status    Replay the dashboard projection without persisting.

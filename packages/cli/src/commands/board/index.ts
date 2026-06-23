@@ -25,7 +25,7 @@ import { handleDashboardCommand } from "./dashboard.js";
 import { handleApprovalGateCommand } from "./approval-gate.js";
 import { handlePortfolioCommand } from "./portfolio.js";
 
-const BOARD_HELP = `legion next board <domain>
+const BOARD_HELP = `legion dev board <domain>
 
 Domains:
   task                Create, inspect, and mutate board task rows.
@@ -44,7 +44,7 @@ Global:
   --no-color                Disable ANSI styling.
   --help                    Show help.`;
 
-const TASK_HELP = `legion next board task <action>
+const TASK_HELP = `legion dev board task <action>
 
 Actions:
   create           Create a board task from JSON input.
@@ -58,7 +58,7 @@ Actions:
 
 All actions accept --input <path> with a JSON object.`;
 
-const EVENT_HELP = `legion next board event <action>
+const EVENT_HELP = `legion dev board event <action>
 
 Actions:
   append           Append a single board event.
@@ -71,7 +71,7 @@ Actions:
 
 All actions accept --input <path> with a JSON object.`;
 
-const CLAIM_HELP = `legion next board claim <action>
+const CLAIM_HELP = `legion dev board claim <action>
 
 Actions:
   try              Attempt to claim a task.
@@ -83,7 +83,7 @@ Actions:
 
 All actions accept --input <path> with a JSON object.`;
 
-const APPROVAL_HELP = `legion next board approval <action>
+const APPROVAL_HELP = `legion dev board approval <action>
 
 Actions:
   create           Create a new approval request.

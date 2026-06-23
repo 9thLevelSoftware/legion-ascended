@@ -1,5 +1,5 @@
 /**
- * P13-T01 — `legion next evals` CLI adapter.
+ * P13-T01 — `legion dev evals` CLI adapter.
  *
  * Release-grade behavioral evals with v8/v9 A/B comparison on sealed
  * scenarios. Routes through the Node-based capture/grade/compare scripts
@@ -41,9 +41,9 @@ import { execFile as execFileCb } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { resolveCliSourceRoot } from "../../source-root.js";
 import {
   failure,
   hasFlag,
@@ -57,7 +57,7 @@ import {
 
 const execFile = promisify(execFileCb);
 
-const EVALS_HELP = `legion next evals <command>
+const EVALS_HELP = `legion dev evals <command>
 
 Commands:
   capture        Seal a scenario into a run directory and write run-manifest.json.
@@ -111,12 +111,9 @@ Threat-model required options:
 Threat-model optional:
   --report <path>           Where to write the JSON verdict (in addition to stdout).`;
 
-// The v9 source root for the scripts/ and evals/ trees. Computed from the
-// compiled CLI's location (dist/commands/evals/index.js -> ../../../..).
-// The scripts live alongside this CLI's source, so we pin them at the
-// v9 source root rather than at the operator's --repository-root, which
-// may be an empty e2e workspace.
-const V9_SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..");
+// The helper scripts live beside the packaged CLI root, not under the
+// operator's --repository-root, which may be an empty e2e workspace.
+const V9_SOURCE_ROOT = resolveCliSourceRoot(import.meta.url, "scripts/baseline/capture-run.mjs");
 
 export async function handleEvalsCommand(context: CliContext): Promise<CliResult> {
   if (hasFlag(context, "help") || context.args.positionals.length === 0) {

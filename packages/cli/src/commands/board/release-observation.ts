@@ -1,5 +1,5 @@
 /**
- * P10-T02 — `legion next board release-observation` CLI adapter.
+ * P10-T02 — `legion dev board release-observation` CLI adapter.
  *
  * Wires the P10-T01 release-observation board adapter into the
  * CLI's existing board command tree. The CLI is the operator
@@ -66,7 +66,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const RELEASE_OBSERVATION_HELP = `legion next board release-observation <action>
+const RELEASE_OBSERVATION_HELP = `legion dev board release-observation <action>
 
 Actions:
   aggregate    Build a BoardEvent from a ReleaseObservationReport JSON and append to the event log.

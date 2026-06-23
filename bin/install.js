@@ -139,8 +139,7 @@ function dirnamePath(p) {
 function resolveHome() {
   const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
   if (!home) {
-    console.error('Cannot determine home directory. Set $HOME or $USERPROFILE.');
-    process.exit(1);
+    throw new Error('Cannot determine home directory. Set $HOME or $USERPROFILE.');
   }
   return normalizePath(home);
 }
@@ -1623,9 +1622,7 @@ function uninstall(runtimeKey, scope) {
   const manifest = readManifest(paths.manifestFile);
 
   if (!manifest) {
-    console.error('No Legion manifest found. Nothing to uninstall.');
-    console.error(`Expected manifest at: ${paths.manifestFile}`);
-    process.exit(1);
+    throw new Error(`No Legion manifest found. Nothing to uninstall.\nExpected manifest at: ${paths.manifestFile}`);
   }
 
   const rt = RUNTIME_METADATA[runtimeKey];
@@ -1805,9 +1802,7 @@ async function update(runtimeKey, scope, verify = false) {
   const manifest = readManifest(paths.manifestFile);
 
   if (!manifest) {
-    console.error('Legion is not installed. Run install first:');
-    console.error(`  npx @9thlevelsoftware/legion ${RUNTIME_METADATA[runtimeKey].flag}`);
-    process.exit(1);
+    throw new Error(`Legion is not installed. Run install first:\n  npx @9thlevelsoftware/legion ${RUNTIME_METADATA[runtimeKey].flag}`);
   }
 
   const installedVersion = manifest.version;
@@ -1838,9 +1833,7 @@ async function update(runtimeKey, scope, verify = false) {
     console.log('\nRe-installing...\n');
     install(runtimeKey, scope, verify);
   } catch (err) {
-    console.error(`Update check failed: ${err.message}`);
-    console.error('Your installed version is still functional.');
-    process.exit(1);
+    throw new Error(`Update check failed: ${err.message}\nYour installed version is still functional.`);
   }
 }
 
@@ -1848,11 +1841,11 @@ async function update(runtimeKey, scope, verify = false) {
 // SECTION 11: Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
 
-  if (args.action === 'help')    { printHelp(); process.exit(0); }
-  if (args.action === 'version') { printVersion(); process.exit(0); }
+  if (args.action === 'help')    { printHelp(); return 0; }
+  if (args.action === 'version') { printVersion(); return 0; }
 
   let runtime = args.runtime;
 
@@ -1862,12 +1855,12 @@ async function main() {
   } else if (!runtime) {
     console.error('Runtime flag required for this action. Use --claude, --codex, --kiro, etc.');
     console.error('Run with --help for full usage.');
-    process.exit(1);
+    return 1;
   }
 
   if (!RUNTIME_METADATA[runtime]) {
     console.error(`Unknown runtime: ${runtime}`);
-    process.exit(1);
+    return 1;
   }
 
   try {
@@ -1881,14 +1874,23 @@ async function main() {
       default:
         install(runtime, args.scope, args.verify);
     }
+    return 0;
   } catch (err) {
     console.error(`\nLegion installer failed: ${err.message}`);
     if (process.env.DEBUG) console.error(err.stack);
-    process.exit(1);
+    return 1;
   }
 }
 
-main();
+if (require.main === module) {
+  main().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
+}
+
+module.exports = {
+  main
+};
 
 
 

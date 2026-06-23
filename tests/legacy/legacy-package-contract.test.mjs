@@ -18,8 +18,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const V8_PACK_DRY_RUN = join(ROOT, "docs", "next", "evidence", "P01-PREFLIGHT", "v8-npm-pack-dry-run.json");
 const LEGACY_CHECKSUMS = join(ROOT, "checksums.sha256");
 const INSTALLER = join(ROOT, "bin", "install.js");
+const CLI_SOURCEMAP = join(ROOT, "dist", "legion-cli.mjs.map");
 
-test("P01-T10 package contents preserve the approved v8 legacy path set", async () => {
+test("package contents preserve legacy paths plus the approved root router bundle", async () => {
   const result = await checkLegacyPackageContents({
     root: ROOT,
     baselinePackPath: V8_PACK_DRY_RUN,
@@ -27,10 +28,11 @@ test("P01-T10 package contents preserve the approved v8 legacy path set", async 
   });
 
   assert.deepEqual(result.missingLegacyPaths, []);
+  assert.deepEqual(result.missingApprovedPackagePaths, []);
   assert.deepEqual(result.extraPackagePaths, []);
   assert.deepEqual(result.workspacePackagePaths, []);
   assert.deepEqual(result.legacyChecksumMismatches, []);
-  assert.equal(result.bin.legion, "bin/install.js");
+  assert.equal(result.bin.legion, "bin/legion.js");
 });
 
 test("P01-T10 seeded package mutations fail the path contract", () => {
@@ -51,6 +53,37 @@ test("P01-T10 seeded persona checksum mutation fails the checksum contract", () 
   });
 
   assert.deepEqual(comparison.legacyChecksumMismatches, ["agents/agents-orchestrator.md"]);
+});
+
+test("Task 4 router and bundle checksum mutations fail the checksum contract", () => {
+  const comparison = compareChecksumMaps({
+    baselineChecksums: new Map([
+      ["bin/legion.js", "a".repeat(64)],
+      ["dist/legion-cli.mjs", "a".repeat(64)]
+    ]),
+    currentChecksums: new Map([
+      ["bin/legion.js", "b".repeat(64)],
+      ["dist/legion-cli.mjs", "b".repeat(64)]
+    ])
+  });
+
+  assert.deepEqual(comparison.legacyChecksumMismatches, [
+    "bin/legion.js",
+    "dist/legion-cli.mjs"
+  ]);
+});
+
+test("Task 4 CLI sourcemap omits embedded sources and machine-specific paths", () => {
+  const text = readFileSync(CLI_SOURCEMAP, "utf8");
+  const map = JSON.parse(text);
+
+  assert.doesNotMatch(text, /\\r\\n/);
+  assert.equal(Object.hasOwn(map, "sourcesContent"), false);
+  assert.ok(Array.isArray(map.sources));
+  for (const source of map.sources) {
+    assert.doesNotMatch(source, /^[A-Za-z]:[\\/]/);
+    assert.doesNotMatch(source, /[\\/]Users[\\/]/);
+  }
 });
 
 test("P01-T10 seeded installer path mutation fails the installer matrix contract", () => {

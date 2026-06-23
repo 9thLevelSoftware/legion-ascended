@@ -8,17 +8,19 @@
     "pnpm": ">=11.4.0 <12"
   },
   "bin": {
-    "legion": "bin/install.js"
+    "legion": "bin/legion.js"
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile --strict-peer-dependencies",
-    "build": "pnpm -r build",
+    "build": "pnpm -r build && node scripts/build-cli-bundle.mjs",
+    "build:packages": "pnpm -r build",
+    "build:cli-bundle": "node scripts/build-cli-bundle.mjs",
     "typecheck": "pnpm run build && pnpm -r typecheck",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "check:package-contents": "node scripts/check-package-contents.mjs",
     "check:worker-bundles": "node scripts/validate-worker-bundles.mjs",
     "check:default-runtime": "node scripts/scan-default-runtime.mjs",
-    "test": "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
+    "test": "pnpm run build && node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\" && pnpm -r --if-present test",
     "docs:protocol": "pnpm run typecheck && node scripts/validate-next.mjs --generate-protocol-docs",
     "validate": "pnpm run validate:next",
     "validate:next": "node scripts/validate-next.mjs",
@@ -28,9 +30,19 @@
   "files": [
     ".codex-plugin/",
     "bin/",
+    "dist/legion-cli.mjs",
+    "dist/legion-cli.mjs.map",
     "agents/",
     "commands/",
     "skills/",
+    "scripts/baseline/*.mjs",
+    "scripts/release/*.mjs",
+    "evals/baseline/corpus-manifest.yaml",
+    "evals/baseline/fixture-hashes.sha256",
+    "evals/baseline/manifest.yaml",
+    "evals/baseline/scenarios/",
+    "evals/baseline/schema/",
+    "evals/fixtures/public/",
     "adapters/",
     "settings.json",
     "checksums.sha256",
@@ -60,6 +72,7 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "typescript": "6.0.3"
   }
 }

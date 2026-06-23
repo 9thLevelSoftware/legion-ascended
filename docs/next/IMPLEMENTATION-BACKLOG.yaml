@@ -170,6 +170,25 @@ items:
       - Cost, duration, intervention, recovery, duplicate-work, and defect metrics are recorded where exposed.
     verification:
       - live workflow eval report
+  - id: P14-B001
+    phase: 14
+    title: Realign CLI to workflow-first Legion UX
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P13-B001
+    maps_to:
+      - docs/next/adr/ADR-009-workflow-first-cli.md
+      - docs/next/baseline/V8-WORKFLOW-COMPATIBILITY-BASELINE.md
+    acceptance:
+      - Canonical root help leads with workflow commands such as legion start, legion plan, legion build, and legion review.
+      - Existing typed service commands remain reachable under legion dev.
+      - Worker bundle authoring is documented as a dev extension workflow, not normal usage.
+      - CLI e2e tests prove top-level workflow command parity and hidden next compatibility.
+    verification:
+      - node --test tests/workflow-command-contract.test.mjs
+      - node --test tests/cli-workflow-ux.test.mjs
+      - pnpm run validate:next
 deferred_placeholders:
   - id: P08-B001
     reason: CLI-first workflow UX backlog expands after protocol/core and board contracts exist.

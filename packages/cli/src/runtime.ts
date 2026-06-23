@@ -13,6 +13,11 @@ export interface CliContext {
   readonly cwd: string;
 }
 
+export interface CliWarning {
+  readonly code: string;
+  readonly message: string;
+}
+
 export interface CliResult {
   readonly exitCode: number;
   readonly payload: Record<string, unknown>;
@@ -24,6 +29,8 @@ export type CommandHandler = (context: CliContext) => Promise<CliResult>;
 const VALUELESS_OPTIONS = new Set([
   "allow-replace-existing-project",
   "apply",
+  "auto",
+  "auto-refine",
   "dry-run",
   "from-codex-legion",
   "from-planning",
@@ -154,6 +161,18 @@ export function unexpectedError(error: unknown): CliResult {
     },
     message
   );
+}
+
+export function withWarning(result: CliResult, warning: CliWarning): CliResult {
+  const existing = Array.isArray(result.payload["warnings"]) ? result.payload["warnings"] as readonly unknown[] : [];
+  return {
+    ...result,
+    payload: {
+      ...result.payload,
+      warnings: [...existing, warning]
+    },
+    human: result.human.length > 0 ? `${result.human}\nwarning: ${warning.message}` : `warning: ${warning.message}`
+  };
 }
 
 export function stripCommand(context: CliContext, count: number): CliContext {

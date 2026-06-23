@@ -1,5 +1,5 @@
 /**
- * P11-T02 — `legion next board portfolio` CLI adapter.
+ * P11-T02 — `legion dev board portfolio` CLI adapter.
  *
  * Wires the portfolio projector into the CLI's existing
  * board command tree. The CLI is the operator surface for
@@ -60,7 +60,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 
-const PORTFOLIO_HELP = `legion next board portfolio <action>
+const PORTFOLIO_HELP = `legion dev board portfolio <action>
 
 Actions:
   status    Replay the portfolio projection without persisting.

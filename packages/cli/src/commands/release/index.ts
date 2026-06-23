@@ -1,5 +1,5 @@
 /**
- * P13-T03 — `legion next release` CLI adapter.
+ * P13-T03 — `legion dev release` CLI adapter.
  *
  * Routes the fail-closed GA gates through the operator-facing CLI:
  *
@@ -12,7 +12,7 @@
  *                      precondition is missing.
  *
  *   rollback-verify    Run the backup-manifest verifier against a path
- *                      supplied by `legion next migrate --apply`. The
+ *                      supplied by `legion dev migrate --apply`. The
  *                      verifier re-hashes the backup directory and
  *                      fails closed on schema drift, hash mismatch, or
  *                      missing backup directory. Non-zero exit when the
@@ -26,8 +26,8 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
+import { resolveCliSourceRoot } from "../../source-root.js";
 import {
   failure,
   hasFlag,
@@ -41,12 +41,12 @@ import {
 
 const execFile = promisify(execFileCb);
 
-const RELEASE_HELP = `legion next release <command>
+const RELEASE_HELP = `legion dev release <command>
 
 Commands:
   checklist          Run the fail-closed GA release checklist verifier.
   rollback-verify    Run the backup-manifest verifier against a single
-                     backup-manifest.json produced by \`legion next migrate --apply\`.
+                     backup-manifest.json produced by \`legion dev migrate --apply\`.
 
 Global:
   --repository-root <path>  Repository root. Defaults to the current directory.
@@ -67,18 +67,16 @@ Checklist optional:
 
 Rollback-verify required options:
   --backup-manifest <path>     Path to the backup-manifest.json produced by
-                               \`legion next migrate --apply\`.
+                               \`legion dev migrate --apply\`.
 
 Rollback-verify optional:
   --source codex-legion|planning   Confirms the manifest kind matches the
                                    source the operator used during apply.
   --report <path>                  Where to write the JSON verdict.`;
 
-// The v9 source root for the scripts/release/ tree. Computed from the
-// compiled CLI's location (dist/commands/release/index.js -> ../../../..).
-// The release scripts live alongside the eval scripts, so we pin them
-// at the v9 source root rather than at the operator's --repository-root.
-const V9_SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..");
+// The release scripts live beside the packaged CLI root, not under the
+// operator's --repository-root.
+const V9_SOURCE_ROOT = resolveCliSourceRoot(import.meta.url, "scripts/release/release-checklist.mjs");
 
 export async function handleReleaseCommand(context: CliContext): Promise<CliResult> {
   if (hasFlag(context, "help") || context.args.positionals.length === 0) {
