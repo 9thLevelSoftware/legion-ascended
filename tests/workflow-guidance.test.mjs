@@ -103,6 +103,12 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
     assert.equal(checkPayload.status, "fresh");
     assert.equal(checkPayload.nextAction.command, "legion plan 1");
 
+    const missingScope = await runCliCapture(["--repository-root", root, "map", "--check", "--scope", "missing", "--json"]);
+    assert.equal(missingScope.exitCode, 1);
+    const missingScopePayload = parseJsonOutput(missingScope);
+    assert.equal(missingScopePayload.status, "usage_error");
+    assert.match(missingScopePayload.diagnostics[0].message, /Unable to check codebase map/);
+
     const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--json"]);
     assert.equal(query.exitCode, 0, query.stderr);
     const queryPayload = parseJsonOutput(query);
@@ -130,6 +136,13 @@ test("quick and polish create typed taskgraphs consumable by build", async () =>
     assert.equal(quickPayload.status, "planned");
     assert.equal(quickPayload.workflow, "quick");
     await assertFile(root, quickPayload.taskgraph.artifactPath);
+    const quickTaskgraph = await readJson(root, quickPayload.taskgraph.artifactPath);
+    assert.deepEqual(quickTaskgraph.tasks[0].scope.write, ["."], "quick tasks should be able to write implementation files");
+    assert.deepEqual(
+      quickTaskgraph.tasks[0].scope.read,
+      [".", quickPayload.requestArtifactPath],
+      "quick task text should not be parsed as a source path"
+    );
 
     const quickBuild = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--allow-dirty", "--json"]);
     assert.equal(quickBuild.exitCode, 0, quickBuild.stderr);
@@ -146,6 +159,9 @@ test("quick and polish create typed taskgraphs consumable by build", async () =>
     assert.equal(polishPayload.status, "planned");
     assert.equal(polishPayload.workflow, "polish");
     await assertFile(root, polishPayload.taskgraph.artifactPath);
+    const polishTaskgraph = await readJson(root, polishPayload.taskgraph.artifactPath);
+    assert.deepEqual(polishTaskgraph.tasks[0].scope.write, ["README.md"]);
+    assert.deepEqual(polishTaskgraph.tasks[0].scope.read, ["README.md", polishPayload.requestArtifactPath]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -180,6 +196,18 @@ test("advise learn retro and milestone write structured guidance state", async (
     const archive = await runCliCapture(["--repository-root", root, "milestone", "--archive", "milestone-mvp", "--json"]);
     assert.equal(archive.exitCode, 0, archive.stderr);
     assert.equal(parseJsonOutput(archive).milestones[0].status, "archived");
+
+    const missingComplete = await runCliCapture(["--repository-root", root, "milestone", "--complete", "milestone-missing", "--summary", "Nope", "--json"]);
+    assert.equal(missingComplete.exitCode, 1);
+    const missingCompletePayload = parseJsonOutput(missingComplete);
+    assert.equal(missingCompletePayload.status, "usage_error");
+    assert.equal(missingCompletePayload.diagnostics[0].message, "Milestone not found: milestone-missing");
+
+    const missingArchive = await runCliCapture(["--repository-root", root, "milestone", "--archive", "milestone-missing", "--json"]);
+    assert.equal(missingArchive.exitCode, 1);
+    const missingArchivePayload = parseJsonOutput(missingArchive);
+    assert.equal(missingArchivePayload.status, "usage_error");
+    assert.equal(missingArchivePayload.diagnostics[0].message, "Milestone not found: milestone-missing");
 
     const retro = await runCliCapture(["--repository-root", root, "retro", "--executor", "fake", "--json"]);
     assert.equal(retro.exitCode, 0, retro.stderr);

@@ -30,7 +30,6 @@
  */
 
 import type {
-  ArtifactPath,
   ArtifactReference,
   ContentHash,
   SchemaVersion,
@@ -141,10 +140,10 @@ export interface WorkerContextRefs {
 }
 
 export interface WorkerContextScope {
-  readonly read: readonly ArtifactPath[];
-  readonly write: readonly ArtifactPath[];
-  readonly forbidden: readonly ArtifactPath[];
-  readonly sequentialFiles: readonly ArtifactPath[];
+  readonly read: TaskContract["scope"]["read"];
+  readonly write: TaskContract["scope"]["write"];
+  readonly forbidden: TaskContract["scope"]["forbidden"];
+  readonly sequentialFiles: TaskContract["scope"]["sequentialFiles"];
 }
 
 export interface WorkerContext {

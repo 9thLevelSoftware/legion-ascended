@@ -216,7 +216,7 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     },
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
-      write: input.writeScope ?? [taskgraphPath],
+      write: input.writeScope ?? ["."],
       forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
       sequentialFiles: []
     },

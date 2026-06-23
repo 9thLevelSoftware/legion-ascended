@@ -32,11 +32,13 @@ export const taskContractContextSchema = z.strictObject({
 
 export type TaskContractContext = z.infer<typeof taskContractContextSchema>;
 
+export const taskContractScopePathSchema = z.union([artifactPathSchema, z.literal(".")]);
+
 export const taskContractScopeSchema = z.strictObject({
-  read: z.array(artifactPathSchema),
-  write: z.array(artifactPathSchema).min(1),
-  forbidden: z.array(artifactPathSchema),
-  sequentialFiles: z.array(artifactPathSchema)
+  read: z.array(taskContractScopePathSchema),
+  write: z.array(taskContractScopePathSchema).min(1),
+  forbidden: z.array(taskContractScopePathSchema),
+  sequentialFiles: z.array(taskContractScopePathSchema)
 });
 
 export type TaskContractScope = z.infer<typeof taskContractScopeSchema>;

@@ -638,6 +638,39 @@ test("P09-T01 conflict detector normalizes paths and detects parent/child overla
   assert.equal(pathsOverlap("packages/core/src/merge", "packages/core/src/runtime"), false);
 });
 
+test("P09-T01 conflict detector treats workspace root scope as overlapping descendants", () => {
+  assert.equal(normalizePath("."), "");
+  assert.equal(pathsOverlap(normalizePath("."), "README.md"), true);
+
+  const { entries } = makeSequencedEntries({ baseRef: "main", count: 2 });
+  const rootWriter = {
+    ...entries[0],
+    taskContract: {
+      ...entries[0].taskContract,
+      scope: {
+        ...entries[0].taskContract.scope,
+        write: ["."]
+      }
+    }
+  };
+  const fileWriter = {
+    ...entries[1],
+    taskContract: {
+      ...entries[1].taskContract,
+      scope: {
+        ...entries[1].taskContract.scope,
+        write: ["README.md"]
+      }
+    }
+  };
+
+  const conflicts = detectPathConflicts([rootWriter, fileWriter]);
+  assert.equal(conflicts.length, 1);
+  assert.equal(conflicts[0].path, "README.md");
+  assert.equal(conflicts[0].reason, "overlapping_write");
+  assert.deepEqual(conflicts[0].conflictingEntrySequenceIndices, [0, 1]);
+});
+
 // ---------------------------------------------------------------------------
 // 19. Frozen output
 // ---------------------------------------------------------------------------
