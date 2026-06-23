@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" role="img" aria-labelledby="title desc">
+  <title id="title">Legion Ascended operational console</title>
+  <desc id="desc">A dark command console showing the Legion guided workflow loop and evidence artifacts.</desc>
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2="960" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#101116"/>
+      <stop offset="0.55" stop-color="#0a0b11"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="74" y1="95" x2="866" y2="510" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.42"/>
+      <stop offset="0.45" stop-color="#8b5cf6" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="#d7b44c" stop-opacity="0.45"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0v48" fill="none" stroke="#ffffff" stroke-opacity="0.055"/>
+    </pattern>
+  </defs>
+  <rect x="16" y="16" width="928" height="588" rx="28" fill="url(#frame)" stroke="#3f3f46"/>
+  <rect x="38" y="38" width="884" height="544" rx="20" fill="#07080d"/>
+  <rect x="38" y="38" width="884" height="544" rx="20" fill="url(#grid)"/>
+  <rect x="38" y="38" width="884" height="56" rx="20" fill="#11131a"/>
+  <circle cx="72" cy="66" r="7" fill="#ef4444"/>
+  <circle cx="96" cy="66" r="7" fill="#f59e0b"/>
+  <circle cx="120" cy="66" r="7" fill="#22c55e"/>
+  <text x="770" y="71" fill="#71717a" font-family="Consolas, monospace" font-size="14" text-anchor="end">LEGION ASCENDED / RUN 042</text>
+
+  <rect x="74" y="126" width="812" height="126" rx="10" fill="#0d0f16" stroke="#27272a"/>
+  <text x="104" y="166" fill="#22d3ee" font-family="Consolas, monospace" font-size="19">$ legion plan 1</text>
+  <text x="104" y="199" fill="#d4d4d8" font-family="Consolas, monospace" font-size="18">typed taskgraph: ready</text>
+  <text x="104" y="229" fill="#a1a1aa" font-family="Consolas, monospace" font-size="16">oracle, scope, verification, context pack sealed</text>
+
+  <rect x="74" y="284" width="250" height="190" rx="10" fill="#101116" stroke="#27272a"/>
+  <text x="104" y="324" fill="#d7b44c" font-family="Consolas, monospace" font-size="16">BUILD</text>
+  <text x="104" y="362" fill="#f4f4f5" font-family="Consolas, monospace" font-size="18">task-run.json</text>
+  <text x="104" y="396" fill="#a1a1aa" font-family="Consolas, monospace" font-size="15">executor-result</text>
+  <text x="104" y="425" fill="#a1a1aa" font-family="Consolas, monospace" font-size="15">pending evidence</text>
+
+  <rect x="355" y="284" width="250" height="190" rx="10" fill="#101116" stroke="#27272a"/>
+  <text x="385" y="324" fill="#22d3ee" font-family="Consolas, monospace" font-size="16">REVIEW</text>
+  <text x="385" y="362" fill="#f4f4f5" font-family="Consolas, monospace" font-size="18">decision.json</text>
+  <text x="385" y="396" fill="#a1a1aa" font-family="Consolas, monospace" font-size="15">human accept</text>
+  <text x="385" y="425" fill="#a1a1aa" font-family="Consolas, monospace" font-size="15">blocked findings</text>
+
+  <rect x="636" y="284" width="250" height="190" rx="10" fill="#101116" stroke="#27272a"/>
+  <text x="666" y="324" fill="#8b5cf6" font-family="Consolas, monospace" font-size="16">SHIP</text>
+  <text x="666" y="362" fill="#f4f4f5" font-family="Consolas, monospace" font-size="18">readiness gate</text>
+  <text x="666" y="396" fill="#a1a1aa" font-family="Consolas, monospace" font-size="15">accepted evidence</text>
+  <text x="666" y="425" fill="#a1a1aa" font-family="Consolas, monospace" font-size="15">accepted review</text>
+
+  <path d="M324 379h31M605 379h31" stroke="url(#pulse)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M344 367l14 12-14 12M625 367l14 12-14 12" fill="none" stroke="#22d3ee" stroke-opacity="0.9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="74" y="512" width="812" height="42" rx="8" fill="#090a11" stroke="#27272a"/>
+  <text x="104" y="538" fill="#22c55e" font-family="Consolas, monospace" font-size="15">context: fresh | map: indexed | lessons: loaded | next action: legion review --accept</text>
+</svg>

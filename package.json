@@ -1,7 +1,7 @@
 {
   "name": "@9thlevelsoftware/legion",
   "version": "9.0.0-alpha.0",
-  "description": "Durable workflow orchestration tool for Legion Next.",
+  "description": "Guided execution layer for AI-assisted software work.",
   "packageManager": "pnpm@11.4.0",
   "engines": {
     "node": ">=24.0.0 <26",
@@ -50,6 +50,7 @@
     "checksums.sha256",
     "docs/control-modes.md",
     "docs/cli/",
+    "docs/site/",
     "docs/runtime-audit.md",
     "docs/runtime-certification-checklists.md",
     "docs/security/",

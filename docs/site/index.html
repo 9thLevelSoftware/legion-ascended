@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Legion | Ascended</title>
+    <meta name="description" content="Legion Ascended is a guided execution layer for AI-assisted software work: one Legion command surface, durable artifacts, human review, and ship-readiness gates.">
+    <link rel="icon" type="image/svg+xml" href="./assets/legion-ascended-mark.svg">
+    <link rel="preload" href="./assets/legion-ascended-mark.svg" as="image">
+    <link rel="preload" href="./assets/tithe-sigil.svg" as="image">
+    <link rel="preload" href="./assets/legion-ascended-console.svg" as="image">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="sigil-bg"></div>
+    <div class="sigil-bg-2"></div>
+    <div class="cursor-glow" id="cursorGlow"></div>
+    <div class="vignette"></div>
+
+    <main class="container">
+      <header>
+        <svg class="legion-sigil" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="100" cy="100" r="90" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <circle cx="100" cy="100" r="85" stroke="currentColor" stroke-width="0.5" fill="none"/>
+          <circle cx="100" cy="100" r="50" stroke="currentColor" stroke-width="0.5" fill="none"/>
+          <circle cx="100" cy="100" r="8" fill="currentColor" opacity="0.9"/>
+          <circle cx="100" cy="100" r="12" stroke="currentColor" stroke-width="1" fill="none"/>
+          <circle cx="100" cy="18" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="157" cy="35" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="182" cy="85" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="170" cy="148" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="125" cy="180" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="75" cy="180" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="30" cy="148" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="18" cy="85" r="4" fill="currentColor" opacity="0.7"/>
+          <circle cx="43" cy="35" r="4" fill="currentColor" opacity="0.7"/>
+          <line x1="100" y1="100" x2="100" y2="22" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="155" y2="38" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="179" y2="87" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="168" y2="146" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="124" y2="177" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="76" y2="177" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="32" y2="146" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="21" y2="87" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <line x1="100" y1="100" x2="45" y2="38" stroke="currentColor" stroke-width="0.8" opacity="0.5"/>
+          <path d="M100,18 Q140,22 157,35" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M157,35 Q175,55 182,85" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M182,85 Q182,120 170,148" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M170,148 Q152,170 125,180" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M125,180 Q100,188 75,180" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M75,180 Q48,170 30,148" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M30,148 Q18,120 18,85" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M18,85 Q25,55 43,35" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+          <path d="M43,35 Q60,22 100,18" stroke="currentColor" stroke-width="0.3" fill="none" opacity="0.3"/>
+        </svg>
+        <h1>LEG<span>I</span>ON</h1>
+        <p class="ascended-flame">Ascended</p>
+        <p class="tagline">"My Name Is Legion, For We Are Many"</p>
+        <p class="sub-tagline">A guided execution layer for AI-assisted software work. One Legion command surface.</p>
+      </header>
+
+      <div class="divider"><div class="divider-line"></div></div>
+
+      <section class="reveal-section">
+        <p class="intro-text">
+          <strong>Legion</strong> is still the word. Ascended is the evolution:
+          a guided execution layer that keeps the human in command while the many
+          help brainstorm, plan, build, review, remember, and prepare work for ship-readiness.
+        </p>
+      </section>
+
+      <section class="reveal-section">
+        <div class="stats-bar">
+          <div class="stat"><div class="num">49</div><div class="label">Agents</div></div>
+          <div class="stat"><div class="num">9</div><div class="label">Divisions</div></div>
+          <div class="stat"><div class="num">6</div><div class="label">First-Class Targets</div></div>
+          <div class="stat"><div class="num">19</div><div class="label">Commands</div></div>
+          <div class="stat"><div class="num">33</div><div class="label">Skills</div></div>
+          <div class="stat"><div class="num">1</div><div class="label">Installer Dependency</div></div>
+        </div>
+      </section>
+
+      <section class="grimoire-section reveal-section">
+        <h2>Summon The Legion</h2>
+        <p>
+          Install once, open any project, and use the same Legion words everywhere.
+          The command surface is always <em>legion</em>.
+        </p>
+        <div class="ritual-code">
+<pre><span class="comment"># See the recommended first-class hosts</span>
+<span class="command">legion</span> install <span class="flag">--list-targets</span>
+
+<span class="comment"># Preview before writing host files</span>
+<span class="command">legion</span> install <span class="flag">--target</span> <span class="string">codex</span> <span class="flag">--local</span> <span class="flag">--dry-run</span>
+
+<span class="comment"># The rite</span>
+<span class="command">legion</span> start
+<span class="command">legion</span> plan 1 <span class="flag">--from-roadmap</span> <span class="string">ROADMAP.md</span>
+<span class="command">legion</span> build <span class="flag">--executor</span> <span class="string">codex</span>
+<span class="command">legion</span> review <span class="flag">--executor</span> <span class="string">codex</span>
+<span class="command">legion</span> review <span class="flag">--accept</span>
+<span class="command">legion</span> ship</pre>
+        </div>
+        <div class="grimoire-buttons">
+          <a href="../../README.md" class="grimoire-btn">Read The README</a>
+          <a href="../cli/WORKFLOW-QUICKSTART.md" class="grimoire-btn">Workflow Quickstart</a>
+        </div>
+      </section>
+
+      <div class="divider"><div class="divider-line"></div></div>
+
+      <section class="reveal-section">
+        <h2>The Commands</h2>
+        <p class="intro-text">Nineteen commands. Each still spoken as Legion.</p>
+        <table class="command-table">
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>legion start</td><td>Initialize typed project state and route to the first planning action.</td></tr>
+            <tr><td>legion plan &lt;N&gt;</td><td>Turn a roadmap phase into specs, a change, an oracle, and task contracts.</td></tr>
+            <tr><td>legion build</td><td>Execute the latest taskgraph through codex, manual, or fake adapters and record evidence.</td></tr>
+            <tr><td>legion review</td><td>Submit structured review decisions and require explicit human acceptance.</td></tr>
+            <tr><td>legion ship</td><td>Report ship readiness only after accepted review and accepted evidence exist.</td></tr>
+            <tr><td>legion status</td><td>Show workflow stage, map freshness, guidance records, and next action.</td></tr>
+            <tr><td>legion explore</td><td>Create read-only design discovery and handoff notes.</td></tr>
+            <tr><td>legion map</td><td>Refresh, check, and query deterministic codebase map artifacts.</td></tr>
+            <tr><td>legion quick</td><td>Create a one-task ad-hoc change for the normal build/review loop.</td></tr>
+            <tr><td>legion advise</td><td>Produce read-only advisory guidance.</td></tr>
+            <tr><td>legion learn</td><td>Record durable lessons consumed by later context packs.</td></tr>
+            <tr><td>legion retro</td><td>Analyze recent evidence and write follow-up actions.</td></tr>
+            <tr><td>legion milestone</td><td>Define, inspect, complete, and archive lifecycle milestones.</td></tr>
+            <tr><td>legion council</td><td>Record structured governance decisions.</td></tr>
+            <tr><td>legion polish</td><td>Create scoped polish work that still goes through build and review.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="divider"><div class="divider-line"></div></div>
+
+      <section class="reveal-section">
+        <h2>The Rite Of Execution</h2>
+        <p class="intro-text">
+          The sacred cycle is explicit: <strong>legion start -&gt; legion plan -&gt; legion build -&gt; legion review -&gt; legion ship</strong>.
+          Guidance commands enrich the loop; they do not bypass it.
+        </p>
+        <div class="workflow-visual">
+          <div class="workflow-step optional"><span class="step-cmd">legion explore</span><span class="step-desc">Research, constraints, approaches, handoff notes</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step optional"><span class="step-cmd">legion map</span><span class="step-desc">Architecture, symbols, search, freshness checks</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step"><span class="step-cmd">legion start</span><span class="step-desc">Project truth record</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step"><span class="step-cmd">legion plan</span><span class="step-desc">Typed taskgraph and verification contracts</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step"><span class="step-cmd">legion build</span><span class="step-desc">Context pack, executor result, redacted logs, pending evidence</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step"><span class="step-cmd">legion review</span><span class="step-desc">Submitted decision, human accept or reject</span></div>
+          <div class="workflow-arrow">&darr;</div>
+          <div class="workflow-step"><span class="step-cmd">legion ship</span><span class="step-desc">Readiness gate, not a deploy button</span></div>
+        </div>
+      </section>
+
+      <div class="divider"><div class="divider-line"></div></div>
+
+      <section class="reveal-section">
+        <h2>The Sacred Powers</h2>
+        <div class="features">
+          <article class="feature-card"><h3>Fresh Context</h3><p>Maps, lessons, records, and guidance runs become focused context packs.</p></article>
+          <article class="feature-card"><h3>Typed Execution</h3><p>Taskgraphs flow through executor adapters and leave durable task-run artifacts.</p></article>
+          <article class="feature-card"><h3>Evidence Trails</h3><p>Builds record prompts, outputs, redacted logs, hashes, and pending evidence.</p></article>
+          <article class="feature-card"><h3>Human Review</h3><p>Review decisions are submitted before evidence can be accepted.</p></article>
+          <article class="feature-card"><h3>Guided Memory</h3><p>Learn, retro, milestone, and council records feed future work.</p></article>
+          <article class="feature-card"><h3>Unified Install</h3><p>First-class targets expose one Legion entrypoint instead of uneven command names.</p></article>
+        </div>
+      </section>
+
+      <section class="tithe-section reveal-section" id="tithe">
+        <img class="tithe-sigil-img" src="./assets/tithe-sigil.svg" alt="">
+        <h2>The Tithe</h2>
+        <p class="tithe-text">
+          The Legion asks not for blood, but for <em>sustenance</em>.<br>
+          Those who have commanded the many and found them worthy<br>
+          may offer tribute, that the voices may continue to serve.
+        </p>
+        <a href="https://ko-fi.com/vitruvianredux" class="tithe-btn" target="_blank" rel="noopener">
+          <span class="tithe-icon">&#9765;</span>
+          Make an Offering
+        </a>
+        <p class="tithe-subtext">Your sacrifice sustains the many.</p>
+      </section>
+
+      <footer>
+        <p>
+          Legion &middot; Ascended by <a href="https://github.com/9thLevelSoftware">9th Level Software</a><br>
+          <a href="https://github.com/9thLevelSoftware/legion-ascended">GitHub Repository</a>
+          &middot; <a href="../../README.md">README</a>
+          &middot; <a href="../cli/INSTALL-MATRIX.md">Install Matrix</a>
+          &middot; <a href="https://ko-fi.com/vitruvianredux">The Tithe</a>
+        </p>
+        <p class="footer-quote">"My name is Legion, for we are many."</p>
+      </footer>
+    </main>
+
+    <script src="./main.js"></script>
+  </body>
+</html>
