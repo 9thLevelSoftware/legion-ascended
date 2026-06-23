@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path24 from "node:path";
+import path28 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path25) {
-  if (!path25)
+function getElementAtPath(obj, path29) {
+  if (!path29)
     return obj;
-  return path25.reduce((acc, key) => acc?.[key], obj);
+  return path29.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path25, issues) {
+function prefixIssues(path29, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path25);
+    iss.path.unshift(path29);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path25 = []) => {
+  const processError = (error3, path29 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path25, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path25, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path25, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
       } else {
-        const fullpath = [...path25, ...issue2.path];
+        const fullpath = [...path29, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -5831,6 +5831,15 @@ var metadataSchema = strictObject({
   annotations: stringRecordSchema.optional(),
   attributes: record(metadataKeySchema, jsonValueSchema).optional()
 });
+function buildIdempotencyKey(input) {
+  const projectId = projectIdSchema.parse(input.projectId);
+  const changeId = changeIdSchema.parse(input.changeId);
+  const taskId = taskIdSchema.parse(input.taskId);
+  const runId = runIdSchema.parse(input.runId);
+  const effectKind = effectKindSchema.parse(input.effectKind);
+  const targetHash = contentHashSchema.parse(input.targetHash);
+  return idempotencyKeySchema.parse(`${projectId}:${changeId}:${taskId}:${runId}:${effectKind}:${targetHash}`);
+}
 
 // packages/protocol/dist/versioning/index.js
 var CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
@@ -5941,6 +5950,8 @@ var artifactRoleSchema = _enum([
   "oracle",
   "taskgraph",
   "evidence-index",
+  "task-run",
+  "review",
   "archive"
 ]);
 var artifactRevisionSchema = strictObject({
@@ -8883,14 +8894,14 @@ var ReleaseObservationBoardAggregator = class {
   aggregate(input) {
     const validated = validateInput(input);
     if (!validated.ok) {
-      const failure12 = deepFreeze2({
+      const failure14 = deepFreeze2({
         ok: false,
         schemaVersion: RELEASE_OBSERVATION_ADAPTER_SCHEMA_VERSION,
         kind: RELEASE_OBSERVATION_ADAPTER_KIND,
         changeId: input.changeId,
         issues: validated.issues
       });
-      return failure12;
+      return failure14;
     }
     const report = input.report;
     const eventType = validated.eventType;
@@ -13776,7 +13787,9 @@ var BOARD_TASK_LINK_DAG_RELATION_SET = new Set(BOARD_TASK_LINK_DAG_RELATIONS);
 import { readFile } from "node:fs/promises";
 var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "allow-replace-existing-project",
+  "allow-dirty",
   "apply",
+  "accept",
   "auto",
   "auto-refine",
   "dry-run",
@@ -15310,6 +15323,12 @@ function parseRequirementId(input) {
 function parseOracleId(input) {
   return oracleIdSchema.parse(input);
 }
+function parseRunId(input) {
+  return runIdSchema.parse(input);
+}
+function parseReviewId(input) {
+  return reviewIdSchema.parse(input);
+}
 function artifactPathForRole(input) {
   switch (input.role) {
     case "project-manifest":
@@ -15349,6 +15368,16 @@ function artifactPathForRole(input) {
     case "evidence-index": {
       const changeId = parseChangeId(input.changeId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/evidence-index.json`);
+    }
+    case "task-run": {
+      const changeId = parseChangeId(input.changeId);
+      const runId = parseRunId(input.runId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/runs/${runId}/task-run.json`);
+    }
+    case "review": {
+      const changeId = parseChangeId(input.changeId);
+      const reviewId = parseReviewId(input.reviewId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/reviews/${reviewId}.json`);
     }
     case "archive": {
       const changeId = parseChangeId(input.changeId);
@@ -15445,14 +15474,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path25) {
-  if (path25.endsWith(".json"))
+function mediaTypeForArtifactPath(path29) {
+  if (path29.endsWith(".json"))
     return "application/json";
-  if (path25.endsWith(".yaml") || path25.endsWith(".yml"))
+  if (path29.endsWith(".yaml") || path29.endsWith(".yml"))
     return "application/yaml";
-  if (path25.endsWith(".md"))
+  if (path29.endsWith(".md"))
     return "text/markdown";
-  if (path25.endsWith(".txt"))
+  if (path29.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -15495,16 +15524,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path25, issues) {
+function schemaDiagnostics(path29, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path25 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path29 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path25
+      path: path29
     });
   });
 }
@@ -16462,7 +16491,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path25 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path29 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -16476,7 +16505,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path25
+        path: path29
       }))
     };
   }
@@ -17224,13 +17253,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path25) {
+function parseRequirementId2(input, path29) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path25
+      path: path29
     })));
   }
   return parsed.data;
@@ -17246,24 +17275,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path25) {
+function parseBaseGitSha(input, path29) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path25
+      path: path29
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path25) {
+function parseOwners(input, path29) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path25
+        path: path29
       })
     ]);
   }
@@ -17275,7 +17304,7 @@ function parseOwners(input, path25) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path25
+        path: path29
       })));
       continue;
     }
@@ -17563,7 +17592,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path25) {
+function conflictDiagnostics(deltas, path29) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -17572,7 +17601,7 @@ function conflictDiagnostics(deltas, path25) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path25
+        path: path29
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -18349,18 +18378,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path25) {
+function parseOracleId2(input, path29) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path25
+      path: path29
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path25) {
+function parseBaseGitSha2(input, path29) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18368,7 +18397,7 @@ function parseBaseGitSha2(input, path25) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path25
+      path: path29
     })));
   }
   return parsed.data;
@@ -18712,7 +18741,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path25) {
+function parseBaseGitSha3(input, path29) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18720,18 +18749,18 @@ function parseBaseGitSha3(input, path25) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path25
+      path: path29
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path25) {
+function assertExpectedRevision(value, path29) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path25
+        path: path29
       })
     ]);
   }
@@ -19013,6 +19042,12 @@ var evidenceIndexJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoft
 
 // packages/artifacts/dist/evidence-index/service.js
 var INVALID_EVIDENCE_INDEX_PATH = ".legion/project/changes/invalid-change/evidence-index.json";
+function compareStrings4(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function compareReferences2(left, right) {
+  return compareStrings4(left.path, right.path) || compareStrings4(left.sha256, right.sha256);
+}
 function failure7(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
@@ -19022,6 +19057,16 @@ function evidenceDiagnostic(input) {
     message: input.message,
     path: input.path ?? INVALID_EVIDENCE_INDEX_PATH
   });
+}
+function schemaDiagnostics4(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [evidenceDiagnostic({ code: input.code, message: "Evidence index failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => evidenceDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
 }
 function parseChangeId5(input) {
   const parsed = changeIdSchema.safeParse(input);
@@ -19033,8 +19078,107 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
+function parseBaseGitSha4(input, path29) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path29
+    })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision2(value, path29) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure7("invalid", [
+      evidenceDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: path29
+      })
+    ]);
+  }
+  return void 0;
+}
 function evidenceIndexPath(changeId) {
   return artifactPathForRole({ role: "evidence-index", changeId });
+}
+function isRecord5(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function artifactInputDiagnostics2(input) {
+  if (input.artifactInputs.length === 0) {
+    return [
+      evidenceDiagnostic({
+        code: "invalid_artifact_inputs",
+        message: "At least one artifact input revision is required.",
+        path: input.artifactPath
+      })
+    ];
+  }
+  const diagnostics = [];
+  const artifactPaths = /* @__PURE__ */ new Set();
+  for (const [index, artifactInput] of input.artifactInputs.entries()) {
+    const parsed = artifactRevisionSchema.safeParse(artifactInput);
+    if (!parsed.success) {
+      diagnostics.push(...schemaDiagnostics4({
+        code: "invalid_artifact_inputs",
+        path: input.artifactPath,
+        issues: parsed.error.issues.map((issue2) => ({
+          ...issue2,
+          path: ["artifactInputs", index, ...issue2.path ?? []]
+        }))
+      }));
+      continue;
+    }
+    if (artifactPaths.has(parsed.data.artifact.path)) {
+      diagnostics.push(evidenceDiagnostic({
+        code: "duplicate_artifact_input",
+        message: `Duplicate artifact input path: ${parsed.data.artifact.path}.`,
+        path: input.artifactPath
+      }));
+    }
+    artifactPaths.add(parsed.data.artifact.path);
+  }
+  return diagnostics;
+}
+function rawAcceptanceDiagnostics(input) {
+  if (!isRecord5(input.entry) || !isRecord5(input.entry["acceptance"]))
+    return [];
+  const acceptance = input.entry["acceptance"];
+  if (acceptance["status"] === "accepted") {
+    if (acceptance["reviewId"] === void 0) {
+      return [
+        evidenceDiagnostic({
+          code: "missing_review_id",
+          message: "Accepted evidence requires a reviewId.",
+          path: input.artifactPath
+        })
+      ];
+    }
+    if (acceptance["acceptedAt"] === void 0) {
+      return [
+        evidenceDiagnostic({
+          code: "missing_accepted_at",
+          message: "Accepted evidence requires acceptedAt.",
+          path: input.artifactPath
+        })
+      ];
+    }
+  }
+  if (acceptance["status"] === "rejected" && (typeof acceptance["reason"] !== "string" || acceptance["reason"].length === 0)) {
+    return [
+      evidenceDiagnostic({
+        code: "missing_rejection_reason",
+        message: "Rejected evidence requires a reason.",
+        path: input.artifactPath
+      })
+    ];
+  }
+  return [];
 }
 function manifestHashDiagnostics2(input) {
   const expectedHash = expectedChangeArtifactManifestHash(input.document.artifactManifest);
@@ -19098,6 +19242,149 @@ function validateEntries(input) {
   }
   return diagnostics;
 }
+function normalizeEntries(input) {
+  const entries = [];
+  for (const entry of input.entries) {
+    const acceptanceDiagnostics = rawAcceptanceDiagnostics({
+      entry,
+      artifactPath: input.artifactPath
+    });
+    if (acceptanceDiagnostics.length > 0)
+      return failure7("invalid", acceptanceDiagnostics);
+    const parsed = evidenceIndexEntrySchema.safeParse(entry);
+    if (!parsed.success) {
+      return failure7("invalid", schemaDiagnostics4({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
+    }
+    entries.push(parsed.data);
+  }
+  const diagnostics = validateEntries({
+    entries,
+    changeId: input.changeId,
+    artifactPath: input.artifactPath
+  });
+  if (diagnostics.length > 0)
+    return failure7("invalid", diagnostics);
+  return entries.sort((left, right) => compareStrings4(left.evidence.id, right.evidence.id));
+}
+function evidenceReferences(entries) {
+  const referencesByKey = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    for (const item of entry.evidence.items) {
+      if (item.artifact === void 0)
+        continue;
+      referencesByKey.set(`${item.artifact.path}\0${item.artifact.sha256}`, item.artifact);
+    }
+  }
+  return [...referencesByKey.values()].sort(compareReferences2);
+}
+function normalizeEvidenceIndex(input) {
+  const artifactInputIssues = artifactInputDiagnostics2({
+    artifactInputs: input.artifactInputs,
+    artifactPath: input.artifactPath
+  });
+  if (artifactInputIssues.length > 0)
+    return failure7("invalid", artifactInputIssues);
+  const entries = normalizeEntries({
+    entries: input.entries,
+    changeId: input.changeId,
+    artifactPath: input.artifactPath
+  });
+  if ("diagnostics" in entries)
+    return entries;
+  const artifactInputs = [...input.artifactInputs].sort(compareArtifactRevisions);
+  const documentInput = {
+    schemaVersion: EVIDENCE_INDEX_SCHEMA_VERSION,
+    kind: "evidence-index",
+    changeId: input.changeId,
+    revision: input.revision,
+    entries,
+    artifactManifest: deriveChangeArtifactManifest({
+      changeId: input.changeId,
+      inputs: artifactInputs,
+      evidenceRefs: evidenceReferences(entries)
+    })
+  };
+  const parsed = evidenceIndexDocumentSchema.safeParse(documentInput);
+  if (!parsed.success) {
+    return failure7("invalid", schemaDiagnostics4({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  return parsed.data;
+}
+async function writeEvidenceIndex(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const artifactPath = evidenceIndexPath(changeId);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision2(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha4(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readEvidenceIndex({
+      repositoryRoot: input.repositoryRoot,
+      changeId
+    });
+    if (!current.ok)
+      return current;
+    if (current.document.revision !== expectedRevision) {
+      return failure7("conflict", [
+        evidenceDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.document.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = normalizeEvidenceIndex({
+    changeId,
+    revision: expectedRevision + 1,
+    entries: input.entries,
+    artifactInputs: input.artifactInputs,
+    artifactPath
+  });
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "evidence-index",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error2) {
+    if (error2 instanceof ArtifactRevisionConflictError) {
+      return failure7("conflict", [
+        evidenceDiagnostic({
+          code: "revision_conflict",
+          message: error2.message,
+          path: artifactPath
+        })
+      ]);
+    }
+    throw error2;
+  }
+}
 async function readEvidenceIndex(input) {
   const changeId = parseChangeId5(input.changeId);
   if (typeof changeId !== "string")
@@ -19151,11 +19438,569 @@ async function readEvidenceIndex(input) {
   };
 }
 
+// packages/artifacts/dist/task-runs/service.js
+import { readdir as readdir4 } from "node:fs/promises";
+import path12 from "node:path";
+var INVALID_TASK_RUN_PATH = ".legion/project/changes/invalid-change/runs/invalid-run/task-run.json";
+var ARTIFACT_REVISION_METADATA_KEY = "artifact_revision";
+function failure8(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function taskRunDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_TASK_RUN_PATH
+  });
+}
+function schemaDiagnostics5(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [taskRunDiagnostic({ code: input.code, message: "Task run failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => taskRunDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId6(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure8("invalid", parsed.error.issues.map((issue2) => taskRunDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseRunId2(input) {
+  const parsed = runIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure8("invalid", parsed.error.issues.map((issue2) => taskRunDiagnostic({
+      code: "invalid_run_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha5(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure8("invalid", parsed.error.issues.map((issue2) => taskRunDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: artifactPath
+    })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision3(value, path29) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure8("invalid", [
+      taskRunDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: path29
+      })
+    ]);
+  }
+  return void 0;
+}
+function taskRunPath(changeId, runId) {
+  return artifactPathForRole({ role: "task-run", changeId, runId });
+}
+function storeArtifactRevision(document, revision) {
+  const parsed = taskRunSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure8("invalid", schemaDiagnostics5({
+      code: "invalid_task_run",
+      path: taskRunPath(document.changeId, document.id),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+function identityDiagnostics(input) {
+  const diagnostics = [];
+  if (input.document.changeId !== input.changeId) {
+    diagnostics.push(taskRunDiagnostic({
+      code: "task_run_change_mismatch",
+      message: `Task run change ID ${input.document.changeId} does not match requested change ${input.changeId}.`,
+      path: input.artifactPath
+    }));
+  }
+  if (input.document.id !== input.runId) {
+    diagnostics.push(taskRunDiagnostic({
+      code: "task_run_id_mismatch",
+      message: `Task run ID ${input.document.id} does not match requested run ${input.runId}.`,
+      path: input.artifactPath
+    }));
+  }
+  return diagnostics;
+}
+async function writeTaskRun(input) {
+  const parsed = taskRunSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure8("invalid", schemaDiagnostics5({
+      code: "invalid_task_run",
+      path: INVALID_TASK_RUN_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = taskRunPath(parsed.data.changeId, parsed.data.id);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision3(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha5(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readTaskRun({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId,
+      runId: parsed.data.id
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure8("conflict", [
+        taskRunDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "task-run",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error2) {
+    if (error2 instanceof ArtifactRevisionConflictError) {
+      return failure8("conflict", [
+        taskRunDiagnostic({
+          code: "revision_conflict",
+          message: error2.message,
+          path: artifactPath
+        })
+      ]);
+    }
+    throw error2;
+  }
+}
+async function readTaskRun(input) {
+  const changeId = parseChangeId6(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const runId = parseRunId2(input.runId);
+  if (typeof runId !== "string")
+    return runId;
+  const artifactPath = taskRunPath(changeId, runId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: taskRunSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure8(status2, read.diagnostics);
+  }
+  const diagnostics = identityDiagnostics({
+    document: read.value,
+    changeId,
+    runId,
+    artifactPath
+  });
+  if (diagnostics.length > 0)
+    return failure8("invalid", diagnostics);
+  const storedRevision = storedArtifactRevision(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "task-run",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function listTaskRunsForChange(input) {
+  const changeId = parseChangeId6(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const runsRoot = path12.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "runs");
+  let entries;
+  try {
+    entries = await readdir4(runsRoot, { withFileTypes: true });
+  } catch (error2) {
+    if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
+      return { ok: true, status: "read", taskRuns: [], diagnostics: [] };
+    }
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return failure8("invalid", [
+      taskRunDiagnostic({
+        code: "task_run_discovery_failed",
+        message,
+        path: ".legion/project/changes/invalid-change/runs"
+      })
+    ]);
+  }
+  const taskRuns = [];
+  for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
+    const runId = runIdSchema.safeParse(entry.name);
+    if (!runId.success)
+      continue;
+    const read = await readTaskRun({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      runId: runId.data
+    });
+    if (!read.ok)
+      continue;
+    taskRuns.push(read);
+  }
+  taskRuns.sort((left, right) => {
+    const byCreatedAt = left.document.createdAt.localeCompare(right.document.createdAt);
+    if (byCreatedAt !== 0)
+      return byCreatedAt;
+    return left.document.id.localeCompare(right.document.id);
+  });
+  return { ok: true, status: "read", taskRuns, diagnostics: [] };
+}
+
+// packages/artifacts/dist/reviews/service.js
+import { readdir as readdir5 } from "node:fs/promises";
+import path13 from "node:path";
+var INVALID_REVIEW_PATH = ".legion/project/changes/invalid-change/reviews/invalid-review.json";
+var ARTIFACT_REVISION_METADATA_KEY2 = "artifact_revision";
+function failure9(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function reviewDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_REVIEW_PATH
+  });
+}
+function schemaDiagnostics6(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [reviewDiagnostic({ code: input.code, message: "Review decision failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => reviewDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId7(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure9("invalid", parsed.error.issues.map((issue2) => reviewDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseReviewId2(input) {
+  const parsed = reviewIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure9("invalid", parsed.error.issues.map((issue2) => reviewDiagnostic({
+      code: "invalid_review_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha6(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure9("invalid", parsed.error.issues.map((issue2) => reviewDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: artifactPath
+    })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision4(value, path29) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure9("invalid", [
+      reviewDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: path29
+      })
+    ]);
+  }
+  return void 0;
+}
+function reviewPath(changeId, reviewId) {
+  return artifactPathForRole({ role: "review", changeId, reviewId });
+}
+function storeArtifactRevision2(document, revision) {
+  const parsed = reviewDecisionSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY2]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure9("invalid", schemaDiagnostics6({
+      code: "invalid_review",
+      path: reviewPath(document.changeId, document.id),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision2(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY2];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+function identityDiagnostics2(input) {
+  const diagnostics = [];
+  if (input.document.changeId !== input.changeId) {
+    diagnostics.push(reviewDiagnostic({
+      code: "review_change_mismatch",
+      message: `Review decision change ID ${input.document.changeId} does not match requested change ${input.changeId}.`,
+      path: input.artifactPath
+    }));
+  }
+  if (input.document.id !== input.reviewId) {
+    diagnostics.push(reviewDiagnostic({
+      code: "review_id_mismatch",
+      message: `Review decision ID ${input.document.id} does not match requested review ${input.reviewId}.`,
+      path: input.artifactPath
+    }));
+  }
+  return diagnostics;
+}
+async function writeReviewDecision(input) {
+  const parsed = reviewDecisionSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure9("invalid", schemaDiagnostics6({
+      code: "invalid_review",
+      path: INVALID_REVIEW_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = reviewPath(parsed.data.changeId, parsed.data.id);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision4(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha6(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readReviewDecision({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId,
+      reviewId: parsed.data.id
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure9("conflict", [
+        reviewDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision2(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "review",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error2) {
+    if (error2 instanceof ArtifactRevisionConflictError) {
+      return failure9("conflict", [
+        reviewDiagnostic({
+          code: "revision_conflict",
+          message: error2.message,
+          path: artifactPath
+        })
+      ]);
+    }
+    throw error2;
+  }
+}
+async function readReviewDecision(input) {
+  const changeId = parseChangeId7(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const reviewId = parseReviewId2(input.reviewId);
+  if (typeof reviewId !== "string")
+    return reviewId;
+  const artifactPath = reviewPath(changeId, reviewId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: reviewDecisionSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure9(status2, read.diagnostics);
+  }
+  const diagnostics = identityDiagnostics2({
+    document: read.value,
+    changeId,
+    reviewId,
+    artifactPath
+  });
+  if (diagnostics.length > 0)
+    return failure9("invalid", diagnostics);
+  const storedRevision = storedArtifactRevision2(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "review",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function listReviewDecisionsForChange(input) {
+  const changeId = parseChangeId7(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const reviewsRoot = path13.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "reviews");
+  let entries;
+  try {
+    entries = await readdir5(reviewsRoot, { withFileTypes: true });
+  } catch (error2) {
+    if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
+      return { ok: true, status: "read", reviews: [], diagnostics: [] };
+    }
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return failure9("invalid", [
+      reviewDiagnostic({
+        code: "review_discovery_failed",
+        message,
+        path: ".legion/project/changes/invalid-change/reviews"
+      })
+    ]);
+  }
+  const reviews = [];
+  for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.name.endsWith(".json"))
+      continue;
+    const reviewId = reviewIdSchema.safeParse(entry.name.slice(0, -".json".length));
+    if (!reviewId.success)
+      continue;
+    const read = await readReviewDecision({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      reviewId: reviewId.data
+    });
+    if (!read.ok)
+      continue;
+    reviews.push(read);
+  }
+  reviews.sort((left, right) => {
+    const byCreatedAt = left.document.createdAt.localeCompare(right.document.createdAt);
+    if (byCreatedAt !== 0)
+      return byCreatedAt;
+    return left.document.id.localeCompare(right.document.id);
+  });
+  return { ok: true, status: "read", reviews, diagnostics: [] };
+}
+
 // packages/artifacts/dist/traceability/service.js
 var INVALID_TRACEABILITY_PATH = ".legion/project/changes/invalid-change/traceability.json";
 var HIGH_RISK_TIERS = /* @__PURE__ */ new Set(["R2", "R3"]);
 var RISK_ORDER = ["R0", "R1", "R2", "R3"];
-function compareStrings4(left, right) {
+function compareStrings5(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function nodeId(kind, id) {
@@ -19176,8 +20021,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path25) {
-  return nodeId("artifact", path25);
+function artifactNodeId(path29) {
+  return nodeId("artifact", path29);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -19186,7 +20031,7 @@ function traceabilityDiagnostic(input) {
     path: input.path ?? INVALID_TRACEABILITY_PATH
   });
 }
-function failure8(status2, diagnostics, report) {
+function failure10(status2, diagnostics, report) {
   return {
     ok: false,
     status: status2,
@@ -19194,10 +20039,10 @@ function failure8(status2, diagnostics, report) {
     ...report === void 0 ? {} : { report }
   };
 }
-function parseChangeId6(input) {
+function parseChangeId8(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure8("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
+    return failure10("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
@@ -19213,8 +20058,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path25) {
-  const fileName = path25.split("/").at(-1);
+function oracleIdFromPath(path29) {
+  const fileName = path29.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -19329,13 +20174,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path25 = [];
+  const path29 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path25.indexOf(node);
+      const cycleStartIndex = path29.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path25.length; index++) {
-          const cyclicNode = path25[index];
+        for (let index = cycleStartIndex; index < path29.length; index++) {
+          const cyclicNode = path29[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -19345,11 +20190,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path25.push(node);
+    path29.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path25.pop();
+    path29.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -19360,7 +20205,7 @@ function detectTraceCycles(state) {
     return;
   state.diagnostics.push(traceabilityDiagnostic({
     code: "cyclic_reference",
-    message: `Trace references contain a cycle involving ${[...cyclic].sort(compareStrings4).join(", ")}.`,
+    message: `Trace references contain a cycle involving ${[...cyclic].sort(compareStrings5).join(", ")}.`,
     path: artifactPathForTraceability(state.changeId)
   }));
 }
@@ -19377,10 +20222,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path25 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path29 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path25,
+        path: path29,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -19612,8 +20457,8 @@ function buildGraph(input) {
   detectTraceCycles(state);
   const graph = {
     changeId: state.changeId,
-    nodes: [...state.nodes.values()].sort((left, right) => compareStrings4(left.id, right.id)),
-    edges: state.edges.sort((left, right) => compareStrings4(left.from, right.from) || compareStrings4(left.to, right.to) || compareStrings4(left.relation, right.relation))
+    nodes: [...state.nodes.values()].sort((left, right) => compareStrings5(left.id, right.id)),
+    edges: state.edges.sort((left, right) => compareStrings5(left.from, right.from) || compareStrings5(left.to, right.to) || compareStrings5(left.relation, right.relation))
   };
   const report = {
     changeId: state.changeId,
@@ -19626,12 +20471,12 @@ function buildGraph(input) {
       reviews: [...state.nodes.values()].filter((node) => node.kind === "review").length
     },
     graph,
-    diagnostics: diagnostics.sort((left, right) => compareStrings4(left.source.path, right.source.path) || compareStrings4(left.code, right.code) || compareStrings4(left.message, right.message))
+    diagnostics: diagnostics.sort((left, right) => compareStrings5(left.source.path, right.source.path) || compareStrings5(left.code, right.code) || compareStrings5(left.message, right.message))
   };
   return report;
 }
 function validateCoverage(state, input) {
-  const targetRequirementIds = [...new Set(input.change.bundle.change.proposedTruth.requirementIds)].sort(compareStrings4);
+  const targetRequirementIds = [...new Set(input.change.bundle.change.proposedTruth.requirementIds)].sort(compareStrings5);
   for (const requirementId of targetRequirementIds) {
     const entry = state.requirements.get(requirementId);
     if (entry === void 0) {
@@ -19848,12 +20693,12 @@ function validateEvidenceTraceTargets(input) {
 async function loadOracles(input) {
   const manifest = await deriveOracleManifest(input);
   if (!manifest.ok)
-    return failure8(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
+    return failure10(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
   const oracles = [];
   for (const revision of manifest.manifest.oracles) {
     const oracleId = oracleIdFromPath(revision.artifact.path);
     if (oracleId === void 0) {
-      return failure8("invalid", [
+      return failure10("invalid", [
         traceabilityDiagnostic({
           code: "invalid_oracle_manifest_path",
           message: `Oracle manifest contains a path that does not end in an oracle ID: ${revision.artifact.path}.`,
@@ -19867,25 +20712,25 @@ async function loadOracles(input) {
       oracleId
     });
     if (!oracle.ok)
-      return failure8(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
+      return failure10(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
     oracles.push(oracle);
   }
-  return oracles.sort((left, right) => compareStrings4(left.document.id, right.document.id));
+  return oracles.sort((left, right) => compareStrings5(left.document.id, right.document.id));
 }
 async function loadTraceabilityArtifacts(input) {
   const change = await loadChangeBundle(input);
   if (!change.ok)
-    return failure8(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
+    return failure10(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok)
-    return failure8(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
+    return failure10(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
   const oracles = await loadOracles(input);
   if ("diagnostics" in oracles)
     return oracles;
   const taskGraph = await readTaskGraph(input);
   if (!taskGraph.ok) {
     if (taskGraph.status === "not_found") {
-      return failure8("invalid", [
+      return failure10("invalid", [
         traceabilityDiagnostic({
           code: "missing_taskgraph",
           message: `Change ${input.changeId} has no taskgraph artifact.`,
@@ -19893,12 +20738,12 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure8("invalid", taskGraph.diagnostics);
+    return failure10("invalid", taskGraph.diagnostics);
   }
   const evidenceIndex = await readEvidenceIndex(input);
   if (!evidenceIndex.ok) {
     if (evidenceIndex.status === "not_found") {
-      return failure8("invalid", [
+      return failure10("invalid", [
         traceabilityDiagnostic({
           code: "missing_evidence_index",
           message: `Change ${input.changeId} has no evidence-index artifact.`,
@@ -19906,12 +20751,12 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure8("invalid", evidenceIndex.diagnostics);
+    return failure10("invalid", evidenceIndex.diagnostics);
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
 async function validateChangeTraceability(input) {
-  const changeId = parseChangeId6(input.changeId);
+  const changeId = parseChangeId8(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const loaded = await loadTraceabilityArtifacts({
@@ -19922,7 +20767,7 @@ async function validateChangeTraceability(input) {
     return loaded;
   const report = buildGraph(loaded);
   if (report.diagnostics.length > 0)
-    return failure8("invalid", report.diagnostics, report);
+    return failure10("invalid", report.diagnostics, report);
   return {
     ok: true,
     status: "validated",
@@ -20003,10 +20848,10 @@ import { readFile as readFile7, rm as rm2, writeFile as writeFile2 } from "node:
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
 var INVALID_ARCHIVE_PATH = ".legion/project/changes/invalid-change/archive.json";
-function compareStrings5(left, right) {
+function compareStrings6(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
-function failure9(status2, diagnostics) {
+function failure11(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function archiveDiagnostic(input) {
@@ -20016,23 +20861,23 @@ function archiveDiagnostic(input) {
     path: input.path ?? INVALID_ARCHIVE_PATH
   });
 }
-function parseChangeId7(input) {
+function parseChangeId9(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path25) {
+function parseArchivedAt(input, path29) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
-    return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path25
+      path: path29
     })));
   }
   return parsed.data;
@@ -20053,7 +20898,7 @@ function archiveRecordWithHash(input) {
     archiveHash: expectedArchiveHash(input)
   });
   if (!parsed.success) {
-    return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archive_record",
       message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
       path: archivePath(input.changeId)
@@ -20061,7 +20906,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path25) {
+function archiveHashDiagnostics(record2, path29) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -20069,11 +20914,11 @@ function archiveHashDiagnostics(record2, path25) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path25
+      path: path29
     })
   ];
 }
-async function assertWorktreeTarget(input, path25) {
+async function assertWorktreeTarget(input, path29) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -20083,31 +20928,31 @@ async function assertWorktreeTarget(input, path25) {
     });
     if (result.stdout.trim().length === 0)
       return void 0;
-    return failure9("conflict", [
+    return failure11("conflict", [
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path25
+        path: path29
       })
     ]);
   } catch (error2) {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path25
+        path: path29
       })
     ]);
   }
 }
 function asArchiveFailure(status2, diagnostics) {
-  return failure9(status2, diagnostics);
+  return failure11(status2, diagnostics);
 }
 function findRevision2(input) {
   const revision = input.change.bundle.artifactRevisions.find((entry) => entry.role === input.role && entry.artifact.path === input.path);
   if (revision !== void 0)
     return revision;
-  return failure9("invalid", [
+  return failure11("invalid", [
     archiveDiagnostic({
       code: "missing_change_artifact_revision",
       message: `Change bundle is missing ${input.role} revision for ${input.path}.`,
@@ -20174,11 +21019,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path25 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path25 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path25)) : remaining;
+    const path29 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path29 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path29)) : remaining;
     return {
-      path: path25,
+      path: path29,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -20220,7 +21065,7 @@ function plannedIndexEntry(input) {
     requirements: input.document.requirements.map((requirement) => ({
       id: requirement.id,
       contentHash: hashContent(stableProtocolJson(requirement))
-    })).sort((left, right) => compareStrings5(left.id, right.id)),
+    })).sort((left, right) => compareStrings6(left.id, right.id)),
     artifact: artifactReferenceForContent({
       path: input.path,
       content,
@@ -20232,34 +21077,34 @@ function plannedIndex(entries) {
   const parsed = currentSpecIndexSchema.safeParse({
     schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
     kind: "current-spec-index",
-    entries: entries.map(plannedIndexEntry).sort((left, right) => compareStrings5(left.path, right.path))
+    entries: entries.map(plannedIndexEntry).sort((left, right) => compareStrings6(left.path, right.path))
   });
   if (parsed.success)
     return parsed.data;
-  return failure9("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+  return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_current_spec_index",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path25, document) {
+function validatePlannedDocument(path29, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path25,
+    artifactPath: path29,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
     return void 0;
-  return failure9(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
+  return failure11(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
 }
 function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path25, document]) => [path25, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path29, document]) => [path29, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
   if (acceptedAt === void 0) {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Change must carry accepted acceptance state before archive.",
@@ -20270,7 +21115,7 @@ function buildPlannedSpecs(input) {
   for (const delta of input.change.deltaSpecs) {
     if (delta.operation === "add") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure9("invalid", [
+        return failure11("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Add delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -20278,17 +21123,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path25 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path25)) {
-        return failure9("conflict", [
+      const path29 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path29)) {
+        return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path25}.`,
-            path: path25
+            message: `Archive add target already exists: ${path29}.`,
+            path: path29
           })
         ]);
       }
-      plannedDocs.set(path25, {
+      plannedDocs.set(path29, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -20301,12 +21146,12 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path25);
+      touchedPaths.add(path29);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
     if (basePath === void 0) {
-      return failure9("invalid", [
+      return failure11("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base for ${delta.requirementId} is missing from the archive plan.`,
@@ -20316,7 +21161,7 @@ function buildPlannedSpecs(input) {
     }
     const currentDocument = plannedDocs.get(basePath);
     if (currentDocument === void 0) {
-      return failure9("invalid", [
+      return failure11("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base ${basePath} for ${delta.requirementId} is not loaded.`,
@@ -20328,7 +21173,7 @@ function buildPlannedSpecs(input) {
     let targetPath = basePath;
     if (delta.operation === "modify") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure9("invalid", [
+        return failure11("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Modify delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -20364,10 +21209,10 @@ function buildPlannedSpecs(input) {
     touchedPaths.add(targetPath);
   }
   const plannedSpecs = [];
-  for (const deletePath of [...deletedPaths].sort(compareStrings5)) {
+  for (const deletePath of [...deletedPaths].sort(compareStrings6)) {
     const beforeEntry = input.currentSpecs.index.entries.find((entry) => entry.path === deletePath);
     if (beforeEntry === void 0) {
-      return failure9("invalid", [
+      return failure11("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Deleted current spec base ${deletePath} is not present in the current spec index.`,
@@ -20382,7 +21227,7 @@ function buildPlannedSpecs(input) {
       before: beforeEntry.artifact
     });
   }
-  for (const specPath of [...touchedPaths].sort(compareStrings5)) {
+  for (const specPath of [...touchedPaths].sort(compareStrings6)) {
     const document = plannedDocs.get(specPath);
     if (document === void 0)
       continue;
@@ -20423,7 +21268,7 @@ function retainedArtifacts(input) {
     return decisions;
   return {
     proposal: input.change.reference,
-    deltas: input.change.bundle.deltas.map((delta) => delta.delta).sort((left, right) => compareStrings5(left.path, right.path)),
+    deltas: input.change.bundle.deltas.map((delta) => delta.delta).sort((left, right) => compareStrings6(left.path, right.path)),
     design: design.artifact,
     decisions: decisions.artifact,
     oracles: input.oracleManifest.manifest.oracles.map((revision) => revision.artifact),
@@ -20476,25 +21321,25 @@ function previewFromPlan(input) {
   });
   if (preview.success)
     return preview.data;
-  return failure9("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
+  return failure11("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_archive_preview",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
     path: archivePath(input.changeId)
   })));
 }
 async function buildArchivePlan(input) {
-  const changeId = parseChangeId7(input.changeId);
+  const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path25 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path25);
+  const path29 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path29);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
   if (!change.ok)
     return asArchiveFailure(change.status === "not_found" ? "not_found" : change.status, change.diagnostics);
   if (change.bundle.change.status !== "accepted" || change.bundle.change.acceptance?.status !== "accepted") {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Only accepted changes can be archived into current truth.",
@@ -20560,7 +21405,7 @@ async function backupFiles(input) {
         artifactPath
       });
     } catch (error2) {
-      return failure9("invalid", [
+      return failure11("invalid", [
         archiveDiagnostic({
           code: "invalid_path",
           message: error2 instanceof Error ? error2.message : String(error2),
@@ -20622,7 +21467,7 @@ async function deletePlannedSpec(input) {
     bytes = await readFile7(resolved.absolutePath);
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
-      return failure9("invalid", [
+      return failure11("invalid", [
         archiveDiagnostic({
           code: "stale_spec_revision",
           message: `Expected current spec ${input.spec.path} to exist before archive removal.`,
@@ -20633,7 +21478,7 @@ async function deletePlannedSpec(input) {
     throw error2;
   }
   if (hashContent(bytes) !== input.spec.before.sha256) {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Current spec ${input.spec.path} no longer matches the archived base content.`,
@@ -20648,7 +21493,7 @@ async function deletePlannedSpec(input) {
   if (!parsed.ok)
     return asArchiveFailure(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
   if (parsed.document.revision !== input.spec.expectedRevision) {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Expected current spec revision ${input.spec.expectedRevision}, but current revision is ${parsed.document.revision}.`,
@@ -20710,7 +21555,7 @@ async function writeArchiveRecord(input) {
     };
   } catch (error2) {
     if (error2 instanceof ArtifactRevisionConflictError || error2 instanceof Error) {
-      return failure9("conflict", [
+      return failure11("conflict", [
         archiveDiagnostic({
           code: "archive_write_failed",
           message: error2.message,
@@ -20722,40 +21567,40 @@ async function writeArchiveRecord(input) {
   }
 }
 async function readArchiveRecord(input) {
-  const changeId = parseChangeId7(input.changeId);
+  const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path25 = archivePath(changeId);
+  const path29 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path25,
+    artifactPath: path29,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure9(status2, read.diagnostics);
+    return failure11(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path25
+        path: path29
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path25);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path29);
   if (hashDiagnostics.length > 0)
-    return failure9("invalid", hashDiagnostics);
+    return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path25,
+    artifactPath: path29,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path25,
+      path: path29,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -20764,7 +21609,7 @@ async function readArchiveRecord(input) {
   };
 }
 async function archiveAcceptedChange(input) {
-  const changeId = parseChangeId7(input.changeId);
+  const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const existing = await readArchiveRecord({
@@ -20776,7 +21621,7 @@ async function archiveAcceptedChange(input) {
     if (!current.ok)
       return asArchiveFailure(current.status, current.diagnostics);
     if (current.indexHash !== existing.record.preview.afterSpecHash) {
-      return failure9("conflict", [
+      return failure11("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Current truth hash ${current.indexHash} does not match archived target hash ${existing.record.preview.afterSpecHash}.`,
@@ -20800,7 +21645,7 @@ async function archiveAcceptedChange(input) {
   if (typeof archivedAt !== "string")
     return archivedAt;
   if (input.archivedBy.length === 0) {
-    return failure9("invalid", [
+    return failure11("invalid", [
       archiveDiagnostic({
         code: "invalid_archived_by",
         message: "Archive requires a non-empty archivedBy actor ID.",
@@ -20835,7 +21680,7 @@ async function archiveAcceptedChange(input) {
     }
     if (currentAfterWrites.indexHash !== plan.preview.afterSpecHash) {
       await rollbackFiles(backups, rollbackGuards);
-      return failure9("conflict", [
+      return failure11("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Applied current truth hash ${currentAfterWrites.indexHash} does not match planned hash ${plan.preview.afterSpecHash}.`,
@@ -20862,7 +21707,7 @@ async function archiveAcceptedChange(input) {
       archivedBy: input.archivedBy,
       preview: plan.preview,
       retainedArtifacts: retained,
-      currentSpecRevisions: [...currentSpecRevisions].sort((left, right) => compareStrings5(left.artifact.path, right.artifact.path))
+      currentSpecRevisions: [...currentSpecRevisions].sort((left, right) => compareStrings6(left.artifact.path, right.artifact.path))
     });
     if ("diagnostics" in record2) {
       await rollbackFiles(backups, rollbackGuards);
@@ -20880,7 +21725,7 @@ async function archiveAcceptedChange(input) {
     return write;
   } catch (error2) {
     await rollbackFiles(backups, rollbackGuards);
-    return failure9("conflict", [
+    return failure11("conflict", [
       archiveDiagnostic({
         code: "archive_write_failed",
         message: error2 instanceof Error ? error2.message : String(error2),
@@ -21002,23 +21847,23 @@ async function archive(context) {
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as existsSync3 } from "node:fs";
 import { readFile as readFile8 } from "node:fs/promises";
-import path13 from "node:path";
+import path15 from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // packages/cli/src/source-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import path12 from "node:path";
+import path14 from "node:path";
 import { fileURLToPath } from "node:url";
 function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
-  const moduleDirectory = path12.dirname(fileURLToPath(importMetaUrl));
+  const moduleDirectory = path14.dirname(fileURLToPath(importMetaUrl));
   const candidates = [
     // Bundled root CLI: dist/legion-cli.mjs -> package root.
-    path12.resolve(moduleDirectory, ".."),
+    path14.resolve(moduleDirectory, ".."),
     // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
-    path12.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+    path14.resolve(moduleDirectory, "..", "..", "..", "..", "..")
   ];
   for (const candidate of candidates) {
-    if (existsSync2(path12.join(candidate, requiredRelativePath))) return candidate;
+    if (existsSync2(path14.join(candidate, requiredRelativePath))) return candidate;
   }
   return candidates[0] ?? process.cwd();
 }
@@ -21142,23 +21987,23 @@ async function capture(context) {
       "capture script did not return a run directory."
     );
   }
-  const resolvedRunDir = path13.isAbsolute(runDir) ? runDir : path13.join(context.repositoryRoot, runDir);
+  const resolvedRunDir = path15.isAbsolute(runDir) ? runDir : path15.join(context.repositoryRoot, runDir);
   if (!existsSync3(resolvedRunDir)) {
     return failure(
       { ok: false, status: "error", diagnostics: [{ code: "capture_failed", message: `captured run directory not found: ${resolvedRunDir}` }] },
       `captured run directory not found: ${resolvedRunDir}`
     );
   }
-  const manifestPath = path13.join(resolvedRunDir, "run-manifest.json");
-  const scorePath = path13.join(resolvedRunDir, "score.json");
+  const manifestPath = path15.join(resolvedRunDir, "run-manifest.json");
+  const scorePath = path15.join(resolvedRunDir, "score.json");
   const manifest = JSON.parse(await readFile8(manifestPath, "utf8"));
   return success(
     {
       ok: true,
       status: "captured",
-      runDirectory: path13.relative(context.repositoryRoot, resolvedRunDir),
-      runManifest: path13.relative(context.repositoryRoot, manifestPath),
-      score: existsSync3(scorePath) ? path13.relative(context.repositoryRoot, scorePath) : null,
+      runDirectory: path15.relative(context.repositoryRoot, resolvedRunDir),
+      runManifest: path15.relative(context.repositoryRoot, manifestPath),
+      score: existsSync3(scorePath) ? path15.relative(context.repositoryRoot, scorePath) : null,
       manifest
     },
     `Captured run to ${resolvedRunDir}.`
@@ -21168,7 +22013,7 @@ async function grade(context) {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const resolvedRunDirectory = path13.resolve(context.repositoryRoot, runDirectory);
+  const resolvedRunDirectory = path15.resolve(context.repositoryRoot, runDirectory);
   const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
@@ -21176,7 +22021,7 @@ async function grade(context) {
     {
       ok: true,
       status: "graded",
-      score: scorePath ? path13.relative(context.repositoryRoot, scorePath) : scorePath
+      score: scorePath ? path15.relative(context.repositoryRoot, scorePath) : scorePath
     },
     `Graded ${runDirectory} -> ${scorePath}.`
   );
@@ -21192,11 +22037,11 @@ async function compare(context) {
     "--repository-root",
     context.repositoryRoot,
     "--v8-dir",
-    path13.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
+    path15.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
     "--v9-dir",
-    path13.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
+    path15.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
     "--output",
-    path13.resolve(context.repositoryRoot, context.args.options.get("output"))
+    path15.resolve(context.repositoryRoot, context.args.options.get("output"))
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -21207,8 +22052,8 @@ async function compare(context) {
     {
       ok: true,
       status: "compared",
-      abComparisonJson: jsonPath ? path13.relative(context.repositoryRoot, jsonPath) : jsonPath,
-      abComparisonMarkdown: mdPath ? path13.relative(context.repositoryRoot, mdPath) : mdPath
+      abComparisonJson: jsonPath ? path15.relative(context.repositoryRoot, jsonPath) : jsonPath,
+      abComparisonMarkdown: mdPath ? path15.relative(context.repositoryRoot, mdPath) : mdPath
     },
     `Compared v8/v9 sealed runs -> ${jsonPath}.`
   );
@@ -21222,13 +22067,13 @@ async function threatModel(context) {
   const args = [
     "scripts/baseline/threat-model.mjs",
     "--run-dir",
-    path13.resolve(context.repositoryRoot, runDir),
+    path15.resolve(context.repositoryRoot, runDir),
     "--output-root",
-    path13.resolve(context.repositoryRoot, outputRoot)
+    path15.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path13.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path15.resolve(context.repositoryRoot, report));
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -21279,7 +22124,7 @@ function parseJsonVerdict(stdout) {
 }
 async function runScript(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path13.join(V9_SOURCE_ROOT, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path15.join(V9_SOURCE_ROOT, arg) : arg
   );
   try {
     const result = await execFile2(process.execPath, resolvedArgs, {
@@ -21325,17 +22170,17 @@ async function runScript(context, scriptArgs) {
 
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash15 } from "node:crypto";
-import { cp, mkdir as mkdir9, readFile as readFile9, readdir as readdir4, rename as rename2, rm as rm3, stat as stat4, writeFile as writeFile3 } from "node:fs/promises";
-import path14 from "node:path";
+import { cp, mkdir as mkdir9, readFile as readFile9, readdir as readdir6, rename as rename2, rm as rm3, stat as stat4, writeFile as writeFile3 } from "node:fs/promises";
+import path16 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
 var LEGION_ROOT = ".legion";
 var EMPTY_TREE_HASH = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-function compareStrings6(left, right) {
+function compareStrings7(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath(value) {
-  return value.split(path14.sep).join("/");
+  return value.split(path16.sep).join("/");
 }
 function isEnoent4(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
@@ -21350,7 +22195,7 @@ async function pathExists3(absolutePath) {
     throw error2;
   }
 }
-function failure10(status2, diagnostics) {
+function failure12(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic(input) {
@@ -21368,39 +22213,39 @@ async function listFiles(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir4(directory, { withFileTypes: true });
+      entries = await readdir6(directory, { withFileTypes: true });
     } catch (error2) {
       if (isEnoent4(error2))
         return;
       throw error2;
     }
-    for (const entry of [...entries].sort((left, right) => compareStrings6(left.name, right.name))) {
-      const absolutePath = path14.join(directory, entry.name);
+    for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
+      const absolutePath = path16.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath(path14.relative(root, absolutePath)));
+        files.push(toPosixPath(path16.relative(root, absolutePath)));
     }
   }
   await visit(root);
-  return files.sort(compareStrings6);
+  return files.sort(compareStrings7);
 }
 async function listSymbolicLinks(root, displayedRoot) {
   const links = [];
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir4(directory, { withFileTypes: true });
+      entries = await readdir6(directory, { withFileTypes: true });
     } catch (error2) {
       if (isEnoent4(error2))
         return;
       throw error2;
     }
-    for (const entry of [...entries].sort((left, right) => compareStrings6(left.name, right.name))) {
-      const absolutePath = path14.join(directory, entry.name);
-      const displayedPath = `${displayedRoot}/${toPosixPath(path14.relative(root, absolutePath))}`;
+    for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
+      const absolutePath = path16.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path16.relative(root, absolutePath))}`;
       if (entry.isSymbolicLink()) {
         links.push(displayedPath);
         continue;
@@ -21410,13 +22255,13 @@ async function listSymbolicLinks(root, displayedRoot) {
     }
   }
   await visit(root);
-  return links.sort(compareStrings6);
+  return links.sort(compareStrings7);
 }
 async function validateNoSymbolicLinks(input) {
   const links = await listSymbolicLinks(input.root, input.displayedRoot);
   if (links.length === 0)
     return void 0;
-  return failure10("conflict", links.map((link) => diagnostic({
+  return failure12("conflict", links.map((link) => diagnostic({
     code: "unsupported_symbolic_link",
     message: "Codex .legion migration cannot preserve symbolic links safely; replace the link with a regular file or migrate it manually.",
     sourcePath: link
@@ -21429,7 +22274,7 @@ async function hashFiles(root, files) {
   for (const file of files) {
     hash.update(file);
     hash.update("\0");
-    hash.update(await readFile9(path14.join(root, ...file.split("/"))));
+    hash.update(await readFile9(path16.join(root, ...file.split("/"))));
     hash.update("\0");
   }
   return `sha256:${hash.digest("hex")}`;
@@ -21438,25 +22283,25 @@ async function hashTree(root) {
   return hashFiles(root, await listFiles(root));
 }
 function containsPath(parent, child) {
-  const relative = path14.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path14.isAbsolute(relative);
+  const relative = path16.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path16.isAbsolute(relative);
 }
 function pathsOverlap2(left, right) {
   return containsPath(left, right) || containsPath(right, left);
 }
 function sameResolvedPath(left, right) {
-  const resolvedLeft = path14.resolve(left);
-  const resolvedRight = path14.resolve(right);
+  const resolvedLeft = path16.resolve(left);
+  const resolvedRight = path16.resolve(right);
   if (process.platform === "win32")
     return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot(input) {
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const stagingRoot = path14.resolve(input.stagingRoot);
-  const legacyRoot = path14.join(repositoryRoot, ".legion");
+  const repositoryRoot = path16.resolve(input.repositoryRoot);
+  const stagingRoot = path16.resolve(input.stagingRoot);
+  const legacyRoot = path16.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .legion source.",
@@ -21467,11 +22312,11 @@ function safeResolvedStagingRoot(input) {
   return stagingRoot;
 }
 function safeResolvedBackupRoot(input) {
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const backupRoot = path14.resolve(input.backupRoot);
-  const legacyRoot = path14.join(repositoryRoot, ".legion");
+  const repositoryRoot = path16.resolve(input.repositoryRoot);
+  const backupRoot = path16.resolve(input.backupRoot);
+  const legacyRoot = path16.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root or .legion source.",
@@ -21486,7 +22331,7 @@ function parseUtcTimestamp(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error2) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: input.code,
         message: error2 instanceof Error ? error2.message : "Value is not a valid UTC timestamp.",
@@ -21495,7 +22340,7 @@ function parseUtcTimestamp(input) {
     ]);
   }
 }
-function isRecord5(value) {
+function isRecord6(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function readString(value) {
@@ -21503,9 +22348,9 @@ function readString(value) {
 }
 function normalizeReportedPath(repositoryRoot, value) {
   const normalized = value.replace(/\\/g, "/");
-  if (path14.isAbsolute(value)) {
-    const relative = path14.relative(repositoryRoot, value);
-    if (relative.length > 0 && !relative.startsWith("..") && !path14.isAbsolute(relative)) {
+  if (path16.isAbsolute(value)) {
+    const relative = path16.relative(repositoryRoot, value);
+    if (relative.length > 0 && !relative.startsWith("..") && !path16.isAbsolute(relative)) {
       return toPosixPath(relative);
     }
   }
@@ -21530,7 +22375,7 @@ function nativeSurface(input) {
   return { path: normalized, source: input.source };
 }
 async function parseCodexManifest(repositoryRoot, legionRoot) {
-  const manifestPath = path14.join(legionRoot, "manifest.json");
+  const manifestPath = path16.join(legionRoot, "manifest.json");
   let parsed;
   try {
     parsed = JSON.parse(await readFile9(manifestPath, "utf8"));
@@ -21560,7 +22405,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
       }
     };
   }
-  if (!isRecord5(parsed)) {
+  if (!isRecord6(parsed)) {
     return {
       generatedPaths: /* @__PURE__ */ new Set(),
       nativeSurfaces: [],
@@ -21574,7 +22419,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
     };
   }
   const generatedPaths = /* @__PURE__ */ new Set([".legion/manifest.json"]);
-  const pathsValue = isRecord5(parsed["paths"]) ? parsed["paths"] : {};
+  const pathsValue = isRecord6(parsed["paths"]) ? parsed["paths"] : {};
   for (const key of ["agents", "commands", "skills", "adapters", "manifest"]) {
     collectManagedPath({
       repositoryRoot,
@@ -21599,7 +22444,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
     nativeSurfaces.push(bridgeSurface);
   if (Array.isArray(parsed["nativeArtifacts"])) {
     for (const artifact of parsed["nativeArtifacts"]) {
-      if (!isRecord5(artifact))
+      if (!isRecord6(artifact))
         continue;
       const surface = nativeSurface({
         repositoryRoot,
@@ -21655,7 +22500,7 @@ function uniqueNativeSurfaces(surfaces) {
     if (!byPath.has(surface.path))
       byPath.set(surface.path, surface);
   }
-  return [...byPath.values()].sort((left, right) => compareStrings6(left.path, right.path));
+  return [...byPath.values()].sort((left, right) => compareStrings7(left.path, right.path));
 }
 function topLevelLegionEntry(legionRelativeFile) {
   return legionRelativeFile.split("/")[0] ?? legionRelativeFile;
@@ -21691,7 +22536,7 @@ function classifySourceFile(relativePath, generatedPaths) {
 async function sourceInventory(input) {
   const files = [];
   for (const file of await listFiles(input.legionRoot)) {
-    const bytes = await readFile9(path14.join(input.legionRoot, ...file.split("/")));
+    const bytes = await readFile9(path16.join(input.legionRoot, ...file.split("/")));
     const relativePath = `.legion/${file}`;
     files.push({
       path: relativePath,
@@ -21703,7 +22548,7 @@ async function sourceInventory(input) {
   return {
     root: LEGION_ROOT,
     treeHash: await hashTree(input.legionRoot),
-    files: files.sort((left, right) => compareStrings6(left.path, right.path))
+    files: files.sort((left, right) => compareStrings7(left.path, right.path))
   };
 }
 function migrationMoves(source) {
@@ -21712,7 +22557,7 @@ function migrationMoves(source) {
     targetPath: `${LEGACY_PROTOCOL_ROOT}/${file.path.slice(".legion/".length)}`,
     classification: "move-to-legacy-protocol",
     rationale: "Preserve legacy Codex protocol bytes outside the v9 .legion/project namespace."
-  })).sort((left, right) => compareStrings6(left.sourcePath, right.sourcePath));
+  })).sort((left, right) => compareStrings7(left.sourcePath, right.sourcePath));
 }
 function sameMigrationMove(left, right) {
   return left.sourcePath === right.sourcePath && left.targetPath === right.targetPath && left.classification === right.classification && left.rationale === right.rationale;
@@ -21732,7 +22577,7 @@ function validateReportMoves(report) {
   }
   if (matchesExpectedMoves)
     return void 0;
-  return failure10("invalid", [
+  return failure12("invalid", [
     diagnostic({
       code: "invalid_migration_moves",
       message: "Dry-run report moves no longer match the reviewed source inventory.",
@@ -21741,18 +22586,18 @@ function validateReportMoves(report) {
   ]);
 }
 async function stageLegacyProtocol(input) {
-  const targetRoot = path14.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
   await rm3(input.stagingRoot, { recursive: true, force: true });
   await mkdir9(targetRoot, { recursive: true });
   for (const move of input.moves) {
-    const sourcePath = path14.join(input.repositoryRoot, ...move.sourcePath.split("/"));
-    const targetPath = path14.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir9(path14.dirname(targetPath), { recursive: true });
+    const sourcePath = path16.join(input.repositoryRoot, ...move.sourcePath.split("/"));
+    const targetPath = path16.join(input.stagingRoot, ...move.targetPath.split("/"));
+    await mkdir9(path16.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
   for (const file of await listFiles(targetRoot)) {
-    const bytes = await readFile9(path14.join(targetRoot, ...file.split("/")));
+    const bytes = await readFile9(path16.join(targetRoot, ...file.split("/")));
     files.push({
       path: `${LEGACY_PROTOCOL_ROOT}/${file}`,
       sha256: bytesHash(bytes),
@@ -21763,12 +22608,12 @@ async function stageLegacyProtocol(input) {
   return {
     root: LEGACY_PROTOCOL_ROOT,
     treeHash: await hashTree(targetRoot),
-    files: files.sort((left, right) => compareStrings6(left.path, right.path))
+    files: files.sort((left, right) => compareStrings7(left.path, right.path))
   };
 }
 async function writeReport(stagingRoot, report) {
-  const reportPath = path14.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir9(path14.dirname(reportPath), { recursive: true });
+  const reportPath = path16.join(stagingRoot, ...REPORT_PATH.split("/"));
+  await mkdir9(path16.dirname(reportPath), { recursive: true });
   await writeFile3(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
@@ -21795,10 +22640,10 @@ async function createCodexLegionMigrationDryRun(input) {
   });
   if (typeof createdAt !== "string")
     return createdAt;
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const legionRoot = path14.join(repositoryRoot, ".legion");
+  const repositoryRoot = path16.resolve(input.repositoryRoot);
+  const legionRoot = path16.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "legacy_legion_root_missing",
         message: "Legacy .legion root does not exist.",
@@ -21849,12 +22694,12 @@ async function createCodexLegionMigrationDryRun(input) {
   };
 }
 async function readReport(stagingRoot) {
-  const reportPath = path14.join(stagingRoot, ...REPORT_PATH.split("/"));
+  const reportPath = path16.join(stagingRoot, ...REPORT_PATH.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile9(reportPath, "utf8"));
   } catch (error2) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "missing_dry_run_report",
         message: error2 instanceof Error ? error2.message : "Dry-run report could not be read.",
@@ -21863,7 +22708,7 @@ async function readReport(stagingRoot) {
     ]);
   }
   if (!isCodexLegionMigrationReport(parsed)) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required Codex Legion migration fields.",
@@ -21874,23 +22719,23 @@ async function readReport(stagingRoot) {
   return parsed;
 }
 function isInventory(value) {
-  return isRecord5(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
+  return isRecord6(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
 }
 function isCodexLegionMigrationReport(value) {
-  if (!isRecord5(value))
+  if (!isRecord6(value))
     return false;
   const policy = value["policy"];
-  return value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory(value["source"]) && isInventory(value["target"]) && Array.isArray(value["nativeSurfaces"]) && Array.isArray(value["moves"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord5(policy) && policy["v8DefaultInstallUnchanged"] === true && policy["nativeCodexSurfacesUntouched"] === true && policy["v9ProjectNamespaceReserved"] === true && policy["legacyProtocolPreserved"] === true;
+  return value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory(value["source"]) && isInventory(value["target"]) && Array.isArray(value["nativeSurfaces"]) && Array.isArray(value["moves"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord6(policy) && policy["v8DefaultInstallUnchanged"] === true && policy["nativeCodexSurfacesUntouched"] === true && policy["v9ProjectNamespaceReserved"] === true && policy["legacyProtocolPreserved"] === true;
 }
 function isBackupManifest(value) {
-  return isRecord5(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
+  return isRecord6(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
-  const targetRoot = path14.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure10("invalid", [
+  return failure12("invalid", [
     diagnostic({
       code: "staged_legacy_protocol_hash_mismatch",
       message: "Staged legacy protocol bytes no longer match the reviewed dry-run report.",
@@ -21899,10 +22744,10 @@ async function validateStagedTargetHash(input) {
   ]);
 }
 async function validateCurrentSourceHash(input) {
-  const currentHash = await hashTree(path14.join(input.repositoryRoot, ".legion"));
+  const currentHash = await hashTree(path16.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
-  return failure10("invalid", [
+  return failure12("invalid", [
     diagnostic({
       code: "source_hash_mismatch",
       message: "Current .legion bytes differ from the reviewed dry-run report.",
@@ -21915,11 +22760,11 @@ function backupId(appliedAt, sourceHash) {
   return `codex-legion-migration-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
 }
 async function backupLegionRoot(input) {
-  const legionRoot = path14.join(input.repositoryRoot, ".legion");
+  const legionRoot = path16.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path14.resolve(input.backupRoot, id);
-  const backupPath = path14.resolve(backupDirectory, "legion");
+  const backupDirectory = path16.resolve(input.backupRoot, id);
+  const backupPath = path16.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
   await rm3(backupDirectory, { recursive: true, force: true });
   await mkdir9(backupDirectory, { recursive: true });
@@ -21936,7 +22781,7 @@ async function backupLegionRoot(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path14.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path16.resolve(backupDirectory, "backup-manifest.json");
   await writeFile3(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -21946,9 +22791,9 @@ async function backupLegionRoot(input) {
   };
 }
 async function installStagedLegacyProtocol(input) {
-  const legionRoot = path14.join(input.repositoryRoot, ".legion");
-  const destination = path14.join(legionRoot, "legacy-protocol");
-  const stagedLegacyProtocolRoot = path14.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const legionRoot = path16.join(input.repositoryRoot, ".legion");
+  const destination = path16.join(legionRoot, "legacy-protocol");
+  const stagedLegacyProtocolRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
   if (input.report.moves.length > 0) {
     if (await pathExists3(destination)) {
       await mergeStagedLegacyProtocol({
@@ -21956,7 +22801,7 @@ async function installStagedLegacyProtocol(input) {
         destinationRoot: destination
       });
     } else {
-      const temporary = path14.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      const temporary = path16.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
       await rm3(temporary, { recursive: true, force: true });
       await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
       await rename2(temporary, destination);
@@ -21967,13 +22812,13 @@ async function installStagedLegacyProtocol(input) {
     report: input.report
   });
   for (const root of roots) {
-    await rm3(path14.join(legionRoot, root), { recursive: true, force: true });
+    await rm3(path16.join(legionRoot, root), { recursive: true, force: true });
   }
 }
 async function mergeStagedLegacyProtocol(input) {
   for (const file of await listFiles(input.stagedRoot)) {
-    const stagedPath = path14.join(input.stagedRoot, ...file.split("/"));
-    const destinationPath = path14.join(input.destinationRoot, ...file.split("/"));
+    const stagedPath = path16.join(input.stagedRoot, ...file.split("/"));
+    const destinationPath = path16.join(input.destinationRoot, ...file.split("/"));
     const stagedBytes = await readFile9(stagedPath);
     let destinationStat;
     try {
@@ -21984,29 +22829,29 @@ async function mergeStagedLegacyProtocol(input) {
     }
     if (destinationStat !== void 0) {
       if (!destinationStat.isFile()) {
-        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path14.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path16.relative(input.destinationRoot, destinationPath))}.`);
       }
       const destinationBytes = await readFile9(destinationPath);
       if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
-        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path14.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path16.relative(input.destinationRoot, destinationPath))}.`);
       }
       continue;
     }
-    await mkdir9(path14.dirname(destinationPath), { recursive: true });
+    await mkdir9(path16.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
 async function cleanupRoots(input) {
-  const legionRoot = path14.join(input.repositoryRoot, ".legion");
+  const legionRoot = path16.join(input.repositoryRoot, ".legion");
   const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
-  for (const entry of await readdir4(legionRoot, { withFileTypes: true })) {
+  for (const entry of await readdir6(legionRoot, { withFileTypes: true })) {
     if (!isReservedLegionRootEntry(entry.name))
       roots.add(entry.name);
   }
-  return [...roots].filter((entry) => entry.length > 0).sort(compareStrings6);
+  return [...roots].filter((entry) => entry.length > 0).sort(compareStrings7);
 }
 async function installedLegacyProtocolFiles(repositoryRoot) {
-  const targetRoot = path14.join(repositoryRoot, ".legion", "legacy-protocol");
+  const targetRoot = path16.join(repositoryRoot, ".legion", "legacy-protocol");
   return (await listFiles(targetRoot)).map((file) => `${LEGACY_PROTOCOL_ROOT}/${file}`);
 }
 async function applyCodexLegionMigration(input) {
@@ -22014,7 +22859,7 @@ async function applyCodexLegionMigration(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure10("blocked", [
+    return failure12("blocked", [
       diagnostic({
         code: "dry_run_review_required",
         message: "Codex .legion migrations require explicit reviewed apply after the dry-run report is inspected.",
@@ -22035,12 +22880,12 @@ async function applyCodexLegionMigration(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
+  const repositoryRoot = path16.resolve(input.repositoryRoot);
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string")
     return backupRoot;
   const symlinkFailure = await validateNoSymbolicLinks({
-    root: path14.join(repositoryRoot, ".legion"),
+    root: path16.join(repositoryRoot, ".legion"),
     displayedRoot: LEGION_ROOT
   });
   if (symlinkFailure !== void 0)
@@ -22074,7 +22919,7 @@ async function applyCodexLegionMigration(input) {
       });
     } catch {
     }
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "apply_failed",
         message: error2 instanceof Error ? error2.message : "Codex .legion migration apply failed.",
@@ -22092,7 +22937,7 @@ async function applyCodexLegionMigration(input) {
 }
 async function rollbackCodexLegionMigration(input) {
   let manifest;
-  const backupManifestPath = path14.resolve(input.backupManifestPath);
+  const backupManifestPath = path16.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile9(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
@@ -22100,7 +22945,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     manifest = parsed;
   } catch (error2) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "invalid_backup_manifest",
         message: error2 instanceof Error ? error2.message : "Backup manifest could not be read.",
@@ -22108,10 +22953,10 @@ async function rollbackCodexLegionMigration(input) {
       })
     ]);
   }
-  const repositoryRoot = path14.resolve(input.repositoryRoot);
-  const legionRoot = path14.join(repositoryRoot, ".legion");
+  const repositoryRoot = path16.resolve(input.repositoryRoot);
+  const legionRoot = path16.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure10("invalid", [
+    return failure12("invalid", [
       diagnostic({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -22120,8 +22965,8 @@ async function rollbackCodexLegionMigration(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path14.isAbsolute(manifest.backupPath)) {
-      return failure10("invalid", [
+    if (!path16.isAbsolute(manifest.backupPath)) {
+      return failure12("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -22130,7 +22975,7 @@ async function rollbackCodexLegionMigration(input) {
       ]);
     }
     if (!await pathExists3(manifest.backupPath)) {
-      return failure10("invalid", [
+      return failure12("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -22140,7 +22985,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     const backupHash = await hashTree(manifest.backupPath);
     if (backupHash !== manifest.preMigrationHash) {
-      return failure10("invalid", [
+      return failure12("invalid", [
         diagnostic({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-migration hash.",
@@ -22162,18 +23007,18 @@ async function rollbackCodexLegionMigration(input) {
 
 // packages/legacy-bridge/dist/import-planning/index.js
 import { createHash as createHash16 } from "node:crypto";
-import { cp as cp2, mkdir as mkdir10, readFile as readFile10, readdir as readdir5, realpath as realpath2, rm as rm4, stat as stat5, writeFile as writeFile4 } from "node:fs/promises";
-import path15 from "node:path";
+import { cp as cp2, mkdir as mkdir10, readFile as readFile10, readdir as readdir7, realpath as realpath2, rm as rm4, stat as stat5, writeFile as writeFile4 } from "node:fs/promises";
+import path17 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
 var EMPTY_TREE_HASH2 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-function compareStrings7(left, right) {
+function compareStrings8(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath2(value) {
-  return value.split(path15.sep).join("/");
+  return value.split(path17.sep).join("/");
 }
-function failure11(status2, diagnostics) {
+function failure13(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic2(input) {
@@ -22194,7 +23039,7 @@ function hashFiles2(root, files) {
     for (const file of files) {
       hash.update(file);
       hash.update("\0");
-      hash.update(await readFile10(path15.join(root, ...file.split("/"))));
+      hash.update(await readFile10(path17.join(root, ...file.split("/"))));
       hash.update("\0");
     }
     return `sha256:${hash.digest("hex")}`;
@@ -22215,24 +23060,24 @@ async function listFiles2(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir5(directory, { withFileTypes: true });
+      entries = await readdir7(directory, { withFileTypes: true });
     } catch (error2) {
       if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT")
         return;
       throw error2;
     }
-    for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path15.join(directory, entry.name);
+    for (const entry of [...entries].sort((left, right) => compareStrings8(left.name, right.name))) {
+      const absolutePath = path17.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath2(path15.relative(root, absolutePath)));
+        files.push(toPosixPath2(path17.relative(root, absolutePath)));
     }
   }
   await visit(root);
-  return files.sort(compareStrings7);
+  return files.sort(compareStrings8);
 }
 async function hashTree2(root) {
   return hashFiles2(root, await listFiles2(root));
@@ -22268,7 +23113,7 @@ function classifyPlanningFile(relativePath) {
 }
 async function sourceInventory2(planningRoot) {
   if (!await pathExists4(planningRoot)) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "planning_root_missing",
         message: "Legacy .planning root does not exist.",
@@ -22278,9 +23123,9 @@ async function sourceInventory2(planningRoot) {
   }
   const files = [];
   for (const file of await listFiles2(planningRoot)) {
-    const absolutePath = path15.join(planningRoot, ...file.split("/"));
+    const absolutePath = path17.join(planningRoot, ...file.split("/"));
     const bytes = await readFile10(absolutePath);
-    const relativePath = toPosixPath2(path15.join(".planning", file));
+    const relativePath = toPosixPath2(path17.join(".planning", file));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -22315,7 +23160,7 @@ function extractRequirements(projectMarkdown) {
     const suffix = requirementSuffix(code);
     const id = requirementIdSchema.safeParse(`req_${suffix}`);
     if (!id.success) {
-      return failure11("invalid", [
+      return failure13("invalid", [
         diagnostic2({
           code: "invalid_requirement_id",
           message: `Legacy requirement code ${code} cannot be converted to a v9 requirement ID.`,
@@ -22334,7 +23179,7 @@ function extractRequirements(projectMarkdown) {
       checked: match[1]?.toLowerCase() === "x"
     });
   }
-  return requirements.sort((left, right) => compareStrings7(left.id, right.id));
+  return requirements.sort((left, right) => compareStrings8(left.id, right.id));
 }
 function readObject(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -22365,7 +23210,7 @@ function summaryFilesModified(content) {
   const body = match?.groups?.["body"];
   if (body === void 0)
     return [];
-  return [...body.matchAll(/^-\s+`?([^`\n]+?)`?\s*$/gm)].map((entry) => entry[1]?.trim()).filter((entry) => entry !== void 0 && entry.length > 0).sort(compareStrings7);
+  return [...body.matchAll(/^-\s+`?([^`\n]+?)`?\s*$/gm)].map((entry) => entry[1]?.trim()).filter((entry) => entry !== void 0 && entry.length > 0).sort(compareStrings8);
 }
 async function readUtf8IfExists(filePath) {
   try {
@@ -22382,11 +23227,11 @@ async function parsePlans(planningRoot, inventory) {
     if (file.classification !== "phase-plan")
       continue;
     const relativeToPlanning = file.path.slice(".planning/".length);
-    const content = await readFile10(path15.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
+    const content = await readFile10(path17.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
     const frontmatter = parsePlanFrontmatter(content);
     plans.push({
       sourcePath: file.path,
-      filesModified: [...readStringArray(frontmatter?.["files_modified"])].sort(compareStrings7)
+      filesModified: [...readStringArray(frontmatter?.["files_modified"])].sort(compareStrings8)
     });
   }
   return plans;
@@ -22395,7 +23240,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   const conflicts = [];
   for (const plan of plans) {
     const summaryPath = plan.sourcePath.replace(/-PLAN\.md$/, "-SUMMARY.md");
-    const summaryContent = await readUtf8IfExists(path15.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
+    const summaryContent = await readUtf8IfExists(path17.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
     if (summaryContent === void 0)
       continue;
     const summaryFiles = summaryFilesModified(summaryContent);
@@ -22414,7 +23259,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   return conflicts;
 }
 async function stateUncertainties(planningRoot) {
-  const state = await readUtf8IfExists(path15.join(planningRoot, "STATE.md"));
+  const state = await readUtf8IfExists(path17.join(planningRoot, "STATE.md"));
   if (state === void 0)
     return [];
   const uncertainties = [
@@ -22488,18 +23333,18 @@ function sectionsForRequirement(requirement) {
   };
 }
 async function writeReport2(stagingRoot, report) {
-  const reportPath = path15.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir10(path15.dirname(reportPath), { recursive: true });
+  const reportPath = path17.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  await mkdir10(path17.dirname(reportPath), { recursive: true });
   await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
-  const projectRoot = path15.join(stagingRoot, ".legion", "project");
+  const projectRoot = path17.join(stagingRoot, ".legion", "project");
   const files = [];
   for (const file of await listFiles2(projectRoot)) {
     if (file === "migration/planning-import-report.json")
       continue;
-    const bytes = await readFile10(path15.join(projectRoot, ...file.split("/")));
-    const relativePath = toPosixPath2(path15.join(".legion/project", file));
+    const bytes = await readFile10(path17.join(projectRoot, ...file.split("/")));
+    const relativePath = toPosixPath2(path17.join(".legion/project", file));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -22510,28 +23355,28 @@ async function targetInventory(stagingRoot) {
   return {
     root: ".legion/project",
     treeHash: await hashTreeExcluding(projectRoot, ["migration/planning-import-report.json"]),
-    files: files.sort((left, right) => compareStrings7(left.path, right.path))
+    files: files.sort((left, right) => compareStrings8(left.path, right.path))
   };
 }
 function containsPath2(parent, child) {
-  const relative = path15.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path15.isAbsolute(relative);
+  const relative = path17.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative);
 }
 function pathsOverlap3(left, right) {
   return containsPath2(left, right) || containsPath2(right, left);
 }
 async function resolveExistingPathComponents(inputPath) {
-  const resolved = path15.resolve(inputPath);
+  const resolved = path17.resolve(inputPath);
   const suffix = [];
   let candidate = resolved;
   while (!await pathExists4(candidate)) {
-    const parent = path15.dirname(candidate);
+    const parent = path17.dirname(candidate);
     if (parent === candidate)
-      return path15.resolve(candidate, ...suffix);
-    suffix.unshift(path15.basename(candidate));
+      return path17.resolve(candidate, ...suffix);
+    suffix.unshift(path17.basename(candidate));
     candidate = parent;
   }
-  return path15.resolve(await realpath2(candidate), ...suffix);
+  return path17.resolve(await realpath2(candidate), ...suffix);
 }
 async function sameCanonicalPath(left, right) {
   const resolvedLeft = await resolveExistingPathComponents(left);
@@ -22541,11 +23386,11 @@ async function sameCanonicalPath(left, right) {
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot2(input) {
-  const repositoryRoot = path15.resolve(input.repositoryRoot);
-  const planningRoot = path15.resolve(input.planningRoot);
-  const stagingRoot = path15.resolve(input.stagingRoot);
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const planningRoot = path17.resolve(input.planningRoot);
+  const stagingRoot = path17.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .planning source."
@@ -22555,18 +23400,18 @@ function safeResolvedStagingRoot2(input) {
   return stagingRoot;
 }
 async function safeResolvedBackupRoot2(input) {
-  const repositoryRoot = path15.resolve(input.repositoryRoot);
-  const backupRoot = path15.resolve(input.backupRoot);
-  const legionRoot = path15.join(repositoryRoot, ".legion");
-  const planningRoot = path15.resolve(input.planningRoot);
-  const stagingRoot = path15.resolve(input.stagingRoot);
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const backupRoot = path17.resolve(input.backupRoot);
+  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const planningRoot = path17.resolve(input.planningRoot);
+  const stagingRoot = path17.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
   const realPlanningRoot = await resolveExistingPathComponents(planningRoot);
   const realStagingRoot = await resolveExistingPathComponents(stagingRoot);
   if (pathsOverlap3(backupRoot, repositoryRoot) || pathsOverlap3(backupRoot, legionRoot) || pathsOverlap3(backupRoot, planningRoot) || pathsOverlap3(backupRoot, stagingRoot) || pathsOverlap3(realBackupRoot, realRepositoryRoot) || pathsOverlap3(realBackupRoot, realLegionRoot) || pathsOverlap3(realBackupRoot, realPlanningRoot) || pathsOverlap3(realBackupRoot, realStagingRoot)) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root, .legion source, planning source, or staging root.",
@@ -22581,7 +23426,7 @@ function parseUtcTimestamp2(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error2) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: input.code,
         message: error2 instanceof Error ? error2.message : "Value is not a valid UTC timestamp.",
@@ -22605,9 +23450,9 @@ async function createPlanningImportDryRun(input) {
   const inventory = await sourceInventory2(planningRoot);
   if ("diagnostics" in inventory)
     return inventory;
-  const projectMarkdown = await readUtf8IfExists(path15.join(planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path17.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "missing_project",
         message: "Legacy .planning/PROJECT.md is required for planning import.",
@@ -22619,7 +23464,7 @@ async function createPlanningImportDryRun(input) {
   if ("diagnostics" in requirements)
     return requirements;
   if (requirements.length === 0) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "missing_requirements",
         message: "Legacy .planning/PROJECT.md does not contain importable requirement bullets.",
@@ -22638,7 +23483,7 @@ async function createPlanningImportDryRun(input) {
     createdAt
   });
   if (!initialized.ok) {
-    return failure11("invalid", initialized.diagnostics.map((entry) => diagnostic2({
+    return failure13("invalid", initialized.diagnostics.map((entry) => diagnostic2({
       code: entry.code,
       message: entry.message,
       sourcePath: entry.source.path
@@ -22669,7 +23514,7 @@ async function createPlanningImportDryRun(input) {
       document
     });
     if (!created.ok) {
-      return failure11("invalid", created.diagnostics.map((entry) => diagnostic2({
+      return failure13("invalid", created.diagnostics.map((entry) => diagnostic2({
         code: entry.code,
         message: entry.message,
         sourcePath: entry.source.path
@@ -22698,7 +23543,7 @@ async function createPlanningImportDryRun(input) {
     createdAt,
     requiresReview: true,
     source: inventory,
-    mappings: mappings.sort((left, right) => compareStrings7(`${left.sourcePath}\0${left.targetPath}`, `${right.sourcePath}\0${right.targetPath}`)),
+    mappings: mappings.sort((left, right) => compareStrings8(`${left.sourcePath}\0${left.targetPath}`, `${right.sourcePath}\0${right.targetPath}`)),
     conflicts: await planSummaryConflicts(planningRoot, plans),
     uncertainties: await stateUncertainties(planningRoot),
     policy: {
@@ -22721,12 +23566,12 @@ async function createPlanningImportDryRun(input) {
   };
 }
 async function readReport2(stagingRoot) {
-  const reportPath = path15.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  const reportPath = path17.join(stagingRoot, ...REPORT_PATH2.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(reportPath, "utf8"));
   } catch (error2) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "missing_dry_run_report",
         message: error2 instanceof Error ? error2.message : "Dry-run report could not be read.",
@@ -22735,7 +23580,7 @@ async function readReport2(stagingRoot) {
     ]);
   }
   if (!isPlanningImportReport(parsed)) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required planning import fields.",
@@ -22751,11 +23596,11 @@ function backupId2(appliedAt, sourceHash) {
 }
 async function backupLegionRoot2(input) {
   const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
-  const legionRoot = path15.join(repositoryRoot, ".legion");
+  const legionRoot = path17.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree2(legionRoot);
   const id = backupId2(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path15.resolve(input.backupRoot, id);
-  const backupPath = path15.resolve(backupDirectory, "legion");
+  const backupDirectory = path17.resolve(input.backupRoot, id);
+  const backupPath = path17.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
   await rm4(backupDirectory, { recursive: true, force: true });
   await mkdir10(backupDirectory, { recursive: true });
@@ -22772,7 +23617,7 @@ async function backupLegionRoot2(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path15.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path17.resolve(backupDirectory, "backup-manifest.json");
   await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -22782,34 +23627,34 @@ async function backupLegionRoot2(input) {
   };
 }
 async function installStagedProject(input) {
-  const stagedProject = path15.join(input.stagingRoot, ".legion", "project");
-  const destinationProject = path15.join(input.repositoryRoot, ".legion", "project");
-  await mkdir10(path15.dirname(destinationProject), { recursive: true });
+  const stagedProject = path17.join(input.stagingRoot, ".legion", "project");
+  const destinationProject = path17.join(input.repositoryRoot, ".legion", "project");
+  await mkdir10(path17.dirname(destinationProject), { recursive: true });
   await rm4(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
-function isRecord6(value) {
+function isRecord7(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isInventory2(value) {
-  return isRecord6(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
+  return isRecord7(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
 }
 function isPlanningImportReport(value) {
-  if (!isRecord6(value))
+  if (!isRecord7(value))
     return false;
   const policy = value["policy"];
   const target = value["target"];
-  return value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory2(value["source"]) && isInventory2(target) && Array.isArray(value["mappings"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord6(policy) && policy["planningReadOnlyAfterApply"] === true && policy["legacySourceDeleted"] === false && policy["mutableStateImportedAsCurrentTruth"] === false;
+  return value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory2(value["source"]) && isInventory2(target) && Array.isArray(value["mappings"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord7(policy) && policy["planningReadOnlyAfterApply"] === true && policy["legacySourceDeleted"] === false && policy["mutableStateImportedAsCurrentTruth"] === false;
 }
 function isBackupManifest2(value) {
-  return isRecord6(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
+  return isRecord7(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
-  const stagedProject = path15.join(input.stagingRoot, ".legion", "project");
+  const stagedProject = path17.join(input.stagingRoot, ".legion", "project");
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure11("invalid", [
+  return failure13("invalid", [
     diagnostic2({
       code: "staged_project_hash_mismatch",
       message: "Staged project bytes no longer match the reviewed dry-run report.",
@@ -22822,7 +23667,7 @@ async function applyPlanningImport(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure11("blocked", [
+    return failure13("blocked", [
       diagnostic2({
         code: "dry_run_review_required",
         message: "Planning imports require explicit reviewed apply after the dry-run report is inspected.",
@@ -22836,9 +23681,9 @@ async function applyPlanningImport(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const destinationProject = path15.join(input.repositoryRoot, ".legion", "project");
+  const destinationProject = path17.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
-    return failure11("conflict", [
+    return failure13("conflict", [
       diagnostic2({
         code: "destination_contains_v9_project",
         message: "Destination already contains .legion/project; pass allowReplaceExistingProject only after review.",
@@ -22880,7 +23725,7 @@ async function applyPlanningImport(input) {
       });
     } catch {
     }
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "apply_failed",
         message: error2 instanceof Error ? error2.message : "Staged project installation failed.",
@@ -22892,13 +23737,13 @@ async function applyPlanningImport(input) {
     ok: true,
     status: "applied",
     backup,
-    installedFiles: (await listFiles2(path15.join(input.repositoryRoot, ".legion", "project"))).map((file) => toPosixPath2(path15.join(".legion/project", file))),
+    installedFiles: (await listFiles2(path17.join(input.repositoryRoot, ".legion", "project"))).map((file) => toPosixPath2(path17.join(".legion/project", file))),
     policy: report.policy
   };
 }
 async function rollbackPlanningImport(input) {
   let manifest;
-  const backupManifestPath = path15.resolve(input.backupManifestPath);
+  const backupManifestPath = path17.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
     if (!isBackupManifest2(parsed)) {
@@ -22906,7 +23751,7 @@ async function rollbackPlanningImport(input) {
     }
     manifest = parsed;
   } catch (error2) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: error2 instanceof Error ? error2.message : "Backup manifest could not be read.",
@@ -22914,10 +23759,10 @@ async function rollbackPlanningImport(input) {
       })
     ]);
   }
-  const repositoryRoot = path15.resolve(input.repositoryRoot);
-  const legionRoot = path15.join(repositoryRoot, ".legion");
-  if (!path15.isAbsolute(manifest.repositoryRoot)) {
-    return failure11("invalid", [
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const legionRoot = path17.join(repositoryRoot, ".legion");
+  if (!path17.isAbsolute(manifest.repositoryRoot)) {
+    return failure13("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: "Backup manifest repositoryRoot must be absolute.",
@@ -22926,7 +23771,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (!await sameCanonicalPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure11("invalid", [
+    return failure13("invalid", [
       diagnostic2({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -22935,8 +23780,8 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path15.isAbsolute(manifest.backupPath)) {
-      return failure11("invalid", [
+    if (!path17.isAbsolute(manifest.backupPath)) {
+      return failure13("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -22947,7 +23792,7 @@ async function rollbackPlanningImport(input) {
     const realBackupPath = await resolveExistingPathComponents(manifest.backupPath);
     const realLegionRoot = await resolveExistingPathComponents(legionRoot);
     if (pathsOverlap3(manifest.backupPath, legionRoot) || pathsOverlap3(realBackupPath, realLegionRoot)) {
-      return failure11("invalid", [
+      return failure13("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must not overlap the requested .legion directory.",
@@ -22956,7 +23801,7 @@ async function rollbackPlanningImport(input) {
       ]);
     }
     if (!await pathExists4(manifest.backupPath)) {
-      return failure11("invalid", [
+      return failure13("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -22966,7 +23811,7 @@ async function rollbackPlanningImport(input) {
     }
     const backupHash = await hashTree2(manifest.backupPath);
     if (backupHash !== manifest.preImportHash) {
-      return failure11("invalid", [
+      return failure13("invalid", [
         diagnostic2({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-import hash.",
@@ -23202,7 +24047,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path16 from "node:path";
+import path18 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -23260,10 +24105,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path16.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path18.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path18.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -23290,13 +24135,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path16.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path18.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path18.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -23347,7 +24192,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path16.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path18.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -23462,7 +24307,7 @@ async function handleDevCommand(context) {
 
 // packages/cli/src/workflow/input.ts
 import { execFileSync } from "node:child_process";
-import path17 from "node:path";
+import path19 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -23639,12 +24484,12 @@ ${rendered}` : "Project initialization failed.";
 }
 
 // packages/cli/src/workflow/state.ts
-import { readdir as readdir7 } from "node:fs/promises";
-import path19 from "node:path";
+import { readdir as readdir9 } from "node:fs/promises";
+import path21 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir6, stat as stat6 } from "node:fs/promises";
-import path18 from "node:path";
+import { readdir as readdir8, stat as stat6 } from "node:fs/promises";
+import path20 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -23670,17 +24515,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path18.join(repositoryRoot, ".legion");
+  const legionRoot = path20.join(repositoryRoot, ".legion");
   if (!await pathExists5(legionRoot)) return [];
-  const entries = await readdir6(legionRoot, { withFileTypes: true });
+  const entries = await readdir8(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path18.join(legionRoot, "project");
-  const manifestPath = path18.join(projectRoot, "project.json");
+  const projectRoot = path20.join(legionRoot, "project");
+  const manifestPath = path20.join(projectRoot, "project.json");
   if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -23785,19 +24630,60 @@ async function resolveWorkflowState(context) {
       diagnostics: taskgraph.diagnostics
     };
   }
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (evidence.ok && reviews.ok && hasAcceptedReview(reviews.reviews) && hasAcceptedEvidence(evidence.document.entries)) {
+    return {
+      stage: "ship_ready",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate."),
+      diagnostics: []
+    };
+  }
+  if (reviews.ok && reviews.reviews.length > 0) {
+    return {
+      stage: "reviewed",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion review --accept", "A review decision exists and may need human acceptance."),
+      diagnostics: []
+    };
+  }
+  if (evidence.ok && evidence.document.entries.length > 0) {
+    return {
+      stage: "built",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion review", "Build evidence exists and is ready for review."),
+      diagnostics: []
+    };
+  }
   return {
     stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion build --dry-run", "Latest planned change is ready for build readiness checks."),
+    nextAction: nextAction("legion build", "Latest planned change is ready for guided build execution."),
     diagnostics: []
   };
 }
+function hasAcceptedReview(reviews) {
+  return reviews.some((review) => review.document.status === "accepted");
+}
+function hasAcceptedEvidence(entries) {
+  return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
+}
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path19.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path21.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir7(changesRoot, { withFileTypes: true });
+    entries = await readdir9(changesRoot, { withFileTypes: true });
   } catch (error2) {
     if (isNodeErrorCode(error2, "ENOENT")) {
       return noWorkflowChange(changesRoot);
@@ -23891,7 +24777,7 @@ async function handleStatusCommand(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import path20 from "node:path";
+import path22 from "node:path";
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -23979,8 +24865,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path20.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path20.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path22.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path22.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function buildChangeBundleInput(options) {
@@ -24147,7 +25033,7 @@ function buildOracleArtifactInput(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile11 } from "node:fs/promises";
-import path21 from "node:path";
+import path23 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -24195,13 +25081,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path21.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path21.join(context.repositoryRoot, "ROADMAP.md")
+    path23.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path23.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path21.isAbsolute(roadmapPath) ? roadmapPath : path21.resolve(repositoryRoot, roadmapPath);
+  return path23.isAbsolute(roadmapPath) ? roadmapPath : path23.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -24494,6 +25380,515 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
+import { execFileSync as execFileSync3 } from "node:child_process";
+import { readFile as readFile14 } from "node:fs/promises";
+
+// packages/cli/src/workflow/context-pack.ts
+import { readdir as readdir10, readFile as readFile13 } from "node:fs/promises";
+import path24 from "node:path";
+
+// packages/cli/src/workflow/executor/result.ts
+import { readFile as readFile12, writeFile as writeFile5 } from "node:fs/promises";
+var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
+var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
+function redactTranscript(text) {
+  return text.replace(JSON_CREDENTIAL_RE, (match) => match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"')).replace(SECRET_ASSIGNMENT_RE, (_match, key) => `${key}=[REDACTED_SECRET]`);
+}
+async function writeProjectTextFile(input) {
+  const absolutePath = await prepareProjectTextFile(input);
+  await writeFile5(absolutePath, input.text, "utf8");
+  return absolutePath;
+}
+async function prepareProjectTextFile(input) {
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath
+  });
+  return resolved.absolutePath;
+}
+async function writeProjectExecutionResult(input) {
+  return writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: stableProtocolJson(input.result)
+  });
+}
+async function readOptionalText(filePath) {
+  try {
+    return await readFile12(filePath, "utf8");
+  } catch (error2) {
+    if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") return "";
+    throw error2;
+  }
+}
+function normalizeExecutionResult(input, fallback) {
+  const value = isRecord8(input) ? input : {};
+  const status2 = parseStatus(value["status"]) ?? fallback.status;
+  const commandsRun = parseCommands(value["commandsRun"]);
+  const findings = parseFindings(value["findings"]);
+  const reviewVerdicts = parseReviewVerdicts(value["reviewVerdicts"]);
+  return {
+    ok: status2 === "succeeded",
+    status: status2,
+    summary: parseString(value["summary"]) ?? fallback.summary,
+    filesChanged: parseStringArray(value["filesChanged"]),
+    commandsRun,
+    findings,
+    ...reviewVerdicts === void 0 ? {} : { reviewVerdicts },
+    ...fallback.rawOutput === void 0 ? {} : { rawOutput: fallback.rawOutput },
+    ...fallback.exitCode === void 0 ? {} : { exitCode: fallback.exitCode }
+  };
+}
+function parseResultFromText(text) {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return void 0;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = /\{[\s\S]*\}/.exec(trimmed);
+    if (match?.[0] === void 0) return void 0;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return void 0;
+    }
+  }
+}
+function isRecord8(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseString(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function parseStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry) => typeof entry === "string" && entry.length > 0);
+}
+function parseStatus(value) {
+  return value === "succeeded" || value === "failed" || value === "blocked" ? value : void 0;
+}
+function parseCommands(value) {
+  if (!Array.isArray(value)) return [];
+  const commands = [];
+  for (const entry of value) {
+    if (!isRecord8(entry)) continue;
+    const command = parseString(entry["command"]);
+    const args = parseStringArray(entry["args"]);
+    const exitCode = entry["exitCode"];
+    if (command === void 0 || typeof exitCode !== "number" || !Number.isInteger(exitCode)) continue;
+    commands.push({ command, args, exitCode });
+  }
+  return commands;
+}
+function parseFindings(value) {
+  if (!Array.isArray(value)) return [];
+  const findings = [];
+  for (const entry of value) {
+    if (!isRecord8(entry)) continue;
+    const id = parseString(entry["id"]);
+    const title = parseString(entry["title"]);
+    const body = parseString(entry["body"]);
+    const severity = entry["severity"];
+    if (id === void 0 || title === void 0 || body === void 0 || severity !== "minor" && severity !== "major" && severity !== "blocking") {
+      continue;
+    }
+    const evidenceRefs = parseStringArray(entry["evidenceRefs"]);
+    findings.push({
+      id,
+      title,
+      body,
+      severity,
+      ...evidenceRefs.length === 0 ? {} : { evidenceRefs }
+    });
+  }
+  return findings;
+}
+function parseReviewVerdicts(value) {
+  if (!isRecord8(value)) return void 0;
+  const specification = parseReviewVerdict(value["specification"]);
+  const integration = parseReviewVerdict(value["integration"]);
+  const evidence = parseReviewVerdict(value["evidence"]);
+  if (specification === void 0 || integration === void 0 || evidence === void 0) return void 0;
+  return { specification, integration, evidence };
+}
+function parseReviewVerdict(value) {
+  return value === "pass" || value === "fail" || value === "unknown" || value === "not_verified" || value === "not_applicable" ? value : void 0;
+}
+
+// packages/cli/src/workflow/context-pack.ts
+async function writeContextPack(input) {
+  const content = await renderContextPack(input);
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: content
+  });
+  return content;
+}
+function buildExecutionPrompt(input) {
+  return [
+    `# Legion ${input.mode} task`,
+    "",
+    "You are executing a Legion guided workflow step with a human in the loop.",
+    "Use the supplied context pack as the authoritative task context.",
+    "",
+    `Context pack: ${input.contextPackArtifactPath}`,
+    "",
+    "## Objective",
+    "",
+    input.task.objective,
+    "",
+    "## Scope",
+    "",
+    "Read scope:",
+    ...input.task.scope.read.map((entry) => `- ${entry}`),
+    "",
+    "Write scope:",
+    ...input.task.scope.write.map((entry) => `- ${entry}`),
+    "",
+    "Forbidden scope:",
+    ...input.task.scope.forbidden.map((entry) => `- ${entry}`),
+    "",
+    "## Harness Rules",
+    "",
+    "- Read before write.",
+    "- Evidence before action.",
+    "- Keep the diff minimal and scoped to the task contract.",
+    "- Verify before report.",
+    "- Do not publish, release, or perform unrelated cleanup.",
+    "",
+    "## Required JSON Result",
+    "",
+    input.requiredOutput,
+    ""
+  ].join("\n");
+}
+async function renderContextPack(input) {
+  const [project, change, specs, workflowRecords] = await Promise.all([
+    loadProject({ repositoryRoot: input.repositoryRoot }),
+    loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId }),
+    listCurrentSpecs({ repositoryRoot: input.repositoryRoot }),
+    readRecentWorkflowRecords(input.repositoryRoot)
+  ]);
+  return [
+    `# Legion Context Pack: ${input.runId}`,
+    "",
+    "## Project",
+    "",
+    project.ok ? fencedJson(project.project) : renderDiagnostics2(project.diagnostics),
+    "",
+    "## Change",
+    "",
+    change.ok ? fencedJson(change.bundle.change) : renderDiagnostics2(change.diagnostics),
+    "",
+    "## Task",
+    "",
+    fencedJson(input.task),
+    "",
+    "## Taskgraph",
+    "",
+    fencedJson({
+      artifactPath: input.taskgraph.artifactPath,
+      revision: input.taskgraph.revision,
+      taskCount: input.taskgraph.document.tasks.length
+    }),
+    "",
+    "## Current Specs",
+    "",
+    specs.ok ? fencedJson(specs.index.entries.map((entry) => ({
+      artifactPath: entry.path,
+      primaryRequirementId: entry.primaryRequirementId,
+      capability: entry.capability
+    }))) : renderDiagnostics2(specs.diagnostics),
+    "",
+    "## Recent Workflow Records",
+    "",
+    workflowRecords.length === 0 ? "No recent workflow records found." : workflowRecords.join("\n\n"),
+    "",
+    "## Verification Commands",
+    "",
+    ...input.task.verification.map((entry) => `- ${[entry.command, ...entry.args].join(" ")} (expected ${entry.expectedExitCode})`),
+    ""
+  ].join("\n");
+}
+function fencedJson(value) {
+  return ["```json", stableProtocolJson(value).trimEnd(), "```"].join("\n");
+}
+function renderDiagnostics2(diagnostics) {
+  if (diagnostics.length === 0) return "No diagnostics.";
+  return diagnostics.map((diagnostic3) => `- ${diagnosticMessage(diagnostic3)}`).join("\n");
+}
+function diagnosticMessage(value) {
+  if (value && typeof value === "object" && "message" in value) return String(value.message);
+  return String(value);
+}
+async function readRecentWorkflowRecords(repositoryRoot) {
+  const workflows = ["learn", "map", "explore", "advise"];
+  const records = [];
+  for (const workflow of workflows) {
+    const workflowRoot = path24.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    let entries;
+    try {
+      entries = await readdir10(workflowRoot, { withFileTypes: true });
+    } catch (error2) {
+      if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") continue;
+      throw error2;
+    }
+    for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
+      const absolutePath = path24.join(workflowRoot, entry.name);
+      let text = "";
+      try {
+        text = await readFile13(absolutePath, "utf8");
+      } catch {
+        continue;
+      }
+      records.push([
+        `### ${workflow}/${entry.name}`,
+        "",
+        "```json",
+        truncate3(text.trim(), 4e3),
+        "```"
+      ].join("\n"));
+    }
+  }
+  return records;
+}
+function truncate3(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}
+... [truncated]`;
+}
+
+// packages/cli/src/workflow/executor/adapters.ts
+import { execFile as execFile4, spawn } from "node:child_process";
+import { promisify as promisify4 } from "node:util";
+var execFileAsync2 = promisify4(execFile4);
+function codexExecArgs(input) {
+  return [
+    "exec",
+    "-C",
+    input.repositoryRoot,
+    "--sandbox",
+    input.sandbox,
+    "--ask-for-approval",
+    "never",
+    "--json",
+    "--output-last-message",
+    input.outputLastMessagePath,
+    "-"
+  ];
+}
+async function selectExecutionAdapterKind(explicit) {
+  if (explicit !== void 0) {
+    if (explicit === "codex" || explicit === "manual" || explicit === "fake") return explicit;
+    return {
+      ok: false,
+      diagnostic: {
+        code: "invalid_executor",
+        message: `Unsupported executor "${explicit}". Use codex, manual, or fake.`
+      }
+    };
+  }
+  return await codexAvailable() ? "codex" : "manual";
+}
+function adapterForKind(kind) {
+  switch (kind) {
+    case "codex":
+      return codexAdapter;
+    case "manual":
+      return manualAdapter;
+    case "fake":
+      return fakeAdapter;
+  }
+}
+async function codexAvailable() {
+  try {
+    await execFileAsync2("codex", ["exec", "--help"], {
+      timeout: 5e3,
+      windowsHide: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+var fakeAdapter = {
+  kind: "fake",
+  async run(request) {
+    const result = {
+      ok: true,
+      status: "succeeded",
+      summary: fakeSummary(request),
+      filesChanged: [],
+      commandsRun: [
+        {
+          command: "legion-executor",
+          args: ["fake", request.mode],
+          exitCode: 0
+        }
+      ],
+      findings: [],
+      ...request.mode === "review" ? {
+        reviewVerdicts: {
+          specification: "pass",
+          integration: "pass",
+          evidence: "pass"
+        }
+      } : {}
+    };
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}
+`) });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+var manualAdapter = {
+  kind: "manual",
+  async run(request) {
+    const summary = `Manual executor prepared ${request.mode} instructions at ${request.promptArtifactPath}.`;
+    const result = {
+      ok: false,
+      status: "blocked",
+      summary,
+      filesChanged: [],
+      commandsRun: [
+        {
+          command: "legion-executor",
+          args: ["manual", request.mode],
+          exitCode: 1
+        }
+      ],
+      findings: [
+        {
+          id: "manual-execution-required",
+          title: "Manual execution required",
+          body: "No executable adapter was selected. Review the prompt and run the requested work manually, then rerun the command with an executor.",
+          severity: "blocking"
+        }
+      ]
+    };
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+var codexAdapter = {
+  kind: "codex",
+  async run(request) {
+    const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
+    const outputLastMessagePath = await prepareProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: outputLastMessageArtifactPath
+    });
+    const args = codexExecArgs({
+      repositoryRoot: request.repositoryRoot,
+      sandbox: request.readOnly ? "read-only" : "workspace-write",
+      outputLastMessagePath
+    });
+    const processResult = await spawnWithInput("codex", args, request.prompt, request.repositoryRoot);
+    const rawOutput = [
+      processResult.stdout,
+      processResult.stderr
+    ].filter((entry) => entry.length > 0).join("\n");
+    const lastMessage = await readOptionalText(outputLastMessagePath);
+    const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
+    const status2 = processResult.exitCode === 0 ? "succeeded" : "failed";
+    const result = normalizeExecutionResult(parsed, {
+      status: status2,
+      summary: processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
+      rawOutput,
+      exitCode: processResult.exitCode
+    });
+    const redacted = redactTranscript(rawOutput);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
+    return result;
+  }
+};
+function fakeSummary(request) {
+  if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;
+  if (request.mode === "fix") return `Fake fix cycle completed for ${request.task.id}.`;
+  return `Fake build executed ${request.task.id}.`;
+}
+async function spawnWithInput(command, args, input, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.stdin.on("error", () => {
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        exitCode: code ?? 1,
+        stdout,
+        stderr
+      });
+    });
+    child.stdin.end(input);
+  });
+}
+
+// packages/cli/src/workflow/run-artifacts.ts
+import { createHash as createHash17 } from "node:crypto";
+import path25 from "node:path";
+var ENTITY_SUFFIX_MAX_LENGTH = 64;
+var DERIVED_ID_HASH_LENGTH = 12;
+function taskIdForContractId(contractId) {
+  return formatEntityId("task", contractId.slice("ctr_".length));
+}
+function runIdForTask(input) {
+  return formatEntityId("run", derivedSuffix(input.taskId.slice("tsk_".length), `-attempt-${input.attempt}`));
+}
+function evidenceIdForRun(runId) {
+  return formatEntityId("evidence", runId.slice("run_".length));
+}
+function reviewIdForChange(input) {
+  return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
+}
+function derivedSuffix(baseSuffix, tail) {
+  const full = `${baseSuffix}${tail}`;
+  if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
+  const digest = createHash17("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const reservedLength = tail.length + digest.length + 1;
+  const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
+  if (prefixLength < 1) {
+    throw new RangeError(`Derived entity ID suffix tail is too long: ${tail}`);
+  }
+  const prefix = baseSuffix.slice(0, prefixLength).replace(/-+$/u, "") || (baseSuffix[0] ?? "x");
+  return `${prefix}-${digest}${tail}`;
+}
+function runArtifactPath(input) {
+  return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/runs/${input.runId}/${input.fileName}`);
+}
+function reviewRunArtifactPath(input) {
+  return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
+}
+function absoluteArtifactPath(repositoryRoot, artifactPath) {
+  return path25.join(repositoryRoot, ...artifactPath.split("/"));
+}
+
+// packages/cli/src/commands/workflow/build.ts
 async function handleBuildWorkflow(context) {
   const planAction = nextAction(
     "legion plan 1",
@@ -24515,7 +25910,7 @@ async function handleBuildWorkflow(context) {
   if (hasFlag(context, "dry-run")) {
     const action2 = nextAction(
       "legion build",
-      "The latest task graph is ready for runtime-local execution."
+      "The latest task graph is ready for guided execution."
     );
     const taskCount = taskgraph.document.tasks.length;
     return success(
@@ -24537,31 +25932,496 @@ async function handleBuildWorkflow(context) {
       },
       [
         "Build ready.",
-        `Dry run: ${driverId.driver} can start ${taskCount} task${taskCount === 1 ? "" : "s"} from ${latestChange.changeId}.`,
+        `Dry run: ${taskCount} task${taskCount === 1 ? "" : "s"} can run from ${latestChange.changeId}.`,
         "No implementation was run.",
         renderNextAction(action2)
       ].join("\n")
     );
   }
-  const action = nextAction(
-    "legion build --dry-run",
-    "Only build readiness checks are wired in this CLI layer right now."
-  );
-  return blockedBuild(
-    [
-      {
-        code: "runtime_start_not_implemented",
-        message: "Runtime execution is not wired yet. Run legion build --dry-run to verify readiness without claiming implementation success.",
-        path: taskgraph.artifactPath
-      }
-    ],
-    action,
-    {
-      changeId: latestChange.changeId,
-      taskgraphPath: taskgraph.artifactPath,
-      driver: driverId
+  if (!hasFlag(context, "allow-dirty")) {
+    const dirty = dirtyWorktreeDiagnostic(context.repositoryRoot);
+    if (dirty !== void 0) {
+      return blockedBuild(
+        [dirty],
+        nextAction("legion build --allow-dirty", "Build execution requires an explicit dirty-worktree override.")
+      );
     }
+  }
+  const selectedExecutor = await selectExecutionAdapterKind(stringOption(context, "executor"));
+  if (typeof selectedExecutor !== "string") {
+    return blockedBuild([selectedExecutor.diagnostic], nextAction("legion build --executor fake", "Choose a supported executor."));
+  }
+  const entries = await existingEvidenceEntries(context.repositoryRoot, latestChange.changeId);
+  if ("diagnostics" in entries) {
+    return blockedBuild(entries.diagnostics, nextAction("legion validate", "Evidence index must be repaired before build can continue."));
+  }
+  const producedEntries = [...entries.entries];
+  const existingTaskRuns = await listTaskRunsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!existingTaskRuns.ok) {
+    return blockedBuild(existingTaskRuns.diagnostics, nextAction("legion validate", "Task-run artifacts must be readable before build can continue."));
+  }
+  const nextAttempts = nextAttemptMap(existingTaskRuns.taskRuns);
+  const taskRuns = [];
+  for (const task of taskgraph.document.tasks) {
+    const taskId = taskIdForContractId(task.id);
+    const attempt = nextAttempts.get(taskId) ?? 1;
+    nextAttempts.set(taskId, attempt + 1);
+    const run = await executeTask({
+      context,
+      executor: selectedExecutor,
+      task,
+      attempt,
+      taskgraph,
+      priorEntries: producedEntries
+    });
+    if (!run.ok) {
+      if (run.taskRun !== void 0) taskRuns.push(run.taskRun);
+      const blockedEntries = run.evidenceEntry === void 0 ? producedEntries : replaceEvidenceEntry(producedEntries, run.evidenceEntry);
+      const evidenceWrite2 = await writeEvidenceIndex({
+        repositoryRoot: context.repositoryRoot,
+        changeId: latestChange.changeId,
+        entries: blockedEntries,
+        artifactInputs: [taskgraph.revision, ...taskgraph.document.artifactInputs],
+        expectedRevision: entries.revision,
+        baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+      });
+      const diagnostics = evidenceWrite2.ok ? run.diagnostics : [...run.diagnostics, ...evidenceWrite2.diagnostics];
+      return blockedBuild(diagnostics, nextAction(`legion build --executor ${selectedExecutor}`, "Resolve the blocked task and rerun build."), {
+        changeId: latestChange.changeId,
+        executor: selectedExecutor,
+        taskRuns,
+        ...evidenceWrite2.ok ? {
+          evidenceIndex: {
+            artifactPath: evidenceWrite2.artifactPath,
+            status: evidenceWrite2.status,
+            entries: evidenceWrite2.document.entries.length
+          }
+        } : {}
+      });
+    }
+    producedEntries.splice(0, producedEntries.length, ...replaceEvidenceEntry(producedEntries, run.evidenceEntry));
+    taskRuns.push(run.taskRun);
+  }
+  const evidenceWrite = await writeEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId,
+    entries: producedEntries,
+    artifactInputs: [taskgraph.revision, ...taskgraph.document.artifactInputs],
+    expectedRevision: entries.revision,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!evidenceWrite.ok) {
+    return blockedBuild(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence index write failed and must be repaired."));
+  }
+  const action = nextAction("legion review", "Build evidence was collected and is pending review.");
+  return success(
+    {
+      ok: true,
+      status: "executed",
+      change: {
+        changeId: latestChange.changeId
+      },
+      executor: selectedExecutor,
+      taskRuns,
+      evidenceIndex: {
+        artifactPath: evidenceWrite.artifactPath,
+        status: evidenceWrite.status,
+        entries: evidenceWrite.document.entries.length
+      },
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      "Build executed.",
+      `Executor: ${selectedExecutor}.`,
+      `Evidence: ${evidenceWrite.artifactPath} (${evidenceWrite.document.entries.length} pending bundle${evidenceWrite.document.entries.length === 1 ? "" : "s"}).`,
+      renderNextAction(action)
+    ].join("\n")
   );
+}
+async function executeTask(input) {
+  const taskId = taskIdForContractId(input.task.id);
+  const runId = runIdForTask({ taskId, attempt: input.attempt });
+  const evidenceId = evidenceIdForRun(runId);
+  const createdAt = currentUtcTimestamp();
+  const baseGitSha = resolveBaseGitSha(input.context.repositoryRoot);
+  const contextPackArtifactPath = runArtifactPath({ changeId: input.task.changeId, runId, fileName: "context-pack.md" });
+  const promptArtifactPath = runArtifactPath({ changeId: input.task.changeId, runId, fileName: "executor-prompt.md" });
+  const resultArtifactPath = runArtifactPath({ changeId: input.task.changeId, runId, fileName: "executor-result.json" });
+  const rawLogArtifactPath = runArtifactPath({ changeId: input.task.changeId, runId, fileName: "executor-raw.log" });
+  const redactedLogArtifactPath = runArtifactPath({ changeId: input.task.changeId, runId, fileName: "executor-redacted.log" });
+  const contextPackAbsolutePath = absoluteArtifactPath(input.context.repositoryRoot, contextPackArtifactPath);
+  const promptAbsolutePath = absoluteArtifactPath(input.context.repositoryRoot, promptArtifactPath);
+  const resultAbsolutePath = absoluteArtifactPath(input.context.repositoryRoot, resultArtifactPath);
+  const rawLogAbsolutePath = absoluteArtifactPath(input.context.repositoryRoot, rawLogArtifactPath);
+  const redactedLogAbsolutePath = absoluteArtifactPath(input.context.repositoryRoot, redactedLogArtifactPath);
+  const contextPack = await writeContextPack({
+    repositoryRoot: input.context.repositoryRoot,
+    changeId: input.task.changeId,
+    runId,
+    taskgraph: input.taskgraph,
+    task: input.task,
+    artifactPath: contextPackArtifactPath,
+    absolutePath: contextPackAbsolutePath
+  });
+  const prompt = buildExecutionPrompt({
+    mode: "build",
+    contextPackArtifactPath,
+    task: input.task,
+    requiredOutput: buildResultContract()
+  });
+  await writeProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: prompt
+  });
+  const started = await writeTaskRun({
+    repositoryRoot: input.context.repositoryRoot,
+    expectedRevision: 0,
+    baseGitSha,
+    document: taskRunDocument({
+      status: "started",
+      task: input.task,
+      taskId,
+      runId,
+      attempt: input.attempt,
+      executor: input.executor,
+      createdAt,
+      startedAt: createdAt,
+      baseGitSha,
+      contextPack
+    })
+  });
+  if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
+  const adapter = adapterForKind(input.executor);
+  const result = await adapter.run({
+    repositoryRoot: input.context.repositoryRoot,
+    changeId: input.task.changeId,
+    runId,
+    task: input.task,
+    mode: "build",
+    executor: input.executor,
+    readOnly: false,
+    prompt,
+    contextPackArtifactPath,
+    contextPackAbsolutePath,
+    promptArtifactPath,
+    promptAbsolutePath,
+    resultArtifactPath,
+    resultAbsolutePath,
+    rawLogArtifactPath,
+    rawLogAbsolutePath,
+    redactedLogArtifactPath,
+    redactedLogAbsolutePath
+  });
+  const finishedAt = currentUtcTimestamp();
+  const evidenceEntry = await evidenceEntryForExecution({
+    repositoryRoot: input.context.repositoryRoot,
+    task: input.task,
+    taskId,
+    runId,
+    evidenceId,
+    createdAt,
+    startedAt: createdAt,
+    finishedAt,
+    result,
+    resultArtifactPath,
+    redactedLogArtifactPath,
+    taskgraphPath: input.taskgraph.artifactPath
+  });
+  const completed = await writeTaskRun({
+    repositoryRoot: input.context.repositoryRoot,
+    expectedRevision: started.revision.revision,
+    baseGitSha,
+    document: taskRunDocument({
+      status: result.status === "blocked" ? "blocked" : result.ok ? "succeeded" : "failed",
+      task: input.task,
+      taskId,
+      runId,
+      attempt: input.attempt,
+      executor: input.executor,
+      createdAt,
+      startedAt: createdAt,
+      finishedAt,
+      baseGitSha,
+      contextPack,
+      evidenceRefs: [evidenceId],
+      error: result.ok ? void 0 : {
+        code: result.status === "blocked" ? "executor_blocked" : "executor_failed",
+        message: result.summary,
+        retryable: true
+      }
+    })
+  });
+  if (!completed.ok) {
+    return {
+      ok: false,
+      evidenceEntry,
+      taskRun: {
+        runId,
+        taskId,
+        artifactPath: started.artifactPath,
+        status: result.status === "blocked" ? "blocked" : result.ok ? "succeeded" : "failed",
+        evidenceId
+      },
+      diagnostics: completed.diagnostics
+    };
+  }
+  if (!result.ok) {
+    return {
+      ok: false,
+      evidenceEntry,
+      taskRun: {
+        runId,
+        taskId,
+        artifactPath: completed.artifactPath,
+        status: completed.document.status,
+        evidenceId
+      },
+      diagnostics: [
+        {
+          code: result.status === "blocked" ? "executor_blocked" : "executor_failed",
+          message: result.summary,
+          path: resultArtifactPath
+        }
+      ]
+    };
+  }
+  return {
+    ok: true,
+    evidenceEntry,
+    taskRun: {
+      runId,
+      taskId,
+      artifactPath: completed.artifactPath,
+      status: completed.document.status,
+      evidenceId
+    }
+  };
+}
+function taskRunDocument(input) {
+  const targetHash = hashContent(stableProtocolJson({
+    task: input.task.id,
+    attempt: input.attempt,
+    executor: input.executor
+  }));
+  const manifest = {
+    runtime: {
+      driver: "legion.executor",
+      version: LEGION_PROTOCOL_VERSION
+    },
+    workerBundle: {
+      id: "workflow-executor",
+      version: LEGION_PROTOCOL_VERSION,
+      role: "implementer",
+      domain: "codebase",
+      capabilities: ["build"],
+      promptContentContract: {
+        instructionsHash: hashContent(input.contextPack),
+        requiredSections: ["objective", "scope", "harness-rules"],
+        forbiddenSections: ["biography", "tone", "personality"]
+      }
+    },
+    model: {
+      provider: input.executor === "codex" ? "openai" : "legion",
+      id: input.executor === "codex" ? "codex-cli" : input.executor,
+      policyVersion: LEGION_PROTOCOL_VERSION
+    },
+    inputs: {
+      contractHash: hashContent(stableProtocolJson(input.task)),
+      currentSpecsHash: hashContent(stableProtocolJson(input.task.context.specRefs)),
+      deltaSpecsHash: hashContent(stableProtocolJson(input.task.context.predecessorArtifacts)),
+      oracleHash: hashContent(stableProtocolJson(input.task.oracleRefs))
+    },
+    repository: {
+      baseCommit: input.baseGitSha
+    },
+    workspace: {
+      sandboxDriver: input.executor,
+      worktreePath: ".legion/project"
+    },
+    policy: {
+      version: LEGION_PROTOCOL_VERSION,
+      riskTier: input.task.risk.tier
+    },
+    idempotencyKey: buildIdempotencyKey({
+      projectId: input.task.projectId,
+      changeId: input.task.changeId,
+      taskId: input.taskId,
+      runId: input.runId,
+      effectKind: "workflow-execute",
+      targetHash
+    }),
+    frozenAt: input.startedAt
+  };
+  return taskRunSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: input.createdAt,
+    ...input.finishedAt === void 0 ? {} : { updatedAt: input.finishedAt },
+    kind: "task-run",
+    id: input.runId,
+    projectId: input.task.projectId,
+    changeId: input.task.changeId,
+    taskId: input.taskId,
+    contractId: input.task.id,
+    contractRevision: input.task.revision,
+    attempt: input.attempt,
+    claimedBy: {
+      kind: "tool",
+      id: "legion-cli",
+      displayName: "Legion CLI"
+    },
+    ...input.evidenceRefs === void 0 ? {} : { evidenceRefs: input.evidenceRefs },
+    ...input.error === void 0 ? {} : { error: input.error },
+    status: input.status,
+    startedAt: input.startedAt,
+    ...input.finishedAt === void 0 ? {} : { finishedAt: input.finishedAt },
+    manifest
+  });
+}
+async function evidenceEntryForExecution(input) {
+  const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
+  const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
+  const logBytes = await readFile14(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
+  const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
+  const traceRefs = [
+    {
+      path: input.taskgraphPath,
+      relation: "records",
+      entity: { kind: "change", id: input.task.changeId }
+    }
+  ];
+  const items = [
+    {
+      id: "executor-result",
+      classification: "runtime-log",
+      verdict: input.result.ok ? "pass" : "fail",
+      artifact: resultReference,
+      command,
+      traceRefs
+    },
+    {
+      id: "executor-redacted-log",
+      classification: "runtime-log",
+      verdict: input.result.ok ? "pass" : "fail",
+      artifact: logReference,
+      traceRefs
+    }
+  ];
+  const evidence = {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: input.createdAt,
+    kind: "evidence",
+    id: input.evidenceId,
+    projectId: input.task.projectId,
+    changeId: input.task.changeId,
+    taskId: input.taskId,
+    runId: input.runId,
+    sensitivity: "secret-redacted",
+    retention: { class: "project" },
+    traceRefs,
+    status: input.result.ok ? "collected" : "failed",
+    items
+  };
+  return {
+    evidence,
+    acceptance: {
+      status: "pending"
+    }
+  };
+}
+function commandForEvidence(result, logBytes, startedAt, endedAt) {
+  const first = result.commandsRun[0];
+  return {
+    command: first?.command ?? "legion-executor",
+    args: first === void 0 ? [] : [...first.args],
+    exitCode: clampExitCode(first?.exitCode ?? (result.ok ? 0 : 1)),
+    outputHash: hashContent(logBytes),
+    startedAt,
+    endedAt
+  };
+}
+async function referenceForFile(repositoryRoot, artifactPath) {
+  const bytes = await readFile14(absoluteArtifactPath(repositoryRoot, artifactPath));
+  return artifactReferenceForContent({
+    path: artifactPath,
+    content: bytes
+  });
+}
+function replaceEvidenceEntry(entries, next) {
+  return [
+    ...entries.filter((entry) => entry.evidence.id !== next.evidence.id),
+    next
+  ];
+}
+async function existingEvidenceEntries(repositoryRoot, changeId) {
+  const current = await readEvidenceIndex({ repositoryRoot, changeId });
+  if (!current.ok) {
+    if (current.status === "not_found") return { entries: [], revision: 0 };
+    return { diagnostics: current.diagnostics };
+  }
+  return {
+    entries: current.document.entries,
+    revision: current.document.revision
+  };
+}
+function nextAttemptMap(taskRuns) {
+  const attempts = /* @__PURE__ */ new Map();
+  for (const run of taskRuns) {
+    const nextAttempt = run.document.attempt + 1;
+    const current = attempts.get(run.document.taskId) ?? 1;
+    if (nextAttempt > current) attempts.set(run.document.taskId, nextAttempt);
+  }
+  return attempts;
+}
+function buildResultContract() {
+  return [
+    "Return only JSON with this shape:",
+    "```json",
+    "{",
+    '  "status": "succeeded | failed | blocked",',
+    '  "summary": "short factual summary",',
+    '  "filesChanged": ["path"],',
+    '  "commandsRun": [{"command": "pnpm", "args": ["test"], "exitCode": 0}],',
+    '  "findings": []',
+    "}",
+    "```"
+  ].join("\n");
+}
+function dirtyWorktreeDiagnostic(repositoryRoot) {
+  try {
+    execFileSync3("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+  } catch {
+    return void 0;
+  }
+  let status2 = "";
+  try {
+    status2 = execFileSync3("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return void 0;
+  }
+  if (status2.length === 0) return void 0;
+  const firstLines = status2.split(/\r?\n/u).slice(0, 8).join("; ");
+  return {
+    code: "dirty_worktree",
+    message: `Worktree has uncommitted changes. Commit/stash them or rerun with --allow-dirty. Changes: ${firstLines}`,
+    path: repositoryRoot
+  };
+}
+function clampExitCode(value) {
+  if (!Number.isInteger(value)) return 1;
+  if (value < 0) return 1;
+  if (value > 255) return 255;
+  return value;
 }
 function blockedBuild(diagnostics, action, extras = {}) {
   return failure(
@@ -24627,24 +26487,669 @@ async function handleReviewWorkflow(context) {
       ].join("\n")
     );
   }
-  const action = nextAction(
-    "legion review --dry-run",
-    "Only review readiness checks are wired in this CLI layer right now."
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!evidence.ok) {
+    return blockedReview(
+      evidence.diagnostics,
+      nextAction("legion build", "Review requires build evidence before it can run."),
+      { changeId: latestChange.changeId }
+    );
+  }
+  if (hasFlag(context, "accept")) {
+    return acceptLatestReview(context, evidence);
+  }
+  const rejectReason = stringOption(context, "reject-reason");
+  if (rejectReason !== void 0) {
+    return rejectLatestReview(context, evidence, rejectReason);
+  }
+  const selectedExecutor = await selectExecutionAdapterKind(stringOption(context, "executor"));
+  if (typeof selectedExecutor !== "string") {
+    return blockedReview([selectedExecutor.diagnostic], nextAction("legion review --executor fake", "Choose a supported executor."));
+  }
+  if (hasFlag(context, "auto")) {
+    return runAutoReview(context, {
+      executor: selectedExecutor,
+      taskgraph,
+      evidence
+    });
+  }
+  const submitted = await submitReview(context, {
+    executor: selectedExecutor,
+    taskgraph,
+    evidence
+  });
+  if (!submitted.ok) {
+    return blockedReview(submitted.diagnostics, nextAction("legion build", "Review could not be submitted until build evidence is usable."));
+  }
+  const clean = submitted.reviews.every((review) => isCleanReview(review.document));
+  const findingCount = submitted.reviews.reduce((total, review) => total + review.document.findings.length, 0);
+  const firstReview = submitted.reviews[0];
+  const action = clean ? nextAction("legion review --accept", "A passing review was submitted and needs human acceptance.") : nextAction("legion build", "Address review findings and collect new evidence.");
+  return success(
+    {
+      ok: true,
+      status: "submitted",
+      ...firstReview === void 0 ? {} : {
+        review: reviewSummary(firstReview)
+      },
+      reviews: submitted.reviews.map(reviewSummary),
+      evidenceIndex: evidence.artifactPath,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      "Review submitted.",
+      `Reviews: ${submitted.reviews.length}.`,
+      clean ? "Verdict: pass." : `Findings: ${findingCount}.`,
+      renderNextAction(action)
+    ].join("\n")
   );
+}
+async function submitReview(context, input) {
+  if (input.taskgraph.document.tasks.length === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "taskgraph_empty",
+          message: "The latest taskgraph has no tasks to review.",
+          path: input.taskgraph.artifactPath
+        }
+      ]
+    };
+  }
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.taskgraph.document.changeId
+  });
+  if (!reviews.ok) return { ok: false, diagnostics: reviews.diagnostics };
+  const reviewTargets = [];
+  const missingEvidence = [];
+  for (const task of input.taskgraph.document.tasks) {
+    const taskId = taskIdForContractId(task.id);
+    const evidenceEntries = collectedEvidenceEntriesForTask(input.evidence.document.entries, taskId);
+    if (evidenceEntries.length === 0) {
+      missingEvidence.push({
+        code: "review_evidence_missing",
+        message: `No collected build evidence exists for ${task.id}. Run legion build before review.`,
+        path: input.evidence.artifactPath
+      });
+      continue;
+    }
+    reviewTargets.push({ task, taskId, evidenceEntries });
+  }
+  if (missingEvidence.length > 0) return { ok: false, diagnostics: missingEvidence };
+  const submitted = [];
+  for (const target of reviewTargets) {
+    const { task, taskId, evidenceEntries } = target;
+    const reviewId = reviewIdForChange({
+      changeId: input.taskgraph.document.changeId,
+      sequence: reviews.reviews.length + submitted.length + 1
+    });
+    const contextPackArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "context-pack.md" });
+    const promptArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-prompt.md" });
+    const resultArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-result.json" });
+    const rawLogArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-raw.log" });
+    const redactedLogArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-redacted.log" });
+    const contextPackAbsolutePath = absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath);
+    const promptAbsolutePath = absoluteArtifactPath(context.repositoryRoot, promptArtifactPath);
+    const resultAbsolutePath = absoluteArtifactPath(context.repositoryRoot, resultArtifactPath);
+    const rawLogAbsolutePath = absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath);
+    const redactedLogAbsolutePath = absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath);
+    const runId = evidenceEntries.at(-1)?.evidence.runId ?? runIdForTask({ taskId, attempt: 1 });
+    await writeContextPack({
+      repositoryRoot: context.repositoryRoot,
+      changeId: input.taskgraph.document.changeId,
+      runId: reviewId,
+      taskgraph: input.taskgraph,
+      task,
+      artifactPath: contextPackArtifactPath,
+      absolutePath: contextPackAbsolutePath
+    });
+    const prompt = buildExecutionPrompt({
+      mode: "review",
+      contextPackArtifactPath,
+      task,
+      requiredOutput: reviewResultContract()
+    });
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: promptArtifactPath,
+      text: prompt
+    });
+    const result = await adapterForKind(input.executor).run({
+      repositoryRoot: context.repositoryRoot,
+      changeId: input.taskgraph.document.changeId,
+      runId,
+      task,
+      mode: "review",
+      executor: input.executor,
+      readOnly: true,
+      prompt,
+      contextPackArtifactPath,
+      contextPackAbsolutePath,
+      promptArtifactPath,
+      promptAbsolutePath,
+      resultArtifactPath,
+      resultAbsolutePath,
+      rawLogArtifactPath,
+      rawLogAbsolutePath,
+      redactedLogArtifactPath,
+      redactedLogAbsolutePath
+    });
+    const createdAt = currentUtcTimestamp();
+    const review = reviewDecisionForExecution({
+      reviewId,
+      task,
+      taskId,
+      runId,
+      result,
+      evidenceEntries,
+      evidenceIndexPath: input.evidence.artifactPath,
+      createdAt,
+      executor: input.executor,
+      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId)
+    });
+    const write = await writeReviewDecision({
+      repositoryRoot: context.repositoryRoot,
+      document: review,
+      expectedRevision: 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+    });
+    if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
+    submitted.push(write);
+  }
+  return { ok: true, reviews: submitted };
+}
+async function acceptLatestReview(context, evidence) {
+  const coverage = await cleanSubmittedReviewCoverage(context.repositoryRoot, evidence);
+  if (!coverage.ok) {
+    return blockedReview(coverage.diagnostics, nextAction("legion review", "Submit a passing review for every collected task evidence bundle before accepting."));
+  }
+  const acceptedAt = currentUtcTimestamp();
+  const acceptedReviews = [];
+  const acceptedByTaskId = /* @__PURE__ */ new Map();
+  for (const review of coverage.reviews) {
+    const submittedAt = review.document.submittedAt ?? acceptedAt;
+    const accepted = await writeReviewDecision({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: review.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: {
+        ...review.document,
+        status: "accepted",
+        updatedAt: acceptedAt,
+        submittedAt
+      }
+    });
+    if (!accepted.ok) {
+      return blockedReview(accepted.diagnostics, nextAction("legion review", "Review acceptance could not be written."));
+    }
+    acceptedReviews.push(accepted);
+    if (accepted.document.taskId !== void 0) acceptedByTaskId.set(accepted.document.taskId, accepted);
+  }
+  const evidenceWrite = await writeEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId,
+    entries: evidence.document.entries.map((entry) => {
+      if (entry.evidence.status !== "collected") return entry;
+      if (entry.evidence.taskId === void 0) return entry;
+      const acceptedReview = acceptedByTaskId.get(entry.evidence.taskId);
+      if (acceptedReview === void 0) return entry;
+      return {
+        ...entry,
+        acceptance: {
+          status: "accepted",
+          reviewId: acceptedReview.document.id,
+          acceptedAt
+        }
+      };
+    }),
+    artifactInputs: evidence.document.artifactManifest.inputs,
+    expectedRevision: evidence.document.revision,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!evidenceWrite.ok) {
+    return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence acceptance could not be written."));
+  }
+  const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
+  return success(
+    {
+      ok: true,
+      status: "accepted",
+      ...acceptedReviews[0] === void 0 ? {} : { review: reviewSummary(acceptedReviews[0]) },
+      reviews: acceptedReviews.map(reviewSummary),
+      evidenceIndex: {
+        artifactPath: evidenceWrite.artifactPath,
+        acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
+      },
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      "Review accepted.",
+      `Evidence accepted: ${evidenceWrite.artifactPath}.`,
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function rejectLatestReview(context, evidence, reason) {
+  const latest = await latestSubmittedReviews(context.repositoryRoot, evidence.document.changeId);
+  if (!latest.ok) {
+    return blockedReview(latest.diagnostics, nextAction("legion review", "Submit a review before rejecting it."));
+  }
+  const rejectedAt = currentUtcTimestamp();
+  const rejectedReviews = [];
+  const rejectedByTaskId = /* @__PURE__ */ new Map();
+  for (const review of latest.reviews) {
+    const submittedAt = review.document.submittedAt ?? rejectedAt;
+    const rejected = await writeReviewDecision({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: review.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: {
+        ...review.document,
+        status: "rejected",
+        updatedAt: rejectedAt,
+        submittedAt,
+        metadata: {
+          ...review.document.metadata ?? {},
+          annotations: {
+            ...review.document.metadata?.annotations ?? {},
+            reject_reason: reason
+          }
+        }
+      }
+    });
+    if (!rejected.ok) {
+      return blockedReview(rejected.diagnostics, nextAction("legion review", "Review rejection could not be written."));
+    }
+    rejectedReviews.push(rejected);
+    if (rejected.document.taskId !== void 0) rejectedByTaskId.set(rejected.document.taskId, rejected);
+  }
+  const evidenceWrite = await writeEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId,
+    entries: evidence.document.entries.map((entry) => ({
+      ...entry,
+      acceptance: {
+        status: "rejected",
+        reviewId: entry.evidence.taskId === void 0 ? rejectedReviews[0]?.document.id : rejectedByTaskId.get(entry.evidence.taskId)?.document.id ?? rejectedReviews[0]?.document.id,
+        reason
+      }
+    })),
+    artifactInputs: evidence.document.artifactManifest.inputs,
+    expectedRevision: evidence.document.revision,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!evidenceWrite.ok) {
+    return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence rejection could not be written."));
+  }
+  const action = nextAction("legion build", "Rejected evidence needs a new build run.");
+  return success(
+    {
+      ok: true,
+      status: "rejected",
+      ...rejectedReviews[0] === void 0 ? {} : { review: reviewSummary(rejectedReviews[0]) },
+      reviews: rejectedReviews.map(reviewSummary),
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      "Review rejected.",
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function runAutoReview(context, input) {
+  const maxCycles = parseMaxCycles(stringOption(context, "max-cycles"));
+  if (typeof maxCycles !== "number") return maxCycles;
+  let currentEvidence = input.evidence;
+  let latestReviews = [];
+  for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+    const submitted = await submitReview(context, {
+      ...input,
+      evidence: currentEvidence
+    });
+    if (!submitted.ok) {
+      return blockedReview(submitted.diagnostics, nextAction("legion review", "Auto review could not submit a review decision."));
+    }
+    latestReviews = submitted.reviews;
+    if (submitted.reviews.every((review) => isCleanReview(review.document))) {
+      const refreshedEvidence = await readEvidenceIndex({
+        repositoryRoot: context.repositoryRoot,
+        changeId: currentEvidence.document.changeId
+      });
+      if (!refreshedEvidence.ok) {
+        return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
+      }
+      return acceptLatestReview(context, refreshedEvidence);
+    }
+    if (cycle < maxCycles) {
+      const tasksByTaskId = taskByTaskId(input.taskgraph.document.tasks);
+      for (const review of submitted.reviews.filter((candidate) => !isCleanReview(candidate.document))) {
+        if (review.document.taskId === void 0) continue;
+        const task = tasksByTaskId.get(review.document.taskId);
+        if (task === void 0) continue;
+        await runAutoFixCycle(context, input.executor, input.taskgraph.document.changeId, task, cycle);
+      }
+      const refreshedEvidence = await refreshBuildEvidenceAfterAutoFix(context, input.executor, input.taskgraph.document.changeId);
+      if (!refreshedEvidence.ok) {
+        return blockedReview(refreshedEvidence.diagnostics, nextAction("legion build", "Auto fix completed, but build evidence could not be refreshed."));
+      }
+      currentEvidence = refreshedEvidence.evidence;
+    }
+  }
   return blockedReview(
     [
       {
-        code: "review_evidence_pipeline_not_implemented",
-        message: "Review evidence collection is not wired yet. Run legion review --dry-run to verify readiness without claiming review acceptance.",
-        path: taskgraph.artifactPath
+        code: "auto_review_not_clean",
+        message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
+        path: latestReviews.at(-1)?.artifactPath
       }
     ],
-    action,
-    {
-      changeId: latestChange.changeId,
-      taskgraphPath: taskgraph.artifactPath
-    }
+    nextAction("legion build", "Address review findings manually and rerun review.")
   );
+}
+async function runAutoFixCycle(context, executor, changeId, task, cycle) {
+  const taskId = taskIdForContractId(task.id);
+  const runId = runIdForTask({ taskId, attempt: 100 + cycle });
+  const contextPackArtifactPath = runArtifactPath({ changeId, runId, fileName: "context-pack.md" });
+  const promptArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-prompt.md" });
+  const resultArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-result.json" });
+  const rawLogArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-raw.log" });
+  const redactedLogArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-redacted.log" });
+  const prompt = buildExecutionPrompt({
+    mode: "fix",
+    contextPackArtifactPath,
+    task,
+    requiredOutput: reviewResultContract()
+  });
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: contextPackArtifactPath,
+    text: [
+      `# Auto Fix Context ${cycle}`,
+      "",
+      `Change: ${changeId}`,
+      `Task: ${task.id}`,
+      "",
+      "The previous review reported findings. Apply the smallest scoped fix and report JSON."
+    ].join("\n")
+  });
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: prompt
+  });
+  await adapterForKind(executor).run({
+    repositoryRoot: context.repositoryRoot,
+    changeId,
+    runId,
+    task,
+    mode: "fix",
+    executor,
+    readOnly: false,
+    prompt,
+    contextPackArtifactPath,
+    contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
+    promptArtifactPath,
+    promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
+    resultArtifactPath,
+    resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
+    rawLogArtifactPath,
+    rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
+    redactedLogArtifactPath,
+    redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
+  });
+}
+function reviewDecisionForExecution(input) {
+  const evidenceRefs = input.evidenceEntries.map((entry) => entry.evidence.id);
+  const findings = input.result.findings.map((finding, index) => reviewFindingForExecution(finding, evidenceRefs, index));
+  const fallbackVerdict = input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail";
+  const verdicts = input.result.ok && input.result.reviewVerdicts !== void 0 ? input.result.reviewVerdicts : {
+    specification: fallbackVerdict,
+    integration: fallbackVerdict,
+    evidence: fallbackVerdict
+  };
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: input.createdAt,
+    kind: "review",
+    id: input.reviewId,
+    projectId: input.task.projectId,
+    changeId: input.task.changeId,
+    taskId: input.taskId,
+    runId: input.runId,
+    reviewer: {
+      kind: "tool",
+      id: `legion-${input.executor}-reviewer`,
+      displayName: "Legion Review Gate"
+    },
+    verdicts,
+    confidence: input.executor === "fake" ? "high" : "medium",
+    findings,
+    supersedes: [...input.supersedes],
+    evidenceRefs: [...evidenceRefs],
+    traceRefs: [
+      {
+        path: input.evidenceIndexPath,
+        relation: "records",
+        entity: { kind: "change", id: input.task.changeId }
+      }
+    ],
+    status: "submitted",
+    submittedAt: input.createdAt
+  };
+}
+function reviewFindingForExecution(finding, evidenceRefs, index) {
+  const id = /^[a-z][a-z0-9._-]{1,127}$/u.test(finding.id) ? finding.id : `finding-${index + 1}`;
+  if (finding.severity === "blocking") {
+    return {
+      id,
+      title: finding.title,
+      body: finding.body,
+      severity: "blocking",
+      evidenceRefs: evidenceRefs.length > 0 ? [...evidenceRefs] : [fallbackEvidenceId()]
+    };
+  }
+  const optionalRefs = evidenceRefs.length === 0 ? {} : { evidenceRefs: [...evidenceRefs] };
+  if (finding.severity === "minor") {
+    return {
+      id,
+      title: finding.title,
+      body: finding.body,
+      severity: "minor",
+      ...optionalRefs
+    };
+  }
+  return {
+    id,
+    title: finding.title,
+    body: finding.body,
+    severity: "major",
+    ...optionalRefs
+  };
+}
+function fallbackEvidenceId() {
+  const evidence = "evd_missing-review-evidence";
+  return evidence;
+}
+function collectedEvidenceEntriesForTask(entries, taskId) {
+  return entries.filter((entry) => entry.evidence.status === "collected" && entry.evidence.taskId === taskId);
+}
+async function cleanSubmittedReviewCoverage(repositoryRoot, evidence) {
+  const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId: evidence.document.changeId });
+  if (!reviews.ok) return { ok: false, diagnostics: reviews.diagnostics };
+  const entriesByTaskId = /* @__PURE__ */ new Map();
+  const diagnostics = [];
+  for (const entry of evidence.document.entries) {
+    if (entry.evidence.status !== "collected") continue;
+    if (entry.evidence.taskId === void 0) {
+      diagnostics.push({
+        code: "evidence_task_missing",
+        message: `Collected evidence ${entry.evidence.id} is missing a task id.`,
+        path: evidence.artifactPath
+      });
+      continue;
+    }
+    const current = entriesByTaskId.get(entry.evidence.taskId) ?? [];
+    current.push(entry);
+    entriesByTaskId.set(entry.evidence.taskId, current);
+  }
+  if (diagnostics.length > 0 && entriesByTaskId.size === 0) return { ok: false, diagnostics };
+  if (entriesByTaskId.size === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "evidence_missing",
+          message: "No collected build evidence exists for the latest change.",
+          path: evidence.artifactPath
+        }
+      ]
+    };
+  }
+  const selected = /* @__PURE__ */ new Map();
+  for (const [taskId, entries] of entriesByTaskId) {
+    const evidenceIds = entries.map((entry) => entry.evidence.id);
+    const latest = reviews.reviews.filter(
+      (review) => review.document.status === "submitted" && review.document.taskId === taskId && isCleanReview(review.document) && evidenceIds.every((evidenceId) => (review.document.evidenceRefs ?? []).includes(evidenceId))
+    ).at(-1);
+    if (latest === void 0) {
+      diagnostics.push({
+        code: "review_not_clean",
+        message: `No clean submitted review covers collected evidence for ${taskId}.`,
+        path: evidence.artifactPath
+      });
+      continue;
+    }
+    selected.set(latest.document.id, latest);
+  }
+  if (diagnostics.length > 0) return { ok: false, diagnostics };
+  return { ok: true, reviews: [...selected.values()] };
+}
+async function latestSubmittedReviews(repositoryRoot, changeId) {
+  const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
+  if (!reviews.ok) return { ok: false, diagnostics: reviews.diagnostics };
+  const latestByTaskId = /* @__PURE__ */ new Map();
+  for (const review of reviews.reviews) {
+    if (review.document.status === "submitted" && review.document.taskId !== void 0) {
+      latestByTaskId.set(review.document.taskId, review);
+    }
+  }
+  const latest = [...latestByTaskId.values()];
+  if (latest.length === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "review_missing",
+          message: "No submitted review decision exists for the latest change."
+        }
+      ]
+    };
+  }
+  return { ok: true, reviews: latest };
+}
+function latestSubmittedReviewIdForTask(reviews, taskId) {
+  const latest = reviews.filter(
+    (review) => review.document.taskId === taskId && (review.document.status === "submitted" || review.document.status === "accepted")
+  ).at(-1);
+  return latest === void 0 ? [] : [latest.document.id];
+}
+function reviewSummary(review) {
+  return {
+    reviewId: review.document.id,
+    taskId: review.document.taskId,
+    artifactPath: review.artifactPath,
+    verdicts: review.document.verdicts,
+    findings: review.document.findings.length
+  };
+}
+function taskByTaskId(tasks) {
+  const map = /* @__PURE__ */ new Map();
+  for (const task of tasks) {
+    map.set(taskIdForContractId(task.id), task);
+  }
+  return map;
+}
+async function refreshBuildEvidenceAfterAutoFix(context, executor, changeId) {
+  const build = await handleBuildWorkflow({
+    ...context,
+    args: {
+      positionals: ["build"],
+      options: /* @__PURE__ */ new Map([
+        ["executor", executor],
+        ["allow-dirty", true]
+      ])
+    }
+  });
+  if (build.exitCode !== 0) {
+    return {
+      ok: false,
+      diagnostics: diagnosticsFromPayload(build.payload, "Auto fix completed, but build evidence refresh failed.")
+    };
+  }
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId
+  });
+  if (!evidence.ok) return { ok: false, diagnostics: evidence.diagnostics };
+  return { ok: true, evidence };
+}
+function diagnosticsFromPayload(payload, fallbackMessage) {
+  const diagnostics = payload["diagnostics"];
+  if (Array.isArray(diagnostics)) return diagnostics;
+  return [
+    {
+      code: "auto_build_refresh_failed",
+      message: fallbackMessage
+    }
+  ];
+}
+function isCleanReview(review) {
+  return review.status === "submitted" && review.verdicts.specification === "pass" && review.verdicts.integration === "pass" && review.verdicts.evidence === "pass" && !hasBlockingFinding(review.findings);
+}
+function hasBlockingFinding(findings) {
+  return findings.some((finding) => finding.severity === "blocking");
+}
+function reviewResultContract() {
+  return [
+    "Return only JSON with this shape:",
+    "```json",
+    "{",
+    '  "status": "succeeded | failed | blocked",',
+    '  "summary": "short factual review summary",',
+    '  "reviewVerdicts": {"specification": "pass", "integration": "pass", "evidence": "pass"},',
+    '  "findings": [{"id": "finding-id", "title": "Finding title", "body": "Evidence and impact", "severity": "minor | major | blocking"}],',
+    '  "filesChanged": [],',
+    '  "commandsRun": []',
+    "}",
+    "```"
+  ].join("\n");
+}
+function parseMaxCycles(value) {
+  if (value === void 0) return 3;
+  if (!/^[1-9]\d*$/u.test(value)) {
+    return failure(
+      {
+        ok: false,
+        status: "usage_error",
+        diagnostics: [
+          {
+            code: "usage_error",
+            message: "--max-cycles must be a positive integer."
+          }
+        ]
+      },
+      "--max-cycles must be a positive integer."
+    );
+  }
+  return Number.parseInt(value, 10);
 }
 function blockedReview(diagnostics, action, extras = {}) {
   return failure(
@@ -24664,8 +27169,8 @@ function blockedReview(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/record.ts
-import { mkdir as mkdir11, writeFile as writeFile5 } from "node:fs/promises";
-import path22 from "node:path";
+import { mkdir as mkdir11, writeFile as writeFile6 } from "node:fs/promises";
+import path26 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -24711,14 +27216,14 @@ async function recordStandaloneWorkflow(context, options) {
 }
 async function writeUniqueWorkflowRecord(input) {
   const artifactDirectory = `.legion/project/workflow/${input.workflow}`;
-  const absoluteDirectory = path22.join(input.repositoryRoot, ...artifactDirectory.split("/"));
+  const absoluteDirectory = path26.join(input.repositoryRoot, ...artifactDirectory.split("/"));
   await mkdir11(absoluteDirectory, { recursive: true });
   for (let index = 0; index < 1e3; index += 1) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const artifactPath = `${artifactDirectory}/${input.safeTimestamp}-${input.slug}${suffix}.json`;
-    const absolutePath = path22.join(input.repositoryRoot, ...artifactPath.split("/"));
+    const absolutePath = path26.join(input.repositoryRoot, ...artifactPath.split("/"));
     try {
-      await writeFile5(absolutePath, input.content, { encoding: "utf8", flag: "wx" });
+      await writeFile6(absolutePath, input.content, { encoding: "utf8", flag: "wx" });
       return artifactPath;
     } catch (error2) {
       if (isEexist(error2)) continue;
@@ -24896,27 +27401,79 @@ function optionalStringInput(context, key) {
 }
 
 // packages/cli/src/commands/workflow/ship.ts
-var SHIP_HELP = "legion ship [--canary]\n\nRun release readiness, promotion, and observation gates.";
+var SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
 async function handleShipWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(SHIP_HELP);
   }
-  const action = nextAction("legion review", "Shipping requires accepted review evidence.");
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    const action = nextAction("legion plan 1", "Shipping requires a planned change.");
+    return blockedShip(latestChange.diagnostics, action);
+  }
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!evidence.ok) {
+    return blockedShip(evidence.diagnostics, nextAction("legion build", "Shipping requires accepted build evidence."));
+  }
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!reviews.ok) {
+    return blockedShip(reviews.diagnostics, nextAction("legion review", "Shipping requires an accepted review."));
+  }
+  const acceptedReview = reviews.reviews.find((review) => review.document.status === "accepted");
+  const acceptedEvidence = evidence.document.entries.length > 0 && evidence.document.entries.every((entry) => entry.acceptance.status === "accepted");
+  if (acceptedReview === void 0 || !acceptedEvidence) {
+    return blockedShip(
+      [
+        {
+          code: "review_evidence_missing",
+          message: "No accepted review and accepted evidence pair was found. Run legion review --accept first."
+        }
+      ],
+      nextAction("legion review --accept", "Shipping requires accepted review evidence.")
+    );
+  }
+  return {
+    exitCode: 0,
+    payload: {
+      ok: true,
+      status: "ready",
+      change: {
+        changeId: latestChange.changeId
+      },
+      review: {
+        reviewId: acceptedReview.document.id,
+        artifactPath: acceptedReview.artifactPath
+      },
+      evidenceIndex: {
+        artifactPath: evidence.artifactPath,
+        acceptedEntries: evidence.document.entries.length
+      },
+      diagnostics: []
+    },
+    human: [
+      "Ship ready.",
+      "Accepted review and build evidence are present.",
+      "No publish or release action was performed."
+    ].join("\n")
+  };
+}
+function blockedShip(diagnostics, action) {
   return failure(
     {
       ok: false,
       status: "blocked",
-      diagnostics: [
-        {
-          code: "review_evidence_missing",
-          message: "No accepted review evidence was found. Run legion review first."
-        }
-      ],
+      diagnostics,
       nextAction: action
     },
     [
       "Ship blocked.",
-      "No accepted review evidence was found. Run legion review first.",
+      diagnostics.map((diagnostic3) => diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3 ? String(diagnostic3.message) : String(diagnostic3)).join("\n"),
       renderNextAction(action)
     ].join("\n")
   );
@@ -24924,7 +27481,7 @@ async function handleShipWorkflow(context) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
-import path23 from "node:path";
+import path27 from "node:path";
 async function handleValidateCommand(context) {
   const result = await validateWorkflowProject(context);
   const payload = {
@@ -24965,7 +27522,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path23.join(root, relativePath));
+    await stat7(path27.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -25070,7 +27627,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path24.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path28.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -25122,8 +27679,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path24.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path24.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path28.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path28.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

@@ -93,6 +93,8 @@ export const artifactRoleSchema = z.enum([
   "oracle",
   "taskgraph",
   "evidence-index",
+  "task-run",
+  "review",
   "archive"
 ]);
 

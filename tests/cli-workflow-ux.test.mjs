@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -46,6 +46,19 @@ async function writeValidRoadmap(root) {
   return roadmapPath;
 }
 
+async function planPhaseOne(root) {
+  await initializeAssetMapperProject(root);
+  await writeValidRoadmap(root);
+  const plan = await runCliCapture([
+    "--repository-root", root,
+    "plan", "1",
+    "--from-roadmap", "ROADMAP.md",
+    "--json"
+  ]);
+  assert.equal(plan.exitCode, 0, plan.stderr);
+  return parseJsonOutput(plan);
+}
+
 async function assertFileExists(filePath) {
   const fileStat = await stat(filePath);
   assert.equal(fileStat.isFile(), true, `${filePath} should be a file`);
@@ -72,6 +85,24 @@ async function readJsonArtifact(root, artifactPath) {
   const absolutePath = path.join(root, ...artifactPath.split("/"));
   const raw = await readFile(absolutePath, "utf8");
   return { raw, parsed: JSON.parse(raw) };
+}
+
+async function appendSecondTaskToTaskgraph(root, taskgraphArtifactPath) {
+  const absolutePath = path.join(root, ...taskgraphArtifactPath.split("/"));
+  const raw = await readFile(absolutePath, "utf8");
+  const taskgraph = JSON.parse(raw);
+  const firstTask = taskgraph.tasks[0];
+  assert.ok(firstTask, "planned taskgraph should have a task to duplicate");
+  const secondTask = structuredClone(firstTask);
+  secondTask.id = "ctr_phase-1-editor-mvp-review";
+  secondTask.title = "Review phase 1: Editor MVP";
+  secondTask.objective = "Implement and verify the secondary phase 1 review task.";
+  secondTask.completion = {
+    ...secondTask.completion,
+    requiredEvidence: ["legion build secondary verification output"]
+  };
+  taskgraph.tasks.push(secondTask);
+  await writeFile(absolutePath, `${JSON.stringify(taskgraph)}\n`, "utf8");
 }
 
 async function writeValidWorkflowRecord(root, workflow = "explore", fileName = "record.json") {
@@ -248,6 +279,100 @@ test("workflow helper render formats next actions and diagnostics", async () => 
   assert.equal(render.renderNextAction(action), "Next: legion plan 1\nReason: Project is initialized.");
   assert.equal(render.renderDiagnostics([]), "");
   assert.equal(render.renderDiagnostics([{ message: "Project manifest is missing." }, "Plain diagnostic"]), "- Project manifest is missing.\n- Plain diagnostic");
+});
+
+test("workflow helper run artifacts reserve suffix space for attempts and review sequence", async () => {
+  const runArtifacts = await importWorkflowModule("run-artifacts");
+  const { formatEntityId, reviewIdSchema, runIdSchema } = await import("../packages/protocol/dist/index.js");
+  const longSuffix = `${"a".repeat(63)}z`;
+  const taskId = formatEntityId("task", longSuffix);
+  const changeId = formatEntityId("change", longSuffix);
+
+  const runId = runArtifacts.runIdForTask({ taskId, attempt: 1 });
+  assert.equal(runIdSchema.safeParse(runId).success, true);
+  assert.equal(runId.endsWith("-attempt-1"), true);
+
+  const reviewId = runArtifacts.reviewIdForChange({ changeId, sequence: 1 });
+  assert.equal(reviewIdSchema.safeParse(reviewId).success, true);
+  assert.equal(reviewId.endsWith("-review-1"), true);
+});
+
+test("workflow executor text writes reject symlinked artifact paths", async (t) => {
+  const result = await importWorkflowModule("executor/result");
+  const root = await tempRepo();
+  try {
+    const artifactPath = ".legion/project/changes/chg_phase-1-editor-mvp/runs/run_phase-1-editor-mvp-attempt-1/context-pack.md";
+    const targetPath = path.join(root, ...artifactPath.split("/"));
+    const outsidePath = path.join(root, "..", `${path.basename(root)}-outside.txt`);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(outsidePath, "outside\n", "utf8");
+    try {
+      await symlink(outsidePath, targetPath, "file");
+    } catch (error) {
+      if (error && typeof error === "object" && ["EPERM", "EACCES", "ENOTSUP"].includes(String(error.code))) {
+        t.skip(`symlink creation unavailable: ${error.message}`);
+        return;
+      }
+      throw error;
+    }
+
+    await assert.rejects(
+      () => result.writeProjectTextFile({
+        repositoryRoot: root,
+        artifactPath,
+        text: "escaped\n"
+      }),
+      /symlink|symbolic link/u
+    );
+    assert.equal(await readFile(outsidePath, "utf8"), "outside\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(path.join(root, "..", `${path.basename(root)}-outside.txt`), { force: true });
+  }
+});
+
+test("workflow review fails verdicts when the review executor fails", async () => {
+  const review = await import("../packages/cli/dist/commands/workflow/review.js");
+  const { formatEntityId } = await import("../packages/protocol/dist/index.js");
+  const projectId = formatEntityId("project", "asset-mapper");
+  const changeId = formatEntityId("change", "phase-1-editor-mvp");
+  const taskId = formatEntityId("task", "phase-1-editor-mvp");
+  const runId = formatEntityId("run", "phase-1-editor-mvp-attempt-1");
+  const reviewId = formatEntityId("review", "phase-1-editor-mvp-review-1");
+
+  const decision = review.reviewDecisionForExecution({
+    reviewId,
+    task: {
+      projectId,
+      changeId
+    },
+    taskId,
+    runId,
+    result: {
+      ok: false,
+      status: "failed",
+      summary: "Executor failed after emitting pass verdicts.",
+      filesChanged: [],
+      commandsRun: [],
+      findings: [],
+      reviewVerdicts: {
+        specification: "pass",
+        integration: "pass",
+        evidence: "pass"
+      }
+    },
+    evidenceEntries: [],
+    evidenceIndexPath: ".legion/project/changes/chg_phase-1-editor-mvp/evidence-index.json",
+    createdAt: "2026-06-23T12:00:00.000Z",
+    executor: "fake",
+    supersedes: []
+  });
+
+  assert.deepEqual(decision.verdicts, {
+    specification: "fail",
+    integration: "fail",
+    evidence: "fail"
+  });
 });
 
 test("workflow helper phase compatibility resolves an explicit roadmap phase", async () => {
@@ -570,8 +695,8 @@ test("workflow helper state advances to build readiness after planning", async (
     assert.equal(workflowState.projectId, "prj_asset-mapper");
     assert.equal(workflowState.currentSpecCount, 1);
     assert.deepEqual(workflowState.nextAction, {
-      command: "legion build --dry-run",
-      reason: "Latest planned change is ready for build readiness checks."
+      command: "legion build",
+      reason: "Latest planned change is ready for guided build execution."
     });
     assert.deepEqual(workflowState.diagnostics, []);
   } finally {
@@ -1062,28 +1187,86 @@ test("legion build dry-run selects the latest change by metadata timestamp", asy
   }
 });
 
-test("legion build without dry-run stays honest until runtime execution is wired", async () => {
+test("legion build --executor fake writes task-run artifacts and pending evidence", async () => {
   const root = await tempRepo();
   try {
-    await initializeAssetMapperProject(root);
-    await writeValidRoadmap(root);
+    await planPhaseOne(root);
 
-    const plan = await runCliCapture([
-      "--repository-root", root,
-      "plan", "1",
-      "--from-roadmap", "ROADMAP.md",
-      "--json"
-    ]);
-    assert.equal(plan.exitCode, 0, plan.stderr);
+    const result = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--json"]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "executed");
+    assert.equal(payload.executor, "fake");
+    assert.equal(payload.nextAction.command, "legion review");
+    assert.equal(payload.taskRuns.length, 1);
 
-    const result = await runCliCapture(["--repository-root", root, "build", "--json"]);
+    const run = payload.taskRuns[0];
+    await assertFileExists(path.join(root, ...run.artifactPath.split("/")));
+    const runArtifact = await readJsonArtifact(root, run.artifactPath);
+    assert.equal(runArtifact.parsed.kind, "task-run");
+    assert.equal(runArtifact.parsed.status, "succeeded");
+    assert.equal(runArtifact.parsed.evidenceRefs[0], run.evidenceId);
+
+    const runRoot = path.dirname(path.join(root, ...run.artifactPath.split("/")));
+    await assertFileExists(path.join(runRoot, "context-pack.md"));
+    await assertFileExists(path.join(runRoot, "executor-result.json"));
+    await assertFileExists(path.join(runRoot, "executor-redacted.log"));
+
+    const evidence = await readJsonArtifact(root, payload.evidenceIndex.artifactPath);
+    assert.equal(evidence.parsed.entries.length, 1);
+    assert.equal(evidence.parsed.entries[0].acceptance.status, "pending");
+
+    const status = await runCliCapture(["--repository-root", root, "status", "--json"]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    const statusPayload = parseJsonOutput(status);
+    assert.equal(statusPayload.workflowState.stage, "built");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion build --executor manual blocks but records failed evidence", async () => {
+  const root = await tempRepo();
+  try {
+    await planPhaseOne(root);
+
+    const result = await runCliCapture(["--repository-root", root, "build", "--executor", "manual", "--json"]);
     assert.equal(result.exitCode, 1);
     const payload = parseJsonOutput(result);
-    assert.equal(payload.ok, false);
     assert.equal(payload.status, "blocked");
-    assert.equal(payload.diagnostics[0]?.code, "runtime_start_not_implemented");
-    assert.equal(payload.driver.driver, "runtime-local");
-    assert.equal(payload.nextAction.command, "legion build --dry-run");
+    assert.equal(payload.taskRuns.length, 1);
+    assert.equal(payload.taskRuns[0].status, "blocked");
+    assert.equal(payload.evidenceIndex.entries, 1);
+
+    const evidence = await readJsonArtifact(root, payload.evidenceIndex.artifactPath);
+    assert.equal(evidence.parsed.entries[0].evidence.status, "failed");
+    assert.equal(evidence.parsed.entries[0].acceptance.status, "pending");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion build retry uses the next task attempt after a blocked run", async () => {
+  const root = await tempRepo();
+  try {
+    await planPhaseOne(root);
+
+    const blocked = await runCliCapture(["--repository-root", root, "build", "--executor", "manual", "--json"]);
+    assert.equal(blocked.exitCode, 1);
+    const blockedPayload = parseJsonOutput(blocked);
+    assert.equal(blockedPayload.taskRuns[0].runId.endsWith("attempt-1"), true);
+
+    const retry = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--json"]);
+    assert.equal(retry.exitCode, 0, retry.stderr);
+    const payload = parseJsonOutput(retry);
+    assert.equal(payload.status, "executed");
+    assert.equal(payload.taskRuns[0].runId.endsWith("attempt-2"), true);
+
+    const evidence = await readJsonArtifact(root, payload.evidenceIndex.artifactPath);
+    assert.equal(evidence.parsed.entries.length, 2);
+    assert.equal(evidence.parsed.entries.some((entry) => entry.evidence.status === "failed"), true);
+    assert.equal(evidence.parsed.entries.some((entry) => entry.evidence.runId.endsWith("attempt-2") && entry.evidence.status === "collected"), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1166,33 +1349,135 @@ test("legion review dry-run reports review gates for the latest taskgraph", asyn
   }
 });
 
-test("legion review without dry-run stays honest until review evidence is wired", async () => {
+test("legion review submits, accepts, advances status, and unlocks ship readiness", async () => {
   const root = await tempRepo();
   try {
-    await initializeAssetMapperProject(root);
-    await writeValidRoadmap(root);
+    await planPhaseOne(root);
 
-    const plan = await runCliCapture([
-      "--repository-root", root,
-      "plan", "1",
-      "--from-roadmap", "ROADMAP.md",
-      "--json"
-    ]);
-    assert.equal(plan.exitCode, 0, plan.stderr);
+    const build = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--json"]);
+    assert.equal(build.exitCode, 0, build.stderr);
 
-    const result = await runCliCapture(["--repository-root", root, "review", "--json"]);
-    assert.equal(result.exitCode, 1);
+    const result = await runCliCapture(["--repository-root", root, "review", "--executor", "fake", "--json"]);
+    assert.equal(result.exitCode, 0, result.stderr);
     const payload = parseJsonOutput(result);
-    assert.equal(payload.ok, false);
-    assert.equal(payload.status, "blocked");
-    assert.equal(payload.diagnostics[0]?.code, "review_evidence_pipeline_not_implemented");
-    assert.equal(payload.nextAction.command, "legion review --dry-run");
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "submitted");
+    assert.equal(payload.review.verdicts.specification, "pass");
+    assert.equal(payload.nextAction.command, "legion review --accept");
+
+    const submitted = await readJsonArtifact(root, payload.review.artifactPath);
+    assert.equal(submitted.parsed.kind, "review");
+    assert.equal(submitted.parsed.status, "submitted");
+
+    const evidenceBeforeAccept = await readJsonArtifact(root, payload.evidenceIndex);
+    assert.equal(evidenceBeforeAccept.parsed.entries[0].acceptance.status, "pending");
+
+    const accepted = await runCliCapture(["--repository-root", root, "review", "--accept", "--json"]);
+    assert.equal(accepted.exitCode, 0, accepted.stderr);
+    const acceptedPayload = parseJsonOutput(accepted);
+    assert.equal(acceptedPayload.status, "accepted");
+    assert.equal(acceptedPayload.nextAction.command, "legion ship");
+
+    const status = await runCliCapture(["--repository-root", root, "status", "--json"]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    const statusPayload = parseJsonOutput(status);
+    assert.equal(statusPayload.workflowState.stage, "ship_ready");
+
+    const ship = await runCliCapture(["--repository-root", root, "ship", "--json"]);
+    assert.equal(ship.exitCode, 0, ship.stderr);
+    const shipPayload = parseJsonOutput(ship);
+    assert.equal(shipPayload.status, "ready");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("legion ship blocks until review evidence exists", async () => {
+test("legion review covers every task before accepting multi-task evidence", async () => {
+  const root = await tempRepo();
+  try {
+    const plan = await planPhaseOne(root);
+    await appendSecondTaskToTaskgraph(root, plan.taskgraph.artifactPath);
+
+    const build = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--json"]);
+    assert.equal(build.exitCode, 0, build.stderr);
+    const buildPayload = parseJsonOutput(build);
+    assert.equal(buildPayload.taskRuns.length, 2);
+
+    const result = await runCliCapture(["--repository-root", root, "review", "--executor", "fake", "--json"]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.status, "submitted");
+    assert.equal(payload.reviews.length, 2);
+    assert.deepEqual(
+      payload.reviews.map((review) => review.taskId).sort(),
+      ["tsk_phase-1-editor-mvp", "tsk_phase-1-editor-mvp-review"]
+    );
+
+    const accepted = await runCliCapture(["--repository-root", root, "review", "--accept", "--json"]);
+    assert.equal(accepted.exitCode, 0, accepted.stderr);
+    const acceptedPayload = parseJsonOutput(accepted);
+    assert.equal(acceptedPayload.status, "accepted");
+    assert.equal(acceptedPayload.reviews.length, 2);
+
+    const evidence = await readJsonArtifact(root, acceptedPayload.evidenceIndex.artifactPath);
+    assert.equal(evidence.parsed.entries.length, 2);
+    assert.equal(evidence.parsed.entries.every((entry) => entry.acceptance.status === "accepted"), true);
+    assert.equal(new Set(evidence.parsed.entries.map((entry) => entry.acceptance.reviewId)).size, 2);
+
+    const status = await runCliCapture(["--repository-root", root, "status", "--json"]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    assert.equal(parseJsonOutput(status).workflowState.stage, "ship_ready");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion review --auto --executor fake accepts a clean review", async () => {
+  const root = await tempRepo();
+  try {
+    await planPhaseOne(root);
+    const build = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--json"]);
+    assert.equal(build.exitCode, 0, build.stderr);
+
+    const auto = await runCliCapture(["--repository-root", root, "review", "--auto", "--executor", "fake", "--json"]);
+    assert.equal(auto.exitCode, 0, auto.stderr);
+    const payload = parseJsonOutput(auto);
+    assert.equal(payload.status, "accepted");
+
+    const status = await runCliCapture(["--repository-root", root, "status", "--json"]);
+    assert.equal(status.exitCode, 0, status.stderr);
+    assert.equal(parseJsonOutput(status).workflowState.stage, "ship_ready");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion build blocks on dirty git worktrees unless --allow-dirty is set", async () => {
+  const root = await tempRepo();
+  try {
+    git(root, ["init"]);
+    git(root, ["config", "user.email", "codex@example.test"]);
+    git(root, ["config", "user.name", "Codex"]);
+    await planPhaseOne(root);
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "initial"]);
+    await writeFile(path.join(root, "ROADMAP.md"), "# Roadmap\n\n## Phase 1: Editor MVP\nDirty change.\n", "utf8");
+
+    const blocked = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--json"]);
+    assert.equal(blocked.exitCode, 1);
+    const blockedPayload = parseJsonOutput(blocked);
+    assert.equal(blockedPayload.status, "blocked");
+    assert.equal(blockedPayload.diagnostics[0]?.code, "dirty_worktree");
+
+    const allowed = await runCliCapture(["--repository-root", root, "build", "--executor", "fake", "--allow-dirty", "--json"]);
+    assert.equal(allowed.exitCode, 0, allowed.stderr);
+    assert.equal(parseJsonOutput(allowed).status, "executed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion ship blocks until accepted review evidence exists", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
@@ -1202,8 +1487,7 @@ test("legion ship blocks until review evidence exists", async () => {
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, false);
     assert.equal(payload.status, "blocked");
-    assert.equal(payload.diagnostics[0]?.code, "review_evidence_missing");
-    assert.equal(payload.nextAction.command, "legion review");
+    assert.equal(payload.nextAction.command, "legion plan 1");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

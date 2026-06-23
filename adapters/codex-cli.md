@@ -14,7 +14,7 @@ detection:
   secondary: ".agents/skills/legion/SKILL.md or ~/.agents/skills/legion/SKILL.md exists"
 max_prompt_size: 128000
 known_quirks:
-  - "sandbox-by-approval-mode"
+  - "exec-json-lines"
   - "no-structured-question-tool"
 ---
 
@@ -107,21 +107,31 @@ No cleanup needed — no agents spawned persistently, no teams created. Update W
 
 ## Dispatch Configuration
 
-When Claude Code is the orchestrator, Codex CLI can be dispatched to for code implementation, testing, refactoring, and bug fixing. Codex runs in full-auto approval mode for non-interactive execution.
+When Legion dispatches Codex CLI, it uses `codex exec` with an explicit repository, sandbox, non-interactive approval mode, JSON output, and an output-last-message file. Do not use bypass flags such as `--dangerously-bypass-approvals-and-sandbox`.
 
 ```yaml
 available: true
 capabilities: [code_implementation, testing, refactoring, bug_fixing, code_review]
 invoke_command: "codex"
-invoke_flags: ["--approval-mode", "full-auto", "--quiet"]
-prompt_delivery: content_flag
-prompt_flag: "-p"
+invoke_flags:
+  - "exec"
+  - "-C"
+  - "{repositoryRoot}"
+  - "--sandbox"
+  - "workspace-write"
+  - "--ask-for-approval"
+  - "never"
+  - "--json"
+  - "--output-last-message"
+  - "{outputLastMessagePath}"
+  - "-"
+prompt_delivery: stdin
 result_mode: file
-result_path: ".planning/dispatch/{task-id}-RESULT.md"
-result_instruction: "Write your complete output to {result_path} using the format specified below."
+result_path: ".legion/project/changes/{changeId}/runs/{runId}/executor-result.json"
+result_instruction: "Return the requested JSON result as the final message."
 max_concurrent: 1
 timeout_ms: 600000
-detection_command: "codex --version"
+detection_command: "codex exec --help"
 prerequisites: []
 ```
 
