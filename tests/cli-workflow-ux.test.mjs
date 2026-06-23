@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -279,6 +279,100 @@ test("workflow helper render formats next actions and diagnostics", async () => 
   assert.equal(render.renderNextAction(action), "Next: legion plan 1\nReason: Project is initialized.");
   assert.equal(render.renderDiagnostics([]), "");
   assert.equal(render.renderDiagnostics([{ message: "Project manifest is missing." }, "Plain diagnostic"]), "- Project manifest is missing.\n- Plain diagnostic");
+});
+
+test("workflow helper run artifacts reserve suffix space for attempts and review sequence", async () => {
+  const runArtifacts = await importWorkflowModule("run-artifacts");
+  const { formatEntityId, reviewIdSchema, runIdSchema } = await import("../packages/protocol/dist/index.js");
+  const longSuffix = `${"a".repeat(63)}z`;
+  const taskId = formatEntityId("task", longSuffix);
+  const changeId = formatEntityId("change", longSuffix);
+
+  const runId = runArtifacts.runIdForTask({ taskId, attempt: 1 });
+  assert.equal(runIdSchema.safeParse(runId).success, true);
+  assert.equal(runId.endsWith("-attempt-1"), true);
+
+  const reviewId = runArtifacts.reviewIdForChange({ changeId, sequence: 1 });
+  assert.equal(reviewIdSchema.safeParse(reviewId).success, true);
+  assert.equal(reviewId.endsWith("-review-1"), true);
+});
+
+test("workflow executor text writes reject symlinked artifact paths", async (t) => {
+  const result = await importWorkflowModule("executor/result");
+  const root = await tempRepo();
+  try {
+    const artifactPath = ".legion/project/changes/chg_phase-1-editor-mvp/runs/run_phase-1-editor-mvp-attempt-1/context-pack.md";
+    const targetPath = path.join(root, ...artifactPath.split("/"));
+    const outsidePath = path.join(root, "..", `${path.basename(root)}-outside.txt`);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(outsidePath, "outside\n", "utf8");
+    try {
+      await symlink(outsidePath, targetPath, "file");
+    } catch (error) {
+      if (error && typeof error === "object" && ["EPERM", "EACCES", "ENOTSUP"].includes(String(error.code))) {
+        t.skip(`symlink creation unavailable: ${error.message}`);
+        return;
+      }
+      throw error;
+    }
+
+    await assert.rejects(
+      () => result.writeProjectTextFile({
+        repositoryRoot: root,
+        artifactPath,
+        text: "escaped\n"
+      }),
+      /symlink|symbolic link/u
+    );
+    assert.equal(await readFile(outsidePath, "utf8"), "outside\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(path.join(root, "..", `${path.basename(root)}-outside.txt`), { force: true });
+  }
+});
+
+test("workflow review fails verdicts when the review executor fails", async () => {
+  const review = await import("../packages/cli/dist/commands/workflow/review.js");
+  const { formatEntityId } = await import("../packages/protocol/dist/index.js");
+  const projectId = formatEntityId("project", "asset-mapper");
+  const changeId = formatEntityId("change", "phase-1-editor-mvp");
+  const taskId = formatEntityId("task", "phase-1-editor-mvp");
+  const runId = formatEntityId("run", "phase-1-editor-mvp-attempt-1");
+  const reviewId = formatEntityId("review", "phase-1-editor-mvp-review-1");
+
+  const decision = review.reviewDecisionForExecution({
+    reviewId,
+    task: {
+      projectId,
+      changeId
+    },
+    taskId,
+    runId,
+    result: {
+      ok: false,
+      status: "failed",
+      summary: "Executor failed after emitting pass verdicts.",
+      filesChanged: [],
+      commandsRun: [],
+      findings: [],
+      reviewVerdicts: {
+        specification: "pass",
+        integration: "pass",
+        evidence: "pass"
+      }
+    },
+    evidenceEntries: [],
+    evidenceIndexPath: ".legion/project/changes/chg_phase-1-editor-mvp/evidence-index.json",
+    createdAt: "2026-06-23T12:00:00.000Z",
+    executor: "fake",
+    supersedes: []
+  });
+
+  assert.deepEqual(decision.verdicts, {
+    specification: "fail",
+    integration: "fail",
+    evidence: "fail"
+  });
 });
 
 test("workflow helper phase compatibility resolves an explicit roadmap phase", async () => {

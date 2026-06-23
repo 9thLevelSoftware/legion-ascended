@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path29 from "node:path";
+import path28 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path30) {
-  if (!path30)
+function getElementAtPath(obj, path29) {
+  if (!path29)
     return obj;
-  return path30.reduce((acc, key) => acc?.[key], obj);
+  return path29.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path30, issues) {
+function prefixIssues(path29, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path30);
+    iss.path.unshift(path29);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path30 = []) => {
+  const processError = (error3, path29 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path30, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
       } else {
-        const fullpath = [...path30, ...issue2.path];
+        const fullpath = [...path29, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -15474,14 +15474,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path30) {
-  if (path30.endsWith(".json"))
+function mediaTypeForArtifactPath(path29) {
+  if (path29.endsWith(".json"))
     return "application/json";
-  if (path30.endsWith(".yaml") || path30.endsWith(".yml"))
+  if (path29.endsWith(".yaml") || path29.endsWith(".yml"))
     return "application/yaml";
-  if (path30.endsWith(".md"))
+  if (path29.endsWith(".md"))
     return "text/markdown";
-  if (path30.endsWith(".txt"))
+  if (path29.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -15524,16 +15524,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path30, issues) {
+function schemaDiagnostics(path29, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path30 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path29 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path30
+      path: path29
     });
   });
 }
@@ -16491,7 +16491,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path30 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path29 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -16505,7 +16505,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path30
+        path: path29
       }))
     };
   }
@@ -17253,13 +17253,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path30) {
+function parseRequirementId2(input, path29) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
@@ -17275,24 +17275,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path30) {
+function parseBaseGitSha(input, path29) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path30) {
+function parseOwners(input, path29) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path30
+        path: path29
       })
     ]);
   }
@@ -17304,7 +17304,7 @@ function parseOwners(input, path30) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path30
+        path: path29
       })));
       continue;
     }
@@ -17592,7 +17592,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path30) {
+function conflictDiagnostics(deltas, path29) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -17601,7 +17601,7 @@ function conflictDiagnostics(deltas, path30) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path30
+        path: path29
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -18378,18 +18378,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path30) {
+function parseOracleId2(input, path29) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path30) {
+function parseBaseGitSha2(input, path29) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18397,7 +18397,7 @@ function parseBaseGitSha2(input, path30) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
@@ -18741,7 +18741,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path30) {
+function parseBaseGitSha3(input, path29) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -18749,18 +18749,18 @@ function parseBaseGitSha3(input, path30) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path30) {
+function assertExpectedRevision(value, path29) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path30
+        path: path29
       })
     ]);
   }
@@ -19078,7 +19078,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path30) {
+function parseBaseGitSha4(input, path29) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -19086,18 +19086,18 @@ function parseBaseGitSha4(input, path30) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path30) {
+function assertExpectedRevision2(value, path29) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path30
+        path: path29
       })
     ]);
   }
@@ -19496,13 +19496,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path30) {
+function assertExpectedRevision3(value, path29) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path30
+        path: path29
       })
     ]);
   }
@@ -19774,13 +19774,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path30) {
+function assertExpectedRevision4(value, path29) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path30
+        path: path29
       })
     ]);
   }
@@ -20021,8 +20021,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path30) {
-  return nodeId("artifact", path30);
+function artifactNodeId(path29) {
+  return nodeId("artifact", path29);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -20058,8 +20058,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path30) {
-  const fileName = path30.split("/").at(-1);
+function oracleIdFromPath(path29) {
+  const fileName = path29.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -20174,13 +20174,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path30 = [];
+  const path29 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path30.indexOf(node);
+      const cycleStartIndex = path29.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path30.length; index++) {
-          const cyclicNode = path30[index];
+        for (let index = cycleStartIndex; index < path29.length; index++) {
+          const cyclicNode = path29[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -20190,11 +20190,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path30.push(node);
+    path29.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path30.pop();
+    path29.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -20222,10 +20222,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path30 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path29 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path30,
+        path: path29,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -20871,13 +20871,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path30) {
+function parseArchivedAt(input, path29) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path30
+      path: path29
     })));
   }
   return parsed.data;
@@ -20906,7 +20906,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path30) {
+function archiveHashDiagnostics(record2, path29) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -20914,11 +20914,11 @@ function archiveHashDiagnostics(record2, path30) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path30
+      path: path29
     })
   ];
 }
-async function assertWorktreeTarget(input, path30) {
+async function assertWorktreeTarget(input, path29) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -20932,7 +20932,7 @@ async function assertWorktreeTarget(input, path30) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path30
+        path: path29
       })
     ]);
   } catch (error2) {
@@ -20940,7 +20940,7 @@ async function assertWorktreeTarget(input, path30) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path30
+        path: path29
       })
     ]);
   }
@@ -21019,11 +21019,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path30 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path30 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path30)) : remaining;
+    const path29 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path29 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path29)) : remaining;
     return {
-      path: path30,
+      path: path29,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -21086,9 +21086,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path30, document) {
+function validatePlannedDocument(path29, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path30,
+    artifactPath: path29,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -21099,7 +21099,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path30, document]) => [path30, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path29, document]) => [path29, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -21123,17 +21123,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path30 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path30)) {
+      const path29 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path29)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path30}.`,
-            path: path30
+            message: `Archive add target already exists: ${path29}.`,
+            path: path29
           })
         ]);
       }
-      plannedDocs.set(path30, {
+      plannedDocs.set(path29, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -21146,7 +21146,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path30);
+      touchedPaths.add(path29);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -21331,8 +21331,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path30 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path30);
+  const path29 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path29);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -21570,10 +21570,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path30 = archivePath(changeId);
+  const path29 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path30,
+    artifactPath: path29,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -21585,22 +21585,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path30
+        path: path29
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path30);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path29);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path30,
+    artifactPath: path29,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path30,
+      path: path29,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -25385,22 +25385,33 @@ import { readFile as readFile14 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
 import { readdir as readdir10, readFile as readFile13 } from "node:fs/promises";
-import path25 from "node:path";
+import path24 from "node:path";
 
 // packages/cli/src/workflow/executor/result.ts
-import { mkdir as mkdir11, readFile as readFile12, writeFile as writeFile5 } from "node:fs/promises";
-import path24 from "node:path";
+import { readFile as readFile12, writeFile as writeFile5 } from "node:fs/promises";
 var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
 var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
 function redactTranscript(text) {
   return text.replace(JSON_CREDENTIAL_RE, (match) => match.replace(/:\s*"(?:[^"\\]|\\.)*"/, ': "[REDACTED_JSON_SECRET]"')).replace(SECRET_ASSIGNMENT_RE, (_match, key) => `${key}=[REDACTED_SECRET]`);
 }
-async function writeTextFile(filePath, text) {
-  await mkdir11(path24.dirname(filePath), { recursive: true });
-  await writeFile5(filePath, text, "utf8");
+async function writeProjectTextFile(input) {
+  const absolutePath = await prepareProjectTextFile(input);
+  await writeFile5(absolutePath, input.text, "utf8");
+  return absolutePath;
 }
-async function writeExecutionResult(filePath, result) {
-  await writeTextFile(filePath, stableProtocolJson(result));
+async function prepareProjectTextFile(input) {
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath
+  });
+  return resolved.absolutePath;
+}
+async function writeProjectExecutionResult(input) {
+  return writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: stableProtocolJson(input.result)
+  });
 }
 async function readOptionalText(filePath) {
   try {
@@ -25507,7 +25518,11 @@ function parseReviewVerdict(value) {
 // packages/cli/src/workflow/context-pack.ts
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
-  await writeTextFile(input.absolutePath, content);
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: content
+  });
   return content;
 }
 function buildExecutionPrompt(input) {
@@ -25611,7 +25626,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path25.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path24.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir10(workflowRoot, { withFileTypes: true });
@@ -25620,7 +25635,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error2;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = path25.join(workflowRoot, entry.name);
+      const absolutePath = path24.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile13(absolutePath, "utf8");
@@ -25721,11 +25736,11 @@ var fakeAdapter = {
         }
       } : {}
     };
-    await writeTextFile(request.rawLogAbsolutePath, `${result.summary}
-`);
-    await writeTextFile(request.redactedLogAbsolutePath, redactTranscript(`${result.summary}
-`));
-    await writeExecutionResult(request.resultAbsolutePath, result);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}
+`) });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
@@ -25754,18 +25769,22 @@ var manualAdapter = {
         }
       ]
     };
-    await writeTextFile(request.rawLogAbsolutePath, `${summary}
-`);
-    await writeTextFile(request.redactedLogAbsolutePath, `${summary}
-`);
-    await writeExecutionResult(request.resultAbsolutePath, result);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
 var codexAdapter = {
   kind: "codex",
   async run(request) {
-    const outputLastMessagePath = request.resultAbsolutePath.replace(/\.json$/u, "-last-message.txt");
+    const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
+    const outputLastMessagePath = await prepareProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: outputLastMessageArtifactPath
+    });
     const args = codexExecArgs({
       repositoryRoot: request.repositoryRoot,
       sandbox: request.readOnly ? "read-only" : "workspace-write",
@@ -25786,11 +25805,11 @@ var codexAdapter = {
       exitCode: processResult.exitCode
     });
     const redacted = redactTranscript(rawOutput);
-    await writeTextFile(request.rawLogAbsolutePath, rawOutput.length > 0 ? rawOutput : `${result.summary}
-`);
-    await writeTextFile(request.redactedLogAbsolutePath, redacted.length > 0 ? redacted : `${result.summary}
-`);
-    await writeExecutionResult(request.resultAbsolutePath, result);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
+` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}
+` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
@@ -25831,18 +25850,33 @@ async function spawnWithInput(command, args, input, cwd) {
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
-import path26 from "node:path";
+import { createHash as createHash17 } from "node:crypto";
+import path25 from "node:path";
+var ENTITY_SUFFIX_MAX_LENGTH = 64;
+var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
   return formatEntityId("task", contractId.slice("ctr_".length));
 }
 function runIdForTask(input) {
-  return formatEntityId("run", `${input.taskId.slice("tsk_".length)}-attempt-${input.attempt}`);
+  return formatEntityId("run", derivedSuffix(input.taskId.slice("tsk_".length), `-attempt-${input.attempt}`));
 }
 function evidenceIdForRun(runId) {
   return formatEntityId("evidence", runId.slice("run_".length));
 }
 function reviewIdForChange(input) {
-  return formatEntityId("review", `${input.changeId.slice("chg_".length)}-review-${input.sequence}`);
+  return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
+}
+function derivedSuffix(baseSuffix, tail) {
+  const full = `${baseSuffix}${tail}`;
+  if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
+  const digest = createHash17("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const reservedLength = tail.length + digest.length + 1;
+  const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
+  if (prefixLength < 1) {
+    throw new RangeError(`Derived entity ID suffix tail is too long: ${tail}`);
+  }
+  const prefix = baseSuffix.slice(0, prefixLength).replace(/-+$/u, "") || (baseSuffix[0] ?? "x");
+  return `${prefix}-${digest}${tail}`;
 }
 function runArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/runs/${input.runId}/${input.fileName}`);
@@ -25851,7 +25885,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path26.join(repositoryRoot, ...artifactPath.split("/"));
+  return path25.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -26039,7 +26073,11 @@ async function executeTask(input) {
     task: input.task,
     requiredOutput: buildResultContract()
   });
-  await writeTextFile(promptAbsolutePath, prompt);
+  await writeProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: prompt
+  });
   const started = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
     expectedRevision: 0,
@@ -26577,7 +26615,11 @@ async function submitReview(context, input) {
       task,
       requiredOutput: reviewResultContract()
     });
-    await writeTextFile(promptAbsolutePath, prompt);
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: promptArtifactPath,
+      text: prompt
+    });
     const result = await adapterForKind(input.executor).run({
       repositoryRoot: context.repositoryRoot,
       changeId: input.taskgraph.document.changeId,
@@ -26826,9 +26868,10 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     task,
     requiredOutput: reviewResultContract()
   });
-  await writeTextFile(
-    absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
-    [
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: contextPackArtifactPath,
+    text: [
       `# Auto Fix Context ${cycle}`,
       "",
       `Change: ${changeId}`,
@@ -26836,8 +26879,12 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
       "",
       "The previous review reported findings. Apply the smallest scoped fix and report JSON."
     ].join("\n")
-  );
-  await writeTextFile(absoluteArtifactPath(context.repositoryRoot, promptArtifactPath), prompt);
+  });
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: prompt
+  });
   await adapterForKind(executor).run({
     repositoryRoot: context.repositoryRoot,
     changeId,
@@ -26862,10 +26909,11 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
 function reviewDecisionForExecution(input) {
   const evidenceRefs = input.evidenceEntries.map((entry) => entry.evidence.id);
   const findings = input.result.findings.map((finding, index) => reviewFindingForExecution(finding, evidenceRefs, index));
-  const verdicts = input.result.reviewVerdicts ?? {
-    specification: input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail",
-    integration: input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail",
-    evidence: input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail"
+  const fallbackVerdict = input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail";
+  const verdicts = input.result.ok && input.result.reviewVerdicts !== void 0 ? input.result.reviewVerdicts : {
+    specification: fallbackVerdict,
+    integration: fallbackVerdict,
+    evidence: fallbackVerdict
   };
   return {
     schemaVersion: LEGION_PROTOCOL_VERSION,
@@ -27121,8 +27169,8 @@ function blockedReview(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/record.ts
-import { mkdir as mkdir12, writeFile as writeFile6 } from "node:fs/promises";
-import path27 from "node:path";
+import { mkdir as mkdir11, writeFile as writeFile6 } from "node:fs/promises";
+import path26 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -27168,12 +27216,12 @@ async function recordStandaloneWorkflow(context, options) {
 }
 async function writeUniqueWorkflowRecord(input) {
   const artifactDirectory = `.legion/project/workflow/${input.workflow}`;
-  const absoluteDirectory = path27.join(input.repositoryRoot, ...artifactDirectory.split("/"));
-  await mkdir12(absoluteDirectory, { recursive: true });
+  const absoluteDirectory = path26.join(input.repositoryRoot, ...artifactDirectory.split("/"));
+  await mkdir11(absoluteDirectory, { recursive: true });
   for (let index = 0; index < 1e3; index += 1) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const artifactPath = `${artifactDirectory}/${input.safeTimestamp}-${input.slug}${suffix}.json`;
-    const absolutePath = path27.join(input.repositoryRoot, ...artifactPath.split("/"));
+    const absolutePath = path26.join(input.repositoryRoot, ...artifactPath.split("/"));
     try {
       await writeFile6(absolutePath, input.content, { encoding: "utf8", flag: "wx" });
       return artifactPath;
@@ -27433,7 +27481,7 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
-import path28 from "node:path";
+import path27 from "node:path";
 async function handleValidateCommand(context) {
   const result = await validateWorkflowProject(context);
   const payload = {
@@ -27474,7 +27522,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat7(path28.join(root, relativePath));
+    await stat7(path27.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -27579,7 +27627,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path29.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path28.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -27631,8 +27679,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path29.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path29.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path28.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path28.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

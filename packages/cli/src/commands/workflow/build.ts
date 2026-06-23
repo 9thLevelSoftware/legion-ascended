@@ -31,7 +31,7 @@ import {
 import { failure, hasFlag, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
-import { adapterForKind, selectExecutionAdapterKind, writeTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
+import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
@@ -264,7 +264,11 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     task: input.task,
     requiredOutput: buildResultContract()
   });
-  await writeTextFile(promptAbsolutePath, prompt);
+  await writeProjectTextFile({
+    repositoryRoot: input.context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: prompt
+  });
 
   const started = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,

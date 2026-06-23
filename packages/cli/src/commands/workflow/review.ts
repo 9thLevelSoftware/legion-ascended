@@ -20,7 +20,7 @@ import {
 import { failure, hasFlag, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
-import { adapterForKind, selectExecutionAdapterKind, writeTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult } from "../../workflow/executor/index.js";
+import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
@@ -240,7 +240,11 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
       task,
       requiredOutput: reviewResultContract()
     });
-    await writeTextFile(promptAbsolutePath, prompt);
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: promptArtifactPath,
+      text: prompt
+    });
 
     const result = await adapterForKind(input.executor).run({
       repositoryRoot: context.repositoryRoot,
@@ -522,9 +526,10 @@ async function runAutoFixCycle(
     task,
     requiredOutput: reviewResultContract()
   });
-  await writeTextFile(
-    absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
-    [
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: contextPackArtifactPath,
+    text: [
       `# Auto Fix Context ${cycle}`,
       "",
       `Change: ${changeId}`,
@@ -532,8 +537,12 @@ async function runAutoFixCycle(
       "",
       "The previous review reported findings. Apply the smallest scoped fix and report JSON."
     ].join("\n")
-  );
-  await writeTextFile(absoluteArtifactPath(context.repositoryRoot, promptArtifactPath), prompt);
+  });
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: promptArtifactPath,
+    text: prompt
+  });
   await adapterForKind(executor).run({
     repositoryRoot: context.repositoryRoot,
     changeId,
@@ -556,7 +565,7 @@ async function runAutoFixCycle(
   });
 }
 
-function reviewDecisionForExecution(input: {
+export function reviewDecisionForExecution(input: {
   readonly reviewId: ReviewId;
   readonly task: TaskContract;
   readonly taskId: ReturnType<typeof taskIdForContractId>;
@@ -570,10 +579,11 @@ function reviewDecisionForExecution(input: {
 }): ReviewDecision {
   const evidenceRefs = input.evidenceEntries.map((entry) => entry.evidence.id);
   const findings = input.result.findings.map((finding, index) => reviewFindingForExecution(finding, evidenceRefs, index));
-  const verdicts = input.result.reviewVerdicts ?? {
-    specification: input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail",
-    integration: input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail",
-    evidence: input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail"
+  const fallbackVerdict = input.result.ok && !hasBlockingFinding(findings) ? "pass" : "fail";
+  const verdicts: ExecutionReviewVerdicts = input.result.ok && input.result.reviewVerdicts !== undefined ? input.result.reviewVerdicts : {
+    specification: fallbackVerdict,
+    integration: fallbackVerdict,
+    evidence: fallbackVerdict
   };
   return {
     schemaVersion: LEGION_PROTOCOL_VERSION,

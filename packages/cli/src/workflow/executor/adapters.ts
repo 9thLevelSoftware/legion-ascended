@@ -1,14 +1,17 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
+import { artifactPathSchema } from "@legion/protocol";
+
 import type { ExecutionAdapter, ExecutionAdapterKind, ExecutionRequest, ExecutionResult } from "./types.js";
 import {
   normalizeExecutionResult,
   parseResultFromText,
+  prepareProjectTextFile,
   readOptionalText,
   redactTranscript,
-  writeExecutionResult,
-  writeTextFile
+  writeProjectExecutionResult,
+  writeProjectTextFile
 } from "./result.js";
 
 const execFileAsync = promisify(execFile);
@@ -99,9 +102,9 @@ const fakeAdapter: ExecutionAdapter = {
           }
         : {})
     };
-    await writeTextFile(request.rawLogAbsolutePath, `${result.summary}\n`);
-    await writeTextFile(request.redactedLogAbsolutePath, redactTranscript(`${result.summary}\n`));
-    await writeExecutionResult(request.resultAbsolutePath, result);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${result.summary}\n` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redactTranscript(`${result.summary}\n`) });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
@@ -131,9 +134,9 @@ const manualAdapter: ExecutionAdapter = {
         }
       ]
     };
-    await writeTextFile(request.rawLogAbsolutePath, `${summary}\n`);
-    await writeTextFile(request.redactedLogAbsolutePath, `${summary}\n`);
-    await writeExecutionResult(request.resultAbsolutePath, result);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: `${summary}\n` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: `${summary}\n` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };
@@ -141,7 +144,11 @@ const manualAdapter: ExecutionAdapter = {
 const codexAdapter: ExecutionAdapter = {
   kind: "codex",
   async run(request) {
-    const outputLastMessagePath = request.resultAbsolutePath.replace(/\.json$/u, "-last-message.txt");
+    const outputLastMessageArtifactPath = artifactPathSchema.parse(request.resultArtifactPath.replace(/executor-result\.json$/u, "executor-last-message.txt"));
+    const outputLastMessagePath = await prepareProjectTextFile({
+      repositoryRoot: request.repositoryRoot,
+      artifactPath: outputLastMessageArtifactPath
+    });
     const args = codexExecArgs({
       repositoryRoot: request.repositoryRoot,
       sandbox: request.readOnly ? "read-only" : "workspace-write",
@@ -162,9 +169,9 @@ const codexAdapter: ExecutionAdapter = {
       exitCode: processResult.exitCode
     });
     const redacted = redactTranscript(rawOutput);
-    await writeTextFile(request.rawLogAbsolutePath, rawOutput.length > 0 ? rawOutput : `${result.summary}\n`);
-    await writeTextFile(request.redactedLogAbsolutePath, redacted.length > 0 ? redacted : `${result.summary}\n`);
-    await writeExecutionResult(request.resultAbsolutePath, result);
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
+    await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
+    await writeProjectExecutionResult({ repositoryRoot: request.repositoryRoot, artifactPath: request.resultArtifactPath, result });
     return result;
   }
 };

@@ -1,7 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
 
-import { stableProtocolJson } from "@legion/artifacts";
+import { ensureProjectArtifactParent, stableProtocolJson } from "@legion/artifacts";
+import type { ArtifactPath } from "@legion/protocol";
 
 import type {
   ExecutionCommandResult,
@@ -22,13 +22,37 @@ export function redactTranscript(text: string): string {
     .replace(SECRET_ASSIGNMENT_RE, (_match, key: string) => `${key}=[REDACTED_SECRET]`);
 }
 
-export async function writeTextFile(filePath: string, text: string): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, text, "utf8");
+export async function writeProjectTextFile(input: {
+  readonly repositoryRoot: string;
+  readonly artifactPath: ArtifactPath;
+  readonly text: string;
+}): Promise<string> {
+  const absolutePath = await prepareProjectTextFile(input);
+  await writeFile(absolutePath, input.text, "utf8");
+  return absolutePath;
 }
 
-export async function writeExecutionResult(filePath: string, result: ExecutionResult): Promise<void> {
-  await writeTextFile(filePath, stableProtocolJson(result));
+export async function prepareProjectTextFile(input: {
+  readonly repositoryRoot: string;
+  readonly artifactPath: ArtifactPath;
+}): Promise<string> {
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath
+  });
+  return resolved.absolutePath;
+}
+
+export async function writeProjectExecutionResult(input: {
+  readonly repositoryRoot: string;
+  readonly artifactPath: ArtifactPath;
+  readonly result: ExecutionResult;
+}): Promise<string> {
+  return writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: stableProtocolJson(input.result)
+  });
 }
 
 export async function readOptionalText(filePath: string): Promise<string> {

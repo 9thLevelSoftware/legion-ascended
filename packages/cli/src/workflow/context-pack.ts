@@ -10,7 +10,7 @@ import {
 } from "@legion/artifacts";
 import type { ArtifactPath, ChangeId, RunId, TaskContract } from "@legion/protocol";
 
-import { writeTextFile } from "./executor/result.js";
+import { writeProjectTextFile } from "./executor/result.js";
 
 export interface ContextPackInput {
   readonly repositoryRoot: string;
@@ -24,7 +24,11 @@ export interface ContextPackInput {
 
 export async function writeContextPack(input: ContextPackInput): Promise<string> {
   const content = await renderContextPack(input);
-  await writeTextFile(input.absolutePath, content);
+  await writeProjectTextFile({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: input.artifactPath,
+    text: content
+  });
   return content;
 }
 
