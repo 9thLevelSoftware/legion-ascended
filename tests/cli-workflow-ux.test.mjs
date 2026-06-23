@@ -932,6 +932,46 @@ test("legion plan phase creates typed artifacts from an explicit roadmap", async
   }
 });
 
+test("legion plan phase reports repeat change conflict and reuses current spec", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const first = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(first.exitCode, 0, first.stderr);
+    const firstPayload = parseJsonOutput(first);
+    assert.equal(firstPayload.ok, true);
+    assert.equal(firstPayload.status, "planned");
+
+    const currentSpecPath = path.join(root, ".legion", "project", "specs", "req_phase-1-editor-mvp.md");
+    await assertFileExists(currentSpecPath);
+
+    const second = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(second.exitCode, 1);
+    const secondPayload = parseJsonOutput(second);
+    assert.equal(secondPayload.ok, false);
+    assert.equal(secondPayload.status, "conflict");
+    assert.equal(secondPayload.failedStep, "change");
+    assert.equal(secondPayload.diagnostics[0]?.code, "artifact_already_exists");
+    assert.equal(secondPayload.nextAction.command, "legion build");
+
+    await assertFileExists(currentSpecPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("legion plan phase rejects missing or blank from-roadmap values", async () => {
   const root = await tempRepo();
   try {
