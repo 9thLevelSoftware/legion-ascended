@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { listCurrentSpecs } from "@legion/artifacts";
+import { listCurrentSpecs, loadChangeBundle } from "@legion/artifacts";
 
 import type { CliContext } from "../runtime.js";
 import { loadWorkflowProject, validateWorkflowProject } from "./context.js";
@@ -40,6 +40,7 @@ export interface LatestWorkflowChangeFailure {
 }
 
 export type LatestWorkflowChangeResult = LatestWorkflowChangeSuccess | LatestWorkflowChangeFailure;
+type LatestWorkflowChangeDiagnostic = LatestWorkflowChangeFailure["diagnostics"][number];
 
 export async function resolveWorkflowState(context: CliContext): Promise<WorkflowState> {
   const project = await loadWorkflowProject(context);
@@ -118,14 +119,48 @@ export async function findLatestWorkflowChangeId(repositoryRoot: string): Promis
 
   const changeIds = entries
     .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
-  const changeId = changeIds.at(-1);
-  if (changeId === undefined) return noWorkflowChange(changesRoot);
+    .map((entry) => entry.name);
+  if (changeIds.length === 0) return noWorkflowChange(changesRoot);
+
+  const validChanges: { readonly changeId: string; readonly createdAt: string }[] = [];
+  const diagnostics: LatestWorkflowChangeDiagnostic[] = [];
+  for (const changeId of changeIds) {
+    const bundle = await loadChangeBundle({ repositoryRoot, changeId });
+    if (bundle.ok) {
+      validChanges.push({
+        changeId,
+        createdAt: bundle.bundle.change.createdAt
+      });
+      continue;
+    }
+
+    diagnostics.push(...bundle.diagnostics);
+  }
+
+  validChanges.sort((left, right) => {
+    const byCreatedAt = left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0;
+    if (byCreatedAt !== 0) return byCreatedAt;
+    return left.changeId < right.changeId ? -1 : left.changeId > right.changeId ? 1 : 0;
+  });
+
+  const latest = validChanges.at(-1);
+  if (latest === undefined) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "change_discovery_failed",
+          message: "Workflow change directories exist, but none could be loaded as valid typed change bundles.",
+          path: changesRoot
+        },
+        ...diagnostics
+      ]
+    };
+  }
 
   return {
     ok: true,
-    changeId
+    changeId: latest.changeId
   };
 }
 

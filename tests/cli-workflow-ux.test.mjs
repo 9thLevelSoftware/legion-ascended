@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -59,6 +59,13 @@ async function assertPathMissing(filePath) {
     throw error;
   }
   assert.fail(`${filePath} should not exist`);
+}
+
+async function writeChangeCreatedAt(root, changeId, createdAt) {
+  const changePath = path.join(root, ".legion", "project", "changes", changeId, "change.yaml");
+  const change = JSON.parse(await readFile(changePath, "utf8"));
+  change.change.createdAt = createdAt;
+  await writeFile(changePath, `${JSON.stringify(change, null, 2)}\n`, "utf8");
 }
 
 async function importWorkflowModule(name) {
@@ -820,6 +827,24 @@ test("legion build blocks clearly when no planned change exists", async () => {
   }
 });
 
+test("legion build blocks when change directories are not valid typed bundles", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await mkdir(path.join(root, ".legion", "project", "changes", "chg_invalid"), { recursive: true });
+
+    const result = await runCliCapture(["--repository-root", root, "build", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "change_discovery_failed");
+    assert.equal(payload.nextAction.command, "legion plan 1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("legion build dry-run reports readiness for the latest typed taskgraph", async () => {
   const root = await tempRepo();
   try {
@@ -847,6 +872,59 @@ test("legion build dry-run reports readiness for the latest typed taskgraph", as
     assert.equal(payload.driver.driver, "runtime-local");
     assert.equal(payload.taskgraph.taskCount, 1);
     assert.equal(payload.nextAction.command, "legion build");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion build dry-run selects the latest change by metadata timestamp", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeFile(
+      path.join(root, "ROADMAP.md"),
+      [
+        "# Roadmap\n",
+        "\n",
+        "## Phase 2: Two\n",
+        "Implement the second phase.\n",
+        "\n",
+        "## Phase 10: Ten\n",
+        "Implement the tenth phase.\n"
+      ].join(""),
+      "utf8"
+    );
+
+    const phaseTwo = await runCliCapture([
+      "--repository-root", root,
+      "plan", "2",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(phaseTwo.exitCode, 0, phaseTwo.stderr);
+
+    const phaseTen = await runCliCapture([
+      "--repository-root", root,
+      "plan", "10",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(phaseTen.exitCode, 0, phaseTen.stderr);
+
+    await writeChangeCreatedAt(root, "chg_phase-2-two", "2026-06-22T12:00:00.000Z");
+    await writeChangeCreatedAt(root, "chg_phase-10-ten", "2026-06-22T12:00:01.000Z");
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "build",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "ready");
+    assert.equal(payload.change.changeId, "chg_phase-10-ten");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
