@@ -1,4 +1,5 @@
-import { helpResult, usageError, type CliContext, type CliResult } from "../../runtime.js";
+import { failure, helpResult, type CliContext, type CliResult } from "../../runtime.js";
+import { nextAction, renderNextAction } from "../../workflow/render.js";
 
 const SHIP_HELP = "legion ship [--canary]\n\nRun release readiness, promotion, and observation gates.";
 
@@ -7,5 +8,23 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     return helpResult(SHIP_HELP);
   }
 
-  return usageError("legion ship requires a reviewed change. Run legion review first.");
+  const action = nextAction("legion review", "Shipping requires accepted review evidence.");
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      diagnostics: [
+        {
+          code: "review_evidence_missing",
+          message: "No accepted review evidence was found. Run legion review first."
+        }
+      ],
+      nextAction: action
+    },
+    [
+      "Ship blocked.",
+      "No accepted review evidence was found. Run legion review first.",
+      renderNextAction(action)
+    ].join("\n")
+  );
 }

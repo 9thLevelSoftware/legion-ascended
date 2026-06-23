@@ -957,7 +957,7 @@ test("legion build without dry-run stays honest until runtime execution is wired
   }
 });
 
-test("legion review blocks clearly when build has not run", async () => {
+test("legion review blocks clearly when no planned change exists", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
@@ -967,8 +967,111 @@ test("legion review blocks clearly when build has not run", async () => {
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, false);
     assert.equal(payload.status, "blocked");
-    assert.equal(payload.diagnostics[0]?.code, "task_run_missing");
-    assert.equal(payload.nextAction.command, "legion build");
+    assert.equal(payload.diagnostics[0]?.code, "change_missing");
+    assert.equal(payload.nextAction.command, "legion plan 1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion review blocks clearly when the latest change has no taskgraph", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const plan = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(plan.exitCode, 0, plan.stderr);
+    const planPayload = parseJsonOutput(plan);
+    await rm(path.join(root, ...planPayload.taskgraph.artifactPath.split("/")), { force: true });
+
+    const result = await runCliCapture(["--repository-root", root, "review", "--dry-run", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "not_found");
+    assert.equal(payload.nextAction.command, "legion plan 1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion review dry-run reports review gates for the latest taskgraph", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const plan = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(plan.exitCode, 0, plan.stderr);
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "review",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "ready");
+    assert.equal(payload.dryRun, true);
+    assert.equal(payload.taskgraph.taskCount, 1);
+    assert.equal(payload.nextAction.command, "legion review");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion review without dry-run stays honest until review evidence is wired", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    await writeValidRoadmap(root);
+
+    const plan = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--json"
+    ]);
+    assert.equal(plan.exitCode, 0, plan.stderr);
+
+    const result = await runCliCapture(["--repository-root", root, "review", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "review_evidence_pipeline_not_implemented");
+    assert.equal(payload.nextAction.command, "legion review --dry-run");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion ship blocks until review evidence exists", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const result = await runCliCapture(["--repository-root", root, "ship", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.diagnostics[0]?.code, "review_evidence_missing");
+    assert.equal(payload.nextAction.command, "legion review");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -984,7 +1087,7 @@ for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "
   });
 }
 
-for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "council"]) {
+for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "council"]) {
   test(`legion ${command} non-help invocation returns a clear contract error`, async () => {
     const result = await runCliCapture([command, "--json"]);
     assert.equal(result.exitCode, 1);

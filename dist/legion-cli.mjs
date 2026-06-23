@@ -24475,23 +24475,83 @@ function blockedBuild(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/review.ts
-async function handleReviewWorkflow(_context) {
-  const action = nextAction("legion build", "No completed task run was found for review.");
+async function handleReviewWorkflow(context) {
+  const planAction = nextAction(
+    "legion plan 1",
+    "A typed task graph is required before review readiness can be checked."
+  );
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedReview(latestChange.diagnostics, planAction);
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedReview(taskgraph.diagnostics, planAction);
+  }
+  const taskCount = taskgraph.document.tasks.length;
+  if (hasFlag(context, "dry-run")) {
+    const action2 = nextAction(
+      "legion review",
+      "Review gates are ready to inspect the latest task graph."
+    );
+    return success(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: {
+          changeId: latestChange.changeId
+        },
+        taskgraph: {
+          artifactPath: taskgraph.artifactPath,
+          taskCount,
+          taskIds: taskgraph.document.tasks.map((task) => task.id)
+        },
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Review ready.",
+        `Dry run: review gates can inspect ${taskCount} task${taskCount === 1 ? "" : "s"} from ${latestChange.changeId}.`,
+        "No review was accepted or recorded.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const action = nextAction(
+    "legion review --dry-run",
+    "Only review readiness checks are wired in this CLI layer right now."
+  );
+  return blockedReview(
+    [
+      {
+        code: "review_evidence_pipeline_not_implemented",
+        message: "Review evidence collection is not wired yet. Run legion review --dry-run to verify readiness without claiming review acceptance.",
+        path: taskgraph.artifactPath
+      }
+    ],
+    action,
+    {
+      changeId: latestChange.changeId,
+      taskgraphPath: taskgraph.artifactPath
+    }
+  );
+}
+function blockedReview(diagnostics, action, extras = {}) {
   return failure(
     {
       ok: false,
       status: "blocked",
-      diagnostics: [
-        {
-          code: "task_run_missing",
-          message: "No completed task run was found. Run legion build first."
-        }
-      ],
+      ...extras,
+      diagnostics,
       nextAction: action
     },
     [
       "Review blocked.",
-      "No completed task run was found. Run legion build first.",
+      renderDiagnostics(diagnostics),
       renderNextAction(action)
     ].join("\n")
   );
@@ -24536,7 +24596,25 @@ async function handleShipWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(SHIP_HELP);
   }
-  return usageError("legion ship requires a reviewed change. Run legion review first.");
+  const action = nextAction("legion review", "Shipping requires accepted review evidence.");
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      diagnostics: [
+        {
+          code: "review_evidence_missing",
+          message: "No accepted review evidence was found. Run legion review first."
+        }
+      ],
+      nextAction: action
+    },
+    [
+      "Ship blocked.",
+      "No accepted review evidence was found. Run legion review first.",
+      renderNextAction(action)
+    ].join("\n")
+  );
 }
 
 // packages/cli/src/commands/workflow/validate.ts
