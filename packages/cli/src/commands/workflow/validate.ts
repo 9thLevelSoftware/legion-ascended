@@ -40,7 +40,7 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
       diagnostics: result.diagnostics
     },
     operationalStore: await pathCheck(context.repositoryRoot, ".legion/var"),
-    workerBundles: await pathCheck(context.cwd, "bundles/index.json")
+    workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
   const payload = {
     ...result,

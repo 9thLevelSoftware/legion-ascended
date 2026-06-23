@@ -691,6 +691,35 @@ test("legion validate and doctor report project and shallow path checks", async 
   }
 });
 
+test("legion doctor checks worker bundles from repository root when cwd differs", async () => {
+  const root = await tempRepo();
+  const otherCwd = await tempRepo();
+  try {
+    const start = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--summary", "Metadata authoring and deterministic asset resolution",
+      "--owner", "dasbl",
+      "--created-at", "2026-06-22T12:00:00.000Z",
+      "--json"
+    ]);
+    assert.equal(start.exitCode, 0, start.stderr);
+
+    await mkdir(path.join(root, "bundles"), { recursive: true });
+    await writeFile(path.join(root, "bundles", "index.json"), "[]\n", "utf8");
+
+    const doctor = await runCliCapture(["--repository-root", root, "doctor", "--json"], { cwd: otherCwd });
+    assert.equal(doctor.exitCode, 0, doctor.stderr);
+    const doctorPayload = parseJsonOutput(doctor);
+    assert.equal(doctorPayload.checks.workerBundles.ok, true);
+    assert.equal(doctorPayload.checks.workerBundles.status, "present");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(otherCwd, { recursive: true, force: true });
+  }
+});
+
 test("unknown workflow commands return usage errors", async () => {
   const result = await runCliCapture(["frobnicate", "--json"]);
   assert.equal(result.exitCode, 1);
