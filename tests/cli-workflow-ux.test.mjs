@@ -491,6 +491,29 @@ test("legion start initializes a project with friendly flags", async () => {
   }
 });
 
+test("legion start supports an explicit project slug", async () => {
+  const root = await tempRepo();
+  try {
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--slug", "asset-mapper-cli",
+      "--summary", "Metadata authoring and deterministic asset resolution",
+      "--owner", "dasbl",
+      "--created-at", "2026-06-22T12:00:00.000Z",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.project.slug, "asset-mapper-cli");
+    assert.equal(payload.project.id, "prj_asset-mapper-cli");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("legion status gives the next workflow action for a new project", async () => {
   const root = await tempRepo();
   try {
@@ -522,6 +545,34 @@ test("legion start reports friendly usage and supports dry-run", async () => {
     const missingNamePayload = parseJsonOutput(missingName);
     assert.equal(missingNamePayload.status, "usage_error");
     assert.match(missingNamePayload.diagnostics[0].message, /legion start --name "My Project"/);
+
+    const invalidOwner = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--owner", "a".repeat(129),
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(invalidOwner.exitCode, 1);
+    const invalidOwnerPayload = parseJsonOutput(invalidOwner);
+    assert.equal(invalidOwnerPayload.status, "usage_error");
+    assert.equal(invalidOwnerPayload.diagnostics[0].code, "usage_error");
+    assert.match(invalidOwnerPayload.diagnostics[0].message, /Invalid --owner value/);
+
+    const invalidSlug = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--slug", "Invalid Slug",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(invalidSlug.exitCode, 1);
+    const invalidSlugPayload = parseJsonOutput(invalidSlug);
+    assert.equal(invalidSlugPayload.status, "usage_error");
+    assert.equal(invalidSlugPayload.diagnostics[0].code, "usage_error");
+    assert.match(invalidSlugPayload.diagnostics[0].message, /Invalid --slug value/);
 
     const dryRun = await runCliCapture([
       "--repository-root", root,

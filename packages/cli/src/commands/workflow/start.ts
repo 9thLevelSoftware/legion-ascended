@@ -1,4 +1,5 @@
 import { initProject } from "@legion/artifacts";
+import { projectSchema, type Actor } from "@legion/protocol";
 
 import {
   failure,
@@ -34,14 +35,31 @@ export async function handleStartCommand(context: CliContext): Promise<CliResult
   }
 
   const owner = stringOption(context, "owner") ?? "operator";
+  let decisionOwner: Actor;
+  try {
+    decisionOwner = ownerActor(owner);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return usageError(`Invalid --owner value. Use a human-readable owner up to 128 characters. ${message}`);
+  }
+
+  const slugValue = stringOption(context, "slug")?.trim() ?? slugFromName(name);
+  let slug: string;
+  try {
+    slug = projectSchema.shape.slug.parse(slugValue);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return usageError(`Invalid --slug value. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number. ${message}`);
+  }
+
   const summary = stringOption(context, "summary")?.trim();
   const result = await initProject({
     repositoryRoot: context.repositoryRoot,
-    slug: slugFromName(name),
+    slug,
     name,
     ...(summary === undefined || summary.length === 0 ? {} : { description: summary }),
     repository: repositoryReference(context.repositoryRoot),
-    decisionOwners: [ownerActor(owner)],
+    decisionOwners: [decisionOwner],
     ...(createdAt === undefined ? {} : { createdAt }),
     dryRun: hasFlag(context, "dry-run")
   });

@@ -22682,14 +22682,29 @@ async function handleStartCommand(context) {
     return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
   }
   const owner = stringOption(context, "owner") ?? "operator";
+  let decisionOwner;
+  try {
+    decisionOwner = ownerActor(owner);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Invalid --owner value. Use a human-readable owner up to 128 characters. ${message}`);
+  }
+  const slugValue = stringOption(context, "slug")?.trim() ?? slugFromName(name);
+  let slug;
+  try {
+    slug = projectSchema.shape.slug.parse(slugValue);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Invalid --slug value. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number. ${message}`);
+  }
   const summary = stringOption(context, "summary")?.trim();
   const result = await initProject({
     repositoryRoot: context.repositoryRoot,
-    slug: slugFromName(name),
+    slug,
     name,
     ...summary === void 0 || summary.length === 0 ? {} : { description: summary },
     repository: repositoryReference(context.repositoryRoot),
-    decisionOwners: [ownerActor(owner)],
+    decisionOwners: [decisionOwner],
     ...createdAt === void 0 ? {} : { createdAt },
     dryRun: hasFlag(context, "dry-run")
   });
