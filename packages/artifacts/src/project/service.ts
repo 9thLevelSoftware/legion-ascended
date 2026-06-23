@@ -213,6 +213,7 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   const projectRoot = path.join(legionRoot, "project");
   const manifestPath = path.join(projectRoot, "project.json");
   if ((await pathExists(projectRoot)) && !(await pathExists(manifestPath))) {
+    if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
       pathDiagnostic({
         code: "migration_required",
@@ -222,6 +223,11 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   }
 
   return [];
+}
+
+async function containsOnlyPreInitWorkflowRecords(projectRoot: string): Promise<boolean> {
+  const entries = await readdir(projectRoot, { withFileTypes: true });
+  return entries.length === 1 && entries[0]?.isDirectory() === true && entries[0].name === "workflow";
 }
 
 function createConstitutionRevision(content: string): ArtifactRevision {

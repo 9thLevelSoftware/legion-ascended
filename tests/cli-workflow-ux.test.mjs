@@ -68,6 +68,19 @@ async function writeChangeCreatedAt(root, changeId, createdAt) {
   await writeFile(changePath, `${JSON.stringify(change, null, 2)}\n`, "utf8");
 }
 
+async function readJsonArtifact(root, artifactPath) {
+  const absolutePath = path.join(root, ...artifactPath.split("/"));
+  const raw = await readFile(absolutePath, "utf8");
+  return { raw, parsed: JSON.parse(raw) };
+}
+
+function assertNoInternalWorkflowNouns(text) {
+  assert.doesNotMatch(text, /worker bundle manifest/i);
+  assert.doesNotMatch(text, /legion next/);
+  assert.doesNotMatch(text, /project\/runtime support/i);
+  assert.doesNotMatch(text, /implementation tasks/i);
+}
+
 async function importWorkflowModule(name) {
   try {
     return await import(`../packages/cli/dist/workflow/${name}.js`);
@@ -690,6 +703,34 @@ test("workflow helper state blocks .legion project data without manifest before 
   }
 });
 
+test("workflow helper state allows pre-start workflow records", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    const recordPath = path.join(root, ".legion", "project", "workflow", "explore", "record.json");
+    await mkdir(path.dirname(recordPath), { recursive: true });
+    await writeFile(recordPath, "{}\n", "utf8");
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "uninitialized");
+    assert.equal(workflowState.projectId, null);
+    assert.equal(workflowState.currentSpecCount, 0);
+    assert.equal(workflowState.nextAction.command, "legion start");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("workflow helper state treats .legion var alone as uninitialized", async () => {
   const state = await importWorkflowModule("state");
   const root = await tempRepo();
@@ -1077,6 +1118,213 @@ test("legion ship blocks until review evidence exists", async () => {
   }
 });
 
+test("legion quick records an ad-hoc task request", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const result = await runCliCapture(["--repository-root", root, "quick", "fix the failing tests", "--json"]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assertNoInternalWorkflowNouns(result.stdout);
+
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "recorded");
+    assert.equal(payload.workflow, "quick");
+    assert.equal(payload.nextAction.command, "legion build");
+    assert.match(payload.artifactPath, /^\.legion\/project\/workflow\/quick\/.+-fix-the-failing-tests\.json$/);
+    assert.doesNotMatch(payload.artifactPath, /^\.legion\/var\//);
+
+    const artifact = await readJsonArtifact(root, payload.artifactPath);
+    assert.equal(artifact.raw.endsWith("\n"), true);
+    assert.deepEqual(artifact.parsed, {
+      schemaVersion: 1,
+      kind: "workflow_record",
+      workflow: "quick",
+      createdAt: payload.createdAt,
+      input: {
+        text: "fix the failing tests"
+      },
+      nextAction: payload.nextAction
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion explore records a design artifact before project start", async () => {
+  const root = await tempRepo();
+  try {
+    const result = await runCliCapture(["--repository-root", root, "explore", "asset metadata editor", "--json"]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assertNoInternalWorkflowNouns(result.stdout);
+
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "recorded");
+    assert.equal(payload.workflow, "explore");
+    assert.equal(payload.nextAction.command, "legion start");
+    assert.match(payload.artifactPath, /^\.legion\/project\/workflow\/explore\/.+-asset-metadata-editor\.json$/);
+    assert.doesNotMatch(payload.artifactPath, /^\.legion\/var\//);
+
+    const artifact = await readJsonArtifact(root, payload.artifactPath);
+    assert.equal(artifact.raw.endsWith("\n"), true);
+    assert.deepEqual(artifact.parsed, {
+      schemaVersion: 1,
+      kind: "workflow_record",
+      workflow: "explore",
+      createdAt: payload.createdAt,
+      input: {
+        text: "asset metadata editor"
+      },
+      nextAction: payload.nextAction
+    });
+
+    const start = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--owner", "dasbl",
+      "--json"
+    ]);
+    assert.equal(start.exitCode, 0, start.stderr);
+    assert.equal(parseJsonOutput(start).nextAction.command, "legion plan 1");
+    await assertFileExists(path.join(root, ...payload.artifactPath.split("/")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+const standaloneRecordCases = [
+  {
+    name: "advise",
+    args: ["advise", "dependency risk", "--json"],
+    workflow: "advise",
+    nextAction: "legion status",
+    input: { text: "dependency risk" },
+    slug: "dependency-risk"
+  },
+  {
+    name: "polish",
+    args: ["polish", "README cleanup", "--json"],
+    workflow: "polish",
+    nextAction: "legion review",
+    input: { target: "README cleanup" },
+    slug: "readme-cleanup"
+  },
+  {
+    name: "learn",
+    args: ["learn", "prefer artifact-backed plans", "--json"],
+    workflow: "learn",
+    nextAction: "legion status",
+    input: { text: "prefer artifact-backed plans" },
+    slug: "prefer-artifact-backed-plans"
+  },
+  {
+    name: "map refresh",
+    args: ["map", "--refresh", "--json"],
+    workflow: "map",
+    nextAction: "legion plan 1",
+    input: { mode: "refresh" },
+    slug: "refresh"
+  },
+  {
+    name: "retro",
+    args: ["retro", "--json"],
+    workflow: "retro",
+    nextAction: "legion plan 1",
+    input: { phase: null, milestone: null },
+    slug: "retro"
+  },
+  {
+    name: "milestone",
+    args: ["milestone", "--json"],
+    workflow: "milestone",
+    nextAction: "legion status",
+    input: { target: null },
+    slug: "milestone"
+  },
+  {
+    name: "council",
+    args: ["council", "release readiness", "--json"],
+    workflow: "council",
+    nextAction: "legion status",
+    input: { text: "release readiness" },
+    slug: "release-readiness"
+  }
+];
+
+for (const recordCase of standaloneRecordCases) {
+  test(`legion ${recordCase.name} records a standalone workflow artifact`, async () => {
+    const root = await tempRepo();
+    try {
+      await initializeAssetMapperProject(root);
+
+      const result = await runCliCapture(["--repository-root", root, ...recordCase.args]);
+      assert.equal(result.exitCode, 0, result.stderr);
+      const payload = parseJsonOutput(result);
+      assert.equal(payload.ok, true);
+      assert.equal(payload.status, "recorded");
+      assert.equal(payload.workflow, recordCase.workflow);
+      assert.equal(payload.nextAction.command, recordCase.nextAction);
+      assert.match(
+        payload.artifactPath,
+        new RegExp(`^\\.legion/project/workflow/${recordCase.workflow}/.+-${recordCase.slug}\\.json$`)
+      );
+
+      const artifact = await readJsonArtifact(root, payload.artifactPath);
+      assert.equal(artifact.raw.endsWith("\n"), true);
+      assert.deepEqual(artifact.parsed, {
+        schemaVersion: 1,
+        kind: "workflow_record",
+        workflow: recordCase.workflow,
+        createdAt: payload.createdAt,
+        input: recordCase.input,
+        nextAction: payload.nextAction
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("legion map --check reports readiness without writing workflow records", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const result = await runCliCapture(["--repository-root", root, "map", "--check", "--json"]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "ready");
+    assert.equal(payload.workflow, "map");
+    assert.equal(payload.mode, "check");
+    assert.equal(payload.nextAction.command, "legion map --refresh");
+    await assertPathMissing(path.join(root, ".legion", "project", "workflow", "map"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+for (const command of ["quick", "advise", "learn", "explore", "council"]) {
+  test(`legion ${command} requires text input without writing records`, async () => {
+    const root = await tempRepo();
+    try {
+      const result = await runCliCapture(["--repository-root", root, command, "--json"]);
+      assert.equal(result.exitCode, 1);
+      const payload = parseJsonOutput(result);
+      assert.equal(payload.ok, false);
+      assert.equal(payload.status, "usage_error");
+      assert.equal(payload.diagnostics[0]?.code, "usage_error");
+      assert.match(payload.diagnostics[0]?.message, /requires/i);
+      await assertPathMissing(path.join(root, ".legion", "project", "workflow", command));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
 for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "council"]) {
   test(`legion ${command} has a user-facing contract`, async () => {
     const result = await runCliCapture([command, "--help"]);
@@ -1084,20 +1332,6 @@ for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "
     assert.match(result.stdout, new RegExp(`legion ${command}`));
     assert.doesNotMatch(result.stdout, /worker bundle manifest/i);
     assert.doesNotMatch(result.stdout, /legion next/);
-  });
-}
-
-for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "council"]) {
-  test(`legion ${command} non-help invocation returns a clear contract error`, async () => {
-    const result = await runCliCapture([command, "--json"]);
-    assert.equal(result.exitCode, 1);
-    const payload = parseJsonOutput(result);
-    assert.equal(payload.ok, false);
-    assert.equal(payload.status, "usage_error");
-    assert.equal(payload.diagnostics[0]?.code, "usage_error");
-    assert.match(payload.diagnostics[0]?.message, new RegExp(`legion ${command}`));
-    assert.doesNotMatch(payload.diagnostics[0]?.message, /legion next/);
-    assert.doesNotMatch(payload.diagnostics[0]?.message, /worker bundle manifest/i);
   });
 }
 
