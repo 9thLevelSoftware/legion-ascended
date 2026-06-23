@@ -402,12 +402,12 @@ test("P02-T10 command subcommands honor help flags without requiring inputs", as
   const projectInit = await runCli(["--repository-root", ROOT, "project", "init", "--help"]);
   assert.equal(projectInit.exitCode, 0, projectInit.stderr);
   assert.equal(projectInit.json.status, "help");
-  assert.match(projectInit.json.help, /legion next project/);
+  assert.match(projectInit.json.help, /legion dev project/);
 
   const changeCreate = await runCli(["--repository-root", ROOT, "change", "create", "--help"]);
   assert.equal(changeCreate.exitCode, 0, changeCreate.stderr);
   assert.equal(changeCreate.json.status, "help");
-  assert.match(changeCreate.json.help, /legion next change/);
+  assert.match(changeCreate.json.help, /legion dev change/);
 });
 
 test("P02-T10 JSON input boundary failures return usage diagnostics", async () => {
