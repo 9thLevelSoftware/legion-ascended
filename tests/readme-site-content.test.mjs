@@ -6,6 +6,7 @@ import test from "node:test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DONATION_URL = "https://ko-fi.com/vitruvianredux";
+const REPO_URL = "https://github.com/9thLevelSoftware/legion-ascended";
 
 async function readText(...segments) {
   return await readFile(path.join(ROOT, ...segments), "utf8");
@@ -65,6 +66,11 @@ test("static site is self-contained and describes the current workflow", async (
   assert.match(html, /The Tithe/);
   assert.match(html, /Make an Offering/);
   assert.match(html, new RegExp(DONATION_URL.replaceAll("/", "\\/")));
+  assert.match(html, new RegExp(`${REPO_URL.replaceAll("/", "\\/")}\\/blob\\/main\\/README\\.md`));
+  assert.match(html, new RegExp(`${REPO_URL.replaceAll("/", "\\/")}\\/blob\\/main\\/docs\\/cli\\/WORKFLOW-QUICKSTART\\.md`));
+  assert.match(html, new RegExp(`${REPO_URL.replaceAll("/", "\\/")}\\/blob\\/main\\/docs\\/cli\\/INSTALL-MATRIX\\.md`));
+  assert.doesNotMatch(html, /href="\.\.\/.*\.md"/);
+  assert.doesNotMatch(html, /href="\/.*\.md"/);
 
   const localAssetRefs = [
     ...attributes(html, "src").filter((value) => value.endsWith(".js") || value.endsWith(".svg")),
@@ -75,6 +81,14 @@ test("static site is self-contained and describes the current workflow", async (
   for (const ref of localAssetRefs) {
     assert.match(ref, /^\.\/(assets\/)?[A-Za-z0-9._/-]+$/, `asset reference must stay local: ${ref}`);
   }
+});
+
+test("Pages workflow deploys docs site and watches its own file", async () => {
+  const workflow = await readText(".github", "workflows", "static.yml");
+
+  assert.match(workflow, /path: docs\/site/);
+  assert.match(workflow, /\.github\/workflows\/static\.yml/);
+  assert.doesNotMatch(workflow, /\.github\/workflows\/pages\.yml/);
 });
 
 test("site CSS avoids remote dependencies and supports reduced motion", async () => {
