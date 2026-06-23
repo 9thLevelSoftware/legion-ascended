@@ -28,7 +28,7 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
-import { failure, hasFlag, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
+import { failure, hasFlag, helpResult, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
@@ -42,7 +42,20 @@ import {
 } from "../../workflow/run-artifacts.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
+const BUILD_HELP = `legion build [--executor codex|manual|fake] [--allow-dirty] [--dry-run]
+
+Execute the latest typed taskgraph through a workflow executor and collect pending build evidence.
+
+Examples:
+  legion build --dry-run --json
+  legion build --executor fake --allow-dirty
+  legion build --executor codex --allow-dirty`;
+
 export async function handleBuildWorkflow(context: CliContext): Promise<CliResult> {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(BUILD_HELP);
+  }
+
   const planAction = nextAction(
     "legion plan 1",
     "A typed task graph is required before build can run."

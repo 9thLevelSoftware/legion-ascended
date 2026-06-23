@@ -23,7 +23,7 @@ legion quick "fix the failing tests"
 
 Typed v9 internals are available under `legion dev` for operators and maintainers. Normal project work should not require `legion dev`, worker bundle manifests, or prompt hash management.
 
-During the current workflow hardening window, `legion build --dry-run --json` and `legion review --dry-run --json` report typed taskgraph readiness. Non-dry-run build and review commands block honestly until the runtime execution and review evidence backends are connected.
+`legion build` now executes the latest typed taskgraph through an executor adapter, records task-run evidence, and routes to `legion review`. `legion review` submits structured review decisions and requires explicit `legion review --accept` before `legion ship` reports readiness.
 
 Runtime slash-command installs remain supported, but they are compatibility and host-integration details over the same workflow names rather than the first normal use path.
 
@@ -80,7 +80,8 @@ node bin/install.js --claude
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js `>=24 <26`
+- pnpm `>=11.4 <12` for source development
 - One of the 10 installable AI CLI runtimes listed above or Kilo Code plugin support via `--kilo-code` (Aider remains manual-only; support tier varies by runtime)
 
 ### Codex note
@@ -124,8 +125,8 @@ This repository now also ships a repo-native Codex plugin manifest at `.codex-pl
 3. Answer the guided questions, or run `legion explore` first to record a design discovery artifact
 4. Review the generated PROJECT.md and ROADMAP.md
 5. Plan the first phase with `legion plan 1`
-6. Check implementation readiness with `legion build --dry-run --json`
-7. Check review readiness with `legion review --dry-run --json`
+6. Run `legion build --executor codex` for live execution, or `legion build --executor manual` to prepare prompts without executing
+7. Run `legion review --executor codex`, then accept a passing submitted review with `legion review --accept`
 8. Repeat plan → build → review for each phase
 
 ## Commands
@@ -138,8 +139,8 @@ These are the canonical Legion CLI command names. Runtime slash commands and pro
 | `legion explore <topic>` | Record design discovery before start or planning | Before `start`, or when a phase needs research |
 | `legion map --check` / `legion map --refresh` | Check or refresh codebase context records | Before planning in existing codebases |
 | `legion plan <N>` | Turn roadmap phase N into typed task contracts | After start, or after completing a phase |
-| `legion build` | Implementation gate for planned task contracts | Use `--dry-run --json` today to verify readiness |
-| `legion review` | Review gate for task outputs and verification evidence | Use `--dry-run --json` today to verify readiness |
+| `legion build` | Execute planned task contracts and collect pending evidence | Use `--executor codex`, `--executor manual`, or `--executor fake` |
+| `legion review` | Submit review decisions and accept passing evidence | Use `--accept` only after a passing submitted review |
 | `legion ship` | Release readiness gate | After accepted review evidence is available |
 | `legion retro` | Record retrospective evidence | After phases or milestones |
 | `legion status` | Show workflow state and next action | Anytime |
@@ -201,7 +202,7 @@ Recent releases rewrote large parts of Legion to behave better on Claude Opus 4.
 
 This is the normal project loop. Use the top-level CLI commands for current work, repeating `legion plan` -> `legion build` -> `legion review` for each phase.
 
-Slash-form names such as `/legion:start` are runtime compatibility aliases for hosts that still expose Legion through prompt commands. The workflow descriptions below preserve the original command contract, while current CLI build/review execution stays fail-closed until runtime execution and review evidence backends are connected.
+Slash-form names such as `/legion:start` are runtime compatibility aliases for hosts that still expose Legion through prompt commands. The workflow descriptions below preserve the original command contract, while the current CLI records typed build evidence and review decisions through the workflow-first command surface.
 
 #### `legion start` (alias: `/legion:start`) — Project Initialization
 
@@ -244,13 +245,13 @@ Decomposes a roadmap phase into as many wave-structured plans as needed, using t
 
 #### `legion build` (alias: `/legion:build`) — Phase Execution
 
-Checks the current phase's typed taskgraph and, when a runtime execution backend is connected, executes those plans with evidence. During the current CLI hardening window, `legion build --dry-run --json` reports readiness and non-dry-run execution blocks instead of pretending agents ran.
+Checks the current phase's typed taskgraph and executes it through the selected executor adapter with durable evidence. `--dry-run --json` still reports readiness without executing work.
 
 **Current CLI steps:**
-1. Determine target phase from STATE.md or `--phase N` flag; validate plan files exist
-2. Discover plans via `wave-executor` — parse YAML frontmatter, build wave map, validate no circular dependencies or file conflicts
-3. In dry-run mode, emit the wave/taskgraph, required evidence paths, and blocking readiness findings
-4. In live mode, fail closed until a runtime execution backend can write summaries, commits, and evidence
+1. Resolve the latest typed taskgraph from `.legion/project`
+2. Block on dirty worktrees unless `--allow-dirty` is supplied
+3. Generate a context pack and executor prompt per task
+4. Run the selected executor adapter and write task-run, executor-result, redacted-log, and pending evidence artifacts
 
 **Runtime execution contract:**
 1. Create a runtime team (`phase-{NN}-execution`) with tasks for each plan and cross-wave dependencies
@@ -263,18 +264,18 @@ Checks the current phase's typed taskgraph and, when a runtime execution backend
 
 **Skills invoked:** `workflow-common-core` -> `wave-executor` -> `execution-tracker` -> `memory-manager` | `codebase-mapper` (map context injection) | `github-sync` (issue checklist + PR creation)
 **Tools:** Read, Write, Edit, Bash, Grep, Glob, Agent, TeamCreate, TeamDelete, TaskCreate, TaskUpdate, TaskList, SendMessage, AskUserQuestion
-**Produces:** Dry-run readiness output today; live runtime execution produces implementation artifacts plus `{NN}-{PP}-SUMMARY.md` files, atomic git commits, and optional GitHub PR
+**Produces:** Task-run artifacts, executor prompts/results, redacted logs, context packs, and pending evidence index entries
 **User interaction:** Confirms pre-execution plan; monitors progress; resolves blockers if agents get stuck
 
 #### `legion review` (alias: `/legion:review`) — Quality Review
 
-Checks review readiness for the current phase and, when review evidence wiring is connected, runs the structured dev-QA loop. During the current CLI hardening window, `legion review --dry-run --json` reports the review taskgraph and non-dry-run review blocks instead of marking a phase complete without evidence.
+Checks review readiness for the current phase and submits structured review decisions against collected build evidence. `--dry-run --json` still reports review readiness without recording a decision.
 
 **Current CLI steps:**
-1. Determine target phase and load build summaries — reads CONTEXT.md, all PLAN.md and SUMMARY.md files, builds deduplicated file list for review
-2. Validate required review inputs and evidence references
-3. In dry-run mode, emit the reviewer/taskgraph plan and blocking readiness findings
-4. In live mode, fail closed until review findings and phase-completion evidence can be written
+1. Resolve the latest taskgraph and evidence index
+2. Submit one review decision per task with collected evidence
+3. Leave evidence pending until a human runs `legion review --accept`
+4. Support bounded `--auto` cycles for explicit fix/re-review flows
 
 **Runtime review contract:**
 1. Detect manual edits before review and store corrective preference signals through `memory-manager`
@@ -1007,7 +1008,8 @@ These activate automatically when their prerequisites are met:
 
 ## Requirements
 
-- Node.js 18+ (install-time only; the installer lazy-loads `yaml` for safe Kilo Code mode merges)
+- Node.js `>=24 <26` for the workflow CLI and source development
+- pnpm `>=11.4 <12` for source development
 - One of the 11 supported AI CLI runtimes or the Kilo Code plugin:
   Claude Code, OpenAI Codex CLI, Cursor, GitHub Copilot CLI, Google Gemini CLI, Antigravity CLI, Kiro CLI, Windsurf, OpenCode, Kilo CLI, Aider, or Kilo Code Plugin
 

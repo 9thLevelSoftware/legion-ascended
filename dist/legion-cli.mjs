@@ -24379,7 +24379,11 @@ function renderDiagnostics(diagnostics) {
   if (diagnostics.length === 0) return "";
   return diagnostics.map((diagnostic3) => {
     if (diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3) {
-      return `- ${String(diagnostic3.message)}`;
+      const entry = diagnostic3;
+      const code = typeof entry.code === "string" && entry.code.length > 0 ? `[${entry.code}] ` : "";
+      const diagnosticPath = typeof entry.path === "string" ? entry.path : typeof entry.source?.path === "string" ? entry.source.path : void 0;
+      const pathSuffix = diagnosticPath === void 0 ? "" : ` (${diagnosticPath})`;
+      return `- ${code}${String(entry.message)}${pathSuffix}`;
     }
     return `- ${String(diagnostic3)}`;
   }).join("\n");
@@ -24387,7 +24391,17 @@ function renderDiagnostics(diagnostics) {
 
 // packages/cli/src/commands/workflow/start.ts
 var START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
+var START_HELP = `legion start --name <name> [--summary <text>] [--owner <name>] [--created-at <utc>] [--slug <slug>] [--dry-run]
+
+Initialize .legion project state and route to the first planning step.
+
+Examples:
+  legion start --name "Asset Mapper" --summary "Metadata authoring and deterministic asset resolution" --owner dasbl
+  legion start --name "Asset Mapper" --dry-run --json`;
 async function handleStartCommand(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(START_HELP);
+  }
   const nameValueless = valuelessStartOption(
     context,
     "name",
@@ -24756,7 +24770,17 @@ function isNodeErrorCode(error2, code) {
 }
 
 // packages/cli/src/commands/workflow/status.ts
+var STATUS_HELP = `legion status
+
+Show the current Legion workflow state and the next recommended command.
+
+Examples:
+  legion status
+  legion status --json`;
 async function handleStatusCommand(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(STATUS_HELP);
+  }
   const workflowState = await resolveWorkflowState(context);
   return success(
     {
@@ -25155,16 +25179,16 @@ function buildTaskGraphInput(options) {
     verification: [
       {
         command: "legion",
-        args: ["build", String(options.phase.number)],
+        args: ["validate"],
         expectedExitCode: 0,
-        timeoutMs: 36e5
+        timeoutMs: 12e4
       }
     ],
     risk: phaseRiskProfile(options.phase),
     approvals: [],
     completion: {
       expectedArtifacts: [options.change.reference],
-      requiredEvidence: ["legion build verification output"],
+      requiredEvidence: ["legion validate verification output"],
       blockedConditions: ["Build evidence is missing or fails oracle review."]
     }
   });
@@ -25187,7 +25211,17 @@ function revisionForRole(revisions, role) {
 // packages/cli/src/commands/workflow/plan.ts
 var PLAN_USAGE = "Use: legion plan 1";
 var PLAN_FROM_ROADMAP_USAGE = "Use: legion plan 1 --from-roadmap ROADMAP.md";
+var PLAN_HELP = `legion plan <phase-number> [--from-roadmap <path>] [--dry-run] [--auto-refine]
+
+Create a typed change bundle, oracle artifact, and taskgraph for a roadmap phase.
+
+Examples:
+  legion plan 1 --from-roadmap ROADMAP.md
+  legion plan 1 --from-roadmap ROADMAP.md --dry-run --json`;
 async function handlePlanWorkflow(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(PLAN_HELP);
+  }
   const phaseNumberResult = parsePhaseNumber(context.args.positionals[0]);
   if (typeof phaseNumberResult !== "number") return phaseNumberResult;
   const fromRoadmapResult = validateFromRoadmapOption(context);
@@ -25526,6 +25560,25 @@ async function writeContextPack(input) {
   return content;
 }
 function buildExecutionPrompt(input) {
+  const objective = input.mode === "review" ? [
+    "Review the collected build evidence for this task. Do not implement fixes or change files.",
+    "",
+    "Task objective:",
+    input.task.objective
+  ].join("\n") : input.task.objective;
+  const writeScopeLabel = input.mode === "review" ? "Original task write scope (review only; do not write):" : "Write scope:";
+  const harnessRules = input.mode === "review" ? [
+    "- Read before verdict.",
+    "- Inspect the context pack, build evidence, task run, executor result, and redacted logs before reporting.",
+    "- Treat recorded successful verification commands as evidence; rerun commands only when necessary and permitted by the runtime.",
+    "- Do not modify files, apply fixes, publish, release, or perform unrelated cleanup."
+  ] : [
+    "- Read before write.",
+    "- Evidence before action.",
+    "- Keep the diff minimal and scoped to the task contract.",
+    "- Verify before report.",
+    "- Do not publish, release, or perform unrelated cleanup."
+  ];
   return [
     `# Legion ${input.mode} task`,
     "",
@@ -25536,14 +25589,14 @@ function buildExecutionPrompt(input) {
     "",
     "## Objective",
     "",
-    input.task.objective,
+    objective,
     "",
     "## Scope",
     "",
     "Read scope:",
     ...input.task.scope.read.map((entry) => `- ${entry}`),
     "",
-    "Write scope:",
+    writeScopeLabel,
     ...input.task.scope.write.map((entry) => `- ${entry}`),
     "",
     "Forbidden scope:",
@@ -25551,11 +25604,7 @@ function buildExecutionPrompt(input) {
     "",
     "## Harness Rules",
     "",
-    "- Read before write.",
-    "- Evidence before action.",
-    "- Keep the diff minimal and scoped to the task contract.",
-    "- Verify before report.",
-    "- Do not publish, release, or perform unrelated cleanup.",
+    ...harnessRules,
     "",
     "## Required JSON Result",
     "",
@@ -25592,6 +25641,13 @@ async function renderContextPack(input) {
       revision: input.taskgraph.revision,
       taskCount: input.taskgraph.document.tasks.length
     }),
+    "",
+    "## Build Evidence",
+    "",
+    input.evidenceEntries === void 0 ? "No build evidence entries were supplied for this context pack." : fencedJson(input.evidenceEntries.map((entry) => ({
+      evidence: entry.evidence,
+      acceptance: entry.acceptance
+    }))),
     "",
     "## Current Specs",
     "",
@@ -25670,8 +25726,6 @@ function codexExecArgs(input) {
     input.repositoryRoot,
     "--sandbox",
     input.sandbox,
-    "--ask-for-approval",
-    "never",
     "--json",
     "--output-last-message",
     input.outputLastMessagePath,
@@ -25703,7 +25757,8 @@ function adapterForKind(kind) {
 }
 async function codexAvailable() {
   try {
-    await execFileAsync2("codex", ["exec", "--help"], {
+    const invocation = codexInvocation(["exec", "--help"]);
+    await execFileAsync2(invocation.command, invocation.args, {
       timeout: 5e3,
       windowsHide: true
     });
@@ -25790,7 +25845,8 @@ var codexAdapter = {
       sandbox: request.readOnly ? "read-only" : "workspace-write",
       outputLastMessagePath
     });
-    const processResult = await spawnWithInput("codex", args, request.prompt, request.repositoryRoot);
+    const invocation = codexInvocation(args);
+    const processResult = await spawnWithInput(invocation.command, invocation.args, request.prompt, request.repositoryRoot);
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
@@ -25813,6 +25869,15 @@ var codexAdapter = {
     return result;
   }
 };
+function codexInvocation(args) {
+  if (process.platform !== "win32") {
+    return { command: "codex", args };
+  }
+  return {
+    command: "cmd.exe",
+    args: ["/d", "/s", "/c", "codex", ...args]
+  };
+}
 function fakeSummary(request) {
   if (request.mode === "review") return `Fake review passed for ${request.task.id}.`;
   if (request.mode === "fix") return `Fake fix cycle completed for ${request.task.id}.`;
@@ -25889,7 +25954,18 @@ function absoluteArtifactPath(repositoryRoot, artifactPath) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
+var BUILD_HELP = `legion build [--executor codex|manual|fake] [--allow-dirty] [--dry-run]
+
+Execute the latest typed taskgraph through a workflow executor and collect pending build evidence.
+
+Examples:
+  legion build --dry-run --json
+  legion build --executor fake --allow-dirty
+  legion build --executor codex --allow-dirty`;
 async function handleBuildWorkflow(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(BUILD_HELP);
+  }
   const planAction = nextAction(
     "legion plan 1",
     "A typed task graph is required before build can run."
@@ -26441,7 +26517,18 @@ function blockedBuild(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/review.ts
+var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+
+Review collected build evidence. A submitted passing review still requires explicit human acceptance.
+
+Examples:
+  legion review --executor fake
+  legion review --accept
+  legion review --auto --max-cycles 3 --executor codex`;
 async function handleReviewWorkflow(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(REVIEW_HELP);
+  }
   const planAction = nextAction(
     "legion plan 1",
     "A typed task graph is required before review readiness can be checked."
@@ -26606,6 +26693,7 @@ async function submitReview(context, input) {
       runId: reviewId,
       taskgraph: input.taskgraph,
       task,
+      evidenceEntries,
       artifactPath: contextPackArtifactPath,
       absolutePath: contextPackAbsolutePath
     });
@@ -27482,7 +27570,24 @@ function blockedShip(diagnostics, action) {
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat7 } from "node:fs/promises";
 import path27 from "node:path";
+var VALIDATE_HELP = `legion validate
+
+Validate committed Legion project state under .legion/project.
+
+Examples:
+  legion validate
+  legion validate --json`;
+var DOCTOR_HELP = `legion doctor
+
+Validate project state and check shallow operational paths such as .legion/var and bundles/index.json.
+
+Examples:
+  legion doctor
+  legion doctor --json`;
 async function handleValidateCommand(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(VALIDATE_HELP);
+  }
   const result = await validateWorkflowProject(context);
   const payload = {
     ...result,
@@ -27494,6 +27599,9 @@ async function handleValidateCommand(context) {
   return success(payload, "Project is valid.");
 }
 async function handleDoctorCommand(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(DOCTOR_HELP);
+  }
   const result = await validateWorkflowProject(context);
   const checks = {
     project: {
@@ -27554,6 +27662,13 @@ var WORKFLOW_HELP = `legion <workflow>
 Workflow commands:
 ${WORKFLOW_COMMANDS.map((entry) => `  ${entry.name.padEnd(10)} ${entry.summary}`).join("\n")}`;
 var COMMAND_SPECIFIC_HELP = /* @__PURE__ */ new Set([
+  "start",
+  "status",
+  "plan",
+  "build",
+  "review",
+  "validate",
+  "doctor",
   "quick",
   "advise",
   "polish",

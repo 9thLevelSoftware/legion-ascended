@@ -107,7 +107,7 @@ No cleanup needed — no agents spawned persistently, no teams created. Update W
 
 ## Dispatch Configuration
 
-When Legion dispatches Codex CLI, it uses `codex exec` with an explicit repository, sandbox, non-interactive approval mode, JSON output, and an output-last-message file. Do not use bypass flags such as `--dangerously-bypass-approvals-and-sandbox`.
+When Legion dispatches Codex CLI, it uses `codex exec` with an explicit repository, sandbox, JSON output, and an output-last-message file. Prompts are delivered through stdin with `-`. Do not use bypass flags such as `--dangerously-bypass-approvals-and-sandbox`.
 
 ```yaml
 available: true
@@ -119,8 +119,6 @@ invoke_flags:
   - "{repositoryRoot}"
   - "--sandbox"
   - "workspace-write"
-  - "--ask-for-approval"
-  - "never"
   - "--json"
   - "--output-last-message"
   - "{outputLastMessagePath}"

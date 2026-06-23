@@ -12,6 +12,7 @@ import type { Project, UtcTimestamp } from "@legion/protocol";
 import {
   failure,
   hasFlag,
+  helpResult,
   success,
   usageError,
   type CliContext,
@@ -32,8 +33,19 @@ import { buildTaskGraphInput } from "../../workflow/taskgraph-input.js";
 
 const PLAN_USAGE = "Use: legion plan 1";
 const PLAN_FROM_ROADMAP_USAGE = "Use: legion plan 1 --from-roadmap ROADMAP.md";
+const PLAN_HELP = `legion plan <phase-number> [--from-roadmap <path>] [--dry-run] [--auto-refine]
+
+Create a typed change bundle, oracle artifact, and taskgraph for a roadmap phase.
+
+Examples:
+  legion plan 1 --from-roadmap ROADMAP.md
+  legion plan 1 --from-roadmap ROADMAP.md --dry-run --json`;
 
 export async function handlePlanWorkflow(context: CliContext): Promise<CliResult> {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(PLAN_HELP);
+  }
+
   const phaseNumberResult = parsePhaseNumber(context.args.positionals[0]);
   if (typeof phaseNumberResult !== "number") return phaseNumberResult;
 

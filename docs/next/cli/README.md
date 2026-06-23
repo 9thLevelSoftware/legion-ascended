@@ -13,7 +13,7 @@ legion quick "fix the failing tests"
 
 The CLI preserves the original Legion workflow verbs while routing them through the v9 typed control plane. Normal users should not need `project`, `change`, `board`, extension manifests, prompt hashes, or hidden compatibility aliases to begin work.
 
-During the current hardening window, `legion build --dry-run --json` and `legion review --dry-run --json` report readiness. Non-dry-run build and review commands block honestly until runtime execution and review evidence ingestion are wired.
+`legion build` executes the latest typed taskgraph through an executor adapter and records pending evidence. `legion review` submits structured review decisions, and `legion review --accept` is the default human approval boundary before `legion ship` reports readiness.
 
 Advanced operator and developer commands live under `legion dev`:
 
@@ -68,3 +68,19 @@ Migration commands call `@legion/legacy-bridge` services. Dry-run staging, apply
 Use `--json` for scripts and tests. Failed service results return nonzero exit codes and preserve the service diagnostics in the JSON payload.
 
 Use `--no-color` for deterministic snapshots. The current implementation does not emit ANSI color, and this flag is accepted to lock the noninteractive contract.
+
+## Dogfood Verification
+
+Run the full workflow loop in a disposable temp workspace:
+
+```powershell
+pnpm workflow:dogfood
+```
+
+Run the same loop against a temp clone of a real repository without mutating the original:
+
+```powershell
+pnpm workflow:dogfood -- --target "C:\Users\dasbl\Documents\Asset Mapper" --executor fake
+```
+
+Use `--executor codex --live-codex` only for an explicit live Codex smoke run.

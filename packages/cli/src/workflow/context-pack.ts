@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  type EvidenceIndexEntry,
   listCurrentSpecs,
   loadChangeBundle,
   loadProject,
@@ -20,6 +21,7 @@ export interface ContextPackInput {
   readonly task: TaskContract;
   readonly artifactPath: ArtifactPath;
   readonly absolutePath: string;
+  readonly evidenceEntries?: readonly EvidenceIndexEntry[];
 }
 
 export async function writeContextPack(input: ContextPackInput): Promise<string> {
@@ -38,6 +40,31 @@ export function buildExecutionPrompt(input: {
   readonly task: TaskContract;
   readonly requiredOutput: string;
 }): string {
+  const objective = input.mode === "review"
+    ? [
+        "Review the collected build evidence for this task. Do not implement fixes or change files.",
+        "",
+        "Task objective:",
+        input.task.objective
+      ].join("\n")
+    : input.task.objective;
+  const writeScopeLabel = input.mode === "review"
+    ? "Original task write scope (review only; do not write):"
+    : "Write scope:";
+  const harnessRules = input.mode === "review"
+    ? [
+        "- Read before verdict.",
+        "- Inspect the context pack, build evidence, task run, executor result, and redacted logs before reporting.",
+        "- Treat recorded successful verification commands as evidence; rerun commands only when necessary and permitted by the runtime.",
+        "- Do not modify files, apply fixes, publish, release, or perform unrelated cleanup."
+      ]
+    : [
+        "- Read before write.",
+        "- Evidence before action.",
+        "- Keep the diff minimal and scoped to the task contract.",
+        "- Verify before report.",
+        "- Do not publish, release, or perform unrelated cleanup."
+      ];
   return [
     `# Legion ${input.mode} task`,
     "",
@@ -48,14 +75,14 @@ export function buildExecutionPrompt(input: {
     "",
     "## Objective",
     "",
-    input.task.objective,
+    objective,
     "",
     "## Scope",
     "",
     "Read scope:",
     ...input.task.scope.read.map((entry) => `- ${entry}`),
     "",
-    "Write scope:",
+    writeScopeLabel,
     ...input.task.scope.write.map((entry) => `- ${entry}`),
     "",
     "Forbidden scope:",
@@ -63,11 +90,7 @@ export function buildExecutionPrompt(input: {
     "",
     "## Harness Rules",
     "",
-    "- Read before write.",
-    "- Evidence before action.",
-    "- Keep the diff minimal and scoped to the task contract.",
-    "- Verify before report.",
-    "- Do not publish, release, or perform unrelated cleanup.",
+    ...harnessRules,
     "",
     "## Required JSON Result",
     "",
@@ -106,6 +129,15 @@ async function renderContextPack(input: ContextPackInput): Promise<string> {
       revision: input.taskgraph.revision,
       taskCount: input.taskgraph.document.tasks.length
     }),
+    "",
+    "## Build Evidence",
+    "",
+    input.evidenceEntries === undefined
+      ? "No build evidence entries were supplied for this context pack."
+      : fencedJson(input.evidenceEntries.map((entry) => ({
+          evidence: entry.evidence,
+          acceptance: entry.acceptance
+        }))),
     "",
     "## Current Specs",
     "",

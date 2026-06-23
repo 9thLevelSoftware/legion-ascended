@@ -331,6 +331,49 @@ test("workflow executor text writes reject symlinked artifact paths", async (t) 
   }
 });
 
+test("workflow codex executor args match current codex exec surface", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  const args = adapters.codexExecArgs({
+    repositoryRoot: "C:\\repo\\asset-mapper",
+    sandbox: "workspace-write",
+    outputLastMessagePath: "C:\\tmp\\executor-last-message.txt"
+  });
+
+  assert.deepEqual(args, [
+    "exec",
+    "-C",
+    "C:\\repo\\asset-mapper",
+    "--sandbox",
+    "workspace-write",
+    "--json",
+    "--output-last-message",
+    "C:\\tmp\\executor-last-message.txt",
+    "-"
+  ]);
+  assert.equal(args.includes("--ask-for-approval"), false);
+  assert.equal(args.includes("--dangerously-bypass-approvals-and-sandbox"), false);
+  assert.equal(args.includes("--dangerously-bypass-hook-trust"), false);
+});
+
+test("core workflow commands expose command-specific help", async () => {
+  const cases = [
+    ["start", /legion start --name <name>/],
+    ["plan", /legion plan <phase-number>/],
+    ["build", /legion build \[--executor codex\|manual\|fake\]/],
+    ["review", /legion review \[--executor codex\|manual\|fake\]/],
+    ["status", /legion status/],
+    ["validate", /legion validate/],
+    ["doctor", /legion doctor/]
+  ];
+
+  for (const [command, expected] of cases) {
+    const result = await runCliCapture([command, "--help"]);
+    assert.equal(result.exitCode, 0, `${command} help should succeed`);
+    assert.match(result.stdout, expected);
+    assert.doesNotMatch(result.stdout, /legion <workflow>/);
+  }
+});
+
 test("workflow review fails verdicts when the review executor fails", async () => {
   const review = await import("../packages/cli/dist/commands/workflow/review.js");
   const { formatEntityId } = await import("../packages/protocol/dist/index.js");
@@ -1369,6 +1412,15 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     assert.equal(submitted.parsed.kind, "review");
     assert.equal(submitted.parsed.status, "submitted");
 
+    const reviewArtifactRoot = path.join(root, ...payload.review.artifactPath.replace(/\.json$/u, "").split("/"));
+    const reviewContextPack = await readFile(path.join(reviewArtifactRoot, "context-pack.md"), "utf8");
+    assert.match(reviewContextPack, /## Build Evidence/);
+    assert.match(reviewContextPack, /executor-result\.json/);
+    const reviewPrompt = await readFile(path.join(reviewArtifactRoot, "executor-prompt.md"), "utf8");
+    assert.match(reviewPrompt, /Review the collected build evidence/);
+    assert.match(reviewPrompt, /Do not modify files/);
+    assert.doesNotMatch(reviewPrompt, /Verify before report/);
+
     const evidenceBeforeAccept = await readJsonArtifact(root, payload.evidenceIndex);
     assert.equal(evidenceBeforeAccept.parsed.entries[0].acceptance.status, "pending");
 
@@ -1925,6 +1977,13 @@ test("legion plan phase creates typed artifacts from an explicit roadmap", async
     await assertFileExists(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "change.yaml"));
     await assertFileExists(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "oracle", "orc_phase-1-editor-mvp.yaml"));
     await assertFileExists(path.join(root, ".legion", "project", "changes", "chg_phase-1-editor-mvp", "taskgraph.json"));
+    const taskgraph = await readJsonArtifact(root, payload.taskgraph.artifactPath);
+    assert.deepEqual(taskgraph.parsed.tasks[0].verification[0], {
+      command: "legion",
+      args: ["validate"],
+      expectedExitCode: 0,
+      timeoutMs: 120000
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

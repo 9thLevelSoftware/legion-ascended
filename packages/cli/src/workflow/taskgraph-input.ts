@@ -80,16 +80,16 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     verification: [
       {
         command: "legion",
-        args: ["build", String(options.phase.number)],
+        args: ["validate"],
         expectedExitCode: 0,
-        timeoutMs: 3_600_000
+        timeoutMs: 120_000
       }
     ],
     risk: phaseRiskProfile(options.phase),
     approvals: [],
     completion: {
       expectedArtifacts: [options.change.reference],
-      requiredEvidence: ["legion build verification output"],
+      requiredEvidence: ["legion validate verification output"],
       blockedConditions: ["Build evidence is missing or fails oracle review."]
     }
   });

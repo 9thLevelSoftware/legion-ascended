@@ -25,13 +25,15 @@ export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
 export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
   "evals/baseline/corpus-manifest.yaml",
   "evals/baseline/fixture-hashes.sha256",
-  "evals/baseline/manifest.yaml"
+  "evals/baseline/manifest.yaml",
+  "scripts/dogfood-workflow.mjs"
 ]);
 
 export const CLI_RUNTIME_PACKAGE_PREFIXES = Object.freeze([
   "evals/baseline/scenarios/",
   "evals/baseline/schema/",
   "evals/fixtures/public/",
+  "docs/cli/",
   "scripts/baseline/",
   "scripts/release/"
 ]);
