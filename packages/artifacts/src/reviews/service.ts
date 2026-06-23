@@ -392,7 +392,7 @@ export async function listReviewDecisionsForChange(input: ListReviewDecisionsInp
       changeId,
       reviewId: reviewId.data
     });
-    if (!read.ok) return read;
+    if (!read.ok) continue;
     reviews.push(read);
   }
 

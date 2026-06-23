@@ -152,7 +152,12 @@ async function readRecentWorkflowRecords(repositoryRoot: string): Promise<readon
     }
     for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
       const absolutePath = path.join(workflowRoot, entry.name);
-      const text = await readFile(absolutePath, "utf8");
+      let text = "";
+      try {
+        text = await readFile(absolutePath, "utf8");
+      } catch {
+        continue;
+      }
       records.push([
         `### ${workflow}/${entry.name}`,
         "",

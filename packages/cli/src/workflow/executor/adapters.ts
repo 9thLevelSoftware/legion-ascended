@@ -197,6 +197,7 @@ async function spawnWithInput(command: string, args: readonly string[], input: s
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
     });
+    child.stdin.on("error", () => {});
     child.on("error", reject);
     child.on("close", (code) => {
       resolve({

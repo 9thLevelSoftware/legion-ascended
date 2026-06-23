@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -12,6 +12,8 @@ test("task-run and review artifacts round trip with revision conflicts", async (
   const {
     artifactPathForRole,
     hashContent,
+    listReviewDecisionsForChange,
+    listTaskRunsForChange,
     readReviewDecision,
     readTaskRun,
     stableProtocolJson,
@@ -160,6 +162,23 @@ test("task-run and review artifacts round trip with revision conflicts", async (
     assert.equal(loadedReview.ok, true, stableProtocolJson(loadedReview));
     assert.equal(loadedReview.document.status, "accepted");
     assert.equal(loadedReview.revision.revision, 2);
+
+    const malformedRunId = formatEntityId("run", "guided-test-task-attempt-bad");
+    const malformedRunRoot = path.join(root, ".legion", "project", "changes", changeId, "runs", malformedRunId);
+    await mkdir(malformedRunRoot, { recursive: true });
+    await writeFile(path.join(malformedRunRoot, "task-run.json"), "{ invalid json", "utf8");
+    const listedRuns = await listTaskRunsForChange({ repositoryRoot: root, changeId });
+    assert.equal(listedRuns.ok, true, stableProtocolJson(listedRuns));
+    assert.equal(listedRuns.taskRuns.length, 1);
+    assert.equal(listedRuns.taskRuns[0].document.id, runId);
+
+    const malformedReviewId = formatEntityId("review", "guided-test-change-review-bad");
+    const malformedReviewPath = path.join(root, ".legion", "project", "changes", changeId, "reviews", `${malformedReviewId}.json`);
+    await writeFile(malformedReviewPath, "{ invalid json", "utf8");
+    const listedReviews = await listReviewDecisionsForChange({ repositoryRoot: root, changeId });
+    assert.equal(listedReviews.ok, true, stableProtocolJson(listedReviews));
+    assert.equal(listedReviews.reviews.length, 1);
+    assert.equal(listedReviews.reviews[0].document.id, reviewId);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

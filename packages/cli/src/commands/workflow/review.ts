@@ -4,7 +4,6 @@ import {
   writeEvidenceIndex,
   writeReviewDecision,
   listReviewDecisionsForChange,
-  listTaskRunsForChange,
   type EvidenceIndexEntry,
   type ReviewDecisionSuccess
 } from "@legion/artifacts";
@@ -27,10 +26,12 @@ import {
   absoluteArtifactPath,
   reviewIdForChange,
   reviewRunArtifactPath,
+  runArtifactPath,
   runIdForTask,
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
+import { handleBuildWorkflow } from "./build.js";
 
 export async function handleReviewWorkflow(context: CliContext): Promise<CliResult> {
   const planAction = nextAction(
@@ -125,7 +126,9 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
     return blockedReview(submitted.diagnostics, nextAction("legion build", "Review could not be submitted until build evidence is usable."));
   }
 
-  const clean = isCleanReview(submitted.review.document);
+  const clean = submitted.reviews.every((review) => isCleanReview(review.document));
+  const findingCount = submitted.reviews.reduce((total, review) => total + review.document.findings.length, 0);
+  const firstReview = submitted.reviews[0];
   const action = clean
     ? nextAction("legion review --accept", "A passing review was submitted and needs human acceptance.")
     : nextAction("legion build", "Address review findings and collect new evidence.");
@@ -133,20 +136,20 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
     {
       ok: true,
       status: "submitted",
-      review: {
-        reviewId: submitted.review.document.id,
-        artifactPath: submitted.review.artifactPath,
-        verdicts: submitted.review.document.verdicts,
-        findings: submitted.review.document.findings.length
-      },
+      ...(firstReview === undefined
+        ? {}
+        : {
+            review: reviewSummary(firstReview)
+          }),
+      reviews: submitted.reviews.map(reviewSummary),
       evidenceIndex: evidence.artifactPath,
       nextAction: action,
       diagnostics: []
     },
     [
       "Review submitted.",
-      `Review: ${submitted.review.artifactPath}.`,
-      clean ? "Verdict: pass." : `Findings: ${submitted.review.document.findings.length}.`,
+      `Reviews: ${submitted.reviews.length}.`,
+      clean ? "Verdict: pass." : `Findings: ${findingCount}.`,
       renderNextAction(action)
     ].join("\n")
   );
@@ -160,10 +163,9 @@ interface SubmitReviewInput {
 
 async function submitReview(context: CliContext, input: SubmitReviewInput): Promise<{
   readonly ok: true;
-  readonly review: ReviewDecisionSuccess;
+  readonly reviews: readonly ReviewDecisionSuccess[];
 } | { readonly ok: false; readonly diagnostics: readonly unknown[] }> {
-  const task = input.taskgraph.document.tasks[0];
-  if (task === undefined) {
+  if (input.taskgraph.document.tasks.length === 0) {
     return {
       ok: false,
       diagnostics: [
@@ -182,138 +184,160 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
   });
   if (!reviews.ok) return { ok: false, diagnostics: reviews.diagnostics };
 
-  const reviewId = reviewIdForChange({
-    changeId: input.taskgraph.document.changeId,
-    sequence: reviews.reviews.length + 1
-  });
-  const contextPackArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "context-pack.md" });
-  const promptArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-prompt.md" });
-  const resultArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-result.json" });
-  const rawLogArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-raw.log" });
-  const redactedLogArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-redacted.log" });
-  const contextPackAbsolutePath = absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath);
-  const promptAbsolutePath = absoluteArtifactPath(context.repositoryRoot, promptArtifactPath);
-  const resultAbsolutePath = absoluteArtifactPath(context.repositoryRoot, resultArtifactPath);
-  const rawLogAbsolutePath = absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath);
-  const redactedLogAbsolutePath = absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath);
-  const latestRun = await latestTaskRun(context.repositoryRoot, input.taskgraph.document.changeId);
-  const taskId = taskIdForContractId(task.id);
-  const runId = latestRun?.document.id ?? runIdForTask({ taskId, attempt: 1 });
+  const reviewTargets: Array<{
+    readonly task: TaskContract;
+    readonly taskId: ReturnType<typeof taskIdForContractId>;
+    readonly evidenceEntries: readonly EvidenceIndexEntry[];
+  }> = [];
+  const missingEvidence: unknown[] = [];
+  for (const task of input.taskgraph.document.tasks) {
+    const taskId = taskIdForContractId(task.id);
+    const evidenceEntries = collectedEvidenceEntriesForTask(input.evidence.document.entries, taskId);
+    if (evidenceEntries.length === 0) {
+      missingEvidence.push({
+        code: "review_evidence_missing",
+        message: `No collected build evidence exists for ${task.id}. Run legion build before review.`,
+        path: input.evidence.artifactPath
+      });
+      continue;
+    }
+    reviewTargets.push({ task, taskId, evidenceEntries });
+  }
 
-  await writeContextPack({
-    repositoryRoot: context.repositoryRoot,
-    changeId: input.taskgraph.document.changeId,
-    runId: reviewId,
-    taskgraph: input.taskgraph,
-    task,
-    artifactPath: contextPackArtifactPath,
-    absolutePath: contextPackAbsolutePath
-  });
-  const prompt = buildExecutionPrompt({
-    mode: "review",
-    contextPackArtifactPath,
-    task,
-    requiredOutput: reviewResultContract()
-  });
-  await writeTextFile(promptAbsolutePath, prompt);
+  if (missingEvidence.length > 0) return { ok: false, diagnostics: missingEvidence };
 
-  const result = await adapterForKind(input.executor).run({
-    repositoryRoot: context.repositoryRoot,
-    changeId: input.taskgraph.document.changeId,
-    runId,
-    task,
-    mode: "review",
-    executor: input.executor,
-    readOnly: true,
-    prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath,
-    promptArtifactPath,
-    promptAbsolutePath,
-    resultArtifactPath,
-    resultAbsolutePath,
-    rawLogArtifactPath,
-    rawLogAbsolutePath,
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath
-  });
+  const submitted: ReviewDecisionSuccess[] = [];
+  for (const target of reviewTargets) {
+    const { task, taskId, evidenceEntries } = target;
+    const reviewId = reviewIdForChange({
+      changeId: input.taskgraph.document.changeId,
+      sequence: reviews.reviews.length + submitted.length + 1
+    });
+    const contextPackArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "context-pack.md" });
+    const promptArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-prompt.md" });
+    const resultArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-result.json" });
+    const rawLogArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-raw.log" });
+    const redactedLogArtifactPath = reviewRunArtifactPath({ changeId: input.taskgraph.document.changeId, reviewId, fileName: "executor-redacted.log" });
+    const contextPackAbsolutePath = absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath);
+    const promptAbsolutePath = absoluteArtifactPath(context.repositoryRoot, promptArtifactPath);
+    const resultAbsolutePath = absoluteArtifactPath(context.repositoryRoot, resultArtifactPath);
+    const rawLogAbsolutePath = absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath);
+    const redactedLogAbsolutePath = absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath);
+    const runId = evidenceEntries.at(-1)?.evidence.runId ?? runIdForTask({ taskId, attempt: 1 });
 
-  const createdAt = currentUtcTimestamp();
-  const review = reviewDecisionForExecution({
-    reviewId,
-    task,
-    taskId,
-    runId,
-    result,
-    evidenceEntries: input.evidence.document.entries,
-    evidenceIndexPath: input.evidence.artifactPath,
-    createdAt,
-    executor: input.executor,
-    supersedes: latestSubmittedReviewId(reviews.reviews)
-  });
-  const write = await writeReviewDecision({
-    repositoryRoot: context.repositoryRoot,
-    document: review,
-    expectedRevision: 0,
-    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
-  });
-  if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
-  return { ok: true, review: write };
+    await writeContextPack({
+      repositoryRoot: context.repositoryRoot,
+      changeId: input.taskgraph.document.changeId,
+      runId: reviewId,
+      taskgraph: input.taskgraph,
+      task,
+      artifactPath: contextPackArtifactPath,
+      absolutePath: contextPackAbsolutePath
+    });
+    const prompt = buildExecutionPrompt({
+      mode: "review",
+      contextPackArtifactPath,
+      task,
+      requiredOutput: reviewResultContract()
+    });
+    await writeTextFile(promptAbsolutePath, prompt);
+
+    const result = await adapterForKind(input.executor).run({
+      repositoryRoot: context.repositoryRoot,
+      changeId: input.taskgraph.document.changeId,
+      runId,
+      task,
+      mode: "review",
+      executor: input.executor,
+      readOnly: true,
+      prompt,
+      contextPackArtifactPath,
+      contextPackAbsolutePath,
+      promptArtifactPath,
+      promptAbsolutePath,
+      resultArtifactPath,
+      resultAbsolutePath,
+      rawLogArtifactPath,
+      rawLogAbsolutePath,
+      redactedLogArtifactPath,
+      redactedLogAbsolutePath
+    });
+
+    const createdAt = currentUtcTimestamp();
+    const review = reviewDecisionForExecution({
+      reviewId,
+      task,
+      taskId,
+      runId,
+      result,
+      evidenceEntries,
+      evidenceIndexPath: input.evidence.artifactPath,
+      createdAt,
+      executor: input.executor,
+      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId)
+    });
+    const write = await writeReviewDecision({
+      repositoryRoot: context.repositoryRoot,
+      document: review,
+      expectedRevision: 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+    });
+    if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
+    submitted.push(write);
+  }
+
+  return { ok: true, reviews: submitted };
 }
 
 async function acceptLatestReview(
   context: CliContext,
   evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
 ): Promise<CliResult> {
-  const latest = await latestSubmittedReview(context.repositoryRoot, evidence.document.changeId);
-  if (!latest.ok) {
-    return blockedReview(latest.diagnostics, nextAction("legion review", "Submit a passing review before accepting."));
-  }
-  if (!isCleanReview(latest.review.document)) {
-    return blockedReview(
-      [
-        {
-          code: "review_not_clean",
-          message: "Only a submitted review with all pass verdicts and no blocking findings can be accepted.",
-          path: latest.review.artifactPath
-        }
-      ],
-      nextAction("legion build", "Address findings and rerun review.")
-    );
+  const coverage = await cleanSubmittedReviewCoverage(context.repositoryRoot, evidence);
+  if (!coverage.ok) {
+    return blockedReview(coverage.diagnostics, nextAction("legion review", "Submit a passing review for every collected task evidence bundle before accepting."));
   }
 
   const acceptedAt = currentUtcTimestamp();
-  const submittedAt = latest.review.document.submittedAt ?? acceptedAt;
-  const accepted = await writeReviewDecision({
-    repositoryRoot: context.repositoryRoot,
-    expectedRevision: latest.review.revision.revision,
-    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
-    document: {
-      ...latest.review.document,
-      status: "accepted",
-      updatedAt: acceptedAt,
-      submittedAt
+  const acceptedReviews: ReviewDecisionSuccess[] = [];
+  const acceptedByTaskId = new Map<string, ReviewDecisionSuccess>();
+  for (const review of coverage.reviews) {
+    const submittedAt = review.document.submittedAt ?? acceptedAt;
+    const accepted = await writeReviewDecision({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: review.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: {
+        ...review.document,
+        status: "accepted",
+        updatedAt: acceptedAt,
+        submittedAt
+      }
+    });
+    if (!accepted.ok) {
+      return blockedReview(accepted.diagnostics, nextAction("legion review", "Review acceptance could not be written."));
     }
-  });
-  if (!accepted.ok) {
-    return blockedReview(accepted.diagnostics, nextAction("legion review", "Review acceptance could not be written."));
+    acceptedReviews.push(accepted);
+    if (accepted.document.taskId !== undefined) acceptedByTaskId.set(accepted.document.taskId, accepted);
   }
 
   const evidenceWrite = await writeEvidenceIndex({
     repositoryRoot: context.repositoryRoot,
     changeId: evidence.document.changeId,
-    entries: evidence.document.entries.map((entry) =>
-      entry.evidence.status === "collected"
-        ? {
-            ...entry,
-            acceptance: {
-              status: "accepted",
-              reviewId: accepted.document.id,
-              acceptedAt
-            }
-          }
-        : entry
-    ),
+    entries: evidence.document.entries.map((entry) => {
+      if (entry.evidence.status !== "collected") return entry;
+      if (entry.evidence.taskId === undefined) return entry;
+      const acceptedReview = acceptedByTaskId.get(entry.evidence.taskId);
+      if (acceptedReview === undefined) return entry;
+      return {
+        ...entry,
+        acceptance: {
+          status: "accepted",
+          reviewId: acceptedReview.document.id,
+          acceptedAt
+        }
+      };
+    }),
     artifactInputs: evidence.document.artifactManifest.inputs,
     expectedRevision: evidence.document.revision,
     baseGitSha: resolveBaseGitSha(context.repositoryRoot)
@@ -327,10 +351,8 @@ async function acceptLatestReview(
     {
       ok: true,
       status: "accepted",
-      review: {
-        reviewId: accepted.document.id,
-        artifactPath: accepted.artifactPath
-      },
+      ...(acceptedReviews[0] === undefined ? {} : { review: reviewSummary(acceptedReviews[0]) }),
+      reviews: acceptedReviews.map(reviewSummary),
       evidenceIndex: {
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
@@ -351,32 +373,38 @@ async function rejectLatestReview(
   evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true },
   reason: string
 ): Promise<CliResult> {
-  const latest = await latestSubmittedReview(context.repositoryRoot, evidence.document.changeId);
+  const latest = await latestSubmittedReviews(context.repositoryRoot, evidence.document.changeId);
   if (!latest.ok) {
     return blockedReview(latest.diagnostics, nextAction("legion review", "Submit a review before rejecting it."));
   }
   const rejectedAt = currentUtcTimestamp();
-  const submittedAt = latest.review.document.submittedAt ?? rejectedAt;
-  const rejected = await writeReviewDecision({
-    repositoryRoot: context.repositoryRoot,
-    expectedRevision: latest.review.revision.revision,
-    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
-    document: {
-      ...latest.review.document,
-      status: "rejected",
-      updatedAt: rejectedAt,
-      submittedAt,
-      metadata: {
-        ...(latest.review.document.metadata ?? {}),
-        annotations: {
-          ...(latest.review.document.metadata?.annotations ?? {}),
-          reject_reason: reason
+  const rejectedReviews: ReviewDecisionSuccess[] = [];
+  const rejectedByTaskId = new Map<string, ReviewDecisionSuccess>();
+  for (const review of latest.reviews) {
+    const submittedAt = review.document.submittedAt ?? rejectedAt;
+    const rejected = await writeReviewDecision({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: review.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: {
+        ...review.document,
+        status: "rejected",
+        updatedAt: rejectedAt,
+        submittedAt,
+        metadata: {
+          ...(review.document.metadata ?? {}),
+          annotations: {
+            ...(review.document.metadata?.annotations ?? {}),
+            reject_reason: reason
+          }
         }
       }
+    });
+    if (!rejected.ok) {
+      return blockedReview(rejected.diagnostics, nextAction("legion review", "Review rejection could not be written."));
     }
-  });
-  if (!rejected.ok) {
-    return blockedReview(rejected.diagnostics, nextAction("legion review", "Review rejection could not be written."));
+    rejectedReviews.push(rejected);
+    if (rejected.document.taskId !== undefined) rejectedByTaskId.set(rejected.document.taskId, rejected);
   }
 
   const evidenceWrite = await writeEvidenceIndex({
@@ -386,7 +414,9 @@ async function rejectLatestReview(
       ...entry,
       acceptance: {
         status: "rejected",
-        reviewId: rejected.document.id,
+        reviewId: entry.evidence.taskId === undefined
+          ? rejectedReviews[0]?.document.id
+          : rejectedByTaskId.get(entry.evidence.taskId)?.document.id ?? rejectedReviews[0]?.document.id,
         reason
       }
     })),
@@ -403,10 +433,8 @@ async function rejectLatestReview(
     {
       ok: true,
       status: "rejected",
-      review: {
-        reviewId: rejected.document.id,
-        artifactPath: rejected.artifactPath
-      },
+      ...(rejectedReviews[0] === undefined ? {} : { review: reviewSummary(rejectedReviews[0]) }),
+      reviews: rejectedReviews.map(reviewSummary),
       nextAction: action,
       diagnostics: []
     },
@@ -424,17 +452,21 @@ async function runAutoReview(
   const maxCycles = parseMaxCycles(stringOption(context, "max-cycles"));
   if (typeof maxCycles !== "number") return maxCycles;
 
-  let latestReview: ReviewDecisionSuccess | undefined;
+  let currentEvidence = input.evidence;
+  let latestReviews: readonly ReviewDecisionSuccess[] = [];
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
-    const submitted = await submitReview(context, input);
+    const submitted = await submitReview(context, {
+      ...input,
+      evidence: currentEvidence
+    });
     if (!submitted.ok) {
       return blockedReview(submitted.diagnostics, nextAction("legion review", "Auto review could not submit a review decision."));
     }
-    latestReview = submitted.review;
-    if (isCleanReview(submitted.review.document)) {
+    latestReviews = submitted.reviews;
+    if (submitted.reviews.every((review) => isCleanReview(review.document))) {
       const refreshedEvidence = await readEvidenceIndex({
         repositoryRoot: context.repositoryRoot,
-        changeId: input.evidence.document.changeId
+        changeId: currentEvidence.document.changeId
       });
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
@@ -443,10 +475,18 @@ async function runAutoReview(
     }
 
     if (cycle < maxCycles) {
-      const task = input.taskgraph.document.tasks[0];
-      if (task !== undefined) {
+      const tasksByTaskId = taskByTaskId(input.taskgraph.document.tasks);
+      for (const review of submitted.reviews.filter((candidate) => !isCleanReview(candidate.document))) {
+        if (review.document.taskId === undefined) continue;
+        const task = tasksByTaskId.get(review.document.taskId);
+        if (task === undefined) continue;
         await runAutoFixCycle(context, input.executor, input.taskgraph.document.changeId, task, cycle);
       }
+      const refreshedEvidence = await refreshBuildEvidenceAfterAutoFix(context, input.executor, input.taskgraph.document.changeId);
+      if (!refreshedEvidence.ok) {
+        return blockedReview(refreshedEvidence.diagnostics, nextAction("legion build", "Auto fix completed, but build evidence could not be refreshed."));
+      }
+      currentEvidence = refreshedEvidence.evidence;
     }
   }
 
@@ -455,7 +495,7 @@ async function runAutoReview(
       {
         code: "auto_review_not_clean",
         message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
-        path: latestReview?.artifactPath
+        path: latestReviews.at(-1)?.artifactPath
       }
     ],
     nextAction("legion build", "Address review findings manually and rerun review.")
@@ -471,12 +511,11 @@ async function runAutoFixCycle(
 ): Promise<void> {
   const taskId = taskIdForContractId(task.id);
   const runId = runIdForTask({ taskId, attempt: 100 + cycle });
-  const reviewId = reviewIdForChange({ changeId, sequence: 100 + cycle });
-  const contextPackArtifactPath = reviewRunArtifactPath({ changeId, reviewId, fileName: "context-pack.md" });
-  const promptArtifactPath = reviewRunArtifactPath({ changeId, reviewId, fileName: "executor-prompt.md" });
-  const resultArtifactPath = reviewRunArtifactPath({ changeId, reviewId, fileName: "executor-result.json" });
-  const rawLogArtifactPath = reviewRunArtifactPath({ changeId, reviewId, fileName: "executor-raw.log" });
-  const redactedLogArtifactPath = reviewRunArtifactPath({ changeId, reviewId, fileName: "executor-redacted.log" });
+  const contextPackArtifactPath = runArtifactPath({ changeId, runId, fileName: "context-pack.md" });
+  const promptArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-prompt.md" });
+  const resultArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-result.json" });
+  const rawLogArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-raw.log" });
+  const redactedLogArtifactPath = runArtifactPath({ changeId, runId, fileName: "executor-redacted.log" });
   const prompt = buildExecutionPrompt({
     mode: "fix",
     contextPackArtifactPath,
@@ -602,20 +641,95 @@ function fallbackEvidenceId(): EvidenceId {
   return evidence as EvidenceId;
 }
 
-async function latestTaskRun(repositoryRoot: string, changeId: string) {
-  const runs = await listTaskRunsForChange({ repositoryRoot, changeId });
-  if (!runs.ok) return undefined;
-  return runs.taskRuns.at(-1);
+function collectedEvidenceEntriesForTask(
+  entries: readonly EvidenceIndexEntry[],
+  taskId: ReturnType<typeof taskIdForContractId>
+): readonly EvidenceIndexEntry[] {
+  return entries.filter((entry) => entry.evidence.status === "collected" && entry.evidence.taskId === taskId);
 }
 
-async function latestSubmittedReview(repositoryRoot: string, changeId: string): Promise<{
+async function cleanSubmittedReviewCoverage(
+  repositoryRoot: string,
+  evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
+): Promise<{
   readonly ok: true;
-  readonly review: ReviewDecisionSuccess;
+  readonly reviews: readonly ReviewDecisionSuccess[];
+} | { readonly ok: false; readonly diagnostics: readonly unknown[] }> {
+  const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId: evidence.document.changeId });
+  if (!reviews.ok) return { ok: false, diagnostics: reviews.diagnostics };
+
+  const entriesByTaskId = new Map<string, EvidenceIndexEntry[]>();
+  const diagnostics: unknown[] = [];
+  for (const entry of evidence.document.entries) {
+    if (entry.evidence.status !== "collected") continue;
+    if (entry.evidence.taskId === undefined) {
+      diagnostics.push({
+        code: "evidence_task_missing",
+        message: `Collected evidence ${entry.evidence.id} is missing a task id.`,
+        path: evidence.artifactPath
+      });
+      continue;
+    }
+    const current = entriesByTaskId.get(entry.evidence.taskId) ?? [];
+    current.push(entry);
+    entriesByTaskId.set(entry.evidence.taskId, current);
+  }
+
+  if (diagnostics.length > 0 && entriesByTaskId.size === 0) return { ok: false, diagnostics };
+  if (entriesByTaskId.size === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "evidence_missing",
+          message: "No collected build evidence exists for the latest change.",
+          path: evidence.artifactPath
+        }
+      ]
+    };
+  }
+
+  const selected = new Map<string, ReviewDecisionSuccess>();
+  for (const [taskId, entries] of entriesByTaskId) {
+    const evidenceIds = entries.map((entry) => entry.evidence.id);
+    const latest = reviews.reviews
+      .filter((review) =>
+        review.document.status === "submitted" &&
+        review.document.taskId === taskId &&
+        isCleanReview(review.document) &&
+        evidenceIds.every((evidenceId) => (review.document.evidenceRefs ?? []).includes(evidenceId))
+      )
+      .at(-1);
+    if (latest === undefined) {
+      diagnostics.push({
+        code: "review_not_clean",
+        message: `No clean submitted review covers collected evidence for ${taskId}.`,
+        path: evidence.artifactPath
+      });
+      continue;
+    }
+    selected.set(latest.document.id, latest);
+  }
+
+  if (diagnostics.length > 0) return { ok: false, diagnostics };
+  return { ok: true, reviews: [...selected.values()] };
+}
+
+async function latestSubmittedReviews(repositoryRoot: string, changeId: string): Promise<{
+  readonly ok: true;
+  readonly reviews: readonly ReviewDecisionSuccess[];
 } | { readonly ok: false; readonly diagnostics: readonly unknown[] }> {
   const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
   if (!reviews.ok) return { ok: false, diagnostics: reviews.diagnostics };
-  const latest = reviews.reviews.filter((review) => review.document.status === "submitted").at(-1);
-  if (latest === undefined) {
+
+  const latestByTaskId = new Map<string, ReviewDecisionSuccess>();
+  for (const review of reviews.reviews) {
+    if (review.document.status === "submitted" && review.document.taskId !== undefined) {
+      latestByTaskId.set(review.document.taskId, review);
+    }
+  }
+  const latest = [...latestByTaskId.values()];
+  if (latest.length === 0) {
     return {
       ok: false,
       diagnostics: [
@@ -626,12 +740,79 @@ async function latestSubmittedReview(repositoryRoot: string, changeId: string): 
       ]
     };
   }
-  return { ok: true, review: latest };
+  return { ok: true, reviews: latest };
 }
 
-function latestSubmittedReviewId(reviews: readonly ReviewDecisionSuccess[]): readonly ReviewId[] {
-  const latest = reviews.filter((review) => review.document.status === "submitted" || review.document.status === "accepted").at(-1);
+function latestSubmittedReviewIdForTask(reviews: readonly ReviewDecisionSuccess[], taskId: ReturnType<typeof taskIdForContractId>): readonly ReviewId[] {
+  const latest = reviews
+    .filter((review) =>
+      review.document.taskId === taskId &&
+      (review.document.status === "submitted" || review.document.status === "accepted")
+    )
+    .at(-1);
   return latest === undefined ? [] : [latest.document.id];
+}
+
+function reviewSummary(review: ReviewDecisionSuccess): Record<string, unknown> {
+  return {
+    reviewId: review.document.id,
+    taskId: review.document.taskId,
+    artifactPath: review.artifactPath,
+    verdicts: review.document.verdicts,
+    findings: review.document.findings.length
+  };
+}
+
+function taskByTaskId(tasks: readonly TaskContract[]): Map<string, TaskContract> {
+  const map = new Map<string, TaskContract>();
+  for (const task of tasks) {
+    map.set(taskIdForContractId(task.id), task);
+  }
+  return map;
+}
+
+async function refreshBuildEvidenceAfterAutoFix(
+  context: CliContext,
+  executor: ExecutionAdapterKind,
+  changeId: string
+): Promise<{
+  readonly ok: true;
+  readonly evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true };
+} | { readonly ok: false; readonly diagnostics: readonly unknown[] }> {
+  const build = await handleBuildWorkflow({
+    ...context,
+    args: {
+      positionals: ["build"],
+      options: new Map<string, string | true>([
+        ["executor", executor],
+        ["allow-dirty", true]
+      ])
+    }
+  });
+  if (build.exitCode !== 0) {
+    return {
+      ok: false,
+      diagnostics: diagnosticsFromPayload(build.payload, "Auto fix completed, but build evidence refresh failed.")
+    };
+  }
+
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId
+  });
+  if (!evidence.ok) return { ok: false, diagnostics: evidence.diagnostics };
+  return { ok: true, evidence };
+}
+
+function diagnosticsFromPayload(payload: Record<string, unknown>, fallbackMessage: string): readonly unknown[] {
+  const diagnostics = payload["diagnostics"];
+  if (Array.isArray(diagnostics)) return diagnostics;
+  return [
+    {
+      code: "auto_build_refresh_failed",
+      message: fallbackMessage
+    }
+  ];
 }
 
 function isCleanReview(review: ReviewDecision): boolean {

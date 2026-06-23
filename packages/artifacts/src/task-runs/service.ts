@@ -391,7 +391,7 @@ export async function listTaskRunsForChange(input: ListTaskRunsInput): Promise<T
       changeId,
       runId: runId.data
     });
-    if (!read.ok) return read;
+    if (!read.ok) continue;
     taskRuns.push(read);
   }
 

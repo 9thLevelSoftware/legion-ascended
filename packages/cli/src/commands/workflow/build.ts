@@ -2,15 +2,16 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 import {
-  artifactPathForRole,
   artifactReferenceForContent,
   hashContent,
   readEvidenceIndex,
   readTaskGraph,
   stableProtocolJson,
+  listTaskRunsForChange,
   writeEvidenceIndex,
   writeTaskRun,
-  type EvidenceIndexEntry
+  type EvidenceIndexEntry,
+  type TaskRunSuccess
 } from "@legion/artifacts";
 import { RuntimeLocalDriver } from "@legion/core";
 import {
@@ -115,9 +116,20 @@ export async function handleBuildWorkflow(context: CliContext): Promise<CliResul
   }
 
   const producedEntries: EvidenceIndexEntry[] = [...entries.entries];
+  const existingTaskRuns = await listTaskRunsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!existingTaskRuns.ok) {
+    return blockedBuild(existingTaskRuns.diagnostics, nextAction("legion validate", "Task-run artifacts must be readable before build can continue."));
+  }
+
+  const nextAttempts = nextAttemptMap(existingTaskRuns.taskRuns);
   const taskRuns: unknown[] = [];
-  for (const [index, task] of taskgraph.document.tasks.entries()) {
-    const attempt = index + 1;
+  for (const task of taskgraph.document.tasks) {
+    const taskId = taskIdForContractId(task.id);
+    const attempt = nextAttempts.get(taskId) ?? 1;
+    nextAttempts.set(taskId, attempt + 1);
     const run = await executeTask({
       context,
       executor: selectedExecutor,
@@ -336,7 +348,20 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
           }
     })
   });
-  if (!completed.ok) return { ok: false, diagnostics: completed.diagnostics };
+  if (!completed.ok) {
+    return {
+      ok: false,
+      evidenceEntry,
+      taskRun: {
+        runId,
+        taskId,
+        artifactPath: started.artifactPath,
+        status: result.status === "blocked" ? "blocked" : result.ok ? "succeeded" : "failed",
+        evidenceId
+      },
+      diagnostics: completed.diagnostics
+    };
+  }
 
   if (!result.ok) {
     return {
@@ -580,6 +605,16 @@ async function existingEvidenceEntries(repositoryRoot: string, changeId: string)
   };
 }
 
+function nextAttemptMap(taskRuns: readonly TaskRunSuccess[]): Map<string, number> {
+  const attempts = new Map<string, number>();
+  for (const run of taskRuns) {
+    const nextAttempt = run.document.attempt + 1;
+    const current = attempts.get(run.document.taskId) ?? 1;
+    if (nextAttempt > current) attempts.set(run.document.taskId, nextAttempt);
+  }
+  return attempts;
+}
+
 function buildResultContract(): string {
   return [
     "Return only JSON with this shape:",
@@ -605,10 +640,15 @@ function dirtyWorktreeDiagnostic(repositoryRoot: string): { readonly code: strin
     return undefined;
   }
 
-  const status = execFileSync("git", ["-C", repositoryRoot, "status", "--porcelain"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"]
-  }).trim();
+  let status = "";
+  try {
+    status = execFileSync("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return undefined;
+  }
   if (status.length === 0) return undefined;
   const firstLines = status.split(/\r?\n/u).slice(0, 8).join("; ");
   return {
