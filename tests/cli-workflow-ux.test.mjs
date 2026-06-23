@@ -11,6 +11,20 @@ async function tempRepo() {
   return mkdtemp(path.join(tmpdir(), "legion-workflow-ux-"));
 }
 
+async function initializeAssetMapperProject(root) {
+  const result = await runCliCapture([
+    "--repository-root", root,
+    "start",
+    "--name", "Asset Mapper",
+    "--summary", "Metadata authoring and deterministic asset resolution",
+    "--owner", "dasbl",
+    "--created-at", "2026-06-22T12:00:00.000Z",
+    "--json"
+  ]);
+  assert.equal(result.exitCode, 0, result.stderr);
+  return parseJsonOutput(result);
+}
+
 async function importWorkflowModule(name) {
   try {
     return await import(`../packages/cli/dist/workflow/${name}.js`);
@@ -157,6 +171,124 @@ test("workflow helper render formats next actions and diagnostics", async () => 
   assert.equal(render.renderNextAction(action), "Next: legion plan 1\nReason: Project is initialized.");
   assert.equal(render.renderDiagnostics([]), "");
   assert.equal(render.renderDiagnostics([{ message: "Project manifest is missing." }, "Plain diagnostic"]), "- Project manifest is missing.\n- Plain diagnostic");
+});
+
+test("workflow helper phase compatibility resolves an explicit roadmap phase", async () => {
+  const phaseCompat = await importWorkflowModule("phase-compat");
+  const root = await tempRepo();
+  try {
+    const roadmapPath = path.join(root, "ROADMAP.md");
+    await writeFile(
+      roadmapPath,
+      [
+        "# Roadmap\r\n",
+        "\r\n",
+        "## Phase 1: Editor MVP\r\n",
+        "Build the editor surface.\r\n",
+        "\r\n",
+        "### Acceptance\r\n",
+        "- Asset metadata can be edited.\r\n",
+        "\r\n",
+        "## Phase 2: Package\r\n",
+        "Ship the app.\r\n"
+      ].join(""),
+      "utf8"
+    );
+
+    const result = await phaseCompat.resolvePhaseSource(
+      {
+        args: {
+          positionals: [],
+          options: new Map([["from-roadmap", "ROADMAP.md"]])
+        },
+        repositoryRoot: root,
+        json: false,
+        noColor: false,
+        cwd: root
+      },
+      1
+    );
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.phase, {
+      number: 1,
+      name: "Editor MVP",
+      body: "Build the editor surface.\n\n### Acceptance\n- Asset metadata can be edited.",
+      sourcePath: roadmapPath
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper phase compatibility prefers planning roadmap before root roadmap", async () => {
+  const phaseCompat = await importWorkflowModule("phase-compat");
+  const root = await tempRepo();
+  try {
+    await mkdir(path.join(root, ".planning"), { recursive: true });
+    const planningRoadmapPath = path.join(root, ".planning", "ROADMAP.md");
+    await writeFile(
+      planningRoadmapPath,
+      "## Phase 1: Planning Source\nUse the planning roadmap.\n",
+      "utf8"
+    );
+    await writeFile(
+      path.join(root, "ROADMAP.md"),
+      "## Phase 1: Root Source\nUse the root roadmap.\n",
+      "utf8"
+    );
+
+    const result = await phaseCompat.resolvePhaseSource(
+      {
+        args: {
+          positionals: [],
+          options: new Map()
+        },
+        repositoryRoot: root,
+        json: false,
+        noColor: false,
+        cwd: root
+      },
+      1
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.phase.name, "Planning Source");
+    assert.equal(result.phase.body, "Use the planning roadmap.");
+    assert.equal(result.phase.sourcePath, planningRoadmapPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper phase compatibility reports a missing phase source", async () => {
+  const phaseCompat = await importWorkflowModule("phase-compat");
+  const root = await tempRepo();
+  try {
+    const result = await phaseCompat.resolvePhaseSource(
+      {
+        args: {
+          positionals: [],
+          options: new Map()
+        },
+        repositoryRoot: root,
+        json: false,
+        noColor: false,
+        cwd: root
+      },
+      1
+    );
+
+    assert.deepEqual(result, {
+      ok: false,
+      diagnostic: {
+        code: "phase_source_missing",
+        message: "No phase 1 source was found. Run legion explore or pass --from-roadmap <path>."
+      }
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("workflow helper context and state load initialized and uninitialized projects", async () => {
@@ -517,21 +649,76 @@ test("legion start supports an explicit project slug", async () => {
 test("legion status gives the next workflow action for a new project", async () => {
   const root = await tempRepo();
   try {
-    await runCliCapture([
-      "--repository-root", root,
-      "start",
-      "--name", "Asset Mapper",
-      "--summary", "Metadata authoring and deterministic asset resolution",
-      "--owner", "dasbl",
-      "--created-at", "2026-06-22T12:00:00.000Z",
-      "--json"
-    ]);
+    await initializeAssetMapperProject(root);
     const result = await runCliCapture(["--repository-root", root, "status", "--json"]);
     assert.equal(result.exitCode, 0, result.stderr);
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, true);
     assert.equal(payload.workflowState.stage, "started");
     assert.equal(payload.nextAction.command, "legion plan 1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion plan phase blocks initialized projects without a roadmap source", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const result = await runCliCapture(["--repository-root", root, "plan", "1", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "blocked");
+    assert.equal(payload.nextAction.command, "legion explore");
+    assert.equal(payload.diagnostics[0].code, "phase_source_missing");
+    assert.match(payload.diagnostics[0].message, /No phase 1 source was found/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    const roadmapPath = path.join(root, "ROADMAP.md");
+    await writeFile(
+      roadmapPath,
+      [
+        "# Roadmap\n",
+        "\n",
+        "## Phase 1: Editor MVP\n",
+        "Build the editor surface.\n",
+        "\n",
+        "### Acceptance\n",
+        "- Asset metadata can be edited.\n",
+        "\n",
+        "## Phase 2: Package\n",
+        "Ship the app.\n"
+      ].join(""),
+      "utf8"
+    );
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "plan", "1",
+      "--from-roadmap", "ROADMAP.md",
+      "--dry-run",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, "planned");
+    assert.deepEqual(payload.phase, {
+      number: 1,
+      name: "Editor MVP",
+      body: "Build the editor surface.\n\n### Acceptance\n- Asset metadata can be edited.",
+      sourcePath: roadmapPath
+    });
+    assert.equal(payload.nextAction.command, "legion build");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
