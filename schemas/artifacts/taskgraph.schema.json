@@ -1220,42 +1220,74 @@
               "read": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512,
-                  "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-                  "description": "Relative POSIX artifact path inside an approved artifact root."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    {
+                      "type": "string",
+                      "const": "."
+                    }
+                  ]
                 }
               },
               "write": {
                 "minItems": 1,
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512,
-                  "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-                  "description": "Relative POSIX artifact path inside an approved artifact root."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    {
+                      "type": "string",
+                      "const": "."
+                    }
+                  ]
                 }
               },
               "forbidden": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512,
-                  "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-                  "description": "Relative POSIX artifact path inside an approved artifact root."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    {
+                      "type": "string",
+                      "const": "."
+                    }
+                  ]
                 }
               },
               "sequentialFiles": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 512,
-                  "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
-                  "description": "Relative POSIX artifact path inside an approved artifact root."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                      "description": "Relative POSIX artifact path inside an approved artifact root."
+                    },
+                    {
+                      "type": "string",
+                      "const": "."
+                    }
+                  ]
                 }
               }
             },

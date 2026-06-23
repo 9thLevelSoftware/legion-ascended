@@ -1748,12 +1748,12 @@ const guidanceCommandCases = [
   },
   {
     name: "polish",
-    args: ["polish", "README cleanup", "--json"],
+    args: ["polish", "README.md", "--json"],
     workflow: "polish",
     status: "planned",
     nextAction: "legion build",
     outputKey: "requestArtifactPath",
-    slug: "readme-cleanup"
+    slug: "readme-md"
   },
   {
     name: "learn",
@@ -1877,6 +1877,23 @@ for (const command of ["quick", "advise", "learn", "explore", "council"]) {
     }
   });
 }
+
+test("legion polish rejects non-path target text without writing records", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+    const result = await runCliCapture(["--repository-root", root, "polish", "README cleanup", "--json"]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "usage_error");
+    assert.equal(payload.diagnostics[0]?.code, "usage_error");
+    assert.match(payload.diagnostics[0]?.message, /Invalid polish target path/);
+    await assertPathMissing(path.join(root, ".legion", "project", "workflow", "polish"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 for (const retroCase of [
   { name: "valueless phase", args: ["retro", "--phase", "--json"], option: "phase" },

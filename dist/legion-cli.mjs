@@ -7722,11 +7722,12 @@ var taskContractContextSchema = strictObject({
   designRefs: array(artifactReferenceSchema),
   predecessorArtifacts: array(artifactReferenceSchema)
 });
+var taskContractScopePathSchema = union([artifactPathSchema, literal(".")]);
 var taskContractScopeSchema = strictObject({
-  read: array(artifactPathSchema),
-  write: array(artifactPathSchema).min(1),
-  forbidden: array(artifactPathSchema),
-  sequentialFiles: array(artifactPathSchema)
+  read: array(taskContractScopePathSchema),
+  write: array(taskContractScopePathSchema).min(1),
+  forbidden: array(taskContractScopePathSchema),
+  sequentialFiles: array(taskContractScopePathSchema)
 });
 var taskContractInterfaceSchema = strictObject({
   name: string2().regex(/^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/, "Invalid interface name"),
@@ -28155,7 +28156,7 @@ async function createAdHocTaskgraph(input) {
     },
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
-      write: input.writeScope ?? [taskgraphPath2],
+      write: input.writeScope ?? ["."],
       forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
       sequentialFiles: []
     },
@@ -28268,6 +28269,10 @@ async function createTypedAdHocWorkflow(context, kind) {
   const target = text ?? "current changed files";
   const title = kind === "quick" ? `Quick task: ${target}` : `Polish: ${target}`;
   const objective = kind === "quick" ? `Complete this ad-hoc task with minimal, verified changes: ${target}` : `Polish ${target} for clarity, simplicity, naming, comments, and consistency without changing intended behavior.`;
+  const targetPath = kind === "polish" && text !== void 0 ? text.trim() : void 0;
+  if (targetPath !== void 0 && !taskContractScopePathSchema.safeParse(targetPath).success) {
+    return usageError(`Invalid polish target path: ${targetPath}`);
+  }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: kind,
@@ -28291,7 +28296,6 @@ async function createTypedAdHocWorkflow(context, kind) {
       ""
     ].join("\n")
   });
-  const targetArtifactPath = text === void 0 ? void 0 : optionalArtifactPath(text);
   const planned = await createAdHocTaskgraph({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -28301,8 +28305,8 @@ async function createTypedAdHocWorkflow(context, kind) {
     sourceArtifactPath: requestArtifactPath,
     idSlug: paths.runId,
     createdAt,
-    readScope: targetArtifactPath === void 0 ? [requestArtifactPath] : [targetArtifactPath, requestArtifactPath],
-    ...targetArtifactPath === void 0 ? {} : { writeScope: [targetArtifactPath] },
+    readScope: targetPath === void 0 ? [requestArtifactPath] : [targetPath, requestArtifactPath],
+    ...targetPath === void 0 ? {} : { writeScope: [targetPath] },
     verificationCommand: ["legion", "validate"]
   });
   if (!planned.ok) {
@@ -28356,13 +28360,6 @@ async function createTypedAdHocWorkflow(context, kind) {
       renderNextAction(action)
     ].join("\n")
   );
-}
-function optionalArtifactPath(value) {
-  try {
-    return artifactPathSchema.parse(value.trim());
-  } catch {
-    return void 0;
-  }
 }
 async function runAdviceWorkflow(context) {
   const topic = positionalText(context);
@@ -28737,7 +28734,13 @@ async function mapCheck(context, scope) {
     createdAt
   });
   const latest = await getLatestCodebaseMap(context.repositoryRoot);
-  const current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  let current;
+  try {
+    current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Unable to check codebase map. ${message}`);
+  }
   const fresh = latest !== void 0 && latest.scope === current.scope && latest.sourceFingerprint === current.sourceFingerprint;
   const action = fresh ? nextAction("legion plan 1", "The codebase map is fresh enough for planning.") : nextAction("legion map --refresh", "Refresh the codebase map before relying on mapped context.");
   await writeGuidanceRun({
@@ -28941,6 +28944,9 @@ async function handleMilestoneWorkflow(context) {
     };
     slugSource = id;
   } else if (complete !== void 0 && summary !== void 0) {
+    if (!current.milestones.some((milestone) => milestone.id === complete)) {
+      return usageError(`Milestone not found: ${complete}`);
+    }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
       status: "completed",
@@ -28950,6 +28956,9 @@ async function handleMilestoneWorkflow(context) {
     status2 = "accepted";
     slugSource = complete;
   } else if (archive2 !== void 0) {
+    if (!current.milestones.some((milestone) => milestone.id === archive2)) {
+      return usageError(`Milestone not found: ${archive2}`);
+    }
     next = updateMilestone(current, archive2, (milestone) => ({
       ...milestone,
       status: "archived",

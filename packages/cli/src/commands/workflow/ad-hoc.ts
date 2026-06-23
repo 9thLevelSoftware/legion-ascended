@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { stableProtocolJson } from "@legion/artifacts";
-import { artifactPathSchema } from "@legion/protocol";
+import { artifactPathSchema, taskContractScopePathSchema } from "@legion/protocol";
 
 import {
   failure,
@@ -92,6 +92,10 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
   const objective = kind === "quick"
     ? `Complete this ad-hoc task with minimal, verified changes: ${target}`
     : `Polish ${target} for clarity, simplicity, naming, comments, and consistency without changing intended behavior.`;
+  const targetPath = kind === "polish" && text !== undefined ? text.trim() : undefined;
+  if (targetPath !== undefined && !taskContractScopePathSchema.safeParse(targetPath).success) {
+    return usageError(`Invalid polish target path: ${targetPath}`);
+  }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: kind,
@@ -116,7 +120,6 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
     ].join("\n")
   });
 
-  const targetArtifactPath = text === undefined ? undefined : optionalArtifactPath(text);
   const planned = await createAdHocTaskgraph({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -126,8 +129,8 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
     sourceArtifactPath: requestArtifactPath,
     idSlug: paths.runId,
     createdAt,
-    readScope: targetArtifactPath === undefined ? [requestArtifactPath] : [targetArtifactPath, requestArtifactPath],
-    ...(targetArtifactPath === undefined ? {} : { writeScope: [targetArtifactPath] }),
+    readScope: targetPath === undefined ? [requestArtifactPath] : [targetPath, requestArtifactPath],
+    ...(targetPath === undefined ? {} : { writeScope: [targetPath] }),
     verificationCommand: ["legion", "validate"]
   });
   if (!planned.ok) {
@@ -183,14 +186,6 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
       renderNextAction(action)
     ].join("\n")
   );
-}
-
-function optionalArtifactPath(value: string): string | undefined {
-  try {
-    return artifactPathSchema.parse(value.trim());
-  } catch {
-    return undefined;
-  }
 }
 
 async function runAdviceWorkflow(context: CliContext): Promise<CliResult> {

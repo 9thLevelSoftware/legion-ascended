@@ -294,7 +294,13 @@ async function mapCheck(context: CliContext, scope: string | undefined): Promise
     createdAt
   });
   const latest = await getLatestCodebaseMap(context.repositoryRoot);
-  const current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...(scope === undefined ? {} : { scope }) });
+  let current: Awaited<ReturnType<typeof currentCodebaseFingerprint>>;
+  try {
+    current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...(scope === undefined ? {} : { scope }) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return usageError(`Unable to check codebase map. ${message}`);
+  }
   const fresh = latest !== undefined &&
     latest.scope === current.scope &&
     latest.sourceFingerprint === current.sourceFingerprint;
@@ -508,6 +514,9 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
     };
     slugSource = id;
   } else if (complete !== undefined && summary !== undefined) {
+    if (!current.milestones.some((milestone) => milestone.id === complete)) {
+      return usageError(`Milestone not found: ${complete}`);
+    }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
       status: "completed",
@@ -517,6 +526,9 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
     status = "accepted";
     slugSource = complete;
   } else if (archive !== undefined) {
+    if (!current.milestones.some((milestone) => milestone.id === archive)) {
+      return usageError(`Milestone not found: ${archive}`);
+    }
     next = updateMilestone(current, archive, (milestone) => ({
       ...milestone,
       status: "archived",
