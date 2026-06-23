@@ -6,12 +6,34 @@ This is the normal CLI path for a human-in-loop Legion project. The CLI writes d
 
 ```powershell
 legion status
+legion explore "clarify the first release slice" --executor fake
+legion map --refresh
+legion map --check
 legion start --name "Asset Mapper" --summary "Metadata authoring and deterministic asset resolution" --owner dasbl
 legion plan 1 --from-roadmap ROADMAP.md
 legion status
 ```
 
-Use `legion explore` or `legion map` before `legion plan` when the project needs discovery or codebase context. Normal users should not edit worker bundle manifests or compute prompt hashes; those are `legion dev worker` extension workflows.
+Use `legion explore` or `legion map` before `legion plan` when the project needs discovery or codebase context. `legion map --query <text>` searches the latest generated map. Normal users should not edit worker bundle manifests or compute prompt hashes; those are `legion dev worker` extension workflows.
+
+## Guidance Commands
+
+```powershell
+legion advise "release risk" --executor manual
+legion learn "Prefer temp-clone dogfood before touching a real repo"
+legion milestone --define MVP --phases 1-3
+legion milestone --status
+```
+
+Guidance runs write `workflow-run.json` plus command-specific markdown under `.legion/project/workflow/<workflow>/<runId>/`. `manual` prepares prompts and artifacts without executing; `fake` is deterministic for tests.
+
+Ad-hoc work still goes through the normal evidence gate:
+
+```powershell
+legion quick "fix the failing validation"
+legion polish packages/cli
+legion build --executor codex
+```
 
 ## Guided Build And Review
 

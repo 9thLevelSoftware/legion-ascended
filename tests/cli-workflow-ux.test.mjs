@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -356,6 +356,63 @@ test("workflow codex executor args match current codex exec surface", async () =
   assert.equal(args.includes("--ask-for-approval"), false);
   assert.equal(args.includes("--dangerously-bypass-approvals-and-sandbox"), false);
   assert.equal(args.includes("--dangerously-bypass-hook-trust"), false);
+});
+
+test("workflow codex executor times out with a blocked result", async () => {
+  const adapters = await importWorkflowModule("executor/adapters");
+  const root = await tempRepo();
+  const fakeBin = path.join(root, "bin");
+  const previousPath = process.env.PATH;
+  const previousTimeout = process.env.LEGION_CODEX_EXEC_TIMEOUT_MS;
+  const baseArtifactPath = ".legion/project/changes/chg_timeout/runs/run_timeout";
+
+  try {
+    await mkdir(fakeBin, { recursive: true });
+    if (process.platform === "win32") {
+      await writeFile(path.join(fakeBin, "codex.cmd"), "@echo off\r\nping -n 10 127.0.0.1 >nul\r\n", "utf8");
+    } else {
+      const shim = path.join(fakeBin, "codex");
+      await writeFile(shim, "#!/usr/bin/env sh\nsleep 5\n", "utf8");
+      await chmod(shim, 0o755);
+    }
+    process.env.PATH = `${fakeBin}${path.delimiter}${previousPath ?? ""}`;
+    process.env.LEGION_CODEX_EXEC_TIMEOUT_MS = "50";
+
+    const adapter = adapters.adapterForKind("codex");
+    const result = await adapter.run({
+      repositoryRoot: root,
+      changeId: "chg_timeout",
+      runId: "run_timeout",
+      task: { id: "ctr_timeout" },
+      mode: "build",
+      executor: "codex",
+      readOnly: true,
+      prompt: "Return a successful Legion executor result.",
+      contextPackArtifactPath: `${baseArtifactPath}/context-pack.md`,
+      contextPackAbsolutePath: path.join(root, ".legion", "project", "changes", "chg_timeout", "runs", "run_timeout", "context-pack.md"),
+      promptArtifactPath: `${baseArtifactPath}/executor-prompt.md`,
+      promptAbsolutePath: path.join(root, ".legion", "project", "changes", "chg_timeout", "runs", "run_timeout", "executor-prompt.md"),
+      resultArtifactPath: `${baseArtifactPath}/executor-result.json`,
+      resultAbsolutePath: path.join(root, ".legion", "project", "changes", "chg_timeout", "runs", "run_timeout", "executor-result.json"),
+      rawLogArtifactPath: `${baseArtifactPath}/executor-raw.log`,
+      rawLogAbsolutePath: path.join(root, ".legion", "project", "changes", "chg_timeout", "runs", "run_timeout", "executor-raw.log"),
+      redactedLogArtifactPath: `${baseArtifactPath}/executor-redacted.log`,
+      redactedLogAbsolutePath: path.join(root, ".legion", "project", "changes", "chg_timeout", "runs", "run_timeout", "executor-redacted.log")
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "blocked");
+    assert.equal(result.exitCode, 124);
+    assert.equal(result.findings.some((finding) => finding.id === "codex-executor-timeout"), true);
+    const written = await readJsonArtifact(root, `${baseArtifactPath}/executor-result.json`);
+    assert.equal(written.parsed.status, "blocked");
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    if (previousTimeout === undefined) delete process.env.LEGION_CODEX_EXEC_TIMEOUT_MS;
+    else process.env.LEGION_CODEX_EXEC_TIMEOUT_MS = previousTimeout;
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("core workflow commands expose command-specific help", async () => {
@@ -1548,7 +1605,7 @@ test("legion ship blocks until accepted review evidence exists", async () => {
   }
 });
 
-test("legion quick records an ad-hoc task request", async () => {
+test("legion quick creates a typed ad-hoc taskgraph", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
@@ -1559,30 +1616,27 @@ test("legion quick records an ad-hoc task request", async () => {
 
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, true);
-    assert.equal(payload.status, "recorded");
+    assert.equal(payload.status, "planned");
     assert.equal(payload.workflow, "quick");
     assert.equal(payload.nextAction.command, "legion build");
-    assert.match(payload.artifactPath, /^\.legion\/project\/workflow\/quick\/.+-fix-the-failing-tests\.json$/);
+    assert.match(payload.artifactPath, /^\.legion\/project\/workflow\/quick\/.+-fix-the-failing-tests\/workflow-run\.json$/);
     assert.doesNotMatch(payload.artifactPath, /^\.legion\/var\//);
+    assert.match(payload.requestArtifactPath, /request\.md$/);
+    assert.match(payload.taskgraph.artifactPath, /^\.legion\/project\/changes\/.+\/taskgraph\.json$/);
 
     const artifact = await readJsonArtifact(root, payload.artifactPath);
     assert.equal(artifact.raw.endsWith("\n"), true);
-    assert.deepEqual(artifact.parsed, {
-      schemaVersion: 1,
-      kind: "workflow_record",
-      workflow: "quick",
-      createdAt: payload.createdAt,
-      input: {
-        text: "fix the failing tests"
-      },
-      nextAction: payload.nextAction
-    });
+    assert.equal(artifact.parsed.kind, "workflow_run");
+    assert.equal(artifact.parsed.workflow, "quick");
+    assert.equal(artifact.parsed.status, "planned");
+    assert.equal(artifact.parsed.outputs.requestArtifactPath, payload.requestArtifactPath);
+    await assertFileExists(path.join(root, ...payload.taskgraph.artifactPath.split("/")));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("legion quick preserves repeated timestamp and slug records", async () => {
+test("legion quick preserves repeated timestamp and slug runs", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
@@ -1601,8 +1655,9 @@ test("legion quick preserves repeated timestamp and slug records", async () => {
     const firstPayload = parseJsonOutput(first);
     const secondPayload = parseJsonOutput(second);
     assert.notEqual(secondPayload.artifactPath, firstPayload.artifactPath);
-    assert.match(firstPayload.artifactPath, /2026-06-22T12-34-56-000Z-fix-the-failing-tests\.json$/);
-    assert.match(secondPayload.artifactPath, /2026-06-22T12-34-56-000Z-fix-the-failing-tests-2\.json$/);
+    assert.match(firstPayload.artifactPath, /2026-06-22t12-34-56-000z-fix-the-failing-tests\/workflow-run\.json$/);
+    assert.match(secondPayload.artifactPath, /2026-06-22t12-34-56-000z-fix-the-failing-tests-2\/workflow-run\.json$/);
+    assert.notEqual(secondPayload.change.changeId, firstPayload.change.changeId);
 
     const firstArtifact = await readJsonArtifact(root, firstPayload.artifactPath);
     const secondArtifact = await readJsonArtifact(root, secondPayload.artifactPath);
@@ -1610,41 +1665,35 @@ test("legion quick preserves repeated timestamp and slug records", async () => {
     assert.equal(secondArtifact.parsed.input.text, "fix the failing tests");
     const files = await readdir(path.join(root, ".legion", "project", "workflow", "quick"));
     assert.deepEqual(files.sort(), [
-      "2026-06-22T12-34-56-000Z-fix-the-failing-tests-2.json",
-      "2026-06-22T12-34-56-000Z-fix-the-failing-tests.json"
+      "2026-06-22t12-34-56-000z-fix-the-failing-tests",
+      "2026-06-22t12-34-56-000z-fix-the-failing-tests-2"
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("legion explore records a design artifact before project start", async () => {
+test("legion explore writes a design guidance run before project start", async () => {
   const root = await tempRepo();
   try {
-    const result = await runCliCapture(["--repository-root", root, "explore", "asset metadata editor", "--json"]);
+    const result = await runCliCapture(["--repository-root", root, "explore", "asset metadata editor", "--executor", "fake", "--json"]);
     assert.equal(result.exitCode, 0, result.stderr);
     assertNoInternalWorkflowNouns(result.stdout);
 
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, true);
-    assert.equal(payload.status, "recorded");
+    assert.equal(payload.status, "completed");
     assert.equal(payload.workflow, "explore");
     assert.equal(payload.nextAction.command, "legion start");
-    assert.match(payload.artifactPath, /^\.legion\/project\/workflow\/explore\/.+-asset-metadata-editor\.json$/);
+    assert.match(payload.artifactPath, /^\.legion\/project\/workflow\/explore\/.+-asset-metadata-editor\/workflow-run\.json$/);
+    assert.match(payload.markdownArtifactPath, /design\.md$/);
     assert.doesNotMatch(payload.artifactPath, /^\.legion\/var\//);
 
     const artifact = await readJsonArtifact(root, payload.artifactPath);
     assert.equal(artifact.raw.endsWith("\n"), true);
-    assert.deepEqual(artifact.parsed, {
-      schemaVersion: 1,
-      kind: "workflow_record",
-      workflow: "explore",
-      createdAt: payload.createdAt,
-      input: {
-        text: "asset metadata editor"
-      },
-      nextAction: payload.nextAction
-    });
+    assert.equal(artifact.parsed.kind, "workflow_run");
+    assert.equal(artifact.parsed.workflow, "explore");
+    assert.equal(artifact.parsed.outputs.markdownArtifactPath, payload.markdownArtifactPath);
 
     const start = await runCliCapture([
       "--repository-root", root,
@@ -1687,67 +1736,74 @@ test("legion start blocks arbitrary files in the pre-start workflow directory", 
   }
 });
 
-const standaloneRecordCases = [
+const guidanceCommandCases = [
   {
     name: "advise",
-    args: ["advise", "dependency risk", "--json"],
+    args: ["advise", "dependency risk", "--executor", "fake", "--json"],
     workflow: "advise",
+    status: "completed",
     nextAction: "legion status",
-    input: { text: "dependency risk" },
+    outputKey: "markdownArtifactPath",
     slug: "dependency-risk"
   },
   {
     name: "polish",
     args: ["polish", "README cleanup", "--json"],
     workflow: "polish",
-    nextAction: "legion review",
-    input: { target: "README cleanup" },
+    status: "planned",
+    nextAction: "legion build",
+    outputKey: "requestArtifactPath",
     slug: "readme-cleanup"
   },
   {
     name: "learn",
     args: ["learn", "prefer artifact-backed plans", "--json"],
     workflow: "learn",
+    status: "completed",
     nextAction: "legion status",
-    input: { text: "prefer artifact-backed plans" },
+    outputKey: "lessonArtifactPath",
     slug: "prefer-artifact-backed-plans"
   },
   {
     name: "map refresh",
     args: ["map", "--refresh", "--json"],
     workflow: "map",
+    status: "completed",
     nextAction: "legion plan 1",
-    input: { mode: "refresh" },
+    outputKey: "mapArtifactPath",
     slug: "refresh"
   },
   {
     name: "retro",
-    args: ["retro", "--json"],
+    args: ["retro", "--executor", "fake", "--json"],
     workflow: "retro",
+    status: "completed",
     nextAction: "legion plan 1",
-    input: { phase: null, milestone: null },
+    outputKey: "markdownArtifactPath",
     slug: "retro"
   },
   {
     name: "milestone",
-    args: ["milestone", "--json"],
+    args: ["milestone", "--status", "--json"],
     workflow: "milestone",
+    status: "completed",
     nextAction: "legion status",
-    input: { target: null },
-    slug: "milestone"
+    outputKey: "markdownArtifactPath",
+    slug: "status"
   },
   {
     name: "council",
-    args: ["council", "release readiness", "--json"],
+    args: ["council", "release readiness", "--executor", "fake", "--json"],
     workflow: "council",
+    status: "completed",
     nextAction: "legion status",
-    input: { text: "release readiness" },
+    outputKey: "markdownArtifactPath",
     slug: "release-readiness"
   }
 ];
 
-for (const recordCase of standaloneRecordCases) {
-  test(`legion ${recordCase.name} records a standalone workflow artifact`, async () => {
+for (const recordCase of guidanceCommandCases) {
+  test(`legion ${recordCase.name} writes a guidance workflow run`, async () => {
     const root = await tempRepo();
     try {
       await initializeAssetMapperProject(root);
@@ -1756,31 +1812,28 @@ for (const recordCase of standaloneRecordCases) {
       assert.equal(result.exitCode, 0, result.stderr);
       const payload = parseJsonOutput(result);
       assert.equal(payload.ok, true);
-      assert.equal(payload.status, "recorded");
+      assert.equal(payload.status, recordCase.status);
       assert.equal(payload.workflow, recordCase.workflow);
       assert.equal(payload.nextAction.command, recordCase.nextAction);
       assert.match(
         payload.artifactPath,
-        new RegExp(`^\\.legion/project/workflow/${recordCase.workflow}/.+-${recordCase.slug}\\.json$`)
+        new RegExp(`^\\.legion/project/workflow/${recordCase.workflow}/.+-${recordCase.slug}/workflow-run\\.json$`)
       );
+      assert.equal(typeof payload[recordCase.outputKey], "string");
 
       const artifact = await readJsonArtifact(root, payload.artifactPath);
       assert.equal(artifact.raw.endsWith("\n"), true);
-      assert.deepEqual(artifact.parsed, {
-        schemaVersion: 1,
-        kind: "workflow_record",
-        workflow: recordCase.workflow,
-        createdAt: payload.createdAt,
-        input: recordCase.input,
-        nextAction: payload.nextAction
-      });
+      assert.equal(artifact.parsed.kind, "workflow_run");
+      assert.equal(artifact.parsed.workflow, recordCase.workflow);
+      assert.equal(artifact.parsed.status, recordCase.status);
+      await assertFileExists(path.join(root, ...payload[recordCase.outputKey].split("/")));
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 }
 
-test("legion map --check reports readiness without writing workflow records", async () => {
+test("legion map --check reports stale state and writes a guidance run", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
@@ -1789,21 +1842,22 @@ test("legion map --check reports readiness without writing workflow records", as
     assert.equal(result.exitCode, 0, result.stderr);
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, true);
-    assert.equal(payload.status, "ready");
+    assert.equal(payload.status, "stale");
     assert.equal(payload.workflow, "map");
     assert.equal(payload.mode, "check");
     assert.equal(payload.nextAction.command, "legion map --refresh");
-    await assertPathMissing(path.join(root, ".legion", "project", "workflow", "map"));
+    await assertFileExists(path.join(root, ...payload.artifactPath.split("/")));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("legion map help only advertises implemented modes", async () => {
+test("legion map help advertises implemented modes", async () => {
   const result = await runCliCapture(["map", "--help"]);
   assert.equal(result.exitCode, 0);
-  assert.match(result.stdout, /legion map \[--check\|--refresh\]/);
-  assert.doesNotMatch(result.stdout, /--query/);
+  assert.match(result.stdout, /--refresh/);
+  assert.match(result.stdout, /--check/);
+  assert.match(result.stdout, /--query <text>/);
 });
 
 for (const command of ["quick", "advise", "learn", "explore", "council"]) {

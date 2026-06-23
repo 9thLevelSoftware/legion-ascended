@@ -15,6 +15,7 @@ import {
 } from "./result.js";
 
 const execFileAsync = promisify(execFile);
+const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 300_000;
 
 export function codexExecArgs(input: {
   readonly repositoryRoot: string;
@@ -156,20 +157,44 @@ const codexAdapter: ExecutionAdapter = {
       outputLastMessagePath
     });
     const invocation = codexInvocation(args);
-    const processResult = await spawnWithInput(invocation.command, invocation.args, request.prompt, request.repositoryRoot);
+    const processResult = await spawnWithInput(
+      invocation.command,
+      invocation.args,
+      request.prompt,
+      request.repositoryRoot,
+      codexExecTimeoutMs()
+    );
     const rawOutput = [
       processResult.stdout,
       processResult.stderr
     ].filter((entry) => entry.length > 0).join("\n");
     const lastMessage = await readOptionalText(outputLastMessagePath);
     const parsed = parseResultFromText(lastMessage.length > 0 ? lastMessage : rawOutput);
-    const status = processResult.exitCode === 0 ? "succeeded" : "failed";
-    const result = normalizeExecutionResult(parsed, {
+    const status = processResult.timedOut ? "blocked" : processResult.exitCode === 0 ? "succeeded" : "failed";
+    const normalized = normalizeExecutionResult(parsed, {
       status,
-      summary: processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
+      summary: processResult.timedOut
+        ? `Codex executor timed out after ${processResult.timeoutMs}ms.`
+        : processResult.exitCode === 0 ? "Codex executor completed." : "Codex executor failed.",
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const result: ExecutionResult = processResult.timedOut
+      ? {
+          ...normalized,
+          ok: false,
+          status: "blocked",
+          findings: [
+            ...normalized.findings,
+            {
+              id: "codex-executor-timeout",
+              title: "Codex executor timed out",
+              body: `Codex did not complete within ${processResult.timeoutMs}ms. Check Codex auth/configuration or rerun with the manual executor.`,
+              severity: "blocking"
+            }
+          ]
+        }
+      : normalized;
     const redacted = redactTranscript(rawOutput);
     await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
     await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });
@@ -194,10 +219,19 @@ function fakeSummary(request: ExecutionRequest): string {
   return `Fake build executed ${request.task.id}.`;
 }
 
-async function spawnWithInput(command: string, args: readonly string[], input: string, cwd: string): Promise<{
+function codexExecTimeoutMs(): number {
+  const configured = process.env["LEGION_CODEX_EXEC_TIMEOUT_MS"];
+  if (configured === undefined) return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+  const parsed = Number.parseInt(configured, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+}
+
+async function spawnWithInput(command: string, args: readonly string[], input: string, cwd: string, timeoutMs: number): Promise<{
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
+  readonly timedOut: boolean;
+  readonly timeoutMs: number;
 }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -207,6 +241,28 @@ async function spawnWithInput(command: string, args: readonly string[], input: s
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    let timedOut = false;
+
+    const settle = (exitCode: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({
+        exitCode,
+        stdout,
+        stderr,
+        timedOut,
+        timeoutMs
+      });
+    };
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      stderr += `${stderr.length === 0 ? "" : "\n"}Codex executor timed out after ${timeoutMs}ms.`;
+      terminateProcessTree(child.pid);
+      setTimeout(() => settle(124), 1_000).unref();
+    }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -217,14 +273,39 @@ async function spawnWithInput(command: string, args: readonly string[], input: s
       stderr += String(chunk);
     });
     child.stdin.on("error", () => {});
-    child.on("error", reject);
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
     child.on("close", (code) => {
-      resolve({
-        exitCode: code ?? 1,
-        stdout,
-        stderr
-      });
+      settle(timedOut ? 124 : code ?? 1);
     });
     child.stdin.end(input);
   });
+}
+
+function terminateProcessTree(pid: number | undefined): void {
+  if (pid === undefined) return;
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    killer.on("error", () => {});
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    // The process may have exited just before the timeout handler ran.
+  }
+  setTimeout(() => {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // The process may already be gone.
+    }
+  }, 1_000).unref();
 }
