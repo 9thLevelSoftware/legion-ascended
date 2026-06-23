@@ -48,15 +48,20 @@ export function parseRoadmapPhase(
   sourcePath: string
 ): PhaseSource | undefined {
   const normalized = text.replace(/\r\n?/g, "\n");
-  const headingPattern = new RegExp(`^##\\s+Phase\\s+${phaseNumber}\\s*:\\s*(.+?)\\s*$`, "im");
+  const headingPattern = new RegExp(`^(#{2,3})\\s+Phase\\s+${phaseNumber}\\s*:\\s*(.+?)\\s*$`, "im");
   const match = headingPattern.exec(normalized);
-  const phaseName = match?.[1];
+  const headingMarker = match?.[1];
+  const phaseName = match?.[2];
   if (match === null || phaseName === undefined) return undefined;
 
   const headingEnd = match.index + match[0].length;
-  const nextHeadingPattern = /^##\s+/gm;
+  const headingLevel = headingMarker?.length ?? 2;
+  const nextHeadingPattern = /^(#{2,3})\s+Phase\s+\d+\s*:/gm;
   nextHeadingPattern.lastIndex = headingEnd;
-  const nextHeading = nextHeadingPattern.exec(normalized);
+  let nextHeading = nextHeadingPattern.exec(normalized);
+  while (nextHeading !== null && (nextHeading[1]?.length ?? 0) > headingLevel) {
+    nextHeading = nextHeadingPattern.exec(normalized);
+  }
   const bodyStart = normalized[headingEnd] === "\n" ? headingEnd + 1 : headingEnd;
   const bodyEnd = nextHeading?.index ?? normalized.length;
 
@@ -70,8 +75,11 @@ export function parseRoadmapPhase(
 
 function roadmapCandidates(context: CliContext): readonly string[] {
   const fromRoadmap = stringOption(context, "from-roadmap");
+  if (fromRoadmap !== undefined) {
+    return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
+  }
+
   const candidates = [
-    fromRoadmap === undefined ? undefined : resolveRoadmapPath(context.repositoryRoot, fromRoadmap),
     path.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
     path.join(context.repositoryRoot, "ROADMAP.md")
   ];

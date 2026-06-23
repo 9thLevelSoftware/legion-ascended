@@ -221,6 +221,112 @@ test("workflow helper phase compatibility resolves an explicit roadmap phase", a
   }
 });
 
+test("workflow helper phase compatibility parses legacy phase details headings", async () => {
+  const phaseCompat = await importWorkflowModule("phase-compat");
+  const phase = phaseCompat.parseRoadmapPhase(
+    [
+      "# Roadmap\n",
+      "\n",
+      "## Phase Details\n",
+      "\n",
+      "### Phase 1: Editor MVP\n",
+      "Build the editor surface.\n",
+      "\n",
+      "#### Acceptance\n",
+      "- Asset metadata can be edited.\n",
+      "\n",
+      "### Phase 2: Package\n",
+      "Ship the app.\n"
+    ].join(""),
+    1,
+    "ROADMAP.md"
+  );
+
+  assert.deepEqual(phase, {
+    number: 1,
+    name: "Editor MVP",
+    body: "Build the editor surface.\n\n#### Acceptance\n- Asset metadata can be edited.",
+    sourcePath: "ROADMAP.md"
+  });
+});
+
+test("workflow helper phase compatibility treats missing explicit roadmap as authoritative", async () => {
+  const phaseCompat = await importWorkflowModule("phase-compat");
+  const root = await tempRepo();
+  try {
+    await writeFile(
+      path.join(root, "ROADMAP.md"),
+      "## Phase 1: Root Source\nUse the root roadmap.\n",
+      "utf8"
+    );
+
+    const result = await phaseCompat.resolvePhaseSource(
+      {
+        args: {
+          positionals: [],
+          options: new Map([["from-roadmap", "missing.md"]])
+        },
+        repositoryRoot: root,
+        json: false,
+        noColor: false,
+        cwd: root
+      },
+      1
+    );
+
+    assert.deepEqual(result, {
+      ok: false,
+      diagnostic: {
+        code: "phase_source_missing",
+        message: "No phase 1 source was found. Run legion explore or pass --from-roadmap <path>."
+      }
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper phase compatibility treats explicit roadmap without phase as authoritative", async () => {
+  const phaseCompat = await importWorkflowModule("phase-compat");
+  const root = await tempRepo();
+  try {
+    await writeFile(
+      path.join(root, "other.md"),
+      "## Phase 2: Other Source\nUse another phase.\n",
+      "utf8"
+    );
+    await writeFile(
+      path.join(root, "ROADMAP.md"),
+      "## Phase 1: Root Source\nUse the root roadmap.\n",
+      "utf8"
+    );
+
+    const result = await phaseCompat.resolvePhaseSource(
+      {
+        args: {
+          positionals: [],
+          options: new Map([["from-roadmap", "other.md"]])
+        },
+        repositoryRoot: root,
+        json: false,
+        noColor: false,
+        cwd: root
+      },
+      1
+    );
+
+    assert.deepEqual(result, {
+      ok: false,
+      diagnostic: {
+        code: "phase_source_missing",
+        message: "No phase 1 source was found. Run legion explore or pass --from-roadmap <path>."
+      }
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("workflow helper phase compatibility prefers planning roadmap before root roadmap", async () => {
   const phaseCompat = await importWorkflowModule("phase-compat");
   const root = await tempRepo();
