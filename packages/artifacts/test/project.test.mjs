@@ -54,6 +54,27 @@ function initInput(repositoryRoot, overrides = {}) {
   };
 }
 
+async function writeValidWorkflowRecord(repositoryRoot, workflow = "explore") {
+  const recordPath = path.join(repositoryRoot, ".legion", "project", "workflow", workflow, "record.json");
+  await mkdir(path.dirname(recordPath), { recursive: true });
+  await writeFile(
+    recordPath,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      kind: "workflow_record",
+      workflow,
+      createdAt: FIXED_TIME,
+      input: { text: "asset metadata editor" },
+      nextAction: {
+        command: "legion start",
+        reason: "Use the exploration record to initialize the project workflow."
+      }
+    }, null, 2)}\n`,
+    "utf8"
+  );
+  return recordPath;
+}
+
 test("P02-T02 initializes a committed project boundary idempotently and keeps var ignored", async () => {
   await withTempRepository(async (repositoryRoot) => {
     await git(repositoryRoot, ["init"]);
@@ -82,6 +103,29 @@ test("P02-T02 initializes a committed project boundary idempotently and keeps va
 
     await git(repositoryRoot, ["check-ignore", ".legion/var/runtime.sqlite"]);
     await assert.rejects(git(repositoryRoot, ["check-ignore", ".legion/project/project.json"]));
+  });
+});
+
+test("P02-T15 init only allows recognized pre-start workflow records", async () => {
+  await withTempRepository(async (repositoryRoot) => {
+    const recordPath = await writeValidWorkflowRecord(repositoryRoot);
+
+    const initialized = await initProject(initInput(repositoryRoot));
+    assert.equal(initialized.ok, true);
+    assert.equal(initialized.status, "initialized");
+    assert.equal(await readFile(recordPath, "utf8").then((content) => JSON.parse(content).kind), "workflow_record");
+  });
+
+  await withTempRepository(async (repositoryRoot) => {
+    const legacyPath = path.join(repositoryRoot, ".legion", "project", "workflow", "legacy-system", "legacy.txt");
+    await mkdir(path.dirname(legacyPath), { recursive: true });
+    await writeFile(legacyPath, "legacy workflow bytes\n", "utf8");
+
+    const collided = await initProject(initInput(repositoryRoot));
+    assert.equal(collided.ok, false);
+    assert.equal(collided.status, "migration_required");
+    assert.equal(collided.diagnostics[0].code, "migration_required");
+    assert.equal(await readFile(legacyPath, "utf8"), "legacy workflow bytes\n");
   });
 });
 

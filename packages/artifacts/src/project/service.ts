@@ -225,9 +225,78 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   return [];
 }
 
-async function containsOnlyPreInitWorkflowRecords(projectRoot: string): Promise<boolean> {
+export async function containsOnlyPreInitWorkflowRecords(projectRoot: string): Promise<boolean> {
   const entries = await readdir(projectRoot, { withFileTypes: true });
-  return entries.length === 1 && entries[0]?.isDirectory() === true && entries[0].name === "workflow";
+  if (entries.length !== 1 || entries[0]?.isDirectory() !== true || entries[0].name !== "workflow") {
+    return false;
+  }
+  return containsOnlyRecognizedWorkflowRecords(path.join(projectRoot, "workflow"));
+}
+
+async function containsOnlyRecognizedWorkflowRecords(workflowRoot: string): Promise<boolean> {
+  const entries = await readdir(workflowRoot, { withFileTypes: true });
+  let recordCount = 0;
+
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name)) continue;
+    if (!entry.isDirectory()) return false;
+
+    const result = await workflowRecordDirectoryStats(path.join(workflowRoot, entry.name), entry.name);
+    if (!result.valid) return false;
+    recordCount += result.recordCount;
+  }
+
+  return recordCount > 0;
+}
+
+async function workflowRecordDirectoryStats(
+  absoluteDirectory: string,
+  workflow: string
+): Promise<{ readonly valid: boolean; readonly recordCount: number }> {
+  const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+  let recordCount = 0;
+
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name)) continue;
+    if (!entry.isFile() || !entry.name.endsWith(".json")) return { valid: false, recordCount: 0 };
+
+    const absolutePath = path.join(absoluteDirectory, entry.name);
+    const raw = await readFile(absolutePath, "utf8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { valid: false, recordCount: 0 };
+    }
+
+    if (!isRecognizedWorkflowRecord(parsed, workflow)) return { valid: false, recordCount: 0 };
+    recordCount += 1;
+  }
+
+  return { valid: true, recordCount };
+}
+
+function isRecognizedWorkflowRecord(value: unknown, workflow: string): boolean {
+  if (!isJsonObject(value)) return false;
+  const nextAction = value["nextAction"];
+
+  return (
+    value["schemaVersion"] === 1 &&
+    value["kind"] === "workflow_record" &&
+    value["workflow"] === workflow &&
+    typeof value["createdAt"] === "string" &&
+    value["createdAt"].trim().length > 0 &&
+    isJsonObject(value["input"]) &&
+    isJsonObject(nextAction) &&
+    typeof nextAction["command"] === "string" &&
+    nextAction["command"].trim().length > 0 &&
+    typeof nextAction["reason"] === "string" &&
+    nextAction["reason"].trim().length > 0
+  );
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function createConstitutionRevision(content: string): ArtifactRevision {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -72,6 +72,27 @@ async function readJsonArtifact(root, artifactPath) {
   const absolutePath = path.join(root, ...artifactPath.split("/"));
   const raw = await readFile(absolutePath, "utf8");
   return { raw, parsed: JSON.parse(raw) };
+}
+
+async function writeValidWorkflowRecord(root, workflow = "explore", fileName = "record.json") {
+  const recordPath = path.join(root, ".legion", "project", "workflow", workflow, fileName);
+  await mkdir(path.dirname(recordPath), { recursive: true });
+  await writeFile(
+    recordPath,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      kind: "workflow_record",
+      workflow,
+      createdAt: "2026-06-22T12:00:00.000Z",
+      input: { text: "asset metadata editor" },
+      nextAction: {
+        command: "legion start",
+        reason: "Use the exploration record to initialize the project workflow."
+      }
+    }, null, 2)}\n`,
+    "utf8"
+  );
+  return recordPath;
 }
 
 function assertNoInternalWorkflowNouns(text) {
@@ -707,9 +728,7 @@ test("workflow helper state allows pre-start workflow records", async () => {
   const state = await importWorkflowModule("state");
   const root = await tempRepo();
   try {
-    const recordPath = path.join(root, ".legion", "project", "workflow", "explore", "record.json");
-    await mkdir(path.dirname(recordPath), { recursive: true });
-    await writeFile(recordPath, "{}\n", "utf8");
+    await writeValidWorkflowRecord(root);
 
     const workflowState = await state.resolveWorkflowState({
       args: {
@@ -726,6 +745,39 @@ test("workflow helper state allows pre-start workflow records", async () => {
     assert.equal(workflowState.projectId, null);
     assert.equal(workflowState.currentSpecCount, 0);
     assert.equal(workflowState.nextAction.command, "legion start");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workflow helper state blocks arbitrary pre-start workflow files", async () => {
+  const state = await importWorkflowModule("state");
+  const root = await tempRepo();
+  try {
+    const legacyPath = path.join(root, ".legion", "project", "workflow", "legacy-system", "legacy.txt");
+    await mkdir(path.dirname(legacyPath), { recursive: true });
+    await writeFile(legacyPath, "legacy workflow bytes\n", "utf8");
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "blocked");
+    assert.equal(workflowState.projectId, null);
+    assert.equal(workflowState.currentSpecCount, 0);
+    assert.equal(workflowState.nextAction.command, "legion validate");
+    assert.equal(workflowState.diagnostics[0]?.code, "migration_required");
+    assert.equal(
+      workflowState.diagnostics[0]?.message,
+      "Existing .legion/project data has no project manifest; explicit migration or reconciliation is required before initialization."
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1152,6 +1204,42 @@ test("legion quick records an ad-hoc task request", async () => {
   }
 });
 
+test("legion quick preserves repeated timestamp and slug records", async () => {
+  const root = await tempRepo();
+  try {
+    await initializeAssetMapperProject(root);
+
+    const args = [
+      "--repository-root", root,
+      "quick", "fix the failing tests",
+      "--created-at", "2026-06-22T12:34:56.000Z",
+      "--json"
+    ];
+    const first = await runCliCapture(args);
+    const second = await runCliCapture(args);
+    assert.equal(first.exitCode, 0, first.stderr);
+    assert.equal(second.exitCode, 0, second.stderr);
+
+    const firstPayload = parseJsonOutput(first);
+    const secondPayload = parseJsonOutput(second);
+    assert.notEqual(secondPayload.artifactPath, firstPayload.artifactPath);
+    assert.match(firstPayload.artifactPath, /2026-06-22T12-34-56-000Z-fix-the-failing-tests\.json$/);
+    assert.match(secondPayload.artifactPath, /2026-06-22T12-34-56-000Z-fix-the-failing-tests-2\.json$/);
+
+    const firstArtifact = await readJsonArtifact(root, firstPayload.artifactPath);
+    const secondArtifact = await readJsonArtifact(root, secondPayload.artifactPath);
+    assert.equal(firstArtifact.parsed.input.text, "fix the failing tests");
+    assert.equal(secondArtifact.parsed.input.text, "fix the failing tests");
+    const files = await readdir(path.join(root, ".legion", "project", "workflow", "quick"));
+    assert.deepEqual(files.sort(), [
+      "2026-06-22T12-34-56-000Z-fix-the-failing-tests-2.json",
+      "2026-06-22T12-34-56-000Z-fix-the-failing-tests.json"
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("legion explore records a design artifact before project start", async () => {
   const root = await tempRepo();
   try {
@@ -1190,6 +1278,32 @@ test("legion explore records a design artifact before project start", async () =
     assert.equal(start.exitCode, 0, start.stderr);
     assert.equal(parseJsonOutput(start).nextAction.command, "legion plan 1");
     await assertFileExists(path.join(root, ...payload.artifactPath.split("/")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("legion start blocks arbitrary files in the pre-start workflow directory", async () => {
+  const root = await tempRepo();
+  try {
+    const legacyPath = path.join(root, ".legion", "project", "workflow", "legacy-system", "legacy.txt");
+    await mkdir(path.dirname(legacyPath), { recursive: true });
+    await writeFile(legacyPath, "legacy workflow bytes\n", "utf8");
+
+    const result = await runCliCapture([
+      "--repository-root", root,
+      "start",
+      "--name", "Asset Mapper",
+      "--owner", "dasbl",
+      "--json"
+    ]);
+    assert.equal(result.exitCode, 1);
+    const payload = parseJsonOutput(result);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.status, "migration_required");
+    assert.equal(payload.diagnostics[0]?.code, "migration_required");
+    assert.equal(payload.nextAction.command, "legion validate");
+    await assertFileExists(legacyPath);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1307,6 +1421,13 @@ test("legion map --check reports readiness without writing workflow records", as
   }
 });
 
+test("legion map help only advertises implemented modes", async () => {
+  const result = await runCliCapture(["map", "--help"]);
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /legion map \[--check\|--refresh\]/);
+  assert.doesNotMatch(result.stdout, /--query/);
+});
+
 for (const command of ["quick", "advise", "learn", "explore", "council"]) {
   test(`legion ${command} requires text input without writing records`, async () => {
     const root = await tempRepo();
@@ -1319,6 +1440,28 @@ for (const command of ["quick", "advise", "learn", "explore", "council"]) {
       assert.equal(payload.diagnostics[0]?.code, "usage_error");
       assert.match(payload.diagnostics[0]?.message, /requires/i);
       await assertPathMissing(path.join(root, ".legion", "project", "workflow", command));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const retroCase of [
+  { name: "valueless phase", args: ["retro", "--phase", "--json"], option: "phase" },
+  { name: "blank phase", args: ["retro", "--phase=", "--json"], option: "phase" },
+  { name: "valueless milestone", args: ["retro", "--milestone", "--json"], option: "milestone" },
+  { name: "blank milestone", args: ["retro", "--milestone=", "--json"], option: "milestone" }
+]) {
+  test(`legion retro rejects ${retroCase.name} without writing records`, async () => {
+    const root = await tempRepo();
+    try {
+      const result = await runCliCapture(["--repository-root", root, ...retroCase.args]);
+      assert.equal(result.exitCode, 1);
+      const payload = parseJsonOutput(result);
+      assert.equal(payload.ok, false);
+      assert.equal(payload.status, "usage_error");
+      assert.match(payload.diagnostics[0]?.message, new RegExp(`--${retroCase.option}`));
+      await assertPathMissing(path.join(root, ".legion", "project", "workflow", "retro"));
     } finally {
       await rm(root, { recursive: true, force: true });
     }

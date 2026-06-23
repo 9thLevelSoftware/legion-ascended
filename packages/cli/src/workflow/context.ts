@@ -1,7 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { loadProject, validateProject } from "@legion/artifacts";
+import { containsOnlyPreInitWorkflowRecords, loadProject, validateProject } from "@legion/artifacts";
 
 import type { CliContext } from "../runtime.js";
 
@@ -62,11 +62,6 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   }
 
   return [];
-}
-
-async function containsOnlyPreInitWorkflowRecords(projectRoot: string): Promise<boolean> {
-  const entries = await readdir(projectRoot, { withFileTypes: true });
-  return entries.length === 1 && entries[0]?.isDirectory() === true && entries[0].name === "workflow";
 }
 
 async function pathExists(absolutePath: string): Promise<boolean> {

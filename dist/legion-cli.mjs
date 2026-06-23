@@ -16009,7 +16009,56 @@ async function detectPreInitCollision(repositoryRoot) {
 }
 async function containsOnlyPreInitWorkflowRecords(projectRoot) {
   const entries = await readdir(projectRoot, { withFileTypes: true });
-  return entries.length === 1 && entries[0]?.isDirectory() === true && entries[0].name === "workflow";
+  if (entries.length !== 1 || entries[0]?.isDirectory() !== true || entries[0].name !== "workflow") {
+    return false;
+  }
+  return containsOnlyRecognizedWorkflowRecords(path9.join(projectRoot, "workflow"));
+}
+async function containsOnlyRecognizedWorkflowRecords(workflowRoot) {
+  const entries = await readdir(workflowRoot, { withFileTypes: true });
+  let recordCount = 0;
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name))
+      continue;
+    if (!entry.isDirectory())
+      return false;
+    const result = await workflowRecordDirectoryStats(path9.join(workflowRoot, entry.name), entry.name);
+    if (!result.valid)
+      return false;
+    recordCount += result.recordCount;
+  }
+  return recordCount > 0;
+}
+async function workflowRecordDirectoryStats(absoluteDirectory, workflow) {
+  const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+  let recordCount = 0;
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name))
+      continue;
+    if (!entry.isFile() || !entry.name.endsWith(".json"))
+      return { valid: false, recordCount: 0 };
+    const absolutePath = path9.join(absoluteDirectory, entry.name);
+    const raw = await readFile4(absolutePath, "utf8");
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { valid: false, recordCount: 0 };
+    }
+    if (!isRecognizedWorkflowRecord(parsed, workflow))
+      return { valid: false, recordCount: 0 };
+    recordCount += 1;
+  }
+  return { valid: true, recordCount };
+}
+function isRecognizedWorkflowRecord(value, workflow) {
+  if (!isJsonObject(value))
+    return false;
+  const nextAction2 = value["nextAction"];
+  return value["schemaVersion"] === 1 && value["kind"] === "workflow_record" && value["workflow"] === workflow && typeof value["createdAt"] === "string" && value["createdAt"].trim().length > 0 && isJsonObject(value["input"]) && isJsonObject(nextAction2) && typeof nextAction2["command"] === "string" && nextAction2["command"].trim().length > 0 && typeof nextAction2["reason"] === "string" && nextAction2["reason"].trim().length > 0;
+}
+function isJsonObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function createConstitutionRevision(content) {
   return artifactRevisionForContent({
@@ -23615,16 +23664,12 @@ async function detectPreInitCollision2(repositoryRoot) {
   const projectRoot = path17.join(legionRoot, "project");
   const manifestPath = path17.join(projectRoot, "project.json");
   if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
-    if (await containsOnlyPreInitWorkflowRecords2(projectRoot)) return [];
+    if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
       migrationDiagnostic("Existing .legion/project data has no project manifest; explicit migration or reconciliation is required before initialization.")
     ];
   }
   return [];
-}
-async function containsOnlyPreInitWorkflowRecords2(projectRoot) {
-  const entries = await readdir6(projectRoot, { withFileTypes: true });
-  return entries.length === 1 && entries[0]?.isDirectory() === true && entries[0].name === "workflow";
 }
 async function pathExists5(absolutePath) {
   try {
@@ -24580,8 +24625,6 @@ async function recordStandaloneWorkflow(context, options) {
   if (typeof createdAt !== "string") return createdAt;
   const slug = slugFromName(options.slugSource);
   const safeTimestamp = createdAt.replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+$/g, "");
-  const artifactPath = `.legion/project/workflow/${options.workflow}/${safeTimestamp}-${slug}.json`;
-  const absolutePath = path21.join(context.repositoryRoot, ...artifactPath.split("/"));
   const record2 = {
     schemaVersion: 1,
     kind: "workflow_record",
@@ -24590,9 +24633,15 @@ async function recordStandaloneWorkflow(context, options) {
     input: options.input,
     nextAction: options.nextAction
   };
-  await mkdir11(path21.dirname(absolutePath), { recursive: true });
-  await writeFile5(absolutePath, `${JSON.stringify(record2, null, 2)}
-`, "utf8");
+  const recordContent = `${JSON.stringify(record2, null, 2)}
+`;
+  const artifactPath = await writeUniqueWorkflowRecord({
+    repositoryRoot: context.repositoryRoot,
+    workflow: options.workflow,
+    safeTimestamp,
+    slug,
+    content: recordContent
+  });
   return success(
     {
       ok: true,
@@ -24610,6 +24659,24 @@ async function recordStandaloneWorkflow(context, options) {
     ].join("\n")
   );
 }
+async function writeUniqueWorkflowRecord(input) {
+  const artifactDirectory = `.legion/project/workflow/${input.workflow}`;
+  const absoluteDirectory = path21.join(input.repositoryRoot, ...artifactDirectory.split("/"));
+  await mkdir11(absoluteDirectory, { recursive: true });
+  for (let index = 0; index < 1e3; index += 1) {
+    const suffix = index === 0 ? "" : `-${index + 1}`;
+    const artifactPath = `${artifactDirectory}/${input.safeTimestamp}-${input.slug}${suffix}.json`;
+    const absolutePath = path21.join(input.repositoryRoot, ...artifactPath.split("/"));
+    try {
+      await writeFile5(absolutePath, input.content, { encoding: "utf8", flag: "wx" });
+      return artifactPath;
+    } catch (error2) {
+      if (isEexist(error2)) continue;
+      throw error2;
+    }
+  }
+  throw new Error(`Unable to create a unique workflow record for ${input.workflow} after 1000 attempts.`);
+}
 function recordCreatedAt(context) {
   if (context.args.options.get("created-at") === true) {
     return usageError("Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z.");
@@ -24620,6 +24687,9 @@ function recordCreatedAt(context) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
   }
+}
+function isEexist(error2) {
+  return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "EEXIST");
 }
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
@@ -24672,7 +24742,7 @@ async function handleAdHocWorkflow(context, command) {
 // packages/cli/src/commands/workflow/contextual.ts
 var HELP2 = {
   explore: "legion explore <topic>\n\nCreate a design discovery artifact before start or planning.",
-  map: "legion map [--check|--refresh|--query <text>]\n\nGenerate, refresh, check, or query codebase context.",
+  map: "legion map [--check|--refresh]\n\nGenerate, refresh, or check codebase context.",
   retro: "legion retro [--phase N|--milestone M]\n\nRecord retrospective evidence for future planning.",
   milestone: "legion milestone\n\nManage milestone status, summaries, and archives.",
   council: "legion council <topic>\n\nRun governance deliberation formerly exposed as /legion:board."
@@ -24693,16 +24763,21 @@ async function handleContextualWorkflow(context, command) {
       });
     case "map":
       return handleMapWorkflow(context);
-    case "retro":
+    case "retro": {
+      const phase = optionalStringInput(context, "phase");
+      if (phase !== null && typeof phase === "object" && isCliResult(phase)) return phase;
+      const milestone = optionalStringInput(context, "milestone");
+      if (milestone !== null && typeof milestone === "object" && isCliResult(milestone)) return milestone;
       return recordStandaloneWorkflow(context, {
         workflow: "retro",
         input: {
-          phase: optionalStringInput(context, "phase"),
-          milestone: optionalStringInput(context, "milestone")
+          phase,
+          milestone
         },
         nextAction: nextAction("legion plan 1", "Use the retrospective record when planning the next phase."),
-        slugSource: optionalStringInput(context, "phase") ?? optionalStringInput(context, "milestone") ?? "retro"
+        slugSource: phase ?? milestone ?? "retro"
       });
+    }
     case "milestone":
       return recordStandaloneWorkflow(context, {
         workflow: "milestone",
@@ -24762,8 +24837,12 @@ function handleMapWorkflow(context) {
   return usageError("legion map requires --check or --refresh.");
 }
 function optionalStringInput(context, key) {
+  if (!context.args.options.has(key)) return null;
   const value = context.args.options.get(key);
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return usageError(`Missing required value for --${key}. Example: legion retro --${key} <value>.`);
+  }
+  return value.trim();
 }
 
 // packages/cli/src/commands/workflow/ship.ts

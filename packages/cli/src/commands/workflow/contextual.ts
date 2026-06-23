@@ -1,10 +1,10 @@
-import { helpResult, success, usageError, type CliContext, type CliResult } from "../../runtime.js";
+import { helpResult, isCliResult, success, usageError, type CliContext, type CliResult } from "../../runtime.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { positionalText, recordStandaloneWorkflow } from "./record.js";
 
 const HELP = {
   explore: "legion explore <topic>\n\nCreate a design discovery artifact before start or planning.",
-  map: "legion map [--check|--refresh|--query <text>]\n\nGenerate, refresh, check, or query codebase context.",
+  map: "legion map [--check|--refresh]\n\nGenerate, refresh, or check codebase context.",
   retro: "legion retro [--phase N|--milestone M]\n\nRecord retrospective evidence for future planning.",
   milestone: "legion milestone\n\nManage milestone status, summaries, and archives.",
   council: "legion council <topic>\n\nRun governance deliberation formerly exposed as /legion:board."
@@ -32,16 +32,21 @@ export async function handleContextualWorkflow(
       });
     case "map":
       return handleMapWorkflow(context);
-    case "retro":
+    case "retro": {
+      const phase = optionalStringInput(context, "phase");
+      if (phase !== null && typeof phase === "object" && isCliResult(phase)) return phase;
+      const milestone = optionalStringInput(context, "milestone");
+      if (milestone !== null && typeof milestone === "object" && isCliResult(milestone)) return milestone;
       return recordStandaloneWorkflow(context, {
         workflow: "retro",
         input: {
-          phase: optionalStringInput(context, "phase"),
-          milestone: optionalStringInput(context, "milestone")
+          phase,
+          milestone
         },
         nextAction: nextAction("legion plan 1", "Use the retrospective record when planning the next phase."),
-        slugSource: optionalStringInput(context, "phase") ?? optionalStringInput(context, "milestone") ?? "retro"
+        slugSource: phase ?? milestone ?? "retro"
       });
+    }
     case "milestone":
       return recordStandaloneWorkflow(context, {
         workflow: "milestone",
@@ -105,7 +110,11 @@ function handleMapWorkflow(context: CliContext): Promise<CliResult> | CliResult 
   return usageError("legion map requires --check or --refresh.");
 }
 
-function optionalStringInput(context: CliContext, key: string): string | null {
+function optionalStringInput(context: CliContext, key: string): string | null | CliResult {
+  if (!context.args.options.has(key)) return null;
   const value = context.args.options.get(key);
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return usageError(`Missing required value for --${key}. Example: legion retro --${key} <value>.`);
+  }
+  return value.trim();
 }
