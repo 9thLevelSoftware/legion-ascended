@@ -42,6 +42,8 @@
               "oracle",
               "taskgraph",
               "evidence-index",
+              "task-run",
+              "review",
               "archive"
             ]
           },
@@ -1602,6 +1604,8 @@
                   "oracle",
                   "taskgraph",
                   "evidence-index",
+                  "task-run",
+                  "review",
                   "archive"
                 ]
               },

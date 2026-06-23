@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { listCurrentSpecs, loadChangeBundle, readTaskGraph } from "@legion/artifacts";
+import { listCurrentSpecs, listReviewDecisionsForChange, loadChangeBundle, readEvidenceIndex, readTaskGraph } from "@legion/artifacts";
 
 import type { CliContext } from "../runtime.js";
 import { loadWorkflowProject, validateWorkflowProject } from "./context.js";
@@ -121,13 +121,59 @@ export async function resolveWorkflowState(context: CliContext): Promise<Workflo
     };
   }
 
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (evidence.ok && reviews.ok && hasAcceptedReview(reviews.reviews) && hasAcceptedEvidence(evidence.document.entries)) {
+    return {
+      stage: "ship_ready",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate."),
+      diagnostics: []
+    };
+  }
+
+  if (reviews.ok && reviews.reviews.length > 0) {
+    return {
+      stage: "reviewed",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion review --accept", "A review decision exists and may need human acceptance."),
+      diagnostics: []
+    };
+  }
+
+  if (evidence.ok && evidence.document.entries.length > 0) {
+    return {
+      stage: "built",
+      projectId: project.loaded.project.id,
+      currentSpecCount: specs.documents.length,
+      nextAction: nextAction("legion review", "Build evidence exists and is ready for review."),
+      diagnostics: []
+    };
+  }
+
   return {
     stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion build --dry-run", "Latest planned change is ready for build readiness checks."),
+    nextAction: nextAction("legion build", "Latest planned change is ready for guided build execution."),
     diagnostics: []
   };
+}
+
+function hasAcceptedReview(reviews: readonly { readonly document: { readonly status: string } }[]): boolean {
+  return reviews.some((review) => review.document.status === "accepted");
+}
+
+function hasAcceptedEvidence(entries: readonly { readonly acceptance: { readonly status: string } }[]): boolean {
+  return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 
 export async function findLatestWorkflowChangeId(repositoryRoot: string): Promise<LatestWorkflowChangeResult> {

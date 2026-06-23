@@ -7,6 +7,8 @@ export * from "./changes/index.js";
 export * from "./oracles/index.js";
 export * from "./taskgraphs/index.js";
 export * from "./evidence-index/index.js";
+export * from "./task-runs/index.js";
+export * from "./reviews/index.js";
 export * from "./traceability/index.js";
 export * from "./invalidation/index.js";
 export * from "./archive/index.js";

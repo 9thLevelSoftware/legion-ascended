@@ -6,11 +6,15 @@ import {
   changeIdSchema,
   oracleIdSchema,
   requirementIdSchema,
+  reviewIdSchema,
+  runIdSchema,
   type ArtifactPath,
   type ArtifactRole,
   type ChangeId,
   type OracleId,
-  type RequirementId
+  type RequirementId,
+  type ReviewId,
+  type RunId
 } from "@legion/protocol";
 
 export const LEGION_PROJECT_ROOT = ".legion/project" as const;
@@ -51,6 +55,8 @@ export interface ArtifactPathForRoleInput {
   readonly changeId?: ChangeId | string;
   readonly requirementId?: RequirementId | string;
   readonly oracleId?: OracleId | string;
+  readonly runId?: RunId | string;
+  readonly reviewId?: ReviewId | string;
 }
 
 export class ArtifactPathError extends Error {
@@ -166,6 +172,14 @@ function parseOracleId(input: OracleId | string | undefined): OracleId {
   return oracleIdSchema.parse(input);
 }
 
+function parseRunId(input: RunId | string | undefined): RunId {
+  return runIdSchema.parse(input);
+}
+
+function parseReviewId(input: ReviewId | string | undefined): ReviewId {
+  return reviewIdSchema.parse(input);
+}
+
 export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPath {
   switch (input.role) {
     case "project-manifest":
@@ -205,6 +219,16 @@ export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPa
     case "evidence-index": {
       const changeId = parseChangeId(input.changeId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/evidence-index.json`);
+    }
+    case "task-run": {
+      const changeId = parseChangeId(input.changeId);
+      const runId = parseRunId(input.runId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/runs/${runId}/task-run.json`);
+    }
+    case "review": {
+      const changeId = parseChangeId(input.changeId);
+      const reviewId = parseReviewId(input.reviewId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/reviews/${reviewId}.json`);
     }
     case "archive": {
       const changeId = parseChangeId(input.changeId);
