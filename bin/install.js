@@ -68,7 +68,11 @@ function resolveRuntimeTarget(target) {
     throw new Error('--target requires a runtime id such as codex, claude, or kilocode.');
   }
   const normalized = target.startsWith('--') ? target : `--${target}`;
-  return RUNTIME_METADATA[target] ? target : resolveRuntimeKey(normalized);
+  const resolved = RUNTIME_METADATA[target] ? target : resolveRuntimeKey(normalized);
+  if (!resolved) {
+    throw new Error(`Unknown target: ${target}`);
+  }
+  return resolved;
 }
 
 function runtimeKeysForPrompt(includeAll = false) {
