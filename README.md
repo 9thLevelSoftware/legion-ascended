@@ -8,6 +8,25 @@ Orchestrate 49 AI specialist personalities across 10 installable AI CLI runtimes
 
 Turn 49 isolated agent personalities into a coordinated legion. The native Legion entry point now depends on the runtime you install into. See the audited compatibility matrix in [docs/runtime-audit.md](docs/runtime-audit.md) before assuming `/legion:*` works everywhere.
 
+## CLI Workflow
+
+The canonical CLI uses the same workflow names as Legion's original slash commands:
+
+```powershell
+legion start
+legion plan 1
+legion build
+legion review
+legion status
+legion quick "fix the failing tests"
+```
+
+Typed v9 internals are available under `legion dev` for operators and maintainers. Normal project work should not require `legion dev`, worker bundle manifests, or prompt hash management.
+
+During the current workflow hardening window, `legion build --dry-run --json` and `legion review --dry-run --json` report typed taskgraph readiness. Non-dry-run build and review commands block honestly until the runtime execution and review evidence backends are connected.
+
+Runtime slash-command installs remain supported, but they are compatibility and host-integration details over the same workflow names rather than the first normal use path.
+
 ## Installation
 
 ### Quick install (recommended)
@@ -101,70 +120,68 @@ This repository now also ships a repo-native Codex plugin manifest at `.codex-pl
 ## Getting Started
 
 1. Install Legion (see above)
-2. Start Legion with the runtime-native entry point from the table above
-3. Answer the guided questions — or run `/legion:explore` first to create a design document
+2. Run `legion start`
+3. Answer the guided questions, or run `legion explore` first to record a design discovery artifact
 4. Review the generated PROJECT.md and ROADMAP.md
-5. Plan the first phase with the runtime-native Legion plan entry
-6. Execute the phase with the runtime-native Legion build entry
-7. Review the phase with the runtime-native Legion review entry
+5. Plan the first phase with `legion plan 1`
+6. Check implementation readiness with `legion build --dry-run --json`
+7. Check review readiness with `legion review --dry-run --json`
 8. Repeat plan → build → review for each phase
 
 ## Commands
 
-These are the canonical Legion command names. Each runtime maps them to its own discovery surface. Codex uses flat prompt names such as `/project:legion-start`; Gemini keeps `/legion:start`; Copilot, OpenCode, and Kilo CLI use flat `/legion-start`; Kilo Code Plugin installs both plugin workflows such as `/legion-start.md` and CLI-backed workflows such as `/legion-start`, plus a single `Legion` mode bridge and individual Agent Skills; Kiro uses `@legion-orchestrator`; Cursor and Windsurf rely on their installed rules and plain-language intent routing. Nineteen commands total.
+These are the canonical Legion CLI command names. Runtime slash commands and prompt entries map back to these workflow verbs for compatibility.
 
 | Command | Description | Usage |
 |---------|-------------|-------|
-| `/legion:start` | Initialize project with guided questioning | Run once at project start |
-| `/legion:plan <N>` | Plan phase N with agent recommendations and wave-structured tasks | After start, or after completing a phase |
-| `/legion:build` | Execute current phase with parallel agent teams | After planning a phase |
-| `/legion:review` | Run QA review cycle with testing/QA agents | After building a phase |
-| `/legion:status` | Show progress dashboard and route to next action | Anytime — routes you to the right command |
-| `/legion:quick <task>` | Run ad-hoc task with intelligent agent selection | Anytime — for one-off tasks |
-| `/legion:advise <topic>` | Get read-only expert consultation from any agent | Anytime — standalone advisory, no phase context needed |
-| `/legion:portfolio` | Multi-project dashboard with dependency tracking | When managing multiple projects |
-| `/legion:milestone` | Milestone completion, archiving, and metrics | At project milestones |
-| `/legion:agent` | Create a new agent personality through guided workflow | When you need a specialist that doesn't exist |
-| `/legion:map` | Generate, refresh, check, or query the codebase map dataset | Before start or planning in existing codebases |
-| `/legion:explore` | Research-first design discovery with Polymath | Creates a design doc; can hand off to `/legion:start <design-doc>` when you choose |
-| `/legion:board` | Convene board of directors for governance decisions | For architecture decisions, go/no-go calls, conflict resolution |
-| `/legion:retro` | Run structured retrospective on completed phases or milestones | After phases or milestones — captures what worked, what didn't |
-| `/legion:ship` | Pre-ship checklist, PR creation, deployment verification, canary monitoring | After review — formal shipping stage before the next phase |
-| `/legion:learn` | Record, recall, and manage project-specific patterns and preferences | Anytime — operationalizes project memory |
-| `/legion:update` | Check for updates and install latest version from npm | After installation — keeps Legion current |
-| `/legion:polish` | Run 4-pass code cleanup on changed files or a target path | After review, or anytime via ad-hoc invocation |
-| `/legion:validate` | Validate .planning/ state file integrity, schema conformance, and cross-references | Anytime — catches drift and corruption early (supports `--ci`, `--fix`) |
+| `legion start` | Initialize project state and route to first planning step | Run once at project start |
+| `legion explore <topic>` | Record design discovery before start or planning | Before `start`, or when a phase needs research |
+| `legion map --check` / `legion map --refresh` | Check or refresh codebase context records | Before planning in existing codebases |
+| `legion plan <N>` | Turn roadmap phase N into typed task contracts | After start, or after completing a phase |
+| `legion build` | Implementation gate for planned task contracts | Use `--dry-run --json` today to verify readiness |
+| `legion review` | Review gate for task outputs and verification evidence | Use `--dry-run --json` today to verify readiness |
+| `legion ship` | Release readiness gate | After accepted review evidence is available |
+| `legion retro` | Record retrospective evidence | After phases or milestones |
+| `legion status` | Show workflow state and next action | Anytime |
+| `legion quick <task>` | Record an ad-hoc task request | Anytime for one-off work |
+| `legion advise <topic>` | Record read-only advisory analysis | Anytime, no phase context needed |
+| `legion polish <target>` | Record scoped cleanup work | After review, or as an ad-hoc workflow |
+| `legion learn <lesson>` | Record project-specific operational learning | Anytime |
+| `legion milestone` | Record milestone status and summaries | At project milestones |
+| `legion validate` | Validate committed Legion project state | Anytime, especially before planning |
+| `legion doctor` | Run shallow path and project-state checks | When diagnosing setup issues |
+| `legion council` | Record governance deliberation | For architecture decisions and go/no-go calls |
 
 ## How It Works
 
 ```
-/legion:start            Guided questioning → PROJECT.md + ROADMAP.md
+legion start             Guided questioning → PROJECT.md + ROADMAP.md
        ↓
-/legion:plan 1           Phase decomposition → Wave-structured plans + agent teams
+legion plan 1            Phase decomposition → typed task contracts
        ↓                       ↓ (optional)
        ↓                 Plan critique → Pre-mortem + assumption hunting
        ↓
-/legion:build            Parallel execution → Agents work in character, wave by wave
+legion build             Implementation gate → runtime readiness now, execution backend later
        ↓
-/legion:review           Quality gate → Review → Fix → Re-review (default max 3 cycles, configurable)
+legion review            Quality gate → review readiness now, evidence pipeline later
        ↓                       ↓ (optional)
        ↓                 Panel mode → 2-4 domain-weighted reviewers with rubrics
        ↓                       ↓ (post-review, configurable)
        ↓                 Code polish → 4-pass cleanup (comments, simplification, readability, consistency)
        ↓
-/legion:ship             Ship pipeline → Pre-ship gates → PR creation → deployment verification
+legion ship              Ship pipeline → Pre-ship gates → PR creation → deployment verification
        ↓
-/legion:retro            Retrospective → What worked, what didn't, reusable patterns
+legion retro             Retrospective → What worked, what didn't, reusable patterns
        ↓
-/legion:plan 2 → ...     Repeat for each phase until project complete
+legion plan 2 → ...      Repeat for each phase until project complete
 
 
-/legion:map              Standalone → Codebase documentation + semantic index
-/legion:explore          Standalone → Research + questions + design doc before optional start
-/legion:advise <topic>   Standalone → Read-only expert consultation (any time)
-/legion:quick <task>     Standalone → One-off task with agent selection (any time)
-/legion:polish [target]  Standalone → 4-pass code cleanup with safety rails (any time)
-/legion:learn <lesson>   Standalone → Record patterns, pitfalls, and preferences (any time)
+legion map               Standalone → Codebase documentation + semantic index
+legion explore           Standalone → Research + questions + design doc before optional start
+legion advise <topic>    Standalone → Read-only expert consultation record
+legion quick <task>      Standalone → One-off task record
+legion polish [target]   Standalone → 4-pass cleanup request
+legion learn <lesson>    Standalone → Record patterns, pitfalls, and preferences
 ```
 
 ## Claude Opus 4.7 Hardening

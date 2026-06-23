@@ -40,6 +40,18 @@ test("CLI README leads with workflow commands, not engine commands", async () =>
   assert.match(opening, /legion plan 1/);
   assert.match(opening, /legion build/);
   assert.match(opening, /legion review/);
+  assert.match(opening, /legion quick "fix the failing tests"/);
   assert.doesNotMatch(readme.slice(0, 1200), /legion next/);
   assert.doesNotMatch(readme.slice(0, 1200), /worker bundle/);
+});
+
+test("user docs do not present worker bundle authoring as typical usage", async () => {
+  const files = ["README.md", "docs/next/cli/README.md"];
+  for (const file of files) {
+    const text = await readFile(file, "utf8");
+    const firstUsageSection = text.slice(0, 2500);
+    assert.doesNotMatch(firstUsageSection, /bundles\/index\.json/);
+    assert.doesNotMatch(firstUsageSection, /instructionsHash/);
+    assert.doesNotMatch(firstUsageSection, /promptContentContract/);
+  }
 });

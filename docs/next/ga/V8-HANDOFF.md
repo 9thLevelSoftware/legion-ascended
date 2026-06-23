@@ -70,7 +70,7 @@ automation belong to v9.
 The v9 line owns the rewrite work tracked in `docs/next/REWRITE-CHARTER.md`
 and the Phase 13 GA decision package under `docs/next/ga/`. v9 changes
 that touch v8 compatibility surfaces must follow the legacy-bridge
-migration path (`legion next migrate --from-codex-legion|--from-planning`).
+migration path (`legion dev migrate --from-codex-legion|--from-planning`).
 
 ## Coexistence Rules
 

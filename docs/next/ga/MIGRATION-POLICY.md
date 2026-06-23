@@ -21,7 +21,7 @@ contract.
 
 ## Sources And Actions
 
-`legion next migrate` accepts exactly one `--from-*` source and
+`legion dev migrate` accepts exactly one `--from-*` source and
 exactly one `--verify|--dry-run|--apply|--rollback` action. The CLI
 rejects any other combination as a usage error so the operator cannot
 accidentally cross-source apply or roll back with the wrong manifest.
@@ -55,7 +55,7 @@ The `--verify` action is the canonical safety gate. It:
 
 `--verify` does not modify the source bytes; running it twice produces
 identical reports (modulo the run id). The verify step is exposed as
-`legion next migrate --verify ...` so operators can wire it into CI
+`legion dev migrate --verify ...` so operators can wire it into CI
 before destructive changes.
 
 ## Source Class Preservation
@@ -102,17 +102,17 @@ accidental mixed ownership remains blocked.
 
 After a successful planning import, `.legion/project/` becomes the
 authoritative state and `.planning/` is treated as historical input.
-Subsequent `legion next project validate` runs read from
+Subsequent `legion dev project validate` runs read from
 `.legion/project/` exclusively.
 
 ## Verification Matrix
 
 | Gate | Verification command | Pass criterion |
 | --- | --- | --- |
-| Pre-apply dry-run | `legion next migrate --from-codex-legion --verify --staging-root <staging> --run-id <id>` | exit 0 + `status: "dry_run"` |
-| Apply | `legion next migrate --from-codex-legion --apply --staging-root <staging> --backup-root <backup> --review-accepted` | exit 0 + `status: "applied"` + non-empty `backup.manifestPath` |
+| Pre-apply dry-run | `legion dev migrate --from-codex-legion --verify --staging-root <staging> --run-id <id>` | exit 0 + `status: "dry_run"` |
+| Apply | `legion dev migrate --from-codex-legion --apply --staging-root <staging> --backup-root <backup> --review-accepted` | exit 0 + `status: "applied"` + non-empty `backup.manifestPath` |
 | Post-apply restore-readiness | `node scripts/release/rollback-policy.mjs --backup-manifest <manifest>` | exit 0 + `status: "restorable"` + zero findings |
-| Rollback | `legion next migrate --from-codex-legion --rollback --backup-manifest <manifest>` | exit 0 + `status: "rolled_back"` + `restoredHash` recorded |
+| Rollback | `legion dev migrate --from-codex-legion --rollback --backup-manifest <manifest>` | exit 0 + `status: "rolled_back"` + `restoredHash` recorded |
 | Post-rollback parity | `node scripts/release/rollback-policy.mjs --backup-manifest <manifest>` | exit 0 + hash recomputed from the live `.legion/` matches `preMigrationHash` / `preImportHash` |
 
 The CLI e2e suite (`apps/cli-e2e/test/cli-e2e.test.mjs`) covers the
@@ -124,7 +124,7 @@ bytes are restored after rollback.
 1. **Plan**: read the v8 baseline report
    (`docs/next/baseline/V8-BASELINE-REPORT.md`) and confirm the
    source baseline matches your checkout.
-2. **Verify**: run `legion next migrate --from-<source> --verify
+2. **Verify**: run `legion dev migrate --from-<source> --verify
    --staging-root <scratch> --run-id <unique>` and review the report
    under `.legion/migration/`.
 3. **Apply**: run the apply command with `--review-accepted` and a
@@ -134,7 +134,7 @@ bytes are restored after rollback.
    --backup-manifest <printed-path>` to confirm the rollback path is
    restorable. The CLI prints `restorable` when the manifest is
    intact, the backup directory exists, and the tree hash matches.
-5. **Adopt**: run `legion next project validate` to confirm the v9
+5. **Adopt**: run `legion dev project validate` to confirm the v9
    project state is parseable.
 
 ## Failure Recovery
