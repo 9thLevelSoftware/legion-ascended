@@ -256,6 +256,50 @@ test("workflow helper state blocks invalid project state instead of suggesting s
   }
 });
 
+test("workflow helper state blocks initialized project truth with missing constitution", async () => {
+  const state = await importWorkflowModule("state");
+  const input = await importWorkflowModule("input");
+  const { initProject } = await import("../packages/artifacts/dist/index.js");
+  const root = await tempRepo();
+  try {
+    const initialized = await initProject({
+      repositoryRoot: root,
+      slug: input.slugFromName("Asset Mapper"),
+      name: "Asset Mapper",
+      description: "Metadata authoring and deterministic asset resolution",
+      repository: {
+        provider: "git",
+        defaultBranch: "main"
+      },
+      decisionOwners: [input.ownerActor("dasbl")],
+      createdAt: "2026-06-22T12:00:00.000Z"
+    });
+    assert.equal(initialized.ok, true);
+    await rm(path.join(root, ".legion", "project", "constitution.md"), { force: true });
+
+    const workflowState = await state.resolveWorkflowState({
+      args: {
+        positionals: [],
+        options: new Map()
+      },
+      repositoryRoot: root,
+      json: false,
+      noColor: false,
+      cwd: root
+    });
+
+    assert.equal(workflowState.stage, "blocked");
+    assert.equal(workflowState.projectId, "prj_asset-mapper");
+    assert.equal(workflowState.currentSpecCount, 0);
+    assert.equal(workflowState.nextAction.command, "legion validate");
+    assert.match(workflowState.nextAction.reason, /repaired before planning/i);
+    assert.equal(workflowState.diagnostics[0]?.code, "constitution_missing");
+    assert.equal(workflowState.diagnostics[0]?.source?.path, ".legion/project/constitution.md");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("workflow helper state blocks invalid current specs instead of recommending planning", async () => {
   const state = await importWorkflowModule("state");
   const input = await importWorkflowModule("input");

@@ -1,7 +1,7 @@
 import { listCurrentSpecs } from "@legion/artifacts";
 
 import type { CliContext } from "../runtime.js";
-import { loadWorkflowProject } from "./context.js";
+import { loadWorkflowProject, validateWorkflowProject } from "./context.js";
 import { nextAction, type NextAction } from "./render.js";
 
 export type WorkflowStage =
@@ -40,6 +40,17 @@ export async function resolveWorkflowState(context: CliContext): Promise<Workflo
       currentSpecCount: 0,
       nextAction: nextAction("legion validate", "Project state must be repaired before planning can continue."),
       diagnostics: project.diagnostics
+    };
+  }
+
+  const validation = await validateWorkflowProject(context);
+  if (!validation.ok) {
+    return {
+      stage: "blocked",
+      projectId: project.loaded.project.id,
+      currentSpecCount: 0,
+      nextAction: nextAction("legion validate", "Project state must be repaired before planning can continue."),
+      diagnostics: validation.diagnostics
     };
   }
 
