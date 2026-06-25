@@ -112,8 +112,34 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to npm
+      - name: Resolve npm authentication mode
+        id: npm_auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "mode=token" >> "$GITHUB_OUTPUT"
+            echo "Using npm token authentication from NPM_TOKEN."
+          else
+            echo "mode=trusted-publishing" >> "$GITHUB_OUTPUT"
+            echo "::notice::NPM_TOKEN is not configured. Attempting npm Trusted Publishing with GitHub OIDC. Configure npm package legion-ascended with trusted publisher owner=9thLevelSoftware, repository=legion-ascended, workflow=npm-publish.yml, allowed action=npm publish."
+          fi
+
+      - name: Check npm token authentication
+        if: steps.npm_auth.outputs.mode == 'token'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm whoami --registry=https://registry.npmjs.org
+
+      - name: Publish to npm with token
+        if: steps.npm_auth.outputs.mode == 'token'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ steps.publish_metadata.outputs.dist_tag }}
         run: npm publish --provenance --access public --tag "$DIST_TAG"
+
+      - name: Publish to npm with trusted publishing
+        if: steps.npm_auth.outputs.mode == 'trusted-publishing'
+        env:
+          DIST_TAG: ${{ steps.publish_metadata.outputs.dist_tag }}
+        run: npm publish --access public --tag "$DIST_TAG"
