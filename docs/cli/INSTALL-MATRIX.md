@@ -71,9 +71,9 @@ legion update --target codex --local
 Existing shortcut flags remain supported:
 
 ```powershell
-npx @9thlevelsoftware/legion --claude
-npx @9thlevelsoftware/legion --codex --local
-npx @9thlevelsoftware/legion --kilo-code --global
+npx legion-ascended --claude
+npx legion-ascended --codex --local
+npx legion-ascended --kilo-code --global
 ```
 
 ## Policy

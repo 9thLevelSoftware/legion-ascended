@@ -120,7 +120,7 @@ function printHelp() {
 
 
 Usage:
-  npx @9thlevelsoftware/legion [runtime] [options]
+  npx legion-ascended [runtime] [options]
   legion install --target <runtime> [options]
 
 Runtime (first-class targets are shown by default):
@@ -1926,10 +1926,10 @@ Check the installed Legion version against the latest npm release and update if 
    - Read the Legion manifest:
      Run: Bash  cat "${manifestFile}" 2>/dev/null
    - Extract the "version" field from the JSON
-   - If no manifest found: "Legion is not installed. Run: npx @9thlevelsoftware/legion ${rt.flag}"
+   - If no manifest found: "Legion is not installed. Run: npx legion-ascended ${rt.flag}"
 
 2. CHECK LATEST VERSION
-   - Run: Bash  npm show @9thlevelsoftware/legion version 2>/dev/null
+   - Run: Bash  npm show legion-ascended version 2>/dev/null
    - If command fails: "Could not check npm registry. Check your internet connection."
    - Store as LATEST_VERSION
 
@@ -1941,12 +1941,12 @@ Check the installed Legion version against the latest npm release and update if 
      Display: "Update available: v{installed} -> v{LATEST_VERSION}"
 
 4. INSTALL UPDATE
-   - Run: Bash  npx @9thlevelsoftware/legion@latest ${rt.flag} --${scope}
+   - Run: Bash  npx legion-ascended@latest ${rt.flag} --${scope}
    - Display the installer output
    - Remind user to restart their CLI
 
 5. SHOW CHANGELOG
-   - Run: Bash  npm show @9thlevelsoftware/legion --json 2>/dev/null
+   - Run: Bash  npm show legion-ascended --json 2>/dev/null
    - If available, show what changed in the new version
 </process>
 `;
@@ -2145,7 +2145,7 @@ async function update(runtimeKey, scope, verify = false) {
   const manifest = readManifest(paths.manifestFile);
 
   if (!manifest) {
-    throw new Error(`Legion is not installed. Run install first:\n  npx @9thlevelsoftware/legion ${RUNTIME_METADATA[runtimeKey].flag}`);
+    throw new Error(`Legion is not installed. Run install first:\n  npx legion-ascended ${RUNTIME_METADATA[runtimeKey].flag}`);
   }
 
   const installedVersion = manifest.version;

@@ -1,0 +1,119 @@
+name: Publish legion-ascended to npm
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      dist_tag:
+        description: "Optional npm dist-tag. Defaults to prerelease label or latest for stable versions."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Package and publish
+    if: github.repository == '9thLevelSoftware/legion-ascended'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+
+      - name: Validate npm package identity
+        run: |
+          node <<'NODE'
+          const { readFileSync } = require("node:fs");
+
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const failures = [];
+
+          if (pkg.name !== "legion-ascended") {
+            failures.push(`package.json name must be legion-ascended, got ${JSON.stringify(pkg.name)}`);
+          }
+          if (pkg.private === true) {
+            failures.push("package.json must not be private for npm publication");
+          }
+          if (pkg.bin?.legion !== "bin/legion.js") {
+            failures.push("package.json must keep the legion binary mapped to bin/legion.js");
+          }
+          if (!String(pkg.repository?.url ?? "").includes("9thLevelSoftware/legion-ascended")) {
+            failures.push("package.json repository.url must point at 9thLevelSoftware/legion-ascended");
+          }
+
+          if (failures.length > 0) {
+            for (const failure of failures) {
+              console.error(`::error::${failure}`);
+            }
+            process.exit(1);
+          }
+          NODE
+
+      - name: Run release validation
+        run: pnpm run validate:next
+
+      - name: Resolve publish metadata
+        id: publish_metadata
+        env:
+          DIST_TAG_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.dist_tag || '' }}
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+
+          if [ -n "$DIST_TAG_OVERRIDE" ]; then
+            dist_tag="$DIST_TAG_OVERRIDE"
+          elif [[ "$package_version" == *-* ]]; then
+            prerelease="${package_version#*-}"
+            dist_tag="${prerelease%%.*}"
+          else
+            dist_tag="latest"
+          fi
+
+          if ! [[ "$dist_tag" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::Invalid npm dist-tag: $dist_tag"
+            exit 1
+          fi
+
+          echo "package_name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Stop if this version already exists on npm
+        env:
+          PACKAGE_NAME: ${{ steps.publish_metadata.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.publish_metadata.outputs.package_version }}
+        run: |
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "::error::$PACKAGE_NAME@$PACKAGE_VERSION already exists on npm. Bump package.json version before publishing."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.publish_metadata.outputs.dist_tag }}
+        run: npm publish --provenance --access public --tag "$DIST_TAG"

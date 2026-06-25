@@ -22,7 +22,7 @@ sign off on the stable channel promotion.
 
 | Field | Value |
 | --- | --- |
-| Package | `@9thlevelsoftware/legion` |
+| Package | `legion-ascended` |
 | Release version | `9.0.0` |
 | Pre-release channel (cut-over) | `next` |
 | Stable channel (post-approval) | `latest` |

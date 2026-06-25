@@ -48,4 +48,4 @@ pnpm run bootstrap
 pnpm run validate
 ```
 
-The root package remains named `@9thlevelsoftware/legion`, but the v8 prompt-package surface remains the frozen reference line until the Phase 1 legacy boundary task (`P01-T10`) materializes or isolates it under explicit package-content tests. Phase 1 Wave 1 must not add a dashboard, hosted service, chat UI, SQLite implementation, dispatcher loop, or Eve-specific runtime binding.
+The root package now publishes as `legion-ascended`, while the v8 prompt-package surface remains the frozen `@9thlevelsoftware/legion` reference line isolated by explicit package-content tests. Phase 1 Wave 1 must not add a dashboard, hosted service, chat UI, SQLite implementation, dispatcher loop, or Eve-specific runtime binding.
