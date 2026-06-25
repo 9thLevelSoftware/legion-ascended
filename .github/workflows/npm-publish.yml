@@ -73,9 +73,6 @@ jobs:
           }
           NODE
 
-      - name: Run release validation
-        run: pnpm run validate:next
-
       - name: Resolve publish metadata
         id: publish_metadata
         env:
@@ -102,6 +99,29 @@ jobs:
           echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
           echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve npm authentication mode
+        id: npm_auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: ${{ steps.publish_metadata.outputs.package_name }}
+        run: |
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "mode=token" >> "$GITHUB_OUTPUT"
+            echo "Using npm token authentication from NPM_TOKEN."
+          elif npm view "$PACKAGE_NAME" name >/dev/null 2>&1; then
+            echo "mode=trusted-publishing" >> "$GITHUB_OUTPUT"
+            echo "::notice::NPM_TOKEN is not configured. Attempting npm Trusted Publishing with GitHub OIDC. Configure npm package legion-ascended with trusted publisher owner=9thLevelSoftware, repository=legion-ascended, workflow=npm-publish.yml, allowed action=npm publish."
+          else
+            echo "::error::NPM_TOKEN is not configured and $PACKAGE_NAME is not published yet. First publish needs a GitHub repository secret named NPM_TOKEN with an npm publish token, or a one-time manual publish. After the package exists, npm Trusted Publishing can be configured for owner=9thLevelSoftware, repository=legion-ascended, workflow=npm-publish.yml."
+            exit 1
+          fi
+
+      - name: Check npm token authentication
+        if: steps.npm_auth.outputs.mode == 'token'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm whoami --registry=https://registry.npmjs.org
+
       - name: Stop if this version already exists on npm
         env:
           PACKAGE_NAME: ${{ steps.publish_metadata.outputs.package_name }}
@@ -112,24 +132,8 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve npm authentication mode
-        id: npm_auth
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -n "${NPM_TOKEN:-}" ]; then
-            echo "mode=token" >> "$GITHUB_OUTPUT"
-            echo "Using npm token authentication from NPM_TOKEN."
-          else
-            echo "mode=trusted-publishing" >> "$GITHUB_OUTPUT"
-            echo "::notice::NPM_TOKEN is not configured. Attempting npm Trusted Publishing with GitHub OIDC. Configure npm package legion-ascended with trusted publisher owner=9thLevelSoftware, repository=legion-ascended, workflow=npm-publish.yml, allowed action=npm publish."
-          fi
-
-      - name: Check npm token authentication
-        if: steps.npm_auth.outputs.mode == 'token'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm whoami --registry=https://registry.npmjs.org
+      - name: Run release validation
+        run: pnpm run validate:next
 
       - name: Publish to npm with token
         if: steps.npm_auth.outputs.mode == 'token'
