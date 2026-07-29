@@ -31,6 +31,7 @@ const VALIDATE_NEXT_PLAN = [
 
 const SCHEMA_FILE_NAMES = {
   taskContract: "task-contract",
+  intakeSession: "intake-session",
   taskRun: "task-run",
   evidenceBundle: "evidence",
   reviewDecision: "review",

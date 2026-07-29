@@ -16,6 +16,8 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
+import { budgetForWriteScope } from "./budget.js";
+import { criterionIdFor, generatedCriterion } from "./criteria.js";
 import { currentUtcTimestamp, firstDecisionOwner, resolveBaseGitSha } from "./change-input.js";
 import { slugFromName } from "./input.js";
 
@@ -59,9 +61,23 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     acceptance: {
       language: `${input.title} is complete when the requested work is implemented, verified, and reviewed.`,
       criteria: [
-        input.objective,
-        "Build evidence is collected by legion build.",
-        "Review evidence is accepted by a human before ship readiness."
+        // The ad-hoc request carries a real verification command, so its
+        // primary criterion is genuinely executable rather than aspirational.
+        {
+          id: criterionIdFor(input.objective, 0),
+          statement: input.objective,
+          proof: {
+            mode: "executable",
+            command: verification.command,
+            args: [...verification.args],
+            expectedExitCode: 0,
+            timeoutMs: 120_000
+          }
+        },
+        // These two are workflow lifecycle facts, not properties of the change;
+        // no command decides them.
+        generatedCriterion("Build evidence is collected by legion build.", 1),
+        generatedCriterion("Review evidence is accepted by a human before ship readiness.", 2)
       ],
       oracleRefs: [oracleId]
     },
@@ -195,6 +211,7 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
   });
   if (!oracle.ok) return oracle;
 
+  const adHocWriteScope = input.writeScope ?? ["."];
   const task = taskContractSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
@@ -207,7 +224,7 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     objective: input.objective,
     requirementIds: [requirementId],
     wave: "A",
-    agents: [input.kind === "polish" ? "code-polisher" : "workflow-implementer"],
+    agents: ["implementer"],
     dependencies: [],
     context: {
       specRefs: [],
@@ -216,9 +233,10 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     },
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
-      write: input.writeScope ?? ["."],
+      write: adHocWriteScope,
       forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
-      sequentialFiles: []
+      sequentialFiles: [],
+      budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })
     },
     interfaces: {
       consumes: [{ name: "AdHocRequest", description: `The ${input.kind} request prepared by Legion.` }],
@@ -241,7 +259,8 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     completion: {
       expectedArtifacts: [change.reference],
       requiredEvidence: [`${verification.command} ${verification.args.join(" ")}`.trim()],
-      blockedConditions: ["Build evidence is missing or review rejects the result."]
+      blockedConditions: ["Build evidence is missing or review rejects the result."],
+      diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   });
 

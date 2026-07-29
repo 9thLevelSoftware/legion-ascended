@@ -964,9 +964,91 @@
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^ac_[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "proof": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "executable"
+                          },
+                          "command": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "args": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "expectedExitCode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "timeoutMs": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600000
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "command",
+                          "args",
+                          "expectedExitCode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "manual"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "oracleRef": {
+                    "type": "string",
+                    "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Oracle ID"
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "proof"
+                ],
+                "additionalProperties": false
               }
             },
             "oracleRefs": {
@@ -2116,9 +2198,91 @@
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^ac_[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "proof": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "executable"
+                          },
+                          "command": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "args": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "expectedExitCode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "timeoutMs": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600000
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "command",
+                          "args",
+                          "expectedExitCode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "manual"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "oracleRef": {
+                    "type": "string",
+                    "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Oracle ID"
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "proof"
+                ],
+                "additionalProperties": false
               }
             },
             "oracleRefs": {
@@ -3268,9 +3432,91 @@
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^ac_[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "proof": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "executable"
+                          },
+                          "command": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "args": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "expectedExitCode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "timeoutMs": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600000
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "command",
+                          "args",
+                          "expectedExitCode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "manual"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "oracleRef": {
+                    "type": "string",
+                    "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Oracle ID"
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "proof"
+                ],
+                "additionalProperties": false
               }
             },
             "oracleRefs": {
@@ -4420,9 +4666,91 @@
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^ac_[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "proof": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "executable"
+                          },
+                          "command": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "args": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "expectedExitCode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "timeoutMs": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600000
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "command",
+                          "args",
+                          "expectedExitCode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "manual"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "oracleRef": {
+                    "type": "string",
+                    "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Oracle ID"
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "proof"
+                ],
+                "additionalProperties": false
               }
             },
             "oracleRefs": {
@@ -5573,9 +5901,91 @@
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^ac_[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "proof": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "executable"
+                          },
+                          "command": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "args": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "expectedExitCode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "timeoutMs": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600000
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "command",
+                          "args",
+                          "expectedExitCode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "manual"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "oracleRef": {
+                    "type": "string",
+                    "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Oracle ID"
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "proof"
+                ],
+                "additionalProperties": false
               }
             },
             "oracleRefs": {
@@ -6725,9 +7135,91 @@
               "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1024
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^ac_[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "proof": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "executable"
+                          },
+                          "command": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "args": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "expectedExitCode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "timeoutMs": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600000
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "command",
+                          "args",
+                          "expectedExitCode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "const": "manual"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "oracleRef": {
+                    "type": "string",
+                    "pattern": "^orc_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+                    "description": "Oracle ID"
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "proof"
+                ],
+                "additionalProperties": false
               }
             },
             "oracleRefs": {

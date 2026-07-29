@@ -47,7 +47,12 @@
       ],
       "sequentialFiles": [
         "packages/protocol/src/index.ts"
-      ]
+      ],
+      "budget": {
+        "maxFilesChanged": 3,
+        "maxLinesChanged": 600,
+        "maxNewFiles": 1
+      }
     },
     "interfaces": {
       "consumes": [
@@ -102,7 +107,11 @@
       "blockedConditions": [
         "Acceptance oracle cannot be executed",
         "Required write falls outside allowlist"
-      ]
+      ],
+      "diffReconciliation": {
+        "required": true,
+        "allowUnlistedReads": true
+      }
     }
   },
   "task": {

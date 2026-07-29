@@ -9,7 +9,7 @@ Source inputs:
 
 # Legion Protocol Schema Catalog
 
-Protocol version: `0.1.0`
+Protocol version: `0.2.0`
 
 | Group | Schema | Title | Canonical ID | Committed artifact |
 | --- | --- | --- | --- | --- |
@@ -21,6 +21,8 @@ Protocol version: `0.1.0`
 | entities | `requirement` | Legion protocol requirement entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/requirement.schema.json` | `schemas/entities/requirement.schema.json` |
 | entities | `decision` | Legion protocol decision entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/decision.schema.json` | `schemas/entities/decision.schema.json` |
 | entities | `oracle` | Legion protocol oracle entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json` | `schemas/entities/oracle.schema.json` |
+| entities | `exploration` | Legion protocol exploration entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/exploration.schema.json` | `schemas/entities/exploration.schema.json` |
+| entities | `intakeSession` | Legion protocol intake session entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json` | `schemas/entities/intake-session.schema.json` |
 | entities | `taskContract` | Legion protocol task contract entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/task-contract.schema.json` | `schemas/entities/task-contract.schema.json` |
 | entities | `task` | Legion protocol task entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/task.schema.json` | `schemas/entities/task.schema.json` |
 | entities | `taskRun` | Legion protocol task run entity schema | `https://schemas.9thlevelsoftware.com/legion/entities/task-run.schema.json` | `schemas/entities/task-run.schema.json` |

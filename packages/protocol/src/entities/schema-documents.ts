@@ -4,6 +4,8 @@ import { approvalSchema } from "./approval.js";
 import { changeSchema } from "./change.js";
 import { decisionSchema } from "./decision.js";
 import { evidenceBundleSchema } from "./evidence.js";
+import { explorationSchema } from "./exploration.js";
+import { intakeSessionSchema } from "./intake-session.js";
 import { observationSchema } from "./observation.js";
 import { oracleSchema } from "./oracle.js";
 import { projectSchema } from "./project.js";
@@ -115,6 +117,16 @@ export const entityJsonSchemas = {
     "https://schemas.9thlevelsoftware.com/legion/entities/oracle.schema.json",
     "Legion protocol oracle entity schema",
     oracleSchema
+  ),
+  exploration: jsonSchemaDocument(
+    "https://schemas.9thlevelsoftware.com/legion/entities/exploration.schema.json",
+    "Legion protocol exploration entity schema",
+    explorationSchema
+  ),
+  intakeSession: jsonSchemaDocument(
+    "https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json",
+    "Legion protocol intake session entity schema",
+    intakeSessionSchema
   ),
   ...lifecycleJsonSchemas
 } as const;

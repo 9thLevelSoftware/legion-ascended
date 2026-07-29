@@ -17,6 +17,7 @@ const schemaFileNames = {
   taskContract: "task-contract",
   taskRun: "task-run",
   evidenceBundle: "evidence",
+  intakeSession: "intake-session",
   reviewDecision: "review",
   fixtureCorpus: "fixture-corpus",
   compatibilityFixture: "compatibility-fixture",

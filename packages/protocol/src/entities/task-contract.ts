@@ -34,11 +34,28 @@ export type TaskContractContext = z.infer<typeof taskContractContextSchema>;
 
 export const taskContractScopePathSchema = z.union([artifactPathSchema, z.literal(".")]);
 
+/**
+ * Blast-radius budget for a single task.
+ *
+ * A task that does not declare how large it is allowed to get cannot be
+ * reconciled against its actual diff, so the budget is required rather than
+ * defaulted. Contracts written before protocol 0.2.0 have no budget; the
+ * upcast migration reports that as a diagnostic instead of inventing one.
+ */
+export const taskContractScopeBudgetSchema = z.strictObject({
+  maxFilesChanged: z.number().int().positive().max(10_000),
+  maxLinesChanged: z.number().int().positive().max(1_000_000),
+  maxNewFiles: z.number().int().min(0).max(10_000)
+});
+
+export type TaskContractScopeBudget = z.infer<typeof taskContractScopeBudgetSchema>;
+
 export const taskContractScopeSchema = z.strictObject({
   read: z.array(taskContractScopePathSchema),
   write: z.array(taskContractScopePathSchema).min(1),
   forbidden: z.array(taskContractScopePathSchema),
-  sequentialFiles: z.array(taskContractScopePathSchema)
+  sequentialFiles: z.array(taskContractScopePathSchema),
+  budget: taskContractScopeBudgetSchema
 });
 
 export type TaskContractScope = z.infer<typeof taskContractScopeSchema>;
@@ -66,10 +83,24 @@ export const taskContractVerificationSchema = z.strictObject({
 
 export type TaskContractVerification = z.infer<typeof taskContractVerificationSchema>;
 
+/**
+ * Whether completion requires the observed working-tree diff to be reconciled
+ * against `scope`. When `required`, an executor's self-reported result is not
+ * sufficient to complete the task: the run must also prove that what changed on
+ * disk stayed inside `scope.write` and within `scope.budget`.
+ */
+export const taskContractDiffReconciliationSchema = z.strictObject({
+  required: z.boolean(),
+  allowUnlistedReads: z.boolean()
+});
+
+export type TaskContractDiffReconciliation = z.infer<typeof taskContractDiffReconciliationSchema>;
+
 export const taskContractCompletionSchema = z.strictObject({
   expectedArtifacts: z.array(artifactReferenceSchema),
   requiredEvidence: z.array(z.string().min(1).max(128)).min(1),
-  blockedConditions: z.array(z.string().min(1).max(1_024)).min(1)
+  blockedConditions: z.array(z.string().min(1).max(1_024)).min(1),
+  diffReconciliation: taskContractDiffReconciliationSchema
 });
 
 export type TaskContractCompletion = z.infer<typeof taskContractCompletionSchema>;
@@ -226,6 +257,14 @@ export const taskContractSchema = schemaMetadataSchema
           path: ["scope", "write", index]
         });
       }
+    }
+
+    if (taskContract.scope.budget.maxNewFiles > taskContract.scope.budget.maxFilesChanged) {
+      context.addIssue({
+        code: "custom",
+        message: "Task contract budget cannot allow more new files than total changed files.",
+        path: ["scope", "budget", "maxNewFiles"]
+      });
     }
   });
 

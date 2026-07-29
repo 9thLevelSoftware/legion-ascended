@@ -75,7 +75,8 @@ export function makeFixtureContract(overrides = {}) {
         "packages/core/test/dispatch.test.mjs"
       ],
       forbidden: ["packages/core/src/runtime/local-driver.ts"],
-      sequentialFiles: ["packages/core/src/index.ts"]
+      sequentialFiles: ["packages/core/src/index.ts"],
+      budget: { maxFilesChanged: 4, maxLinesChanged: 800, maxNewFiles: 2 }
     },
     interfaces: {
       consumes: [
@@ -113,11 +114,21 @@ export function makeFixtureContract(overrides = {}) {
       blockedConditions: [
         "Acceptance oracle cannot be executed",
         "Required write falls outside allowlist"
-      ]
+      ],
+      diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   };
 
-  return { ...base, ...overrides };
+  // `scope` and `completion` merge one level deep so a caller can override the
+  // parts it cares about (write paths, blocked conditions) without having to
+  // restate protocol-required members like `scope.budget` that are irrelevant
+  // to the behaviour under test.
+  return {
+    ...base,
+    ...overrides,
+    scope: { ...base.scope, ...(overrides.scope ?? {}) },
+    completion: { ...base.completion, ...(overrides.completion ?? {}) }
+  };
 }
 
 /**

@@ -7,13 +7,13 @@ Source inputs:
 
 # Legion Next Protocol Documentation
 
-Protocol version: `0.1.0`
+Protocol version: `0.2.0`
 
 This directory is generated from the typed protocol and core transition sources. Run `pnpm docs:protocol` to refresh it, or `pnpm validate:next` to refresh and fail on drift.
 
 | Surface | Generated coverage |
 | --- | --- |
-| Schema catalog | 24 JSON Schema documents across primitives, entities, events, and API contracts. |
+| Schema catalog | 26 JSON Schema documents across primitives, entities, events, and API contracts. |
 | Event contracts | 28 append-only event types from the event catalog. |
 | API contracts | 23 command types plus query envelope contracts. |
 | State machines | 8 core transition matrices derived from reducer source. |
