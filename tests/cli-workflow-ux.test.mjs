@@ -1495,10 +1495,20 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     const statusPayload = parseJsonOutput(status);
     assert.equal(statusPayload.workflowState.stage, "ship_ready");
 
+    // Accepting a review advances the workflow to ship_ready; it does not make
+    // the change shippable. An R2 phase still requires approved delta specs, a
+    // protected oracle, integration checks and whole-change acceptance
+    // evidence, none of which Legion produces yet, so the gate blocks and names
+    // them. Phase D flips this back to `ready`.
     const ship = await runCliCapture(["--repository-root", root, "ship", "--json"]);
-    assert.equal(ship.exitCode, 0, ship.stderr);
+    assert.equal(ship.exitCode, 1);
     const shipPayload = parseJsonOutput(ship);
-    assert.equal(shipPayload.status, "ready");
+    assert.equal(shipPayload.status, "blocked");
+    assert.ok(shipPayload.diagnostics.length > 0, "blocked ship should name unproven gates");
+    assert.ok(
+      shipPayload.diagnostics.some((entry) => entry.code === "risk_gate_unevaluable"),
+      "ship should block on unprovable risk gates, not on missing review evidence"
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

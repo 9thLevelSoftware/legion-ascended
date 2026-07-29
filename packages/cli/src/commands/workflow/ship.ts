@@ -68,15 +68,22 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   });
 
   if (!gateReport.ready) {
+    // Both blocking statuses are named. Reporting only `unsatisfied` would make
+    // a change blocked purely by unevaluable gates fail with no explanation of
+    // what is missing, which is the least useful way to be correct.
     return blockedShip(
       gateReport.gates
-        .filter((gate) => gate.status === "unsatisfied")
+        .filter((gate) => gate.status !== "satisfied")
         .map((gate) => ({
-          code: "risk_gate_unsatisfied",
+          code:
+            gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
           message: `${gate.label} is not satisfied for ${gate.taskId}: ${gate.reason}`,
           path: evidence.artifactPath
         })),
-      nextAction("legion build", "Required risk gates are not satisfied for this change.")
+      nextAction(
+        "legion build",
+        `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
+      )
     );
   }
 

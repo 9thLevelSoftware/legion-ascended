@@ -22,12 +22,20 @@ import { latestEvidencePerTask } from "./evidence-selection.js";
  *  - `satisfied`   — evidence exists and is positive.
  *  - `unsatisfied` — evidence exists and is negative. Blocks.
  *  - `unevaluable` — Legion does not yet produce evidence of this kind at all.
+ *                    Also blocks.
  *
- * `unevaluable` is not a quiet pass. It is counted and named in the ship
- * payload so the gap is visible on every run. It is reported rather than
- * blocking because the gap is a missing product capability, not a property of
- * the change under review — blocking on it would make ship permanently red
- * while telling the operator nothing they could act on.
+ * An unevaluable gate blocks because the alternative is a self-contradicting
+ * verdict: an R2 or R3 change would report `status: "ready"` while the same
+ * payload lists its security, acceptance, release-observation and rollback
+ * gates as unproven. "Ready" has to mean the risk tier's gates were met, not
+ * that nothing actively failed — a gate with no producer is unmet, and the
+ * absence of evidence is not evidence of satisfaction.
+ *
+ * The consequence is that high-tier changes cannot be called ship-ready until
+ * Phase D produces oracles, specs and integration checks. That is the honest
+ * state of the product, and the report names exactly which gates are missing.
+ * Lowering the tier through an audited `risk.override` is the supported way to
+ * ship work whose gates genuinely do not apply.
  */
 
 export type ShipGateStatus = "satisfied" | "unsatisfied" | "unevaluable";
@@ -162,5 +170,7 @@ export function deriveShipGates(input: {
   const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
   const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
 
-  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 };
+  // Both unsatisfied and unevaluable block: a required gate that cannot be
+  // evaluated has not been met.
+  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
 }

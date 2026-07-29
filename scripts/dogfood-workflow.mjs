@@ -134,8 +134,24 @@ async function main() {
     const finalStatus = runLegion(workspace, ["status"], { expectExitCode: 0 });
     assertEqual(finalStatus.workflowState.stage, "ship_ready", "workflow should reach ship_ready");
 
-    const ship = runLegion(workspace, ["ship"], { expectExitCode: 0 });
-    assertEqual(ship.status, "ready", "ship readiness should pass");
+    // Ship blocks, and that is the correct outcome to demonstrate.
+    //
+    // An R2 change requires approved delta specs, a protected oracle,
+    // integration checks and whole-change acceptance evidence. Legion has no
+    // producer for any of them yet, so the gate reports them unproven rather
+    // than calling the change ready. Asserting "ready" here would make the
+    // dogfood certify a readiness the tool cannot actually establish — the
+    // exact self-contradiction the gate exists to prevent.
+    //
+    // When Phase D produces those artifacts this becomes a passing gate, and
+    // this assertion should flip back to expecting `ready`.
+    const ship = runLegion(workspace, ["ship"], { expectExitCode: 1 });
+    assertEqual(ship.status, "blocked", "ship should block while required gates are unproven");
+    assertEqual(
+      Array.isArray(ship.diagnostics) && ship.diagnostics.length > 0,
+      true,
+      "blocked ship should name the gates it cannot prove"
+    );
 
     const retro = runLegion(workspace, ["retro", "--executor", options.executor], {
       expectExitCode: 0,
@@ -154,7 +170,8 @@ async function main() {
       taskRuns: build.taskRuns.length,
       guidanceRuns: 6,
       finalStage: finalStatus.workflowState.stage,
-      shipStatus: ship.status
+      shipStatus: ship.status,
+      shipBlockedGates: (ship.diagnostics ?? []).length
     };
     ok = true;
     if (options.json) {

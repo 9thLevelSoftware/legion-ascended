@@ -27842,10 +27842,20 @@ function buildTaskGraphInput(options) {
     },
     scope: {
       read: [options.change.artifactPath, options.oracle.artifactPath],
-      write: [taskgraphPath2],
-      forbidden: [".legion/var/runtime.sqlite"],
-      sequentialFiles: [taskgraphPath2],
-      budget: budgetForWriteScope([taskgraphPath2])
+      // This task's objective is to implement the phase, so its write scope has
+      // to be the implementation surface. It previously listed only the
+      // taskgraph artifact, which made the contract impossible to satisfy: any
+      // source edit was an out-of-scope write and every real build blocked. The
+      // test suite could not see it because the `fake` executor writes nothing.
+      //
+      // The stub planner cannot name that surface yet, so scope is
+      // repository-wide with a finite budget — the same trade `legion quick`
+      // already makes when the caller cannot enumerate files in advance.
+      // Phase D narrows this to the files a decomposed task actually touches.
+      write: ["."],
+      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      sequentialFiles: [],
+      budget: budgetForWriteScope(["."])
     },
     interfaces: {
       consumes: [
@@ -28496,9 +28506,10 @@ function diffDelta(before, after) {
     attributable.map((file) => {
       const prior = priorByPath.get(file.path);
       if (prior === void 0) return file;
+      const additional = file.linesChanged - prior.linesChanged;
       return {
         ...file,
-        linesChanged: Math.max(0, file.linesChanged - prior.linesChanged),
+        linesChanged: additional > 0 ? additional : file.linesChanged,
         // A file that already existed as a pre-existing new file is not newly
         // created by this run.
         isNew: file.isNew && !prior.isNew
@@ -28533,6 +28544,7 @@ var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
 var LEGION_BIN = "bin/legion.js";
+var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
@@ -28554,10 +28566,18 @@ function terminateProcessTree2(pid) {
     });
     return;
   }
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch {
-  }
+  const signalGroup = (signal) => {
+    try {
+      process.kill(-pid, signal);
+    } catch {
+      try {
+        process.kill(pid, signal);
+      } catch {
+      }
+    }
+  };
+  signalGroup("SIGTERM");
+  setTimeout(() => signalGroup("SIGKILL"), GROUP_KILL_GRACE_MS).unref();
 }
 function runCommand(input) {
   return new Promise((resolve) => {
@@ -28569,7 +28589,10 @@ function runCommand(input) {
       cwd: input.cwd,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: false
+      shell: false,
+      // POSIX only: lead a new process group so a timeout can signal the whole
+      // tree rather than just this process. Windows uses taskkill /t instead.
+      detached: process.platform !== "win32"
     });
     const settle = (outcome) => {
       if (settled) return;
@@ -30979,7 +31002,7 @@ function parseExploration(input) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 var HELP2 = {
-  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration whose proposals and open questions feed legion start. Nothing an exploration produces is authoritative.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Note: legion start does not read explorations yet \u2014 that handoff is not wired up.",
   map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
   retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
@@ -31623,7 +31646,7 @@ function deriveShipGates(input) {
   const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
   const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
   const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
-  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 };
+  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
 }
 
 // packages/cli/src/commands/workflow/ship.ts
@@ -31679,12 +31702,15 @@ async function handleShipWorkflow(context) {
   });
   if (!gateReport.ready) {
     return blockedShip(
-      gateReport.gates.filter((gate) => gate.status === "unsatisfied").map((gate) => ({
-        code: "risk_gate_unsatisfied",
+      gateReport.gates.filter((gate) => gate.status !== "satisfied").map((gate) => ({
+        code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
         message: `${gate.label} is not satisfied for ${gate.taskId}: ${gate.reason}`,
         path: evidence.artifactPath
       })),
-      nextAction("legion build", "Required risk gates are not satisfied for this change.")
+      nextAction(
+        "legion build",
+        `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
+      )
     );
   }
   const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
