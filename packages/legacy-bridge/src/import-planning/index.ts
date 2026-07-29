@@ -527,7 +527,20 @@ function requirementDocument(input: {
     statement: input.requirement.statement,
     acceptance: {
       language: "Imported from legacy .planning requirements for human review before apply.",
-      criteria: [truncate(input.requirement.statement, 1_024)],
+      // Legacy .planning requirements are prose checklists with no acceptance
+      // criteria. Record that absence explicitly as a manual criterion rather
+      // than restating the requirement as if it were its own proof — an
+      // imported requirement is not buildable until a real criterion is authored.
+      criteria: [
+        {
+          id: "ac_imported-unspecified",
+          statement: truncate(input.requirement.statement, 1_024),
+          proof: {
+            mode: "manual",
+            reason: "Imported from legacy .planning; no acceptance criterion was defined at the source. Author a criterion before planning work against this requirement."
+          }
+        }
+      ],
       oracleRefs: []
     },
     traceRefs: [sourceReference(input.artifactPath, input.requirement.id)],

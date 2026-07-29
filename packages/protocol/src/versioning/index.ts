@@ -1,10 +1,28 @@
 import { schemaVersionSchema, type SchemaVersion } from "../primitives/values.js";
 
-export const CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
+/**
+ * Protocol 0.2.0 (Karpathy-method hardening).
+ *
+ * Breaking shape changes against 0.1.0:
+ *  - `taskContract.scope.budget` is required — a task must declare its
+ *    blast radius so the post-execution diff can be reconciled against it.
+ *  - `taskContract.completion.diffReconciliation` is required.
+ *  - `requirement.acceptance.criteria` entries are objects carrying an
+ *    explicit proof mode, not bare strings.
+ *
+ * 0.1.0 stays in `SUPPORTED_PROTOCOL_VERSIONS` so existing `.legion/project`
+ * state remains readable through the upcast migrations.
+ */
+export const PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
+
+export const CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
 
 export type CurrentProtocolVersion = typeof CURRENT_PROTOCOL_VERSION;
 
-export const SUPPORTED_PROTOCOL_VERSIONS = [CURRENT_PROTOCOL_VERSION] as const;
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  PREVIOUS_PROTOCOL_VERSION,
+  CURRENT_PROTOCOL_VERSION
+] as const;
 
 export interface VersionedRecord {
   readonly schemaVersion: SchemaVersion;

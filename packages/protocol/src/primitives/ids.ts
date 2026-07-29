@@ -14,7 +14,8 @@ export const ENTITY_ID_KINDS = [
   "approval",
   "release",
   "observation",
-  "event"
+  "event",
+  "intake"
 ] as const;
 
 export type EntityIdKind = (typeof ENTITY_ID_KINDS)[number];
@@ -33,7 +34,8 @@ export const ENTITY_ID_PREFIXES: Record<EntityIdKind, string> = {
   approval: "apv",
   release: "rel",
   observation: "obs",
-  event: "evt"
+  event: "evt",
+  intake: "itk"
 } as const;
 
 export const timeSortableIdSchema = z
@@ -76,6 +78,7 @@ export const approvalIdSchema = idSchema<"ApprovalId">("apv", slugSuffixPattern,
 export const releaseIdSchema = idSchema<"ReleaseId">("rel", slugSuffixPattern, "Release ID");
 export const observationIdSchema = idSchema<"ObservationId">("obs", slugSuffixPattern, "Observation ID");
 export const eventIdSchema = idSchema<"EventId">("evt", timeSortableSuffixPattern, "Event ID");
+export const intakeSessionIdSchema = idSchema<"IntakeSessionId">("itk", slugSuffixPattern, "Intake session ID");
 
 export type ProjectId = z.infer<typeof projectIdSchema>;
 export type ChangeId = z.infer<typeof changeIdSchema>;
@@ -91,6 +94,7 @@ export type ApprovalId = z.infer<typeof approvalIdSchema>;
 export type ReleaseId = z.infer<typeof releaseIdSchema>;
 export type ObservationId = z.infer<typeof observationIdSchema>;
 export type EventId = z.infer<typeof eventIdSchema>;
+export type IntakeSessionId = z.infer<typeof intakeSessionIdSchema>;
 
 export type EntityId =
   | ProjectId
@@ -106,7 +110,8 @@ export type EntityId =
   | ApprovalId
   | ReleaseId
   | ObservationId
-  | EventId;
+  | EventId
+  | IntakeSessionId;
 
 export const entityIdSchemas = {
   project: projectIdSchema,
@@ -122,7 +127,8 @@ export const entityIdSchemas = {
   approval: approvalIdSchema,
   release: releaseIdSchema,
   observation: observationIdSchema,
-  event: eventIdSchema
+  event: eventIdSchema,
+  intake: intakeSessionIdSchema
 } as const;
 
 export const entityIdKindSchema = z.enum(ENTITY_ID_KINDS);
@@ -141,7 +147,8 @@ export const anyEntityIdSchema = z.union([
   approvalIdSchema,
   releaseIdSchema,
   observationIdSchema,
-  eventIdSchema
+  eventIdSchema,
+  intakeSessionIdSchema
 ]);
 
 export const entityReferenceSchema = z.strictObject({

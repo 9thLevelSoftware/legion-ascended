@@ -248,3 +248,5 @@ export function generateCompatibilityReport(input: CompatibilityReportInput): st
     protocolEvolutionPolicyDocumentation
   ].join("\n");
 }
+
+export * from "./legion-0-2-0.js";

@@ -12,6 +12,7 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
+import { budgetForWriteScope } from "./budget.js";
 import { createdAtOption, slugFromName } from "./input.js";
 import { nextAction, type NextAction } from "./render.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "./executor/index.js";
@@ -219,7 +220,8 @@ export async function runGuidanceExecutor(input: {
     objective: input.prompt,
     requirementIds: [requirementId],
     wave: "A",
-    agents: ["workflow-guide"],
+    // Guidance runs are read-only investigation.
+    agents: ["explorer"],
     dependencies: [],
     context: {
       specRefs: [],
@@ -230,7 +232,8 @@ export async function runGuidanceExecutor(input: {
       read: [contextPackArtifactPath],
       write: [resultArtifactPath],
       forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
-      sequentialFiles: []
+      sequentialFiles: [],
+      budget: budgetForWriteScope([resultArtifactPath])
     },
     interfaces: {
       consumes: [{ name: "GuidanceRequest", description: "The workflow guidance request." }],
@@ -253,7 +256,10 @@ export async function runGuidanceExecutor(input: {
     completion: {
       expectedArtifacts: [],
       requiredEvidence: ["guidance markdown artifact"],
-      blockedConditions: ["The executor cannot produce guidance."]
+      blockedConditions: ["The executor cannot produce guidance."],
+      // Guidance is advisory and writes only its own result artifact, so any
+      // source-tree change during a guidance run is out of scope by definition.
+      diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   });
 
@@ -340,6 +346,8 @@ export function guidancePrompt(input: {
   readonly workflow: GuidanceWorkflow;
   readonly topic: string;
   readonly requiredSections: readonly string[];
+  /** Appended verbatim; used to request a workflow-specific structured result. */
+  readonly extraContract?: string;
 }): string {
   return [
     `# Legion ${input.workflow}`,

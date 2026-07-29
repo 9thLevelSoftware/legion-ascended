@@ -60,7 +60,18 @@ function requirement(slug, oracleId, overrides = {}) {
     statement: `${slug} behavior is current and archiveable.`,
     acceptance: {
       language: `${slug} acceptance is deterministic.`,
-      criteria: [`${slug} criterion`],
+      criteria: [
+        {
+          id: `ac_${slug}-criterion`,
+          statement: `${slug} criterion`,
+          proof: {
+            mode: "executable",
+            command: "pnpm",
+            args: ["--filter", "@legion/artifacts", "test"],
+            expectedExitCode: 0
+          }
+        }
+      ],
       oracleRefs: [oracleId]
     },
     traceRefs: [
@@ -238,7 +249,8 @@ function taskContract(requirementId, oracleId, currentSpec, change, artifactInpu
       read: [currentSpec.artifactPath],
       write: [".legion/project/changes/chg_archive-merge/taskgraph.json"],
       forbidden: [".legion/var/runtime.sqlite"],
-      sequentialFiles: []
+      sequentialFiles: [],
+      budget: { maxFilesChanged: 2, maxLinesChanged: 400, maxNewFiles: 1 }
     },
     interfaces: {
       consumes: [{ name: "ArchiveInput", description: "Accepted change artifacts." }],
@@ -258,7 +270,8 @@ function taskContract(requirementId, oracleId, currentSpec, change, artifactInpu
     completion: {
       expectedArtifacts: [change.revision.artifact],
       requiredEvidence: ["validate-next output hash"],
-      blockedConditions: ["Accepted evidence is missing."]
+      blockedConditions: ["Accepted evidence is missing."],
+      diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   };
 }

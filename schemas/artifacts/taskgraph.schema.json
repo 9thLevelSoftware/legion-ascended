@@ -1289,13 +1289,40 @@
                     }
                   ]
                 }
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "maxFilesChanged": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10000
+                  },
+                  "maxLinesChanged": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "maxNewFiles": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  }
+                },
+                "required": [
+                  "maxFilesChanged",
+                  "maxLinesChanged",
+                  "maxNewFiles"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "read",
               "write",
               "forbidden",
-              "sequentialFiles"
+              "sequentialFiles",
+              "budget"
             ],
             "additionalProperties": false
           },
@@ -1564,12 +1591,29 @@
                   "minLength": 1,
                   "maxLength": 1024
                 }
+              },
+              "diffReconciliation": {
+                "type": "object",
+                "properties": {
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "allowUnlistedReads": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "required",
+                  "allowUnlistedReads"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "expectedArtifacts",
               "requiredEvidence",
-              "blockedConditions"
+              "blockedConditions",
+              "diffReconciliation"
             ],
             "additionalProperties": false
           }

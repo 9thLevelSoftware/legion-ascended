@@ -14,6 +14,7 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
+import { budgetForWriteScope } from "./budget.js";
 import { currentUtcTimestamp, phasePlanIds, phaseRiskProfile } from "./change-input.js";
 import type { PhaseSource } from "./phase-compat.js";
 
@@ -45,7 +46,9 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
     requirementIds: [ids.requirementId],
     wave: "A",
-    agents: ["taskgraph-planner"],
+    // Bundle IDs from bundles/index.json. An agent with no worker bundle
+    // cannot be dispatched, so these must name real bundles.
+    agents: ["implementer"],
     dependencies: [],
     context: {
       specRefs: [],
@@ -56,7 +59,8 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
       read: [options.change.artifactPath, options.oracle.artifactPath],
       write: [taskgraphPath],
       forbidden: [".legion/var/runtime.sqlite"],
-      sequentialFiles: [taskgraphPath]
+      sequentialFiles: [taskgraphPath],
+      budget: budgetForWriteScope([taskgraphPath])
     },
     interfaces: {
       consumes: [
@@ -90,7 +94,8 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     completion: {
       expectedArtifacts: [options.change.reference],
       requiredEvidence: ["legion validate verification output"],
-      blockedConditions: ["Build evidence is missing or fails oracle review."]
+      blockedConditions: ["Build evidence is missing or fails oracle review."],
+      diffReconciliation: { required: true, allowUnlistedReads: true }
     }
   });
 

@@ -13,7 +13,12 @@ import {
   type EvidenceIndexEntry,
   type TaskRunSuccess
 } from "@legion/artifacts";
-import { RuntimeLocalDriver } from "@legion/core";
+import {
+  FreshContextDispatcher,
+  RuntimeLocalDriver,
+  runDeterministicVerification,
+  type VerificationReport
+} from "@legion/core";
 import {
   LEGION_PROTOCOL_VERSION,
   buildIdempotencyKey,
@@ -23,6 +28,7 @@ import {
   type EvidenceBundle,
   type EvidenceCommandResult,
   type EvidenceItem,
+  type ModelManifest,
   type TaskContract,
   type TaskRun,
   type UtcTimestamp
@@ -31,7 +37,15 @@ import {
 import { failure, hasFlag, helpResult, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
+import {
+  observeWorkingTreeDiff,
+  reconcileTaskDiff,
+  reconciliationBlocks,
+  type ReconciliationResult
+} from "../../workflow/diff-reconciliation.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
+import { createVerificationRunner } from "../../workflow/executor/verification-runner.js";
+import { createWorkerBundleRegistry } from "../../workflow/executor/worker-bundles.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
@@ -302,6 +316,13 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
   });
   if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
 
+  // Observed before dispatch so `--allow-dirty` pre-existing edits are not
+  // attributed to this run.
+  const beforeDispatch = observeWorkingTreeDiff({
+    repositoryRoot: input.context.repositoryRoot,
+    baseGitSha
+  }).observation;
+
   const adapter = adapterForKind(input.executor);
   const result = await adapter.run({
     repositoryRoot: input.context.repositoryRoot,
@@ -325,6 +346,30 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
   });
 
   const finishedAt = currentUtcTimestamp();
+
+  // What the working tree shows, independent of what the executor reported.
+  const reconciliation = input.task.completion.diffReconciliation.required
+    ? reconcileTaskDiff({
+        repositoryRoot: input.context.repositoryRoot,
+        baseGitSha,
+        scope: input.task.scope,
+        // The adapter writes the result and logs after dispatch; that is
+        // harness output, not executor work product.
+        harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+        ...(beforeDispatch === undefined ? {} : { before: beforeDispatch })
+      })
+    : undefined;
+  const inContract = !reconciliationBlocks(reconciliation);
+
+  // Execute the contract's declared verification commands. Until now these were
+  // rendered into the executor prompt as text and never run, so "verification"
+  // in evidence meant whatever exit code the executor reported about itself.
+  const verification = await runContractVerification({
+    repositoryRoot: input.context.repositoryRoot,
+    task: input.task,
+    executor: input.executor
+  });
+
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -337,14 +382,24 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     result,
     resultArtifactPath,
     redactedLogArtifactPath,
-    taskgraphPath: input.taskgraph.artifactPath
+    taskgraphPath: input.taskgraph.artifactPath,
+    verification,
+    ...(reconciliation === undefined ? {} : { reconciliation })
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
     expectedRevision: started.revision.revision,
     baseGitSha,
     document: taskRunDocument({
-      status: result.status === "blocked" ? "blocked" : result.ok ? "succeeded" : "failed",
+      // A run that left its contract is blocked regardless of what the
+      // executor reported about itself.
+      status: !inContract || !verification.passed
+        ? "blocked"
+        : result.status === "blocked"
+          ? "blocked"
+          : result.ok
+            ? "succeeded"
+            : "failed",
       task: input.task,
       taskId,
       runId,
@@ -356,13 +411,25 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
       baseGitSha,
       contextPack,
       evidenceRefs: [evidenceId],
-      error: result.ok
-        ? undefined
-        : {
-            code: result.status === "blocked" ? "executor_blocked" : "executor_failed",
-            message: result.summary,
-            retryable: true
+      error: !inContract
+        ? {
+            code: "diff_reconciliation_failed",
+            message: reconciliationSummary(reconciliation),
+            retryable: false
           }
+        : !verification.passed
+          ? {
+              code: "verification_failed",
+              message: verification.blockedReason ?? "Declared verification commands did not pass.",
+              retryable: true
+            }
+        : result.ok
+          ? undefined
+          : {
+              code: result.status === "blocked" ? "executor_blocked" : "executor_failed",
+              message: result.summary,
+              retryable: true
+            }
     })
   });
   if (!completed.ok) {
@@ -380,7 +447,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     };
   }
 
-  if (!result.ok) {
+  if (!result.ok || !inContract || !verification.passed) {
     return {
       ok: false,
       evidenceEntry,
@@ -392,11 +459,33 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
         evidenceId
       },
       diagnostics: [
-        {
-          code: result.status === "blocked" ? "executor_blocked" : "executor_failed",
-          message: result.summary,
-          path: resultArtifactPath
-        }
+        ...(inContract
+          ? []
+          : [
+              {
+                code: "diff_reconciliation_failed",
+                message: reconciliationSummary(reconciliation),
+                path: input.taskgraph.artifactPath
+              }
+            ]),
+        ...(verification.passed
+          ? []
+          : [
+              {
+                code: "verification_failed",
+                message: verification.blockedReason ?? "Declared verification commands did not pass.",
+                path: input.taskgraph.artifactPath
+              }
+            ]),
+        ...(result.ok
+          ? []
+          : [
+              {
+                code: result.status === "blocked" ? "executor_blocked" : "executor_failed",
+                message: result.summary,
+                path: resultArtifactPath
+              }
+            ])
       ]
     };
   }
@@ -523,6 +612,8 @@ async function evidenceEntryForExecution(input: {
   readonly resultArtifactPath: ArtifactPath;
   readonly redactedLogArtifactPath: ArtifactPath;
   readonly taskgraphPath: ArtifactPath;
+  readonly verification: ContractVerification;
+  readonly reconciliation?: ReconciliationResult;
 }): Promise<EvidenceIndexEntry> {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
@@ -535,8 +626,13 @@ async function evidenceEntryForExecution(input: {
       entity: { kind: "change" as const, id: input.task.changeId }
     }
   ];
+  const reconciliation = input.reconciliation;
+  const inContract = !reconciliationBlocks(reconciliation);
+
   const items: EvidenceItem[] = [
     {
+      // The executor's own account of the run. Recorded as a claim, never as
+      // proof — this is the value that used to decide the verdict on its own.
       id: "executor-result",
       classification: "runtime-log",
       verdict: input.result.ok ? "pass" : "fail",
@@ -552,6 +648,52 @@ async function evidenceEntryForExecution(input: {
       traceRefs
     }
   ];
+
+  if (input.verification.report !== undefined) {
+    const report = input.verification.report;
+    items.push({
+      // Exit codes observed by the harness running the contract's own declared
+      // commands — not the counts the executor reported about itself.
+      id: "declared-verification",
+      classification: "test-report",
+      verdict: report.passed ? "pass" : "fail",
+      artifact: resultReference,
+      traceRefs
+    });
+  }
+
+  if (reconciliation !== undefined) {
+    items.push({
+      // What the working tree shows. This is the item that decides whether the
+      // run stayed inside its contract.
+      id: "diff-reconciliation",
+      classification: "runtime-log",
+      verdict:
+        reconciliation.status === "clean"
+          ? "pass"
+          : reconciliation.status === "not_applicable"
+            ? "not_applicable"
+            : "fail",
+      artifact: resultReference,
+      traceRefs
+    });
+
+    const mismatch = claimObservationMismatch(input.result, reconciliation);
+    if (mismatch !== undefined) {
+      items.push({
+        // The executor's file list disagreed with the working tree. Neither
+        // side is assumed correct, so the verdict is `unknown` rather than
+        // `fail` — the disagreement is a measurement, not a contract breach.
+        // Recording it is what makes executor drift visible over time.
+        id: "claim-observation-mismatch",
+        classification: "runtime-log",
+        verdict: "unknown",
+        artifact: resultReference,
+        traceRefs
+      });
+    }
+  }
+
   const evidence: EvidenceBundle = {
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt: input.createdAt,
@@ -564,7 +706,7 @@ async function evidenceEntryForExecution(input: {
     sensitivity: "secret-redacted",
     retention: { class: "project" },
     traceRefs,
-    status: input.result.ok ? "collected" : "failed",
+    status: input.result.ok && inContract && input.verification.passed ? "collected" : "failed",
     items
   };
   return {
@@ -630,6 +772,130 @@ function nextAttemptMap(taskRuns: readonly TaskRunSuccess[]): Map<string, number
     if (nextAttempt > current) attempts.set(run.document.taskId, nextAttempt);
   }
   return attempts;
+}
+
+interface ContractVerification {
+  readonly report?: VerificationReport;
+  /** True when every declared command hit its expected exit code. */
+  readonly passed: boolean;
+  /** Set when verification could not be attempted at all. */
+  readonly blockedReason?: string;
+}
+
+/**
+ * Run `TaskContract.verification[]` through core's deterministic runner.
+ *
+ * The aggregation semantics (`passed` iff every command matched its declared
+ * exit code and none timed out, plus the deterministic `reportSha256`) belong
+ * to `@legion/core`; this function only supplies the two things core is
+ * deliberately ignorant of — a worker context and a way to execute a process.
+ */
+async function runContractVerification(input: {
+  readonly repositoryRoot: string;
+  readonly task: TaskContract;
+  readonly executor: ExecutionAdapterKind;
+}): Promise<ContractVerification> {
+  const model = modelManifestForExecutor(input.executor);
+
+  let registry;
+  try {
+    registry = createWorkerBundleRegistry({ model });
+  } catch (error) {
+    // A bundle whose prompt has drifted from its declared hash must not be
+    // dispatched. Failing loudly here is the point of the content-addressing
+    // gate; silently skipping verification would defeat it.
+    return {
+      passed: false,
+      blockedReason: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  const dispatch = new FreshContextDispatcher().dispatch({
+    taskContract: input.task,
+    bundleRegistry: registry,
+    protocolVersion: LEGION_PROTOCOL_VERSION,
+    availableAgents: [...input.task.agents],
+    availableContracts: input.task.dependencies.map((dependency) => ({
+      contractId: dependency.contractId,
+      ...(dependency.revision === undefined ? {} : { revision: dependency.revision })
+    })),
+    availableArtifacts: [
+      ...input.task.context.specRefs,
+      ...input.task.context.designRefs,
+      ...input.task.context.predecessorArtifacts
+    ]
+  });
+
+  if (!dispatch.ok) {
+    return {
+      passed: false,
+      blockedReason: `A fresh worker context could not be dispatched for verification: ${dispatch.issues
+        .map((issue) => issue.message)
+        .join(" ")}`
+    };
+  }
+
+  const { report, issues } = await runDeterministicVerification({
+    taskContract: input.task,
+    workerContext: dispatch.workerContext,
+    options: {
+      runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
+      now: currentUtcTimestamp
+    }
+  });
+
+  return {
+    report,
+    passed: report.passed,
+    ...(report.passed
+      ? {}
+      : {
+          blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s). ${issues
+            .map((issue) => issue.message)
+            .join(" ")}`.trim()
+        })
+  };
+}
+
+function modelManifestForExecutor(executor: ExecutionAdapterKind): ModelManifest {
+  return {
+    provider: executor === "codex" ? "openai" : "legion",
+    id: executor === "codex" ? "codex-cli" : executor,
+    policyVersion: LEGION_PROTOCOL_VERSION
+  };
+}
+
+function reconciliationSummary(reconciliation: ReconciliationResult | undefined): string {
+  if (reconciliation === undefined) return "Diff reconciliation did not run.";
+  if (reconciliation.status === "unavailable") {
+    return `The run could not be reconciled against its task contract, so it is not proven in-contract. ${reconciliation.unavailableReason ?? ""}`.trim();
+  }
+  return reconciliation.violations.map((violation) => violation.message).join(" ");
+}
+
+/**
+ * Compare the executor's self-reported `filesChanged` against what the working
+ * tree actually shows.
+ *
+ * This is not used to decide pass/fail — the observation already does that. It
+ * exists because a systematic gap between claim and observation is the clearest
+ * available measurement of executor drift, and it is only visible if both are
+ * recorded side by side.
+ */
+function claimObservationMismatch(
+  result: ExecutionResult,
+  reconciliation: ReconciliationResult
+): { readonly claimedOnly: readonly string[]; readonly observedOnly: readonly string[] } | undefined {
+  const observation = reconciliation.observation;
+  if (observation === undefined) return undefined;
+
+  const claimed = new Set((result.filesChanged ?? []).map((entry) => entry.replace(/\\/g, "/")));
+  const observed = new Set(observation.changedFiles);
+  const claimedOnly = [...claimed].filter((entry) => !observed.has(entry)).sort();
+  const observedOnly = [...observed].filter((entry) => !claimed.has(entry)).sort();
+
+  if (claimedOnly.length === 0 && observedOnly.length === 0) return undefined;
+  return { claimedOnly, observedOnly };
 }
 
 function buildResultContract(): string {

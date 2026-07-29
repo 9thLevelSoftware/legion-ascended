@@ -207,7 +207,18 @@ function requirement(slug, overrides = {}) {
     statement: `${slug} behavior is deployed and reviewable.`,
     acceptance: {
       language: `${slug} acceptance is deterministic.`,
-      criteria: [`${slug} criterion`],
+      criteria: [
+        {
+          id: `ac_${slug}-criterion`,
+          statement: `${slug} criterion`,
+          proof: {
+            mode: "executable",
+            command: "pnpm",
+            args: ["run", "validate:next"],
+            expectedExitCode: 0
+          }
+        }
+      ],
       oracleRefs: []
     },
     traceRefs: [

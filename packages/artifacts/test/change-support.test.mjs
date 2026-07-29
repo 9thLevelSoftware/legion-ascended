@@ -61,7 +61,18 @@ function requirement(slug) {
     statement: `${slug} behavior is deployed and reviewable.`,
     acceptance: {
       language: `${slug} acceptance is deterministic.`,
-      criteria: [`${slug} criterion`],
+      criteria: [
+        {
+          id: `ac_${slug}-criterion`,
+          statement: `${slug} criterion`,
+          proof: {
+            mode: "executable",
+            command: "pnpm",
+            args: ["--filter", "@legion/artifacts", "test"],
+            expectedExitCode: 0
+          }
+        }
+      ],
       oracleRefs: []
     },
     traceRefs: [
@@ -276,7 +287,8 @@ function taskContract(id, currentSpec, change, oracle, artifactInputs, overrides
       read: [currentSpec.artifactPath],
       write: [".legion/project/changes/chg_workflow-delta/taskgraph.json"],
       forbidden: [".legion/var/runtime.sqlite"],
-      sequentialFiles: []
+      sequentialFiles: [],
+      budget: { maxFilesChanged: 2, maxLinesChanged: 400, maxNewFiles: 1 }
     },
     interfaces: {
       consumes: [
@@ -306,7 +318,8 @@ function taskContract(id, currentSpec, change, oracle, artifactInputs, overrides
     completion: {
       expectedArtifacts: [findRevision(change.bundle, "proposal").artifact],
       requiredEvidence: ["validate-next output hash"],
-      blockedConditions: ["Validation output is missing or unverifiable."]
+      blockedConditions: ["Validation output is missing or unverifiable."],
+      diffReconciliation: { required: true, allowUnlistedReads: true }
     },
     ...overrides
   };

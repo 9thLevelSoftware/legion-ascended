@@ -54,7 +54,18 @@ function requirement(slug, overrides = {}) {
     statement: `${slug} behavior is deployed and reviewable.`,
     acceptance: {
       language: `${slug} acceptance is deterministic.`,
-      criteria: [`${slug} criterion`],
+      criteria: [
+        {
+          id: `ac_${slug}-criterion`,
+          statement: `${slug} criterion`,
+          proof: {
+            mode: "executable",
+            command: "pnpm",
+            args: ["--filter", "@legion/artifacts", "test"],
+            expectedExitCode: 0
+          }
+        }
+      ],
       oracleRefs: []
     },
     traceRefs: [

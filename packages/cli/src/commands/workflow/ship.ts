@@ -1,7 +1,9 @@
-import { listReviewDecisionsForChange, readEvidenceIndex } from "@legion/artifacts";
+import { listReviewDecisionsForChange, readEvidenceIndex, readTaskGraph } from "@legion/artifacts";
 
 import { failure, helpResult, type CliContext, type CliResult } from "../../runtime.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
+import { taskIdForContractId } from "../../workflow/run-artifacts.js";
+import { deriveShipGates } from "../../workflow/ship-gates.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
 const SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
@@ -48,6 +50,37 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     );
   }
 
+  // Readiness is derived from the ADR-006 gate set for each task's risk tier,
+  // not from the existence of an accepted review row.
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
+  }
+
+  const gateReport = deriveShipGates({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    entries: evidence.document.entries,
+    reviews: reviews.reviews
+  });
+
+  if (!gateReport.ready) {
+    return blockedShip(
+      gateReport.gates
+        .filter((gate) => gate.status === "unsatisfied")
+        .map((gate) => ({
+          code: "risk_gate_unsatisfied",
+          message: `${gate.label} is not satisfied for ${gate.taskId}: ${gate.reason}`,
+          path: evidence.artifactPath
+        })),
+      nextAction("legion build", "Required risk gates are not satisfied for this change.")
+    );
+  }
+
+  const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
   return {
     exitCode: 0,
     payload: {
@@ -64,11 +97,23 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
+      riskGates: {
+        satisfied: gateReport.satisfied,
+        unsatisfied: gateReport.unsatisfied,
+        unevaluable: gateReport.unevaluable,
+        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))]
+      },
       diagnostics: []
     },
     human: [
       "Ship ready.",
-      "Accepted review and build evidence are present.",
+      `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
+      ...(unevaluable.length === 0
+        ? []
+        : [
+            `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,
+            "These gates are required by the change's risk tier but are not proven."
+          ]),
       "No publish or release action was performed."
     ].join("\n")
   };

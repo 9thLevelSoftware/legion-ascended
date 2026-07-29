@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { loadProject, stableProtocolJson } from "@legion/artifacts";
-import { artifactPathSchema } from "@legion/protocol";
+import { LEGION_PROTOCOL_VERSION, artifactPathSchema, formatEntityId, type ArtifactPath } from "@legion/protocol";
 
 import {
   failure,
@@ -21,6 +21,8 @@ import {
   refreshCodebaseMap
 } from "../../workflow/codebase-map.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
+import { parseResultFromText } from "../../workflow/executor/result.js";
+import { explorationResultContract, parseExploration } from "../../workflow/exploration.js";
 import {
   createGuidanceRunPaths,
   guidanceArtifactPath,
@@ -32,12 +34,13 @@ import {
   writeGuidanceRun,
   type GuidanceRunDocument
 } from "../../workflow/guidance-run.js";
+import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { resolveWorkflowState } from "../../workflow/state.js";
 import { positionalText } from "./record.js";
 
 const HELP = {
-  explore: "legion explore <topic> [--executor codex|manual|fake]\n\nCreate a design discovery artifact before start or planning.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration whose proposals and open questions feed legion start. Nothing an exploration produces is authoritative.",
   map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
   retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
@@ -146,7 +149,10 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
   const prompt = guidancePrompt({
     workflow: input.workflow,
     topic: topic ?? input.workflow,
-    requiredSections: input.sections
+    requiredSections: input.sections,
+    // Exploration is the only guidance workflow whose output feeds a later
+    // structured step, so it is the only one asked for a typed result.
+    ...(input.workflow === "explore" ? { extraContract: explorationResultContract() } : {})
   });
   const executed = await runGuidanceExecutor({
     context,
@@ -174,6 +180,32 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
     text: markdown
   });
 
+  // Persist the typed exploration alongside the prose. The design document
+  // stays human-readable; this is what `legion start` will consume as
+  // proposals and injected open questions.
+  let explorationArtifactPath: ArtifactPath | undefined;
+  let explorationDiagnostics: readonly string[] = [];
+  if (input.workflow === "explore") {
+    const parsed = parseExploration({
+      raw: parseResultFromText(executed.result.rawOutput ?? ""),
+      runId: formatEntityId("run", slugFromName(`explore-${paths.runId}`)),
+      topic: topic ?? input.workflow,
+      entry: stringOption(context, "entry") ?? "raw-idea",
+      createdAt,
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      fallbackSummary: summary
+    });
+    explorationDiagnostics = parsed.diagnostics;
+    if (parsed.exploration !== undefined) {
+      explorationArtifactPath = guidanceArtifactPath(paths, "exploration.json");
+      await writeProjectTextFile({
+        repositoryRoot: context.repositoryRoot,
+        artifactPath: explorationArtifactPath,
+        text: stableProtocolJson(parsed.exploration)
+      });
+    }
+  }
+
   const status = executed.result.ok ? "completed" : "blocked";
   const run = await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
@@ -182,6 +214,7 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
     runInput: { topic: topic ?? null },
     outputs: {
       markdownArtifactPath,
+      ...(explorationArtifactPath === undefined ? {} : { explorationArtifactPath }),
       promptArtifactPath: executed.promptArtifactPath,
       resultArtifactPath: executed.resultArtifactPath,
       rawLogArtifactPath: executed.rawLogArtifactPath,
@@ -199,6 +232,8 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
     runId: paths.runId,
     artifactPath: paths.workflowRunArtifactPath,
     markdownArtifactPath,
+    ...(explorationArtifactPath === undefined ? {} : { explorationArtifactPath }),
+    ...(explorationDiagnostics.length === 0 ? {} : { explorationDiagnostics }),
     executor: executed.executor,
     nextAction: action,
     diagnostics: executed.result.findings

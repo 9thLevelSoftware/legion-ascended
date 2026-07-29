@@ -27,6 +27,7 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
+import { generatedCriteria } from "./criteria.js";
 import type { PhaseSource } from "./phase-compat.js";
 
 export interface PhasePlanIds {
@@ -90,7 +91,7 @@ export function buildPhaseCurrentSpecInput(options: {
     statement: `Phase ${options.phase.number} (${options.phase.name}) has a resolved planning source.`,
     acceptance: {
       language: `Phase ${options.phase.number} planning starts from a resolved source artifact.`,
-      criteria: [`${options.phase.name} source is available for typed planning.`],
+      criteria: generatedCriteria([`${options.phase.name} source is available for typed planning.`]),
       oracleRefs: []
     },
     traceRefs: [
@@ -170,7 +171,7 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
     statement: requirementStatement(options.phase),
     acceptance: {
       language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
-      criteria: acceptanceCriteria(options.phase),
+      criteria: generatedCriteria(acceptanceCriteria(options.phase)),
       oracleRefs: [ids.oracleId]
     },
     traceRefs: [

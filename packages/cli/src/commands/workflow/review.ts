@@ -307,10 +307,54 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
   return { ok: true, reviews: submitted };
 }
 
+/**
+ * Evidence items recorded by the harness rather than reported by an executor.
+ *
+ * A human may accept a reviewer's judgement, but not away an observation: if
+ * the declared verification commands failed, or the diff left the contract,
+ * acceptance is refused regardless of what any review says.
+ */
+const HARNESS_OBSERVATION_ITEM_IDS = new Set(["declared-verification", "diff-reconciliation"]);
+
+/**
+ * Find failed harness observations anywhere in the evidence index.
+ *
+ * This deliberately scans every entry rather than only `collected` ones.
+ * `cleanSubmittedReviewCoverage` skips non-collected bundles, so a mixed index
+ * — one task failed on an earlier run, another succeeded later — would
+ * otherwise be accepted on the strength of the passing bundle alone, and the
+ * failure would vanish by omission.
+ */
+function failedObservations(
+  evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
+): readonly unknown[] {
+  const diagnostics: unknown[] = [];
+  for (const entry of evidence.document.entries) {
+    for (const item of entry.evidence.items) {
+      if (!HARNESS_OBSERVATION_ITEM_IDS.has(item.id)) continue;
+      if (item.verdict !== "fail") continue;
+      diagnostics.push({
+        code: "unresolved_failed_observation",
+        message: `Evidence ${entry.evidence.id} records a failed ${item.id}. Rerun build until it passes; acceptance cannot override a harness observation.`,
+        path: evidence.artifactPath
+      });
+    }
+  }
+  return diagnostics;
+}
+
 async function acceptLatestReview(
   context: CliContext,
   evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
 ): Promise<CliResult> {
+  const failed = failedObservations(evidence);
+  if (failed.length > 0) {
+    return blockedReview(
+      failed,
+      nextAction("legion build", "Build evidence contains a failed harness observation and cannot be accepted.")
+    );
+  }
+
   const coverage = await cleanSubmittedReviewCoverage(context.repositoryRoot, evidence);
   if (!coverage.ok) {
     return blockedReview(coverage.diagnostics, nextAction("legion review", "Submit a passing review for every collected task evidence bundle before accepting."));

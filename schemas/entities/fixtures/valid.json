@@ -122,8 +122,26 @@
     "acceptance": {
       "language": "Project, change, requirement, decision, and oracle documents parse only when required workflow intent fields are present.",
       "criteria": [
-        "Valid entity fixtures parse without mutation.",
-        "Missing version, status, coverage, or protection fields are rejected."
+        {
+          "id": "ac_fixtures-parse-unmutated",
+          "statement": "Valid entity fixtures parse without mutation.",
+          "proof": {
+            "mode": "executable",
+            "command": "pnpm",
+            "args": ["--filter", "@legion/protocol", "test"],
+            "expectedExitCode": 0
+          }
+        },
+        {
+          "id": "ac_incomplete-fixtures-rejected",
+          "statement": "Missing version, status, coverage, or protection fields are rejected.",
+          "proof": {
+            "mode": "executable",
+            "command": "pnpm",
+            "args": ["--filter", "@legion/protocol", "test"],
+            "expectedExitCode": 0
+          }
+        }
       ],
       "oracleRefs": [
         "orc_protocol-entity-fixtures"
