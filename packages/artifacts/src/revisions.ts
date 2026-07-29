@@ -6,6 +6,7 @@ import {
   artifactReferenceSchema,
   artifactRevisionSchema,
   contentHashSchema,
+  upcastProtocolRecords,
   type ArtifactPath,
   type ArtifactReference,
   type ArtifactRevision,
@@ -221,7 +222,10 @@ export async function readJsonArtifact<T>(input: ReadJsonArtifactInput<T>): Prom
     };
   }
 
-  const validation = input.schema.safeParse(parsed);
+  // Upcast persisted documents written under an older protocol version before
+  // validating. The artifact reference below still hashes the original `bytes`,
+  // so migrating on read does not disturb content addressing or manifest hashes.
+  const validation = input.schema.safeParse(upcastProtocolRecords(parsed));
   if (!validation.success) {
     return {
       ok: false,

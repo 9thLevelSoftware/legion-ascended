@@ -17,7 +17,8 @@ import {
   FreshContextDispatcher,
   RuntimeLocalDriver,
   runDeterministicVerification,
-  type VerificationReport
+  type VerificationReport,
+  type WorkerContext
 } from "@legion/core";
 import {
   LEGION_PROTOCOL_VERSION,
@@ -316,6 +317,25 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
   });
   if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
 
+  // Resolve the worker context BEFORE the executor runs. The worker-bundle
+  // prompt-hash gate only means "refuse to dispatch" if it is consulted while
+  // refusing is still possible; checking it after the adapter has already
+  // modified the repository would make it a completion gate wearing a dispatch
+  // gate's name.
+  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
+  if (workerContext.blockedReason !== undefined) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "worker_context_unavailable",
+          message: workerContext.blockedReason,
+          path: input.taskgraph.artifactPath
+        }
+      ]
+    };
+  }
+
   // Observed before dispatch so `--allow-dirty` pre-existing edits are not
   // attributed to this run.
   const beforeDispatch = observeWorkingTreeDiff({
@@ -347,7 +367,19 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
 
   const finishedAt = currentUtcTimestamp();
 
-  // What the working tree shows, independent of what the executor reported.
+  // Execute the contract's declared verification commands. Until now these were
+  // rendered into the executor prompt as text and never run, so "verification"
+  // in evidence meant whatever exit code the executor reported about itself.
+  const verification = await runContractVerification({
+    repositoryRoot: input.context.repositoryRoot,
+    task: input.task,
+    workerContext: workerContext.workerContext
+  });
+
+  // Observed after verification, not before. Verification commands legitimately
+  // write — snapshot updates, generated files, formatters — and those writes are
+  // repository mutations made during the run. Reconciling before they happen
+  // would leave them permanently unchecked against scope and budget.
   const reconciliation = input.task.completion.diffReconciliation.required
     ? reconcileTaskDiff({
         repositoryRoot: input.context.repositoryRoot,
@@ -360,15 +392,6 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
       })
     : undefined;
   const inContract = !reconciliationBlocks(reconciliation);
-
-  // Execute the contract's declared verification commands. Until now these were
-  // rendered into the executor prompt as text and never run, so "verification"
-  // in evidence meant whatever exit code the executor reported about itself.
-  const verification = await runContractVerification({
-    repositoryRoot: input.context.repositoryRoot,
-    task: input.task,
-    executor: input.executor
-  });
 
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
@@ -790,24 +813,31 @@ interface ContractVerification {
  * to `@legion/core`; this function only supplies the two things core is
  * deliberately ignorant of — a worker context and a way to execute a process.
  */
-async function runContractVerification(input: {
-  readonly repositoryRoot: string;
+interface PreparedWorkerContext {
+  readonly workerContext?: WorkerContext;
+  /** Set when a fresh worker context could not be produced; dispatch must not proceed. */
+  readonly blockedReason?: string;
+}
+
+/**
+ * Resolve a fresh, isolated worker context for a task.
+ *
+ * Split out from verification so it can be called before the executor runs.
+ * Loading the bundle registry is what enforces the prompt content-hash gate, and
+ * a gate that only fires after the untrusted process has already written to the
+ * repository is not a dispatch gate.
+ */
+function prepareWorkerContext(input: {
   readonly task: TaskContract;
   readonly executor: ExecutionAdapterKind;
-}): Promise<ContractVerification> {
-  const model = modelManifestForExecutor(input.executor);
-
+}): PreparedWorkerContext {
   let registry;
   try {
-    registry = createWorkerBundleRegistry({ model });
+    registry = createWorkerBundleRegistry({ model: modelManifestForExecutor(input.executor) });
   } catch (error) {
     // A bundle whose prompt has drifted from its declared hash must not be
-    // dispatched. Failing loudly here is the point of the content-addressing
-    // gate; silently skipping verification would defeat it.
-    return {
-      passed: false,
-      blockedReason: error instanceof Error ? error.message : String(error)
-    };
+    // dispatched. Failing loudly here is the point of content addressing.
+    return { blockedReason: error instanceof Error ? error.message : String(error) };
   }
 
   const dispatch = new FreshContextDispatcher().dispatch({
@@ -828,16 +858,35 @@ async function runContractVerification(input: {
 
   if (!dispatch.ok) {
     return {
-      passed: false,
-      blockedReason: `A fresh worker context could not be dispatched for verification: ${dispatch.issues
+      blockedReason: `A fresh worker context could not be dispatched: ${dispatch.issues
         .map((issue) => issue.message)
         .join(" ")}`
     };
   }
 
+  return { workerContext: dispatch.workerContext };
+}
+
+/**
+ * Run `TaskContract.verification[]` through core's deterministic runner.
+ *
+ * The aggregation semantics (`passed` iff every command matched its declared
+ * exit code and none timed out, plus the deterministic `reportSha256`) belong
+ * to `@legion/core`; this function only supplies the two things core is
+ * deliberately ignorant of — a worker context and a way to execute a process.
+ */
+async function runContractVerification(input: {
+  readonly repositoryRoot: string;
+  readonly task: TaskContract;
+  readonly workerContext: WorkerContext | undefined;
+}): Promise<ContractVerification> {
+  if (input.workerContext === undefined) {
+    return { passed: false, blockedReason: "No worker context was available for verification." };
+  }
+
   const { report, issues } = await runDeterministicVerification({
     taskContract: input.task,
-    workerContext: dispatch.workerContext,
+    workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
       now: currentUtcTimestamp

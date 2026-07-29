@@ -73,7 +73,19 @@ export function loadWorkerBundles(sourceRoot?: string): ReadonlyMap<string, Work
 
     // The content-addressing gate. A prompt that has drifted from its declared
     // hash means the worker would run instructions nobody approved.
-    if (typeof entry.promptFile === "string") {
+    //
+    // A manifest that declares `instructionsHash` but names no prompt file is
+    // rejected rather than skipped: otherwise omitting `promptFile` is a way to
+    // claim a content-addressable contract while supplying nothing to address,
+    // and the gate becomes opt-out.
+    if (typeof entry.promptFile !== "string") {
+      throw new WorkerBundleIntegrityError(
+        manifest.id,
+        `Worker bundle ${manifest.id} declares promptContentContract.instructionsHash but names no promptFile, so its prompt cannot be content-addressed. Refusing to dispatch.`
+      );
+    }
+
+    {
       const promptPath = path.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody: string;
       try {

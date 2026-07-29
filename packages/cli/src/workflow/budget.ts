@@ -54,7 +54,16 @@ export function budgetForWriteScope(
   const slackFiles = options.slackFiles ?? 0;
   const linesPerFile = options.linesPerFile ?? DEFAULT_LINES_PER_FILE;
 
-  const declaredFiles = Math.max(write.length, 1);
+  // An empty write scope is a contract-authoring error. Rounding it up to a
+  // one-file budget would silently accept the mistake and reconcile the run
+  // against a limit nobody wrote.
+  if (write.length === 0) {
+    throw new RangeError(
+      "Cannot derive a blast-radius budget from an empty write scope; the task contract must declare what it may write."
+    );
+  }
+
+  const declaredFiles = write.length;
   const maxFilesChanged = declaredFiles + slackFiles;
 
   return {

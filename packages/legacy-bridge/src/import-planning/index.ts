@@ -501,6 +501,21 @@ function sourceReference(pathValue: ArtifactPath, requirementId: RequirementId) 
   };
 }
 
+/**
+ * Criterion id for an imported requirement, unique per source requirement code.
+ */
+function importedCriterionId(code: string): string {
+  const slug = code
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48)
+    .replace(/-+$/g, "");
+  return slug.length > 0 && /^[a-z0-9]/.test(slug)
+    ? `ac_${slug}-unspecified`
+    : "ac_imported-unspecified";
+}
+
 function requirementDocument(input: {
   readonly requirement: LegacyRequirement;
   readonly projectId: string;
@@ -533,7 +548,11 @@ function requirementDocument(input: {
       // imported requirement is not buildable until a real criterion is authored.
       criteria: [
         {
-          id: "ac_imported-unspecified",
+          // Derived per requirement. A shared literal id passes the schema's
+          // within-requirement uniqueness check but collides across every
+          // imported requirement, so any later join on criterion id is
+          // ambiguous.
+          id: importedCriterionId(input.requirement.code),
           statement: truncate(input.requirement.statement, 1_024),
           proof: {
             mode: "manual",

@@ -5849,6 +5849,102 @@ function buildIdempotencyKey(input) {
 // packages/protocol/dist/versioning/index.js
 var PREVIOUS_PROTOCOL_VERSION = schemaVersionSchema.parse("0.1.0");
 var CURRENT_PROTOCOL_VERSION = schemaVersionSchema.parse("0.2.0");
+var SUPPORTED_PROTOCOL_VERSIONS = [
+  PREVIOUS_PROTOCOL_VERSION,
+  CURRENT_PROTOCOL_VERSION
+];
+var migrationIdPattern = /^[a-z][a-z0-9._-]{1,127}$/;
+function isRecord(input) {
+  return typeof input === "object" && input !== null && !Array.isArray(input);
+}
+function safeParseSchemaVersion(input) {
+  const result = schemaVersionSchema.safeParse(input);
+  if (!result.success)
+    return null;
+  return result.data;
+}
+function parseSchemaVersion(input, fieldName = "schemaVersion") {
+  const version2 = safeParseSchemaVersion(input);
+  if (version2 === null) {
+    throw new TypeError(`${fieldName} must be a valid semantic schema version.`);
+  }
+  return version2;
+}
+function assertVersionedRecord(input) {
+  if (!isRecord(input)) {
+    throw new TypeError("Versioned protocol records must be objects.");
+  }
+  const schemaVersion = parseSchemaVersion(input["schemaVersion"], "schemaVersion");
+  return { ...input, schemaVersion };
+}
+function parseSemanticVersion(version2) {
+  const schemaVersion = parseSchemaVersion(version2, "version");
+  const parts = schemaVersion.split(".").map((part) => Number.parseInt(part, 10));
+  const [major, minor, patch] = parts;
+  if (major === void 0 || minor === void 0 || patch === void 0) {
+    throw new TypeError("version must contain major, minor, and patch parts.");
+  }
+  return { major, minor, patch };
+}
+function compareSchemaVersions(left, right) {
+  const leftParts = parseSemanticVersion(left);
+  const rightParts = parseSemanticVersion(right);
+  if (leftParts.major !== rightParts.major)
+    return leftParts.major < rightParts.major ? -1 : 1;
+  if (leftParts.minor !== rightParts.minor)
+    return leftParts.minor < rightParts.minor ? -1 : 1;
+  if (leftParts.patch !== rightParts.patch)
+    return leftParts.patch < rightParts.patch ? -1 : 1;
+  return 0;
+}
+function normalizeSupportedVersions(input = SUPPORTED_PROTOCOL_VERSIONS) {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new TypeError("supportedVersions must contain at least one semantic schema version.");
+  }
+  const unique = /* @__PURE__ */ new Map();
+  for (const version2 of input) {
+    const parsed = parseSchemaVersion(version2, "supportedVersions");
+    unique.set(parsed, parsed);
+  }
+  return [...unique.values()].sort(compareSchemaVersions);
+}
+function normalizeMigrationDescriptor(descriptor) {
+  if (!migrationIdPattern.test(descriptor.id)) {
+    throw new TypeError(`Migration ID ${descriptor.id} is invalid.`);
+  }
+  return {
+    id: descriptor.id,
+    fromVersion: parseSchemaVersion(descriptor.fromVersion, "fromVersion"),
+    toVersion: parseSchemaVersion(descriptor.toVersion, "toVersion")
+  };
+}
+function findProtocolMigrationPath(input) {
+  const fromVersion = parseSchemaVersion(input.fromVersion, "fromVersion");
+  const toVersion = parseSchemaVersion(input.toVersion, "toVersion");
+  if (fromVersion === toVersion)
+    return [];
+  const migrations = (input.migrations ?? []).map(normalizeMigrationDescriptor);
+  const visited = /* @__PURE__ */ new Set([fromVersion]);
+  const queue = [
+    { version: fromVersion, path: [] }
+  ];
+  let next = queue.shift();
+  while (next !== void 0) {
+    for (const migration of migrations) {
+      if (migration.fromVersion !== next.version)
+        continue;
+      if (visited.has(migration.toVersion))
+        continue;
+      const path36 = [...next.path, migration];
+      if (migration.toVersion === toVersion)
+        return path36;
+      visited.add(migration.toVersion);
+      queue.push({ version: migration.toVersion, path: path36 });
+    }
+    next = queue.shift();
+  }
+  return null;
+}
 var protocolEvolutionPolicyDocumentation = [
   "# Legion Protocol Evolution Policy",
   "",
@@ -8279,6 +8375,271 @@ var eventJsonSchemas = {
   compatibilityFixture: jsonSchemaDocument3("https://schemas.9thlevelsoftware.com/legion/events/compatibility-fixture.schema.json", "Legion protocol prior-minor event compatibility fixture schema", eventCompatibilityFixtureSchema)
 };
 
+// packages/protocol/dist/migrations/legion-0-2-0.js
+var MIGRATED_BUDGET_ANNOTATION = "legion.protocol.budget-origin";
+var MIGRATED_CRITERIA_ANNOTATION = "legion.protocol.criteria-origin";
+var MIGRATED_VALUE = "migrated-from-0.1.0";
+var MIGRATED_CRITERION_REASON = "Migrated from protocol 0.1.0, which recorded acceptance criteria as prose with no proof. Author an executable criterion before treating this as verified.";
+var MIGRATED_LINES_PER_FILE = 200;
+var TARGET_VERSION = "0.2.0";
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function withAnnotation(record2, key) {
+  const metadata = isRecord2(record2["metadata"]) ? record2["metadata"] : {};
+  const annotations = isRecord2(metadata["annotations"]) ? metadata["annotations"] : {};
+  return {
+    ...record2,
+    metadata: {
+      ...metadata,
+      annotations: { ...annotations, [key]: MIGRATED_VALUE }
+    }
+  };
+}
+function upcastRequirement(record2) {
+  const acceptance = isRecord2(record2["acceptance"]) ? record2["acceptance"] : void 0;
+  const criteria = acceptance === void 0 ? void 0 : acceptance["criteria"];
+  if (!Array.isArray(criteria) || criteria.length === 0)
+    return { ...record2 };
+  if (criteria.every((entry) => isRecord2(entry)))
+    return { ...record2 };
+  const upcast = criteria.map((entry, index) => isRecord2(entry) ? entry : {
+    id: `ac_migrated-${index + 1}`,
+    statement: String(entry),
+    proof: { mode: "manual", reason: MIGRATED_CRITERION_REASON }
+  });
+  return withAnnotation({ ...record2, acceptance: { ...acceptance, criteria: upcast } }, MIGRATED_CRITERIA_ANNOTATION);
+}
+function upcastTaskContract(record2) {
+  const scope = isRecord2(record2["scope"]) ? record2["scope"] : void 0;
+  const completion = isRecord2(record2["completion"]) ? record2["completion"] : void 0;
+  if (scope === void 0 || completion === void 0)
+    return { ...record2 };
+  if (isRecord2(scope["budget"]) && isRecord2(completion["diffReconciliation"]))
+    return { ...record2 };
+  const write = Array.isArray(scope["write"]) ? scope["write"] : [];
+  const declaredFiles = Math.max(write.length, 1);
+  return withAnnotation({
+    ...record2,
+    scope: {
+      ...scope,
+      budget: isRecord2(scope["budget"]) ? scope["budget"] : {
+        maxFilesChanged: declaredFiles,
+        maxLinesChanged: declaredFiles * MIGRATED_LINES_PER_FILE,
+        maxNewFiles: declaredFiles
+      }
+    },
+    completion: {
+      ...completion,
+      diffReconciliation: isRecord2(completion["diffReconciliation"]) ? completion["diffReconciliation"] : { required: true, allowUnlistedReads: true }
+    }
+  }, MIGRATED_BUDGET_ANNOTATION);
+}
+var legionProtocol010To020 = {
+  id: "legion.protocol.0-1-0.to.0-2-0",
+  fromVersion: "0.1.0",
+  toVersion: TARGET_VERSION,
+  kind: "upcast",
+  description: "Add fail-safe task blast-radius budgets and diff reconciliation, and convert prose acceptance criteria into criterion objects with explicit proof modes.",
+  preserves: [
+    "scope.read",
+    "scope.write",
+    "scope.forbidden",
+    "scope.sequentialFiles",
+    "acceptance.language",
+    "acceptance.oracleRefs",
+    "statement",
+    "traceRefs"
+  ],
+  informationPreserving: false,
+  migrate(record2) {
+    const migrated = record2["kind"] === "requirement" ? upcastRequirement(record2) : record2["kind"] === "task-contract" ? upcastTaskContract(record2) : { ...record2 };
+    return { ...migrated, schemaVersion: TARGET_VERSION };
+  }
+};
+var LEGION_PROTOCOL_MIGRATIONS = [legionProtocol010To020];
+
+// packages/protocol/dist/migrations/upcast.js
+var cachedRegistry;
+function migrationRegistry() {
+  cachedRegistry ??= createMigrationRegistry({
+    currentVersion: CURRENT_PROTOCOL_VERSION,
+    supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
+    migrations: LEGION_PROTOCOL_MIGRATIONS
+  });
+  return cachedRegistry;
+}
+function isRecord3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isVersionedRecord(value) {
+  if (!isRecord3(value))
+    return false;
+  return typeof value["schemaVersion"] === "string" && typeof value["kind"] === "string";
+}
+function needsUpcast(value) {
+  try {
+    return compareSchemaVersions(value["schemaVersion"], CURRENT_PROTOCOL_VERSION) < 0;
+  } catch {
+    return false;
+  }
+}
+function upcastProtocolRecords(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => upcastProtocolRecords(entry));
+  }
+  if (!isRecord3(value))
+    return value;
+  const migratedChildren = {};
+  for (const [key, child] of Object.entries(value)) {
+    migratedChildren[key] = upcastProtocolRecords(child);
+  }
+  if (!isVersionedRecord(migratedChildren) || !needsUpcast(migratedChildren)) {
+    return migratedChildren;
+  }
+  try {
+    return applyMigrations(migratedChildren, { registry: migrationRegistry() }).record;
+  } catch {
+    return migratedChildren;
+  }
+}
+
+// packages/protocol/dist/migrations/index.js
+var migrationIdPattern2 = /^[a-z][a-z0-9._-]{1,127}$/;
+function cloneVersionedRecord(record2) {
+  const serialized = JSON.stringify(record2);
+  if (serialized === void 0) {
+    throw new TypeError("Versioned protocol records must be JSON-serializable objects.");
+  }
+  const cloned = JSON.parse(serialized);
+  return assertVersionedRecord(cloned);
+}
+function assertSupportedVersion(version2, registry2, fieldName) {
+  if (!registry2.supportedVersions.includes(version2)) {
+    throw new RangeError(`${fieldName} ${version2} is not included in the migration registry supportedVersions.`);
+  }
+}
+function normalizePreservedInvariants(input) {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new TypeError("Protocol migrations must list at least one preserved field or invariant.");
+  }
+  for (const invariant of input) {
+    if (typeof invariant !== "string" || invariant.trim().length === 0) {
+      throw new TypeError("Protocol migration preserved invariants must be non-empty strings.");
+    }
+  }
+  return Object.freeze([...input]);
+}
+function normalizeMigration(registry2, migration) {
+  if (!migrationIdPattern2.test(migration.id)) {
+    throw new TypeError(`Protocol migration ID ${migration.id} is invalid.`);
+  }
+  if (typeof migration.description !== "string" || migration.description.trim().length === 0) {
+    throw new TypeError("Protocol migrations require a non-empty description.");
+  }
+  if (migration.kind !== "upcast" && migration.kind !== "downcast") {
+    throw new TypeError("Protocol migrations must be declared as upcast or downcast.");
+  }
+  if (typeof migration.migrate !== "function") {
+    throw new TypeError("Protocol migrations require a migrate function.");
+  }
+  const fromVersion = parseSchemaVersion(migration.fromVersion, "fromVersion");
+  const toVersion = parseSchemaVersion(migration.toVersion, "toVersion");
+  if (fromVersion === toVersion) {
+    throw new RangeError("Protocol migration source and target versions must differ.");
+  }
+  assertSupportedVersion(fromVersion, registry2, "fromVersion");
+  assertSupportedVersion(toVersion, registry2, "toVersion");
+  const comparison = compareSchemaVersions(fromVersion, toVersion);
+  if (migration.kind === "upcast" && comparison >= 0) {
+    throw new RangeError("Upcast migrations must move to a newer protocol version.");
+  }
+  if (migration.kind === "downcast") {
+    if (comparison <= 0) {
+      throw new RangeError("Downcast migrations must move to an older protocol version.");
+    }
+    if (migration.informationPreserving !== true) {
+      throw new Error("Downcast migrations must declare information-preserving evidence.");
+    }
+  }
+  const preserves = normalizePreservedInvariants(migration.preserves);
+  return Object.freeze({
+    id: migration.id,
+    fromVersion,
+    toVersion,
+    kind: migration.kind,
+    description: migration.description,
+    preserves,
+    ...migration.informationPreserving === void 0 ? {} : { informationPreserving: migration.informationPreserving },
+    migrate: migration.migrate
+  });
+}
+function migrationKey(migration) {
+  return `${migration.fromVersion}->${migration.toVersion}`;
+}
+function createMigrationRegistry(input = {}) {
+  const currentVersion = parseSchemaVersion(input.currentVersion ?? CURRENT_PROTOCOL_VERSION, "currentVersion");
+  const supportedVersions = normalizeSupportedVersions(input.supportedVersions ?? [currentVersion]);
+  if (!supportedVersions.includes(currentVersion)) {
+    throw new RangeError(`currentVersion ${currentVersion} must be included in supportedVersions.`);
+  }
+  let registry2 = Object.freeze({
+    currentVersion,
+    supportedVersions,
+    migrations: []
+  });
+  for (const migration of input.migrations ?? []) {
+    registry2 = registerMigration(registry2, migration);
+  }
+  return registry2;
+}
+function registerMigration(registry2, migration) {
+  const normalized = normalizeMigration(registry2, migration);
+  if (registry2.migrations.some((entry) => entry.id === normalized.id)) {
+    throw new Error(`Protocol migration ${normalized.id} is already registered.`);
+  }
+  const key = migrationKey(normalized);
+  if (registry2.migrations.some((entry) => migrationKey(entry) === key)) {
+    throw new Error(`Protocol migration path ${key} is already registered.`);
+  }
+  return Object.freeze({
+    currentVersion: registry2.currentVersion,
+    supportedVersions: registry2.supportedVersions,
+    migrations: Object.freeze([...registry2.migrations, normalized])
+  });
+}
+function applyMigrations(input, options) {
+  const initial = assertVersionedRecord(input);
+  const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
+  assertSupportedVersion(targetVersion, options.registry, "targetVersion");
+  const path36 = findProtocolMigrationPath({
+    fromVersion: initial.schemaVersion,
+    toVersion: targetVersion,
+    migrations: options.registry.migrations
+  });
+  if (path36 === null) {
+    throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
+  }
+  let record2 = cloneVersionedRecord(initial);
+  const appliedMigrations = [];
+  for (const descriptor of path36) {
+    const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
+    if (!migration) {
+      throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
+    }
+    const migrated = assertVersionedRecord(migration.migrate(record2));
+    if (migrated.schemaVersion !== migration.toVersion) {
+      throw new Error(`Migration ${migration.id} returned schemaVersion ${migrated.schemaVersion}; expected ${migration.toVersion}.`);
+    }
+    record2 = migrated;
+    appliedMigrations.push(migration.id);
+  }
+  return Object.freeze({
+    record: record2,
+    appliedMigrations: Object.freeze(appliedMigrations)
+  });
+}
+
 // packages/protocol/dist/primitives/schema-documents.js
 var idsDocumentSchema = strictObject({
   projectId: projectIdSchema,
@@ -10356,7 +10717,7 @@ function deriveDashboardProjectionStateHash(state) {
 function isString(value) {
   return typeof value === "string";
 }
-function isRecord(value) {
+function isRecord4(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 function readProjectId(event) {
@@ -10689,7 +11050,7 @@ function mapChangeEventToVerdict(eventType, payload) {
   }
 }
 function summariseEvent(event) {
-  if (!isRecord(event.payload))
+  if (!isRecord4(event.payload))
     return summaryForGeneric(event);
   const payload = event.payload;
   if (isTaskEventType(event.eventType)) {
@@ -11177,7 +11538,7 @@ function isString3(value) {
 function isNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
-function isRecord2(value) {
+function isRecord5(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 function isBoardTaskStatus(value) {
@@ -11534,7 +11895,7 @@ function applyReleaseEvent(working, payload) {
 }
 function applyEventToRollupHeader(working, event) {
   const payload = event.payload;
-  if (!payload || !isRecord2(payload))
+  if (!payload || !isRecord5(payload))
     return;
   const projectId = readProjectIdFromPayload(payload);
   if (!projectId)
@@ -11587,7 +11948,7 @@ function reducePortfolio(state, event, options = {}) {
 }
 function replayOnePriorEvent(working, event) {
   const payload = event.payload;
-  if (!payload || !isRecord2(payload))
+  if (!payload || !isRecord5(payload))
     return;
   switch (event.eventType) {
     case "task.created": {
@@ -11690,7 +12051,7 @@ function cloneMutableEdge(edge) {
 }
 function applyEvent(working, event) {
   const payload = event.payload;
-  if (!payload || !isRecord2(payload))
+  if (!payload || !isRecord5(payload))
     return;
   switch (event.eventType) {
     case "task.created":
@@ -12987,7 +13348,7 @@ function blockerFromJson(raw) {
     throw new Error("Failed to deserialize board task blocker JSON: " + message);
   }
 }
-function isRecord3(value) {
+function isRecord6(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function intentMatches(storedIntent, currentIntent) {
@@ -13122,7 +13483,7 @@ var SqliteBoardTaskRepository = class {
             }
             const existingRow = loadBoardTaskRow(database, parsed.taskId);
             if (existingRow) {
-              if (isRecord3(parsed.intent)) {
+              if (isRecord6(parsed.intent)) {
                 if (!intentMatches(parsed.intent, intent)) {
                   throwIdempotencyIntentMismatch("Board task create", input.idempotencyKey);
                 }
@@ -13985,7 +14346,7 @@ var SqliteBoardApprovalRepository = class {
             }
             const existingRow = loadApprovalRow(this.#database, parsed.approvalId);
             if (existingRow) {
-              if (isRecord3(parsed.intent)) {
+              if (isRecord6(parsed.intent)) {
                 if (!intentMatches(parsed.intent, intent)) {
                   throwIdempotencyIntentMismatch("Board approval create", input.idempotencyKey);
                 }
@@ -14332,7 +14693,7 @@ function throwEventIdempotencyIntentMismatch(idempotencyKey, globalSequence) {
 }
 function parseStoredEventCursor(record2) {
   const parsed = JSON.parse(record2.result_json);
-  if (!isRecord3(parsed) || typeof parsed["eventId"] !== "string") {
+  if (!isRecord6(parsed) || typeof parsed["eventId"] !== "string") {
     throw new Error("Board event idempotency record missing eventId.");
   }
   return parsed;
@@ -14552,7 +14913,7 @@ var SqliteBoardEventRepository = class {
           }
           const eventRow = this.#database.prepare(BOARD_EVENT_STATEMENTS.selectById).get(cursor.eventId);
           if (eventRow) {
-            if (isRecord3(cursor.intent)) {
+            if (isRecord6(cursor.intent)) {
               if (!intentMatches(cursor.intent, intent)) {
                 throwEventIdempotencyIntentMismatch(idempotencyKey, cursor.globalSequence);
               }
@@ -16677,14 +17038,14 @@ function contentBytes(content) {
     return Buffer.from(content, "utf8");
   return content;
 }
-function isRecord4(value) {
+function isRecord7(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function sortStable(value) {
   if (Array.isArray(value)) {
     return value.map((item) => sortStable(item));
   }
-  if (!isRecord4(value)) {
+  if (!isRecord7(value)) {
     return value;
   }
   const sorted = {};
@@ -16817,7 +17178,7 @@ async function readJsonArtifact(input) {
       ]
     };
   }
-  const validation = input.schema.safeParse(parsed);
+  const validation = input.schema.safeParse(upcastProtocolRecords(parsed));
   if (!validation.success) {
     return {
       ok: false,
@@ -20344,7 +20705,7 @@ function assertExpectedRevision2(value, path36) {
 function evidenceIndexPath(changeId) {
   return artifactPathForRole({ role: "evidence-index", changeId });
 }
-function isRecord5(value) {
+function isRecord8(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function artifactInputDiagnostics2(input) {
@@ -20384,7 +20745,7 @@ function artifactInputDiagnostics2(input) {
   return diagnostics;
 }
 function rawAcceptanceDiagnostics(input) {
-  if (!isRecord5(input.entry) || !isRecord5(input.entry["acceptance"]))
+  if (!isRecord8(input.entry) || !isRecord8(input.entry["acceptance"]))
     return [];
   const acceptance = input.entry["acceptance"];
   if (acceptance["status"] === "accepted") {
@@ -23578,7 +23939,7 @@ function parseUtcTimestamp(input) {
     ]);
   }
 }
-function isRecord6(value) {
+function isRecord9(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function readString(value) {
@@ -23643,7 +24004,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
       }
     };
   }
-  if (!isRecord6(parsed)) {
+  if (!isRecord9(parsed)) {
     return {
       generatedPaths: /* @__PURE__ */ new Set(),
       nativeSurfaces: [],
@@ -23657,7 +24018,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
     };
   }
   const generatedPaths = /* @__PURE__ */ new Set([".legion/manifest.json"]);
-  const pathsValue = isRecord6(parsed["paths"]) ? parsed["paths"] : {};
+  const pathsValue = isRecord9(parsed["paths"]) ? parsed["paths"] : {};
   for (const key of ["agents", "commands", "skills", "adapters", "manifest"]) {
     collectManagedPath({
       repositoryRoot,
@@ -23682,7 +24043,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
     nativeSurfaces.push(bridgeSurface);
   if (Array.isArray(parsed["nativeArtifacts"])) {
     for (const artifact of parsed["nativeArtifacts"]) {
-      if (!isRecord6(artifact))
+      if (!isRecord9(artifact))
         continue;
       const surface = nativeSurface({
         repositoryRoot,
@@ -23957,16 +24318,16 @@ async function readReport(stagingRoot) {
   return parsed;
 }
 function isInventory(value) {
-  return isRecord6(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
+  return isRecord9(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
 }
 function isCodexLegionMigrationReport(value) {
-  if (!isRecord6(value))
+  if (!isRecord9(value))
     return false;
   const policy = value["policy"];
-  return value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory(value["source"]) && isInventory(value["target"]) && Array.isArray(value["nativeSurfaces"]) && Array.isArray(value["moves"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord6(policy) && policy["v8DefaultInstallUnchanged"] === true && policy["nativeCodexSurfacesUntouched"] === true && policy["v9ProjectNamespaceReserved"] === true && policy["legacyProtocolPreserved"] === true;
+  return value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory(value["source"]) && isInventory(value["target"]) && Array.isArray(value["nativeSurfaces"]) && Array.isArray(value["moves"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord9(policy) && policy["v8DefaultInstallUnchanged"] === true && policy["nativeCodexSurfacesUntouched"] === true && policy["v9ProjectNamespaceReserved"] === true && policy["legacyProtocolPreserved"] === true;
 }
 function isBackupManifest(value) {
-  return isRecord6(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
+  return isRecord9(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
   const targetRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
@@ -24531,6 +24892,10 @@ function sourceReference(pathValue, requirementId) {
     }
   };
 }
+function importedCriterionId(code) {
+  const slug = code.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/g, "");
+  return slug.length > 0 && /^[a-z0-9]/.test(slug) ? `ac_${slug}-unspecified` : "ac_imported-unspecified";
+}
 function requirementDocument(input) {
   const category = input.requirement.code.toLowerCase().startsWith("mig") ? "migration" : "behavior";
   return {
@@ -24557,7 +24922,11 @@ function requirementDocument(input) {
       // imported requirement is not buildable until a real criterion is authored.
       criteria: [
         {
-          id: "ac_imported-unspecified",
+          // Derived per requirement. A shared literal id passes the schema's
+          // within-requirement uniqueness check but collides across every
+          // imported requirement, so any later join on criterion id is
+          // ambiguous.
+          id: importedCriterionId(input.requirement.code),
           statement: truncate(input.requirement.statement, 1024),
           proof: {
             mode: "manual",
@@ -24884,21 +25253,21 @@ async function installStagedProject(input) {
   await rm4(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
-function isRecord7(value) {
+function isRecord10(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isInventory2(value) {
-  return isRecord7(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
+  return isRecord10(value) && typeof value["root"] === "string" && typeof value["treeHash"] === "string" && Array.isArray(value["files"]);
 }
 function isPlanningImportReport(value) {
-  if (!isRecord7(value))
+  if (!isRecord10(value))
     return false;
   const policy = value["policy"];
   const target = value["target"];
-  return value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory2(value["source"]) && isInventory2(target) && Array.isArray(value["mappings"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord7(policy) && policy["planningReadOnlyAfterApply"] === true && policy["legacySourceDeleted"] === false && policy["mutableStateImportedAsCurrentTruth"] === false;
+  return value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-report" && typeof value["runId"] === "string" && typeof value["createdAt"] === "string" && value["requiresReview"] === true && isInventory2(value["source"]) && isInventory2(target) && Array.isArray(value["mappings"]) && Array.isArray(value["conflicts"]) && Array.isArray(value["uncertainties"]) && isRecord10(policy) && policy["planningReadOnlyAfterApply"] === true && policy["legacySourceDeleted"] === false && policy["mutableStateImportedAsCurrentTruth"] === false;
 }
 function isBackupManifest2(value) {
-  return isRecord7(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
+  return isRecord10(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
   const stagedProject = path17.join(input.stagingRoot, ".legion", "project");
@@ -25788,7 +26157,7 @@ async function readOptionalText(filePath) {
   }
 }
 function normalizeExecutionResult(input, fallback) {
-  const value = isRecord8(input) ? input : {};
+  const value = isRecord11(input) ? input : {};
   const status2 = parseStatus(value["status"]) ?? fallback.status;
   const commandsRun = parseCommands(value["commandsRun"]);
   const findings = parseFindings(value["findings"]);
@@ -25820,7 +26189,7 @@ function parseResultFromText(text) {
     }
   }
 }
-function isRecord8(value) {
+function isRecord11(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function parseString(value) {
@@ -25837,7 +26206,7 @@ function parseCommands(value) {
   if (!Array.isArray(value)) return [];
   const commands = [];
   for (const entry of value) {
-    if (!isRecord8(entry)) continue;
+    if (!isRecord11(entry)) continue;
     const command = parseString(entry["command"]);
     const args = parseStringArray(entry["args"]);
     const exitCode = entry["exitCode"];
@@ -25850,7 +26219,7 @@ function parseFindings(value) {
   if (!Array.isArray(value)) return [];
   const findings = [];
   for (const entry of value) {
-    if (!isRecord8(entry)) continue;
+    if (!isRecord11(entry)) continue;
     const id = parseString(entry["id"]);
     const title = parseString(entry["title"]);
     const body = parseString(entry["body"]);
@@ -25870,7 +26239,7 @@ function parseFindings(value) {
   return findings;
 }
 function parseReviewVerdicts(value) {
-  if (!isRecord8(value)) return void 0;
+  if (!isRecord11(value)) return void 0;
   const specification = parseReviewVerdict(value["specification"]);
   const integration = parseReviewVerdict(value["integration"]);
   const evidence = parseReviewVerdict(value["evidence"]);
@@ -25899,7 +26268,12 @@ function budgetForWriteScope(write, options = {}) {
   if (isRepositoryWide(write)) return REPOSITORY_WIDE_TASK_BUDGET;
   const slackFiles = options.slackFiles ?? 0;
   const linesPerFile = options.linesPerFile ?? DEFAULT_LINES_PER_FILE;
-  const declaredFiles = Math.max(write.length, 1);
+  if (write.length === 0) {
+    throw new RangeError(
+      "Cannot derive a blast-radius budget from an empty write scope; the task contract must declare what it may write."
+    );
+  }
+  const declaredFiles = write.length;
   const maxFilesChanged = declaredFiles + slackFiles;
   return {
     maxFilesChanged,
@@ -27932,13 +28306,25 @@ function truncate3(text, maxLength) {
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
+import { createHash as createHash18 } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import path27 from "node:path";
+function summarizeObservation(files, baseGitSha) {
+  const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    files: ordered,
+    changedFiles: ordered.map((file) => file.path),
+    newFiles: ordered.filter((file) => file.isNew).map((file) => file.path),
+    linesChanged: ordered.reduce((total, file) => total + file.linesChanged, 0),
+    baseGitSha
+  };
+}
 function reconciliationBlocks(result) {
   if (result === void 0) return false;
   return result.status === "violated" || result.status === "unavailable";
 }
 var MAX_UNTRACKED_LINE_COUNT_BYTES = 2e6;
+var MAX_HASHED_BYTES = 64 * 1024 * 1024;
 function git(repositoryRoot, args) {
   return execFileSync3("git", ["-C", repositoryRoot, ...args], {
     encoding: "utf8",
@@ -27951,6 +28337,14 @@ function toPosix(value) {
 }
 function splitLines(value) {
   return value.split(/\r?\n/u).filter((line) => line.length > 0);
+}
+function hashFileContent(absolutePath) {
+  try {
+    if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
+    return createHash18("sha256").update(readFileSync(absolutePath)).digest("hex");
+  } catch {
+    return void 0;
+  }
 }
 function countUntrackedLines(absolutePath) {
   try {
@@ -27972,32 +28366,32 @@ function observeWorkingTreeDiff(input) {
       unavailableReason: "The project is not under git, so a working-tree diff cannot be observed."
     };
   }
-  const changed = /* @__PURE__ */ new Set();
+  const lines = /* @__PURE__ */ new Map();
   const created = /* @__PURE__ */ new Set();
-  let linesChanged = 0;
   try {
     for (const line of splitLines(git(input.repositoryRoot, ["diff", "--numstat", input.baseGitSha, "--"]))) {
       const [added, deleted, ...rest] = line.split("	");
       const filePath = toPosix(rest.join("	"));
       if (filePath.length === 0) continue;
-      changed.add(filePath);
-      linesChanged += (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+      const count = (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+      lines.set(filePath, (lines.get(filePath) ?? 0) + count);
     }
     for (const line of splitLines(git(input.repositoryRoot, ["diff", "--name-status", input.baseGitSha, "--"]))) {
       const [status2, ...rest] = line.split("	");
       const filePath = toPosix(rest[rest.length - 1] ?? "");
       if (filePath.length === 0) continue;
-      changed.add(filePath);
+      if (!lines.has(filePath)) lines.set(filePath, 0);
       if (status2?.startsWith("A")) created.add(filePath);
     }
     for (const line of splitLines(git(input.repositoryRoot, ["status", "--porcelain", "--untracked-files=all"]))) {
       const code = line.slice(0, 2);
       const filePath = toPosix(line.slice(3).trim());
       if (filePath.length === 0) continue;
-      changed.add(filePath);
       if (code === "??") {
         created.add(filePath);
-        linesChanged += countUntrackedLines(path27.join(input.repositoryRoot, filePath));
+        lines.set(filePath, countUntrackedLines(path27.join(input.repositoryRoot, filePath)));
+      } else if (!lines.has(filePath)) {
+        lines.set(filePath, 0);
       }
     }
   } catch (error2) {
@@ -28007,15 +28401,16 @@ function observeWorkingTreeDiff(input) {
       unavailableReason: `The working tree diff could not be read: ${error2 instanceof Error ? error2.message : String(error2)}`
     };
   }
+  const files = [...lines.entries()].map(([filePath, linesChanged]) => ({
+    path: filePath,
+    linesChanged,
+    isNew: created.has(filePath),
+    contentSha256: hashFileContent(path27.join(input.repositoryRoot, filePath))
+  }));
   return {
     status: "clean",
     violations: [],
-    observation: {
-      changedFiles: [...changed].sort(),
-      newFiles: [...created].sort(),
-      linesChanged,
-      baseGitSha: input.baseGitSha
-    }
+    observation: summarizeObservation(files, input.baseGitSha)
   };
 }
 function pathIsCoveredBy(filePath, scopeEntry) {
@@ -28030,14 +28425,11 @@ function coveredByAny(filePath, entries) {
 function reconcileDiff(input) {
   const violations = [];
   const harnessPaths = input.harnessPaths ?? [];
-  const attributable = input.observation.changedFiles.filter(
-    (filePath) => !coveredByAny(filePath, harnessPaths)
+  const attributable = summarizeObservation(
+    input.observation.files.filter((file) => !coveredByAny(file.path, harnessPaths)),
+    input.observation.baseGitSha
   );
-  const changedFiles = attributable;
-  const newFiles = input.observation.newFiles.filter(
-    (filePath) => !coveredByAny(filePath, harnessPaths)
-  );
-  const { linesChanged } = input.observation;
+  const { changedFiles, newFiles, linesChanged } = attributable;
   const { write, forbidden, budget } = input.scope;
   const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
   if (forbiddenHits.length > 0) {
@@ -28081,25 +28473,37 @@ function reconcileDiff(input) {
   return violations;
 }
 function diffDelta(before, after) {
-  const preexisting = new Set(before.changedFiles);
-  const preexistingNew = new Set(before.newFiles);
-  return {
-    changedFiles: after.changedFiles.filter((filePath) => !preexisting.has(filePath)),
-    newFiles: after.newFiles.filter((filePath) => !preexistingNew.has(filePath)),
-    linesChanged: Math.max(0, after.linesChanged - before.linesChanged),
-    baseGitSha: after.baseGitSha
-  };
+  const priorByPath = new Map(before.files.map((file) => [file.path, file]));
+  const attributable = after.files.filter((file) => {
+    const prior = priorByPath.get(file.path);
+    if (prior === void 0) return true;
+    if (prior.contentSha256 === void 0 || file.contentSha256 === void 0) return true;
+    return prior.contentSha256 !== file.contentSha256;
+  });
+  return summarizeObservation(
+    attributable.map((file) => {
+      const prior = priorByPath.get(file.path);
+      if (prior === void 0) return file;
+      return {
+        ...file,
+        linesChanged: Math.max(0, file.linesChanged - prior.linesChanged),
+        // A file that already existed as a pre-existing new file is not newly
+        // created by this run.
+        isNew: file.isNew && !prior.isNew
+      };
+    }),
+    after.baseGitSha
+  );
 }
 function reconcileTaskDiff(input) {
   const observed = observeWorkingTreeDiff(input);
   if (observed.observation === void 0) return observed;
   const delta = input.before === void 0 ? observed.observation : diffDelta(input.before, observed.observation);
   const harnessPaths = input.harnessPaths ?? [];
-  const attributable = {
-    ...delta,
-    changedFiles: delta.changedFiles.filter((filePath) => !coveredByAny(filePath, harnessPaths)),
-    newFiles: delta.newFiles.filter((filePath) => !coveredByAny(filePath, harnessPaths))
-  };
+  const attributable = summarizeObservation(
+    delta.files.filter((file) => !coveredByAny(file.path, harnessPaths)),
+    delta.baseGitSha
+  );
   const violations = reconcileDiff({ observation: attributable, scope: input.scope });
   return {
     status: violations.length === 0 ? "clean" : "violated",
@@ -28110,7 +28514,7 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/executor/verification-runner.ts
 import { spawn as spawn2 } from "node:child_process";
-import { createHash as createHash18 } from "node:crypto";
+import { createHash as createHash19 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
 import path28 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
@@ -28125,7 +28529,7 @@ function resolveCommand(command, args) {
   return { command: process.execPath, args: [binPath, ...args] };
 }
 function sha2562(value) {
-  return `sha256:${createHash18("sha256").update(value, "utf8").digest("hex")}`;
+  return `sha256:${createHash19("sha256").update(value, "utf8").digest("hex")}`;
 }
 function terminateProcessTree2(pid) {
   if (pid === void 0) return;
@@ -28209,6 +28613,11 @@ function createVerificationRunner(options) {
       expectedExitCode: request.expectedExitCode,
       stdoutSha256: sha2562(outcome.stdout),
       stderrSha256: sha2562(outcome.stderr),
+      // `sha256(stdout ++ stderr)`, in that order — NOT a digest of the two
+      // streams interleaved as a terminal would show them. The streams are
+      // captured separately, so real arrival order is not recoverable here.
+      // Treat this as a cheap combined fingerprint, not a reproduction of the
+      // run's console output.
       combinedSha256: sha2562(`${outcome.stdout}${outcome.stderr}`),
       durationMs: Date.now() - startedMs,
       timedOut: outcome.timedOut,
@@ -28220,7 +28629,7 @@ function createVerificationRunner(options) {
 }
 
 // packages/cli/src/workflow/executor/worker-bundles.ts
-import { createHash as createHash19 } from "node:crypto";
+import { createHash as createHash20 } from "node:crypto";
 import { readFileSync as readFileSync2 } from "node:fs";
 import path29 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
@@ -28234,7 +28643,7 @@ var WorkerBundleIntegrityError = class extends Error {
   }
 };
 function sha256Hex5(value) {
-  return createHash19("sha256").update(value, "utf8").digest("hex");
+  return createHash20("sha256").update(value, "utf8").digest("hex");
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
@@ -28258,7 +28667,13 @@ function loadWorkerBundles(sourceRoot) {
       capabilities: entry.capabilities,
       promptContentContract: entry.promptContentContract
     });
-    if (typeof entry.promptFile === "string") {
+    if (typeof entry.promptFile !== "string") {
+      throw new WorkerBundleIntegrityError(
+        manifest.id,
+        `Worker bundle ${manifest.id} declares promptContentContract.instructionsHash but names no promptFile, so its prompt cannot be content-addressed. Refusing to dispatch.`
+      );
+    }
+    {
       const promptPath = path29.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
@@ -28293,7 +28708,7 @@ function createWorkerBundleRegistry(options) {
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash20 } from "node:crypto";
+import { createHash as createHash21 } from "node:crypto";
 import path30 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
@@ -28312,7 +28727,7 @@ function reviewIdForChange(input) {
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash20("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const digest = createHash21("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   const reservedLength = tail.length + digest.length + 1;
   const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
   if (prefixLength < 1) {
@@ -28550,6 +28965,19 @@ async function executeTask(input) {
     })
   });
   if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
+  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
+  if (workerContext.blockedReason !== void 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "worker_context_unavailable",
+          message: workerContext.blockedReason,
+          path: input.taskgraph.artifactPath
+        }
+      ]
+    };
+  }
   const beforeDispatch = observeWorkingTreeDiff({
     repositoryRoot: input.context.repositoryRoot,
     baseGitSha
@@ -28576,6 +29004,11 @@ async function executeTask(input) {
     redactedLogAbsolutePath
   });
   const finishedAt = currentUtcTimestamp();
+  const verification = await runContractVerification({
+    repositoryRoot: input.context.repositoryRoot,
+    task: input.task,
+    workerContext: workerContext.workerContext
+  });
   const reconciliation = input.task.completion.diffReconciliation.required ? reconcileTaskDiff({
     repositoryRoot: input.context.repositoryRoot,
     baseGitSha,
@@ -28586,11 +29019,6 @@ async function executeTask(input) {
     ...beforeDispatch === void 0 ? {} : { before: beforeDispatch }
   }) : void 0;
   const inContract = !reconciliationBlocks(reconciliation);
-  const verification = await runContractVerification({
-    repositoryRoot: input.context.repositoryRoot,
-    task: input.task,
-    executor: input.executor
-  });
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -28919,16 +29347,12 @@ function nextAttemptMap(taskRuns) {
   }
   return attempts;
 }
-async function runContractVerification(input) {
-  const model = modelManifestForExecutor(input.executor);
+function prepareWorkerContext(input) {
   let registry2;
   try {
-    registry2 = createWorkerBundleRegistry({ model });
+    registry2 = createWorkerBundleRegistry({ model: modelManifestForExecutor(input.executor) });
   } catch (error2) {
-    return {
-      passed: false,
-      blockedReason: error2 instanceof Error ? error2.message : String(error2)
-    };
+    return { blockedReason: error2 instanceof Error ? error2.message : String(error2) };
   }
   const dispatch2 = new FreshContextDispatcher().dispatch({
     taskContract: input.task,
@@ -28947,13 +29371,18 @@ async function runContractVerification(input) {
   });
   if (!dispatch2.ok) {
     return {
-      passed: false,
-      blockedReason: `A fresh worker context could not be dispatched for verification: ${dispatch2.issues.map((issue2) => issue2.message).join(" ")}`
+      blockedReason: `A fresh worker context could not be dispatched: ${dispatch2.issues.map((issue2) => issue2.message).join(" ")}`
     };
+  }
+  return { workerContext: dispatch2.workerContext };
+}
+async function runContractVerification(input) {
+  if (input.workerContext === void 0) {
+    return { passed: false, blockedReason: "No worker context was available for verification." };
   }
   const { report, issues } = await runDeterministicVerification({
     taskContract: input.task,
-    workerContext: dispatch2.workerContext,
+    workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
       now: currentUtcTimestamp
@@ -29052,6 +29481,32 @@ function blockedBuild(diagnostics, action, extras = {}) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+
+// packages/cli/src/workflow/evidence-selection.ts
+function attemptFromEvidence(entry) {
+  const candidates = [entry.evidence.runId, entry.evidence.id];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const match = /-attempt-(\d+)$/u.exec(candidate);
+    if (match?.[1] !== void 0) return Number.parseInt(match[1], 10);
+  }
+  return 0;
+}
+function latestEvidencePerTask(entries) {
+  const latest = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    const taskId = entry.evidence.taskId;
+    if (taskId === void 0) continue;
+    const current = latest.get(taskId);
+    if (current === void 0 || attemptFromEvidence(entry) >= attemptFromEvidence(current)) {
+      latest.set(taskId, entry);
+    }
+  }
+  return latest;
+}
+function latestEvidenceEntries(entries) {
+  return [...latestEvidencePerTask(entries).entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, entry]) => entry);
 }
 
 // packages/cli/src/commands/workflow/review.ts
@@ -29293,7 +29748,7 @@ async function submitReview(context, input) {
 var HARNESS_OBSERVATION_ITEM_IDS = /* @__PURE__ */ new Set(["declared-verification", "diff-reconciliation"]);
 function failedObservations(evidence) {
   const diagnostics = [];
-  for (const entry of evidence.document.entries) {
+  for (const entry of latestEvidenceEntries(evidence.document.entries)) {
     for (const item of entry.evidence.items) {
       if (!HARNESS_OBSERVATION_ITEM_IDS.has(item.id)) continue;
       if (item.verdict !== "fail") continue;
@@ -30403,7 +30858,7 @@ function explorationResultContract() {
     "intake rather than guessed. A slot must not appear in both."
   ].join("\n");
 }
-function isRecord9(value) {
+function isRecord12(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function asString(value) {
@@ -30416,14 +30871,14 @@ function slugToNodeId(value, fallbackIndex) {
 }
 function parseExploration(input) {
   const diagnostics = [];
-  const value = isRecord9(input.raw) ? input.raw : {};
-  if (!isRecord9(input.raw)) {
+  const value = isRecord12(input.raw) ? input.raw : {};
+  if (!isRecord12(input.raw)) {
     diagnostics.push("The exploration executor returned no structured result; only the summary was preserved.");
   }
   const proposals = [];
   const rawProposals = Array.isArray(value["proposals"]) ? value["proposals"] : [];
   for (const [index, candidate] of rawProposals.entries()) {
-    if (!isRecord9(candidate)) {
+    if (!isRecord12(candidate)) {
       diagnostics.push(`Proposal ${index} was not an object and was dropped.`);
       continue;
     }
@@ -30451,11 +30906,11 @@ function parseExploration(input) {
   const seenNodeIds = /* @__PURE__ */ new Set();
   const rawQuestions = Array.isArray(value["openQuestions"]) ? value["openQuestions"] : [];
   for (const [index, candidate] of rawQuestions.entries()) {
-    const record2 = isRecord9(candidate) ? candidate : {};
+    const record2 = isRecord12(candidate) ? candidate : {};
     const question = asString(record2["question"]) ?? asString(candidate) ?? `Unresolved decision ${index + 1}`;
     const slot = asString(record2["slot"]) ?? `open.question-${index + 1}`;
     const why = asString(record2["why"]) ?? "The exploration did not settle this.";
-    if (!isRecord9(candidate) || asString(record2["question"]) === void 0) {
+    if (!isRecord12(candidate) || asString(record2["question"]) === void 0) {
       diagnostics.push(`Open question ${index} was malformed and was repaired rather than dropped.`);
     }
     if (proposedSlots.has(slot)) {
@@ -30466,14 +30921,20 @@ function parseExploration(input) {
         diagnostics.push(`Slot ${slot} was both proposed and left open; the proposal was discarded in favour of asking.`);
       }
     }
-    let nodeId2 = slugToNodeId(question, index);
-    while (seenNodeIds.has(nodeId2)) nodeId2 = `${nodeId2.slice(0, MAX_NODE_ID_LENGTH - 3)}-${index + 1}`;
+    const base = slugToNodeId(question, index);
+    let nodeId2 = base;
+    let collision = 0;
+    while (seenNodeIds.has(nodeId2)) {
+      collision += 1;
+      const suffix = `-${collision}`;
+      nodeId2 = `${base.slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+    }
     seenNodeIds.add(nodeId2);
     openQuestions.push({ nodeId: nodeId2, slot, question, why });
   }
   const notes = [];
   for (const candidate of Array.isArray(value["notes"]) ? value["notes"] : []) {
-    if (!isRecord9(candidate)) continue;
+    if (!isRecord12(candidate)) continue;
     const heading = asString(candidate["heading"]);
     const body = asString(candidate["body"]);
     if (heading === void 0 || body === void 0) continue;
@@ -31087,18 +31548,18 @@ function renderMilestones(index) {
 
 // packages/cli/src/workflow/ship-gates.ts
 function evidenceItemVerdict(entries, taskId, itemId) {
-  for (const entry of entries) {
-    if (entry.evidence.taskId !== taskId) continue;
-    for (const item of entry.evidence.items) {
-      if (item.id !== itemId) continue;
-      if (item.verdict === "pass") return "pass";
-      if (item.verdict === "fail") return "fail";
-    }
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  for (const item of entry.evidence.items) {
+    if (item.id !== itemId) continue;
+    if (item.verdict === "pass") return "pass";
+    if (item.verdict === "fail") return "fail";
   }
   return void 0;
 }
 function hasEvidence(entries, taskId) {
-  return entries.some((entry) => entry.evidence.taskId === taskId && entry.evidence.items.length > 0);
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  return entry !== void 0 && entry.evidence.items.length > 0;
 }
 function hasAcceptedReview2(reviews, taskId) {
   return reviews.some(

@@ -1,5 +1,18 @@
 import * as z from "zod";
 
+/**
+ * Entity-kind audit for consumers that dispatch on `entityReferenceSchema.kind`.
+ *
+ * Adding a kind widens what every such consumer can receive. Audited at the time
+ * `intake` was added: the only dispatchers are positive-match chains in
+ * `packages/artifacts` (`traceability`, `specs`, `archive`), and the sole
+ * exhaustive one — `entityNodeId` — already returns `undefined` for any kind it
+ * does not name. Nine of the fourteen kinds were already unhandled there, so a
+ * new kind joins an existing default rather than introducing an unhandled case.
+ *
+ * If a consumer ever needs exhaustive handling, give it an explicit default that
+ * surfaces an unsupported-kind diagnostic rather than silently skipping.
+ */
 export const ENTITY_ID_KINDS = [
   "project",
   "change",

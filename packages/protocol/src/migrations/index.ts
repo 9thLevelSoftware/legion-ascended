@@ -250,3 +250,4 @@ export function generateCompatibilityReport(input: CompatibilityReportInput): st
 }
 
 export * from "./legion-0-2-0.js";
+export * from "./upcast.js";

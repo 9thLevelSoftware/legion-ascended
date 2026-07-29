@@ -30,6 +30,7 @@ import {
   runIdForTask,
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
+import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
@@ -317,19 +318,22 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
 const HARNESS_OBSERVATION_ITEM_IDS = new Set(["declared-verification", "diff-reconciliation"]);
 
 /**
- * Find failed harness observations anywhere in the evidence index.
+ * Find failed harness observations in each task's current evidence.
  *
- * This deliberately scans every entry rather than only `collected` ones.
- * `cleanSubmittedReviewCoverage` skips non-collected bundles, so a mixed index
- * — one task failed on an earlier run, another succeeded later — would
- * otherwise be accepted on the strength of the passing bundle alone, and the
- * failure would vanish by omission.
+ * Scans regardless of bundle status, because `cleanSubmittedReviewCoverage`
+ * skips non-collected bundles — so a mixed index would otherwise be accepted on
+ * the strength of a passing bundle alone and the failure would vanish by
+ * omission.
+ *
+ * But only the latest attempt per task counts. The index retains every attempt,
+ * so scanning all of them would make one historical failure permanent: the
+ * diagnostic tells the operator to rerun, and rerunning could never clear it.
  */
 function failedObservations(
   evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
 ): readonly unknown[] {
   const diagnostics: unknown[] = [];
-  for (const entry of evidence.document.entries) {
+  for (const entry of latestEvidenceEntries(evidence.document.entries)) {
     for (const item of entry.evidence.items) {
       if (!HARNESS_OBSERVATION_ITEM_IDS.has(item.id)) continue;
       if (item.verdict !== "fail") continue;

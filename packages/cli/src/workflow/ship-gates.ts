@@ -7,6 +7,8 @@ import {
 import type { EvidenceIndexEntry, ReviewDecisionSuccess } from "@legion/artifacts";
 import type { TaskContract } from "@legion/protocol";
 
+import { latestEvidencePerTask } from "./evidence-selection.js";
+
 /**
  * Ship readiness derived from ADR-006 risk gates.
  *
@@ -46,24 +48,31 @@ export interface ShipGateReport {
   readonly ready: boolean;
 }
 
+/**
+ * The verdict recorded by a task's *latest* attempt.
+ *
+ * Reading the first match in stored order would answer with the earliest
+ * attempt, so an old passing bundle would mask a newer failure and the gate
+ * would certify a task that most recently failed.
+ */
 function evidenceItemVerdict(
   entries: readonly EvidenceIndexEntry[],
   taskId: string,
   itemId: string
 ): "pass" | "fail" | undefined {
-  for (const entry of entries) {
-    if (entry.evidence.taskId !== taskId) continue;
-    for (const item of entry.evidence.items) {
-      if (item.id !== itemId) continue;
-      if (item.verdict === "pass") return "pass";
-      if (item.verdict === "fail") return "fail";
-    }
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === undefined) return undefined;
+  for (const item of entry.evidence.items) {
+    if (item.id !== itemId) continue;
+    if (item.verdict === "pass") return "pass";
+    if (item.verdict === "fail") return "fail";
   }
   return undefined;
 }
 
 function hasEvidence(entries: readonly EvidenceIndexEntry[], taskId: string): boolean {
-  return entries.some((entry) => entry.evidence.taskId === taskId && entry.evidence.items.length > 0);
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  return entry !== undefined && entry.evidence.items.length > 0;
 }
 
 function hasAcceptedReview(reviews: readonly ReviewDecisionSuccess[], taskId: string): boolean {

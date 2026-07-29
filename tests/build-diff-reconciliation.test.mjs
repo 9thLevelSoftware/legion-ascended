@@ -11,7 +11,8 @@ import {
   pathIsCoveredBy,
   reconcileDiff,
   reconcileTaskDiff,
-  reconciliationBlocks
+  reconciliationBlocks,
+  summarizeObservation
 } from "../packages/cli/dist/workflow/diff-reconciliation.js";
 
 const BUDGET = { maxFilesChanged: 3, maxLinesChanged: 100, maxNewFiles: 2 };
@@ -27,14 +28,24 @@ function scope(overrides = {}) {
   };
 }
 
-function observation(overrides = {}) {
-  return {
-    changedFiles: [],
-    newFiles: [],
-    linesChanged: 0,
-    baseGitSha: "0".repeat(40),
-    ...overrides
-  };
+/**
+ * Build an observation from the summary view used by most tests.
+ *
+ * `files` is now authoritative, so the helper synthesises it: all the lines land
+ * on the first path, and each file gets a content hash derived from its path so
+ * identical paths across two observations compare equal by default.
+ */
+function observation({ changedFiles = [], newFiles = [], linesChanged = 0, lines, hashes = {} } = {}) {
+  const created = new Set(newFiles);
+  const files = changedFiles.map((filePath, index) => ({
+    path: filePath,
+    // Per-file counts when given; otherwise put the whole total on the first
+    // path so summary-style fixtures stay terse.
+    linesChanged: lines === undefined ? (index === 0 ? linesChanged : 0) : lines[filePath] ?? 0,
+    isNew: created.has(filePath),
+    contentSha256: hashes[filePath] ?? `hash-of-${filePath}`
+  }));
+  return summarizeObservation(files, "0".repeat(40));
 }
 
 function git(root, args) {
@@ -128,12 +139,14 @@ test("pre-existing edits are not attributed to the run", () => {
   const before = observation({
     changedFiles: ["src/app/dirty.ts"],
     newFiles: ["src/app/dirty.ts"],
-    linesChanged: 40
+    lines: { "src/app/dirty.ts": 40 }
   });
   const after = observation({
     changedFiles: ["src/app/dirty.ts", "src/app/new.ts"],
     newFiles: ["src/app/dirty.ts", "src/app/new.ts"],
-    linesChanged: 65
+    // dirty.ts is byte-identical to the pre-existing state; only new.ts is the
+    // run's work.
+    lines: { "src/app/dirty.ts": 40, "src/app/new.ts": 25 }
   });
 
   const delta = diffDelta(before, after);
@@ -142,9 +155,82 @@ test("pre-existing edits are not attributed to the run", () => {
   assert.equal(delta.linesChanged, 25);
 });
 
+test("only the additional churn on an already-dirty file is attributed", () => {
+  const before = observation({
+    changedFiles: ["src/app/a.ts"],
+    lines: { "src/app/a.ts": 30 }
+  });
+  const after = observation({
+    changedFiles: ["src/app/a.ts"],
+    lines: { "src/app/a.ts": 70 },
+    hashes: { "src/app/a.ts": "executor-added-more" }
+  });
+
+  // 70 total minus the 30 already there.
+  assert.equal(diffDelta(before, after).linesChanged, 40);
+});
+
 test("a run that reverts more than it adds never reports a negative line count", () => {
-  const delta = diffDelta(observation({ linesChanged: 80 }), observation({ linesChanged: 10 }));
-  assert.equal(delta.linesChanged, 0);
+  const before = observation({ changedFiles: ["src/app/a.ts"], linesChanged: 80 });
+  const after = observation({
+    changedFiles: ["src/app/a.ts"],
+    linesChanged: 10,
+    hashes: { "src/app/a.ts": "changed-again" }
+  });
+  assert.equal(diffDelta(before, after).linesChanged, 0);
+});
+
+test("an executor edit to an already-dirty file is still attributed", () => {
+  // The bypass this replaced: dropping every pre-existing dirty path let an
+  // executor modify an already-dirty forbidden file with no trace.
+  const before = observation({ changedFiles: ["src/secrets/keys.env"], linesChanged: 1 });
+  const after = observation({
+    changedFiles: ["src/secrets/keys.env"],
+    linesChanged: 5,
+    hashes: { "src/secrets/keys.env": "executor-touched-it" }
+  });
+
+  const delta = diffDelta(before, after);
+  assert.deepEqual(delta.changedFiles, ["src/secrets/keys.env"]);
+
+  const violations = reconcileDiff({ observation: delta, scope: scope() });
+  assert.equal(violations[0].code, "forbidden_path_touched");
+});
+
+test("a dirty file the executor never touched is not attributed", () => {
+  // Same content on both sides means the operator's own edit, not the run's.
+  const before = observation({ changedFiles: ["src/app/dirty.ts"], linesChanged: 40 });
+  const after = observation({ changedFiles: ["src/app/dirty.ts"], linesChanged: 40 });
+
+  assert.deepEqual(diffDelta(before, after).changedFiles, []);
+});
+
+test("an unreadable file is attributed rather than assumed innocent", () => {
+  const before = observation({ changedFiles: ["src/app/a.ts"] });
+  const after = observation({ changedFiles: ["src/app/a.ts"], hashes: { "src/app/a.ts": undefined } });
+
+  // hashes[...] = undefined falls back in the helper, so build the file directly.
+  const unreadable = summarizeObservation(
+    [{ path: "src/app/a.ts", linesChanged: 0, isNew: false, contentSha256: undefined }],
+    "0".repeat(40)
+  );
+  assert.deepEqual(diffDelta(before, unreadable).changedFiles, ["src/app/a.ts"]);
+  assert.ok(after.files.length === 1);
+});
+
+test("harness line counts are excluded along with harness files", () => {
+  // A verbose executor log must not consume the task's line budget.
+  const runRoot = ".legion/project/changes/chg_x/runs/run_y";
+  const violations = reconcileDiff({
+    observation: observation({
+      changedFiles: [`${runRoot}/executor-raw.log`, "src/app/main.ts"],
+      linesChanged: 50_000
+    }),
+    scope: scope(),
+    harnessPaths: [runRoot]
+  });
+
+  assert.deepEqual(violations, []);
 });
 
 // --- observation against a real repository --------------------------------

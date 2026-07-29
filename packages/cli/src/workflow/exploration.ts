@@ -149,8 +149,17 @@ export function parseExploration(
       }
     }
 
-    let nodeId = slugToNodeId(question, index);
-    while (seenNodeIds.has(nodeId)) nodeId = `${nodeId.slice(0, MAX_NODE_ID_LENGTH - 3)}-${index + 1}`;
+    // A monotonic counter, not `index`: reusing the loop index appended the same
+    // suffix on every collision, so against the length cap the slice could
+    // return an already-taken id and the loop would never terminate.
+    const base = slugToNodeId(question, index);
+    let nodeId = base;
+    let collision = 0;
+    while (seenNodeIds.has(nodeId)) {
+      collision += 1;
+      const suffix = `-${collision}`;
+      nodeId = `${base.slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+    }
     seenNodeIds.add(nodeId);
 
     openQuestions.push({ nodeId, slot, question, why });

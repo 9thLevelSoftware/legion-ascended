@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -31,14 +32,55 @@ export interface ReconciliationViolation {
   readonly paths: readonly string[];
 }
 
+/**
+ * One changed file, with everything needed to attribute it.
+ *
+ * Per-file granularity is load-bearing rather than tidy. An earlier version
+ * tracked only path lists plus a single total line count, which broke two ways:
+ * subtracting a pre-existing dirty path removed it wholesale even if the
+ * executor went on to edit that same file, and filtering harness paths out of
+ * the path lists left their lines inside the total. Both are fixed by filtering
+ * files and deriving the totals.
+ */
+export interface ObservedFile {
+  readonly path: string;
+  /** Added + deleted lines. Binary files count as 0. */
+  readonly linesChanged: number;
+  /** Did not exist at the base commit. */
+  readonly isNew: boolean;
+  /**
+   * Content hash of the file as it currently stands, or `undefined` when it is
+   * unreadable (deleted, binary-unreadable, oversized). Comparing hashes across
+   * two observations is what distinguishes "this file was already dirty" from
+   * "the executor changed this file too".
+   */
+  readonly contentSha256: string | undefined;
+}
+
 export interface DiffObservation {
+  readonly files: readonly ObservedFile[];
   /** Repository-relative POSIX paths that changed, tracked and untracked. */
   readonly changedFiles: readonly string[];
   /** Subset of `changedFiles` that did not exist at the base commit. */
   readonly newFiles: readonly string[];
-  /** Added + deleted lines across all changed files. Binary files count as 0. */
+  /** Added + deleted lines across `files`. */
   readonly linesChanged: number;
   readonly baseGitSha: string;
+}
+
+/** Derive the summary views from the authoritative per-file list. */
+export function summarizeObservation(
+  files: readonly ObservedFile[],
+  baseGitSha: string
+): DiffObservation {
+  const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    files: ordered,
+    changedFiles: ordered.map((file) => file.path),
+    newFiles: ordered.filter((file) => file.isNew).map((file) => file.path),
+    linesChanged: ordered.reduce((total, file) => total + file.linesChanged, 0),
+    baseGitSha
+  };
 }
 
 /**
@@ -71,6 +113,7 @@ export function reconciliationBlocks(result: ReconciliationResult | undefined): 
 }
 
 const MAX_UNTRACKED_LINE_COUNT_BYTES = 2_000_000;
+const MAX_HASHED_BYTES = 64 * 1024 * 1024;
 
 function git(repositoryRoot: string, args: readonly string[]): string {
   return execFileSync("git", ["-C", repositoryRoot, ...args], {
@@ -86,6 +129,22 @@ function toPosix(value: string): string {
 
 function splitLines(value: string): readonly string[] {
   return value.split(/\r?\n/u).filter((line) => line.length > 0);
+}
+
+/**
+ * Hash a file's current bytes so two observations can be compared by content.
+ *
+ * Returns `undefined` when the file cannot be read — deleted, oversized, or
+ * permission-denied. Callers treat an unknown hash as "assume it changed",
+ * because an unreadable file is not evidence that nothing happened to it.
+ */
+function hashFileContent(absolutePath: string): string | undefined {
+  try {
+    if (statSync(absolutePath).size > MAX_HASHED_BYTES) return undefined;
+    return createHash("sha256").update(readFileSync(absolutePath)).digest("hex");
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -122,9 +181,8 @@ export function observeWorkingTreeDiff(input: {
     };
   }
 
-  const changed = new Set<string>();
+  const lines = new Map<string, number>();
   const created = new Set<string>();
-  let linesChanged = 0;
 
   try {
     // Tracked changes since the base commit, whether committed or staged.
@@ -132,16 +190,16 @@ export function observeWorkingTreeDiff(input: {
       const [added, deleted, ...rest] = line.split("\t");
       const filePath = toPosix(rest.join("\t"));
       if (filePath.length === 0) continue;
-      changed.add(filePath);
       // Binary files report "-" for both counts.
-      linesChanged += (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+      const count = (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+      lines.set(filePath, (lines.get(filePath) ?? 0) + count);
     }
 
     for (const line of splitLines(git(input.repositoryRoot, ["diff", "--name-status", input.baseGitSha, "--"]))) {
       const [status, ...rest] = line.split("\t");
       const filePath = toPosix(rest[rest.length - 1] ?? "");
       if (filePath.length === 0) continue;
-      changed.add(filePath);
+      if (!lines.has(filePath)) lines.set(filePath, 0);
       if (status?.startsWith("A")) created.add(filePath);
     }
 
@@ -150,10 +208,11 @@ export function observeWorkingTreeDiff(input: {
       const code = line.slice(0, 2);
       const filePath = toPosix(line.slice(3).trim());
       if (filePath.length === 0) continue;
-      changed.add(filePath);
       if (code === "??") {
         created.add(filePath);
-        linesChanged += countUntrackedLines(path.join(input.repositoryRoot, filePath));
+        lines.set(filePath, countUntrackedLines(path.join(input.repositoryRoot, filePath)));
+      } else if (!lines.has(filePath)) {
+        lines.set(filePath, 0);
       }
     }
   } catch (error) {
@@ -164,15 +223,17 @@ export function observeWorkingTreeDiff(input: {
     };
   }
 
+  const files: ObservedFile[] = [...lines.entries()].map(([filePath, linesChanged]) => ({
+    path: filePath,
+    linesChanged,
+    isNew: created.has(filePath),
+    contentSha256: hashFileContent(path.join(input.repositoryRoot, filePath))
+  }));
+
   return {
     status: "clean",
     violations: [],
-    observation: {
-      changedFiles: [...changed].sort(),
-      newFiles: [...created].sort(),
-      linesChanged,
-      baseGitSha: input.baseGitSha
-    }
+    observation: summarizeObservation(files, input.baseGitSha)
   };
 }
 
@@ -214,14 +275,14 @@ export function reconcileDiff(input: {
 }): readonly ReconciliationViolation[] {
   const violations: ReconciliationViolation[] = [];
   const harnessPaths = input.harnessPaths ?? [];
-  const attributable = input.observation.changedFiles.filter(
-    (filePath) => !coveredByAny(filePath, harnessPaths)
+  // Filter files, then derive the totals. Filtering the path lists while reusing
+  // the observation's own line total would leave harness log lines inside the
+  // budget, so a verbose executor log could block an in-contract run.
+  const attributable = summarizeObservation(
+    input.observation.files.filter((file) => !coveredByAny(file.path, harnessPaths)),
+    input.observation.baseGitSha
   );
-  const changedFiles = attributable;
-  const newFiles = input.observation.newFiles.filter(
-    (filePath) => !coveredByAny(filePath, harnessPaths)
-  );
-  const { linesChanged } = input.observation;
+  const { changedFiles, newFiles, linesChanged } = attributable;
   const { write, forbidden, budget } = input.scope;
 
   const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
@@ -276,23 +337,45 @@ export function reconcileDiff(input: {
  *
  * `legion build --allow-dirty` permits a worktree that was already modified
  * before dispatch. Reconciling the raw post-run diff would then blame the
- * executor for edits it never made, which would make the check untrustworthy
- * and, worse, trainable-around. Subtracting a pre-dispatch observation keeps
- * the reconciliation honest on both paths.
+ * executor for edits it never made.
  *
- * Line counts are a difference of totals rather than a per-file diff, so a run
- * that both adds and reverts lines can under-report. That is the safe direction
- * for a budget check: it never invents an overrun.
+ * Attribution is by **content**, not by path. Dropping every path that was
+ * already dirty would let an executor edit an already-dirty forbidden or
+ * out-of-scope file with no trace — a bypass of the very checks this module
+ * exists to perform, and one that a dirty worktree makes trivially reachable.
+ * A file therefore stays attributable whenever its content hash differs from
+ * the pre-dispatch snapshot, and is dropped only when it is byte-identical to
+ * what was already there.
+ *
+ * A file whose content cannot be hashed on either side is kept rather than
+ * dropped: an unreadable file is not evidence of innocence.
  */
 export function diffDelta(before: DiffObservation, after: DiffObservation): DiffObservation {
-  const preexisting = new Set(before.changedFiles);
-  const preexistingNew = new Set(before.newFiles);
-  return {
-    changedFiles: after.changedFiles.filter((filePath) => !preexisting.has(filePath)),
-    newFiles: after.newFiles.filter((filePath) => !preexistingNew.has(filePath)),
-    linesChanged: Math.max(0, after.linesChanged - before.linesChanged),
-    baseGitSha: after.baseGitSha
-  };
+  const priorByPath = new Map(before.files.map((file) => [file.path, file]));
+
+  const attributable = after.files.filter((file) => {
+    const prior = priorByPath.get(file.path);
+    if (prior === undefined) return true;
+    if (prior.contentSha256 === undefined || file.contentSha256 === undefined) return true;
+    return prior.contentSha256 !== file.contentSha256;
+  });
+
+  return summarizeObservation(
+    attributable.map((file) => {
+      const prior = priorByPath.get(file.path);
+      if (prior === undefined) return file;
+      // The file was already dirty and changed again. Only the additional churn
+      // belongs to this run; never report a negative count.
+      return {
+        ...file,
+        linesChanged: Math.max(0, file.linesChanged - prior.linesChanged),
+        // A file that already existed as a pre-existing new file is not newly
+        // created by this run.
+        isNew: file.isNew && !prior.isNew
+      };
+    }),
+    after.baseGitSha
+  );
 }
 
 /**
@@ -322,12 +405,15 @@ export function reconcileTaskDiff(input: {
   // self-reported file list against this must see the same set reconciliation
   // judged, or they report mismatches for files the executor never claimed
   // because it never touched them.
+  //
+  // Filter `files` and re-derive, never spread-and-patch: the summary views are
+  // computed from `files`, so patching them while leaving `files` intact puts
+  // harness output back into the budget totals.
   const harnessPaths = input.harnessPaths ?? [];
-  const attributable: DiffObservation = {
-    ...delta,
-    changedFiles: delta.changedFiles.filter((filePath) => !coveredByAny(filePath, harnessPaths)),
-    newFiles: delta.newFiles.filter((filePath) => !coveredByAny(filePath, harnessPaths))
-  };
+  const attributable = summarizeObservation(
+    delta.files.filter((file) => !coveredByAny(file.path, harnessPaths)),
+    delta.baseGitSha
+  );
 
   const violations = reconcileDiff({ observation: attributable, scope: input.scope });
   return {

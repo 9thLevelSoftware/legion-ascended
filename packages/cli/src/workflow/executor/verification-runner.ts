@@ -188,6 +188,11 @@ export function createVerificationRunner(
       expectedExitCode: request.expectedExitCode,
       stdoutSha256: sha256(outcome.stdout),
       stderrSha256: sha256(outcome.stderr),
+      // `sha256(stdout ++ stderr)`, in that order — NOT a digest of the two
+      // streams interleaved as a terminal would show them. The streams are
+      // captured separately, so real arrival order is not recoverable here.
+      // Treat this as a cheap combined fingerprint, not a reproduction of the
+      // run's console output.
       combinedSha256: sha256(`${outcome.stdout}${outcome.stderr}`),
       durationMs: Date.now() - startedMs,
       timedOut: outcome.timedOut,
