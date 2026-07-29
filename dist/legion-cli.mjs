@@ -8452,6 +8452,7 @@ var legionProtocol010To020 = {
     "traceRefs"
   ],
   informationPreserving: false,
+  appliesToKinds: ["requirement", "task-contract"],
   migrate(record2) {
     const migrated = record2["kind"] === "requirement" ? upcastRequirement(record2) : record2["kind"] === "task-contract" ? upcastTaskContract(record2) : { ...record2 };
     return { ...migrated, schemaVersion: TARGET_VERSION };
@@ -8472,10 +8473,21 @@ function migrationRegistry() {
 function isRecord3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function isVersionedRecord(value) {
+function migratableKinds() {
+  const kinds = /* @__PURE__ */ new Set();
+  for (const migration of LEGION_PROTOCOL_MIGRATIONS) {
+    for (const kind of migration.appliesToKinds ?? [])
+      kinds.add(kind);
+  }
+  return kinds;
+}
+function isMigratableRecord(value) {
   if (!isRecord3(value))
     return false;
-  return typeof value["schemaVersion"] === "string" && typeof value["kind"] === "string";
+  if (typeof value["schemaVersion"] !== "string")
+    return false;
+  const kind = value["kind"];
+  return typeof kind === "string" && migratableKinds().has(kind);
 }
 function needsUpcast(value) {
   try {
@@ -8494,7 +8506,7 @@ function upcastProtocolRecords(value) {
   for (const [key, child] of Object.entries(value)) {
     migratedChildren[key] = upcastProtocolRecords(child);
   }
-  if (!isVersionedRecord(migratedChildren) || !needsUpcast(migratedChildren)) {
+  if (!isMigratableRecord(migratedChildren) || !needsUpcast(migratedChildren)) {
     return migratedChildren;
   }
   try {

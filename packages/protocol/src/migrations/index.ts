@@ -18,6 +18,17 @@ export interface ProtocolMigration extends ProtocolMigrationDescriptor {
   readonly description: string;
   readonly preserves: readonly string[];
   readonly informationPreserving?: boolean;
+  /**
+   * Entity `kind` values this migration knows how to convert.
+   *
+   * Required by `upcastProtocolRecords`, which will not touch a record whose
+   * kind no migration claims. Artifact envelopes such as `taskgraph` and
+   * `change-artifact-manifest` carry their own version constants that are
+   * independent of the protocol version, and several embed a self-hash computed
+   * over their own fields — rewriting their `schemaVersion` silently invalidates
+   * that hash. Claiming kinds explicitly keeps the walk from guessing.
+   */
+  readonly appliesToKinds?: readonly string[];
   readonly migrate: (record: VersionedRecord) => unknown;
 }
 

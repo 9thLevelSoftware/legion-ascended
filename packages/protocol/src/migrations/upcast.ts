@@ -46,10 +46,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** A versioned protocol record: has both a `kind` and a `schemaVersion`. */
-function isVersionedRecord(value: unknown): value is Record<string, unknown> {
+/**
+ * Kinds some registered migration claims it can convert.
+ *
+ * Deliberately not "anything with a schemaVersion". Artifact envelopes
+ * (`taskgraph`, `change-artifact-manifest`, evidence indexes) are versioned by
+ * their own constants, not by the protocol version, and some embed a hash
+ * computed over their own fields. Bumping their `schemaVersion` on read breaks
+ * that self-hash and makes every read fail — which is exactly what a blanket
+ * walk did before this restriction.
+ */
+function migratableKinds(): ReadonlySet<string> {
+  const kinds = new Set<string>();
+  for (const migration of LEGION_PROTOCOL_MIGRATIONS) {
+    for (const kind of migration.appliesToKinds ?? []) kinds.add(kind);
+  }
+  return kinds;
+}
+
+/** A protocol record a registered migration claims: right `kind`, has a version. */
+function isMigratableRecord(value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
-  return typeof value["schemaVersion"] === "string" && typeof value["kind"] === "string";
+  if (typeof value["schemaVersion"] !== "string") return false;
+  const kind = value["kind"];
+  return typeof kind === "string" && migratableKinds().has(kind);
 }
 
 function needsUpcast(value: Record<string, unknown>): boolean {
@@ -83,7 +103,7 @@ export function upcastProtocolRecords(value: unknown): unknown {
     migratedChildren[key] = upcastProtocolRecords(child);
   }
 
-  if (!isVersionedRecord(migratedChildren) || !needsUpcast(migratedChildren)) {
+  if (!isMigratableRecord(migratedChildren) || !needsUpcast(migratedChildren)) {
     return migratedChildren;
   }
 

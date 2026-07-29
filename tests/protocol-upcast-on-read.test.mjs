@@ -79,6 +79,28 @@ test("task contracts nested inside a taskgraph are upcast, not just the envelope
     assert.ok(task.scope.budget !== undefined, `${task.id} did not gain a budget`);
     assert.ok(task.completion.diffReconciliation !== undefined);
   }
+
+  // Artifact envelopes are versioned by their own constants, not by the
+  // protocol version, and the manifest embeds a hash over its own fields.
+  // Rewriting these on read invalidated that self-hash and made every taskgraph
+  // read fail with manifest_hash_mismatch.
+  assert.equal(upcast.schemaVersion, "0.1.0");
+  assert.equal(upcast.artifactManifest.schemaVersion, "0.1.0");
+  assert.equal(upcast.artifactManifest.manifestHash, legacyTaskgraph.artifactManifest.manifestHash);
+});
+
+test("only kinds a migration claims are touched", () => {
+  // The guard that keeps the walk from guessing. `change-artifact-manifest` has
+  // no registered migration, so its version is left exactly as written.
+  const envelope = {
+    schemaVersion: "0.1.0",
+    kind: "change-artifact-manifest",
+    changeId: "chg_x",
+    inputs: [],
+    evidenceRefs: [],
+    manifestHash: `sha256:${"c".repeat(64)}`
+  };
+  assert.deepEqual(upcastProtocolRecords(envelope), envelope);
 });
 
 test("legacy prose acceptance criteria become criterion objects", () => {

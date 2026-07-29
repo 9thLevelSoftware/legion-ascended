@@ -129,6 +129,7 @@ export const legionProtocol010To020: ProtocolMigration = {
     "traceRefs"
   ],
   informationPreserving: false,
+  appliesToKinds: ["requirement", "task-contract"],
   migrate(record: VersionedRecord): unknown {
     const migrated =
       record["kind"] === "requirement"
