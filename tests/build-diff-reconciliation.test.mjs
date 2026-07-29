@@ -151,7 +151,7 @@ test("a run that reverts more than it adds never reports a negative line count",
 
 test("observation sees modified, created, and untracked files", async (t) => {
   const { root, head } = await tempGitRepo();
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
   await writeFile(path.join(root, "src", "app", "base.txt"), "one\ntwo\n", "utf8");
   await writeFile(path.join(root, "src", "app", "untracked.txt"), "a\nb\nc\n", "utf8");
@@ -166,7 +166,7 @@ test("observation sees modified, created, and untracked files", async (t) => {
 
 test("a committed change is still attributed to the run", async (t) => {
   const { root, head } = await tempGitRepo();
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
   // An executor that commits its work must not thereby escape reconciliation.
   await writeFile(path.join(root, "src", "app", "base.txt"), "one\ntwo\nthree\n", "utf8");
@@ -179,7 +179,7 @@ test("a committed change is still attributed to the run", async (t) => {
 
 test("an out-of-contract write is caught end to end against a real repo", async (t) => {
   const { root, head } = await tempGitRepo();
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
   await mkdir(path.join(root, "src", "secrets"), { recursive: true });
   await writeFile(path.join(root, "src", "secrets", "keys.env"), "TOKEN=1\n", "utf8");
@@ -192,7 +192,7 @@ test("an out-of-contract write is caught end to end against a real repo", async 
 
 test("a non-git project is not_applicable and does not block", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "legion-diff-nogit-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
   const result = reconcileTaskDiff({ repositoryRoot: root, baseGitSha: "0".repeat(40), scope: scope() });
 

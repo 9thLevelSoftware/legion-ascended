@@ -10,7 +10,7 @@ const EMPTY_SHA256 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca49
 
 async function tempRoot(t) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-verify-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   return root;
 }
 

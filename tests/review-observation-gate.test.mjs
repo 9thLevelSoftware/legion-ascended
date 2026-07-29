@@ -16,7 +16,7 @@ function git(root, args) {
 /** Drive start -> plan -> build -> review so an evidence index exists. */
 async function reviewedProject(t) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-review-gate-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
   git(root, ["init", "--initial-branch=main"]);
   git(root, ["config", "user.email", "test@example.com"]);

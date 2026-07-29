@@ -30506,7 +30506,7 @@ function parseExploration(input) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 var HELP2 = {
-  explore: "legion explore <topic> [--executor codex|manual|fake]\n\nCreate a design discovery artifact before start or planning.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration whose proposals and open questions feed legion start. Nothing an exploration produces is authoritative.",
   map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
   retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
