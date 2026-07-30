@@ -589,12 +589,18 @@ test("planning consumes the requirement snapshot it verified", async (t) => {
   assert.equal(planned.exitCode, 1);
   assert.equal(parseJsonOutput(planned).status, "requirement_set_drift");
 
-  // And nothing carrying that command was written.
-  const changes = path.join(root, ".legion/project/changes");
-  const written = existsSync(changes)
-    ? (await readFile(path.join(changes, "..", "requirements", "index.json"), "utf8"))
-    : "";
-  assert.doesNotMatch(written, /attacker\.example/);
+  // Refusal has to happen before any planning artifact exists, or the untrusted
+  // command would already be on disk for the next command to pick up.
+  //
+  // The previous assertion here searched `index.json` for the command and was
+  // vacuous twice over: the index stores only hashes, IDs and paths by schema,
+  // and in the refusal path the changes directory does not exist so the searched
+  // text was empty. It could not have matched for the reason it claimed.
+  assert.equal(
+    existsSync(path.join(root, ".legion/project/changes")),
+    false,
+    "no change artifacts may be written when planning refuses"
+  );
 });
 
 test("a rendered command keeps argument boundaries a reviewer can reproduce", async () => {
@@ -620,4 +626,19 @@ test("a rendered command keeps argument boundaries a reviewer can reproduce", as
   assert.notEqual(quoted, split, "distinct argument vectors must render distinctly");
   assert.match(quoted, /node -e "foo bar"/);
   assert.match(split, /node -e foo bar/);
+
+  // An empty argument is schema-valid and rendered as nothing at all, so `[""]`
+  // read identically to `[]`.
+  const empty = describeCriterion({
+    id: "ac_empty-1",
+    statement: "The empty argument is passed",
+    proof: { mode: "executable", command: "node", args: [""], expectedExitCode: 0 }
+  });
+  const none = describeCriterion({
+    id: "ac_none-1",
+    statement: "The empty argument is passed",
+    proof: { mode: "executable", command: "node", args: [], expectedExitCode: 0 }
+  });
+  assert.notEqual(empty, none, "an empty argument must be distinguishable from none");
+  assert.match(empty, /node ""/);
 });

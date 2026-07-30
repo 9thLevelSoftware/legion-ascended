@@ -30483,7 +30483,7 @@ function clamp(value) {
 }
 function describeCriterion(criterion) {
   if (criterion.proof.mode === "executable") {
-    const command = [criterion.proof.command, ...criterion.proof.args].map((part) => /[\s"']/.test(part) ? JSON.stringify(part) : part).join(" ");
+    const command = [criterion.proof.command, ...criterion.proof.args].map((part) => part === "" || /[\s"'\\]/.test(part) ? JSON.stringify(part) : part).join(" ");
     return clamp(`${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
   return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);

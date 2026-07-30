@@ -153,7 +153,10 @@ export function describeCriterion(criterion: RequirementCriterion): string {
     // would reproduce — the same argument-boundary collapse the verification
     // identity had, in the text a human acts on.
     const command = [criterion.proof.command, ...criterion.proof.args]
-      .map((part) => (/[\s"']/.test(part) ? JSON.stringify(part) : part))
+      // Empty and whitespace-bearing arguments are both quoted: `[""]` rendered
+      // as nothing at all, so it read identically to `[]` and instructed the
+      // reviewer to reproduce a command the runner does not execute.
+      .map((part) => (part === "" || /[\s"'\\]/.test(part) ? JSON.stringify(part) : part))
       .join(" ");
     return clamp(`${criterion.statement} — \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
