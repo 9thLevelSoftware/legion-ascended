@@ -223,14 +223,16 @@ function restoreProtectedIndex(input: {
   readonly baseGitSha: GitSha;
   readonly state: ProtectedState;
   readonly paths: readonly string[];
-}): void {
-  if (input.paths.length === 0) return;
-  const run = (args: readonly string[]): void => {
+}): readonly string[] {
+  if (input.paths.length === 0) return [];
+  // Failures are returned rather than swallowed: a reset that did not happen
+  // leaves the tampered blob staged while containment reports the path restored.
+  const run = (args: readonly string[]): boolean => {
     try {
       execFileSync("git", ["-C", input.repositoryRoot, ...args], { stdio: "ignore" });
+      return true;
     } catch {
-      // Not a git repository, or nothing to unstage; the working tree is the
-      // authority either way.
+      return false;
     }
   };
 
@@ -239,9 +241,51 @@ function restoreProtectedIndex(input: {
   // rewrite then HEAD is the executor's — so the index would be restored to the
   // tampered blob. Naming the base makes the reference point one the run could
   // not influence.
-  run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths]);
+  const failures: string[] = [];
+  if (!run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths])) {
+    failures.push(...input.paths);
+  }
   const restage = input.paths.filter((relative) => input.state.staged.has(relative));
-  if (restage.length > 0) run(["add", "--", ...restage]);
+  if (restage.length > 0 && !run(["add", "--", ...restage])) {
+    failures.push(...restage);
+  }
+  return failures;
+}
+
+/**
+ * Protected paths that differ between the base commit and the current HEAD.
+ *
+ * Checked independently of the working tree. An executor can commit a rewrite
+ * and then put the files back, leaving nothing for the snapshot comparison to
+ * find while the poisoned blob sits in history — a guard that only looks at the
+ * tree is defeated by tidying up.
+ */
+function protectedPathsCommittedSince(input: {
+  readonly repositoryRoot: string;
+  readonly baseGitSha: GitSha;
+}): readonly string[] {
+  try {
+    const output = execFileSync(
+      "git",
+      [
+        "-C",
+        input.repositoryRoot,
+        "diff",
+        "--name-only",
+        input.baseGitSha,
+        "HEAD",
+        "--",
+        LEGION_PROJECT_ROOT
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return output
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  } catch {
+    return [];
+  }
 }
 
 /** The commit the worktree is on now, or `undefined` when it cannot be read. */
@@ -277,9 +321,23 @@ function restoreProtectedFiles(input: {
   const restored: string[] = [];
   const unrestored: string[] = [];
 
-  for (const relative of input.paths) {
+  // A replaced root is handled first and alone. Restoring a root symlink and
+  // then processing descendants would make every later `rmSync` traverse the
+  // recreated link and delete files in its target; a root replaced by a regular
+  // file blocks descendant restoration with ENOTDIR until it is removed.
+  const rootTouched = input.paths.includes(LEGION_PROJECT_ROOT);
+  const ordered = rootTouched
+    ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)]
+    : input.paths;
+  const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
+
+  for (const relative of ordered) {
     const absolute = path.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
+
+    // When the root itself was a snapshotted non-directory, it is the whole
+    // protected tree; there are no descendants to walk into afterwards.
+    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) continue;
 
     try {
       if (before === undefined) {
@@ -307,14 +365,20 @@ function restoreProtectedFiles(input: {
     }
   }
 
-  restoreProtectedIndex({
+  const indexFailures = restoreProtectedIndex({
     repositoryRoot: input.repositoryRoot,
     baseGitSha: input.baseGitSha,
     state: input.state,
     paths: restored
   });
 
-  return { restored, unrestored };
+  // A path whose index entry could not be reset is not restored, whatever the
+  // working tree looks like.
+  const stillStaged = new Set(indexFailures);
+  return {
+    restored: restored.filter((entry) => !stillStaged.has(entry)),
+    unrestored: [...unrestored, ...indexFailures]
+  };
 }
 
 export async function runGuardedExecution(
@@ -381,13 +445,17 @@ export async function runGuardedExecution(
       `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
     );
   }
+  const committedProtected = protectedPathsCommittedSince({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha
+  });
   const headAfter = currentHead(input.repositoryRoot);
-  if (touchedProtected.length > 0 && headAfter !== undefined && headAfter !== input.baseGitSha) {
+  if (committedProtected.length > 0 && headAfter !== undefined && headAfter !== input.baseGitSha) {
     // The worktree and index are restored, but a commit the run created still
     // contains the rewrite. Rewriting history here would discard whatever else
     // that commit holds, so the operator is told instead of guessed for.
     reasons.push(
-      `The run committed while modifying protected artifacts; HEAD is now ${headAfter} rather than ${input.baseGitSha}. The working tree and index were restored, but that commit still contains the change.`
+      `The run committed changes to ${committedProtected.length} protected control artifact(s): ${committedProtected.join(", ")}. HEAD is now ${headAfter} rather than ${input.baseGitSha}; the working tree and index were restored, but that commit still contains the change.`
     );
   }
   if (reconciliation?.status === "unavailable") {

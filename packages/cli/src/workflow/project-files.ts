@@ -31,15 +31,22 @@ export function listProjectFiles(
   const results: ProjectFileEntry[] = [];
 
   // Classify the root itself before walking it. `readdirSync` follows a
-  // symlinked directory, and only descendants get a `Dirent` to classify — so a
-  // run that replaced `.legion/project` with a link would have its target's
-  // contents listed as protected files, and containment would write the saved
-  // artifacts through the surviving link while never restoring the real control
-  // directory. The root is reported as its own entry instead, so it is detected
-  // and unlinked like any other planted link.
+  // symlinked directory and only gives `Dirent`s for descendants, so a run that
+  // replaced `.legion/project` with a link would have the link target's contents
+  // listed as protected files — and containment would write saved artifacts
+  // through the surviving link instead of restoring the real control directory.
+  //
+  // A root replaced by a *regular file* is just as dangerous and less obvious:
+  // `readdirSync` throws ENOTDIR, which a bare catch reports as "no protected
+  // files at all", so the whole control tree reads as absent and nothing is
+  // detected. Any non-directory root is therefore reported as its own entry.
   try {
-    if (lstatSync(path.join(repositoryRoot, relativeRoot)).isSymbolicLink()) {
+    const rootStat = lstatSync(path.join(repositoryRoot, relativeRoot));
+    if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: undefined }];
+    }
+    if (!rootStat.isDirectory()) {
+      return [{ path: relativeRoot, kind: "file", size: rootStat.size }];
     }
   } catch {
     return [];

@@ -217,6 +217,35 @@ test("a control artifact deleted by the run is restored", async (t) => {
   assert.equal(await readFile(path.join(root, ...TASKGRAPH.split("/")), "utf8"), original);
 });
 
+test("committing tampering and then tidying the tree is still caught", async (t) => {
+  const { root, run } = await plannedProject(t);
+  const original = await readFile(path.join(root, ...TASKGRAPH.split("/")), "utf8");
+
+  // The attack a working-tree-only guard misses: commit the rewrite, then put
+  // the file back. Nothing differs from the pre-dispatch snapshot, so the
+  // protected-path comparison finds nothing — while the poisoned blob sits in
+  // history for the next reset or merge to surface.
+  const build = await withPlan(
+    {
+      writes: [{ path: TASKGRAPH, content: '{"tampered":true}\n' }],
+      commit: true,
+      writesAfterCommit: [{ path: TASKGRAPH, content: original }]
+    },
+    () => run("build", "--executor", "fake", "--json")
+  );
+
+  assert.equal(build.exitCode, 1);
+  const payload = parseJsonOutput(build);
+  assert.equal(payload.status, "blocked");
+  assert.ok(
+    payload.diagnostics.some((entry) => /committed changes to .* protected control artifact/i.test(entry.message)),
+    `expected the committed rewrite to be reported, got ${JSON.stringify(payload.diagnostics)}`
+  );
+
+  // The working tree is clean, which is exactly why the tree alone is not enough.
+  assert.equal(await readFile(path.join(root, ...TASKGRAPH.split("/")), "utf8"), original);
+});
+
 test("a symlink created by the run is detected and removed", async (t) => {
   const { root, run } = await plannedProject(t);
   const planted = ".legion/project/planted-link";

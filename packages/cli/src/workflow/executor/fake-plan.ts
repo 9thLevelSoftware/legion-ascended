@@ -30,6 +30,14 @@ export interface FakeExecutorPlan {
   readonly symlinks?: readonly { readonly path: string; readonly target: string }[];
   /** Commit the working tree after writing — the case that breaks a re-resolved base SHA. */
   readonly commit?: boolean;
+  /**
+   * Writes applied *after* the commit, to restore the tree and hide the change.
+   *
+   * The attack a working-tree-only guard misses entirely: commit the tampering,
+   * put the files back, and leave nothing for a snapshot comparison to find
+   * while the poisoned blob stays in history.
+   */
+  readonly writesAfterCommit?: readonly { readonly path: string; readonly content: string }[];
   /** What the executor *claims* it changed. Omit to claim exactly what it wrote. */
   readonly claimFilesChanged?: readonly string[];
   readonly status?: ExecutionResult["status"];
@@ -134,6 +142,14 @@ export function applyFakeExecutorPlan(input: ApplyFakeExecutorPlanInput): readon
     } catch {
       // Nothing to commit, or not a git repository; the plan's other effects stand.
     }
+  }
+
+  for (const entry of input.plan.writesAfterCommit ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === undefined) continue;
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, entry.content, "utf8");
+    if (!written.includes(entry.path)) written.push(entry.path);
   }
 
   return written;

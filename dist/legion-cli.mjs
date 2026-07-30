@@ -26361,6 +26361,13 @@ function applyFakeExecutorPlan(input) {
     } catch {
     }
   }
+  for (const entry of input.plan.writesAfterCommit ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === void 0) continue;
+    mkdirSync2(path20.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, entry.content, "utf8");
+    if (!written.includes(entry.path)) written.push(entry.path);
+  }
   return written;
 }
 
@@ -28831,8 +28838,12 @@ import path31 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    if (lstatSync(path31.join(repositoryRoot, relativeRoot)).isSymbolicLink()) {
+    const rootStat = lstatSync(path31.join(repositoryRoot, relativeRoot));
+    if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
+    }
+    if (!rootStat.isDirectory()) {
+      return [{ path: relativeRoot, kind: "file", size: rootStat.size }];
     }
   } catch {
     return [];
@@ -28959,16 +28970,45 @@ function protectedPathsTouched(input) {
   return [...touched].sort();
 }
 function restoreProtectedIndex(input) {
-  if (input.paths.length === 0) return;
+  if (input.paths.length === 0) return [];
   const run = (args) => {
     try {
       execFileSync5("git", ["-C", input.repositoryRoot, ...args], { stdio: "ignore" });
+      return true;
     } catch {
+      return false;
     }
   };
-  run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths]);
+  const failures = [];
+  if (!run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths])) {
+    failures.push(...input.paths);
+  }
   const restage = input.paths.filter((relative) => input.state.staged.has(relative));
-  if (restage.length > 0) run(["add", "--", ...restage]);
+  if (restage.length > 0 && !run(["add", "--", ...restage])) {
+    failures.push(...restage);
+  }
+  return failures;
+}
+function protectedPathsCommittedSince(input) {
+  try {
+    const output = execFileSync5(
+      "git",
+      [
+        "-C",
+        input.repositoryRoot,
+        "diff",
+        "--name-only",
+        input.baseGitSha,
+        "HEAD",
+        "--",
+        LEGION_PROJECT_ROOT
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+  } catch {
+    return [];
+  }
 }
 function currentHead(repositoryRoot) {
   try {
@@ -28983,9 +29023,13 @@ function currentHead(repositoryRoot) {
 function restoreProtectedFiles(input) {
   const restored = [];
   const unrestored = [];
-  for (const relative of input.paths) {
+  const rootTouched = input.paths.includes(LEGION_PROJECT_ROOT);
+  const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
+  const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
+  for (const relative of ordered) {
     const absolute = path32.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
+    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) continue;
     try {
       if (before === void 0) {
         rmSync3(absolute, { force: true, recursive: true });
@@ -29011,13 +29055,17 @@ function restoreProtectedFiles(input) {
       unrestored.push(relative);
     }
   }
-  restoreProtectedIndex({
+  const indexFailures = restoreProtectedIndex({
     repositoryRoot: input.repositoryRoot,
     baseGitSha: input.baseGitSha,
     state: input.state,
     paths: restored
   });
-  return { restored, unrestored };
+  const stillStaged = new Set(indexFailures);
+  return {
+    restored: restored.filter((entry) => !stillStaged.has(entry)),
+    unrestored: [...unrestored, ...indexFailures]
+  };
 }
 async function runGuardedExecution(input) {
   const before = observeWorkingTreeDiff({
@@ -29065,10 +29113,14 @@ async function runGuardedExecution(input) {
       `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
     );
   }
+  const committedProtected = protectedPathsCommittedSince({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha
+  });
   const headAfter = currentHead(input.repositoryRoot);
-  if (touchedProtected.length > 0 && headAfter !== void 0 && headAfter !== input.baseGitSha) {
+  if (committedProtected.length > 0 && headAfter !== void 0 && headAfter !== input.baseGitSha) {
     reasons.push(
-      `The run committed while modifying protected artifacts; HEAD is now ${headAfter} rather than ${input.baseGitSha}. The working tree and index were restored, but that commit still contains the change.`
+      `The run committed changes to ${committedProtected.length} protected control artifact(s): ${committedProtected.join(", ")}. HEAD is now ${headAfter} rather than ${input.baseGitSha}; the working tree and index were restored, but that commit still contains the change.`
     );
   }
   if (reconciliation?.status === "unavailable") {
