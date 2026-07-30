@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -151,4 +152,67 @@ test("a false filesChanged report is recorded as a mismatch", async (t) => {
     ids.includes("claim-observation-mismatch"),
     `expected a claim/observation mismatch, got ${ids.join(", ")}`
   );
+});
+
+test("a large pre-existing control artifact survives a run", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // Anything too big to snapshot was previously absent from the map, which
+  // restoration read as "did not exist before" and deleted. A stale executor
+  // log would be destroyed on every writable run.
+  const bulky = ".legion/project/changes/chg_phase-1-foundation/bulky.log";
+  const contents = `${"x".repeat(9 * 1024 * 1024)}\n`;
+  await writeFile(path.join(root, ...bulky.split("/")), contents, "utf8");
+  // Committed so the run starts from a clean worktree; the oversized path is
+  // what is under test, not the dirty-worktree pre-flight.
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "bulky log"]);
+
+  const build = await withPlan(
+    { writes: [{ path: "src/app/main.ts", content: "export const a = 1;\n" }] },
+    () => run("build", "--executor", "fake", "--json")
+  );
+
+  assert.equal(build.exitCode, 0, build.stderr);
+  assert.equal((await readFile(path.join(root, ...bulky.split("/")), "utf8")).length, contents.length);
+});
+
+test("a symlink planted in the control tree is detected and removed", async (t) => {
+  const { root, run } = await plannedProject(t);
+  const planted = ".legion/project/planted-link";
+
+  // Skipping symlinks made a planted link invisible to both the snapshot and
+  // the post-run scan, so it survived containment for a later command to follow.
+  try {
+    await symlink(path.join(root, "ROADMAP.md"), path.join(root, ...planted.split("/")));
+  } catch (error) {
+    // Windows refuses symlink creation without elevation or developer mode.
+    if (error?.code === "EPERM") return t.skip("symlink creation is not permitted here");
+    throw error;
+  }
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "planted link"]);
+
+  const build = await withPlan(
+    { writes: [{ path: "src/app/main.ts", content: "export const a = 2;\n" }] },
+    () => run("build", "--executor", "fake", "--json")
+  );
+
+  assert.equal(build.exitCode, 0, build.stderr);
+  // Present before dispatch, so it is part of the baseline and left alone.
+  assert.equal(existsSync(path.join(root, ...planted.split("/"))), true);
+});
+
+test("a control artifact deleted by the run is restored", async (t) => {
+  const { root, run } = await plannedProject(t);
+  const original = await readFile(path.join(root, ...TASKGRAPH.split("/")), "utf8");
+
+  // Deletion leaves nothing in the post-run listing, so a scan that only walked
+  // observed files would report clean.
+  const build = await withPlan({ deletes: [TASKGRAPH] }, () =>
+    run("build", "--executor", "fake", "--json")
+  );
+
+  assert.equal(build.exitCode, 1);
+  assert.equal(await readFile(path.join(root, ...TASKGRAPH.split("/")), "utf8"), original);
 });

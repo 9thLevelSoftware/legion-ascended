@@ -65,32 +65,106 @@ export interface GuardedExecutionOutcome {
 
 const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 
-/** Pre-dispatch bytes of a protected file, or `undefined` when it did not exist. */
-type ProtectedSnapshot = ReadonlyMap<string, Buffer | undefined>;
+/**
+ * What a protected path looked like before dispatch.
+ *
+ * `oversized` and `symlink` are distinct states rather than absences. Treating
+ * "too big to snapshot" as "did not exist" made restoration delete a large
+ * pre-existing artifact — an old executor log — on every writable run, so the
+ * guard destroyed valid workflow state while reporting that it had protected it.
+ * Absence from the map means, and only means, the path did not exist.
+ */
+type ProtectedEntry =
+  | { readonly kind: "file"; readonly bytes: Buffer }
+  | { readonly kind: "oversized"; readonly size: number | undefined }
+  | { readonly kind: "symlink" };
+
+type ProtectedSnapshot = ReadonlyMap<string, ProtectedEntry>;
+
+function isHarnessPath(relative: string, harnessPaths: readonly string[]): boolean {
+  return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
+}
 
 function snapshotProtectedFiles(input: {
   readonly repositoryRoot: string;
   readonly harnessPaths: readonly string[];
 }): ProtectedSnapshot {
-  const snapshot = new Map<string, Buffer | undefined>();
-  for (const relative of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
-    if (input.harnessPaths.some((entry) => pathIsCoveredBy(relative, entry))) continue;
-    const absolute = path.join(input.repositoryRoot, relative);
+  const snapshot = new Map<string, ProtectedEntry>();
+  for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
+    if (isHarnessPath(entry.path, input.harnessPaths)) continue;
+
+    if (entry.kind === "symlink") {
+      snapshot.set(entry.path, { kind: "symlink" });
+      continue;
+    }
+    if (entry.size !== undefined && entry.size > MAX_SNAPSHOT_BYTES) {
+      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
+      continue;
+    }
     try {
-      if (statSync(absolute).size > MAX_SNAPSHOT_BYTES) continue;
-      snapshot.set(relative, readFileSync(absolute));
+      snapshot.set(entry.path, {
+        kind: "file",
+        bytes: readFileSync(path.join(input.repositoryRoot, entry.path))
+      });
     } catch {
-      snapshot.set(relative, undefined);
+      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
     }
   }
   return snapshot;
 }
 
+/** Protected paths that differ from the pre-dispatch snapshot, including deletions and new symlinks. */
+function protectedPathsTouched(input: {
+  readonly repositoryRoot: string;
+  readonly snapshot: ProtectedSnapshot;
+  readonly harnessPaths: readonly string[];
+}): readonly string[] {
+  const touched = new Set<string>();
+  const current = new Map(
+    listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)
+      .filter((entry) => !isHarnessPath(entry.path, input.harnessPaths))
+      .map((entry) => [entry.path, entry] as const)
+  );
+
+  for (const [relative, before] of input.snapshot) {
+    const now = current.get(relative);
+    if (now === undefined) {
+      // Removed. A deletion leaves nothing in the post-run listing, so a scan
+      // that only walked observed files would call it clean.
+      touched.add(relative);
+      continue;
+    }
+    if (before.kind === "symlink" || now.kind === "symlink") {
+      if (before.kind !== now.kind) touched.add(relative);
+      continue;
+    }
+    if (before.kind === "oversized") {
+      // Not snapshotted, so size is the only comparison available.
+      if (before.size !== now.size) touched.add(relative);
+      continue;
+    }
+    try {
+      if (!before.bytes.equals(readFileSync(path.join(input.repositoryRoot, relative)))) {
+        touched.add(relative);
+      }
+    } catch {
+      touched.add(relative);
+    }
+  }
+
+  for (const relative of current.keys()) {
+    if (!input.snapshot.has(relative)) touched.add(relative);
+  }
+
+  return [...touched].sort();
+}
+
 /**
- * Restore protected files to the exact bytes they had before dispatch.
+ * Restore protected paths to their pre-dispatch state.
  *
- * Returns the paths that could not be restored, so a caller can say so rather
- * than implying the tree is clean.
+ * Only a path genuinely absent before the run is removed. Anything that existed
+ * but could not be snapshotted is left in place and reported, because deleting
+ * it would be worse than the modification it is meant to undo.
  */
 function restoreProtectedFiles(input: {
   readonly repositoryRoot: string;
@@ -105,51 +179,27 @@ function restoreProtectedFiles(input: {
     const before = input.snapshot.get(relative);
     try {
       if (before === undefined) {
-        // Absent before the run, so restoring means removing what appeared.
-        rmSync(absolute, { force: true });
-      } else {
-        mkdirSync(path.dirname(absolute), { recursive: true });
-        writeFileSync(absolute, before);
+        // Appeared during the run. `rmSync` removes a symlink itself rather
+        // than following it, which is what makes a planted link safe to clear.
+        rmSync(absolute, { force: true, recursive: true });
+        restored.push(relative);
+        continue;
       }
-      restored.push(relative);
+      if (before.kind === "file") {
+        mkdirSync(path.dirname(absolute), { recursive: true });
+        writeFileSync(absolute, before.bytes);
+        restored.push(relative);
+        continue;
+      }
+      // Existed as a symlink or was too large to capture: its original content
+      // cannot be reproduced, so say so rather than destroy it.
+      unrestored.push(relative);
     } catch {
       unrestored.push(relative);
     }
   }
 
   return { restored, unrestored };
-}
-
-/** Protected paths whose bytes differ from the pre-dispatch snapshot, including deletions. */
-function protectedPathsTouched(input: {
-  readonly repositoryRoot: string;
-  readonly snapshot: ProtectedSnapshot;
-  readonly harnessPaths: readonly string[];
-}): readonly string[] {
-  const touched = new Set<string>();
-
-  // Files that existed before: changed or removed.
-  for (const [relative, before] of input.snapshot) {
-    const absolute = path.join(input.repositoryRoot, relative);
-    let current: Buffer | undefined;
-    try {
-      current = readFileSync(absolute);
-    } catch {
-      current = undefined;
-    }
-    if (before === undefined && current === undefined) continue;
-    if (before === undefined || current === undefined || !before.equals(current)) {
-      touched.add(relative);
-    }
-  }
-
-  // Files that appeared after.
-  for (const relative of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
-    if (input.harnessPaths.some((entry) => pathIsCoveredBy(relative, entry))) continue;
-    if (!input.snapshot.has(relative)) touched.add(relative);
-  }
-
-  return [...touched].sort();
 }
 
 export async function runGuardedExecution(

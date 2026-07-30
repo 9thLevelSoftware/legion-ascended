@@ -28598,7 +28598,7 @@ function createWorkerBundleRegistry(options) {
 }
 
 // packages/cli/src/workflow/guarded-execution.ts
-import { readFileSync as readFileSync3, statSync as statSync2, writeFileSync as writeFileSync2, mkdirSync as mkdirSync3, rmSync as rmSync3 } from "node:fs";
+import { readFileSync as readFileSync3, writeFileSync as writeFileSync2, mkdirSync as mkdirSync3, rmSync as rmSync3 } from "node:fs";
 import path32 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
@@ -28812,7 +28812,7 @@ function reconcileTaskDiff(input) {
 }
 
 // packages/cli/src/workflow/project-files.ts
-import { readdirSync } from "node:fs";
+import { lstatSync, readdirSync } from "node:fs";
 import path31 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
@@ -28825,33 +28825,87 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
     }
     for (const entry of entries) {
       const child = `${relative}/${entry.name}`;
-      if (entry.isSymbolicLink()) continue;
+      if (entry.isSymbolicLink()) {
+        results.push({ path: child, kind: "symlink", size: void 0 });
+        continue;
+      }
       if (entry.isDirectory()) {
         walk2(child);
         continue;
       }
-      if (entry.isFile()) results.push(child);
+      if (!entry.isFile()) continue;
+      let size;
+      try {
+        size = lstatSync(path31.join(repositoryRoot, child)).size;
+      } catch {
+        size = void 0;
+      }
+      results.push({ path: child, kind: "file", size });
     }
   };
   walk2(relativeRoot);
-  return results.sort();
+  return results.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 // packages/cli/src/workflow/guarded-execution.ts
 var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+function isHarnessPath(relative, harnessPaths) {
+  return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
+}
 function snapshotProtectedFiles(input) {
   const snapshot = /* @__PURE__ */ new Map();
-  for (const relative of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
-    if (input.harnessPaths.some((entry) => pathIsCoveredBy(relative, entry))) continue;
-    const absolute = path32.join(input.repositoryRoot, relative);
+  for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
+    if (isHarnessPath(entry.path, input.harnessPaths)) continue;
+    if (entry.kind === "symlink") {
+      snapshot.set(entry.path, { kind: "symlink" });
+      continue;
+    }
+    if (entry.size !== void 0 && entry.size > MAX_SNAPSHOT_BYTES) {
+      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
+      continue;
+    }
     try {
-      if (statSync2(absolute).size > MAX_SNAPSHOT_BYTES) continue;
-      snapshot.set(relative, readFileSync3(absolute));
+      snapshot.set(entry.path, {
+        kind: "file",
+        bytes: readFileSync3(path32.join(input.repositoryRoot, entry.path))
+      });
     } catch {
-      snapshot.set(relative, void 0);
+      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
     }
   }
   return snapshot;
+}
+function protectedPathsTouched(input) {
+  const touched = /* @__PURE__ */ new Set();
+  const current = new Map(
+    listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT).filter((entry) => !isHarnessPath(entry.path, input.harnessPaths)).map((entry) => [entry.path, entry])
+  );
+  for (const [relative, before] of input.snapshot) {
+    const now = current.get(relative);
+    if (now === void 0) {
+      touched.add(relative);
+      continue;
+    }
+    if (before.kind === "symlink" || now.kind === "symlink") {
+      if (before.kind !== now.kind) touched.add(relative);
+      continue;
+    }
+    if (before.kind === "oversized") {
+      if (before.size !== now.size) touched.add(relative);
+      continue;
+    }
+    try {
+      if (!before.bytes.equals(readFileSync3(path32.join(input.repositoryRoot, relative)))) {
+        touched.add(relative);
+      }
+    } catch {
+      touched.add(relative);
+    }
+  }
+  for (const relative of current.keys()) {
+    if (!input.snapshot.has(relative)) touched.add(relative);
+  }
+  return [...touched].sort();
 }
 function restoreProtectedFiles(input) {
   const restored = [];
@@ -28861,38 +28915,22 @@ function restoreProtectedFiles(input) {
     const before = input.snapshot.get(relative);
     try {
       if (before === void 0) {
-        rmSync3(absolute, { force: true });
-      } else {
-        mkdirSync3(path32.dirname(absolute), { recursive: true });
-        writeFileSync2(absolute, before);
+        rmSync3(absolute, { force: true, recursive: true });
+        restored.push(relative);
+        continue;
       }
-      restored.push(relative);
+      if (before.kind === "file") {
+        mkdirSync3(path32.dirname(absolute), { recursive: true });
+        writeFileSync2(absolute, before.bytes);
+        restored.push(relative);
+        continue;
+      }
+      unrestored.push(relative);
     } catch {
       unrestored.push(relative);
     }
   }
   return { restored, unrestored };
-}
-function protectedPathsTouched(input) {
-  const touched = /* @__PURE__ */ new Set();
-  for (const [relative, before] of input.snapshot) {
-    const absolute = path32.join(input.repositoryRoot, relative);
-    let current;
-    try {
-      current = readFileSync3(absolute);
-    } catch {
-      current = void 0;
-    }
-    if (before === void 0 && current === void 0) continue;
-    if (before === void 0 || current === void 0 || !before.equals(current)) {
-      touched.add(relative);
-    }
-  }
-  for (const relative of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
-    if (input.harnessPaths.some((entry) => pathIsCoveredBy(relative, entry))) continue;
-    if (!input.snapshot.has(relative)) touched.add(relative);
-  }
-  return [...touched].sort();
 }
 async function runGuardedExecution(input) {
   const before = observeWorkingTreeDiff({
