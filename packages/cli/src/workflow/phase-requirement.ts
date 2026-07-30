@@ -19,13 +19,24 @@ import type { Requirement, RequirementCriterion } from "@legion/protocol";
 
 import type { PhaseSource } from "./phase-compat.js";
 
+/**
+ * A criterion whose proof is executable, narrowed at the point it is sorted.
+ *
+ * `partition` already establishes this, but returning the wide union made every
+ * consumer re-check `proof.mode` and carry unreachable fallbacks for a case the
+ * type system had already ruled out.
+ */
+export type ExecutableCriterion = RequirementCriterion & {
+  readonly proof: Extract<RequirementCriterion["proof"], { mode: "executable" }>;
+};
+
 /** Matches the `**Requirement:** \`req_x\`` line `renderRoadmap` emits. */
 const REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
 
 export interface ResolvedPhaseRequirement {
   readonly requirement: Requirement;
   /** Criteria the runner can decide, in the order the operator gave them. */
-  readonly executable: readonly RequirementCriterion[];
+  readonly executable: readonly ExecutableCriterion[];
   /** Criteria that state why no command can decide them. */
   readonly manual: readonly RequirementCriterion[];
 }
@@ -41,13 +52,13 @@ export function requirementIdInPhase(phase: PhaseSource): string | undefined {
 }
 
 function partition(requirement: Requirement): {
-  readonly executable: readonly RequirementCriterion[];
+  readonly executable: readonly ExecutableCriterion[];
   readonly manual: readonly RequirementCriterion[];
 } {
-  const executable: RequirementCriterion[] = [];
+  const executable: ExecutableCriterion[] = [];
   const manual: RequirementCriterion[] = [];
   for (const criterion of requirement.acceptance.criteria) {
-    if (criterion.proof.mode === "executable") executable.push(criterion);
+    if (criterion.proof.mode === "executable") executable.push(criterion as ExecutableCriterion);
     else manual.push(criterion);
   }
   return { executable, manual };
@@ -91,6 +102,24 @@ export async function resolvePhaseRequirement(
 }
 
 /**
+ * The oracle caps both coverage criteria and postconditions at 1024 characters.
+ *
+ * Intake accepts a criterion statement of exactly that length, so appending the
+ * proof description overflowed it and `oracleSchema.parse` threw — after the
+ * current spec and change bundle were already on disk, leaving partial planning
+ * artifacts behind for a perfectly valid interview.
+ */
+export const MAX_CRITERION_DESCRIPTION = 1_024;
+
+function clamp(value: string): string {
+  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
+  // Truncated with a visible marker rather than allowed to throw. The statement
+  // leads, so what survives is the part that identifies the criterion; the full
+  // text remains in the requirement artifact this describes.
+  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}…`;
+}
+
+/**
  * A criterion rendered as the line a reviewer reads.
  *
  * Executable criteria carry their command so the oracle states what decides
@@ -100,7 +129,7 @@ export async function resolvePhaseRequirement(
 export function describeCriterion(criterion: RequirementCriterion): string {
   if (criterion.proof.mode === "executable") {
     const command = [criterion.proof.command, ...criterion.proof.args].join(" ");
-    return `${criterion.statement} — \`${command}\` must exit ${criterion.proof.expectedExitCode}`;
+    return clamp(`${criterion.statement} — \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
-  return `${criterion.statement} — manual: ${criterion.proof.reason}`;
+  return clamp(`${criterion.statement} — manual: ${criterion.proof.reason}`);
 }

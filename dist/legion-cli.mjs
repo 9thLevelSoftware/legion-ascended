@@ -30454,12 +30454,17 @@ async function resolvePhaseRequirement(repositoryRoot, phase) {
   }
   return { ok: true, resolved: { requirement, ...partition(requirement) } };
 }
+var MAX_CRITERION_DESCRIPTION = 1024;
+function clamp(value) {
+  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
+  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
+}
 function describeCriterion(criterion) {
   if (criterion.proof.mode === "executable") {
     const command = [criterion.proof.command, ...criterion.proof.args].join(" ");
-    return `${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`;
+    return clamp(`${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
-  return `${criterion.statement} \u2014 manual: ${criterion.proof.reason}`;
+  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
 }
 
 // packages/cli/src/workflow/oracle-input.ts
@@ -30612,10 +30617,10 @@ function isEnoent8(error2) {
 // packages/cli/src/workflow/taskgraph-input.ts
 function phaseVerification(options) {
   const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
-    command: criterion.proof.mode === "executable" ? criterion.proof.command : "legion",
-    args: criterion.proof.mode === "executable" ? [...criterion.proof.args] : ["validate"],
-    expectedExitCode: criterion.proof.mode === "executable" ? criterion.proof.expectedExitCode : 0,
-    timeoutMs: criterion.proof.mode === "executable" ? criterion.proof.timeoutMs ?? 6e5 : 12e4
+    command: criterion.proof.command,
+    args: [...criterion.proof.args],
+    expectedExitCode: criterion.proof.expectedExitCode,
+    timeoutMs: criterion.proof.timeoutMs ?? 6e5
   }));
   const project = options.enforcement === void 0 ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 12e4 } : {
     command: options.enforcement.verification.command,
@@ -30623,7 +30628,7 @@ function phaseVerification(options) {
     expectedExitCode: 0,
     timeoutMs: 6e5
   };
-  const key = (entry) => `${entry.command} ${entry.args.join(" ")}`;
+  const key = (entry) => `${entry.command} ${entry.args.join(" ")} => ${entry.expectedExitCode}`;
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }

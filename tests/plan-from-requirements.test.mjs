@@ -64,7 +64,12 @@ async function plannedProject(t, answers = ANSWERS) {
   git(root, ["config", "core.autocrlf", "false"]);
 
   const run = (...args) => runCliCapture(["--repository-root", root, ...args]);
-  await writeFile(path.join(root, "intake.json"), JSON.stringify(answers), "utf8");
+  // Keys set to `undefined` mean "not asked", so they are removed rather than
+  // serialized as null, which the batch entrance rightly refuses.
+  const supplied = Object.fromEntries(
+    Object.entries(answers).filter(([, value]) => value !== undefined)
+  );
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(supplied), "utf8");
   await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
   const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
   assert.equal(finalize.exitCode, 0, finalize.stderr);
@@ -169,4 +174,109 @@ test("planning a project with no requirement set still works", async (t) => {
     )
   );
   assert.equal(taskgraph.tasks.length, 1);
+});
+
+test("a maximum-length criterion still plans", async (t) => {
+  // Intake accepts a criterion statement of exactly 1024 characters, and the
+  // oracle caps its rendered coverage at 1024 too — so appending the proof
+  // description overflowed and `oracleSchema.parse` threw, after the current
+  // spec and change bundle were already written. A schema-valid interview could
+  // not be planned and left partial artifacts behind.
+  const statement = `A${"x".repeat(1_022)}Z`;
+  assert.equal(statement.length, 1_024);
+
+  const { taskgraph, oracle } = await plannedProject(t, {
+    ...ANSWERS,
+    "req-1-ac-1-statement": statement,
+    "req-1-ac-1-more": "false",
+    "req-1-ac-2-statement": undefined,
+    "req-1-ac-2-proof": undefined,
+    "req-1-ac-2-detail": undefined,
+    "req-1-ac-2-more": undefined
+  });
+
+  // Planning completing at all is the assertion: it previously threw from
+  // `oracleSchema.parse` after the spec and change bundle were already written.
+  assert.equal(taskgraph.tasks.length, 1);
+
+  // The criterion is still identifiable from what survives, and the truncation
+  // is marked rather than silent.
+  assert.match(oracle, /Axxx/);
+  assert.match(oracle, /…/);
+});
+
+test("a rendered criterion never exceeds the oracle's field limit", async () => {
+  const { describeCriterion, MAX_CRITERION_DESCRIPTION } = await import(
+    "../packages/cli/dist/workflow/phase-requirement.js"
+  );
+
+  // Asserted directly rather than through the artifact: a YAML document has
+  // long lines for unrelated reasons, so reading the limit off the file would
+  // pass or fail for the wrong cause.
+  const executable = describeCriterion({
+    id: "ac_long-1",
+    statement: "x".repeat(1_024),
+    proof: { mode: "executable", command: "pnpm", args: ["test"], expectedExitCode: 0 }
+  });
+  const manual = describeCriterion({
+    id: "ac_long-2",
+    statement: "y".repeat(1_024),
+    proof: { mode: "manual", reason: "z".repeat(1_024) }
+  });
+
+  assert.ok(executable.length <= MAX_CRITERION_DESCRIPTION, `${executable.length} characters`);
+  assert.ok(manual.length <= MAX_CRITERION_DESCRIPTION, `${manual.length} characters`);
+
+  // Ordinary input must not be reshaped by the clamp.
+  assert.equal(
+    describeCriterion({
+      id: "ac_short-1",
+      statement: "Resolving a missing asset exits non-zero",
+      proof: { mode: "executable", command: "pnpm", args: ["test"], expectedExitCode: 0 }
+    }),
+    "Resolving a missing asset exits non-zero — `pnpm test` must exit 0"
+  );
+});
+
+test("a criterion expecting a non-zero exit does not suppress the project check", async () => {
+  const { phaseVerification } = await import(
+    "../packages/cli/dist/workflow/taskgraph-input.js"
+  );
+
+  // Unreachable through intake, which pins every criterion to exit 0 — so this
+  // exercises the unit directly. Driving it through an interview would pass
+  // whether or not the exit code were part of the identity, which is no test.
+  const criterion = (expectedExitCode) => ({
+    id: "ac_same-command-1",
+    statement: "The suite reports the expected outcome",
+    proof: { mode: "executable", command: "pnpm", args: ["test"], expectedExitCode }
+  });
+  const enforcement = {
+    risk: { tier: "R2", reason: "x" },
+    budget: { maxFilesChanged: 12, maxLinesChanged: 600, maxNewFiles: 4 },
+    verification: { command: "pnpm", args: ["test"] }
+  };
+  const render = (entries) =>
+    entries.map((entry) => `${entry.command} ${entry.args.join(" ")} => ${entry.expectedExitCode}`);
+
+  // Different expectation for the same command: keyed on command alone, the
+  // criterion asserting exit 1 removed the project check asserting exit 0, so a
+  // failing regression suite satisfied the task.
+  const differing = render(
+    phaseVerification({
+      enforcement,
+      requirement: { requirement: {}, executable: [criterion(1)], manual: [] }
+    })
+  );
+  assert.deepEqual(differing, ["pnpm test => 1", "pnpm test => 0"]);
+
+  // Identical command and expectation still collapses: one proof should not be
+  // run twice and counted as two.
+  const identical = render(
+    phaseVerification({
+      enforcement,
+      requirement: { requirement: {}, executable: [criterion(0)], manual: [] }
+    })
+  );
+  assert.deepEqual(identical, ["pnpm test => 0"]);
 });

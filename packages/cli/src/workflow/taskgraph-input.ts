@@ -51,15 +51,20 @@ export interface BuildTaskGraphInputOptions {
  * Manual criteria are deliberately absent — they cannot be run, and inventing a
  * command for one would be the fabrication protocol 0.2.0 exists to prevent.
  * The oracle names them for a reviewer instead.
+ *
+ * Exported for direct testing: the intake graph pins every criterion to exit 0,
+ * so the case where a criterion and the project command differ only in expected
+ * exit code is unreachable through an interview and can only be exercised here.
+ * A test that drove this through intake would pass whether or not the exit code
+ * were part of the identity, which is no test at all.
  */
-function phaseVerification(options: BuildTaskGraphInputOptions) {
+export function phaseVerification(options: BuildTaskGraphInputOptions) {
+  // `executable` is narrowed by `partition`, so no runtime re-check is needed.
   const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
-    command: criterion.proof.mode === "executable" ? criterion.proof.command : "legion",
-    args: criterion.proof.mode === "executable" ? [...criterion.proof.args] : ["validate"],
-    expectedExitCode:
-      criterion.proof.mode === "executable" ? criterion.proof.expectedExitCode : 0,
-    timeoutMs:
-      criterion.proof.mode === "executable" ? criterion.proof.timeoutMs ?? 600_000 : 120_000
+    command: criterion.proof.command,
+    args: [...criterion.proof.args],
+    expectedExitCode: criterion.proof.expectedExitCode,
+    timeoutMs: criterion.proof.timeoutMs ?? 600_000
   }));
 
   const project =
@@ -74,8 +79,13 @@ function phaseVerification(options: BuildTaskGraphInputOptions) {
 
   // De-duplicated: an operator whose criterion command is also the project
   // command should not have it run twice and reported as two proofs.
-  const key = (entry: { command: string; args: readonly string[] }) =>
-    `${entry.command} ${entry.args.join(" ")}`;
+  //
+  // The expected exit code is part of the identity. Without it, a criterion
+  // asserting `pnpm test` exits 1 would suppress the project check asserting it
+  // exits 0 — so a failing regression suite would satisfy the task, which is the
+  // opposite of what adding project verification was for.
+  const key = (entry: { command: string; args: readonly string[]; expectedExitCode: number }) =>
+    `${entry.command} ${entry.args.join(" ")} => ${entry.expectedExitCode}`;
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
