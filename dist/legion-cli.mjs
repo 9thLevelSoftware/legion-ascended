@@ -30444,9 +30444,19 @@ function partition(requirement) {
   }
   return { executable, manual };
 }
-async function resolvePhaseRequirement(repositoryRoot, phase) {
+async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
   const requirementId = requirementIdInPhase(phase);
   if (requirementId === void 0) return { ok: "absent" };
+  if (verified !== void 0) {
+    const found = verified.find((entry) => entry.id === requirementId);
+    if (found === void 0) {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+      };
+    }
+    return { ok: true, resolved: { requirement: found, ...partition(found) } };
+  }
   const set = await readRequirementSet(repositoryRoot);
   if (!set.ok) {
     if (set.status === "not_found") {
@@ -30655,7 +30665,7 @@ function phaseVerification(options) {
     expectedExitCode: 0,
     timeoutMs: 6e5
   };
-  const key = (entry) => JSON.stringify([entry.command, [...entry.args], entry.expectedExitCode]);
+  const key = (entry) => JSON.stringify({ ...entry, args: [...entry.args] }, Object.keys(entry).sort());
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
@@ -30863,7 +30873,11 @@ async function handlePlanWorkflow(context) {
     }
   }
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : void 0;
-  const phaseRequirement = await resolvePhaseRequirement(context.repositoryRoot, resolved.phase);
+  const phaseRequirement = await resolvePhaseRequirement(
+    context.repositoryRoot,
+    resolved.phase,
+    requirementSet.ok ? requirementSet.requirements : void 0
+  );
   if (phaseRequirement.ok === false) {
     return failure(
       {

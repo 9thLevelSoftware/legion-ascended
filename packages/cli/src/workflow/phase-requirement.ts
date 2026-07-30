@@ -74,10 +74,30 @@ function partition(requirement: Requirement): {
  */
 export async function resolvePhaseRequirement(
   repositoryRoot: string,
-  phase: PhaseSource
+  phase: PhaseSource,
+  /**
+   * The requirements the caller already verified.
+   *
+   * Passed in rather than re-read, because a second independent read is a second
+   * snapshot: a file changed between verification and resolution would enter the
+   * task contract without a drift diagnostic, which is exactly what the
+   * verification was added to prevent.
+   */
+  verified?: readonly Requirement[]
 ): Promise<PhaseRequirementResult> {
   const requirementId = requirementIdInPhase(phase);
   if (requirementId === undefined) return { ok: "absent" };
+
+  if (verified !== undefined) {
+    const found = verified.find((entry) => entry.id === requirementId);
+    if (found === undefined) {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+      };
+    }
+    return { ok: true, resolved: { requirement: found, ...partition(found) } };
+  }
 
   const set = await readRequirementSet(repositoryRoot);
   if (!set.ok) {

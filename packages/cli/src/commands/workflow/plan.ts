@@ -166,7 +166,14 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   // cannot resolve is a broken trace, not an absent one — planning against a
   // stale roadmap would silently produce a contract for a requirement that no
   // longer exists.
-  const phaseRequirement = await resolvePhaseRequirement(context.repositoryRoot, resolved.phase);
+  // The requirements verified above, not a fresh read: verifying one snapshot
+  // and consuming another leaves a window in which an edited executable command
+  // enters the task contract with no drift diagnostic.
+  const phaseRequirement = await resolvePhaseRequirement(
+    context.repositoryRoot,
+    resolved.phase,
+    requirementSet.ok ? requirementSet.requirements : undefined
+  );
   if (phaseRequirement.ok === false) {
     return failure(
       {

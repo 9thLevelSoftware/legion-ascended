@@ -58,7 +58,14 @@ export interface BuildTaskGraphInputOptions {
  * A test that drove this through intake would pass whether or not the exit code
  * were part of the identity, which is no test at all.
  */
-export function phaseVerification(options: BuildTaskGraphInputOptions) {
+export interface TaskVerification {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly expectedExitCode: number;
+  readonly timeoutMs: number;
+}
+
+export function phaseVerification(options: BuildTaskGraphInputOptions): readonly TaskVerification[] {
   // `executable` is narrowed by `partition`, so no runtime re-check is needed.
   const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
     command: criterion.proof.command,
@@ -84,11 +91,15 @@ export function phaseVerification(options: BuildTaskGraphInputOptions) {
   // asserting `pnpm test` exits 1 would suppress the project check asserting it
   // exits 0 — so a failing regression suite would satisfy the task, which is the
   // opposite of what adding project verification was for.
-  // Structured, because joining on spaces loses argument boundaries:
-  // `node -e "foo bar"` and `node -e foo bar` flatten to the same string while
-  // the runner executes different commands, so one would suppress the other.
-  const key = (entry: { command: string; args: readonly string[]; expectedExitCode: number }) =>
-    JSON.stringify([entry.command, [...entry.args], entry.expectedExitCode]);
+  // Keyed on the whole entry, not an enumerated subset of its fields.
+  //
+  // This key has now been wrong three times: it ignored the expected exit code,
+  // then flattened argument boundaries, then ignored the timeout — each a field
+  // the runner acts on that the identity had quietly excluded. Every fix added
+  // one more field and left the next one out. Two verification entries are the
+  // same proof exactly when they are the same entry, so that is what it compares.
+  const key = (entry: TaskVerification) =>
+    JSON.stringify({ ...entry, args: [...entry.args] }, Object.keys(entry).sort());
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
