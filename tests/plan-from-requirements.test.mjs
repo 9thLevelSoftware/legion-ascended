@@ -441,14 +441,20 @@ test("the spec self-anchor predicate matches what createCurrentSpec requires", a
   );
 });
 
-test("an imported requirement keeps the oracle coverage it already had", async () => {
+test("a proposed requirement carries only the oracle this change can resolve", async () => {
   const { buildChangeBundleInput } = await import(
     "../packages/cli/dist/workflow/change-input.js"
   );
 
-  // Shipping the change installs `proposedRequirement` as current truth, so
-  // replacing the list rather than appending would drop the earlier coverage
-  // links permanently.
+  // Retaining an imported requirement's earlier oracle IDs was implemented and
+  // then reverted: `validateChangeTraceability` loads only the current change's
+  // oracle manifest, so every retained ID reports `missing_oracle_artifact` and
+  // archive refuses the change outright. Preserving coverage properly needs
+  // cross-change oracle resolution.
+  //
+  // Nothing shipped produces a requirement with prior refs — intake writes
+  // `oracleRefs: []` — so this loses no coverage today. The test pins the
+  // decision so the trade is deliberate rather than rediscovered.
   const input = buildChangeBundleInput({
     repositoryRoot: process.cwd(),
     project: { id: "prj_asset-mapper", policy: { decisionOwners: [{ kind: "human", id: "dasbl" }] } },
@@ -485,8 +491,43 @@ test("an imported requirement keeps the oracle coverage it already had", async (
     createdAt: CREATED_AT
   });
 
-  const refs = input.deltaSpecs[0].proposedRequirement.acceptance.oracleRefs;
-  assert.ok(refs.includes("orc_pre-existing-coverage"), `prior coverage was dropped: ${refs}`);
-  assert.equal(new Set(refs).size, refs.length, "oracle refs must not duplicate");
-  assert.equal(refs.at(-1), "orc_phase-1-foundation");
+  assert.deepEqual(
+    input.deltaSpecs[0].proposedRequirement.acceptance.oracleRefs,
+    ["orc_phase-1-foundation"]
+  );
+});
+
+test("a CRLF checkout of an unchanged project still plans", async (t) => {
+  const { root, run } = await scratchProject(t);
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  // `core.autocrlf=true` is the Windows default, so a fresh clone rewrites these
+  // LF files to CRLF. Once planning began enforcing drift, that made every plan
+  // fail on a project nobody had touched — the guard firing on the checkout
+  // rather than on a change.
+  for (const relative of finalize.requirementSet.paths) {
+    const absolute = path.join(root, ...relative.split("/"));
+    const contents = await readFile(absolute, "utf8");
+    await writeFile(absolute, contents.replace(/\r?\n/g, "\r\n"), "utf8");
+  }
+  const indexPath = path.join(root, ".legion/project/requirements/index.json");
+  await writeFile(
+    indexPath,
+    (await readFile(indexPath, "utf8")).replace(/\r?\n/g, "\r\n"),
+    "utf8"
+  );
+
+  assert.equal((await run("validate", "--json")).exitCode, 0, "line endings are not a change");
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 0, planned.stderr);
+
+  // The guard must still fire on an actual edit, so normalizing must not have
+  // blunted it.
+  const requirementPath = path.join(root, ...finalize.requirementSet.paths[0].split("/"));
+  const requirement = JSON.parse(await readFile(requirementPath, "utf8"));
+  requirement.statement = "Something nobody agreed to";
+  await writeFile(requirementPath, `${JSON.stringify(requirement, undefined, 2)}\r\n`, "utf8");
+  assert.equal((await run("validate", "--json")).exitCode, 1, "a real edit is still drift");
 });

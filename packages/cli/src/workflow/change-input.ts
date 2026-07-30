@@ -289,17 +289,20 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
         })
       : requirementSchema.parse({
           ...options.requirement,
-          // The oracle that verifies this phase, appended rather than assigned.
-          // Replacing the list dropped any coverage an imported requirement
-          // already carried, and shipping the change installs this as current
-          // truth — so the earlier links would be gone permanently.
-          acceptance: {
-            ...options.requirement.acceptance,
-            oracleRefs: [
-              ...options.requirement.acceptance.oracleRefs.filter((id) => id !== ids.oracleId),
-              ids.oracleId
-            ]
-          },
+          // Only this phase's oracle.
+          //
+          // Retaining an imported requirement's earlier oracle IDs was tried and
+          // reverted: `validateChangeTraceability` loads only the current
+          // change's oracle manifest, so every retained ID reports
+          // `missing_oracle_artifact` and archive refuses the change outright.
+          // Carrying historical coverage needs cross-change oracle resolution,
+          // which is a larger piece of work than this.
+          //
+          // Nothing shipped produces a requirement with prior refs — intake
+          // writes `oracleRefs: []` — so no coverage is lost today. The legacy
+          // importer will be the first producer, and it must land together with
+          // that resolution rather than trading a silent loss for a hard block.
+          acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
           traceRefs: withSpecAnchor(options.requirement)
         });
 
