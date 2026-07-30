@@ -30,6 +30,21 @@ export function listProjectFiles(
 ): readonly ProjectFileEntry[] {
   const results: ProjectFileEntry[] = [];
 
+  // Classify the root itself before walking it. `readdirSync` follows a
+  // symlinked directory, and only descendants get a `Dirent` to classify — so a
+  // run that replaced `.legion/project` with a link would have its target's
+  // contents listed as protected files, and containment would write the saved
+  // artifacts through the surviving link while never restoring the real control
+  // directory. The root is reported as its own entry instead, so it is detected
+  // and unlinked like any other planted link.
+  try {
+    if (lstatSync(path.join(repositoryRoot, relativeRoot)).isSymbolicLink()) {
+      return [{ path: relativeRoot, kind: "symlink", size: undefined }];
+    }
+  } catch {
+    return [];
+  }
+
   const walk = (relative: string): void => {
     let entries;
     try {

@@ -220,6 +220,7 @@ function protectedPathsTouched(input: {
  */
 function restoreProtectedIndex(input: {
   readonly repositoryRoot: string;
+  readonly baseGitSha: GitSha;
   readonly state: ProtectedState;
   readonly paths: readonly string[];
 }): void {
@@ -233,9 +234,26 @@ function restoreProtectedIndex(input: {
     }
   };
 
-  run(["reset", "--quiet", "--", ...input.paths]);
+  // Reset against the pre-dispatch commit, not the current one. A bare
+  // `git reset -- <path>` resets to HEAD, and if the executor committed its
+  // rewrite then HEAD is the executor's — so the index would be restored to the
+  // tampered blob. Naming the base makes the reference point one the run could
+  // not influence.
+  run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths]);
   const restage = input.paths.filter((relative) => input.state.staged.has(relative));
   if (restage.length > 0) run(["add", "--", ...restage]);
+}
+
+/** The commit the worktree is on now, or `undefined` when it cannot be read. */
+function currentHead(repositoryRoot: string): string | undefined {
+  try {
+    return execFileSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -252,6 +270,7 @@ function restoreProtectedIndex(input: {
  */
 function restoreProtectedFiles(input: {
   readonly repositoryRoot: string;
+  readonly baseGitSha: GitSha;
   readonly state: ProtectedState;
   readonly paths: readonly string[];
 }): { readonly restored: readonly string[]; readonly unrestored: readonly string[] } {
@@ -290,6 +309,7 @@ function restoreProtectedFiles(input: {
 
   restoreProtectedIndex({
     repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha,
     state: input.state,
     paths: restored
   });
@@ -331,6 +351,7 @@ export async function runGuardedExecution(
     ? { restored: [] as readonly string[], unrestored: [] as readonly string[] }
     : restoreProtectedFiles({
         repositoryRoot: input.repositoryRoot,
+        baseGitSha: input.baseGitSha,
         state,
         paths: touchedProtected
       });
@@ -358,6 +379,15 @@ export async function runGuardedExecution(
       : `Could not restore ${containment.unrestored.join(", ")}; inspect the worktree before rerunning.`;
     reasons.push(
       `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
+    );
+  }
+  const headAfter = currentHead(input.repositoryRoot);
+  if (touchedProtected.length > 0 && headAfter !== undefined && headAfter !== input.baseGitSha) {
+    // The worktree and index are restored, but a commit the run created still
+    // contains the rewrite. Rewriting history here would discard whatever else
+    // that commit holds, so the operator is told instead of guessed for.
+    reasons.push(
+      `The run committed while modifying protected artifacts; HEAD is now ${headAfter} rather than ${input.baseGitSha}. The working tree and index were restored, but that commit still contains the change.`
     );
   }
   if (reconciliation?.status === "unavailable") {

@@ -28830,6 +28830,13 @@ import { lstatSync, readdirSync } from "node:fs";
 import path31 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
+  try {
+    if (lstatSync(path31.join(repositoryRoot, relativeRoot)).isSymbolicLink()) {
+      return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
+    }
+  } catch {
+    return [];
+  }
   const walk2 = (relative) => {
     let entries;
     try {
@@ -28959,9 +28966,19 @@ function restoreProtectedIndex(input) {
     } catch {
     }
   };
-  run(["reset", "--quiet", "--", ...input.paths]);
+  run(["reset", "--quiet", input.baseGitSha, "--", ...input.paths]);
   const restage = input.paths.filter((relative) => input.state.staged.has(relative));
   if (restage.length > 0) run(["add", "--", ...restage]);
+}
+function currentHead(repositoryRoot) {
+  try {
+    return execFileSync5("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return void 0;
+  }
 }
 function restoreProtectedFiles(input) {
   const restored = [];
@@ -28996,6 +29013,7 @@ function restoreProtectedFiles(input) {
   }
   restoreProtectedIndex({
     repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha,
     state: input.state,
     paths: restored
   });
@@ -29025,6 +29043,7 @@ async function runGuardedExecution(input) {
   });
   const containment = touchedProtected.length === 0 ? { restored: [], unrestored: [] } : restoreProtectedFiles({
     repositoryRoot: input.repositoryRoot,
+    baseGitSha: input.baseGitSha,
     state,
     paths: touchedProtected
   });
@@ -29044,6 +29063,12 @@ async function runGuardedExecution(input) {
     const note = containment.unrestored.length === 0 ? `Restored ${containment.restored.length} protected path(s) to their pre-run state.` : `Could not restore ${containment.unrestored.join(", ")}; inspect the worktree before rerunning.`;
     reasons.push(
       `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
+    );
+  }
+  const headAfter = currentHead(input.repositoryRoot);
+  if (touchedProtected.length > 0 && headAfter !== void 0 && headAfter !== input.baseGitSha) {
+    reasons.push(
+      `The run committed while modifying protected artifacts; HEAD is now ${headAfter} rather than ${input.baseGitSha}. The working tree and index were restored, but that commit still contains the change.`
     );
   }
   if (reconciliation?.status === "unavailable") {
