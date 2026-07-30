@@ -27853,7 +27853,18 @@ function buildTaskGraphInput(options) {
       // already makes when the caller cannot enumerate files in advance.
       // Phase D narrows this to the files a decomposed task actually touches.
       write: ["."],
-      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      // `.legion/project` is forbidden to implementation work, not merely
+      // out of scope. It holds the control artifacts — the taskgraph, change
+      // bundle, oracle and evidence index — that `review` and `ship` reload
+      // from disk after the executor runs. An executor able to write there
+      // could rewrite its own contract, including lowering `risk.tier`, and the
+      // ship gate would then derive a smaller gate set from the tampered file.
+      // The contract must not be amendable by the party it constrains.
+      //
+      // Harness-written run artifacts live under this prefix too, and are
+      // excluded from attribution before the forbidden check runs, so Legion's
+      // own bookkeeping is unaffected.
+      forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(["."])
     },
@@ -30505,7 +30516,10 @@ async function createAdHocTaskgraph(input) {
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
       write: adHocWriteScope,
-      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      // See taskgraph-input.ts: control artifacts are forbidden to the party
+      // the contract constrains, so an ad-hoc run cannot rewrite its own scope
+      // or risk tier before review and ship reload them.
+      forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })
     },

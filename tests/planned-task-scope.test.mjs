@@ -82,6 +82,57 @@ test("the planned contract still forbids the paths it should", async (t) => {
   assert.equal(violations[0].code, "forbidden_path_touched");
 });
 
+test("an executor cannot rewrite its own contract", async (t) => {
+  const task = await plannedTaskgraph(t);
+
+  // The escalation this closes: `review` and `ship` reload the taskgraph from
+  // disk after the executor runs. A writable control artifact lets the executor
+  // lower its own risk.tier, so ship derives a smaller gate set from a tampered
+  // contract and returns ready. A contract must not be amendable by the party
+  // it constrains.
+  //
+  // The earlier version of this file asserted `.git` was forbidden and never
+  // checked `.legion/project` — it proved the contract permitted the work, but
+  // not that it withheld the authority to change itself.
+  const observation = summarizeObservation(
+    [
+      {
+        path: ".legion/project/changes/chg_phase-1-foundation/taskgraph.json",
+        linesChanged: 3,
+        isNew: false,
+        contentSha256: "tampered"
+      }
+    ],
+    "0".repeat(40)
+  );
+
+  const violations = reconcileDiff({ observation, scope: task.scope });
+  assert.equal(violations[0].code, "forbidden_path_touched");
+});
+
+test("every control artifact under .legion/project is withheld", async (t) => {
+  const task = await plannedTaskgraph(t);
+
+  for (const controlPath of [
+    ".legion/project/project.json",
+    ".legion/project/changes/chg_phase-1-foundation/change.yaml",
+    ".legion/project/changes/chg_phase-1-foundation/oracle/orc_phase-1-foundation.yaml",
+    ".legion/project/changes/chg_phase-1-foundation/evidence-index.json",
+    ".legion/project/constitution.md"
+  ]) {
+    const observation = summarizeObservation(
+      [{ path: controlPath, linesChanged: 1, isNew: false, contentSha256: "x" }],
+      "0".repeat(40)
+    );
+    const violations = reconcileDiff({ observation, scope: task.scope });
+    assert.equal(
+      violations[0]?.code,
+      "forbidden_path_touched",
+      `${controlPath} should be forbidden to implementation work`
+    );
+  }
+});
+
 test("the planned contract keeps a finite budget despite repository-wide scope", async (t) => {
   const task = await plannedTaskgraph(t);
 
