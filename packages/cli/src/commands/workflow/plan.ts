@@ -8,7 +8,7 @@ import {
   type ArtifactDiagnostic,
   type CurrentSpecSuccess
 } from "@legion/artifacts";
-import type { Project, UtcTimestamp } from "@legion/protocol";
+import type { Project, Requirement, UtcTimestamp } from "@legion/protocol";
 
 import {
   failure,
@@ -28,6 +28,7 @@ import {
 import { loadWorkflowProject } from "../../workflow/context.js";
 import { buildOracleArtifactInput } from "../../workflow/oracle-input.js";
 import { resolvePhaseSource, type PhaseSource } from "../../workflow/phase-compat.js";
+import { resolvePhaseRequirement } from "../../workflow/phase-requirement.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import { resolveWorkflowState } from "../../workflow/state.js";
 import { buildTaskGraphInput } from "../../workflow/taskgraph-input.js";
@@ -110,41 +111,10 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
 
   const createdAt = currentUtcTimestamp();
   const baseGitSha = resolveBaseGitSha(context.repositoryRoot);
-  const currentSpec = await ensurePhaseCurrentSpec({
-    repositoryRoot: context.repositoryRoot,
-    project: loadedProject.loaded.project,
-    phase: resolved.phase,
-    createdAt
-  });
-  if (!currentSpec.ok) {
-    return artifactCreationFailure("current-spec", currentSpec.status, currentSpec.diagnostics, action);
-  }
 
-  const change = await createChangeBundle(buildChangeBundleInput({
-    repositoryRoot: context.repositoryRoot,
-    project: loadedProject.loaded.project,
-    phase: resolved.phase,
-    currentSpec,
-    baseGitSha,
-    createdAt
-  }));
-  if (!change.ok) {
-    return artifactCreationFailure("change", change.status, change.diagnostics, action);
-  }
-
-  const oracle = await createOracleArtifact(buildOracleArtifactInput({
-    repositoryRoot: context.repositoryRoot,
-    project: loadedProject.loaded.project,
-    phase: resolved.phase,
-    change,
-    baseGitSha,
-    createdAt
-  }));
-  if (!oracle.ok) {
-    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
-  }
-
-  // The enforcement settings the interview recorded, if this project held one.
+  // Read first, so a corrupt requirement set is reported as corrupt rather than
+  // as a phase whose requirement cannot be resolved. Both are refusals, but they
+  // name different repairs.
   // Read here rather than defaulted inside the builder so a project with no
   // requirement set is visibly a different case from one whose operator chose
   // the repository-wide limits.
@@ -168,6 +138,65 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   }
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : undefined;
 
+  // The requirement this phase was rendered from. A roadmap that names one it
+  // cannot resolve is a broken trace, not an absent one — planning against a
+  // stale roadmap would silently produce a contract for a requirement that no
+  // longer exists.
+  const phaseRequirement = await resolvePhaseRequirement(context.repositoryRoot, resolved.phase);
+  if (phaseRequirement.ok === false) {
+    return failure(
+      {
+        ok: false,
+        status: "requirement_unresolved",
+        diagnostics: [{ code: "requirement_unresolved", message: phaseRequirement.reason }],
+        nextAction: nextAction("legion validate", "Repair the roadmap or requirement set, then plan again.")
+      },
+      `Planning is blocked.
+  - ${phaseRequirement.reason}`
+    );
+  }
+  const requirement = phaseRequirement.ok === true ? phaseRequirement.resolved : undefined;
+
+  const currentSpec = await ensurePhaseCurrentSpec({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    ...(requirement === undefined ? {} : { requirement: requirement.requirement }),
+    createdAt
+  });
+  if (!currentSpec.ok) {
+    return artifactCreationFailure("current-spec", currentSpec.status, currentSpec.diagnostics, action);
+  }
+
+
+  const change = await createChangeBundle(buildChangeBundleInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    currentSpec,
+    ...(requirement === undefined ? {} : { requirement: requirement.requirement }),
+    ...(enforcement === undefined ? {} : { enforcement: enforcement.risk }),
+    baseGitSha,
+    createdAt
+  }));
+  if (!change.ok) {
+    return artifactCreationFailure("change", change.status, change.diagnostics, action);
+  }
+
+  const oracle = await createOracleArtifact(buildOracleArtifactInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    change,
+    ...(requirement === undefined ? {} : { requirement }),
+    baseGitSha,
+    createdAt
+  }));
+  if (!oracle.ok) {
+    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
+  }
+
+
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -176,7 +205,8 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     oracle,
     baseGitSha,
     createdAt,
-    ...(enforcement === undefined ? {} : { enforcement })
+    ...(enforcement === undefined ? {} : { enforcement }),
+    ...(requirement === undefined ? {} : { requirement })
   }));
   if (!taskgraph.ok) {
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);
@@ -280,6 +310,7 @@ async function ensurePhaseCurrentSpec(input: {
   readonly repositoryRoot: string;
   readonly project: Project;
   readonly phase: PhaseSource;
+  readonly requirement?: Requirement;
   readonly createdAt: UtcTimestamp;
 }): Promise<CurrentSpecSuccess | {
   readonly ok: false;

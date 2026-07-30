@@ -30192,6 +30192,25 @@ function phaseRiskProfile(phase, recorded) {
 function buildPhaseCurrentSpecInput(options) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
+  if (options.requirement !== void 0) {
+    const authored = requirementSchema.parse({
+      ...options.requirement,
+      traceRefs: withSpecAnchor(options.requirement)
+    });
+    return {
+      repositoryRoot: options.repositoryRoot,
+      document: {
+        primaryRequirementId: authored.id,
+        capability: {
+          id: ids.suffix,
+          title: `Phase ${options.phase.number}: ${options.phase.name}`,
+          status: "active"
+        },
+        requirements: [authored],
+        ...currentSpecTail(options, authored.id)
+      }
+    };
+  }
   const currentSpecPath = artifactPathForRole({
     role: "current-spec",
     requirementId: ids.requirementId
@@ -30231,16 +30250,21 @@ function buildPhaseCurrentSpecInput(options) {
         status: "active"
       },
       requirements: [requirement],
-      sections: {
-        purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
-        behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
-        constraints: "The baseline current spec is limited to planning-source availability.",
-        scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
-        interfaces: "legion plan",
-        compatibility: "The current spec exists so change bundles have explicit current truth.",
-        failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
-        traceIds: [ids.requirementId]
-      }
+      ...currentSpecTail(options, ids.requirementId)
+    }
+  };
+}
+function currentSpecTail(options, traceRequirementId) {
+  return {
+    sections: {
+      purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
+      behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
+      constraints: "The baseline current spec is limited to planning-source availability.",
+      scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
+      interfaces: "legion plan",
+      compatibility: "The current spec exists so change bundles have explicit current truth.",
+      failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
+      traceIds: [traceRequirementId]
     }
   };
 }
@@ -30263,13 +30287,30 @@ function phaseSourceArtifactPath(repositoryRoot, phase) {
   const candidate = relative.length > 0 && !relative.startsWith("../") && !path29.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
+function withSpecAnchor(requirement) {
+  const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
+  const anchored = requirement.traceRefs.some(
+    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines"
+  );
+  if (anchored) return requirement.traceRefs;
+  return [
+    ...requirement.traceRefs,
+    {
+      path: specPath,
+      anchor: requirement.id,
+      relation: "defines",
+      entity: { kind: "requirement", id: requirement.id }
+    }
+  ];
+}
 function buildChangeBundleInput(options) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
   const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
   const owner = firstDecisionOwner(options.project);
-  const requirement = requirementSchema.parse({
+  const deltaRequirementId = options.requirement?.id ?? ids.requirementId;
+  const requirement = options.requirement === void 0 ? requirementSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
     kind: "requirement",
@@ -30293,6 +30334,12 @@ function buildChangeBundleInput(options) {
       }
     ],
     supersedes: []
+  }) : requirementSchema.parse({
+    ...options.requirement,
+    // The oracle that verifies this phase, added without touching the
+    // criteria the operator wrote.
+    acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+    traceRefs: withSpecAnchor(options.requirement)
   });
   return {
     repositoryRoot: options.repositoryRoot,
@@ -30302,7 +30349,7 @@ function buildChangeBundleInput(options) {
     summary: summarizePhase(options.phase),
     owners: [owner],
     baseGitSha,
-    risk: phaseRiskProfile(options.phase),
+    risk: phaseRiskProfile(options.phase, options.enforcement),
     createdAt,
     currentSpecs: [
       {
@@ -30313,7 +30360,7 @@ function buildChangeBundleInput(options) {
     deltaSpecs: [
       {
         operation: "modify",
-        requirementId: ids.requirementId,
+        requirementId: deltaRequirementId,
         proposedRequirement: requirement,
         sections: {
           purpose: summarizePhase(options.phase),
@@ -30323,7 +30370,7 @@ function buildChangeBundleInput(options) {
           interfaces: "legion plan",
           compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
           failureModes: "Artifact service validation failures are returned with typed diagnostics.",
-          traceIds: [ids.requirementId]
+          traceIds: [deltaRequirementId]
         },
         rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
       }
@@ -30371,11 +30418,69 @@ function truncate3(value, maxLength) {
   return normalized.slice(0, maxLength - 1).trimEnd();
 }
 
+// packages/cli/src/workflow/phase-requirement.ts
+var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
+function requirementIdInPhase(phase) {
+  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
+}
+function partition(requirement) {
+  const executable = [];
+  const manual = [];
+  for (const criterion of requirement.acceptance.criteria) {
+    if (criterion.proof.mode === "executable") executable.push(criterion);
+    else manual.push(criterion);
+  }
+  return { executable, manual };
+}
+async function resolvePhaseRequirement(repositoryRoot, phase) {
+  const requirementId = requirementIdInPhase(phase);
+  if (requirementId === void 0) return { ok: "absent" };
+  const set = await readRequirementSet(repositoryRoot);
+  if (!set.ok) {
+    if (set.status === "not_found") {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
+      };
+    }
+    return { ok: false, reason: set.reason };
+  }
+  const requirement = set.requirements.find((entry) => entry.id === requirementId);
+  if (requirement === void 0) {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+    };
+  }
+  return { ok: true, resolved: { requirement, ...partition(requirement) } };
+}
+function describeCriterion(criterion) {
+  if (criterion.proof.mode === "executable") {
+    const command = [criterion.proof.command, ...criterion.proof.args].join(" ");
+    return `${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`;
+  }
+  return `${criterion.statement} \u2014 manual: ${criterion.proof.reason}`;
+}
+
 // packages/cli/src/workflow/oracle-input.ts
+function inspectionInstructions(options) {
+  const resolved = options.requirement;
+  if (resolved === void 0) {
+    return `Review implementation and evidence for phase ${options.phase.number}: ${options.phase.name}.`;
+  }
+  if (resolved.manual.length === 0) {
+    return `Every acceptance criterion for ${resolved.requirement.id} is executable and runs as task verification. Confirm the evidence records those runs.`;
+  }
+  return [
+    `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`,
+    ...resolved.manual.map((criterion) => `  - ${describeCriterion(criterion)}`)
+  ].join("\n");
+}
 function buildOracleArtifactInput(options) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const owner = firstDecisionOwner(options.project);
+  const coveredRequirementId = options.requirement?.requirement.id ?? ids.requirementId;
   const oraclePath2 = artifactPathForRole({
     role: "oracle",
     changeId: ids.changeId,
@@ -30393,14 +30498,18 @@ function buildOracleArtifactInput(options) {
     sourceArtifacts: [options.change.reference],
     expected: {
       preconditions: ["The phase change bundle exists and validates."],
-      postconditions: [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`],
+      postconditions: options.requirement === void 0 ? [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`] : options.requirement.requirement.acceptance.criteria.map(describeCriterion),
       evidence: ["Build and verification evidence is attached during legion build."]
     },
+    // The operator's own criteria, not a restatement of the phase. "Phase N
+    // acceptance criteria are satisfied" is not a criterion — it is the
+    // question rephrased as its own answer, and it made every oracle
+    // indistinguishable from every other.
     requirementCoverage: [
       {
-        requirementId: ids.requirementId,
+        requirementId: coveredRequirementId,
         coverage: "primary",
-        criteria: [`Phase ${options.phase.number} acceptance criteria are satisfied.`]
+        criteria: options.requirement === void 0 ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`] : options.requirement.requirement.acceptance.criteria.map(describeCriterion)
       }
     ],
     traceRefs: [
@@ -30408,13 +30517,18 @@ function buildOracleArtifactInput(options) {
         path: oraclePath2,
         anchor: ids.oracleId,
         relation: "verifies",
-        entity: { kind: "requirement", id: ids.requirementId }
+        entity: { kind: "requirement", id: coveredRequirementId }
       }
     ],
     type: "inspectable",
+    // Inspectable even when every criterion is executable: the task contract is
+    // what runs those commands, and duplicating them here would make the same
+    // proof pass twice while covering the manual criteria neither time. The
+    // instructions name the unproven ones so a reviewer knows what is left to
+    // them.
     execution: {
       mode: "manual-inspection",
-      instructions: `Review implementation and evidence for phase ${options.phase.number}: ${options.phase.name}.`
+      instructions: inspectionInstructions(options)
     }
   });
   return {
@@ -30496,6 +30610,23 @@ function isEnoent8(error2) {
 }
 
 // packages/cli/src/workflow/taskgraph-input.ts
+function phaseVerification(options) {
+  const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
+    command: criterion.proof.mode === "executable" ? criterion.proof.command : "legion",
+    args: criterion.proof.mode === "executable" ? [...criterion.proof.args] : ["validate"],
+    expectedExitCode: criterion.proof.mode === "executable" ? criterion.proof.expectedExitCode : 0,
+    timeoutMs: criterion.proof.mode === "executable" ? criterion.proof.timeoutMs ?? 6e5 : 12e4
+  }));
+  const project = options.enforcement === void 0 ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 12e4 } : {
+    command: options.enforcement.verification.command,
+    args: [...options.enforcement.verification.args],
+    expectedExitCode: 0,
+    timeoutMs: 6e5
+  };
+  const key = (entry) => `${entry.command} ${entry.args.join(" ")}`;
+  const seen = new Set(criteria.map(key));
+  return seen.has(key(project)) ? criteria : [...criteria, project];
+}
 function buildTaskGraphInput(options) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
@@ -30512,7 +30643,10 @@ function buildTaskGraphInput(options) {
     revision: 1,
     title: `Build phase ${options.phase.number}: ${options.phase.name}`,
     objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
-    requirementIds: [ids.requirementId],
+    // The requirement the interview wrote, so the contract traces to something
+    // the operator actually agreed to rather than to a stub minted from the
+    // phase heading.
+    requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
     wave: "A",
     // Bundle IDs from bundles/index.json. An agent with no worker bundle
     // cannot be dispatched, so these must name real bundles.
@@ -30569,14 +30703,7 @@ function buildTaskGraphInput(options) {
     // The project's own verification command when the interview recorded one.
     // `legion validate` alone is a tautology — it checks the artifacts this
     // command just wrote, not the code the task changed.
-    verification: [
-      options.enforcement === void 0 ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 12e4 } : {
-        command: options.enforcement.verification.command,
-        args: [...options.enforcement.verification.args],
-        expectedExitCode: 0,
-        timeoutMs: 6e5
-      }
-    ],
+    verification: phaseVerification(options),
     risk: phaseRiskProfile(options.phase, options.enforcement?.risk),
     approvals: [],
     completion: {
@@ -30673,37 +30800,6 @@ async function handlePlanWorkflow(context) {
   }
   const createdAt = currentUtcTimestamp();
   const baseGitSha = resolveBaseGitSha(context.repositoryRoot);
-  const currentSpec = await ensurePhaseCurrentSpec({
-    repositoryRoot: context.repositoryRoot,
-    project: loadedProject.loaded.project,
-    phase: resolved.phase,
-    createdAt
-  });
-  if (!currentSpec.ok) {
-    return artifactCreationFailure("current-spec", currentSpec.status, currentSpec.diagnostics, action);
-  }
-  const change = await createChangeBundle(buildChangeBundleInput({
-    repositoryRoot: context.repositoryRoot,
-    project: loadedProject.loaded.project,
-    phase: resolved.phase,
-    currentSpec,
-    baseGitSha,
-    createdAt
-  }));
-  if (!change.ok) {
-    return artifactCreationFailure("change", change.status, change.diagnostics, action);
-  }
-  const oracle = await createOracleArtifact(buildOracleArtifactInput({
-    repositoryRoot: context.repositoryRoot,
-    project: loadedProject.loaded.project,
-    phase: resolved.phase,
-    change,
-    baseGitSha,
-    createdAt
-  }));
-  if (!oracle.ok) {
-    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
-  }
   const requirementSet = await readRequirementSet(context.repositoryRoot);
   if (!requirementSet.ok && requirementSet.status === "invalid") {
     return failure(
@@ -30718,6 +30814,55 @@ async function handlePlanWorkflow(context) {
     );
   }
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : void 0;
+  const phaseRequirement = await resolvePhaseRequirement(context.repositoryRoot, resolved.phase);
+  if (phaseRequirement.ok === false) {
+    return failure(
+      {
+        ok: false,
+        status: "requirement_unresolved",
+        diagnostics: [{ code: "requirement_unresolved", message: phaseRequirement.reason }],
+        nextAction: nextAction("legion validate", "Repair the roadmap or requirement set, then plan again.")
+      },
+      `Planning is blocked.
+  - ${phaseRequirement.reason}`
+    );
+  }
+  const requirement = phaseRequirement.ok === true ? phaseRequirement.resolved : void 0;
+  const currentSpec = await ensurePhaseCurrentSpec({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    ...requirement === void 0 ? {} : { requirement: requirement.requirement },
+    createdAt
+  });
+  if (!currentSpec.ok) {
+    return artifactCreationFailure("current-spec", currentSpec.status, currentSpec.diagnostics, action);
+  }
+  const change = await createChangeBundle(buildChangeBundleInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    currentSpec,
+    ...requirement === void 0 ? {} : { requirement: requirement.requirement },
+    ...enforcement === void 0 ? {} : { enforcement: enforcement.risk },
+    baseGitSha,
+    createdAt
+  }));
+  if (!change.ok) {
+    return artifactCreationFailure("change", change.status, change.diagnostics, action);
+  }
+  const oracle = await createOracleArtifact(buildOracleArtifactInput({
+    repositoryRoot: context.repositoryRoot,
+    project: loadedProject.loaded.project,
+    phase: resolved.phase,
+    change,
+    ...requirement === void 0 ? {} : { requirement },
+    baseGitSha,
+    createdAt
+  }));
+  if (!oracle.ok) {
+    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
+  }
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -30726,7 +30871,8 @@ async function handlePlanWorkflow(context) {
     oracle,
     baseGitSha,
     createdAt,
-    ...enforcement === void 0 ? {} : { enforcement }
+    ...enforcement === void 0 ? {} : { enforcement },
+    ...requirement === void 0 ? {} : { requirement }
   }));
   if (!taskgraph.ok) {
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);

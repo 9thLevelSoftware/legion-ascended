@@ -15,6 +15,7 @@ import {
 } from "@legion/protocol";
 
 import type { RequirementSetEnforcement } from "./intake/finalize.js";
+import type { ResolvedPhaseRequirement } from "./phase-requirement.js";
 
 import { budgetForWriteScope } from "./budget.js";
 import { currentUtcTimestamp, phasePlanIds, phaseRiskProfile } from "./change-input.js";
@@ -29,12 +30,54 @@ export interface BuildTaskGraphInputOptions {
    * therefore chose no limits; the repository-wide fallback applies then.
    */
   readonly enforcement?: RequirementSetEnforcement;
+  /** The requirement this phase was rendered from, when the roadmap names one. */
+  readonly requirement?: ResolvedPhaseRequirement;
   readonly project: Project;
   readonly phase: PhaseSource;
   readonly change: ChangeBundleSuccess;
   readonly oracle: OracleArtifactSuccess;
   readonly baseGitSha: GitSha;
   readonly createdAt?: UtcTimestamp;
+}
+
+/**
+ * What the task has to run to be believed.
+ *
+ * The requirement's own executable criteria come first: they are what the
+ * operator said decides this requirement, and a task that verified only the
+ * project-wide command would prove nothing broke rather than that the
+ * requirement holds. The project command follows as a regression check.
+ *
+ * Manual criteria are deliberately absent — they cannot be run, and inventing a
+ * command for one would be the fabrication protocol 0.2.0 exists to prevent.
+ * The oracle names them for a reviewer instead.
+ */
+function phaseVerification(options: BuildTaskGraphInputOptions) {
+  const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
+    command: criterion.proof.mode === "executable" ? criterion.proof.command : "legion",
+    args: criterion.proof.mode === "executable" ? [...criterion.proof.args] : ["validate"],
+    expectedExitCode:
+      criterion.proof.mode === "executable" ? criterion.proof.expectedExitCode : 0,
+    timeoutMs:
+      criterion.proof.mode === "executable" ? criterion.proof.timeoutMs ?? 600_000 : 120_000
+  }));
+
+  const project =
+    options.enforcement === undefined
+      ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 120_000 }
+      : {
+          command: options.enforcement.verification.command,
+          args: [...options.enforcement.verification.args],
+          expectedExitCode: 0,
+          timeoutMs: 600_000
+        };
+
+  // De-duplicated: an operator whose criterion command is also the project
+  // command should not have it run twice and reported as two proofs.
+  const key = (entry: { command: string; args: readonly string[] }) =>
+    `${entry.command} ${entry.args.join(" ")}`;
+  const seen = new Set(criteria.map(key));
+  return seen.has(key(project)) ? criteria : [...criteria, project];
 }
 
 export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteTaskGraphInput {
@@ -53,7 +96,10 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     revision: 1,
     title: `Build phase ${options.phase.number}: ${options.phase.name}`,
     objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
-    requirementIds: [ids.requirementId],
+    // The requirement the interview wrote, so the contract traces to something
+    // the operator actually agreed to rather than to a stub minted from the
+    // phase heading.
+    requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
     wave: "A",
     // Bundle IDs from bundles/index.json. An agent with no worker bundle
     // cannot be dispatched, so these must name real bundles.
@@ -110,16 +156,7 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     // The project's own verification command when the interview recorded one.
     // `legion validate` alone is a tautology — it checks the artifacts this
     // command just wrote, not the code the task changed.
-    verification: [
-      options.enforcement === undefined
-        ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 120_000 }
-        : {
-            command: options.enforcement.verification.command,
-            args: [...options.enforcement.verification.args],
-            expectedExitCode: 0,
-            timeoutMs: 600_000
-          }
-    ],
+    verification: phaseVerification(options),
     risk: phaseRiskProfile(options.phase, options.enforcement?.risk),
     approvals: [],
     completion: {

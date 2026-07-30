@@ -22,6 +22,7 @@ import {
   type OracleId,
   type Actor,
   type Project,
+  type Requirement,
   type RequirementId,
   type RiskProfile,
   type RiskTier,
@@ -44,6 +45,9 @@ export interface BuildChangeInputOptions {
   readonly project: Project;
   readonly phase: PhaseSource;
   readonly currentSpec: CurrentSpecSuccess;
+  /** The requirement this phase was rendered from, when the roadmap names one. */
+  readonly requirement?: Requirement;
+  readonly enforcement?: { readonly tier: RiskTier; readonly reason: string };
   readonly baseGitSha?: GitSha;
   readonly createdAt?: UtcTimestamp;
 }
@@ -84,10 +88,42 @@ export function buildPhaseCurrentSpecInput(options: {
   readonly repositoryRoot: string;
   readonly project: Project;
   readonly phase: PhaseSource;
+  readonly requirement?: Requirement;
   readonly createdAt?: UtcTimestamp;
 }): CreateCurrentSpecInput {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
+
+  // The requirement the interview wrote, when the roadmap names one. Authoring
+  // a fresh `req_<phase-suffix>` instead replaced the operator's acceptance
+  // proofs with generated prose and left the contract tracing to a requirement
+  // nobody agreed to.
+  if (options.requirement !== undefined) {
+    // A current spec requires each requirement to anchor itself: a trace ref at
+    // the spec's own path, anchored on the requirement ID. Intake requirements
+    // trace to the interview that recorded them, which is a different and
+    // equally necessary fact — so the spec anchor is added here, where the
+    // requirement is being placed into a spec, rather than asserted at intake
+    // time about a document that does not exist yet.
+    const authored = requirementSchema.parse({
+      ...options.requirement,
+      traceRefs: withSpecAnchor(options.requirement)
+    });
+    return {
+      repositoryRoot: options.repositoryRoot,
+      document: {
+        primaryRequirementId: authored.id,
+        capability: {
+          id: ids.suffix,
+          title: `Phase ${options.phase.number}: ${options.phase.name}`,
+          status: "active"
+        },
+        requirements: [authored],
+        ...currentSpecTail(options, authored.id)
+      }
+    };
+  }
+
   const currentSpecPath = artifactPathForRole({
     role: "current-spec",
     requirementId: ids.requirementId
@@ -128,16 +164,29 @@ export function buildPhaseCurrentSpecInput(options: {
         status: "active"
       },
       requirements: [requirement],
-      sections: {
-        purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
-        behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
-        constraints: "The baseline current spec is limited to planning-source availability.",
-        scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
-        interfaces: "legion plan",
-        compatibility: "The current spec exists so change bundles have explicit current truth.",
-        failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
-        traceIds: [ids.requirementId]
-      }
+      ...currentSpecTail(options, ids.requirementId)
+    }
+  };
+}
+
+/**
+ * The prose sections of a phase current spec.
+ *
+ * Shared so the authored-stub branch and the real-requirement branch cannot
+ * drift apart; only `traceIds` differs, and it has to name whichever
+ * requirement the document actually carries.
+ */
+function currentSpecTail(options: { readonly phase: PhaseSource }, traceRequirementId: string) {
+  return {
+    sections: {
+      purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
+      behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
+      constraints: "The baseline current spec is limited to planning-source availability.",
+      scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
+      interfaces: "legion plan",
+      compatibility: "The current spec exists so change bundles have explicit current truth.",
+      failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
+      traceIds: [traceRequirementId]
     }
   };
 }
@@ -166,37 +215,76 @@ export function phaseSourceArtifactPath(repositoryRoot: string, phase: PhaseSour
   return artifactPathSchema.parse(candidate);
 }
 
+/**
+ * A requirement's trace refs, guaranteed to include the spec self-anchor.
+ *
+ * Shared by the current-spec and delta paths, because a delta's proposed
+ * requirement is validated against the same rule as the spec's.
+ */
+function withSpecAnchor(requirement: Requirement): Requirement["traceRefs"] {
+  const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
+  const anchored = requirement.traceRefs.some(
+    (traceRef) =>
+      traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines"
+  );
+  if (anchored) return requirement.traceRefs;
+  return [
+    ...requirement.traceRefs,
+    {
+      path: specPath,
+      anchor: requirement.id,
+      relation: "defines",
+      entity: { kind: "requirement", id: requirement.id }
+    }
+  ];
+}
+
 export function buildChangeBundleInput(options: BuildChangeInputOptions): CreateChangeBundleInput {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
   const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
   const owner = firstDecisionOwner(options.project);
-  const requirement = requirementSchema.parse({
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "requirement",
-    id: ids.requirementId,
-    projectId: options.project.id,
-    priority: "must",
-    category: "behavior",
-    status: "accepted",
-    statement: requirementStatement(options.phase),
-    acceptance: {
-      language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
-      criteria: generatedCriteria(acceptanceCriteria(options.phase)),
-      oracleRefs: [ids.oracleId]
-    },
-    traceRefs: [
-      {
-        path: sourcePath,
-        anchor: `phase-${options.phase.number}`,
-        relation: "defines",
-        entity: { kind: "requirement", id: ids.requirementId }
-      }
-    ],
-    supersedes: []
-  });
+
+  // The delta has to modify the requirement the current spec actually carries.
+  // Authoring a `req_phase-*` stub here while the spec held the intake
+  // requirement produced a delta with no matching base, and the operator's
+  // acceptance proofs were replaced with generated prose on the way past.
+  const deltaRequirementId = options.requirement?.id ?? ids.requirementId;
+  const requirement =
+    options.requirement === undefined
+      ? requirementSchema.parse({
+          schemaVersion: LEGION_PROTOCOL_VERSION,
+          createdAt,
+          kind: "requirement",
+          id: ids.requirementId,
+          projectId: options.project.id,
+          priority: "must",
+          category: "behavior",
+          status: "accepted",
+          statement: requirementStatement(options.phase),
+          acceptance: {
+            language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
+            criteria: generatedCriteria(acceptanceCriteria(options.phase)),
+            oracleRefs: [ids.oracleId]
+          },
+          traceRefs: [
+            {
+              path: sourcePath,
+              anchor: `phase-${options.phase.number}`,
+              relation: "defines",
+              entity: { kind: "requirement", id: ids.requirementId }
+            }
+          ],
+          supersedes: []
+        })
+      : requirementSchema.parse({
+          ...options.requirement,
+          // The oracle that verifies this phase, added without touching the
+          // criteria the operator wrote.
+          acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+          traceRefs: withSpecAnchor(options.requirement)
+        });
 
   return {
     repositoryRoot: options.repositoryRoot,
@@ -206,7 +294,7 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
     summary: summarizePhase(options.phase),
     owners: [owner],
     baseGitSha,
-    risk: phaseRiskProfile(options.phase),
+    risk: phaseRiskProfile(options.phase, options.enforcement),
     createdAt,
     currentSpecs: [
       {
@@ -217,7 +305,7 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
     deltaSpecs: [
       {
         operation: "modify",
-        requirementId: ids.requirementId,
+        requirementId: deltaRequirementId,
         proposedRequirement: requirement,
         sections: {
           purpose: summarizePhase(options.phase),
@@ -227,7 +315,7 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
           interfaces: "legion plan",
           compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
           failureModes: "Artifact service validation failures are returned with typed diagnostics.",
-          traceIds: [ids.requirementId]
+          traceIds: [deltaRequirementId]
         },
         rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
       }
