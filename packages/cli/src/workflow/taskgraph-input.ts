@@ -68,7 +68,11 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
       // already makes when the caller cannot enumerate files in advance.
       // Phase D narrows this to the files a decomposed task actually touches.
       write: ["."],
-      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      // `.legion/project` holds the control artifacts `review` and `ship`
+      // reload after the executor runs, so a contract must not let the party it
+      // constrains rewrite them. Harness run artifacts share the prefix but are
+      // excluded from attribution before the forbidden check.
+      forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(["."])
     },

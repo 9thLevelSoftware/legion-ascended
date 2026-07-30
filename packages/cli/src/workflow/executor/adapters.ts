@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { artifactPathSchema } from "@legion/protocol";
 
 import type { ExecutionAdapter, ExecutionAdapterKind, ExecutionRequest, ExecutionResult } from "./types.js";
+import { applyFakeExecutorPlan, readFakeExecutorPlan } from "./fake-plan.js";
 import {
   normalizeExecutionResult,
   parseResultFromText,
@@ -81,11 +82,20 @@ async function codexAvailable(): Promise<boolean> {
 const fakeAdapter: ExecutionAdapter = {
   kind: "fake",
   async run(request) {
+    // A scripted plan lets tests drive real write-path violations. Absent one,
+    // the fake behaves exactly as it always has and touches nothing.
+    const plan = readFakeExecutorPlan();
+    const written = plan === undefined
+      ? []
+      : applyFakeExecutorPlan({ repositoryRoot: request.repositoryRoot, plan, readOnly: request.readOnly });
+    const status = plan?.status ?? "succeeded";
+
     const result: ExecutionResult = {
-      ok: true,
-      status: "succeeded",
-      summary: fakeSummary(request),
-      filesChanged: [],
+      ok: status === "succeeded",
+      status,
+      summary: plan?.summary ?? fakeSummary(request),
+      // What it claims, which a plan may deliberately set at odds with `written`.
+      filesChanged: plan?.claimFilesChanged ?? written,
       commandsRun: [
         {
           command: "legion-executor",

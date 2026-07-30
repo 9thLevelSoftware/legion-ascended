@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { stableProtocolJson } from "@legion/artifacts";
+import { LEGION_PROJECT_ROOT, stableProtocolJson } from "@legion/artifacts";
 import { artifactPathSchema, taskContractScopePathSchema } from "@legion/protocol";
 
 import {
@@ -14,6 +14,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 import { createAdHocTaskgraph } from "../../workflow/ad-hoc-taskgraph.js";
+import { pathIsCoveredBy } from "../../workflow/diff-reconciliation.js";
 import { loadWorkflowProject } from "../../workflow/context.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
 import {
@@ -95,6 +96,16 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
   const targetPath = kind === "polish" && text !== undefined ? text.trim() : undefined;
   if (targetPath !== undefined && !taskContractScopePathSchema.safeParse(targetPath).success) {
     return usageError(`Invalid polish target path: ${targetPath}`);
+  }
+  // Control artifacts are forbidden to implementation work, so a target inside
+  // them would plan successfully and then fail every edit as
+  // `forbidden_path_touched`. The schema's overlap check compares scope entries
+  // for exact equality and cannot see that a target is nested under a forbidden
+  // prefix, so reject it here rather than emit a contract nothing can satisfy.
+  if (targetPath !== undefined && pathIsCoveredBy(targetPath, LEGION_PROJECT_ROOT)) {
+    return usageError(
+      `Cannot polish ${targetPath}: ${LEGION_PROJECT_ROOT} holds Legion control artifacts, which implementation tasks may not write. Edit it directly, or use the workflow command that owns it.`
+    );
   }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 import {
+  LEGION_PROJECT_ROOT,
   artifactReferenceForContent,
   hashContent,
   readEvidenceIndex,
@@ -38,15 +39,11 @@ import {
 import { failure, hasFlag, helpResult, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
-import {
-  observeWorkingTreeDiff,
-  reconcileTaskDiff,
-  reconciliationBlocks,
-  type ReconciliationResult
-} from "../../workflow/diff-reconciliation.js";
+import type { ReconciliationResult } from "../../workflow/diff-reconciliation.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
 import { createVerificationRunner } from "../../workflow/executor/verification-runner.js";
 import { createWorkerBundleRegistry } from "../../workflow/executor/worker-bundles.js";
+import { runGuardedExecution } from "../../workflow/guarded-execution.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
@@ -336,62 +333,56 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     };
   }
 
-  // Observed before dispatch so `--allow-dirty` pre-existing edits are not
-  // attributed to this run.
-  const beforeDispatch = observeWorkingTreeDiff({
-    repositoryRoot: input.context.repositoryRoot,
-    baseGitSha
-  }).observation;
-
+  // Every writable dispatch goes through the same guarded path, so the
+  // guarantees it makes — one base SHA, pre-run snapshot, post-run
+  // reconciliation, harness-level control-artifact ban, containment on
+  // violation — cannot differ between build and auto-fix.
+  let verification: ContractVerification = { passed: true };
   const adapter = adapterForKind(input.executor);
-  const result = await adapter.run({
-    repositoryRoot: input.context.repositoryRoot,
-    changeId: input.task.changeId,
-    runId,
-    task: input.task,
-    mode: "build",
-    executor: input.executor,
-    readOnly: false,
-    prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath,
-    promptArtifactPath,
-    promptAbsolutePath,
-    resultArtifactPath,
-    resultAbsolutePath,
-    rawLogArtifactPath,
-    rawLogAbsolutePath,
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath
-  });
-
-  const finishedAt = currentUtcTimestamp();
-
-  // Execute the contract's declared verification commands. Until now these were
-  // rendered into the executor prompt as text and never run, so "verification"
-  // in evidence meant whatever exit code the executor reported about itself.
-  const verification = await runContractVerification({
+  const guarded = await runGuardedExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
-    workerContext: workerContext.workerContext
-  });
-
-  // Observed after verification, not before. Verification commands legitimately
-  // write — snapshot updates, generated files, formatters — and those writes are
-  // repository mutations made during the run. Reconciling before they happen
-  // would leave them permanently unchecked against scope and budget.
-  const reconciliation = input.task.completion.diffReconciliation.required
-    ? reconcileTaskDiff({
+    // The same SHA the task-run manifest records, so evidence, snapshot and
+    // reconciliation all describe one revision.
+    baseGitSha,
+    harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+    run: () =>
+      adapter.run({
         repositoryRoot: input.context.repositoryRoot,
-        baseGitSha,
-        scope: input.task.scope,
-        // The adapter writes the result and logs after dispatch; that is
-        // harness output, not executor work product.
-        harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
-        ...(beforeDispatch === undefined ? {} : { before: beforeDispatch })
-      })
-    : undefined;
-  const inContract = !reconciliationBlocks(reconciliation);
+        changeId: input.task.changeId,
+        runId,
+        task: input.task,
+        mode: "build",
+        executor: input.executor,
+        readOnly: false,
+        prompt,
+        contextPackArtifactPath,
+        contextPackAbsolutePath,
+        promptArtifactPath,
+        promptAbsolutePath,
+        resultArtifactPath,
+        resultAbsolutePath,
+        rawLogArtifactPath,
+        rawLogAbsolutePath,
+        redactedLogArtifactPath,
+        redactedLogAbsolutePath
+      }),
+    // Verification runs inside the guarded window so its own writes — snapshot
+    // updates, generated files, formatters — are reconciled rather than
+    // escaping the post-run snapshot.
+    afterRun: async () => {
+      verification = await runContractVerification({
+        repositoryRoot: input.context.repositoryRoot,
+        task: input.task,
+        workerContext: workerContext.workerContext
+      });
+    }
+  });
+
+  const result = guarded.result;
+  const finishedAt = currentUtcTimestamp();
+  const reconciliation = guarded.reconciliation;
+  const inContract = guarded.inContract;
 
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
@@ -407,6 +398,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     redactedLogArtifactPath,
     taskgraphPath: input.taskgraph.artifactPath,
     verification,
+    inContract,
     ...(reconciliation === undefined ? {} : { reconciliation })
   });
   const completed = await writeTaskRun({
@@ -437,7 +429,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
       error: !inContract
         ? {
             code: "diff_reconciliation_failed",
-            message: reconciliationSummary(reconciliation),
+            message: guarded.blockedReason ?? reconciliationSummary(reconciliation),
             retryable: false
           }
         : !verification.passed
@@ -487,7 +479,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
           : [
               {
                 code: "diff_reconciliation_failed",
-                message: reconciliationSummary(reconciliation),
+                message: guarded.blockedReason ?? reconciliationSummary(reconciliation),
                 path: input.taskgraph.artifactPath
               }
             ]),
@@ -636,6 +628,7 @@ async function evidenceEntryForExecution(input: {
   readonly redactedLogArtifactPath: ArtifactPath;
   readonly taskgraphPath: ArtifactPath;
   readonly verification: ContractVerification;
+  readonly inContract: boolean;
   readonly reconciliation?: ReconciliationResult;
 }): Promise<EvidenceIndexEntry> {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
@@ -650,7 +643,9 @@ async function evidenceEntryForExecution(input: {
     }
   ];
   const reconciliation = input.reconciliation;
-  const inContract = !reconciliationBlocks(reconciliation);
+  // Supplied by the guarded execution rather than recomputed. Two places
+  // deciding the same thing is how these paths drift apart.
+  const inContract = input.inContract;
 
   const items: EvidenceItem[] = [
     {

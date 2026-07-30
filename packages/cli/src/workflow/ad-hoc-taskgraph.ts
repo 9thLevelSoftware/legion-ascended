@@ -234,7 +234,7 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
       write: adHocWriteScope,
-      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })
     },

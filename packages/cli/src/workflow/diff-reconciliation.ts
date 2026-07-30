@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 import type { TaskContract } from "@legion/protocol";
@@ -272,6 +272,8 @@ export function reconcileDiff(input: {
    * is an exclusion for known-harness output, never a general escape hatch.
    */
   readonly harnessPaths?: readonly string[];
+  /** Forbidden regardless of the contract, for harness invariants older taskgraphs must not be able to waive. */
+  readonly alwaysForbidden?: readonly string[];
 }): readonly ReconciliationViolation[] {
   const violations: ReconciliationViolation[] = [];
   const harnessPaths = input.harnessPaths ?? [];
@@ -283,7 +285,8 @@ export function reconcileDiff(input: {
     input.observation.baseGitSha
   );
   const { changedFiles, newFiles, linesChanged } = attributable;
-  const { write, forbidden, budget } = input.scope;
+  const { write, budget } = input.scope;
+  const forbidden = [...input.scope.forbidden, ...(input.alwaysForbidden ?? [])];
 
   const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
   if (forbiddenHits.length > 0) {
@@ -405,6 +408,8 @@ export function reconcileTaskDiff(input: {
   readonly before?: DiffObservation;
   /** Harness-written paths to exclude; see `reconcileDiff`. */
   readonly harnessPaths?: readonly string[];
+  /** Forbidden regardless of contract; see `reconcileDiff`. */
+  readonly alwaysForbidden?: readonly string[];
 }): ReconciliationResult {
   const observed = observeWorkingTreeDiff(input);
   if (observed.observation === undefined) return observed;
@@ -427,10 +432,48 @@ export function reconcileTaskDiff(input: {
     delta.baseGitSha
   );
 
-  const violations = reconcileDiff({ observation: attributable, scope: input.scope });
+  const violations = reconcileDiff({
+    observation: attributable,
+    scope: input.scope,
+    ...(input.alwaysForbidden === undefined ? {} : { alwaysForbidden: input.alwaysForbidden })
+  });
   return {
     status: violations.length === 0 ? "clean" : "violated",
     observation: attributable,
     violations
   };
+}
+
+/**
+ * Restore paths to their state at `baseGitSha`, discarding whatever a run wrote.
+ *
+ * Detecting a forbidden write is not enough on its own: if the offending file
+ * stays on disk, the next command reads it. Control artifacts are exactly the
+ * files later stages reload, so a rewrite that is merely *reported* is still a
+ * rewrite that gets consumed. Restoring is what turns detection into
+ * containment.
+ *
+ * Returns the paths it could not restore, so the caller can say so rather than
+ * implying the tree is clean.
+ */
+export function restorePathsToBase(input: {
+  readonly repositoryRoot: string;
+  readonly baseGitSha: string;
+  readonly paths: readonly string[];
+}): readonly string[] {
+  const failed: string[] = [];
+  for (const filePath of input.paths) {
+    try {
+      git(input.repositoryRoot, ["checkout", input.baseGitSha, "--", filePath]);
+      continue;
+    } catch {
+      // Not present at the base commit, so restoring means removing it.
+    }
+    try {
+      rmSync(path.join(input.repositoryRoot, filePath), { force: true });
+    } catch {
+      failed.push(filePath);
+    }
+  }
+  return failed;
 }

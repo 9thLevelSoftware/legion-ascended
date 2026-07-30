@@ -1,4 +1,5 @@
 import {
+  LEGION_PROJECT_ROOT,
   readEvidenceIndex,
   readTaskGraph,
   writeEvidenceIndex,
@@ -31,6 +32,7 @@ import {
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
+import { runGuardedExecution } from "../../workflow/guarded-execution.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
@@ -605,26 +607,54 @@ async function runAutoFixCycle(
     artifactPath: promptArtifactPath,
     text: prompt
   });
-  await adapterForKind(executor).run({
+  // The fix executor writes, so it is subject to the same reconciliation the
+  // build path applies. Without this the auto-review loop is an unguarded door
+  // into the repository: the fix run could rewrite
+  // .legion/project/changes/<id>/taskgraph.json, and the refresh build that
+  // follows snapshots the tree *before* its own dispatch — so the tampering is
+  // already present, gets attributed to no one, and review and ship then load
+  // the altered contract.
+  const guarded = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
-    changeId,
-    runId,
     task,
-    mode: "fix",
-    executor,
-    readOnly: false,
-    prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
-    promptArtifactPath,
-    promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
-    resultArtifactPath,
-    resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
-    rawLogArtifactPath,
-    rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+    harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    run: () =>
+      adapterForKind(executor).run({
+        repositoryRoot: context.repositoryRoot,
+        changeId,
+        runId,
+        task,
+        mode: "fix",
+        executor,
+        readOnly: false,
+        prompt,
+        contextPackArtifactPath,
+        contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
+        promptArtifactPath,
+        promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
+        resultArtifactPath,
+        resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
+        rawLogArtifactPath,
+        rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
+        redactedLogArtifactPath,
+        redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
+      })
   });
+
+  if (!guarded.inContract) {
+    throw new AutoFixScopeError(
+      guarded.blockedReason ?? "The auto-fix run left the task contract."
+    );
+  }
+}
+
+/** Raised when an auto-fix run writes outside the contract it was fixing. */
+export class AutoFixScopeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AutoFixScopeError";
+  }
 }
 
 export function reviewDecisionForExecution(input: {
