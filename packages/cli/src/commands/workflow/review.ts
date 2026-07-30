@@ -1,4 +1,5 @@
 import {
+  LEGION_PROJECT_ROOT,
   readEvidenceIndex,
   readTaskGraph,
   writeEvidenceIndex,
@@ -31,6 +32,11 @@ import {
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
+import {
+  observeWorkingTreeDiff,
+  reconcileTaskDiff,
+  reconciliationBlocks
+} from "../../workflow/diff-reconciliation.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
@@ -605,6 +611,18 @@ async function runAutoFixCycle(
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  // The fix executor writes, so it is subject to the same reconciliation the
+  // build path applies. Without this the auto-review loop is an unguarded door
+  // into the repository: the fix run could rewrite
+  // .legion/project/changes/<id>/taskgraph.json, and the refresh build that
+  // follows snapshots the tree *before* its own dispatch — so the tampering is
+  // already present, gets attributed to no one, and review and ship then load
+  // the altered contract.
+  const beforeFix = observeWorkingTreeDiff({
+    repositoryRoot: context.repositoryRoot,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  }).observation;
+
   await adapterForKind(executor).run({
     repositoryRoot: context.repositoryRoot,
     changeId,
@@ -625,6 +643,31 @@ async function runAutoFixCycle(
     redactedLogArtifactPath,
     redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
   });
+
+  const reconciliation = reconcileTaskDiff({
+    repositoryRoot: context.repositoryRoot,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+    scope: task.scope,
+    harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    alwaysForbidden: [LEGION_PROJECT_ROOT],
+    ...(beforeFix === undefined ? {} : { before: beforeFix })
+  });
+
+  if (reconciliationBlocks(reconciliation)) {
+    throw new AutoFixScopeError(
+      `The auto-fix run left the task contract: ${reconciliation.violations
+        .map((violation) => violation.message)
+        .join(" ")}`.trim()
+    );
+  }
+}
+
+/** Raised when an auto-fix run writes outside the contract it was fixing. */
+export class AutoFixScopeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AutoFixScopeError";
+  }
 }
 
 export function reviewDecisionForExecution(input: {

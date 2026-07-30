@@ -30037,6 +30037,10 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  const beforeFix = observeWorkingTreeDiff({
+    repositoryRoot: context.repositoryRoot,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  }).observation;
   await adapterForKind(executor).run({
     repositoryRoot: context.repositoryRoot,
     changeId,
@@ -30057,7 +30061,26 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     redactedLogArtifactPath,
     redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
   });
+  const reconciliation = reconcileTaskDiff({
+    repositoryRoot: context.repositoryRoot,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+    scope: task.scope,
+    harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    alwaysForbidden: [LEGION_PROJECT_ROOT],
+    ...beforeFix === void 0 ? {} : { before: beforeFix }
+  });
+  if (reconciliationBlocks(reconciliation)) {
+    throw new AutoFixScopeError(
+      `The auto-fix run left the task contract: ${reconciliation.violations.map((violation) => violation.message).join(" ")}`.trim()
+    );
+  }
 }
+var AutoFixScopeError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "AutoFixScopeError";
+  }
+};
 function reviewDecisionForExecution(input) {
   const evidenceRefs = input.evidenceEntries.map((entry) => entry.evidence.id);
   const findings = input.result.findings.map((finding, index) => reviewFindingForExecution(finding, evidenceRefs, index));
