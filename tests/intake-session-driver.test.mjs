@@ -1203,3 +1203,119 @@ test("an abandoned session reservation does not block initialization", async (t)
   assert.equal(finalize.exitCode, 0, finalize.stderr);
   assert.equal(parseJsonOutput(finalize).projectStatus, "initialized");
 });
+
+test("answers to injected exploration questions reach the requirement set", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await seedExplorationRun(root);
+
+  await run("start", "--from-exploration", "explore-1", "--json", "--created-at", CREATED_AT);
+  const answers = { ...ANSWERS, "open-which-runtime": "Node 24, no browser build" };
+
+  for (let guard = 0; guard < 200; guard += 1) {
+    const next = parseJsonOutput(await run("start", "--next", "--json"));
+    if (next.status === "complete") break;
+    const nodeId = next.question.nodeId;
+    const value = answers[nodeId];
+    if (value === undefined) {
+      assert.equal(next.question.required, false, `no scripted answer for ${nodeId}`);
+      await run("start", "--skip");
+      continue;
+    }
+    const result = await run("start", "--answer", `${nodeId}=${value}`);
+    assert.equal(result.exitCode, 0, `${nodeId}: ${result.stderr}`);
+  }
+
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+
+  // The C0 contract is that exploration may only add questions, so a fuzzier
+  // idea produces a longer interview. That only means something if the answers
+  // are usable: requirementDrafts reads the built-in req-<n>-* slots only, so an
+  // injected answer was recorded and consumed by nothing, and two interviews
+  // disagreeing about an injected constraint produced identical contracts.
+  const index = JSON.parse(
+    await readFile(path.join(root, ".legion/project/requirements/index.json"), "utf8")
+  );
+  const resolved = index.resolvedQuestions ?? [];
+  assert.equal(resolved.length, 1, `expected the injected answer, got ${JSON.stringify(resolved)}`);
+  assert.equal(resolved[0].nodeId, "open-which-runtime");
+  assert.equal(resolved[0].answer, "Node 24, no browser build");
+  assert.equal(resolved[0].fromExploration, "run_explore-1");
+});
+
+test("a second session cannot overwrite another session's requirement set", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const first = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  // Concurrent starts are preserved and --session can complete either, so two
+  // valid interviews could silently replace each other's durable contracts and
+  // delete the requirements the other authored.
+  const second = parseJsonOutput(
+    await run("start", "--next", "--json", "--created-at", "2026-07-30T13:00:00.000Z")
+  );
+  assert.notEqual(second.session.id, first.session.id);
+  await run("start", "--session", second.session.id, "--intake", "intake.json");
+
+  const clash = await run("start", "--finalize", "--session", second.session.id, "--json");
+  assert.equal(clash.exitCode, 1);
+  assert.equal(parseJsonOutput(clash).status, "requirement_set_conflict");
+
+  // The first session's set is intact, and re-finalizing it still works.
+  const index = JSON.parse(
+    await readFile(path.join(root, ".legion/project/requirements/index.json"), "utf8")
+  );
+  assert.equal(index.intakeSessionId, first.session.id);
+  assert.equal(
+    (await run("start", "--finalize", "--session", first.session.id, "--json")).exitCode,
+    0
+  );
+});
+
+test("planning refuses a corrupt requirement set instead of falling back", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(
+    path.join(root, "intake.json"),
+    JSON.stringify({ ...ANSWERS, "risk-tier": "R3", "budget-files": "3", "budget-new-files": "1" }),
+    "utf8"
+  );
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  await writeFile(path.join(root, ...finalize.requirementSet.paths[0].split("/")), "{ not json", "utf8");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "intake"]);
+
+  // `not_found` means no interview and repository defaults apply. `invalid`
+  // means the set exists and is damaged — treating them alike silently emitted
+  // a task under an R2 default the operator never chose.
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 1);
+  assert.equal(parseJsonOutput(planned).status, "requirement_set_invalid");
+});
+
+test("requirement text is bounded at the question, not at the schema", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  // Under the session cap of 8192 but over the requirement schema's 2048, so it
+  // used to pass both validation layers and throw out of requirementSchema.parse
+  // during --finalize — a stack trace where the operator should have got the
+  // question back.
+  await writeFile(
+    path.join(root, "intake.json"),
+    JSON.stringify({ ...ANSWERS, "req-1-statement": "x".repeat(3_000) }),
+    "utf8"
+  );
+
+  const applied = await run("start", "--intake", "intake.json", "--json", "--created-at", CREATED_AT);
+  assert.equal(applied.exitCode, 1);
+  assert.ok(
+    applied.stdout.includes("req-1-statement") || applied.stderr.includes("req-1-statement"),
+    "the over-long statement should be reported against its node"
+  );
+  assert.doesNotMatch(applied.stderr, /ZodError|Unhandled/);
+});

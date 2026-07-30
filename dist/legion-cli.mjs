@@ -18860,6 +18860,22 @@ var requirementSetSchema = strictObject({
       args: array(string2().max(256)).max(64)
     })
   }).optional(),
+  /**
+   * Answers to questions a brainstorm injected.
+   *
+   * Exploration's open questions become required intake nodes, so the operator
+   * must answer them — and `requirementDrafts` only reconstructs the built-in
+   * `req-<n>-*` slots, so those answers had nowhere to go. Two interviews
+   * giving opposite answers to an injected constraint produced byte-identical
+   * contracts, and the decision survived only in the session file.
+   */
+  resolvedQuestions: array(strictObject({
+    nodeId: string2().min(1).max(64),
+    slot: string2().min(1).max(64),
+    question: string2().min(1).max(1024),
+    answer: string2().min(1).max(8192),
+    fromExploration: string2().min(1).max(64)
+  })).optional(),
   entries: array(requirementSetEntrySchema)
 }).superRefine((set, context) => {
   const seen = /* @__PURE__ */ new Set();
@@ -18964,6 +18980,7 @@ async function writeRequirementSet(input) {
     ...input.intakeSessionId === void 0 ? {} : { intakeSessionId: input.intakeSessionId },
     ...input.graphVersion === void 0 ? {} : { graphVersion: input.graphVersion },
     ...input.enforcement === void 0 ? {} : { enforcement: input.enforcement },
+    ...input.resolvedQuestions === void 0 || input.resolvedQuestions.length === 0 ? {} : { resolvedQuestions: input.resolvedQuestions },
     requirementSetHash: computeRequirementSetHash(input.requirements),
     entries
   });
@@ -26956,6 +26973,15 @@ function validateSlotText(node, value) {
     if ("error" in parsed) return fail("invalid_command", parsed.error);
     return void 0;
   }
+  if (/^requirements\.\d+\.statement$/.test(node.slot) && value.length > 2048) {
+    return fail("too_long", "Keep the requirement to 2048 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.statement$/.test(node.slot) && value.length > 1024) {
+    return fail("too_long", "Keep the criterion to 1024 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.detail$/.test(node.slot) && value.length > 1024) {
+    return fail("too_long", "Keep the command or reason to 1024 characters or fewer.");
+  }
   return void 0;
 }
 function slugFromText(value) {
@@ -27319,6 +27345,23 @@ function enforcementPolicy(answers) {
     budget: { maxFilesChanged, maxLinesChanged, maxNewFiles },
     verification: { command: command.command, args: [...command.args] }
   };
+}
+function resolvedOpenQuestions(session) {
+  const answers = new Map(session.answers.map((answer) => [answer.nodeId, answer.value]));
+  const resolved = [];
+  for (const node of session.injectedNodes) {
+    const value = answers.get(node.nodeId);
+    const text = typeof value === "string" ? value : Array.isArray(value) ? value.join(", ") : String(value ?? "");
+    if (text.trim().length === 0) continue;
+    resolved.push({
+      nodeId: node.nodeId,
+      slot: node.slot,
+      question: node.prompt,
+      answer: text,
+      fromExploration: node.origin.runId
+    });
+  }
+  return resolved;
 }
 
 // packages/cli/src/workflow/intake/exploration-source.ts
@@ -29241,6 +29284,23 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     schemaVersion: LEGION_PROTOCOL_VERSION,
     intakeSessionPath: intakeSessionArtifactPath2(session.id)
   });
+  const existingSet = await readRequirementSet(context.repositoryRoot);
+  if (existingSet.ok && existingSet.set.intakeSessionId !== void 0 && existingSet.set.intakeSessionId !== session.id) {
+    return failure(
+      {
+        ok: false,
+        status: "requirement_set_conflict",
+        session: sessionPayload(session, answered, total),
+        diagnostics: [
+          {
+            code: "requirement_set_conflict",
+            message: `This project's requirement set was written by intake session ${existingSet.set.intakeSessionId}. Finalizing ${session.id} would replace it and delete requirements it authored. Abort one of the interviews, or start from a clean project.`
+          }
+        ]
+      },
+      `Refusing to replace the requirement set written by ${existingSet.set.intakeSessionId}.`
+    );
+  }
   const enforcement = enforcementPolicy(session.answers);
   if (enforcement === void 0) {
     notes.push(
@@ -29254,6 +29314,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     intakeSessionId: session.id,
     graphVersion: session.graphVersion,
     ...enforcement === void 0 ? {} : { enforcement },
+    resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
   const roadmapPath = path25.join(context.repositoryRoot, ROADMAP_FILE);
@@ -30644,6 +30705,18 @@ async function handlePlanWorkflow(context) {
     return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
   }
   const requirementSet = await readRequirementSet(context.repositoryRoot);
+  if (!requirementSet.ok && requirementSet.status === "invalid") {
+    return failure(
+      {
+        ok: false,
+        status: "requirement_set_invalid",
+        diagnostics: [{ code: "requirement_set_invalid", message: requirementSet.reason }],
+        nextAction: nextAction("legion validate", "Repair the requirement set before planning against it.")
+      },
+      `The requirement set is invalid, so planning would silently use defaults instead of the recorded policy.
+  - ${requirementSet.reason}`
+    );
+  }
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : void 0;
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,

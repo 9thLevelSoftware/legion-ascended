@@ -15,6 +15,7 @@ import {
 } from "@legion/artifacts";
 import {
   requirementSchema,
+  type IntakeSession,
   type ProjectId,
   type RiskTier,
   type Requirement,
@@ -397,4 +398,35 @@ export function enforcementPolicy(
     budget: { maxFilesChanged, maxLinesChanged, maxNewFiles },
     verification: { command: command.command, args: [...command.args] }
   };
+}
+
+/**
+ * Answers to the questions exploration injected.
+ *
+ * The C0 contract is that a brainstorm may only *add* questions, so an
+ * unresolved idea produces a longer interview. That only means something if the
+ * answers are then usable: `requirementDrafts` reads the built-in `req-<n>-*`
+ * slots only, so an injected answer was recorded in the session and consumed by
+ * nothing. Two interviews disagreeing about an injected constraint produced
+ * byte-identical contracts.
+ */
+export function resolvedOpenQuestions(
+  session: IntakeSession
+): NonNullable<RequirementSet["resolvedQuestions"]> {
+  const answers = new Map(session.answers.map((answer) => [answer.nodeId, answer.value]));
+  const resolved: NonNullable<RequirementSet["resolvedQuestions"]> = [];
+
+  for (const node of session.injectedNodes) {
+    const value = answers.get(node.nodeId);
+    const text = typeof value === "string" ? value : Array.isArray(value) ? value.join(", ") : String(value ?? "");
+    if (text.trim().length === 0) continue;
+    resolved.push({
+      nodeId: node.nodeId,
+      slot: node.slot,
+      question: node.prompt,
+      answer: text,
+      fromExploration: node.origin.runId
+    });
+  }
+  return resolved;
 }

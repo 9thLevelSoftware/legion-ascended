@@ -15,7 +15,12 @@
 import { lstat, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { initProject, updateConstitution, writeRequirementSet } from "@legion/artifacts";
+import {
+  initProject,
+  readRequirementSet,
+  updateConstitution,
+  writeRequirementSet
+} from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
   projectSchema,
@@ -34,7 +39,13 @@ import {
 } from "../../runtime.js";
 import { createdAtOption, ownerActor, repositoryReference, slugFromName } from "../input.js";
 import { nextAction, renderNextAction } from "../render.js";
-import { buildRequirements, enforcementPolicy, renderConstitution, renderRoadmap } from "./finalize.js";
+import {
+  buildRequirements,
+  enforcementPolicy,
+  renderConstitution,
+  renderRoadmap,
+  resolvedOpenQuestions
+} from "./finalize.js";
 import { INTAKE_GRAPH_VERSION, findNode, nextNode, type IntakeNode } from "./graph.js";
 import { loadExploration, listExplorations } from "./exploration-source.js";
 import { renderIntakeDiagnostics, renderQuestion, renderSessionStatus } from "./render.js";
@@ -1063,6 +1074,36 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     intakeSessionPath: intakeSessionArtifactPath(session.id)
   });
 
+  // Two sessions can now both reach finalize, because the allocator preserves
+  // concurrent starts and --session can complete either. Writing unconditionally
+  // meant the second replaced the first's requirement set and deleted its
+  // unmatched req_*.json files — two valid interviews silently overwriting each
+  // other's durable contracts.
+  const existingSet = await readRequirementSet(context.repositoryRoot);
+  if (
+    existingSet.ok &&
+    existingSet.set.intakeSessionId !== undefined &&
+    existingSet.set.intakeSessionId !== session.id
+  ) {
+    return failure(
+      {
+        ok: false,
+        status: "requirement_set_conflict",
+        session: sessionPayload(session, answered, total),
+        diagnostics: [
+          {
+            code: "requirement_set_conflict",
+            message:
+              `This project's requirement set was written by intake session ${existingSet.set.intakeSessionId}. ` +
+              `Finalizing ${session.id} would replace it and delete requirements it authored. ` +
+              `Abort one of the interviews, or start from a clean project.`
+          }
+        ]
+      },
+      `Refusing to replace the requirement set written by ${existingSet.set.intakeSessionId}.`
+    );
+  }
+
   // The risk tier, budgets and verification command the operator chose are
   // recorded with the requirement set, because planning reads them from there.
   // Left in the session they would be answers nobody consumes.
@@ -1080,6 +1121,7 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     intakeSessionId: session.id,
     graphVersion: session.graphVersion,
     ...(enforcement === undefined ? {} : { enforcement }),
+    resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
 

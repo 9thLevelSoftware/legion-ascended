@@ -77,6 +77,26 @@ export const requirementSetSchema = z
         })
       })
       .optional(),
+    /**
+     * Answers to questions a brainstorm injected.
+     *
+     * Exploration's open questions become required intake nodes, so the operator
+     * must answer them — and `requirementDrafts` only reconstructs the built-in
+     * `req-<n>-*` slots, so those answers had nowhere to go. Two interviews
+     * giving opposite answers to an injected constraint produced byte-identical
+     * contracts, and the decision survived only in the session file.
+     */
+    resolvedQuestions: z
+      .array(
+        z.strictObject({
+          nodeId: z.string().min(1).max(64),
+          slot: z.string().min(1).max(64),
+          question: z.string().min(1).max(1_024),
+          answer: z.string().min(1).max(8_192),
+          fromExploration: z.string().min(1).max(64)
+        })
+      )
+      .optional(),
     entries: z.array(requirementSetEntrySchema)
   })
   .superRefine((set, context) => {

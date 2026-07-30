@@ -149,6 +149,23 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   // requirement set is visibly a different case from one whose operator chose
   // the repository-wide limits.
   const requirementSet = await readRequirementSet(context.repositoryRoot);
+  // `not_found` is a project that never held an interview, which plans on
+  // repository defaults. `invalid` is a requirement set that exists and is
+  // damaged — treating the two alike silently dropped the recorded risk tier,
+  // budget and verification command and emitted a task under defaults the
+  // operator never chose.
+  if (!requirementSet.ok && requirementSet.status === "invalid") {
+    return failure(
+      {
+        ok: false,
+        status: "requirement_set_invalid",
+        diagnostics: [{ code: "requirement_set_invalid", message: requirementSet.reason }],
+        nextAction: nextAction("legion validate", "Repair the requirement set before planning against it.")
+      },
+      `The requirement set is invalid, so planning would silently use defaults instead of the recorded policy.
+  - ${requirementSet.reason}`
+    );
+  }
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : undefined;
 
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({

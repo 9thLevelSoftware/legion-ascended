@@ -301,6 +301,21 @@ function validateSlotText(node: IntakeNode, value: string): IntakeDiagnostic | u
     return undefined;
   }
 
+  // The requirement schema caps a statement at 2048 characters and a criterion
+  // statement or manual reason at 1024, while an answer may be up to 8192. An
+  // over-long value therefore passed both validation layers and threw out of
+  // `requirementSchema.parse` during --finalize, where the operator gets a stack
+  // trace instead of the question back.
+  if (/^requirements\.\d+\.statement$/.test(node.slot) && value.length > 2_048) {
+    return fail("too_long", "Keep the requirement to 2048 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.statement$/.test(node.slot) && value.length > 1_024) {
+    return fail("too_long", "Keep the criterion to 1024 characters or fewer.");
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.detail$/.test(node.slot) && value.length > 1_024) {
+    return fail("too_long", "Keep the command or reason to 1024 characters or fewer.");
+  }
+
   // A criterion's detail carries either the command that decides it or the
   // reason no command can. Which one is settled by the proof node, which the
   // single-answer path cannot see, so the check lives in `validateAnswerSet`.
