@@ -9,7 +9,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -23,7 +23,7 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
-import { PROJECT_ARTIFACT_PATHS } from "../paths.js";
+import { ArtifactPathError, PROJECT_ARTIFACT_PATHS, ensureProjectArtifactParent } from "../paths.js";
 import {
   REQUIREMENT_SET_SCHEMA_VERSION,
   requirementSetSchema,
@@ -72,11 +72,47 @@ function hashBytes(bytes: string): ContentHash {
   return contentHashSchema.parse(`sha256:${createHash("sha256").update(bytes, "utf8").digest("hex")}`);
 }
 
-async function writeAtomic(target: string, contents: string): Promise<void> {
-  await mkdir(path.dirname(target), { recursive: true });
-  const temporary = `${target}.tmp`;
+/**
+ * Write one artifact through the repository's own path guards.
+ *
+ * `ensureProjectArtifactParent` is what rejects a path that leaves the
+ * repository, whether through a symlinked ancestor or a symlinked final
+ * component. Joining a path by hand and writing to it skips all of that: a
+ * symlinked `.legion/project/requirements` would send every predictably-named
+ * `req_*.json` outside the repository, and the cleanup pass would then delete
+ * unrelated files that happened to match the pattern.
+ */
+async function writeProjectArtifact(
+  repositoryRoot: string,
+  artifactPath: string,
+  contents: string
+): Promise<void> {
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
+  const temporary = `${resolved.absolutePath}.tmp`;
   await writeFile(temporary, contents, "utf8");
-  await rename(temporary, target);
+  await rename(temporary, resolved.absolutePath);
+}
+
+/**
+ * The requirements directory, refused unless it is a real directory inside the
+ * repository.
+ *
+ * Checked before the cleanup pass as well as before writing, because deleting
+ * through a symlink is the more damaging half.
+ */
+async function resolveRequirementsRoot(repositoryRoot: string): Promise<string> {
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot,
+    artifactPath: requirementSetIndexPath()
+  });
+  const root = path.dirname(resolved.absolutePath);
+  const stats = await lstat(root);
+  if (!stats.isDirectory()) {
+    throw new ArtifactPathError(
+      `${PROJECT_ARTIFACT_PATHS.requirements} is not a directory; refusing to write the requirement set through it.`
+    );
+  }
+  return root;
 }
 
 export interface WriteRequirementSetInput {
@@ -106,8 +142,7 @@ export async function writeRequirementSet(
   input: WriteRequirementSetInput
 ): Promise<WriteRequirementSetResult> {
   const createdAt = input.createdAt ?? utcTimestampSchema.parse(new Date().toISOString());
-  const root = requirementsRoot(input.repositoryRoot);
-  await mkdir(root, { recursive: true });
+  const root = await resolveRequirementsRoot(input.repositoryRoot);
 
   const entries: RequirementSetEntry[] = [];
   const written = new Set<string>();
@@ -117,7 +152,7 @@ export async function writeRequirementSet(
     const parsed = requirementSchema.parse(requirement);
     const contents = `${JSON.stringify(parsed, undefined, 2)}\n`;
     const relative = requirementArtifactPath(parsed.id);
-    await writeAtomic(path.join(input.repositoryRoot, ...relative.split("/")), contents);
+    await writeProjectArtifact(input.repositoryRoot, relative, contents);
     written.add(`${parsed.id}.json`);
     requirementPaths.push(relative);
     entries.push(
@@ -141,12 +176,15 @@ export async function writeRequirementSet(
   });
 
   const indexRelative = requirementSetIndexPath();
-  await writeAtomic(
-    path.join(input.repositoryRoot, ...indexRelative.split("/")),
+  await writeProjectArtifact(
+    input.repositoryRoot,
+    indexRelative,
     `${JSON.stringify(set, undefined, 2)}\n`
   );
 
   for (const entry of await readdir(root, { withFileTypes: true })) {
+    // `isFile` is false for a symlink, so a planted link is left alone rather
+    // than followed and unlinked through.
     if (!entry.isFile()) continue;
     if (entry.name === REQUIREMENT_SET_INDEX_FILE) continue;
     if (written.has(entry.name)) continue;

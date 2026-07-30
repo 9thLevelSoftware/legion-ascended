@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -404,5 +404,229 @@ test("direct initialization still works and says what it skipped", async (t) => 
   assert.ok(
     payload.warnings.some((entry) => entry.code === "intake_skipped"),
     "skipping the interview should be visible, not silent"
+  );
+});
+
+/** Stand up a guidance run the way `legion explore` does. */
+async function seedExplorationRun(root) {
+  const runId = "explore-1";
+  const artifactDir = path.join(root, ".legion/project/workflow/explore", runId);
+  await mkdir(artifactDir, { recursive: true });
+  const explorationPath = `.legion/project/workflow/explore/${runId}/exploration.json`;
+  const exploration = {
+    schemaVersion: "0.2.0",
+    createdAt: CREATED_AT,
+    kind: "exploration",
+    runId: "run_explore-1",
+    status: "exploratory",
+    entry: "raw-idea",
+    topic: "asset mapping",
+    summary: "An idea about resolving assets.",
+    proposals: [
+      {
+        slot: "project.name",
+        value: "Asset Mapper",
+        rationale: "The topic named it.",
+        anchor: "framing",
+        confidence: "inferred"
+      }
+    ],
+    openQuestions: [
+      { nodeId: "which-runtime", slot: "open.runtime", question: "Which runtime?", why: "unsettled" }
+    ],
+    notes: []
+  };
+  await writeFile(path.join(artifactDir, "exploration.json"), JSON.stringify(exploration), "utf8");
+  await writeFile(
+    path.join(artifactDir, "workflow-run.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      kind: "workflow_run",
+      workflow: "explore",
+      runId,
+      createdAt: CREATED_AT,
+      status: "completed",
+      input: { topic: "asset mapping" },
+      outputs: { explorationArtifactPath: explorationPath },
+      nextAction: { command: "legion start", reason: "seed intake" },
+      diagnostics: []
+    }),
+    "utf8"
+  );
+  return { runId, artifactDir, exploration };
+}
+
+test("--from-exploration is honoured when the printed advice is followed", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await seedExplorationRun(root);
+
+  // The no-argument start creates an unseeded session and prints
+  // "--from-exploration <runId>". Resuming that session before reading the
+  // option meant following the printed advice silently discarded the
+  // exploration — every proposal and every open question with it.
+  const first = await run("start", "--next", "--json", "--created-at", CREATED_AT);
+  const firstPayload = parseJsonOutput(first);
+  assert.equal(firstPayload.session.injectedNodes, 0);
+  assert.ok(
+    firstPayload.availableExplorations.some((entry) => entry.runId === "explore-1"),
+    "the exploration should be offered"
+  );
+
+  const seeded = await run(
+    "start", "--from-exploration", "explore-1", "--json", "--created-at", "2026-07-30T13:00:00.000Z"
+  );
+  assert.equal(seeded.exitCode, 0, seeded.stderr);
+  const seededPayload = parseJsonOutput(seeded);
+  assert.notEqual(seededPayload.session.id, firstPayload.session.id);
+  assert.equal(seededPayload.session.explorationRunId, "run_explore-1");
+  assert.equal(seededPayload.session.injectedNodes, 1);
+  assert.equal(seededPayload.question.proposal?.value, "Asset Mapper");
+});
+
+test("--from-exploration refuses to discard an interview in progress", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await seedExplorationRun(root);
+
+  await run("start", "--next", "--json", "--created-at", CREATED_AT);
+  await run("start", "--answer", "project-name=Asset Mapper");
+
+  // Silently replacing a session with answers would lose work; silently
+  // resuming would ignore the option. Refusing says which is happening.
+  const seeded = await run("start", "--from-exploration", "explore-1", "--json");
+  assert.equal(seeded.exitCode, 1);
+  assert.match(parseJsonOutput(seeded).diagnostics[0].message, /--abort/);
+});
+
+test("two sessions sharing a --created-at do not overwrite each other", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  const first = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+  await run("start", "--answer", "project-name=First Project");
+  await run("start", "--abort");
+
+  // The ID derives from the timestamp, so the same --created-at would produce
+  // the same ID and saveSession would replace the earlier record — erasing a
+  // durable decision record that requirement trace references point at.
+  const second = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+  assert.notEqual(second.session.id, first.session.id);
+
+  const earlier = JSON.parse(
+    await readFile(path.join(root, ".legion/project/intake", first.session.id, "session.json"), "utf8")
+  );
+  assert.equal(earlier.status, "aborted");
+  assert.equal(earlier.answers[0].value, "First Project", "the first session's answers must survive");
+});
+
+test("a corrupt session stops the command instead of being stepped over", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const started = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+
+  await writeFile(
+    path.join(root, ".legion/project/intake", started.session.id, "session.json"),
+    "{ not json",
+    "utf8"
+  );
+
+  // Skipping it would resume an older interview or open a new one while the
+  // record of the interview in progress sat corrupt, and the operator would be
+  // answering a different session without being told.
+  const next = await run("start", "--next", "--json");
+  assert.equal(next.exitCode, 1);
+  const payload = parseJsonOutput(next);
+  assert.equal(payload.status, "invalid_session");
+  assert.match(payload.diagnostics[0].message, new RegExp(started.session.id));
+});
+
+test("finalize refuses when the interview disagrees with an initialized project", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  // Direct initialization first, then an interview naming a different project.
+  // initProject returns already_initialized and applies none of the interview's
+  // identity, so reporting success would leave project.json — which downstream
+  // context and escalation read — disagreeing with what was just agreed.
+  await run("start", "--name", "Original Name", "--owner", "someone-else");
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+
+  const finalize = await run("start", "--finalize", "--json");
+  assert.equal(finalize.exitCode, 1);
+  const payload = parseJsonOutput(finalize);
+  assert.equal(payload.status, "identity_conflict");
+  assert.ok(
+    payload.diagnostics.some((entry) => /Original Name/.test(entry.message)),
+    `the conflict should name both values, got ${JSON.stringify(payload.diagnostics)}`
+  );
+});
+
+test("re-finalizing is byte-identical even when the first run set --created-at", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+
+  // The first finalize passes --created-at; the documented forced-roadmap retry
+  // does not. Honouring the flag here would rewrite every requirement timestamp
+  // on the retry and change the hash, during what the command calls an
+  // identical re-render.
+  const first = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", "2026-01-01T00:00:00.000Z")
+  );
+  const requirementPath = path.join(root, ...first.requirementSet.paths[0].split("/"));
+  const before = await readFile(requirementPath, "utf8");
+
+  const second = parseJsonOutput(
+    await run("start", "--finalize", "--session", first.session.id, "--json")
+  );
+  assert.equal(second.requirementSet.requirementSetHash, first.requirementSet.requirementSetHash);
+  assert.equal(await readFile(requirementPath, "utf8"), before);
+});
+
+test("a symlinked requirements directory is refused, not written through", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const outside = await mkdtemp(path.join(tmpdir(), "legion-outside-"));
+  t.after(() => rm(outside, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+
+  // A bystander file that the cleanup pass would delete: it matches `req_*.json`
+  // but belongs to whoever owns the directory the link points at.
+  const bystander = path.join(outside, "req_someone-elses.json");
+  await writeFile(bystander, "{}\n", "utf8");
+
+  await mkdir(path.join(root, ".legion/project"), { recursive: true });
+  try {
+    await symlink(outside, path.join(root, ".legion/project/requirements"), "dir");
+  } catch (error) {
+    if (error?.code === "EPERM") return t.skip("symlink creation is not permitted here");
+    throw error;
+  }
+
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+
+  // Writing by hand-joined path would have followed the link, scattering
+  // predictably-named requirement files outside the repository and deleting the
+  // bystander on the way past.
+  assert.equal(finalize.exitCode, 1, "finalizing through a symlinked control directory must be refused");
+  assert.equal(await readFile(bystander, "utf8"), "{}\n", "an unrelated file must not be touched");
+});
+
+test("a requirements path that is not a directory is refused", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  // The symlink case above is the dangerous one, but it cannot run where
+  // symlink creation needs elevation. A plain file exercises the same guard —
+  // that the requirements root is resolved and checked rather than assumed —
+  // on every platform.
+  await mkdir(path.join(root, ".legion/project"), { recursive: true });
+  await writeFile(path.join(root, ".legion/project/requirements"), "not a directory\n", "utf8");
+
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+
+  assert.equal(finalize.exitCode, 1);
+  assert.equal(
+    await readFile(path.join(root, ".legion/project/requirements"), "utf8"),
+    "not a directory\n",
+    "the blocking file must be left as it was"
   );
 });

@@ -40,6 +40,7 @@ import { loadExploration, listExplorations } from "./exploration-source.js";
 import { renderIntakeDiagnostics, renderQuestion, renderSessionStatus } from "./render.js";
 import {
   abortSession,
+  allocateSessionId,
   createSession,
   finalizeSession,
   findActiveSession,
@@ -193,17 +194,40 @@ async function resolveSession(
     };
   }
 
-  const active = await findActiveSession(context.repositoryRoot);
+  const explorationRunId = stringOption(context, "from-exploration");
+  const found = await findActiveSession(context.repositoryRoot);
+  // A corrupt session stops everything rather than being stepped over: resuming
+  // an older interview, or quietly opening a new one, would have the operator
+  // answering a different session than the record on disk describes.
+  if (!found.ok) return failure({ ok: false, status: "invalid_session", diagnostics: [{ code: "corrupt_session", message: found.reason }] }, found.reason);
+
+  const active = found.session;
   if (active !== undefined) {
-    const stale = graphVersionMismatch(active);
-    if (stale !== undefined) return usageError(stale);
-    const seeded = await proposalsFor(context.repositoryRoot, active);
-    return {
-      session: active,
-      proposals: seeded.proposals,
-      created: false,
-      notes: seeded.diagnostics
-    };
+    // `--from-exploration` only applies at session creation, and the no-argument
+    // start prints exactly this command when it finds explorations. Resuming
+    // before reading the option meant following that advice silently discarded
+    // the chosen exploration — every proposal and every open question with it.
+    if (explorationRunId !== undefined && active.explorationRef?.runId !== explorationRunId) {
+      if (active.answers.length > 0) {
+        return usageError(
+          `Session ${active.id} is already in progress with ${active.answers.length} answer(s), and seeding only applies when a session is created. ` +
+            `Run legion start --abort --session ${active.id} first if you want to restart from exploration ${explorationRunId}.`
+        );
+      }
+      // Nothing has been answered, so replacing it loses no work. Abort rather
+      // than delete: the abandoned session stays on disk as a record.
+      await saveSession(context.repositoryRoot, abortSession(active));
+    } else {
+      const stale = graphVersionMismatch(active);
+      if (stale !== undefined) return usageError(stale);
+      const seeded = await proposalsFor(context.repositoryRoot, active);
+      return {
+        session: active,
+        proposals: seeded.proposals,
+        created: false,
+        notes: seeded.diagnostics
+      };
+    }
   }
 
   if (!options.create) {
@@ -213,11 +237,16 @@ async function resolveSession(
   }
 
   const createdAt = createdAtOption(context) ?? nowTimestamp();
-  const explorationRunId = stringOption(context, "from-exploration");
+  // Allocated against the filesystem, not derived from the timestamp alone: two
+  // starts sharing a `--created-at` would otherwise share an ID, and saving the
+  // second would overwrite the first session's durable record.
+  const sessionId = await allocateSessionId(context.repositoryRoot, createdAt);
+
   if (explorationRunId !== undefined) {
     const loaded = await loadExploration(context.repositoryRoot, explorationRunId);
     if (!loaded.ok) return usageError(loaded.reason);
     const seeded = createSession({
+      sessionId,
       createdAt,
       schemaVersion: LEGION_PROTOCOL_VERSION,
       exploration: loaded.loaded.exploration,
@@ -227,7 +256,7 @@ async function resolveSession(
     return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
   }
 
-  const seeded = createSession({ createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
+  const seeded = createSession({ sessionId, createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
   await saveSession(context.repositoryRoot, seeded.session);
   return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
 }
@@ -793,10 +822,14 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     return usageError(`The project name does not produce a valid slug. Pass --slug explicitly. ${message}`);
   }
 
-  // The session's own creation instant, not "now": re-finalizing must produce
-  // byte-identical requirements, and a fresh timestamp would change every
-  // artifact and therefore the requirement set hash on every retry.
-  const createdAt = createdAtOption(context) ?? session.createdAt;
+  // Always the session's own creation instant. Not "now", and deliberately not
+  // `--created-at` either: the documented forced-roadmap retry omits that flag,
+  // so honouring it on the first finalize would make the retry write a different
+  // timestamp into every requirement and change the requirement set hash — during
+  // what this command calls an identical re-render. `--created-at` still selects
+  // the session's timestamp when the session is created, which is where it
+  // belongs.
+  const createdAt = session.createdAt;
   const constitution = renderConstitution({ answers: session.answers });
 
   const initialized = await initProject({
@@ -824,6 +857,44 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
   // the constraints changed would otherwise leave the constitution describing an
   // earlier interview, which is worse than not writing it at all: the document
   // the authority order puts above generated plans would be quietly stale.
+  // An interview that reports success while `project.json` keeps a different
+  // name or owner is worse than one that refuses: downstream context packs and
+  // escalation read the manifest, so the two would disagree silently about who
+  // owns the project.
+  if (initialized.status === "already_initialized") {
+    const existing = initialized.project;
+    const conflicts: string[] = [];
+    if (existing.name !== name) conflicts.push(`name is "${existing.name}", the interview says "${name}"`);
+    if (summary.length > 0 && existing.description !== summary) {
+      conflicts.push("summary differs");
+    }
+    const owners = initialized.manifest.project.policy.decisionOwners ?? [];
+    if (
+      owner.length > 0 &&
+      owners.length > 0 &&
+      !owners.some((entry) => entry.id === owner || entry.displayName === owner)
+    ) {
+      const named = owners.map((entry) => entry.displayName ?? entry.id).join(", ");
+      conflicts.push(`decision owner is ${named}, the interview says "${owner}"`);
+    }
+    if (conflicts.length > 0) {
+      return failure(
+        {
+          ok: false,
+          status: "identity_conflict",
+          session: sessionPayload(session, answered, total),
+          project: existing,
+          diagnostics: conflicts.map((message) => ({ code: "identity_conflict", message }))
+        },
+        [
+          "This project was already initialized and the interview disagrees with it:",
+          ...conflicts.map((message) => `  - ${message}`),
+          "legion start --finalize does not rewrite an existing project identity. Either answer to match, or start from a clean project."
+        ].join("\n")
+      );
+    }
+  }
+
   if (initialized.status === "already_initialized") {
     const updated = await updateConstitution({
       repositoryRoot: context.repositoryRoot,

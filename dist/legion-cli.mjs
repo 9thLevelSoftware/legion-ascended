@@ -18860,12 +18860,9 @@ var requirementSetSchema = strictObject({
 
 // packages/artifacts/dist/requirements/service.js
 import { createHash as createHash15 } from "node:crypto";
-import { mkdir as mkdir9, readFile as readFile6, readdir as readdir3, rename as rename2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
+import { lstat as lstat2, readFile as readFile6, readdir as readdir3, rename as rename2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
 import path11 from "node:path";
 var REQUIREMENT_SET_INDEX_FILE = "index.json";
-function requirementsRoot(repositoryRoot) {
-  return path11.join(repositoryRoot, ".legion", "project", "requirements");
-}
 function requirementArtifactPath(requirementId) {
   return `${PROJECT_ARTIFACT_PATHS.requirements}/${requirementId}.json`;
 }
@@ -18888,16 +18885,27 @@ function computeRequirementSetHash(requirements) {
 function hashBytes(bytes) {
   return contentHashSchema.parse(`sha256:${createHash15("sha256").update(bytes, "utf8").digest("hex")}`);
 }
-async function writeAtomic(target, contents) {
-  await mkdir9(path11.dirname(target), { recursive: true });
-  const temporary = `${target}.tmp`;
+async function writeProjectArtifact(repositoryRoot, artifactPath, contents) {
+  const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
+  const temporary = `${resolved.absolutePath}.tmp`;
   await writeFile2(temporary, contents, "utf8");
-  await rename2(temporary, target);
+  await rename2(temporary, resolved.absolutePath);
+}
+async function resolveRequirementsRoot(repositoryRoot) {
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot,
+    artifactPath: requirementSetIndexPath()
+  });
+  const root = path11.dirname(resolved.absolutePath);
+  const stats = await lstat2(root);
+  if (!stats.isDirectory()) {
+    throw new ArtifactPathError(`${PROJECT_ARTIFACT_PATHS.requirements} is not a directory; refusing to write the requirement set through it.`);
+  }
+  return root;
 }
 async function writeRequirementSet(input) {
   const createdAt = input.createdAt ?? utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
-  const root = requirementsRoot(input.repositoryRoot);
-  await mkdir9(root, { recursive: true });
+  const root = await resolveRequirementsRoot(input.repositoryRoot);
   const entries = [];
   const written = /* @__PURE__ */ new Set();
   const requirementPaths = [];
@@ -18906,7 +18914,7 @@ async function writeRequirementSet(input) {
     const contents = `${JSON.stringify(parsed, void 0, 2)}
 `;
     const relative = requirementArtifactPath(parsed.id);
-    await writeAtomic(path11.join(input.repositoryRoot, ...relative.split("/")), contents);
+    await writeProjectArtifact(input.repositoryRoot, relative, contents);
     written.add(`${parsed.id}.json`);
     requirementPaths.push(relative);
     entries.push(requirementSetSchema.shape.entries.element.parse({
@@ -18926,7 +18934,7 @@ async function writeRequirementSet(input) {
     entries
   });
   const indexRelative = requirementSetIndexPath();
-  await writeAtomic(path11.join(input.repositoryRoot, ...indexRelative.split("/")), `${JSON.stringify(set, void 0, 2)}
+  await writeProjectArtifact(input.repositoryRoot, indexRelative, `${JSON.stringify(set, void 0, 2)}
 `);
   for (const entry of await readdir3(root, { withFileTypes: true })) {
     if (!entry.isFile())
@@ -24010,7 +24018,7 @@ async function runScript(context, scriptArgs) {
 
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash16 } from "node:crypto";
-import { cp, mkdir as mkdir10, readFile as readFile10, readdir as readdir7, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
+import { cp, mkdir as mkdir9, readFile as readFile10, readdir as readdir7, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
 import path17 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
@@ -24428,11 +24436,11 @@ function validateReportMoves(report) {
 async function stageLegacyProtocol(input) {
   const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
   await rm4(input.stagingRoot, { recursive: true, force: true });
-  await mkdir10(targetRoot, { recursive: true });
+  await mkdir9(targetRoot, { recursive: true });
   for (const move of input.moves) {
     const sourcePath = path17.join(input.repositoryRoot, ...move.sourcePath.split("/"));
     const targetPath = path17.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir10(path17.dirname(targetPath), { recursive: true });
+    await mkdir9(path17.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
@@ -24453,7 +24461,7 @@ async function stageLegacyProtocol(input) {
 }
 async function writeReport(stagingRoot, report) {
   const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir10(path17.dirname(reportPath), { recursive: true });
+  await mkdir9(path17.dirname(reportPath), { recursive: true });
   await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
@@ -24607,7 +24615,7 @@ async function backupLegionRoot(input) {
   const backupPath = path17.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
   await rm4(backupDirectory, { recursive: true, force: true });
-  await mkdir10(backupDirectory, { recursive: true });
+  await mkdir9(backupDirectory, { recursive: true });
   if (existingLegionRoot) {
     await cp(legionRoot, backupPath, { recursive: true });
   }
@@ -24677,7 +24685,7 @@ async function mergeStagedLegacyProtocol(input) {
       }
       continue;
     }
-    await mkdir10(path17.dirname(destinationPath), { recursive: true });
+    await mkdir9(path17.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
@@ -24847,7 +24855,7 @@ async function rollbackCodexLegionMigration(input) {
 
 // packages/legacy-bridge/dist/import-planning/index.js
 import { createHash as createHash17 } from "node:crypto";
-import { cp as cp2, mkdir as mkdir11, readFile as readFile11, readdir as readdir8, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
+import { cp as cp2, mkdir as mkdir10, readFile as readFile11, readdir as readdir8, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
 import path18 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
@@ -25195,7 +25203,7 @@ function sectionsForRequirement(requirement) {
 }
 async function writeReport2(stagingRoot, report) {
   const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir11(path18.dirname(reportPath), { recursive: true });
+  await mkdir10(path18.dirname(reportPath), { recursive: true });
   await writeFile5(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
@@ -25334,7 +25342,7 @@ async function createPlanningImportDryRun(input) {
     ]);
   }
   await rm5(stagingRoot, { recursive: true, force: true });
-  await mkdir11(stagingRoot, { recursive: true });
+  await mkdir10(stagingRoot, { recursive: true });
   const initialized = await initProject({
     repositoryRoot: stagingRoot,
     slug: input.project.slug,
@@ -25464,7 +25472,7 @@ async function backupLegionRoot2(input) {
   const backupPath = path18.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
   await rm5(backupDirectory, { recursive: true, force: true });
-  await mkdir11(backupDirectory, { recursive: true });
+  await mkdir10(backupDirectory, { recursive: true });
   if (existingLegionRoot) {
     await cp2(legionRoot, backupPath, { recursive: true });
   }
@@ -25490,7 +25498,7 @@ async function backupLegionRoot2(input) {
 async function installStagedProject(input) {
   const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
   const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
-  await mkdir11(path18.dirname(destinationProject), { recursive: true });
+  await mkdir10(path18.dirname(destinationProject), { recursive: true });
   await rm5(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
@@ -27154,7 +27162,7 @@ import { readFile as readFile14 } from "node:fs/promises";
 import path23 from "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
-import { mkdir as mkdir12, readdir as readdir9, readFile as readFile13 } from "node:fs/promises";
+import { mkdir as mkdir11, readdir as readdir9, readFile as readFile13 } from "node:fs/promises";
 import path22 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
@@ -27677,7 +27685,7 @@ function guidanceCreatedAt(context) {
 }
 async function createGuidanceRunPaths(input) {
   const workflowRoot = path22.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
-  await mkdir12(workflowRoot, { recursive: true });
+  await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
   for (let index = 0; index < 1e3; index += 1) {
@@ -27686,7 +27694,7 @@ async function createGuidanceRunPaths(input) {
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
     const absoluteRunRoot = path22.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
-      await mkdir12(absoluteRunRoot);
+      await mkdir11(absoluteRunRoot);
       return {
         workflow: input.workflow,
         runId,
@@ -28076,8 +28084,9 @@ function renderSessionStatus(input) {
 }
 
 // packages/cli/src/workflow/intake/session.ts
-import { mkdir as mkdir13, readFile as readFile15, readdir as readdir10, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
+import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
 import path24 from "node:path";
+var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
   return path24.join(repositoryRoot, ".legion", "project", "intake", sessionId);
@@ -28093,7 +28102,7 @@ function intakeSessionIdFor(createdAt, salt = "") {
   return formatEntityId("intake", `${compact}${salt}`);
 }
 function createSession(input) {
-  const id = intakeSessionIdFor(input.createdAt, input.salt ?? "");
+  const id = input.sessionId ?? intakeSessionIdFor(input.createdAt, input.salt ?? "");
   const proposals = /* @__PURE__ */ new Map();
   const injectedNodes = [];
   if (input.exploration !== void 0) {
@@ -28254,7 +28263,7 @@ async function loadSession(repositoryRoot, sessionId) {
 async function saveSession(repositoryRoot, session) {
   const validated = intakeSessionSchema.parse(session);
   const directory = intakeSessionDirectory(repositoryRoot, validated.id);
-  await mkdir13(directory, { recursive: true });
+  await mkdir12(directory, { recursive: true });
   const target = path24.join(directory, SESSION_FILE);
   const temporary = `${target}.tmp`;
   await writeFile7(temporary, `${JSON.stringify(validated, void 0, 2)}
@@ -28275,9 +28284,33 @@ async function listSessions(repositoryRoot) {
 async function findActiveSession(repositoryRoot) {
   for (const sessionId of await listSessions(repositoryRoot)) {
     const loaded = await loadSession(repositoryRoot, sessionId);
-    if (loaded.ok && loaded.session.status === "active") return loaded.session;
+    if (!loaded.ok) {
+      return {
+        ok: false,
+        reason: `${loaded.reason} Repair or remove ${INTAKE_ROOT}/${sessionId}, or name a different session with --session.`
+      };
+    }
+    if (loaded.session.status === "active") return { ok: true, session: loaded.session };
   }
-  return void 0;
+  return { ok: true, session: void 0 };
+}
+async function intakeSessionExists(repositoryRoot, sessionId) {
+  try {
+    await readFile15(sessionFilePath(repositoryRoot, sessionId), "utf8");
+    return true;
+  } catch (error2) {
+    if (isEnoent5(error2)) return false;
+    return true;
+  }
+}
+async function allocateSessionId(repositoryRoot, createdAt) {
+  const base = intakeSessionIdFor(createdAt);
+  if (!await intakeSessionExists(repositoryRoot, base)) return base;
+  for (let attempt = 1; attempt <= 999; attempt += 1) {
+    const candidate = intakeSessionIdFor(createdAt, `-${attempt}`);
+    if (!await intakeSessionExists(repositoryRoot, candidate)) return candidate;
+  }
+  throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
 }
 function isEnoent5(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
@@ -28368,17 +28401,29 @@ async function resolveSession(context, options) {
       notes: seeded2.diagnostics
     };
   }
-  const active = await findActiveSession(context.repositoryRoot);
+  const explorationRunId = stringOption(context, "from-exploration");
+  const found = await findActiveSession(context.repositoryRoot);
+  if (!found.ok) return failure({ ok: false, status: "invalid_session", diagnostics: [{ code: "corrupt_session", message: found.reason }] }, found.reason);
+  const active = found.session;
   if (active !== void 0) {
-    const stale = graphVersionMismatch(active);
-    if (stale !== void 0) return usageError(stale);
-    const seeded2 = await proposalsFor(context.repositoryRoot, active);
-    return {
-      session: active,
-      proposals: seeded2.proposals,
-      created: false,
-      notes: seeded2.diagnostics
-    };
+    if (explorationRunId !== void 0 && active.explorationRef?.runId !== explorationRunId) {
+      if (active.answers.length > 0) {
+        return usageError(
+          `Session ${active.id} is already in progress with ${active.answers.length} answer(s), and seeding only applies when a session is created. Run legion start --abort --session ${active.id} first if you want to restart from exploration ${explorationRunId}.`
+        );
+      }
+      await saveSession(context.repositoryRoot, abortSession(active));
+    } else {
+      const stale = graphVersionMismatch(active);
+      if (stale !== void 0) return usageError(stale);
+      const seeded2 = await proposalsFor(context.repositoryRoot, active);
+      return {
+        session: active,
+        proposals: seeded2.proposals,
+        created: false,
+        notes: seeded2.diagnostics
+      };
+    }
   }
   if (!options.create) {
     return usageError(
@@ -28386,11 +28431,12 @@ async function resolveSession(context, options) {
     );
   }
   const createdAt = createdAtOption(context) ?? nowTimestamp2();
-  const explorationRunId = stringOption(context, "from-exploration");
+  const sessionId = await allocateSessionId(context.repositoryRoot, createdAt);
   if (explorationRunId !== void 0) {
     const loaded = await loadExploration(context.repositoryRoot, explorationRunId);
     if (!loaded.ok) return usageError(loaded.reason);
     const seeded2 = createSession({
+      sessionId,
       createdAt,
       schemaVersion: LEGION_PROTOCOL_VERSION,
       exploration: loaded.loaded.exploration,
@@ -28399,7 +28445,7 @@ async function resolveSession(context, options) {
     await saveSession(context.repositoryRoot, seeded2.session);
     return { session: seeded2.session, proposals: seeded2.proposals, created: true, notes: [] };
   }
-  const seeded = createSession({ createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
+  const seeded = createSession({ sessionId, createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
   await saveSession(context.repositoryRoot, seeded.session);
   return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
 }
@@ -28857,7 +28903,7 @@ ${renderIntakeDiagnostics(semantic)}`
     const message = error2 instanceof Error ? error2.message : String(error2);
     return usageError(`The project name does not produce a valid slug. Pass --slug explicitly. ${message}`);
   }
-  const createdAt = createdAtOption(context) ?? session.createdAt;
+  const createdAt = session.createdAt;
   const constitution = renderConstitution({ answers: session.answers });
   const initialized = await initProject({
     repositoryRoot: context.repositoryRoot,
@@ -28878,6 +28924,35 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
   }
   const projectId = initialized.project.id;
   const notes = [];
+  if (initialized.status === "already_initialized") {
+    const existing = initialized.project;
+    const conflicts = [];
+    if (existing.name !== name) conflicts.push(`name is "${existing.name}", the interview says "${name}"`);
+    if (summary.length > 0 && existing.description !== summary) {
+      conflicts.push("summary differs");
+    }
+    const owners = initialized.manifest.project.policy.decisionOwners ?? [];
+    if (owner.length > 0 && owners.length > 0 && !owners.some((entry) => entry.id === owner || entry.displayName === owner)) {
+      const named = owners.map((entry) => entry.displayName ?? entry.id).join(", ");
+      conflicts.push(`decision owner is ${named}, the interview says "${owner}"`);
+    }
+    if (conflicts.length > 0) {
+      return failure(
+        {
+          ok: false,
+          status: "identity_conflict",
+          session: sessionPayload(session, answered, total),
+          project: existing,
+          diagnostics: conflicts.map((message) => ({ code: "identity_conflict", message }))
+        },
+        [
+          "This project was already initialized and the interview disagrees with it:",
+          ...conflicts.map((message) => `  - ${message}`),
+          "legion start --finalize does not rewrite an existing project identity. Either answer to match, or start from a clean project."
+        ].join("\n")
+      );
+    }
+  }
   if (initialized.status === "already_initialized") {
     const updated = await updateConstitution({
       repositoryRoot: context.repositoryRoot,
@@ -33183,7 +33258,7 @@ function commandParts(parts) {
 }
 
 // packages/cli/src/commands/workflow/record.ts
-import { mkdir as mkdir14, writeFile as writeFile9 } from "node:fs/promises";
+import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
 import path38 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();

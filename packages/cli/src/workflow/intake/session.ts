@@ -73,6 +73,8 @@ export interface CreateSessionInput {
   readonly exploration?: Exploration;
   readonly explorationArtifact?: { readonly path: string; readonly sha256: string };
   readonly salt?: string;
+  /** Allocated by the caller against the filesystem; see `allocateSessionId`. */
+  readonly sessionId?: string;
 }
 
 export interface SeededSession {
@@ -99,7 +101,10 @@ export interface ExplorationProposal {
  * keeps a fuzzy idea from becoming a confident contract.
  */
 export function createSession(input: CreateSessionInput): SeededSession {
-  const id = intakeSessionIdFor(input.createdAt, input.salt ?? "");
+  // `sessionId` is supplied by a caller that checked the filesystem. Deriving it
+  // here from the timestamp alone made two starts with the same `--created-at`
+  // produce the same ID, and `saveSession` would overwrite the earlier record.
+  const id = input.sessionId ?? intakeSessionIdFor(input.createdAt, input.salt ?? "");
   const proposals = new Map<string, ExplorationProposal>();
   const injectedNodes: IntakeInjectedNode[] = [];
 
@@ -405,16 +410,71 @@ export async function listSessions(repositoryRoot: string): Promise<readonly str
     .sort((left, right) => right.localeCompare(left));
 }
 
-/** The most recent session that is still open, if any. */
-export async function findActiveSession(repositoryRoot: string): Promise<IntakeSession | undefined> {
+export type FindActiveSessionResult =
+  | { readonly ok: true; readonly session: IntakeSession | undefined }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * The most recent session that is still open, if any.
+ *
+ * A candidate that cannot be parsed stops the search rather than being skipped.
+ * Skipping it would resume an older interview, or silently start a new one,
+ * while the durable record of the interview in progress sat corrupt on disk —
+ * and the operator would answer a different session without being told. The
+ * previous comment here claimed exactly this behaviour and the code did the
+ * opposite.
+ */
+export async function findActiveSession(
+  repositoryRoot: string
+): Promise<FindActiveSessionResult> {
   for (const sessionId of await listSessions(repositoryRoot)) {
     const loaded = await loadSession(repositoryRoot, sessionId);
-    // A session that no longer parses must not silently hide a resumable one
-    // behind it, but it also must not be treated as absent — `legion start`
-    // surfaces it through `loadSession` when named explicitly.
-    if (loaded.ok && loaded.session.status === "active") return loaded.session;
+    if (!loaded.ok) {
+      return {
+        ok: false,
+        reason: `${loaded.reason} Repair or remove ${INTAKE_ROOT}/${sessionId}, or name a different session with --session.`
+      };
+    }
+    if (loaded.session.status === "active") return { ok: true, session: loaded.session };
   }
-  return undefined;
+  return { ok: true, session: undefined };
+}
+
+/**
+ * Whether a session ID is already taken.
+ *
+ * IDs derive from the creation instant, so an explicit `--created-at` (or two
+ * starts inside one millisecond) can collide with a session already on disk.
+ * Overwriting it would erase a durable decision record and leave the earlier
+ * requirement set's trace references pointing at a different interview.
+ */
+export async function intakeSessionExists(
+  repositoryRoot: string,
+  sessionId: string
+): Promise<boolean> {
+  try {
+    await readFile(sessionFilePath(repositoryRoot, sessionId), "utf8");
+    return true;
+  } catch (error) {
+    if (isEnoent(error)) return false;
+    // Unreadable for any other reason still means occupied: claiming the ID
+    // would overwrite whatever is there.
+    return true;
+  }
+}
+
+/** An unused session ID at or after `createdAt`, salting until one is free. */
+export async function allocateSessionId(
+  repositoryRoot: string,
+  createdAt: UtcTimestamp
+): Promise<string> {
+  const base = intakeSessionIdFor(createdAt);
+  if (!(await intakeSessionExists(repositoryRoot, base))) return base;
+  for (let attempt = 1; attempt <= 999; attempt += 1) {
+    const candidate = intakeSessionIdFor(createdAt, `-${attempt}`);
+    if (!(await intakeSessionExists(repositoryRoot, candidate))) return candidate;
+  }
+  throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
 }
 
 function isEnoent(error: unknown): boolean {
