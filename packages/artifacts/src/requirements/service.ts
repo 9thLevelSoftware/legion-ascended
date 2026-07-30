@@ -126,6 +126,7 @@ export interface WriteRequirementSetInput {
   readonly requirements: readonly Requirement[];
   readonly intakeSessionId?: IntakeSessionId;
   readonly graphVersion?: string;
+  readonly enforcement?: RequirementSet["enforcement"];
   readonly createdAt?: UtcTimestamp;
 }
 
@@ -176,6 +177,7 @@ export async function writeRequirementSet(
     projectId: input.projectId,
     ...(input.intakeSessionId === undefined ? {} : { intakeSessionId: input.intakeSessionId }),
     ...(input.graphVersion === undefined ? {} : { graphVersion: input.graphVersion }),
+    ...(input.enforcement === undefined ? {} : { enforcement: input.enforcement }),
     requirementSetHash: computeRequirementSetHash(input.requirements),
     entries
   });

@@ -3,6 +3,7 @@ import {
   createCurrentSpec,
   createOracleArtifact,
   readCurrentSpec,
+  readRequirementSet,
   writeTaskGraph,
   type ArtifactDiagnostic,
   type CurrentSpecSuccess
@@ -143,6 +144,13 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
   }
 
+  // The enforcement settings the interview recorded, if this project held one.
+  // Read here rather than defaulted inside the builder so a project with no
+  // requirement set is visibly a different case from one whose operator chose
+  // the repository-wide limits.
+  const requirementSet = await readRequirementSet(context.repositoryRoot);
+  const enforcement = requirementSet.ok ? requirementSet.set.enforcement : undefined;
+
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -150,7 +158,8 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     change,
     oracle,
     baseGitSha,
-    createdAt
+    createdAt,
+    ...(enforcement === undefined ? {} : { enforcement })
   }));
   if (!taskgraph.ok) {
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);

@@ -24,6 +24,7 @@ import {
   type Project,
   type RequirementId,
   type RiskProfile,
+  type RiskTier,
   type UtcTimestamp
 } from "@legion/protocol";
 
@@ -60,7 +61,19 @@ export function phasePlanIds(phase: PhaseSource): PhasePlanIds {
   };
 }
 
-export function phaseRiskProfile(phase: PhaseSource): RiskProfile {
+export function phaseRiskProfile(
+  phase: PhaseSource,
+  recorded?: { readonly tier: RiskTier; readonly reason: string }
+): RiskProfile {
+  // A hardcoded R2 silently overrode an operator who chose R3, weakening the
+  // gate set on exactly the projects that asked for the strictest one.
+  if (recorded !== undefined) {
+    return riskProfileSchema.parse({
+      tier: recorded.tier,
+      reasons: [recorded.reason, `Phase ${phase.number} workflow plan creates a reviewable change.`]
+    });
+  }
+
   return riskProfileSchema.parse({
     tier: "R2",
     reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]

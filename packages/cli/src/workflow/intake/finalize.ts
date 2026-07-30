@@ -10,11 +10,13 @@
 
 import {
   DEFAULT_PROJECT_CONSTITUTION,
-  requirementArtifactPath
+  requirementArtifactPath,
+  type RequirementSet
 } from "@legion/artifacts";
 import {
   requirementSchema,
   type ProjectId,
+  type RiskTier,
   type Requirement,
   type RequirementCriterion,
   type UtcTimestamp
@@ -26,6 +28,8 @@ import { parseCommandLine, requirementDrafts, slugFromText, type RequirementDraf
 import type { IntakeAnswer } from "@legion/protocol";
 
 const MAX_REQUIREMENT_SLUG = 48;
+
+export type RequirementSetEnforcement = NonNullable<RequirementSet["enforcement"]>;
 
 /**
  * A `wont` requirement records a decision not to build something. It has no
@@ -354,3 +358,40 @@ export function renderConstitution(input: RenderConstitutionInput): string {
 }
 
 export const INTAKE_GRAPH_VERSION_FOR_FINALIZE = INTAKE_GRAPH_VERSION;
+
+/**
+ * The enforcement settings the interview collected, in the shape planning reads.
+ *
+ * Returns `undefined` only when an answer is missing or unparseable, which the
+ * validators already prevent on the `--finalize` path. Falling back to a default
+ * here would be the worse failure: the operator would have chosen a limit and
+ * silently got a different one.
+ */
+export function enforcementPolicy(
+  answers: readonly IntakeAnswer[]
+): RequirementSetEnforcement | undefined {
+  const tier = answerText(answers, "risk-tier");
+  const reason = answerText(answers, "risk-reason");
+  const verification = answerText(answers, "pref-verification");
+  if (tier === undefined || reason === undefined || verification === undefined) return undefined;
+
+  const numbers = ["budget-files", "budget-lines", "budget-new-files"].map((nodeId) => {
+    const raw = answerText(answers, nodeId);
+    if (raw === undefined) return undefined;
+    const parsed = Number.parseInt(raw.trim().replace(/[_,]/g, ""), 10);
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
+  });
+  const [maxFilesChanged, maxLinesChanged, maxNewFiles] = numbers;
+  if (maxFilesChanged === undefined || maxLinesChanged === undefined || maxNewFiles === undefined) {
+    return undefined;
+  }
+
+  const command = parseCommandLine(verification);
+  if ("error" in command) return undefined;
+
+  return {
+    risk: { tier: tier as RiskTier, reason: reason.slice(0, 128) },
+    budget: { maxFilesChanged, maxLinesChanged, maxNewFiles },
+    verification: { command: command.command, args: [...command.args] }
+  };
+}

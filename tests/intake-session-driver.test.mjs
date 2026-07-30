@@ -90,6 +90,46 @@ async function interview(run, answers = ANSWERS) {
   throw new Error("the interview did not terminate");
 }
 
+/** A second exploration run, used to push a pinned one past the discovery cap. */
+async function seedNamedExplorationRun(root, runId) {
+  const artifactDir = path.join(root, ".legion/project/workflow/explore", runId);
+  await mkdir(artifactDir, { recursive: true });
+  const explorationPath = `.legion/project/workflow/explore/${runId}/exploration.json`;
+  await writeFile(
+    path.join(artifactDir, "exploration.json"),
+    JSON.stringify({
+      schemaVersion: "0.2.0",
+      createdAt: `2026-08-${String((Number(runId.slice(-2)) % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
+      kind: "exploration",
+      runId: `run_${runId}`,
+      status: "exploratory",
+      entry: "raw-idea",
+      topic: runId,
+      summary: "A later brainstorm.",
+      proposals: [],
+      openQuestions: [],
+      notes: []
+    }),
+    "utf8"
+  );
+  await writeFile(
+    path.join(artifactDir, "workflow-run.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      kind: "workflow_run",
+      workflow: "explore",
+      runId,
+      createdAt: `2026-08-${String((Number(runId.slice(-2)) % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
+      status: "completed",
+      input: { topic: runId },
+      outputs: { explorationArtifactPath: explorationPath },
+      nextAction: { command: "legion start", reason: "seed intake" },
+      diagnostics: []
+    }),
+    "utf8"
+  );
+}
+
 test("an interrupted interview resumes from disk, not from memory", async (t) => {
   const { root, run } = await scratchRepo(t);
 
@@ -909,4 +949,167 @@ test("a quoted shell metacharacter is a usable acceptance criterion", async (t) 
 
   const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
   assert.equal(finalize.exitCode, 0, finalize.stderr);
+});
+
+test("the enforcement answers reach the generated task contract", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  // Deliberately unlike every default: R3 rather than the hardcoded R2, a
+  // three-file budget rather than the repository-wide twenty, and a real
+  // verification command rather than `legion validate` checking its own output.
+  const answers = {
+    ...ANSWERS,
+    "risk-tier": "R3",
+    "risk-reason": "Touches credentials.",
+    "budget-files": "3",
+    "budget-lines": "150",
+    "budget-new-files": "1",
+    "pref-verification": "pnpm run verify --strict"
+  };
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(answers), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+
+  // Recorded on the requirement set, which is what planning reads.
+  const index = JSON.parse(
+    await readFile(path.join(root, ".legion/project/requirements/index.json"), "utf8")
+  );
+  assert.deepEqual(index.enforcement.budget, {
+    maxFilesChanged: 3,
+    maxLinesChanged: 150,
+    maxNewFiles: 1
+  });
+  assert.equal(index.enforcement.risk.tier, "R3");
+
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "intake"]);
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 0, planned.stderr);
+
+  const taskgraph = JSON.parse(
+    await readFile(
+      path.join(root, ...parseJsonOutput(planned).taskgraph.artifactPath.split("/")),
+      "utf8"
+    )
+  );
+  const task = taskgraph.tasks[0];
+
+  // Choosing R3 previously had no effect: phaseRiskProfile hardcoded R2, which
+  // silently weakened the gate set on the projects that asked for the strictest.
+  assert.equal(task.risk.tier, "R3");
+  assert.ok(task.risk.reasons.includes("Touches credentials."));
+
+  // A budget that is asked for and ignored is worse than not asking, because the
+  // operator believes a limit is in force.
+  assert.deepEqual(task.scope.budget, {
+    maxFilesChanged: 3,
+    maxLinesChanged: 150,
+    maxNewFiles: 1
+  });
+
+  // `legion validate` alone is a tautology: it checks the artifacts plan just
+  // wrote, not the code the task changes.
+  assert.equal(task.verification[0].command, "pnpm");
+  assert.deepEqual(task.verification[0].args, ["run", "verify", "--strict"]);
+});
+
+test("a project with no interview still plans on repository defaults", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await run("start", "--name", "Bare Project", "--owner", "dasbl");
+  await writeFile(path.join(root, "ROADMAP.md"), "## Phase 1: Foundation\n\n- Build it\n", "utf8");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "init"]);
+
+  // Direct initialization records no policy, so the fallback has to remain
+  // reachable rather than the planner assuming an interview happened.
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 0, planned.stderr);
+
+  const taskgraph = JSON.parse(
+    await readFile(
+      path.join(root, ...parseJsonOutput(planned).taskgraph.artifactPath.split("/")),
+      "utf8"
+    )
+  );
+  assert.equal(taskgraph.tasks[0].risk.tier, "R2");
+  assert.equal(taskgraph.tasks[0].verification[0].command, "legion");
+});
+
+test("legion doctor does not disagree with legion validate", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  assert.equal((await run("validate", "--json")).exitCode, 0);
+  assert.equal((await run("doctor", "--json")).exitCode, 0);
+
+  const requirementPath = path.join(root, ...finalize.requirementSet.paths[0].split("/"));
+  const requirement = JSON.parse(await readFile(requirementPath, "utf8"));
+  requirement.statement = "Something nobody agreed to";
+  await writeFile(requirementPath, `${JSON.stringify(requirement, undefined, 2)}\n`, "utf8");
+
+  // Two validation entrances that disagree teach operators to trust whichever
+  // one is currently passing.
+  assert.equal((await run("validate", "--json")).exitCode, 1);
+  const doctored = await run("doctor", "--json");
+  assert.equal(doctored.exitCode, 1, "doctor must not report a project validate refuses");
+  assert.equal(parseJsonOutput(doctored).checks.requirementSet.ok, false);
+});
+
+test("--session without a value is refused rather than guessed", async (t) => {
+  const { run } = await scratchRepo(t);
+  await run("start", "--next", "--json", "--created-at", CREATED_AT);
+
+  // `--session` with no value parses as `true`, which read as absent and fell
+  // through to the newest active session — so this could abort a different
+  // interview than the operator named.
+  const aborted = await run("start", "--abort", "--session", "--json");
+  assert.equal(aborted.exitCode, 1);
+  assert.match(parseJsonOutput(aborted).diagnostics[0].message, /--session/);
+
+  const status = parseJsonOutput(await run("start", "--session-status", "--json"));
+  assert.equal(status.session.status, "active", "the session must not have been touched");
+});
+
+test("follow-up commands name the session that emitted them", async (t) => {
+  const { run } = await scratchRepo(t);
+  const first = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+
+  // With concurrent starts preserved rather than overwritten, "the newest active
+  // session" and "the session that asked this question" are no longer the same
+  // thing, so a follow-up that omits --session can answer the wrong interview.
+  assert.match(first.nextAction.command, new RegExp(`--session ${first.session.id}`));
+
+  const answered = parseJsonOutput(
+    await run("start", "--session", first.session.id, "--answer", "project-name=Asset Mapper", "--json")
+  );
+  assert.match(answered.nextAction.command, new RegExp(`--session ${first.session.id}`));
+});
+
+test("a pinned exploration stays resolvable behind newer runs", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await seedExplorationRun(root);
+
+  const seeded = parseJsonOutput(
+    await run("start", "--from-exploration", "explore-1", "--json", "--created-at", CREATED_AT)
+  );
+  assert.equal(seeded.question.proposal?.value, "Asset Mapper");
+
+  // The discovery cap is for the list a human reads. Applying it to resolution
+  // meant a dozen newer brainstorms silently withheld the proposals of the one
+  // this session is pinned to.
+  for (let index = 0; index < 14; index += 1) {
+    await seedNamedExplorationRun(root, `later-${String(index).padStart(2, "0")}`);
+  }
+
+  const resumed = parseJsonOutput(await run("start", "--next", "--json"));
+  assert.equal(
+    resumed.question.proposal?.value,
+    "Asset Mapper",
+    "the pinned exploration must still resolve"
+  );
+  assert.equal(resumed.warnings, undefined, "no proposals should be withheld");
 });

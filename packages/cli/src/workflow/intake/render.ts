@@ -51,7 +51,7 @@ export function renderQuestion(input: RenderQuestionInput): string {
       : input.proposal.value;
     lines.push(`  Exploration proposed (${input.proposal.confidence}): ${value}`);
     lines.push(`  Because: ${input.proposal.rationale}`);
-    lines.push(`  Accept it with --accept-proposal, or answer to override it.`);
+    lines.push(`  Accept it with --session ${input.sessionId} --accept-proposal, or answer to override it.`);
   }
 
   if (input.node.injected === true) {
@@ -60,10 +60,10 @@ export function renderQuestion(input: RenderQuestionInput): string {
   }
 
   lines.push("");
-  lines.push(`  legion start --answer ${input.node.id}=<value>`);
+  lines.push(`  legion start --session ${input.sessionId} --answer "${input.node.id}=<value>"`);
 
   if (!input.node.required) {
-    lines.push(`  legion start --skip   (this question is optional)`);
+    lines.push(`  legion start --session ${input.sessionId} --skip   (this question is optional)`);
   }
 
   return lines.join("\n");

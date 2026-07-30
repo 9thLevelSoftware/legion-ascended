@@ -18835,6 +18835,32 @@ var requirementSetSchema = strictObject({
   /** The graph version the interview ran under, when there was one. */
   graphVersion: string2().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/, "Invalid graph version").optional(),
   requirementSetHash: contentHashSchema,
+  /**
+   * The enforcement settings the interview collected.
+   *
+   * Recorded here rather than left in the session because planning has to read
+   * them. An answer that is asked for, stored, and never consumed is the same
+   * failure as a hash that is written and never checked: the operator believes
+   * they set a limit, and nothing enforces it.
+   *
+   * Optional because a project initialized with `--name` never held an
+   * interview. Consumers fall back to their own defaults and say so.
+   */
+  enforcement: strictObject({
+    risk: strictObject({
+      tier: riskTierSchema,
+      reason: string2().min(1).max(128)
+    }),
+    budget: strictObject({
+      maxFilesChanged: number2().int().positive(),
+      maxLinesChanged: number2().int().positive(),
+      maxNewFiles: number2().int().min(0)
+    }),
+    verification: strictObject({
+      command: string2().min(1).max(256),
+      args: array(string2().max(256)).max(64)
+    })
+  }).optional(),
   entries: array(requirementSetEntrySchema)
 }).superRefine((set, context) => {
   const seen = /* @__PURE__ */ new Set();
@@ -18848,6 +18874,13 @@ var requirementSetSchema = strictObject({
       continue;
     }
     seen.add(entry.requirementId);
+  }
+  if (set.enforcement !== void 0 && set.enforcement.budget.maxNewFiles > set.enforcement.budget.maxFilesChanged) {
+    context.addIssue({
+      code: "custom",
+      message: "A task cannot create more new files than it may change in total.",
+      path: ["enforcement", "budget", "maxNewFiles"]
+    });
   }
   if (set.intakeSessionId === void 0 && set.graphVersion !== void 0) {
     context.addIssue({
@@ -18931,6 +18964,7 @@ async function writeRequirementSet(input) {
     projectId: input.projectId,
     ...input.intakeSessionId === void 0 ? {} : { intakeSessionId: input.intakeSessionId },
     ...input.graphVersion === void 0 ? {} : { graphVersion: input.graphVersion },
+    ...input.enforcement === void 0 ? {} : { enforcement: input.enforcement },
     requirementSetHash: computeRequirementSetHash(input.requirements),
     entries
   });
@@ -27255,6 +27289,29 @@ function renderConstitution(input) {
   return `${lines.join("\n").trimEnd()}
 `;
 }
+function enforcementPolicy(answers) {
+  const tier = answerText2(answers, "risk-tier");
+  const reason = answerText2(answers, "risk-reason");
+  const verification = answerText2(answers, "pref-verification");
+  if (tier === void 0 || reason === void 0 || verification === void 0) return void 0;
+  const numbers = ["budget-files", "budget-lines", "budget-new-files"].map((nodeId2) => {
+    const raw = answerText2(answers, nodeId2);
+    if (raw === void 0) return void 0;
+    const parsed = Number.parseInt(raw.trim().replace(/[_,]/g, ""), 10);
+    return Number.isSafeInteger(parsed) ? parsed : void 0;
+  });
+  const [maxFilesChanged, maxLinesChanged, maxNewFiles] = numbers;
+  if (maxFilesChanged === void 0 || maxLinesChanged === void 0 || maxNewFiles === void 0) {
+    return void 0;
+  }
+  const command = parseCommandLine(verification);
+  if ("error" in command) return void 0;
+  return {
+    risk: { tier, reason: reason.slice(0, 128) },
+    budget: { maxFilesChanged, maxLinesChanged, maxNewFiles },
+    verification: { command: command.command, args: [...command.args] }
+  };
+}
 
 // packages/cli/src/workflow/intake/exploration-source.ts
 import { createHash as createHash18 } from "node:crypto";
@@ -28055,13 +28112,15 @@ async function readExplorationRunId(repositoryRoot, artifactPath) {
     return void 0;
   }
 }
-async function listExplorations(repositoryRoot) {
+async function listExplorations(repositoryRoot, limitPerWorkflow = DISCOVERY_LIMIT) {
   const runs = await latestGuidanceRuns({
     repositoryRoot,
     workflows: ["explore"],
-    // Deep enough to find a brainstorm from a few days ago, shallow enough that
-    // "recent explorations" stays a list a human can read.
-    limitPerWorkflow: 10
+    // A number, always. Omitting the option is not "no limit" —
+    // `latestGuidanceRuns` defaults to three, tighter than the discovery cap
+    // rather than looser — and passing `undefined` to a defaulted parameter
+    // silently restores the default it was meant to override.
+    limitPerWorkflow
   });
   const withArtifacts = runs.flatMap((run) => {
     const artifactPath = explorationArtifactPathOf(run);
@@ -28080,8 +28139,10 @@ async function listExplorations(repositoryRoot) {
     })
   );
 }
+var DISCOVERY_LIMIT = 10;
+var ALL_EXPLORATIONS = Number.MAX_SAFE_INTEGER;
 async function loadExploration(repositoryRoot, runId) {
-  const candidates = await listExplorations(repositoryRoot);
+  const candidates = await listExplorations(repositoryRoot, ALL_EXPLORATIONS);
   const candidate = candidates.find(
     (entry) => entry.runId === runId || entry.explorationRunId === runId
   );
@@ -28149,16 +28210,16 @@ function renderQuestion(input) {
     const value = Array.isArray(input.proposal.value) ? input.proposal.value.join(", ") : input.proposal.value;
     lines.push(`  Exploration proposed (${input.proposal.confidence}): ${value}`);
     lines.push(`  Because: ${input.proposal.rationale}`);
-    lines.push(`  Accept it with --accept-proposal, or answer to override it.`);
+    lines.push(`  Accept it with --session ${input.sessionId} --accept-proposal, or answer to override it.`);
   }
   if (input.node.injected === true) {
     lines.push("");
     lines.push("  This question exists because exploration left it unresolved.");
   }
   lines.push("");
-  lines.push(`  legion start --answer ${input.node.id}=<value>`);
+  lines.push(`  legion start --session ${input.sessionId} --answer "${input.node.id}=<value>"`);
   if (!input.node.required) {
-    lines.push(`  legion start --skip   (this question is optional)`);
+    lines.push(`  legion start --session ${input.sessionId} --skip   (this question is optional)`);
   }
   return lines.join("\n");
 }
@@ -28525,6 +28586,9 @@ async function proposalsFor(repositoryRoot, session) {
 }
 async function resolveSession(context, options) {
   const wantsProposals = options.proposals !== false;
+  if (context.args.options.get("session") === true) {
+    return usageError("Missing required value for --session. Pass the session ID, as in --session itk_...");
+  }
   const explicitId = stringOption(context, "session");
   if (explicitId !== void 0) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
@@ -28628,7 +28692,7 @@ ${renderNextAction(action2)}`
   }
   const proposal = proposals.get(node.slot);
   const action = nextAction(
-    `legion start --answer "${node.id}=<value>"`,
+    `legion start --session ${session.id} --answer "${node.id}=<value>"`,
     "Record this answer; the next question follows."
   );
   const human = [];
@@ -28797,7 +28861,7 @@ ${renderNextAction(action2)}`
   }
   const proposal = resolved.proposals.get(following.node.slot);
   const action = nextAction(
-    `legion start --answer "${following.node.id}=<value>"`,
+    `legion start --session ${recorded.session.id} --answer "${following.node.id}=<value>"`,
     "Record the next answer."
   );
   return success(
@@ -29048,7 +29112,10 @@ async function handleFinalize(context) {
     injectedNodes: session.injectedNodes
   });
   if (node !== void 0) {
-    const action2 = nextAction(`legion start --answer "${node.id}=<value>"`, "Answer the remaining questions.");
+    const action2 = nextAction(
+      `legion start --session ${session.id} --answer "${node.id}=<value>"`,
+      "Answer the remaining questions."
+    );
     return failure(
       {
         ok: false,
@@ -29158,12 +29225,19 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     schemaVersion: LEGION_PROTOCOL_VERSION,
     intakeSessionPath: intakeSessionArtifactPath2(session.id)
   });
+  const enforcement = enforcementPolicy(session.answers);
+  if (enforcement === void 0) {
+    notes.push(
+      "The enforcement answers could not be read back, so planning will fall back to repository defaults. Re-run the risk and budget questions."
+    );
+  }
   const written = await writeRequirementSet({
     repositoryRoot: context.repositoryRoot,
     projectId,
     requirements,
     intakeSessionId: session.id,
     graphVersion: session.graphVersion,
+    ...enforcement === void 0 ? {} : { enforcement },
     createdAt
   });
   const roadmapPath = path25.join(context.repositoryRoot, ROADMAP_FILE);
@@ -30022,7 +30096,13 @@ function phasePlanIds(phase) {
     contractId: formatEntityId("contract", suffix)
   };
 }
-function phaseRiskProfile(phase) {
+function phaseRiskProfile(phase, recorded) {
+  if (recorded !== void 0) {
+    return riskProfileSchema.parse({
+      tier: recorded.tier,
+      reasons: [recorded.reason, `Phase ${phase.number} workflow plan creates a reviewable change.`]
+    });
+  }
   return riskProfileSchema.parse({
     tier: "R2",
     reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]
@@ -30381,7 +30461,10 @@ function buildTaskGraphInput(options) {
       // excluded from attribution before the forbidden check.
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
-      budget: budgetForWriteScope(["."])
+      // The operator's chosen blast radius, not a repository-wide default. A
+      // budget that is asked for and then ignored is worse than not asking:
+      // they believe a limit is in force and nothing enforces it.
+      budget: options.enforcement?.budget ?? budgetForWriteScope(["."])
     },
     interfaces: {
       consumes: [
@@ -30402,15 +30485,18 @@ function buildTaskGraphInput(options) {
       ]
     },
     oracleRefs: [ids.oracleId],
+    // The project's own verification command when the interview recorded one.
+    // `legion validate` alone is a tautology — it checks the artifacts this
+    // command just wrote, not the code the task changed.
     verification: [
-      {
-        command: "legion",
-        args: ["validate"],
+      options.enforcement === void 0 ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 12e4 } : {
+        command: options.enforcement.verification.command,
+        args: [...options.enforcement.verification.args],
         expectedExitCode: 0,
-        timeoutMs: 12e4
+        timeoutMs: 6e5
       }
     ],
-    risk: phaseRiskProfile(options.phase),
+    risk: phaseRiskProfile(options.phase, options.enforcement?.risk),
     approvals: [],
     completion: {
       expectedArtifacts: [options.change.reference],
@@ -30537,6 +30623,8 @@ async function handlePlanWorkflow(context) {
   if (!oracle.ok) {
     return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
   }
+  const requirementSet = await readRequirementSet(context.repositoryRoot);
+  const enforcement = requirementSet.ok ? requirementSet.set.enforcement : void 0;
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -30544,7 +30632,8 @@ async function handlePlanWorkflow(context) {
     change,
     oracle,
     baseGitSha,
-    createdAt
+    createdAt,
+    ...enforcement === void 0 ? {} : { enforcement }
   }));
   if (!taskgraph.ok) {
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);
@@ -34696,23 +34785,33 @@ async function handleDoctorCommand(context) {
     return helpResult(DOCTOR_HELP);
   }
   const result = await validateWorkflowProject(context);
+  const drift = await requirementSetDiagnostics(context.repositoryRoot);
   const checks = {
     project: {
       ok: result.ok,
       status: result.ok ? "valid" : result.status,
       diagnostics: result.diagnostics
     },
+    requirementSet: {
+      ok: drift.length === 0,
+      status: drift.length === 0 ? "valid" : "requirement_set_drift",
+      diagnostics: drift
+    },
     operationalStore: await pathCheck(context.repositoryRoot, ".legion/var"),
     workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
+  const ok = result.ok && drift.length === 0;
+  const diagnostics = [...result.diagnostics, ...drift];
   const payload = {
     ...result,
-    status: result.ok ? "valid" : result.status,
+    ok,
+    diagnostics,
+    status: ok ? "valid" : result.ok ? "requirement_set_drift" : result.status,
     checks
   };
-  if (!result.ok) {
+  if (!ok) {
     return failure(payload, `Doctor found project validation issues.
-${renderDiagnostics(result.diagnostics)}`);
+${renderDiagnostics(diagnostics)}`);
   }
   return success(payload, doctorHuman(checks));
 }

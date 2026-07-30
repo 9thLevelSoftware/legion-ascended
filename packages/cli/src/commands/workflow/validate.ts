@@ -80,23 +80,37 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
   }
 
   const result = await validateWorkflowProject(context);
+  // Doctor is the broader diagnostic, so it must not report a project healthy
+  // that `legion validate` refuses. Two validation entrances that disagree teach
+  // operators to trust whichever one is currently passing.
+  const drift = await requirementSetDiagnostics(context.repositoryRoot);
   const checks = {
     project: {
       ok: result.ok,
       status: result.ok ? "valid" : result.status,
       diagnostics: result.diagnostics
     },
+    requirementSet: {
+      ok: drift.length === 0,
+      status: drift.length === 0 ? "valid" : "requirement_set_drift",
+      diagnostics: drift
+    },
     operationalStore: await pathCheck(context.repositoryRoot, ".legion/var"),
     workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
+
+  const ok = result.ok && drift.length === 0;
+  const diagnostics = [...result.diagnostics, ...drift];
   const payload = {
     ...result,
-    status: result.ok ? "valid" : result.status,
+    ok,
+    diagnostics,
+    status: ok ? "valid" : result.ok ? "requirement_set_drift" : result.status,
     checks
   };
 
-  if (!result.ok) {
-    return failure(payload, `Doctor found project validation issues.\n${renderDiagnostics(result.diagnostics)}`);
+  if (!ok) {
+    return failure(payload, `Doctor found project validation issues.\n${renderDiagnostics(diagnostics)}`);
   }
 
   return success(payload, doctorHuman(checks));

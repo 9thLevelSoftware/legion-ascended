@@ -34,7 +34,7 @@ import {
 } from "../../runtime.js";
 import { createdAtOption, ownerActor, repositoryReference, slugFromName } from "../input.js";
 import { nextAction, renderNextAction } from "../render.js";
-import { buildRequirements, renderConstitution, renderRoadmap } from "./finalize.js";
+import { buildRequirements, enforcementPolicy, renderConstitution, renderRoadmap } from "./finalize.js";
 import { INTAKE_GRAPH_VERSION, findNode, nextNode, type IntakeNode } from "./graph.js";
 import { loadExploration, listExplorations } from "./exploration-source.js";
 import { renderIntakeDiagnostics, renderQuestion, renderSessionStatus } from "./render.js";
@@ -192,6 +192,15 @@ async function resolveSession(
   }
 ): Promise<ResolvedSession | CliResult> {
   const wantsProposals = options.proposals !== false;
+
+  // `--session` with no value parses as `true`, which `stringOption` reports as
+  // absent — so the command silently fell through to the newest active session.
+  // `legion start --abort --session --json` could therefore abort a different
+  // interview than the operator named.
+  if (context.args.options.get("session") === true) {
+    return usageError("Missing required value for --session. Pass the session ID, as in --session itk_...");
+  }
+
   const explicitId = stringOption(context, "session");
   if (explicitId !== undefined) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
@@ -338,8 +347,12 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
   }
 
   const proposal = proposals.get(node.slot);
+  // The session is named explicitly. With concurrent starts now preserved rather
+  // than overwritten, "the newest active session" and "the session that asked
+  // this question" are no longer the same thing, so a follow-up that omits it
+  // can record an answer into a different interview.
   const action = nextAction(
-    `legion start --answer "${node.id}=<value>"`,
+    `legion start --session ${session.id} --answer "${node.id}=<value>"`,
     "Record this answer; the next question follows."
   );
 
@@ -564,7 +577,7 @@ async function recordAndReport(
 
   const proposal = resolved.proposals.get(following.node.slot);
   const action = nextAction(
-    `legion start --answer "${following.node.id}=<value>"`,
+    `legion start --session ${recorded.session.id} --answer "${following.node.id}=<value>"`,
     "Record the next answer."
   );
   return success(
@@ -890,7 +903,10 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     injectedNodes: session.injectedNodes
   });
   if (node !== undefined) {
-    const action = nextAction(`legion start --answer "${node.id}=<value>"`, "Answer the remaining questions.");
+    const action = nextAction(
+      `legion start --session ${session.id} --answer "${node.id}=<value>"`,
+      "Answer the remaining questions."
+    );
     return failure(
       {
         ok: false,
@@ -1028,12 +1044,23 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     intakeSessionPath: intakeSessionArtifactPath(session.id)
   });
 
+  // The risk tier, budgets and verification command the operator chose are
+  // recorded with the requirement set, because planning reads them from there.
+  // Left in the session they would be answers nobody consumes.
+  const enforcement = enforcementPolicy(session.answers);
+  if (enforcement === undefined) {
+    notes.push(
+      "The enforcement answers could not be read back, so planning will fall back to repository defaults. Re-run the risk and budget questions."
+    );
+  }
+
   const written = await writeRequirementSet({
     repositoryRoot: context.repositoryRoot,
     projectId,
     requirements,
     intakeSessionId: session.id,
     graphVersion: session.graphVersion,
+    ...(enforcement === undefined ? {} : { enforcement }),
     createdAt
   });
 

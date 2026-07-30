@@ -68,14 +68,17 @@ async function readExplorationRunId(
  * and the two would drift the moment either changed.
  */
 export async function listExplorations(
-  repositoryRoot: string
+  repositoryRoot: string,
+  limitPerWorkflow: number = DISCOVERY_LIMIT
 ): Promise<readonly ExplorationCandidate[]> {
   const runs = await latestGuidanceRuns({
     repositoryRoot,
     workflows: ["explore"],
-    // Deep enough to find a brainstorm from a few days ago, shallow enough that
-    // "recent explorations" stays a list a human can read.
-    limitPerWorkflow: 10
+    // A number, always. Omitting the option is not "no limit" —
+    // `latestGuidanceRuns` defaults to three, tighter than the discovery cap
+    // rather than looser — and passing `undefined` to a defaulted parameter
+    // silently restores the default it was meant to override.
+    limitPerWorkflow
   });
 
   // Read in parallel. These are independent files and the list is walked on
@@ -101,6 +104,19 @@ export async function listExplorations(
   );
 }
 
+/**
+ * How many explorations the *discovery* list offers.
+ *
+ * A cap belongs on the list a human reads. It does not belong on resolution: a
+ * session pins one exploration by ID, and ten newer runs must not make its
+ * proposals disappear. `loadExploration` therefore searches without the cap,
+ * which also lets `--from-exploration` name an older run.
+ */
+export const DISCOVERY_LIMIT = 10;
+
+/** Ask for every exploration on disk, however many there are. */
+export const ALL_EXPLORATIONS = Number.MAX_SAFE_INTEGER;
+
 export interface LoadedExploration {
   readonly exploration: Exploration;
   readonly artifact: { readonly path: string; readonly sha256: string };
@@ -122,7 +138,9 @@ export async function loadExploration(
   repositoryRoot: string,
   runId: string
 ): Promise<LoadExplorationResult> {
-  const candidates = await listExplorations(repositoryRoot);
+  // Unbounded on purpose: see DISCOVERY_LIMIT. A pinned exploration must stay
+  // resolvable however many newer runs exist.
+  const candidates = await listExplorations(repositoryRoot, ALL_EXPLORATIONS);
   // Either ID resolves: the run ID a human types, or the entity ID a session
   // recorded.
   const candidate = candidates.find(

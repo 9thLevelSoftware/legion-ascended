@@ -2,6 +2,7 @@ import * as z from "zod";
 
 import {
   artifactPathSchema,
+  riskTierSchema,
   contentHashSchema,
   intakeSessionIdSchema,
   projectIdSchema,
@@ -48,6 +49,34 @@ export const requirementSetSchema = z
       .regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/, "Invalid graph version")
       .optional(),
     requirementSetHash: contentHashSchema,
+    /**
+     * The enforcement settings the interview collected.
+     *
+     * Recorded here rather than left in the session because planning has to read
+     * them. An answer that is asked for, stored, and never consumed is the same
+     * failure as a hash that is written and never checked: the operator believes
+     * they set a limit, and nothing enforces it.
+     *
+     * Optional because a project initialized with `--name` never held an
+     * interview. Consumers fall back to their own defaults and say so.
+     */
+    enforcement: z
+      .strictObject({
+        risk: z.strictObject({
+          tier: riskTierSchema,
+          reason: z.string().min(1).max(128)
+        }),
+        budget: z.strictObject({
+          maxFilesChanged: z.number().int().positive(),
+          maxLinesChanged: z.number().int().positive(),
+          maxNewFiles: z.number().int().min(0)
+        }),
+        verification: z.strictObject({
+          command: z.string().min(1).max(256),
+          args: z.array(z.string().max(256)).max(64)
+        })
+      })
+      .optional(),
     entries: z.array(requirementSetEntrySchema)
   })
   .superRefine((set, context) => {
@@ -62,6 +91,14 @@ export const requirementSetSchema = z
         continue;
       }
       seen.add(entry.requirementId);
+    }
+
+    if (set.enforcement !== undefined && set.enforcement.budget.maxNewFiles > set.enforcement.budget.maxFilesChanged) {
+      context.addIssue({
+        code: "custom",
+        message: "A task cannot create more new files than it may change in total.",
+        path: ["enforcement", "budget", "maxNewFiles"]
+      });
     }
 
     if (set.intakeSessionId === undefined && set.graphVersion !== undefined) {
