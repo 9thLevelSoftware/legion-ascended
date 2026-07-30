@@ -19064,8 +19064,8 @@ async function readRequirementSet(repositoryRoot) {
   }
   return { ok: true, set: parsed.data, requirements, contents };
 }
-async function verifyRequirementSet(repositoryRoot) {
-  const read = await readRequirementSet(repositoryRoot);
+async function verifyRequirementSet(repositoryRoot, snapshot) {
+  const read = snapshot ?? await readRequirementSet(repositoryRoot);
   if (!read.ok) {
     if (read.status === "not_found")
       return [];
@@ -30483,7 +30483,7 @@ function clamp(value) {
 }
 function describeCriterion(criterion) {
   if (criterion.proof.mode === "executable") {
-    const command = [criterion.proof.command, ...criterion.proof.args].join(" ");
+    const command = [criterion.proof.command, ...criterion.proof.args].map((part) => /[\s"']/.test(part) ? JSON.stringify(part) : part).join(" ");
     return clamp(`${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
   return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
@@ -30856,7 +30856,7 @@ async function handlePlanWorkflow(context) {
     );
   }
   if (requirementSet.ok) {
-    const drift = await verifyRequirementSet(context.repositoryRoot);
+    const drift = await verifyRequirementSet(context.repositoryRoot, requirementSet);
     if (drift.length > 0) {
       return failure(
         {

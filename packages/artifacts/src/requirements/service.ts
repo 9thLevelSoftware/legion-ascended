@@ -329,9 +329,18 @@ export interface RequirementSetDrift {
  * and removal, which no per-file check can see.
  */
 export async function verifyRequirementSet(
-  repositoryRoot: string
+  repositoryRoot: string,
+  /**
+   * An already-read set to validate, instead of reading again.
+   *
+   * Verifying one read and consuming another is not verification: a requirement
+   * drifted at read time and restored before the check would be approved, while
+   * the untrusted content is what planning copies into the task contract. The
+   * caller passes the snapshot it will actually use.
+   */
+  snapshot?: ReadRequirementSetResult
 ): Promise<readonly RequirementSetDrift[]> {
-  const read = await readRequirementSet(repositoryRoot);
+  const read = snapshot ?? (await readRequirementSet(repositoryRoot));
   if (!read.ok) {
     if (read.status === "not_found") return [];
     return [{ code: "requirement_set_drift", message: read.reason }];

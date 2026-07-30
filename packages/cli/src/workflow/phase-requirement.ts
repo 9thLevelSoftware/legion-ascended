@@ -148,7 +148,13 @@ function clamp(value: string): string {
  */
 export function describeCriterion(criterion: RequirementCriterion): string {
   if (criterion.proof.mode === "executable") {
-    const command = [criterion.proof.command, ...criterion.proof.args].join(" ");
+    // Quoted where it matters. Joining on spaces renders `["-e", "foo bar"]`
+    // as `node -e foo bar`, which is a different command and the one a reviewer
+    // would reproduce — the same argument-boundary collapse the verification
+    // identity had, in the text a human acts on.
+    const command = [criterion.proof.command, ...criterion.proof.args]
+      .map((part) => (/[\s"']/.test(part) ? JSON.stringify(part) : part))
+      .join(" ");
     return clamp(`${criterion.statement} — \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
   return clamp(`${criterion.statement} — manual: ${criterion.proof.reason}`);

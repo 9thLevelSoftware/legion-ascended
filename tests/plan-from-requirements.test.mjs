@@ -596,3 +596,28 @@ test("planning consumes the requirement snapshot it verified", async (t) => {
     : "";
   assert.doesNotMatch(written, /attacker\.example/);
 });
+
+test("a rendered command keeps argument boundaries a reviewer can reproduce", async () => {
+  const { describeCriterion } = await import(
+    "../packages/cli/dist/workflow/phase-requirement.js"
+  );
+
+  // This text becomes the oracle postcondition and coverage criterion, so it is
+  // the command a reviewer retypes. Joining on spaces rendered
+  // `["-e", "foo bar"]` as `node -e foo bar` — a different command, and
+  // indistinguishable from `["-e", "foo", "bar"]`.
+  const quoted = describeCriterion({
+    id: "ac_quoted-1",
+    statement: "The quoted form runs",
+    proof: { mode: "executable", command: "node", args: ["-e", "foo bar"], expectedExitCode: 0 }
+  });
+  const split = describeCriterion({
+    id: "ac_split-1",
+    statement: "The quoted form runs",
+    proof: { mode: "executable", command: "node", args: ["-e", "foo", "bar"], expectedExitCode: 0 }
+  });
+
+  assert.notEqual(quoted, split, "distinct argument vectors must render distinctly");
+  assert.match(quoted, /node -e "foo bar"/);
+  assert.match(split, /node -e foo bar/);
+});

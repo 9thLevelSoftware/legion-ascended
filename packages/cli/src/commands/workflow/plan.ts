@@ -143,7 +143,8 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   // `legion validate` and `legion doctor` both detect this; the path that
   // actually consumes the content did not, which is the wrong way round.
   if (requirementSet.ok) {
-    const drift = await verifyRequirementSet(context.repositoryRoot);
+    // The snapshot read above, so what is verified is what is consumed.
+    const drift = await verifyRequirementSet(context.repositoryRoot, requirementSet);
     if (drift.length > 0) {
       return failure(
         {
