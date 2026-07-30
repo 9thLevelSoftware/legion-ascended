@@ -2160,11 +2160,17 @@ test("legion plan phase requires a strict positive integer", async () => {
 test("legion start reports friendly usage and supports dry-run", async () => {
   const root = await tempRepo();
   try {
-    const missingName = await runCliCapture(["--repository-root", root, "start", "--json"]);
-    assert.equal(missingName.exitCode, 1);
-    const missingNamePayload = parseJsonOutput(missingName);
-    assert.equal(missingNamePayload.status, "usage_error");
-    assert.match(missingNamePayload.diagnostics[0].message, /legion start --name "My Project"/);
+    // `legion start` with no arguments used to be a usage error. It is now the
+    // interview entrance, which is why the intake graph could claim that
+    // invocation without breaking any caller: nothing could have been relying
+    // on a command that only ever failed.
+    const bare = await runCliCapture(["--repository-root", root, "start", "--json"]);
+    assert.equal(bare.exitCode, 0, bare.stderr);
+    const barePayload = parseJsonOutput(bare);
+    assert.equal(barePayload.status, "question");
+    assert.equal(barePayload.question.nodeId, "project-name");
+    assert.equal(barePayload.session.answered, 0);
+    assert.ok(barePayload.session.total > 0, "the session should report how many questions are pending");
 
     const valuelessName = await runCliCapture(["--repository-root", root, "start", "--name", "--dry-run", "--json"]);
     assert.equal(valuelessName.exitCode, 1);

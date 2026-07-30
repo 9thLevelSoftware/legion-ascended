@@ -23,6 +23,8 @@ export const PROJECT_ARTIFACT_PATHS = Object.freeze({
   projectManifest: ".legion/project/project.json",
   constitution: ".legion/project/constitution.md",
   currentSpecs: ".legion/project/specs",
+  requirements: ".legion/project/requirements",
+  intake: ".legion/project/intake",
   changes: ".legion/project/changes",
   adr: ".legion/project/adr"
 });

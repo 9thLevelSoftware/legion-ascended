@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path38 from "node:path";
+import path42 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path39) {
-  if (!path39)
+function getElementAtPath(obj, path43) {
+  if (!path43)
     return obj;
-  return path39.reduce((acc, key) => acc?.[key], obj);
+  return path43.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path39, issues) {
+function prefixIssues(path43, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path39);
+    iss.path.unshift(path43);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path39 = []) => {
+  const processError = (error3, path43 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path39, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path43, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path39, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path43, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path39, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path43, ...issue2.path]);
       } else {
-        const fullpath = [...path39, ...issue2.path];
+        const fullpath = [...path43, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -5935,11 +5935,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path39 = [...next.path, migration];
+      const path43 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path39;
+        return path43;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path39 });
+      queue.push({ version: migration.toVersion, path: path43 });
     }
     next = queue.shift();
   }
@@ -8624,17 +8624,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path39 = findProtocolMigrationPath({
+  const path43 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path39 === null) {
+  if (path43 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path39) {
+  for (const descriptor of path43) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -9697,10 +9697,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path39) {
-  if (path39.length === 0)
+function renderPath(path43) {
+  if (path43.length === 0)
     return "<root>";
-  return path39.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path43.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -15390,20 +15390,30 @@ var BOARD_TASK_LINK_DAG_RELATION_SET = new Set(BOARD_TASK_LINK_DAG_RELATIONS);
 // packages/cli/src/runtime.ts
 import { readFile } from "node:fs/promises";
 var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
+  "abort",
+  "accept-proposal",
   "allow-replace-existing-project",
   "allow-dirty",
   "apply",
   "accept",
   "auto",
   "auto-refine",
+  "back",
   "dry-run",
+  "finalize",
+  "force-roadmap",
   "from-codex-legion",
   "from-planning",
   "help",
   "json",
+  // Without this, `legion start --next --json` is fine but `legion start --next`
+  // followed by any positional swallows it as the flag's value.
+  "next",
   "no-color",
   "review-accepted",
-  "rollback"
+  "rollback",
+  "session-status",
+  "skip"
 ]);
 function parseCliArgs(argv) {
   const positionals = [];
@@ -16865,6 +16875,8 @@ var PROJECT_ARTIFACT_PATHS = Object.freeze({
   projectManifest: ".legion/project/project.json",
   constitution: ".legion/project/constitution.md",
   currentSpecs: ".legion/project/specs",
+  requirements: ".legion/project/requirements",
+  intake: ".legion/project/intake",
   changes: ".legion/project/changes",
   adr: ".legion/project/adr"
 });
@@ -17078,14 +17090,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path39) {
-  if (path39.endsWith(".json"))
+function mediaTypeForArtifactPath(path43) {
+  if (path43.endsWith(".json"))
     return "application/json";
-  if (path39.endsWith(".yaml") || path39.endsWith(".yml"))
+  if (path43.endsWith(".yaml") || path43.endsWith(".yml"))
     return "application/yaml";
-  if (path39.endsWith(".md"))
+  if (path43.endsWith(".md"))
     return "text/markdown";
-  if (path39.endsWith(".txt"))
+  if (path43.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -17128,16 +17140,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path39, issues) {
+function schemaDiagnostics(path43, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path39 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path43 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path39
+      path: path43
     });
   });
 }
@@ -17642,10 +17654,44 @@ async function detectPreInitCollision(repositoryRoot) {
 }
 async function containsOnlyPreInitWorkflowRecords(projectRoot) {
   const entries = await readdir(projectRoot, { withFileTypes: true });
-  if (entries.length !== 1 || entries[0]?.isDirectory() !== true || entries[0].name !== "workflow") {
+  let recordCount = 0;
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name))
+      continue;
+    if (!entry.isDirectory())
+      return false;
+    if (entry.name === "workflow") {
+      if (!await containsOnlyRecognizedWorkflowRecords(path9.join(projectRoot, entry.name))) {
+        return false;
+      }
+      recordCount += 1;
+      continue;
+    }
+    if (entry.name === "intake") {
+      const intake = await intakeSessionDirectoryStats(path9.join(projectRoot, entry.name));
+      if (!intake.valid)
+        return false;
+      recordCount += intake.recordCount;
+      continue;
+    }
     return false;
   }
-  return containsOnlyRecognizedWorkflowRecords(path9.join(projectRoot, "workflow"));
+  return recordCount > 0;
+}
+async function intakeSessionDirectoryStats(absoluteDirectory) {
+  const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+  let recordCount = 0;
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name))
+      continue;
+    if (!entry.isDirectory() || !entry.name.startsWith("itk_"))
+      return { valid: false, recordCount: 0 };
+    if (!await pathExists2(path9.join(absoluteDirectory, entry.name, "session.json"))) {
+      return { valid: false, recordCount: 0 };
+    }
+    recordCount += 1;
+  }
+  return { valid: true, recordCount };
 }
 async function containsOnlyRecognizedWorkflowRecords(workflowRoot) {
   const entries = await readdir(workflowRoot, { withFileTypes: true });
@@ -17943,6 +17989,65 @@ async function validateProject(input) {
     return failure2("invalid", diagnostics);
   return { ok: true, diagnostics: [] };
 }
+async function updateConstitution(input) {
+  const loaded = await loadProject({ repositoryRoot: input.repositoryRoot });
+  if (!loaded.ok)
+    return loaded;
+  if (input.expectedManifestRevision !== loaded.manifest.revision) {
+    return failure2("invalid", [
+      pathDiagnostic({
+        code: "stale_manifest_revision",
+        message: `Expected project manifest revision ${input.expectedManifestRevision}, but current revision is ${loaded.manifest.revision}.`
+      })
+    ]);
+  }
+  const constitutionDiagnostics = validateConstitutionText({
+    content: input.content,
+    path: loaded.manifest.project.policy.constitution.path
+  });
+  if (constitutionDiagnostics.length > 0)
+    return failure2("invalid", constitutionDiagnostics);
+  const constitutionWrite = await writeRevisionedArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: loaded.manifest.project.policy.constitution.path,
+    role: "constitution",
+    content: input.content,
+    expectedRevision: loaded.constitutionRevision.revision,
+    currentRevision: loaded.constitutionRevision.revision,
+    supersedes: loaded.constitutionRevision.artifact,
+    mediaType: "text/markdown"
+  });
+  const updatedProject = projectSchema.parse({
+    ...loaded.project,
+    updatedAt: parseTimestamp(input.updatedAt),
+    policy: {
+      ...loaded.project.policy,
+      constitution: constitutionWrite.reference
+    }
+  });
+  const updatedManifest = buildManifest({
+    revision: loaded.manifest.revision + 1,
+    project: updatedProject,
+    constitutionRevision: constitutionWrite.revision
+  });
+  const manifestWrite = await writeRevisionedArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: PROJECT_MANIFEST_ARTIFACT_PATH,
+    role: "project-manifest",
+    content: stableProtocolJson(updatedManifest),
+    expectedRevision: loaded.manifest.revision,
+    currentRevision: loaded.manifest.revision,
+    supersedes: loaded.manifestReference,
+    mediaType: "application/json"
+  });
+  return success2({
+    status: "updated",
+    project: updatedProject,
+    manifest: updatedManifest,
+    manifestRevision: manifestWrite.revision,
+    constitutionRevision: constitutionWrite.revision
+  });
+}
 
 // packages/artifacts/dist/specs/schema.js
 var CURRENT_SPEC_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
@@ -18102,7 +18207,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path39 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path43 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -18116,7 +18221,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path39
+        path: path43
       }))
     };
   }
@@ -18713,6 +18818,130 @@ function diffCurrentSpecIndexes(input) {
   return { added, modified, removed, moved };
 }
 
+// packages/artifacts/dist/requirements/schema.js
+var REQUIREMENT_SET_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
+var requirementSetEntrySchema = strictObject({
+  requirementId: requirementIdSchema,
+  path: artifactPathSchema,
+  sha256: contentHashSchema
+});
+var requirementSetSchema = strictObject({
+  schemaVersion: schemaVersionSchema,
+  kind: literal("requirement-set"),
+  createdAt: utcTimestampSchema,
+  projectId: projectIdSchema,
+  /** The interview this set came from; absent for imported or generated sets. */
+  intakeSessionId: intakeSessionIdSchema.optional(),
+  /** The graph version the interview ran under, when there was one. */
+  graphVersion: string2().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/, "Invalid graph version").optional(),
+  requirementSetHash: contentHashSchema,
+  entries: array(requirementSetEntrySchema)
+}).superRefine((set, context) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, entry] of set.entries.entries()) {
+    if (seen.has(entry.requirementId)) {
+      context.addIssue({
+        code: "custom",
+        message: "Requirement IDs must be unique within a requirement set.",
+        path: ["entries", index, "requirementId"]
+      });
+      continue;
+    }
+    seen.add(entry.requirementId);
+  }
+  if (set.intakeSessionId === void 0 && set.graphVersion !== void 0) {
+    context.addIssue({
+      code: "custom",
+      message: "A graph version without an intake session has nothing to describe.",
+      path: ["graphVersion"]
+    });
+  }
+});
+
+// packages/artifacts/dist/requirements/service.js
+import { createHash as createHash15 } from "node:crypto";
+import { mkdir as mkdir9, readFile as readFile6, readdir as readdir3, rename as rename2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
+import path11 from "node:path";
+var REQUIREMENT_SET_INDEX_FILE = "index.json";
+function requirementsRoot(repositoryRoot) {
+  return path11.join(repositoryRoot, ".legion", "project", "requirements");
+}
+function requirementArtifactPath(requirementId) {
+  return `${PROJECT_ARTIFACT_PATHS.requirements}/${requirementId}.json`;
+}
+function requirementSetIndexPath() {
+  return `${PROJECT_ARTIFACT_PATHS.requirements}/${REQUIREMENT_SET_INDEX_FILE}`;
+}
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object")
+    return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value))
+    return `[${value.map(canonicalJson).join(",")}]`;
+  const entries = Object.entries(value).filter(([, entry]) => entry !== void 0).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+  return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(",")}}`;
+}
+function computeRequirementSetHash(requirements) {
+  const digest = createHash15("sha256");
+  digest.update(canonicalJson(requirements.map((requirement) => requirementSchema.parse(requirement))));
+  return contentHashSchema.parse(`sha256:${digest.digest("hex")}`);
+}
+function hashBytes(bytes) {
+  return contentHashSchema.parse(`sha256:${createHash15("sha256").update(bytes, "utf8").digest("hex")}`);
+}
+async function writeAtomic(target, contents) {
+  await mkdir9(path11.dirname(target), { recursive: true });
+  const temporary = `${target}.tmp`;
+  await writeFile2(temporary, contents, "utf8");
+  await rename2(temporary, target);
+}
+async function writeRequirementSet(input) {
+  const createdAt = input.createdAt ?? utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+  const root = requirementsRoot(input.repositoryRoot);
+  await mkdir9(root, { recursive: true });
+  const entries = [];
+  const written = /* @__PURE__ */ new Set();
+  const requirementPaths = [];
+  for (const requirement of input.requirements) {
+    const parsed = requirementSchema.parse(requirement);
+    const contents = `${JSON.stringify(parsed, void 0, 2)}
+`;
+    const relative = requirementArtifactPath(parsed.id);
+    await writeAtomic(path11.join(input.repositoryRoot, ...relative.split("/")), contents);
+    written.add(`${parsed.id}.json`);
+    requirementPaths.push(relative);
+    entries.push(requirementSetSchema.shape.entries.element.parse({
+      requirementId: parsed.id,
+      path: relative,
+      sha256: hashBytes(contents)
+    }));
+  }
+  const set = requirementSetSchema.parse({
+    schemaVersion: REQUIREMENT_SET_SCHEMA_VERSION,
+    kind: "requirement-set",
+    createdAt,
+    projectId: input.projectId,
+    ...input.intakeSessionId === void 0 ? {} : { intakeSessionId: input.intakeSessionId },
+    ...input.graphVersion === void 0 ? {} : { graphVersion: input.graphVersion },
+    requirementSetHash: computeRequirementSetHash(input.requirements),
+    entries
+  });
+  const indexRelative = requirementSetIndexPath();
+  await writeAtomic(path11.join(input.repositoryRoot, ...indexRelative.split("/")), `${JSON.stringify(set, void 0, 2)}
+`);
+  for (const entry of await readdir3(root, { withFileTypes: true })) {
+    if (!entry.isFile())
+      continue;
+    if (entry.name === REQUIREMENT_SET_INDEX_FILE)
+      continue;
+    if (written.has(entry.name))
+      continue;
+    if (!entry.name.startsWith("req_") || !entry.name.endsWith(".json"))
+      continue;
+    await rm2(path11.join(root, entry.name), { force: true });
+  }
+  return { set, indexPath: indexRelative, requirementPaths };
+}
+
 // packages/artifacts/dist/changes/schema.js
 var CHANGE_BUNDLE_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
 var deltaOperationSchema = _enum(["add", "modify", "remove"]);
@@ -18836,7 +19065,7 @@ function jsonSchemaDocument7(id, title, schema) {
 var changeBundleJsonSchema = jsonSchemaDocument7("https://schemas.9thlevelsoftware.com/legion/artifacts/change-bundle.schema.json", "Legion change bundle artifact schema", changeBundleSchema);
 
 // packages/artifacts/dist/changes/service.js
-import { readFile as readFile6, stat as stat3 } from "node:fs/promises";
+import { readFile as readFile7, stat as stat3 } from "node:fs/promises";
 var INVALID_CHANGE_BUNDLE_PATH = `${PROJECT_ARTIFACT_PATHS.changes}/invalid-change/change.yaml`;
 function isEnoent3(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
@@ -18864,13 +19093,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path39) {
+function parseRequirementId2(input, path43) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
@@ -18886,24 +19115,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path39) {
+function parseBaseGitSha(input, path43) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path39) {
+function parseOwners(input, path43) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path39
+        path: path43
       })
     ]);
   }
@@ -18915,7 +19144,7 @@ function parseOwners(input, path39) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path39
+        path: path43
       })));
       continue;
     }
@@ -19033,7 +19262,7 @@ async function readMarkdownArtifact(input) {
   }
   let content;
   try {
-    content = await readFile6(resolved.absolutePath, "utf8");
+    content = await readFile7(resolved.absolutePath, "utf8");
   } catch (error2) {
     if (isEnoent3(error2)) {
       return failure4("not_found", [
@@ -19081,7 +19310,7 @@ async function readCurrentSpecByArtifactPath(input) {
   }
   let content;
   try {
-    content = await readFile6(resolved.absolutePath, "utf8");
+    content = await readFile7(resolved.absolutePath, "utf8");
   } catch (error2) {
     if (isEnoent3(error2)) {
       return failure4("not_found", [
@@ -19203,7 +19432,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path39) {
+function conflictDiagnostics(deltas, path43) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -19212,7 +19441,7 @@ function conflictDiagnostics(deltas, path39) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path39
+        path: path43
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -19950,8 +20179,8 @@ var oracleArtifactJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoft
 var oracleManifestJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-manifest.schema.json", "Legion oracle manifest schema", oracleManifestSchema);
 
 // packages/artifacts/dist/oracles/service.js
-import { readdir as readdir3 } from "node:fs/promises";
-import path11 from "node:path";
+import { readdir as readdir4 } from "node:fs/promises";
+import path12 from "node:path";
 var INVALID_ORACLE_PATH = ".legion/project/changes/invalid-change/oracle/invalid.yaml";
 function compareStrings2(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -19989,18 +20218,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path39) {
+function parseOracleId2(input, path43) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path39) {
+function parseBaseGitSha2(input, path43) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20008,7 +20237,7 @@ function parseBaseGitSha2(input, path39) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
@@ -20178,10 +20407,10 @@ async function deriveOracleManifest(input) {
   const changeId = parseChangeId3(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const oracleDirectory = path11.join(input.repositoryRoot, PROJECT_ARTIFACT_PATHS.changes, changeId, "oracle");
+  const oracleDirectory = path12.join(input.repositoryRoot, PROJECT_ARTIFACT_PATHS.changes, changeId, "oracle");
   let entries;
   try {
-    entries = await readdir3(oracleDirectory, { withFileTypes: true });
+    entries = await readdir4(oracleDirectory, { withFileTypes: true });
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
       return {
@@ -20352,7 +20581,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path39) {
+function parseBaseGitSha3(input, path43) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20360,18 +20589,18 @@ function parseBaseGitSha3(input, path39) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path39) {
+function assertExpectedRevision(value, path43) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path39
+        path: path43
       })
     ]);
   }
@@ -20689,7 +20918,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path39) {
+function parseBaseGitSha4(input, path43) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20697,18 +20926,18 @@ function parseBaseGitSha4(input, path39) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path39) {
+function assertExpectedRevision2(value, path43) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path39
+        path: path43
       })
     ]);
   }
@@ -21050,8 +21279,8 @@ async function readEvidenceIndex(input) {
 }
 
 // packages/artifacts/dist/task-runs/service.js
-import { readdir as readdir4 } from "node:fs/promises";
-import path12 from "node:path";
+import { readdir as readdir5 } from "node:fs/promises";
+import path13 from "node:path";
 var INVALID_TASK_RUN_PATH = ".legion/project/changes/invalid-change/runs/invalid-run/task-run.json";
 var ARTIFACT_REVISION_METADATA_KEY = "artifact_revision";
 function failure8(status2, diagnostics) {
@@ -21107,13 +21336,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path39) {
+function assertExpectedRevision3(value, path43) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path39
+        path: path43
       })
     ]);
   }
@@ -21287,10 +21516,10 @@ async function listTaskRunsForChange(input) {
   const changeId = parseChangeId6(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const runsRoot = path12.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "runs");
+  const runsRoot = path13.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "runs");
   let entries;
   try {
-    entries = await readdir4(runsRoot, { withFileTypes: true });
+    entries = await readdir5(runsRoot, { withFileTypes: true });
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
       return { ok: true, status: "read", taskRuns: [], diagnostics: [] };
@@ -21328,8 +21557,8 @@ async function listTaskRunsForChange(input) {
 }
 
 // packages/artifacts/dist/reviews/service.js
-import { readdir as readdir5 } from "node:fs/promises";
-import path13 from "node:path";
+import { readdir as readdir6 } from "node:fs/promises";
+import path14 from "node:path";
 var INVALID_REVIEW_PATH = ".legion/project/changes/invalid-change/reviews/invalid-review.json";
 var ARTIFACT_REVISION_METADATA_KEY2 = "artifact_revision";
 function failure9(status2, diagnostics) {
@@ -21385,13 +21614,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path39) {
+function assertExpectedRevision4(value, path43) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path39
+        path: path43
       })
     ]);
   }
@@ -21565,10 +21794,10 @@ async function listReviewDecisionsForChange(input) {
   const changeId = parseChangeId7(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const reviewsRoot = path13.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "reviews");
+  const reviewsRoot = path14.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "reviews");
   let entries;
   try {
-    entries = await readdir5(reviewsRoot, { withFileTypes: true });
+    entries = await readdir6(reviewsRoot, { withFileTypes: true });
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
       return { ok: true, status: "read", reviews: [], diagnostics: [] };
@@ -21632,8 +21861,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path39) {
-  return nodeId("artifact", path39);
+function artifactNodeId(path43) {
+  return nodeId("artifact", path43);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -21669,8 +21898,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path39) {
-  const fileName = path39.split("/").at(-1);
+function oracleIdFromPath(path43) {
+  const fileName = path43.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -21785,13 +22014,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path39 = [];
+  const path43 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path39.indexOf(node);
+      const cycleStartIndex = path43.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path39.length; index++) {
-          const cyclicNode = path39[index];
+        for (let index = cycleStartIndex; index < path43.length; index++) {
+          const cyclicNode = path43[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -21801,11 +22030,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path39.push(node);
+    path43.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path39.pop();
+    path43.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -21833,10 +22062,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path39 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path43 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path39,
+        path: path43,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -22455,7 +22684,7 @@ var archiveRecordJsonSchema = jsonSchemaDocument11("https://schemas.9thlevelsoft
 
 // packages/artifacts/dist/archive/service.js
 import { execFile } from "node:child_process";
-import { readFile as readFile7, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
+import { readFile as readFile8, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
 var INVALID_ARCHIVE_PATH = ".legion/project/changes/invalid-change/archive.json";
@@ -22482,13 +22711,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path39) {
+function parseArchivedAt(input, path43) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path39
+      path: path43
     })));
   }
   return parsed.data;
@@ -22517,7 +22746,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path39) {
+function archiveHashDiagnostics(record2, path43) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -22525,11 +22754,11 @@ function archiveHashDiagnostics(record2, path39) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path39
+      path: path43
     })
   ];
 }
-async function assertWorktreeTarget(input, path39) {
+async function assertWorktreeTarget(input, path43) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -22543,7 +22772,7 @@ async function assertWorktreeTarget(input, path39) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path39
+        path: path43
       })
     ]);
   } catch (error2) {
@@ -22551,7 +22780,7 @@ async function assertWorktreeTarget(input, path39) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path39
+        path: path43
       })
     ]);
   }
@@ -22630,11 +22859,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path39 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path39 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path39)) : remaining;
+    const path43 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path43 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path43)) : remaining;
     return {
-      path: path39,
+      path: path43,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -22697,9 +22926,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path39, document) {
+function validatePlannedDocument(path43, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path39,
+    artifactPath: path43,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -22710,7 +22939,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path39, document]) => [path39, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path43, document]) => [path43, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -22734,17 +22963,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path39 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path39)) {
+      const path43 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path43)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path39}.`,
-            path: path39
+            message: `Archive add target already exists: ${path43}.`,
+            path: path43
           })
         ]);
       }
-      plannedDocs.set(path39, {
+      plannedDocs.set(path43, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -22757,7 +22986,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path39);
+      touchedPaths.add(path43);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -22942,8 +23171,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path39 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path39);
+  const path43 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path43);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -23025,7 +23254,7 @@ async function backupFiles(input) {
       ]);
     }
     try {
-      const bytes = await readFile7(resolved.absolutePath);
+      const bytes = await readFile8(resolved.absolutePath);
       backups.push({ path: artifactPath, absolutePath: resolved.absolutePath, existed: true, bytes });
     } catch (error2) {
       if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
@@ -23039,7 +23268,7 @@ async function backupFiles(input) {
 }
 async function rollbackGuardMatches(backup, guard) {
   try {
-    const bytes = await readFile7(backup.absolutePath);
+    const bytes = await readFile8(backup.absolutePath);
     return guard.kind === "content" ? hashContent(bytes) === guard.sha256 : false;
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
@@ -23055,10 +23284,10 @@ async function rollbackFiles(backups, guards) {
       continue;
     if (backup.existed) {
       if (backup.bytes !== void 0)
-        await writeFile2(backup.absolutePath, backup.bytes);
+        await writeFile3(backup.absolutePath, backup.bytes);
       continue;
     }
-    await rm2(backup.absolutePath, { force: true });
+    await rm3(backup.absolutePath, { force: true });
   }
 }
 function rollbackGuardsForPlannedSpecs(plannedSpecs) {
@@ -23075,7 +23304,7 @@ async function deletePlannedSpec(input) {
   });
   let bytes;
   try {
-    bytes = await readFile7(resolved.absolutePath);
+    bytes = await readFile8(resolved.absolutePath);
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
       return failure11("invalid", [
@@ -23112,7 +23341,7 @@ async function deletePlannedSpec(input) {
       })
     ]);
   }
-  await rm2(resolved.absolutePath, { force: false });
+  await rm3(resolved.absolutePath, { force: false });
   return void 0;
 }
 async function writePlannedSpecs(input) {
@@ -23181,10 +23410,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path39 = archivePath(changeId);
+  const path43 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path39,
+    artifactPath: path43,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -23196,22 +23425,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path39
+        path: path43
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path39);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path43);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path39,
+    artifactPath: path43,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path39,
+      path: path43,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -23457,24 +23686,24 @@ async function archive(context) {
 // packages/cli/src/commands/evals/index.ts
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as existsSync3 } from "node:fs";
-import { readFile as readFile8 } from "node:fs/promises";
-import path15 from "node:path";
+import { readFile as readFile9 } from "node:fs/promises";
+import path16 from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // packages/cli/src/source-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import path14 from "node:path";
+import path15 from "node:path";
 import { fileURLToPath } from "node:url";
 function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
-  const moduleDirectory = path14.dirname(fileURLToPath(importMetaUrl));
+  const moduleDirectory = path15.dirname(fileURLToPath(importMetaUrl));
   const candidates = [
     // Bundled root CLI: dist/legion-cli.mjs -> package root.
-    path14.resolve(moduleDirectory, ".."),
+    path15.resolve(moduleDirectory, ".."),
     // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
-    path14.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+    path15.resolve(moduleDirectory, "..", "..", "..", "..", "..")
   ];
   for (const candidate of candidates) {
-    if (existsSync2(path14.join(candidate, requiredRelativePath))) return candidate;
+    if (existsSync2(path15.join(candidate, requiredRelativePath))) return candidate;
   }
   return candidates[0] ?? process.cwd();
 }
@@ -23598,23 +23827,23 @@ async function capture(context) {
       "capture script did not return a run directory."
     );
   }
-  const resolvedRunDir = path15.isAbsolute(runDir) ? runDir : path15.join(context.repositoryRoot, runDir);
+  const resolvedRunDir = path16.isAbsolute(runDir) ? runDir : path16.join(context.repositoryRoot, runDir);
   if (!existsSync3(resolvedRunDir)) {
     return failure(
       { ok: false, status: "error", diagnostics: [{ code: "capture_failed", message: `captured run directory not found: ${resolvedRunDir}` }] },
       `captured run directory not found: ${resolvedRunDir}`
     );
   }
-  const manifestPath = path15.join(resolvedRunDir, "run-manifest.json");
-  const scorePath = path15.join(resolvedRunDir, "score.json");
-  const manifest = JSON.parse(await readFile8(manifestPath, "utf8"));
+  const manifestPath = path16.join(resolvedRunDir, "run-manifest.json");
+  const scorePath = path16.join(resolvedRunDir, "score.json");
+  const manifest = JSON.parse(await readFile9(manifestPath, "utf8"));
   return success(
     {
       ok: true,
       status: "captured",
-      runDirectory: path15.relative(context.repositoryRoot, resolvedRunDir),
-      runManifest: path15.relative(context.repositoryRoot, manifestPath),
-      score: existsSync3(scorePath) ? path15.relative(context.repositoryRoot, scorePath) : null,
+      runDirectory: path16.relative(context.repositoryRoot, resolvedRunDir),
+      runManifest: path16.relative(context.repositoryRoot, manifestPath),
+      score: existsSync3(scorePath) ? path16.relative(context.repositoryRoot, scorePath) : null,
       manifest
     },
     `Captured run to ${resolvedRunDir}.`
@@ -23624,7 +23853,7 @@ async function grade(context) {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const resolvedRunDirectory = path15.resolve(context.repositoryRoot, runDirectory);
+  const resolvedRunDirectory = path16.resolve(context.repositoryRoot, runDirectory);
   const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
@@ -23632,7 +23861,7 @@ async function grade(context) {
     {
       ok: true,
       status: "graded",
-      score: scorePath ? path15.relative(context.repositoryRoot, scorePath) : scorePath
+      score: scorePath ? path16.relative(context.repositoryRoot, scorePath) : scorePath
     },
     `Graded ${runDirectory} -> ${scorePath}.`
   );
@@ -23648,11 +23877,11 @@ async function compare(context) {
     "--repository-root",
     context.repositoryRoot,
     "--v8-dir",
-    path15.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
+    path16.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
     "--v9-dir",
-    path15.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
+    path16.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
     "--output",
-    path15.resolve(context.repositoryRoot, context.args.options.get("output"))
+    path16.resolve(context.repositoryRoot, context.args.options.get("output"))
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -23663,8 +23892,8 @@ async function compare(context) {
     {
       ok: true,
       status: "compared",
-      abComparisonJson: jsonPath ? path15.relative(context.repositoryRoot, jsonPath) : jsonPath,
-      abComparisonMarkdown: mdPath ? path15.relative(context.repositoryRoot, mdPath) : mdPath
+      abComparisonJson: jsonPath ? path16.relative(context.repositoryRoot, jsonPath) : jsonPath,
+      abComparisonMarkdown: mdPath ? path16.relative(context.repositoryRoot, mdPath) : mdPath
     },
     `Compared v8/v9 sealed runs -> ${jsonPath}.`
   );
@@ -23678,13 +23907,13 @@ async function threatModel(context) {
   const args = [
     "scripts/baseline/threat-model.mjs",
     "--run-dir",
-    path15.resolve(context.repositoryRoot, runDir),
+    path16.resolve(context.repositoryRoot, runDir),
     "--output-root",
-    path15.resolve(context.repositoryRoot, outputRoot)
+    path16.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path15.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -23735,7 +23964,7 @@ function parseJsonVerdict(stdout) {
 }
 async function runScript(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path15.join(V9_SOURCE_ROOT, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path16.join(V9_SOURCE_ROOT, arg) : arg
   );
   try {
     const result = await execFile2(process.execPath, resolvedArgs, {
@@ -23780,9 +24009,9 @@ async function runScript(context, scriptArgs) {
 }
 
 // packages/legacy-bridge/dist/import-codex/index.js
-import { createHash as createHash15 } from "node:crypto";
-import { cp, mkdir as mkdir9, readFile as readFile9, readdir as readdir6, rename as rename2, rm as rm3, stat as stat4, writeFile as writeFile3 } from "node:fs/promises";
-import path16 from "node:path";
+import { createHash as createHash16 } from "node:crypto";
+import { cp, mkdir as mkdir10, readFile as readFile10, readdir as readdir7, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
+import path17 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
 var LEGION_ROOT = ".legion";
@@ -23791,7 +24020,7 @@ function compareStrings7(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath(value) {
-  return value.split(path16.sep).join("/");
+  return value.split(path17.sep).join("/");
 }
 function isEnoent4(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
@@ -23817,27 +24046,27 @@ function diagnostic(input) {
   };
 }
 function bytesHash(bytes) {
-  return `sha256:${createHash15("sha256").update(bytes).digest("hex")}`;
+  return `sha256:${createHash16("sha256").update(bytes).digest("hex")}`;
 }
 async function listFiles(root) {
   const files = [];
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir6(directory, { withFileTypes: true });
+      entries = await readdir7(directory, { withFileTypes: true });
     } catch (error2) {
       if (isEnoent4(error2))
         return;
       throw error2;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path16.join(directory, entry.name);
+      const absolutePath = path17.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath(path16.relative(root, absolutePath)));
+        files.push(toPosixPath(path17.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -23848,15 +24077,15 @@ async function listSymbolicLinks(root, displayedRoot) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir6(directory, { withFileTypes: true });
+      entries = await readdir7(directory, { withFileTypes: true });
     } catch (error2) {
       if (isEnoent4(error2))
         return;
       throw error2;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path16.join(directory, entry.name);
-      const displayedPath = `${displayedRoot}/${toPosixPath(path16.relative(root, absolutePath))}`;
+      const absolutePath = path17.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path17.relative(root, absolutePath))}`;
       if (entry.isSymbolicLink()) {
         links.push(displayedPath);
         continue;
@@ -23881,11 +24110,11 @@ async function validateNoSymbolicLinks(input) {
 async function hashFiles(root, files) {
   if (files.length === 0)
     return EMPTY_TREE_HASH;
-  const hash = createHash15("sha256");
+  const hash = createHash16("sha256");
   for (const file of files) {
     hash.update(file);
     hash.update("\0");
-    hash.update(await readFile9(path16.join(root, ...file.split("/"))));
+    hash.update(await readFile10(path17.join(root, ...file.split("/"))));
     hash.update("\0");
   }
   return `sha256:${hash.digest("hex")}`;
@@ -23894,23 +24123,23 @@ async function hashTree(root) {
   return hashFiles(root, await listFiles(root));
 }
 function containsPath(parent, child) {
-  const relative = path16.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path16.isAbsolute(relative);
+  const relative = path17.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative);
 }
 function pathsOverlap2(left, right) {
   return containsPath(left, right) || containsPath(right, left);
 }
 function sameResolvedPath(left, right) {
-  const resolvedLeft = path16.resolve(left);
-  const resolvedRight = path16.resolve(right);
+  const resolvedLeft = path17.resolve(left);
+  const resolvedRight = path17.resolve(right);
   if (process.platform === "win32")
     return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot(input) {
-  const repositoryRoot = path16.resolve(input.repositoryRoot);
-  const stagingRoot = path16.resolve(input.stagingRoot);
-  const legacyRoot = path16.join(repositoryRoot, ".legion");
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const stagingRoot = path17.resolve(input.stagingRoot);
+  const legacyRoot = path17.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
     return failure12("invalid", [
       diagnostic({
@@ -23923,9 +24152,9 @@ function safeResolvedStagingRoot(input) {
   return stagingRoot;
 }
 function safeResolvedBackupRoot(input) {
-  const repositoryRoot = path16.resolve(input.repositoryRoot);
-  const backupRoot = path16.resolve(input.backupRoot);
-  const legacyRoot = path16.join(repositoryRoot, ".legion");
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const backupRoot = path17.resolve(input.backupRoot);
+  const legacyRoot = path17.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
     return failure12("invalid", [
       diagnostic({
@@ -23959,9 +24188,9 @@ function readString(value) {
 }
 function normalizeReportedPath(repositoryRoot, value) {
   const normalized = value.replace(/\\/g, "/");
-  if (path16.isAbsolute(value)) {
-    const relative = path16.relative(repositoryRoot, value);
-    if (relative.length > 0 && !relative.startsWith("..") && !path16.isAbsolute(relative)) {
+  if (path17.isAbsolute(value)) {
+    const relative = path17.relative(repositoryRoot, value);
+    if (relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative)) {
       return toPosixPath(relative);
     }
   }
@@ -23986,10 +24215,10 @@ function nativeSurface(input) {
   return { path: normalized, source: input.source };
 }
 async function parseCodexManifest(repositoryRoot, legionRoot) {
-  const manifestPath = path16.join(legionRoot, "manifest.json");
+  const manifestPath = path17.join(legionRoot, "manifest.json");
   let parsed;
   try {
-    parsed = JSON.parse(await readFile9(manifestPath, "utf8"));
+    parsed = JSON.parse(await readFile10(manifestPath, "utf8"));
   } catch (error2) {
     if (isEnoent4(error2)) {
       return {
@@ -24147,7 +24376,7 @@ function classifySourceFile(relativePath, generatedPaths) {
 async function sourceInventory(input) {
   const files = [];
   for (const file of await listFiles(input.legionRoot)) {
-    const bytes = await readFile9(path16.join(input.legionRoot, ...file.split("/")));
+    const bytes = await readFile10(path17.join(input.legionRoot, ...file.split("/")));
     const relativePath = `.legion/${file}`;
     files.push({
       path: relativePath,
@@ -24197,18 +24426,18 @@ function validateReportMoves(report) {
   ]);
 }
 async function stageLegacyProtocol(input) {
-  const targetRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
-  await rm3(input.stagingRoot, { recursive: true, force: true });
-  await mkdir9(targetRoot, { recursive: true });
+  const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  await rm4(input.stagingRoot, { recursive: true, force: true });
+  await mkdir10(targetRoot, { recursive: true });
   for (const move of input.moves) {
-    const sourcePath = path16.join(input.repositoryRoot, ...move.sourcePath.split("/"));
-    const targetPath = path16.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir9(path16.dirname(targetPath), { recursive: true });
+    const sourcePath = path17.join(input.repositoryRoot, ...move.sourcePath.split("/"));
+    const targetPath = path17.join(input.stagingRoot, ...move.targetPath.split("/"));
+    await mkdir10(path17.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
   for (const file of await listFiles(targetRoot)) {
-    const bytes = await readFile9(path16.join(targetRoot, ...file.split("/")));
+    const bytes = await readFile10(path17.join(targetRoot, ...file.split("/")));
     files.push({
       path: `${LEGACY_PROTOCOL_ROOT}/${file}`,
       sha256: bytesHash(bytes),
@@ -24223,9 +24452,9 @@ async function stageLegacyProtocol(input) {
   };
 }
 async function writeReport(stagingRoot, report) {
-  const reportPath = path16.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir9(path16.dirname(reportPath), { recursive: true });
-  await writeFile3(reportPath, stableProtocolJson(report), "utf8");
+  const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
+  await mkdir10(path17.dirname(reportPath), { recursive: true });
+  await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
   if (moves.length > 0)
@@ -24251,8 +24480,8 @@ async function createCodexLegionMigrationDryRun(input) {
   });
   if (typeof createdAt !== "string")
     return createdAt;
-  const repositoryRoot = path16.resolve(input.repositoryRoot);
-  const legionRoot = path16.join(repositoryRoot, ".legion");
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const legionRoot = path17.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
     return failure12("invalid", [
       diagnostic({
@@ -24305,10 +24534,10 @@ async function createCodexLegionMigrationDryRun(input) {
   };
 }
 async function readReport(stagingRoot) {
-  const reportPath = path16.join(stagingRoot, ...REPORT_PATH.split("/"));
+  const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
   let parsed;
   try {
-    parsed = JSON.parse(await readFile9(reportPath, "utf8"));
+    parsed = JSON.parse(await readFile10(reportPath, "utf8"));
   } catch (error2) {
     return failure12("invalid", [
       diagnostic({
@@ -24342,7 +24571,7 @@ function isBackupManifest(value) {
   return isRecord9(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
-  const targetRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
@@ -24355,7 +24584,7 @@ async function validateStagedTargetHash(input) {
   ]);
 }
 async function validateCurrentSourceHash(input) {
-  const currentHash = await hashTree(path16.join(input.repositoryRoot, ".legion"));
+  const currentHash = await hashTree(path17.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
   return failure12("invalid", [
@@ -24367,18 +24596,18 @@ async function validateCurrentSourceHash(input) {
   ]);
 }
 function backupId(appliedAt, sourceHash) {
-  const hash = createHash15("sha256").update(`${appliedAt}\0${sourceHash}`).digest("hex").slice(0, 16);
+  const hash = createHash16("sha256").update(`${appliedAt}\0${sourceHash}`).digest("hex").slice(0, 16);
   return `codex-legion-migration-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
 }
 async function backupLegionRoot(input) {
-  const legionRoot = path16.join(input.repositoryRoot, ".legion");
+  const legionRoot = path17.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path16.resolve(input.backupRoot, id);
-  const backupPath = path16.resolve(backupDirectory, "legion");
+  const backupDirectory = path17.resolve(input.backupRoot, id);
+  const backupPath = path17.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
-  await rm3(backupDirectory, { recursive: true, force: true });
-  await mkdir9(backupDirectory, { recursive: true });
+  await rm4(backupDirectory, { recursive: true, force: true });
+  await mkdir10(backupDirectory, { recursive: true });
   if (existingLegionRoot) {
     await cp(legionRoot, backupPath, { recursive: true });
   }
@@ -24392,8 +24621,8 @@ async function backupLegionRoot(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path16.resolve(backupDirectory, "backup-manifest.json");
-  await writeFile3(manifestPath, stableProtocolJson(manifest), "utf8");
+  const manifestPath = path17.resolve(backupDirectory, "backup-manifest.json");
+  await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
     backupPath,
@@ -24402,9 +24631,9 @@ async function backupLegionRoot(input) {
   };
 }
 async function installStagedLegacyProtocol(input) {
-  const legionRoot = path16.join(input.repositoryRoot, ".legion");
-  const destination = path16.join(legionRoot, "legacy-protocol");
-  const stagedLegacyProtocolRoot = path16.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const legionRoot = path17.join(input.repositoryRoot, ".legion");
+  const destination = path17.join(legionRoot, "legacy-protocol");
+  const stagedLegacyProtocolRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
   if (input.report.moves.length > 0) {
     if (await pathExists3(destination)) {
       await mergeStagedLegacyProtocol({
@@ -24412,10 +24641,10 @@ async function installStagedLegacyProtocol(input) {
         destinationRoot: destination
       });
     } else {
-      const temporary = path16.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
-      await rm3(temporary, { recursive: true, force: true });
+      const temporary = path17.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      await rm4(temporary, { recursive: true, force: true });
       await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
-      await rename2(temporary, destination);
+      await rename3(temporary, destination);
     }
   }
   const roots = await cleanupRoots({
@@ -24423,14 +24652,14 @@ async function installStagedLegacyProtocol(input) {
     report: input.report
   });
   for (const root of roots) {
-    await rm3(path16.join(legionRoot, root), { recursive: true, force: true });
+    await rm4(path17.join(legionRoot, root), { recursive: true, force: true });
   }
 }
 async function mergeStagedLegacyProtocol(input) {
   for (const file of await listFiles(input.stagedRoot)) {
-    const stagedPath = path16.join(input.stagedRoot, ...file.split("/"));
-    const destinationPath = path16.join(input.destinationRoot, ...file.split("/"));
-    const stagedBytes = await readFile9(stagedPath);
+    const stagedPath = path17.join(input.stagedRoot, ...file.split("/"));
+    const destinationPath = path17.join(input.destinationRoot, ...file.split("/"));
+    const stagedBytes = await readFile10(stagedPath);
     let destinationStat;
     try {
       destinationStat = await stat4(destinationPath);
@@ -24440,29 +24669,29 @@ async function mergeStagedLegacyProtocol(input) {
     }
     if (destinationStat !== void 0) {
       if (!destinationStat.isFile()) {
-        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path16.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path17.relative(input.destinationRoot, destinationPath))}.`);
       }
-      const destinationBytes = await readFile9(destinationPath);
+      const destinationBytes = await readFile10(destinationPath);
       if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
-        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path16.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path17.relative(input.destinationRoot, destinationPath))}.`);
       }
       continue;
     }
-    await mkdir9(path16.dirname(destinationPath), { recursive: true });
+    await mkdir10(path17.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
 async function cleanupRoots(input) {
-  const legionRoot = path16.join(input.repositoryRoot, ".legion");
+  const legionRoot = path17.join(input.repositoryRoot, ".legion");
   const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
-  for (const entry of await readdir6(legionRoot, { withFileTypes: true })) {
+  for (const entry of await readdir7(legionRoot, { withFileTypes: true })) {
     if (!isReservedLegionRootEntry(entry.name))
       roots.add(entry.name);
   }
   return [...roots].filter((entry) => entry.length > 0).sort(compareStrings7);
 }
 async function installedLegacyProtocolFiles(repositoryRoot) {
-  const targetRoot = path16.join(repositoryRoot, ".legion", "legacy-protocol");
+  const targetRoot = path17.join(repositoryRoot, ".legion", "legacy-protocol");
   return (await listFiles(targetRoot)).map((file) => `${LEGACY_PROTOCOL_ROOT}/${file}`);
 }
 async function applyCodexLegionMigration(input) {
@@ -24491,12 +24720,12 @@ async function applyCodexLegionMigration(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const repositoryRoot = path16.resolve(input.repositoryRoot);
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string")
     return backupRoot;
   const symlinkFailure = await validateNoSymbolicLinks({
-    root: path16.join(repositoryRoot, ".legion"),
+    root: path17.join(repositoryRoot, ".legion"),
     displayedRoot: LEGION_ROOT
   });
   if (symlinkFailure !== void 0)
@@ -24548,9 +24777,9 @@ async function applyCodexLegionMigration(input) {
 }
 async function rollbackCodexLegionMigration(input) {
   let manifest;
-  const backupManifestPath = path16.resolve(input.backupManifestPath);
+  const backupManifestPath = path17.resolve(input.backupManifestPath);
   try {
-    const parsed = JSON.parse(await readFile9(backupManifestPath, "utf8"));
+    const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
       throw new Error("Backup manifest is missing required Codex Legion migration fields.");
     }
@@ -24564,8 +24793,8 @@ async function rollbackCodexLegionMigration(input) {
       })
     ]);
   }
-  const repositoryRoot = path16.resolve(input.repositoryRoot);
-  const legionRoot = path16.join(repositoryRoot, ".legion");
+  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const legionRoot = path17.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
     return failure12("invalid", [
       diagnostic({
@@ -24576,7 +24805,7 @@ async function rollbackCodexLegionMigration(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path16.isAbsolute(manifest.backupPath)) {
+    if (!path17.isAbsolute(manifest.backupPath)) {
       return failure12("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
@@ -24605,7 +24834,7 @@ async function rollbackCodexLegionMigration(input) {
       ]);
     }
   }
-  await rm3(legionRoot, { recursive: true, force: true });
+  await rm4(legionRoot, { recursive: true, force: true });
   if (manifest.existingLegionRoot) {
     await cp(manifest.backupPath, legionRoot, { recursive: true });
   }
@@ -24617,9 +24846,9 @@ async function rollbackCodexLegionMigration(input) {
 }
 
 // packages/legacy-bridge/dist/import-planning/index.js
-import { createHash as createHash16 } from "node:crypto";
-import { cp as cp2, mkdir as mkdir10, readFile as readFile10, readdir as readdir7, realpath as realpath2, rm as rm4, stat as stat5, writeFile as writeFile4 } from "node:fs/promises";
-import path17 from "node:path";
+import { createHash as createHash17 } from "node:crypto";
+import { cp as cp2, mkdir as mkdir11, readFile as readFile11, readdir as readdir8, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
+import path18 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
 var EMPTY_TREE_HASH2 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -24627,7 +24856,7 @@ function compareStrings8(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath2(value) {
-  return value.split(path17.sep).join("/");
+  return value.split(path18.sep).join("/");
 }
 function failure13(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
@@ -24640,17 +24869,17 @@ function diagnostic2(input) {
   };
 }
 function bytesHash2(bytes) {
-  return `sha256:${createHash16("sha256").update(bytes).digest("hex")}`;
+  return `sha256:${createHash17("sha256").update(bytes).digest("hex")}`;
 }
 function hashFiles2(root, files) {
   if (files.length === 0)
     return Promise.resolve(EMPTY_TREE_HASH2);
-  const hash = createHash16("sha256");
+  const hash = createHash17("sha256");
   return (async () => {
     for (const file of files) {
       hash.update(file);
       hash.update("\0");
-      hash.update(await readFile10(path17.join(root, ...file.split("/"))));
+      hash.update(await readFile11(path18.join(root, ...file.split("/"))));
       hash.update("\0");
     }
     return `sha256:${hash.digest("hex")}`;
@@ -24671,20 +24900,20 @@ async function listFiles2(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir7(directory, { withFileTypes: true });
+      entries = await readdir8(directory, { withFileTypes: true });
     } catch (error2) {
       if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT")
         return;
       throw error2;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings8(left.name, right.name))) {
-      const absolutePath = path17.join(directory, entry.name);
+      const absolutePath = path18.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath2(path17.relative(root, absolutePath)));
+        files.push(toPosixPath2(path18.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -24734,9 +24963,9 @@ async function sourceInventory2(planningRoot) {
   }
   const files = [];
   for (const file of await listFiles2(planningRoot)) {
-    const absolutePath = path17.join(planningRoot, ...file.split("/"));
-    const bytes = await readFile10(absolutePath);
-    const relativePath = toPosixPath2(path17.join(".planning", file));
+    const absolutePath = path18.join(planningRoot, ...file.split("/"));
+    const bytes = await readFile11(absolutePath);
+    const relativePath = toPosixPath2(path18.join(".planning", file));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -24825,7 +25054,7 @@ function summaryFilesModified(content) {
 }
 async function readUtf8IfExists(filePath) {
   try {
-    return await readFile10(filePath, "utf8");
+    return await readFile11(filePath, "utf8");
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT")
       return void 0;
@@ -24838,7 +25067,7 @@ async function parsePlans(planningRoot, inventory) {
     if (file.classification !== "phase-plan")
       continue;
     const relativeToPlanning = file.path.slice(".planning/".length);
-    const content = await readFile10(path17.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
+    const content = await readFile11(path18.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
     const frontmatter = parsePlanFrontmatter(content);
     plans.push({
       sourcePath: file.path,
@@ -24851,7 +25080,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   const conflicts = [];
   for (const plan of plans) {
     const summaryPath = plan.sourcePath.replace(/-PLAN\.md$/, "-SUMMARY.md");
-    const summaryContent = await readUtf8IfExists(path17.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
+    const summaryContent = await readUtf8IfExists(path18.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
     if (summaryContent === void 0)
       continue;
     const summaryFiles = summaryFilesModified(summaryContent);
@@ -24870,7 +25099,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   return conflicts;
 }
 async function stateUncertainties(planningRoot) {
-  const state = await readUtf8IfExists(path17.join(planningRoot, "STATE.md"));
+  const state = await readUtf8IfExists(path18.join(planningRoot, "STATE.md"));
   if (state === void 0)
     return [];
   const uncertainties = [
@@ -24965,18 +25194,18 @@ function sectionsForRequirement(requirement) {
   };
 }
 async function writeReport2(stagingRoot, report) {
-  const reportPath = path17.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir10(path17.dirname(reportPath), { recursive: true });
-  await writeFile4(reportPath, stableProtocolJson(report), "utf8");
+  const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  await mkdir11(path18.dirname(reportPath), { recursive: true });
+  await writeFile5(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
-  const projectRoot = path17.join(stagingRoot, ".legion", "project");
+  const projectRoot = path18.join(stagingRoot, ".legion", "project");
   const files = [];
   for (const file of await listFiles2(projectRoot)) {
     if (file === "migration/planning-import-report.json")
       continue;
-    const bytes = await readFile10(path17.join(projectRoot, ...file.split("/")));
-    const relativePath = toPosixPath2(path17.join(".legion/project", file));
+    const bytes = await readFile11(path18.join(projectRoot, ...file.split("/")));
+    const relativePath = toPosixPath2(path18.join(".legion/project", file));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -24991,24 +25220,24 @@ async function targetInventory(stagingRoot) {
   };
 }
 function containsPath2(parent, child) {
-  const relative = path17.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative);
+  const relative = path18.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative);
 }
 function pathsOverlap3(left, right) {
   return containsPath2(left, right) || containsPath2(right, left);
 }
 async function resolveExistingPathComponents(inputPath) {
-  const resolved = path17.resolve(inputPath);
+  const resolved = path18.resolve(inputPath);
   const suffix = [];
   let candidate = resolved;
   while (!await pathExists4(candidate)) {
-    const parent = path17.dirname(candidate);
+    const parent = path18.dirname(candidate);
     if (parent === candidate)
-      return path17.resolve(candidate, ...suffix);
-    suffix.unshift(path17.basename(candidate));
+      return path18.resolve(candidate, ...suffix);
+    suffix.unshift(path18.basename(candidate));
     candidate = parent;
   }
-  return path17.resolve(await realpath2(candidate), ...suffix);
+  return path18.resolve(await realpath2(candidate), ...suffix);
 }
 async function sameCanonicalPath(left, right) {
   const resolvedLeft = await resolveExistingPathComponents(left);
@@ -25018,9 +25247,9 @@ async function sameCanonicalPath(left, right) {
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot2(input) {
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const planningRoot = path17.resolve(input.planningRoot);
-  const stagingRoot = path17.resolve(input.stagingRoot);
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const planningRoot = path18.resolve(input.planningRoot);
+  const stagingRoot = path18.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
     return failure13("invalid", [
       diagnostic2({
@@ -25032,11 +25261,11 @@ function safeResolvedStagingRoot2(input) {
   return stagingRoot;
 }
 async function safeResolvedBackupRoot2(input) {
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const backupRoot = path17.resolve(input.backupRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
-  const planningRoot = path17.resolve(input.planningRoot);
-  const stagingRoot = path17.resolve(input.stagingRoot);
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const backupRoot = path18.resolve(input.backupRoot);
+  const legionRoot = path18.join(repositoryRoot, ".legion");
+  const planningRoot = path18.resolve(input.planningRoot);
+  const stagingRoot = path18.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
@@ -25082,7 +25311,7 @@ async function createPlanningImportDryRun(input) {
   const inventory = await sourceInventory2(planningRoot);
   if ("diagnostics" in inventory)
     return inventory;
-  const projectMarkdown = await readUtf8IfExists(path17.join(planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path18.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
     return failure13("invalid", [
       diagnostic2({
@@ -25104,8 +25333,8 @@ async function createPlanningImportDryRun(input) {
       })
     ]);
   }
-  await rm4(stagingRoot, { recursive: true, force: true });
-  await mkdir10(stagingRoot, { recursive: true });
+  await rm5(stagingRoot, { recursive: true, force: true });
+  await mkdir11(stagingRoot, { recursive: true });
   const initialized = await initProject({
     repositoryRoot: stagingRoot,
     slug: input.project.slug,
@@ -25198,10 +25427,10 @@ async function createPlanningImportDryRun(input) {
   };
 }
 async function readReport2(stagingRoot) {
-  const reportPath = path17.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
   let parsed;
   try {
-    parsed = JSON.parse(await readFile10(reportPath, "utf8"));
+    parsed = JSON.parse(await readFile11(reportPath, "utf8"));
   } catch (error2) {
     return failure13("invalid", [
       diagnostic2({
@@ -25223,19 +25452,19 @@ async function readReport2(stagingRoot) {
   return parsed;
 }
 function backupId2(appliedAt, sourceHash) {
-  const hash = createHash16("sha256").update(`${appliedAt}\0${sourceHash}`).digest("hex").slice(0, 16);
+  const hash = createHash17("sha256").update(`${appliedAt}\0${sourceHash}`).digest("hex").slice(0, 16);
   return `planning-import-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
 }
 async function backupLegionRoot2(input) {
   const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const legionRoot = path18.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree2(legionRoot);
   const id = backupId2(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path17.resolve(input.backupRoot, id);
-  const backupPath = path17.resolve(backupDirectory, "legion");
+  const backupDirectory = path18.resolve(input.backupRoot, id);
+  const backupPath = path18.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
-  await rm4(backupDirectory, { recursive: true, force: true });
-  await mkdir10(backupDirectory, { recursive: true });
+  await rm5(backupDirectory, { recursive: true, force: true });
+  await mkdir11(backupDirectory, { recursive: true });
   if (existingLegionRoot) {
     await cp2(legionRoot, backupPath, { recursive: true });
   }
@@ -25249,8 +25478,8 @@ async function backupLegionRoot2(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path17.resolve(backupDirectory, "backup-manifest.json");
-  await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
+  const manifestPath = path18.resolve(backupDirectory, "backup-manifest.json");
+  await writeFile5(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
     backupPath,
@@ -25259,10 +25488,10 @@ async function backupLegionRoot2(input) {
   };
 }
 async function installStagedProject(input) {
-  const stagedProject = path17.join(input.stagingRoot, ".legion", "project");
-  const destinationProject = path17.join(input.repositoryRoot, ".legion", "project");
-  await mkdir10(path17.dirname(destinationProject), { recursive: true });
-  await rm4(destinationProject, { recursive: true, force: true });
+  const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
+  const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
+  await mkdir11(path18.dirname(destinationProject), { recursive: true });
+  await rm5(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
 function isRecord10(value) {
@@ -25282,7 +25511,7 @@ function isBackupManifest2(value) {
   return isRecord10(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
-  const stagedProject = path17.join(input.stagingRoot, ".legion", "project");
+  const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
@@ -25313,7 +25542,7 @@ async function applyPlanningImport(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const destinationProject = path17.join(input.repositoryRoot, ".legion", "project");
+  const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
     return failure13("conflict", [
       diagnostic2({
@@ -25369,15 +25598,15 @@ async function applyPlanningImport(input) {
     ok: true,
     status: "applied",
     backup,
-    installedFiles: (await listFiles2(path17.join(input.repositoryRoot, ".legion", "project"))).map((file) => toPosixPath2(path17.join(".legion/project", file))),
+    installedFiles: (await listFiles2(path18.join(input.repositoryRoot, ".legion", "project"))).map((file) => toPosixPath2(path18.join(".legion/project", file))),
     policy: report.policy
   };
 }
 async function rollbackPlanningImport(input) {
   let manifest;
-  const backupManifestPath = path17.resolve(input.backupManifestPath);
+  const backupManifestPath = path18.resolve(input.backupManifestPath);
   try {
-    const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
+    const parsed = JSON.parse(await readFile11(backupManifestPath, "utf8"));
     if (!isBackupManifest2(parsed)) {
       throw new Error("Backup manifest is missing required planning import fields.");
     }
@@ -25391,9 +25620,9 @@ async function rollbackPlanningImport(input) {
       })
     ]);
   }
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
-  if (!path17.isAbsolute(manifest.repositoryRoot)) {
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const legionRoot = path18.join(repositoryRoot, ".legion");
+  if (!path18.isAbsolute(manifest.repositoryRoot)) {
     return failure13("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
@@ -25412,7 +25641,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path17.isAbsolute(manifest.backupPath)) {
+    if (!path18.isAbsolute(manifest.backupPath)) {
       return failure13("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
@@ -25452,7 +25681,7 @@ async function rollbackPlanningImport(input) {
       ]);
     }
   }
-  await rm4(legionRoot, { recursive: true, force: true });
+  await rm5(legionRoot, { recursive: true, force: true });
   if (manifest.existingLegionRoot) {
     await cp2(manifest.backupPath, legionRoot, { recursive: true });
   }
@@ -25679,7 +25908,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path18 from "node:path";
+import path19 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -25737,10 +25966,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path18.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path19.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path18.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path19.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -25767,13 +25996,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path18.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path19.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path18.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path19.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -25824,7 +26053,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path18.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path19.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -25939,7 +26168,7 @@ async function handleDevCommand(context) {
 
 // packages/cli/src/workflow/input.ts
 import { execFileSync } from "node:child_process";
-import path19 from "node:path";
+import path20 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -25999,6 +26228,10 @@ function isStableDefaultBranch(branch) {
   return branch === "main" || branch === "master" || branch === "trunk" || branch === "develop";
 }
 
+// packages/cli/src/workflow/intake/driver.ts
+import { access, readFile as readFile16, writeFile as writeFile8 } from "node:fs/promises";
+import path25 from "node:path";
+
 // packages/cli/src/workflow/render.ts
 function nextAction(command, reason) {
   return { command, reason };
@@ -26021,121 +26254,1005 @@ function renderDiagnostics(diagnostics) {
   }).join("\n");
 }
 
-// packages/cli/src/commands/workflow/start.ts
-var START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
-var START_HELP = `legion start --name <name> [--summary <text>] [--owner <name>] [--created-at <utc>] [--slug <slug>] [--dry-run]
+// packages/cli/src/workflow/criteria.ts
+var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
+var MAX_CRITERION_SLUG_LENGTH = 48;
+function criterionIdFor(statement, index) {
+  const slug = statement.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_CRITERION_SLUG_LENGTH).replace(/-+$/g, "");
+  return slug.length > 0 ? `ac_${slug}-${index + 1}` : `ac_criterion-${index + 1}`;
+}
+function generatedCriterion(statement, index) {
+  return {
+    id: criterionIdFor(statement, index),
+    statement,
+    proof: {
+      mode: "manual",
+      reason: GENERATED_CRITERION_REASON
+    }
+  };
+}
+function generatedCriteria(statements) {
+  return statements.map((statement, index) => generatedCriterion(statement, index));
+}
 
-Initialize .legion project state and route to the first planning step.
+// packages/cli/src/workflow/intake/graph.ts
+var INTAKE_GRAPH_VERSION = "1.0.0";
+var MAX_REQUIREMENTS = 40;
+var MAX_CRITERIA_PER_REQUIREMENT = 20;
+var PRIORITY_OPTIONS = [
+  { value: "must", label: "Must", description: "The project fails without it." },
+  { value: "should", label: "Should", description: "Painful to omit, but survivable." },
+  { value: "could", label: "Could", description: "Worth doing if it is cheap." },
+  { value: "wont", label: "Won't", description: "Recorded so it stays decided, and out of scope." }
+];
+var CATEGORY_OPTIONS = [
+  { value: "behavior", label: "Behavior", description: "What the system does." },
+  { value: "constraint", label: "Constraint", description: "A limit it must respect." },
+  { value: "compatibility", label: "Compatibility", description: "What it must keep working with." },
+  { value: "security", label: "Security", description: "What it must not permit." },
+  { value: "migration", label: "Migration", description: "Moving existing state or callers." },
+  { value: "quality", label: "Quality", description: "Performance, reliability, accessibility." },
+  { value: "documentation", label: "Documentation", description: "What must be written down." }
+];
+var PROOF_OPTIONS = [
+  {
+    value: "executable",
+    label: "A command decides it",
+    description: "A command that exits zero when the criterion holds and non-zero when it does not."
+  },
+  {
+    value: "manual",
+    label: "A human decides it",
+    description: "No command can decide it. You will be asked why, and the gap stays visible."
+  }
+];
+var RISK_OPTIONS = [
+  { value: "R0", label: "R0 \u2014 trivial", description: "Local, reversible, no external effect." },
+  { value: "R1", label: "R1 \u2014 routine", description: "Ordinary change to existing behavior." },
+  { value: "R2", label: "R2 \u2014 significant", description: "New surface, or behavior others depend on." },
+  { value: "R3", label: "R3 \u2014 critical", description: "Data, money, credentials, or anything hard to undo." }
+];
+var YES_NO_HELP = "Answer with true or false.";
+var OPENING_NODES = [
+  {
+    id: "project-name",
+    section: "identity",
+    slot: "project.name",
+    prompt: "What is this project called?",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "project-summary",
+    section: "identity",
+    slot: "project.summary",
+    prompt: "Summarize it in one or two sentences.",
+    help: "This lands in project.json and heads every context pack an implementer sees.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "project-owner",
+    section: "identity",
+    slot: "project.owner",
+    prompt: "Who owns the decisions on this project?",
+    help: "The person an implementer escalates to. Not necessarily whoever is typing.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "problem-statement",
+    section: "problem",
+    slot: "problem.statement",
+    prompt: "What problem does this solve?",
+    help: "Describe the situation as it is now, not the solution you have in mind.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "problem-users",
+    section: "problem",
+    slot: "problem.users",
+    prompt: "Who has this problem?",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "problem-success",
+    section: "problem",
+    slot: "problem.success",
+    prompt: "How will you know it worked?",
+    help: "Answer concretely. This is the question the acceptance criteria below make executable.",
+    kind: "free-text",
+    required: true
+  }
+];
+var CLOSING_NODES = [
+  {
+    id: "non-goals",
+    section: "non-goals",
+    slot: "scope.non-goals",
+    prompt: "What is explicitly out of scope?",
+    help: "One per line. Answer 'none' if nothing is worth ruling out yet \u2014 but consider that an unstated non-goal is the most common source of scope drift.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "constraints",
+    section: "constraints",
+    slot: "constraints.text",
+    prompt: "What constraints must the implementation respect?",
+    help: "Language, runtime, dependencies it may not add, systems it may not touch. One per line, or 'none'.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "risk-tier",
+    section: "risk",
+    slot: "risk.tier",
+    prompt: "How risky is the riskiest thing this project will do?",
+    help: "This sets the default gate set. It can be raised per change; lowering it later requires an audited override.",
+    kind: "single",
+    options: RISK_OPTIONS,
+    required: true
+  },
+  {
+    id: "risk-reason",
+    section: "risk",
+    slot: "risk.reason",
+    prompt: "Why that tier?",
+    help: "Recorded verbatim on the risk profile, so a later reader can judge whether the tier still fits.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "budget-files",
+    section: "budget",
+    slot: "budget.max-files-changed",
+    prompt: "At most how many files should a single task change?",
+    help: "A task that exceeds its budget is blocked, not warned. Small numbers force decomposition, which is the point.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "budget-lines",
+    section: "budget",
+    slot: "budget.max-lines-changed",
+    prompt: "At most how many lines should a single task change?",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "budget-new-files",
+    section: "budget",
+    slot: "budget.max-new-files",
+    prompt: "At most how many new files should a single task create?",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "pref-verification",
+    section: "preferences",
+    slot: "preferences.verification",
+    prompt: "What command verifies the whole project?",
+    help: "The command a task runs to prove it did not break anything \u2014 a test script, a build, a lint. It becomes the default verification on generated task contracts.",
+    kind: "free-text",
+    required: true
+  },
+  {
+    id: "pref-notes",
+    section: "preferences",
+    slot: "preferences.notes",
+    prompt: "Anything else an implementer should know before touching this code?",
+    help: "Optional. Skip it with --skip if nothing comes to mind.",
+    kind: "free-text",
+    required: false
+  }
+];
+function requirementNodes(index) {
+  return [
+    {
+      id: `req-${index}-statement`,
+      section: "requirements",
+      slot: `requirements.${index}.statement`,
+      prompt: `Requirement ${index}: what must be true when this is done?`,
+      help: "State one testable fact. If it needs an 'and', it is probably two requirements.",
+      kind: "free-text",
+      required: true
+    },
+    {
+      id: `req-${index}-priority`,
+      section: "requirements",
+      slot: `requirements.${index}.priority`,
+      prompt: `Requirement ${index}: how important is it?`,
+      kind: "single",
+      options: PRIORITY_OPTIONS,
+      required: true
+    },
+    {
+      id: `req-${index}-category`,
+      section: "requirements",
+      slot: `requirements.${index}.category`,
+      prompt: `Requirement ${index}: what kind of requirement is it?`,
+      kind: "single",
+      options: CATEGORY_OPTIONS,
+      required: true
+    }
+  ];
+}
+function criterionNodes(requirementIndex, criterionIndex) {
+  const prefix = `req-${requirementIndex}-ac-${criterionIndex}`;
+  const slotPrefix = `requirements.${requirementIndex}.criteria.${criterionIndex}`;
+  const notWont = { nodeId: `req-${requirementIndex}-priority`, notEquals: "wont" };
+  return [
+    {
+      id: `${prefix}-statement`,
+      section: "requirements",
+      slot: `${slotPrefix}.statement`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: what specifically must hold?`,
+      help: "Narrower than the requirement. Something a single check could decide.",
+      kind: "free-text",
+      required: true,
+      dependsOn: notWont
+    },
+    {
+      id: `${prefix}-proof`,
+      section: "requirements",
+      slot: `${slotPrefix}.proof`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: how is it proven?`,
+      kind: "single",
+      options: PROOF_OPTIONS,
+      required: true,
+      dependsOn: notWont
+    },
+    {
+      id: `${prefix}-detail`,
+      section: "requirements",
+      slot: `${slotPrefix}.detail`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: the command, or the reason no command can decide it.`,
+      help: "For a command, write it as you would type it \u2014 'pnpm test --filter core'. Exit code 0 must mean the criterion holds.",
+      kind: "free-text",
+      required: true,
+      dependsOn: notWont
+    },
+    {
+      id: `${prefix}-more`,
+      section: "requirements",
+      slot: `${slotPrefix}.more`,
+      prompt: `Requirement ${requirementIndex}: is there another acceptance criterion?`,
+      help: YES_NO_HELP,
+      kind: "confirm",
+      required: true,
+      dependsOn: notWont
+    }
+  ];
+}
+function moreRequirementsNode(index) {
+  return {
+    id: `req-${index}-more`,
+    section: "requirements",
+    slot: `requirements.${index}.more`,
+    prompt: "Is there another requirement?",
+    help: YES_NO_HELP,
+    kind: "confirm",
+    required: true
+  };
+}
+function injectedNodeToIntakeNode(node) {
+  return {
+    id: node.nodeId,
+    section: "open-questions",
+    slot: node.slot,
+    prompt: node.prompt,
+    help: `Raised as unresolved during exploration ${node.origin.runId}.`,
+    kind: "free-text",
+    required: true,
+    injected: true
+  };
+}
+function answerMap(answers) {
+  const map = /* @__PURE__ */ new Map();
+  for (const answer of answers) map.set(answer.nodeId, answer.value);
+  return map;
+}
+function isAffirmative(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "yes" || normalized === "y";
+}
+function materializeNodes(input) {
+  const answers = answerMap(input.answers);
+  const nodes = [...OPENING_NODES];
+  for (let requirement = 1; requirement <= MAX_REQUIREMENTS; requirement += 1) {
+    nodes.push(...requirementNodes(requirement));
+    if (answers.get(`req-${requirement}-priority`) === void 0) break;
+    for (let criterion = 1; criterion <= MAX_CRITERIA_PER_REQUIREMENT; criterion += 1) {
+      nodes.push(...criterionNodes(requirement, criterion));
+      if (!isAffirmative(answers.get(`req-${requirement}-ac-${criterion}-more`))) break;
+    }
+    if (requirement < MAX_REQUIREMENTS) {
+      nodes.push(moreRequirementsNode(requirement));
+      if (!isAffirmative(answers.get(`req-${requirement}-more`))) break;
+    }
+  }
+  nodes.push(...CLOSING_NODES);
+  nodes.push(...input.injectedNodes.map(injectedNodeToIntakeNode));
+  return nodes;
+}
+function isNodeApplicable(node, answers) {
+  const condition = node.dependsOn;
+  if (condition === void 0) return true;
+  const value = answers.get(condition.nodeId);
+  if (value === void 0) return false;
+  if ("equals" in condition) return value === condition.equals;
+  return value !== condition.notEquals;
+}
+function nextNode(input) {
+  const answers = answerMap(input.answers);
+  const nodes = materializeNodes(input);
+  let total = 0;
+  let answered = 0;
+  let next;
+  for (const node of nodes) {
+    if (!isNodeApplicable(node, answers)) continue;
+    total += 1;
+    if (answers.has(node.id)) {
+      answered += 1;
+      continue;
+    }
+    if (next === void 0) next = node;
+  }
+  return { node: next, total, answered };
+}
+var SKIPPED_VALUE = "";
+function findNode(input, nodeId2) {
+  return materializeNodes(input).find((node) => node.id === nodeId2);
+}
+function answersByNodeId(answers) {
+  return answerMap(answers);
+}
+function applicableNodes(input) {
+  const answers = answerMap(input.answers);
+  return materializeNodes(input).filter((node) => isNodeApplicable(node, answers));
+}
 
-Examples:
-  legion start --name "Asset Mapper" --summary "Metadata authoring and deterministic asset resolution" --owner dasbl
-  legion start --name "Asset Mapper" --dry-run --json`;
-async function handleStartCommand(context) {
-  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
-    return helpResult(START_HELP);
+// packages/cli/src/workflow/intake/validators.ts
+var MAX_BUDGET_FILES = 1e4;
+var MAX_BUDGET_LINES = 1e6;
+var NON_ANSWERS = /* @__PURE__ */ new Set([
+  "n/a",
+  "na",
+  "none",
+  "nothing",
+  "tbd",
+  "todo",
+  "?",
+  "-",
+  "--",
+  ".",
+  "idk",
+  "unknown",
+  "unsure",
+  "later"
+]);
+function isNonAnswer(value) {
+  return NON_ANSWERS.has(value.trim().toLowerCase().replace(/[.!]+$/, ""));
+}
+function asText(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function parseCommandLine(input) {
+  const tokens = [];
+  let current = "";
+  let quote;
+  let started = false;
+  for (const character of input.trim()) {
+    if (quote !== void 0) {
+      if (character === quote) {
+        quote = void 0;
+        continue;
+      }
+      current += character;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      started = true;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (started) {
+        tokens.push(current);
+        current = "";
+        started = false;
+      }
+      continue;
+    }
+    current += character;
+    started = true;
   }
-  const nameValueless = valuelessStartOption(
-    context,
-    "name",
-    `Missing required option --name. ${START_EXAMPLE}`
-  );
-  if (nameValueless !== void 0) return nameValueless;
-  const name = stringOption(context, "name")?.trim();
-  if (name === void 0 || name.length === 0) {
-    return usageError(`Missing required option --name. ${START_EXAMPLE}`);
+  if (quote !== void 0) {
+    return { error: "The command has an unclosed quote." };
   }
-  const createdAtValueless = valuelessStartOption(
-    context,
-    "created-at",
-    "Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z."
-  );
-  if (createdAtValueless !== void 0) return createdAtValueless;
-  let createdAt;
-  try {
-    createdAt = createdAtOption(context);
-  } catch (error2) {
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
+  if (started) tokens.push(current);
+  const [command, ...args] = tokens;
+  if (command === void 0 || command.length === 0) {
+    return { error: "The command is empty." };
   }
-  const ownerValueless = valuelessStartOption(
-    context,
-    "owner",
-    "Missing required value for --owner. Use a human-readable owner up to 128 characters."
-  );
-  if (ownerValueless !== void 0) return ownerValueless;
-  const explicitOwner = stringOption(context, "owner");
-  if (explicitOwner !== void 0 && explicitOwner.trim().length === 0) {
-    return usageError("Invalid --owner value. Use a human-readable owner up to 128 characters.");
+  const metacharacter = /[|&;<>$`\n]/.exec(input);
+  if (metacharacter !== null) {
+    return {
+      error: `Shell syntax is not available (${metacharacter[0]}); verification runs the command directly. Wrap it in a script and name that instead.`
+    };
   }
-  const owner = explicitOwner ?? "operator";
-  let decisionOwner;
-  try {
-    decisionOwner = ownerActor(owner);
-  } catch (error2) {
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    return usageError(`Invalid --owner value. Use a human-readable owner up to 128 characters. ${message}`);
-  }
-  const slugValueless = valuelessStartOption(
-    context,
-    "slug",
-    "Missing required value for --slug. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number."
-  );
-  if (slugValueless !== void 0) return slugValueless;
-  const slugValue = stringOption(context, "slug")?.trim() ?? slugFromName(name);
-  let slug;
-  try {
-    slug = projectSchema.shape.slug.parse(slugValue);
-  } catch (error2) {
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    return usageError(`Invalid --slug value. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number. ${message}`);
-  }
-  const summary = stringOption(context, "summary")?.trim();
-  const result = await initProject({
-    repositoryRoot: context.repositoryRoot,
-    slug,
-    name,
-    ...summary === void 0 || summary.length === 0 ? {} : { description: summary },
-    repository: repositoryReference(context.repositoryRoot),
-    decisionOwners: [decisionOwner],
-    ...createdAt === void 0 ? {} : { createdAt },
-    dryRun: hasFlag(context, "dry-run")
+  return { command, args };
+}
+function positiveInteger(value, max) {
+  const trimmed = value.trim().replace(/[_,]/g, "");
+  if (!/^\d+$/.test(trimmed)) return { error: "Enter a whole number." };
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return { error: "Enter a number greater than zero." };
+  if (parsed > max) return { error: `Enter a number no greater than ${max}.` };
+  return { value: parsed };
+}
+function nonNegativeInteger(value, max) {
+  const trimmed = value.trim().replace(/[_,]/g, "");
+  if (!/^\d+$/.test(trimmed)) return { error: "Enter a whole number." };
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed)) return { error: "Enter a whole number." };
+  if (parsed > max) return { error: `Enter a number no greater than ${max}.` };
+  return { value: parsed };
+}
+function coerceConfirm(value) {
+  const normalized = value.trim().toLowerCase();
+  if (["true", "yes", "y", "1"].includes(normalized)) return true;
+  if (["false", "no", "n", "0"].includes(normalized)) return false;
+  return void 0;
+}
+function validateAnswer(node, raw) {
+  const diagnostics = [];
+  const reject = (code, message) => ({
+    diagnostics: [{ code, message, nodeId: node.id, slot: node.slot }]
   });
-  if (!result.ok) {
-    return failure(
+  if (node.kind === "confirm") {
+    if (typeof raw === "boolean") return { value: raw, diagnostics };
+    const text2 = asText(raw);
+    const coerced = text2 === void 0 ? void 0 : coerceConfirm(text2);
+    if (coerced === void 0) return reject("invalid_confirm", "Answer with true or false.");
+    return { value: coerced, diagnostics };
+  }
+  if (node.kind === "multi") {
+    const values = Array.isArray(raw) ? raw : asText(raw)?.split(",").map((entry) => entry.trim());
+    if (values === void 0) return reject("invalid_multi", "Provide a comma-separated list.");
+    const cleaned = values.filter((entry) => entry.length > 0);
+    if (node.required && cleaned.length === 0) {
+      return reject("empty_required", "This question requires an answer.");
+    }
+    const permitted = new Set((node.options ?? []).map((option) => option.value));
+    const unknown2 = cleaned.filter((entry) => !permitted.has(entry));
+    if (permitted.size > 0 && unknown2.length > 0) {
+      return reject("unknown_option", `Not an available choice: ${unknown2.join(", ")}.`);
+    }
+    return { value: cleaned, diagnostics };
+  }
+  const text = asText(raw);
+  if (text === void 0) return reject("invalid_text", "Provide a text answer.");
+  if (node.kind === "single") {
+    const permitted = new Set((node.options ?? []).map((option) => option.value));
+    const normalized = text.trim();
+    if (!permitted.has(normalized)) {
+      return reject(
+        "unknown_option",
+        `Choose one of: ${[...permitted].join(", ")}.`
+      );
+    }
+    return { value: normalized, diagnostics };
+  }
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    if (node.required) return reject("empty_required", "This question requires an answer.");
+    return { value: SKIPPED_VALUE, diagnostics };
+  }
+  const slotDiagnostic = validateSlotText(node, trimmed);
+  if (slotDiagnostic !== void 0) return { diagnostics: [slotDiagnostic] };
+  return { value: trimmed, diagnostics };
+}
+function validateSlotText(node, value) {
+  const fail = (code, message) => ({
+    code,
+    message,
+    nodeId: node.id,
+    slot: node.slot
+  });
+  if (node.slot === "project.name") {
+    if (value.length > 160) return fail("too_long", "Keep the name to 160 characters or fewer.");
+    if (slugFromText(value).length < 3) {
+      return fail(
+        "unslugifiable_name",
+        "The name needs at least three letters or digits so it can become a project slug."
+      );
+    }
+    return void 0;
+  }
+  if (node.slot === "project.owner") {
+    if (value.length > 128) return fail("too_long", "Keep the owner to 128 characters or fewer.");
+    return void 0;
+  }
+  if (node.slot === "project.summary" && value.length > 2048) {
+    return fail("too_long", "Keep the summary to 2048 characters or fewer.");
+  }
+  if (node.slot === "budget.max-files-changed" || node.slot === "budget.max-lines-changed") {
+    const max = node.slot === "budget.max-lines-changed" ? MAX_BUDGET_LINES : MAX_BUDGET_FILES;
+    const parsed = positiveInteger(value, max);
+    if ("error" in parsed) return fail("invalid_budget", parsed.error);
+    return void 0;
+  }
+  if (node.slot === "budget.max-new-files") {
+    const parsed = nonNegativeInteger(value, MAX_BUDGET_FILES);
+    if ("error" in parsed) return fail("invalid_budget", parsed.error);
+    return void 0;
+  }
+  if (node.slot === "preferences.verification") {
+    const parsed = parseCommandLine(value);
+    if ("error" in parsed) return fail("invalid_command", parsed.error);
+    return void 0;
+  }
+  return void 0;
+}
+function slugFromText(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64).replace(/-+$/g, "");
+}
+function answerText(answers, nodeId2) {
+  const value = answers.get(nodeId2);
+  return typeof value === "string" ? value : void 0;
+}
+function requirementDrafts(answers) {
+  const map = /* @__PURE__ */ new Map();
+  for (const answer of answers) map.set(answer.nodeId, answer.value);
+  const drafts = [];
+  for (let index = 1; ; index += 1) {
+    const statement = answerText(map, `req-${index}-statement`);
+    if (statement === void 0) break;
+    const priority = answerText(map, `req-${index}-priority`) ?? "";
+    const category = answerText(map, `req-${index}-category`) ?? "";
+    const criteria = [];
+    for (let criterion = 1; ; criterion += 1) {
+      const criterionStatement = answerText(map, `req-${index}-ac-${criterion}-statement`);
+      if (criterionStatement === void 0) break;
+      criteria.push({
+        index: criterion,
+        statement: criterionStatement,
+        proof: answerText(map, `req-${index}-ac-${criterion}-proof`) ?? "",
+        detail: answerText(map, `req-${index}-ac-${criterion}-detail`) ?? ""
+      });
+    }
+    drafts.push({ index, statement, priority, category, criteria });
+  }
+  return drafts;
+}
+function validateAnswerSet(input) {
+  const diagnostics = [];
+  const map = /* @__PURE__ */ new Map();
+  for (const answer of input.answers) map.set(answer.nodeId, answer.value);
+  const drafts = requirementDrafts(input.answers);
+  if (drafts.length === 0) {
+    diagnostics.push({
+      code: "no_requirements",
+      message: "A project needs at least one requirement before it can be finalized."
+    });
+  }
+  for (const draft of drafts) {
+    const nodeId2 = `req-${draft.index}-statement`;
+    if (draft.priority === "wont") {
+      continue;
+    }
+    if (draft.criteria.length === 0) {
+      diagnostics.push({
+        code: draft.priority === "must" ? "must_without_criteria" : "requirement_without_criteria",
+        message: draft.priority === "must" ? `Requirement ${draft.index} is a 'must' with no acceptance criteria. A must-have nobody can check is a wish.` : `Requirement ${draft.index} has no acceptance criteria.`,
+        nodeId: nodeId2,
+        slot: `requirements.${draft.index}.statement`
+      });
+      continue;
+    }
+    for (const criterion of draft.criteria) {
+      const criterionNode = `req-${draft.index}-ac-${criterion.index}-detail`;
+      const slot = `requirements.${draft.index}.criteria.${criterion.index}.detail`;
+      if (criterion.proof === "executable") {
+        const parsed = parseCommandLine(criterion.detail);
+        if ("error" in parsed) {
+          diagnostics.push({
+            code: "invalid_criterion_command",
+            message: `Requirement ${draft.index}, criterion ${criterion.index}: ${parsed.error}`,
+            nodeId: criterionNode,
+            slot
+          });
+        }
+        continue;
+      }
+      if (criterion.proof === "manual") {
+        if (criterion.detail.trim().length < 12 || isNonAnswer(criterion.detail)) {
+          diagnostics.push({
+            code: "empty_manual_reason",
+            message: `Requirement ${draft.index}, criterion ${criterion.index}: state why no command can decide this. 'Manual' without a reason is how an unproven criterion becomes invisible.`,
+            nodeId: criterionNode,
+            slot
+          });
+        }
+        continue;
+      }
+      diagnostics.push({
+        code: "unknown_proof_mode",
+        message: `Requirement ${draft.index}, criterion ${criterion.index}: choose whether a command or a human decides it.`,
+        nodeId: `req-${draft.index}-ac-${criterion.index}-proof`,
+        slot: `requirements.${draft.index}.criteria.${criterion.index}.proof`
+      });
+    }
+  }
+  const files = answerText(map, "budget-files");
+  const newFiles = answerText(map, "budget-new-files");
+  if (files !== void 0 && newFiles !== void 0) {
+    const parsedFiles = positiveInteger(files, MAX_BUDGET_FILES);
+    const parsedNew = nonNegativeInteger(newFiles, MAX_BUDGET_FILES);
+    if (!("error" in parsedFiles) && !("error" in parsedNew) && parsedNew.value > parsedFiles.value) {
+      diagnostics.push({
+        code: "budget_inconsistent",
+        message: `A task cannot create ${parsedNew.value} new files while changing at most ${parsedFiles.value}.`,
+        nodeId: "budget-new-files",
+        slot: "budget.max-new-files"
+      });
+    }
+  }
+  return diagnostics;
+}
+
+// packages/cli/src/workflow/intake/finalize.ts
+var MAX_REQUIREMENT_SLUG = 48;
+var WONT_CRITERION_REASON = "Recorded during intake as out of scope. Nothing is built, so nothing is proven; this criterion exists to keep the decision visible.";
+function requirementIdFor(statement, index) {
+  const slug = slugFromText(statement).slice(0, MAX_REQUIREMENT_SLUG).replace(/-+$/g, "");
+  return slug.length > 0 ? `req_${slug}-${index}` : `req_requirement-${index}`;
+}
+function answerText2(answers, nodeId2) {
+  const answer = answers.find((entry) => entry.nodeId === nodeId2);
+  return typeof answer?.value === "string" && answer.value.length > 0 ? answer.value : void 0;
+}
+function criterionFor(draft, criterion, index) {
+  const id = criterionIdFor(criterion.statement, index);
+  if (criterion.proof === "executable") {
+    const parsed = parseCommandLine(criterion.detail);
+    if (!("error" in parsed)) {
+      return {
+        id,
+        statement: criterion.statement,
+        proof: {
+          mode: "executable",
+          command: parsed.command,
+          args: [...parsed.args],
+          // The interview states this contract explicitly: exit zero means the
+          // criterion holds. Asking for an expected code per criterion invites
+          // a non-zero answer chosen to make a failing command look fine.
+          expectedExitCode: 0
+        }
+      };
+    }
+    return {
+      id,
+      statement: criterion.statement,
+      proof: {
+        mode: "manual",
+        reason: `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.`
+      }
+    };
+  }
+  return {
+    id,
+    statement: criterion.statement,
+    proof: {
+      mode: "manual",
+      reason: criterion.detail.trim().length > 0 ? criterion.detail : WONT_CRITERION_REASON
+    }
+  };
+}
+function buildRequirements(input) {
+  const drafts = requirementDrafts(input.answers);
+  const requirements = [];
+  const usedIds = /* @__PURE__ */ new Set();
+  for (const draft of drafts) {
+    let id = requirementIdFor(draft.statement, draft.index);
+    let attempt = 0;
+    while (usedIds.has(id)) {
+      attempt += 1;
+      id = `${requirementIdFor(draft.statement, draft.index)}-${attempt}`;
+    }
+    usedIds.add(id);
+    const isWont = draft.priority === "wont";
+    const criteria = isWont ? [
       {
-        ...result,
-        nextAction: nextAction("legion validate", "Project state must be repaired before initialization can continue.")
-      },
-      startFailureHuman(result.diagnostics)
+        id: criterionIdFor(draft.statement, 0),
+        statement: `Not built: ${draft.statement}`,
+        proof: { mode: "manual", reason: WONT_CRITERION_REASON }
+      }
+    ] : draft.criteria.map((criterion, index) => criterionFor(draft, criterion, index));
+    requirements.push(
+      requirementSchema.parse({
+        schemaVersion: input.schemaVersion,
+        createdAt: input.createdAt,
+        kind: "requirement",
+        id,
+        projectId: input.projectId,
+        // A requirement the decision owner just stated in an interview is
+        // accepted, not proposed. `wont` is the recorded decision not to build,
+        // which is what `rejected` means.
+        status: isWont ? "rejected" : "accepted",
+        priority: draft.priority,
+        category: draft.category,
+        statement: draft.statement,
+        acceptance: {
+          language: draft.statement,
+          criteria,
+          oracleRefs: []
+        },
+        traceRefs: [
+          {
+            path: input.intakeSessionPath,
+            anchor: `requirements.${draft.index}`,
+            relation: "records",
+            entity: { kind: "requirement", id }
+          }
+        ],
+        supersedes: []
+      })
     );
   }
-  const action = result.status === "dry_run" ? nextAction("legion start", "Dry run completed; rerun without --dry-run to write .legion/project/project.json.") : nextAction("legion plan 1", "Project is initialized and ready for the first planned change.");
-  return success(
-    {
-      ...result,
-      nextAction: action
-    },
-    `${result.project.id}: ${result.status}.
-${renderNextAction(action)}`
-  );
+  return requirements;
 }
-function valuelessStartOption(context, key, valuelessMessage) {
-  const value = context.args.options.get(key);
-  return value === true ? usageError(valuelessMessage) : void 0;
+function plannedRequirements(requirements) {
+  return requirements.filter((requirement) => requirement.priority !== "wont");
 }
-function startFailureHuman(diagnostics) {
-  const rendered = renderDiagnostics(diagnostics);
-  return rendered.length > 0 ? `Project initialization failed.
-${rendered}` : "Project initialization failed.";
+function escapeTableCell(value) {
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
+}
+function truncate2(value, limit) {
+  return value.length <= limit ? value : `${value.slice(0, limit - 1).trimEnd()}\u2026`;
+}
+function bulletList(value) {
+  if (value === void 0) return [];
+  return value.split(/\r?\n/).map((line) => line.replace(/^\s*[-*]\s*/, "").trim()).filter((line) => line.length > 0);
+}
+function renderRoadmap(input) {
+  const planned = plannedRequirements(input.requirements);
+  const nonGoals = bulletList(answerText2(input.answers, "non-goals"));
+  const constraints = bulletList(answerText2(input.answers, "constraints"));
+  const excluded = input.requirements.filter((requirement) => requirement.priority === "wont");
+  const lines = [];
+  lines.push(`# ${input.projectName} \u2014 Roadmap`);
+  lines.push("");
+  lines.push(`<!-- Rendered by \`legion start --finalize\` from intake session ${input.intakeSessionId}. -->`);
+  lines.push("<!-- This file is a view of .legion/project/requirements. Edit the requirements, not this file. -->");
+  lines.push("");
+  lines.push("## Overview");
+  lines.push("");
+  const summary = answerText2(input.answers, "project-summary");
+  if (summary !== void 0) {
+    lines.push(summary);
+    lines.push("");
+  }
+  const problem = answerText2(input.answers, "problem-statement");
+  const users = answerText2(input.answers, "problem-users");
+  const success4 = answerText2(input.answers, "problem-success");
+  if (problem !== void 0) lines.push(`**Problem.** ${problem}`, "");
+  if (users !== void 0) lines.push(`**Who has it.** ${users}`, "");
+  if (success4 !== void 0) lines.push(`**Done looks like.** ${success4}`, "");
+  lines.push("## Non-Goals");
+  lines.push("");
+  if (nonGoals.length === 0 && excluded.length === 0) {
+    lines.push("- (none recorded)");
+  } else {
+    for (const entry of nonGoals) lines.push(`- ${entry}`);
+    for (const requirement of excluded) {
+      lines.push(`- Declined during intake: ${requirement.statement}`);
+    }
+  }
+  lines.push("");
+  lines.push("## Constraints");
+  lines.push("");
+  if (constraints.length === 0) {
+    lines.push("- (none recorded)");
+  } else {
+    for (const entry of constraints) lines.push(`- ${entry}`);
+  }
+  lines.push("");
+  lines.push("## Phases");
+  lines.push("");
+  lines.push("| Phase | Name | Requirements | Status |");
+  lines.push("|-------|------|--------------|--------|");
+  for (const [index, requirement] of planned.entries()) {
+    lines.push(
+      `| ${index + 1} | ${escapeTableCell(truncate2(requirement.statement, 60))} | ${requirement.id} | Pending |`
+    );
+  }
+  if (planned.length === 0) {
+    lines.push("| 1 | (no requirements yet) | \u2014 | Pending |");
+  }
+  lines.push("");
+  for (const [index, requirement] of planned.entries()) {
+    lines.push(`## Phase ${index + 1}: ${requirement.statement.replace(/\r?\n/g, " ").trim()}`);
+    lines.push("");
+    lines.push(`**Requirement:** \`${requirement.id}\` (${requirement.priority}, ${requirement.category})`);
+    lines.push("");
+    lines.push(`**Artifact:** \`${requirementArtifactPath(requirement.id)}\``);
+    lines.push("");
+    lines.push("**Acceptance criteria**");
+    lines.push("");
+    for (const criterion of requirement.acceptance.criteria) {
+      const proof = criterion.proof.mode === "executable" ? `\`${[criterion.proof.command, ...criterion.proof.args].join(" ")}\` must exit ${criterion.proof.expectedExitCode}` : `manual \u2014 ${criterion.proof.reason}`;
+      lines.push(`- [ ] ${criterion.statement}`);
+      lines.push(`  - ${proof}`);
+    }
+    lines.push("");
+  }
+  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}
+`;
+}
+function renderConstitution(input) {
+  const constraints = bulletList(answerText2(input.answers, "constraints"));
+  const nonGoals = bulletList(answerText2(input.answers, "non-goals"));
+  const notes = answerText2(input.answers, "pref-notes");
+  const verification = answerText2(input.answers, "pref-verification");
+  if (constraints.length === 0 && nonGoals.length === 0 && notes === void 0 && verification === void 0) {
+    return DEFAULT_PROJECT_CONSTITUTION;
+  }
+  const lines = [DEFAULT_PROJECT_CONSTITUTION.trimEnd(), "", "## Project Constraints", ""];
+  lines.push("Recorded during intake. These outrank generated plans.");
+  lines.push("");
+  if (constraints.length === 0) {
+    lines.push("- (none recorded)");
+  } else {
+    for (const entry of constraints) lines.push(`- ${entry}`);
+  }
+  lines.push("");
+  lines.push("## Out Of Scope");
+  lines.push("");
+  if (nonGoals.length === 0) {
+    lines.push("- (none recorded)");
+  } else {
+    for (const entry of nonGoals) lines.push(`- ${entry}`);
+  }
+  lines.push("");
+  if (verification !== void 0) {
+    lines.push("## Project Verification");
+    lines.push("");
+    lines.push(`\`${verification}\` must pass before a change is shippable.`);
+    lines.push("");
+  }
+  if (notes !== void 0) {
+    lines.push("## Implementer Notes");
+    lines.push("");
+    lines.push(notes);
+    lines.push("");
+  }
+  return `${lines.join("\n").trimEnd()}
+`;
 }
 
-// packages/cli/src/workflow/codebase-map.ts
-import { createHash as createHash17 } from "node:crypto";
-import { readdir as readdir9, readFile as readFile13, stat as stat6 } from "node:fs/promises";
+// packages/cli/src/workflow/intake/exploration-source.ts
+import { createHash as createHash18 } from "node:crypto";
+import { readFile as readFile14 } from "node:fs/promises";
+import path23 from "node:path";
+
+// packages/cli/src/workflow/guidance-run.ts
+import { mkdir as mkdir12, readdir as readdir9, readFile as readFile13 } from "node:fs/promises";
 import path22 from "node:path";
 
+// packages/cli/src/workflow/budget.ts
+var DEFAULT_LINES_PER_FILE = 200;
+var REPOSITORY_WIDE_TASK_BUDGET = {
+  maxFilesChanged: 20,
+  maxLinesChanged: 2e3,
+  maxNewFiles: 10
+};
+function isRepositoryWide(write) {
+  return write.some((entry) => entry === ".");
+}
+function budgetForWriteScope(write, options = {}) {
+  if (isRepositoryWide(write)) return REPOSITORY_WIDE_TASK_BUDGET;
+  const slackFiles = options.slackFiles ?? 0;
+  const linesPerFile = options.linesPerFile ?? DEFAULT_LINES_PER_FILE;
+  if (write.length === 0) {
+    throw new RangeError(
+      "Cannot derive a blast-radius budget from an empty write scope; the task contract must declare what it may write."
+    );
+  }
+  const declaredFiles = write.length;
+  const maxFilesChanged = declaredFiles + slackFiles;
+  return {
+    maxFilesChanged,
+    maxLinesChanged: maxFilesChanged * linesPerFile,
+    maxNewFiles: declaredFiles
+  };
+}
+
+// packages/cli/src/workflow/executor/adapters.ts
+import { execFile as execFile4, spawn } from "node:child_process";
+import { promisify as promisify4 } from "node:util";
+
+// packages/cli/src/workflow/executor/fake-plan.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import path21 from "node:path";
+var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
+function readFakeExecutorPlan() {
+  const raw = process.env[FAKE_PLAN_ENV];
+  if (raw === void 0 || raw.trim().length === 0) return void 0;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? parsed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function resolveInsideRepository(repositoryRoot, relative) {
+  const root = path21.resolve(repositoryRoot);
+  const absolute = path21.resolve(root, relative);
+  const prefix = root.endsWith(path21.sep) ? root : `${root}${path21.sep}`;
+  return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
+}
+function applyFakeExecutorPlan(input) {
+  if (input.readOnly) return [];
+  const written = [];
+  const staged = [];
+  for (const entry of input.plan.writes ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === void 0) continue;
+    mkdirSync2(path21.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, entry.content, "utf8");
+    written.push(entry.path);
+    staged.push(entry.path);
+  }
+  for (const entry of input.plan.deletes ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry);
+    if (absolute === void 0) continue;
+    rmSync(absolute, { force: true });
+    written.push(entry);
+    staged.push(entry);
+  }
+  for (const entry of input.plan.symlinks ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === void 0) continue;
+    try {
+      mkdirSync2(path21.dirname(absolute), { recursive: true });
+      rmSync(absolute, { force: true });
+      symlinkSync(entry.target, absolute);
+      written.push(entry.path);
+      staged.push(entry.path);
+    } catch {
+    }
+  }
+  if (input.plan.commit === true && staged.length > 0) {
+    try {
+      execFileSync2("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
+      execFileSync2(
+        "git",
+        ["-C", input.repositoryRoot, "-c", "user.email=fake@legion", "-c", "user.name=Fake Executor", "commit", "-m", "fake executor commit"],
+        { stdio: "ignore" }
+      );
+    } catch {
+    }
+  }
+  for (const entry of input.plan.writesAfterCommit ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === void 0) continue;
+    mkdirSync2(path21.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, entry.content, "utf8");
+    if (!written.includes(entry.path)) written.push(entry.path);
+  }
+  return written;
+}
+
 // packages/cli/src/workflow/executor/result.ts
-import { readFile as readFile11, writeFile as writeFile5 } from "node:fs/promises";
+import { readFile as readFile12, writeFile as writeFile6 } from "node:fs/promises";
 var SECRET_ASSIGNMENT_RE = /\b(api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)\b\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
 var JSON_CREDENTIAL_RE = /"(?:api[_-]?key|api[_-]?secret|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|pwd|token|secret)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
 function redactTranscript(text) {
@@ -26143,7 +27260,7 @@ function redactTranscript(text) {
 }
 async function writeProjectTextFile(input) {
   const absolutePath = await prepareProjectTextFile(input);
-  await writeFile5(absolutePath, input.text, "utf8");
+  await writeFile6(absolutePath, input.text, "utf8");
   return absolutePath;
 }
 async function prepareProjectTextFile(input) {
@@ -26162,7 +27279,7 @@ async function writeProjectExecutionResult(input) {
 }
 async function readOptionalText(filePath) {
   try {
-    return await readFile11(filePath, "utf8");
+    return await readFile12(filePath, "utf8");
   } catch (error2) {
     if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") return "";
     throw error2;
@@ -26260,115 +27377,6 @@ function parseReviewVerdicts(value) {
 }
 function parseReviewVerdict(value) {
   return value === "pass" || value === "fail" || value === "unknown" || value === "not_verified" || value === "not_applicable" ? value : void 0;
-}
-
-// packages/cli/src/workflow/guidance-run.ts
-import { mkdir as mkdir11, readdir as readdir8, readFile as readFile12 } from "node:fs/promises";
-import path21 from "node:path";
-
-// packages/cli/src/workflow/budget.ts
-var DEFAULT_LINES_PER_FILE = 200;
-var REPOSITORY_WIDE_TASK_BUDGET = {
-  maxFilesChanged: 20,
-  maxLinesChanged: 2e3,
-  maxNewFiles: 10
-};
-function isRepositoryWide(write) {
-  return write.some((entry) => entry === ".");
-}
-function budgetForWriteScope(write, options = {}) {
-  if (isRepositoryWide(write)) return REPOSITORY_WIDE_TASK_BUDGET;
-  const slackFiles = options.slackFiles ?? 0;
-  const linesPerFile = options.linesPerFile ?? DEFAULT_LINES_PER_FILE;
-  if (write.length === 0) {
-    throw new RangeError(
-      "Cannot derive a blast-radius budget from an empty write scope; the task contract must declare what it may write."
-    );
-  }
-  const declaredFiles = write.length;
-  const maxFilesChanged = declaredFiles + slackFiles;
-  return {
-    maxFilesChanged,
-    maxLinesChanged: maxFilesChanged * linesPerFile,
-    maxNewFiles: declaredFiles
-  };
-}
-
-// packages/cli/src/workflow/executor/adapters.ts
-import { execFile as execFile4, spawn } from "node:child_process";
-import { promisify as promisify4 } from "node:util";
-
-// packages/cli/src/workflow/executor/fake-plan.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import path20 from "node:path";
-var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
-function readFakeExecutorPlan() {
-  const raw = process.env[FAKE_PLAN_ENV];
-  if (raw === void 0 || raw.trim().length === 0) return void 0;
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null ? parsed : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function resolveInsideRepository(repositoryRoot, relative) {
-  const root = path20.resolve(repositoryRoot);
-  const absolute = path20.resolve(root, relative);
-  const prefix = root.endsWith(path20.sep) ? root : `${root}${path20.sep}`;
-  return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
-}
-function applyFakeExecutorPlan(input) {
-  if (input.readOnly) return [];
-  const written = [];
-  const staged = [];
-  for (const entry of input.plan.writes ?? []) {
-    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
-    if (absolute === void 0) continue;
-    mkdirSync2(path20.dirname(absolute), { recursive: true });
-    writeFileSync(absolute, entry.content, "utf8");
-    written.push(entry.path);
-    staged.push(entry.path);
-  }
-  for (const entry of input.plan.deletes ?? []) {
-    const absolute = resolveInsideRepository(input.repositoryRoot, entry);
-    if (absolute === void 0) continue;
-    rmSync(absolute, { force: true });
-    written.push(entry);
-    staged.push(entry);
-  }
-  for (const entry of input.plan.symlinks ?? []) {
-    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
-    if (absolute === void 0) continue;
-    try {
-      mkdirSync2(path20.dirname(absolute), { recursive: true });
-      rmSync(absolute, { force: true });
-      symlinkSync(entry.target, absolute);
-      written.push(entry.path);
-      staged.push(entry.path);
-    } catch {
-    }
-  }
-  if (input.plan.commit === true && staged.length > 0) {
-    try {
-      execFileSync2("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
-      execFileSync2(
-        "git",
-        ["-C", input.repositoryRoot, "-c", "user.email=fake@legion", "-c", "user.name=Fake Executor", "commit", "-m", "fake executor commit"],
-        { stdio: "ignore" }
-      );
-    } catch {
-    }
-  }
-  for (const entry of input.plan.writesAfterCommit ?? []) {
-    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
-    if (absolute === void 0) continue;
-    mkdirSync2(path20.dirname(absolute), { recursive: true });
-    writeFileSync(absolute, entry.content, "utf8");
-    if (!written.includes(entry.path)) written.push(entry.path);
-  }
-  return written;
 }
 
 // packages/cli/src/workflow/executor/adapters.ts
@@ -26657,17 +27665,17 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path21.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
-  await mkdir11(workflowRoot, { recursive: true });
+  const workflowRoot = path22.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  await mkdir12(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
   for (let index = 0; index < 1e3; index += 1) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path21.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path22.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
-      await mkdir11(absoluteRunRoot);
+      await mkdir12(absoluteRunRoot);
       return {
         workflow: input.workflow,
         runId,
@@ -26845,10 +27853,10 @@ async function latestGuidanceRuns(input) {
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
   for (const workflow of workflows) {
-    const workflowRoot = path21.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path22.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir8(workflowRoot, { withFileTypes: true });
+      entries = await readdir9(workflowRoot, { withFileTypes: true });
     } catch (error2) {
       if (isNodeErrorCode(error2, "ENOENT")) continue;
       throw error2;
@@ -26856,9 +27864,9 @@ async function latestGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const runPath = path21.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path22.join(workflowRoot, entry.name, "workflow-run.json");
       try {
-        const parsed = JSON.parse(await readFile12(runPath, "utf8"));
+        const parsed = JSON.parse(await readFile13(runPath, "utf8"));
         if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
       } catch {
         continue;
@@ -26913,7 +27921,1135 @@ function isNodeErrorCode(error2, code) {
   return error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === code;
 }
 
+// packages/cli/src/workflow/intake/exploration-source.ts
+function explorationArtifactPathOf(run) {
+  const value = run.outputs["explorationArtifactPath"];
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+async function listExplorations(repositoryRoot) {
+  const runs = await latestGuidanceRuns({
+    repositoryRoot,
+    workflows: ["explore"],
+    // Deep enough to find a brainstorm from a few days ago, shallow enough that
+    // "recent explorations" stays a list a human can read.
+    limitPerWorkflow: 10
+  });
+  const candidates = [];
+  for (const run of runs) {
+    const artifactPath = explorationArtifactPathOf(run);
+    if (artifactPath === void 0) continue;
+    const topic = run.input["topic"];
+    candidates.push({
+      runId: run.runId,
+      artifactPath,
+      createdAt: run.createdAt,
+      topic: typeof topic === "string" ? topic : "exploration"
+    });
+  }
+  return candidates;
+}
+async function loadExploration(repositoryRoot, runId) {
+  const candidates = await listExplorations(repositoryRoot);
+  const candidate = candidates.find((entry) => entry.runId === runId);
+  if (candidate === void 0) {
+    const known = candidates.map((entry) => entry.runId).join(", ");
+    return {
+      ok: false,
+      reason: known.length > 0 ? `No exploration ${runId}. Available: ${known}.` : `No exploration ${runId}. Run legion explore first.`
+    };
+  }
+  let raw;
+  try {
+    raw = await readFile14(path23.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };
+  }
+  let parsedJson;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return { ok: false, reason: `Exploration ${runId} is not valid JSON: ${message}` };
+  }
+  const parsed = explorationSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      reason: `Exploration ${runId} does not match the protocol: ${parsed.error.issues.map((issue2) => `${issue2.path.join(".")}: ${issue2.message}`).join("; ")}`
+    };
+  }
+  return {
+    ok: true,
+    loaded: {
+      exploration: parsed.data,
+      artifact: {
+        path: candidate.artifactPath,
+        sha256: `sha256:${createHash18("sha256").update(raw, "utf8").digest("hex")}`
+      },
+      candidate
+    }
+  };
+}
+
+// packages/cli/src/workflow/intake/render.ts
+function renderQuestion(input) {
+  const lines = [];
+  lines.push(`[${input.answered}/${input.total}] ${input.node.prompt}`);
+  if (input.node.help !== void 0) {
+    lines.push(`  ${input.node.help}`);
+  }
+  if (input.node.options !== void 0 && input.node.options.length > 0) {
+    lines.push("");
+    for (const option of input.node.options) {
+      const description = option.description === void 0 ? "" : ` \u2014 ${option.description}`;
+      lines.push(`  ${option.value}: ${option.label}${description}`);
+    }
+  }
+  if (input.node.kind === "confirm") {
+    lines.push("");
+    lines.push("  true / false");
+  }
+  if (input.proposal !== void 0) {
+    lines.push("");
+    const value = Array.isArray(input.proposal.value) ? input.proposal.value.join(", ") : input.proposal.value;
+    lines.push(`  Exploration proposed (${input.proposal.confidence}): ${value}`);
+    lines.push(`  Because: ${input.proposal.rationale}`);
+    lines.push(`  Accept it with --accept-proposal, or answer to override it.`);
+  }
+  if (input.node.injected === true) {
+    lines.push("");
+    lines.push("  This question exists because exploration left it unresolved.");
+  }
+  lines.push("");
+  lines.push(`  legion start --answer ${input.node.id}=<value>`);
+  if (!input.node.required) {
+    lines.push(`  legion start --skip   (this question is optional)`);
+  }
+  return lines.join("\n");
+}
+function renderIntakeDiagnostics(diagnostics) {
+  if (diagnostics.length === 0) return "";
+  return diagnostics.map((diagnostic3) => {
+    const location = diagnostic3.nodeId === void 0 ? "" : ` (${diagnostic3.nodeId})`;
+    return `  - ${diagnostic3.message}${location}`;
+  }).join("\n");
+}
+function renderSessionStatus(input) {
+  const lines = [];
+  lines.push(`${input.sessionId}: ${input.status}`);
+  lines.push(`  answered ${input.answered} of ${input.total} questions`);
+  if (input.cursor !== void 0) {
+    lines.push(`  next: ${input.cursor}`);
+  }
+  if (input.explorationRunId !== void 0) {
+    lines.push(`  seeded from exploration ${input.explorationRunId}`);
+  }
+  if (input.injectedCount > 0) {
+    lines.push(`  ${input.injectedCount} question(s) added by that exploration's open questions`);
+  }
+  return lines.join("\n");
+}
+
+// packages/cli/src/workflow/intake/session.ts
+import { mkdir as mkdir13, readFile as readFile15, readdir as readdir10, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
+import path24 from "node:path";
+var SESSION_FILE = "session.json";
+function intakeSessionDirectory(repositoryRoot, sessionId) {
+  return path24.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+}
+function sessionFilePath(repositoryRoot, sessionId) {
+  return path24.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+}
+function nowTimestamp2() {
+  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+}
+function intakeSessionIdFor(createdAt, salt = "") {
+  const compact = createdAt.replace(/[-:.]/g, "").replace("T", "-").replace("Z", "");
+  return formatEntityId("intake", `${compact}${salt}`);
+}
+function createSession(input) {
+  const id = intakeSessionIdFor(input.createdAt, input.salt ?? "");
+  const proposals = /* @__PURE__ */ new Map();
+  const injectedNodes = [];
+  if (input.exploration !== void 0) {
+    for (const proposal of input.exploration.proposals) {
+      proposals.set(proposal.slot, {
+        value: proposal.value,
+        rationale: proposal.rationale,
+        anchor: proposal.anchor,
+        confidence: proposal.confidence,
+        runId: input.exploration.runId
+      });
+    }
+    for (const question of input.exploration.openQuestions) {
+      injectedNodes.push({
+        nodeId: question.nodeId,
+        slot: question.slot,
+        prompt: question.question,
+        origin: { runId: input.exploration.runId, anchor: question.slot }
+      });
+    }
+  }
+  const explorationRef = input.exploration !== void 0 && input.explorationArtifact !== void 0 ? {
+    runId: input.exploration.runId,
+    artifact: {
+      path: input.explorationArtifact.path,
+      sha256: input.explorationArtifact.sha256
+    }
+  } : void 0;
+  const draft = {
+    schemaVersion: input.schemaVersion,
+    createdAt: input.createdAt,
+    kind: "intake-session",
+    id,
+    graphVersion: INTAKE_GRAPH_VERSION,
+    status: "active",
+    ...explorationRef === void 0 ? {} : { explorationRef },
+    answers: [],
+    injectedNodes,
+    diagnostics: []
+  };
+  const withCursor = withRecomputedCursor(intakeSessionSchema.parse(draft));
+  return { session: withCursor, proposals };
+}
+function withRecomputedCursor(session) {
+  const { node } = nextNode({ answers: session.answers, injectedNodes: session.injectedNodes });
+  const next = node === void 0 ? {} : { cursor: node.id };
+  const { cursor: _dropped, ...rest } = session;
+  return intakeSessionSchema.parse({ ...rest, ...next });
+}
+function recordAnswer(input) {
+  if (input.session.status !== "active") {
+    return { ok: false, reason: `This session is ${input.session.status} and cannot take new answers.` };
+  }
+  const node = findNode(
+    { answers: input.session.answers, injectedNodes: input.session.injectedNodes },
+    input.nodeId
+  );
+  if (node === void 0) {
+    return {
+      ok: false,
+      reason: `${input.nodeId} is not a question in this session. Ask for the next question rather than choosing one.`
+    };
+  }
+  if (!isNodeApplicable(node, answersByNodeId(input.session.answers))) {
+    return {
+      ok: false,
+      reason: `${input.nodeId} is not being asked; an earlier answer ruled it out.`
+    };
+  }
+  const answer = {
+    nodeId: node.id,
+    slot: node.slot,
+    value: input.value,
+    answeredAt: input.answeredAt,
+    source: input.source ?? "human",
+    ...input.proposedFrom === void 0 ? {} : { proposedFrom: input.proposedFrom }
+  };
+  const answers = [...input.session.answers.filter((entry) => entry.nodeId !== node.id), answer];
+  const parsed = intakeSessionSchema.safeParse({ ...input.session, answers });
+  if (!parsed.success) {
+    return { ok: false, reason: parsed.error.issues.map((issue2) => issue2.message).join("; ") };
+  }
+  return { ok: true, session: withRecomputedCursor(pruneOrphanedAnswers(parsed.data)) };
+}
+function pruneOrphanedAnswers(session) {
+  let current = session;
+  for (; ; ) {
+    const live = new Set(
+      applicableNodes({ answers: current.answers, injectedNodes: current.injectedNodes }).map(
+        (node) => node.id
+      )
+    );
+    const answers = current.answers.filter((answer) => live.has(answer.nodeId));
+    if (answers.length === current.answers.length) return current;
+    current = intakeSessionSchema.parse({ ...current, answers });
+  }
+}
+function stepBack(session) {
+  if (session.status !== "active") {
+    return { ok: false, reason: `This session is ${session.status} and cannot be rewound.` };
+  }
+  const last = session.answers.at(-1);
+  if (last === void 0) {
+    return { ok: false, reason: "Nothing has been answered yet." };
+  }
+  const answers = session.answers.filter((entry) => entry.nodeId !== last.nodeId);
+  const pruned = pruneOrphanedAnswers(intakeSessionSchema.parse({ ...session, answers }));
+  return { ok: true, session: withRecomputedCursor(pruned), nodeId: last.nodeId };
+}
+function abortSession(session) {
+  return intakeSessionSchema.parse({ ...session, status: "aborted" });
+}
+function finalizeSession(session, projectId) {
+  const { cursor: _dropped, ...rest } = session;
+  return intakeSessionSchema.parse({ ...rest, status: "finalized", projectId });
+}
+function withDiagnostics(session, diagnostics) {
+  return intakeSessionSchema.parse({ ...session, diagnostics: [...diagnostics] });
+}
+async function loadSession(repositoryRoot, sessionId) {
+  let text;
+  try {
+    text = await readFile15(sessionFilePath(repositoryRoot, sessionId), "utf8");
+  } catch (error2) {
+    if (isEnoent5(error2)) return { ok: false, reason: `No intake session ${sessionId} exists.` };
+    throw error2;
+  }
+  let parsedJson;
+  try {
+    parsedJson = JSON.parse(text);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return { ok: false, reason: `Intake session ${sessionId} is not valid JSON: ${message}` };
+  }
+  const parsed = intakeSessionSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      reason: `Intake session ${sessionId} does not match the protocol: ${parsed.error.issues.map((issue2) => `${issue2.path.join(".")}: ${issue2.message}`).join("; ")}`
+    };
+  }
+  return { ok: true, session: parsed.data };
+}
+async function saveSession(repositoryRoot, session) {
+  const validated = intakeSessionSchema.parse(session);
+  const directory = intakeSessionDirectory(repositoryRoot, validated.id);
+  await mkdir13(directory, { recursive: true });
+  const target = path24.join(directory, SESSION_FILE);
+  const temporary = `${target}.tmp`;
+  await writeFile7(temporary, `${JSON.stringify(validated, void 0, 2)}
+`, "utf8");
+  await rename4(temporary, target);
+}
+async function listSessions(repositoryRoot) {
+  const root = path24.join(repositoryRoot, ".legion", "project", "intake");
+  let entries;
+  try {
+    entries = await readdir10(root, { withFileTypes: true });
+  } catch (error2) {
+    if (isEnoent5(error2)) return [];
+    throw error2;
+  }
+  return entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("itk_")).map((entry) => entry.name).sort((left, right) => right.localeCompare(left));
+}
+async function findActiveSession(repositoryRoot) {
+  for (const sessionId of await listSessions(repositoryRoot)) {
+    const loaded = await loadSession(repositoryRoot, sessionId);
+    if (loaded.ok && loaded.session.status === "active") return loaded.session;
+  }
+  return void 0;
+}
+function isEnoent5(error2) {
+  return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
+}
+
+// packages/cli/src/workflow/intake/driver.ts
+var ROADMAP_MARKER = "<!-- Rendered by `legion start --finalize`";
+var ROADMAP_FILE = "ROADMAP.md";
+function intakeSessionArtifactPath(sessionId) {
+  return `.legion/project/intake/${sessionId}/session.json`;
+}
+function questionPayload(node, proposal) {
+  return {
+    nodeId: node.id,
+    section: node.section,
+    slot: node.slot,
+    prompt: node.prompt,
+    ...node.help === void 0 ? {} : { help: node.help },
+    kind: node.kind,
+    required: node.required,
+    ...node.options === void 0 ? {} : { options: node.options },
+    ...node.injected === true ? { injected: true } : {},
+    ...proposal === void 0 ? {} : {
+      proposal: {
+        value: proposal.value,
+        rationale: proposal.rationale,
+        confidence: proposal.confidence,
+        runId: proposal.runId,
+        anchor: proposal.anchor
+      }
+    }
+  };
+}
+function sessionPayload(session, answered, total) {
+  return {
+    id: session.id,
+    status: session.status,
+    graphVersion: session.graphVersion,
+    answered,
+    total,
+    ...session.cursor === void 0 ? {} : { cursor: session.cursor },
+    ...session.explorationRef === void 0 ? {} : { explorationRunId: session.explorationRef.runId },
+    injectedNodes: session.injectedNodes.length
+  };
+}
+async function proposalsFor(repositoryRoot, session) {
+  const reference = session.explorationRef;
+  if (reference === void 0) return /* @__PURE__ */ new Map();
+  const loaded = await loadExploration(repositoryRoot, reference.runId);
+  if (!loaded.ok) return /* @__PURE__ */ new Map();
+  const proposals = /* @__PURE__ */ new Map();
+  for (const proposal of loaded.loaded.exploration.proposals) {
+    proposals.set(proposal.slot, {
+      value: proposal.value,
+      rationale: proposal.rationale,
+      anchor: proposal.anchor,
+      confidence: proposal.confidence,
+      runId: loaded.loaded.exploration.runId
+    });
+  }
+  return proposals;
+}
+async function resolveSession(context, options) {
+  const explicitId = stringOption(context, "session");
+  if (explicitId !== void 0) {
+    const loaded = await loadSession(context.repositoryRoot, explicitId);
+    if (!loaded.ok) return usageError(loaded.reason);
+    return {
+      session: loaded.session,
+      proposals: await proposalsFor(context.repositoryRoot, loaded.session),
+      created: false
+    };
+  }
+  const active = await findActiveSession(context.repositoryRoot);
+  if (active !== void 0) {
+    return {
+      session: active,
+      proposals: await proposalsFor(context.repositoryRoot, active),
+      created: false
+    };
+  }
+  if (!options.create) {
+    return usageError(
+      "There is no active intake session. Run legion start to begin one, or pass --session <id>."
+    );
+  }
+  const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const explorationRunId = stringOption(context, "from-exploration");
+  if (explorationRunId !== void 0) {
+    const loaded = await loadExploration(context.repositoryRoot, explorationRunId);
+    if (!loaded.ok) return usageError(loaded.reason);
+    const seeded2 = createSession({
+      createdAt,
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      exploration: loaded.loaded.exploration,
+      explorationArtifact: loaded.loaded.artifact
+    });
+    await saveSession(context.repositoryRoot, seeded2.session);
+    return { session: seeded2.session, proposals: seeded2.proposals, created: true };
+  }
+  const seeded = createSession({ createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
+  await saveSession(context.repositoryRoot, seeded.session);
+  return { session: seeded.session, proposals: seeded.proposals, created: true };
+}
+function isCliResult3(value) {
+  return "exitCode" in value;
+}
+async function handleNextQuestion(context) {
+  const resolved = await resolveSession(context, { create: true });
+  if (isCliResult3(resolved)) return resolved;
+  const { session, proposals, created } = resolved;
+  const { node, answered, total } = nextNode({
+    answers: session.answers,
+    injectedNodes: session.injectedNodes
+  });
+  const explorations = created && session.explorationRef === void 0 ? await listExplorations(context.repositoryRoot) : [];
+  if (node === void 0) {
+    const action2 = nextAction(
+      `legion start --finalize --session ${session.id}`,
+      "Every question has been answered; finalizing writes the requirement set."
+    );
+    return success(
+      {
+        ok: true,
+        status: "complete",
+        session: sessionPayload(session, answered, total),
+        question: null,
+        nextAction: action2
+      },
+      `Interview complete: ${answered} of ${total} questions answered.
+${renderNextAction(action2)}`
+    );
+  }
+  const proposal = proposals.get(node.slot);
+  const action = nextAction(
+    `legion start --answer "${node.id}=<value>"`,
+    "Record this answer; the next question follows."
+  );
+  const human = [];
+  if (created) {
+    human.push(`Started intake session ${session.id} (graph ${session.graphVersion}).`);
+    if (session.injectedNodes.length > 0) {
+      human.push(
+        `${session.injectedNodes.length} extra question(s) were added from the exploration's open questions.`
+      );
+    }
+    if (explorations.length > 0) {
+      human.push(
+        `Recent exploration(s) available to seed from: ${explorations.map((entry) => entry.runId).join(", ")}. Restart with --from-exploration <runId> to use one.`
+      );
+    }
+    human.push("");
+  }
+  human.push(renderQuestion({ node, answered, total, proposal, sessionId: session.id }));
+  return success(
+    {
+      ok: true,
+      status: "question",
+      session: sessionPayload(session, answered, total),
+      question: questionPayload(node, proposal),
+      ...explorations.length > 0 && created ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) } : {},
+      nextAction: action
+    },
+    human.join("\n")
+  );
+}
+function resolveAnswerTarget(resolved, nodeId2) {
+  const { session, proposals } = resolved;
+  const materialize = { answers: session.answers, injectedNodes: session.injectedNodes };
+  if (nodeId2 === void 0) {
+    const { node: node2 } = nextNode(materialize);
+    if (node2 === void 0) {
+      return usageError(
+        "Every question has already been answered. Run legion start --finalize, or --back to change an answer."
+      );
+    }
+    return { node: node2, session, proposals };
+  }
+  const node = findNode(materialize, nodeId2);
+  if (node === void 0) {
+    return usageError(
+      `${nodeId2} is not a question in this session. Run legion start --next to see what is being asked.`
+    );
+  }
+  return { node, session, proposals };
+}
+async function handleAnswer(context) {
+  const rawAnswer = stringOption(context, "answer");
+  if (rawAnswer === void 0) {
+    return usageError('Provide an answer as --answer "<nodeId>=<value>".');
+  }
+  const separator = rawAnswer.indexOf("=");
+  if (separator <= 0) {
+    return usageError(
+      `Answers are written as --answer "<nodeId>=<value>". Received: ${rawAnswer}`
+    );
+  }
+  const nodeId2 = rawAnswer.slice(0, separator).trim();
+  const rawValue = rawAnswer.slice(separator + 1);
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  if (resolved.session.status !== "active") {
+    return usageError(`Session ${resolved.session.id} is ${resolved.session.status}.`);
+  }
+  const target = resolveAnswerTarget(resolved, nodeId2);
+  if ("exitCode" in target) return target;
+  return recordAndReport(context, resolved, target.node, rawValue, void 0);
+}
+async function handleAcceptProposal(context) {
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  if (resolved.session.status !== "active") {
+    return usageError(`Session ${resolved.session.id} is ${resolved.session.status}.`);
+  }
+  const target = resolveAnswerTarget(resolved, stringOption(context, "node"));
+  if ("exitCode" in target) return target;
+  const proposal = resolved.proposals.get(target.node.slot);
+  if (proposal === void 0) {
+    return usageError(
+      `No exploration proposed a value for ${target.node.slot}. Answer it with --answer instead.`
+    );
+  }
+  const value = Array.isArray(proposal.value) ? proposal.value.join(", ") : proposal.value;
+  return recordAndReport(context, resolved, target.node, value, {
+    runId: proposal.runId,
+    anchor: proposal.anchor
+  });
+}
+async function handleSkip(context) {
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  if (resolved.session.status !== "active") {
+    return usageError(`Session ${resolved.session.id} is ${resolved.session.status}.`);
+  }
+  const target = resolveAnswerTarget(resolved, stringOption(context, "node"));
+  if ("exitCode" in target) return target;
+  if (target.node.required) {
+    return usageError(
+      `${target.node.id} is required and cannot be skipped. Every required question is asked, which is the point of the graph.`
+    );
+  }
+  return recordAndReport(context, resolved, target.node, "", void 0);
+}
+async function recordAndReport(context, resolved, node, rawValue, proposedFrom) {
+  const validated = validateAnswer(node, rawValue);
+  if (validated.value === void 0) {
+    return failure(
+      {
+        ok: false,
+        status: "rejected",
+        session: sessionPayload(resolved.session, 0, 0),
+        question: questionPayload(node, resolved.proposals.get(node.slot)),
+        diagnostics: validated.diagnostics
+      },
+      `${node.prompt}
+${renderIntakeDiagnostics(validated.diagnostics)}`
+    );
+  }
+  const recorded = recordAnswer({
+    session: resolved.session,
+    nodeId: node.id,
+    value: validated.value,
+    answeredAt: nowTimestamp2(),
+    source: proposedFrom === void 0 ? "human" : "proposed-accepted",
+    ...proposedFrom === void 0 ? {} : { proposedFrom: { runId: proposedFrom.runId, anchor: proposedFrom.anchor } }
+  });
+  if (!recorded.ok) {
+    return failure(
+      { ok: false, status: "rejected", diagnostics: [{ code: "answer_rejected", message: recorded.reason }] },
+      recorded.reason
+    );
+  }
+  await saveSession(context.repositoryRoot, recorded.session);
+  const following = nextNode({
+    answers: recorded.session.answers,
+    injectedNodes: recorded.session.injectedNodes
+  });
+  if (following.node === void 0) {
+    const action2 = nextAction(
+      `legion start --finalize --session ${recorded.session.id}`,
+      "Every question has been answered."
+    );
+    return success(
+      {
+        ok: true,
+        status: "complete",
+        session: sessionPayload(recorded.session, following.answered, following.total),
+        question: null,
+        nextAction: action2
+      },
+      `Recorded ${node.id}.
+Interview complete: ${following.answered} of ${following.total} questions answered.
+${renderNextAction(action2)}`
+    );
+  }
+  const proposal = resolved.proposals.get(following.node.slot);
+  const action = nextAction(
+    `legion start --answer "${following.node.id}=<value>"`,
+    "Record the next answer."
+  );
+  return success(
+    {
+      ok: true,
+      status: "question",
+      session: sessionPayload(recorded.session, following.answered, following.total),
+      question: questionPayload(following.node, proposal),
+      nextAction: action
+    },
+    `Recorded ${node.id}.
+
+${renderQuestion({
+      node: following.node,
+      answered: following.answered,
+      total: following.total,
+      proposal,
+      sessionId: recorded.session.id
+    })}`
+  );
+}
+async function handleBack(context) {
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  const stepped = stepBack(resolved.session);
+  if (!stepped.ok) return usageError(stepped.reason);
+  await saveSession(context.repositoryRoot, stepped.session);
+  const following = nextNode({
+    answers: stepped.session.answers,
+    injectedNodes: stepped.session.injectedNodes
+  });
+  if (following.node === void 0) {
+    return success(
+      {
+        ok: true,
+        status: "complete",
+        session: sessionPayload(stepped.session, following.answered, following.total),
+        question: null,
+        undone: stepped.nodeId
+      },
+      `Undid ${stepped.nodeId}. The interview is still complete.`
+    );
+  }
+  return success(
+    {
+      ok: true,
+      status: "question",
+      session: sessionPayload(stepped.session, following.answered, following.total),
+      question: questionPayload(following.node, resolved.proposals.get(following.node.slot)),
+      undone: stepped.nodeId
+    },
+    `Undid ${stepped.nodeId}.
+
+${renderQuestion({
+      node: following.node,
+      answered: following.answered,
+      total: following.total,
+      proposal: resolved.proposals.get(following.node.slot),
+      sessionId: stepped.session.id
+    })}`
+  );
+}
+async function handleSessionStatus(context) {
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  const { session } = resolved;
+  const { answered, total } = nextNode({
+    answers: session.answers,
+    injectedNodes: session.injectedNodes
+  });
+  return success(
+    {
+      ok: true,
+      status: "session_status",
+      session: sessionPayload(session, answered, total),
+      answers: session.answers.map((answer) => ({
+        nodeId: answer.nodeId,
+        slot: answer.slot,
+        source: answer.source,
+        answeredAt: answer.answeredAt
+      })),
+      diagnostics: session.diagnostics
+    },
+    renderSessionStatus({
+      sessionId: session.id,
+      status: session.status,
+      answered,
+      total,
+      cursor: session.cursor,
+      injectedCount: session.injectedNodes.length,
+      explorationRunId: session.explorationRef?.runId
+    })
+  );
+}
+async function handleAbort(context) {
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  const aborted2 = abortSession(resolved.session);
+  await saveSession(context.repositoryRoot, aborted2);
+  const action = nextAction("legion start", "Begin a new intake session.");
+  return success(
+    { ok: true, status: "aborted", session: sessionPayload(aborted2, 0, 0), nextAction: action },
+    `Aborted ${aborted2.id}. The answers are kept on disk for reference.
+${renderNextAction(action)}`
+  );
+}
+async function handleBatchIntake(context) {
+  const filePath = stringOption(context, "intake");
+  if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
+  let parsed;
+  try {
+    const absolute = path25.isAbsolute(filePath) ? filePath : path25.resolve(context.repositoryRoot, filePath);
+    parsed = JSON.parse(await readFile16(absolute, "utf8"));
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Failed to read intake file ${filePath}: ${message}`);
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return usageError("An intake file must be a JSON object mapping node IDs to answers.");
+  }
+  const answers = parsed;
+  const resolved = await resolveSession(context, { create: true });
+  if (isCliResult3(resolved)) return resolved;
+  let session = resolved.session;
+  const diagnostics = [];
+  const applied = [];
+  const answeredAt = nowTimestamp2();
+  for (; ; ) {
+    const { node } = nextNode({ answers: session.answers, injectedNodes: session.injectedNodes });
+    if (node === void 0) break;
+    const raw = answers[node.id];
+    if (raw === void 0) {
+      if (!node.required) {
+        const skipped = recordAnswer({ session, nodeId: node.id, value: "", answeredAt });
+        if (skipped.ok) {
+          session = skipped.session;
+          continue;
+        }
+      }
+      diagnostics.push({
+        code: "missing_answer",
+        message: `The intake file has no answer for ${node.id}: ${node.prompt}`,
+        nodeId: node.id,
+        slot: node.slot
+      });
+      break;
+    }
+    const value = typeof raw === "boolean" || Array.isArray(raw) ? raw : String(raw);
+    const validated = validateAnswer(node, value);
+    if (validated.value === void 0) {
+      diagnostics.push(...validated.diagnostics);
+      break;
+    }
+    const recorded = recordAnswer({ session, nodeId: node.id, value: validated.value, answeredAt });
+    if (!recorded.ok) {
+      diagnostics.push({ code: "answer_rejected", message: recorded.reason, nodeId: node.id });
+      break;
+    }
+    session = recorded.session;
+    applied.push(node.id);
+  }
+  await saveSession(context.repositoryRoot, session);
+  const { answered, total } = nextNode({
+    answers: session.answers,
+    injectedNodes: session.injectedNodes
+  });
+  if (diagnostics.length > 0) {
+    return failure(
+      {
+        ok: false,
+        status: "incomplete",
+        session: sessionPayload(session, answered, total),
+        applied,
+        diagnostics
+      },
+      `Applied ${applied.length} answer(s), then stopped.
+${renderIntakeDiagnostics(diagnostics)}`
+    );
+  }
+  const action = nextAction(
+    `legion start --finalize --session ${session.id}`,
+    "Every question is answered; finalizing writes the requirement set."
+  );
+  return success(
+    {
+      ok: true,
+      status: "complete",
+      session: sessionPayload(session, answered, total),
+      applied,
+      nextAction: action
+    },
+    `Applied ${applied.length} answer(s); the interview is complete.
+${renderNextAction(action)}`
+  );
+}
+async function fileExists(target) {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function handleFinalize(context) {
+  const resolved = await resolveSession(context, { create: false });
+  if (isCliResult3(resolved)) return resolved;
+  const session = resolved.session;
+  if (session.status !== "active") {
+    return usageError(`Session ${session.id} is already ${session.status}.`);
+  }
+  const { node, answered, total } = nextNode({
+    answers: session.answers,
+    injectedNodes: session.injectedNodes
+  });
+  if (node !== void 0) {
+    const action2 = nextAction(`legion start --answer "${node.id}=<value>"`, "Answer the remaining questions.");
+    return failure(
+      {
+        ok: false,
+        status: "incomplete",
+        session: sessionPayload(session, answered, total),
+        question: questionPayload(node, resolved.proposals.get(node.slot)),
+        nextAction: action2
+      },
+      `${answered} of ${total} questions answered; ${node.id} is still open.
+${renderNextAction(action2)}`
+    );
+  }
+  const semantic = validateAnswerSet({ answers: session.answers });
+  if (semantic.length > 0) {
+    return failure(
+      {
+        ok: false,
+        status: "invalid",
+        session: sessionPayload(session, answered, total),
+        diagnostics: semantic
+      },
+      `The interview is complete but the answers do not yet make a contract:
+${renderIntakeDiagnostics(semantic)}`
+    );
+  }
+  const answerFor = (nodeId2) => {
+    const answer = session.answers.find((entry) => entry.nodeId === nodeId2);
+    return typeof answer?.value === "string" ? answer.value : "";
+  };
+  const name = answerFor("project-name");
+  const summary = answerFor("project-summary");
+  const owner = answerFor("project-owner");
+  let slug;
+  try {
+    slug = projectSchema.shape.slug.parse(stringOption(context, "slug")?.trim() ?? slugFromName(name));
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`The project name does not produce a valid slug. Pass --slug explicitly. ${message}`);
+  }
+  const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const constitution = renderConstitution({ answers: session.answers });
+  const initialized = await initProject({
+    repositoryRoot: context.repositoryRoot,
+    slug,
+    name,
+    ...summary.length === 0 ? {} : { description: summary },
+    repository: repositoryReference(context.repositoryRoot),
+    decisionOwners: [ownerActor(owner)],
+    createdAt,
+    constitutionTemplate: constitution
+  });
+  if (!initialized.ok) {
+    return failure(
+      { ...initialized, nextAction: nextAction("legion validate", "Repair project state, then finalize again.") },
+      `Project initialization failed.
+${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
+    );
+  }
+  const projectId = initialized.project.id;
+  const notes = [];
+  if (initialized.status === "already_initialized") {
+    const updated = await updateConstitution({
+      repositoryRoot: context.repositoryRoot,
+      expectedManifestRevision: initialized.manifest.revision,
+      content: constitution,
+      updatedAt: createdAt
+    });
+    if (!updated.ok) {
+      notes.push(
+        `The constitution could not be updated: ${updated.diagnostics.map((entry) => entry.message).join("; ")}`
+      );
+    }
+  }
+  const requirements = buildRequirements({
+    answers: session.answers,
+    projectId,
+    createdAt,
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    intakeSessionPath: intakeSessionArtifactPath(session.id)
+  });
+  const written = await writeRequirementSet({
+    repositoryRoot: context.repositoryRoot,
+    projectId,
+    requirements,
+    intakeSessionId: session.id,
+    graphVersion: session.graphVersion,
+    createdAt
+  });
+  const roadmapPath = path25.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmap = renderRoadmap({
+    projectName: name,
+    answers: session.answers,
+    requirements,
+    intakeSessionId: session.id
+  });
+  let roadmapWritten = false;
+  if (await fileExists(roadmapPath)) {
+    const existing = await readFile16(roadmapPath, "utf8");
+    if (existing.includes(ROADMAP_MARKER) || hasFlag(context, "force-roadmap")) {
+      await writeFile8(roadmapPath, roadmap, "utf8");
+      roadmapWritten = true;
+    } else {
+      notes.push(
+        `${ROADMAP_FILE} already exists and was not written by legion start; it was left alone. Pass --force-roadmap to replace it.`
+      );
+    }
+  } else {
+    await writeFile8(roadmapPath, roadmap, "utf8");
+    roadmapWritten = true;
+  }
+  const finalized = withDiagnostics(finalizeSession(session, projectId), notes);
+  await saveSession(context.repositoryRoot, finalized);
+  const action = nextAction("legion plan 1", "The requirement set is written; plan the first phase.");
+  const humanLines = [
+    `${projectId}: ${initialized.status}.`,
+    `Wrote ${requirements.length} requirement(s) to ${written.indexPath}.`,
+    `Requirement set hash: ${written.set.requirementSetHash}.`,
+    roadmapWritten ? `Rendered ${ROADMAP_FILE}.` : `${ROADMAP_FILE} was left unchanged.`,
+    ...notes.map((note) => `warning: ${note}`),
+    renderNextAction(action)
+  ];
+  return success(
+    {
+      ok: true,
+      status: "finalized",
+      session: sessionPayload(finalized, answered, total),
+      project: initialized.project,
+      projectStatus: initialized.status,
+      requirementSet: {
+        indexPath: written.indexPath,
+        requirementSetHash: written.set.requirementSetHash,
+        count: requirements.length,
+        paths: written.requirementPaths
+      },
+      roadmap: { path: ROADMAP_FILE, written: roadmapWritten },
+      graphVersion: INTAKE_GRAPH_VERSION,
+      ...notes.length === 0 ? {} : { warnings: notes.map((note) => ({ code: "finalize_note", message: note })) },
+      nextAction: action
+    },
+    humanLines.join("\n")
+  );
+}
+
+// packages/cli/src/commands/workflow/start.ts
+var START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
+var START_HELP = `legion start [--next] [--json]
+
+Run the intake interview. The CLI owns the question graph; a host renders each
+question and relays the answer. State lives in .legion/project/intake, so an
+interrupted interview resumes exactly where it stopped.
+
+  legion start                         Begin or resume; print the next question
+  legion start --next --json           The same question, machine-readable
+  legion start --answer "<node>=<v>"   Record one answer and advance
+  legion start --accept-proposal       Take the exploration's suggestion for this question
+  legion start --skip                  Decline an optional question
+  legion start --back                  Undo the most recent answer
+  legion start --session-status        Report progress without changing anything
+  legion start --abort                 Close the session without finalizing
+  legion start --intake <file>         Answer everything at once, same validators
+  legion start --finalize              Write requirements, constitution and ROADMAP.md
+  legion start --from-exploration <id> Seed a new session from a legion explore run
+
+Options: --session <id> selects a session explicitly, --slug overrides the derived
+project slug, --force-roadmap replaces a ROADMAP.md this command did not write.
+
+Direct initialization, which asks nothing and creates no requirements:
+  legion start --name <name> [--summary <text>] [--owner <name>] [--dry-run]`;
+async function handleStartCommand(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(START_HELP);
+  }
+  if (context.args.options.has("name")) {
+    return directInitialization(context);
+  }
+  if (hasFlag(context, "session-status")) return handleSessionStatus(context);
+  if (hasFlag(context, "abort")) return handleAbort(context);
+  if (hasFlag(context, "back")) return handleBack(context);
+  if (hasFlag(context, "finalize")) return handleFinalize(context);
+  if (hasFlag(context, "accept-proposal")) return handleAcceptProposal(context);
+  if (hasFlag(context, "skip")) return handleSkip(context);
+  if (context.args.options.has("answer")) return handleAnswer(context);
+  if (context.args.options.has("intake")) return handleBatchIntake(context);
+  return handleNextQuestion(context);
+}
+async function directInitialization(context) {
+  const nameValueless = valuelessStartOption(
+    context,
+    "name",
+    `Missing required option --name. ${START_EXAMPLE}`
+  );
+  if (nameValueless !== void 0) return nameValueless;
+  const name = stringOption(context, "name")?.trim();
+  if (name === void 0 || name.length === 0) {
+    return usageError(`Missing required option --name. ${START_EXAMPLE}`);
+  }
+  const createdAtValueless = valuelessStartOption(
+    context,
+    "created-at",
+    "Missing required value for --created-at. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z."
+  );
+  if (createdAtValueless !== void 0) return createdAtValueless;
+  let createdAt;
+  try {
+    createdAt = createdAtOption(context);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Invalid --created-at value. Use a canonical UTC timestamp such as 2026-06-22T12:00:00.000Z. ${message}`);
+  }
+  const ownerValueless = valuelessStartOption(
+    context,
+    "owner",
+    "Missing required value for --owner. Use a human-readable owner up to 128 characters."
+  );
+  if (ownerValueless !== void 0) return ownerValueless;
+  const explicitOwner = stringOption(context, "owner");
+  if (explicitOwner !== void 0 && explicitOwner.trim().length === 0) {
+    return usageError("Invalid --owner value. Use a human-readable owner up to 128 characters.");
+  }
+  const owner = explicitOwner ?? "operator";
+  let decisionOwner;
+  try {
+    decisionOwner = ownerActor(owner);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Invalid --owner value. Use a human-readable owner up to 128 characters. ${message}`);
+  }
+  const slugValueless = valuelessStartOption(
+    context,
+    "slug",
+    "Missing required value for --slug. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number."
+  );
+  if (slugValueless !== void 0) return slugValueless;
+  const slugValue = stringOption(context, "slug")?.trim() ?? slugFromName(name);
+  let slug;
+  try {
+    slug = projectSchema.shape.slug.parse(slugValue);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return usageError(`Invalid --slug value. Use lowercase letters, numbers, and hyphens, 3-64 characters, starting and ending with a letter or number. ${message}`);
+  }
+  const summary = stringOption(context, "summary")?.trim();
+  const result = await initProject({
+    repositoryRoot: context.repositoryRoot,
+    slug,
+    name,
+    ...summary === void 0 || summary.length === 0 ? {} : { description: summary },
+    repository: repositoryReference(context.repositoryRoot),
+    decisionOwners: [decisionOwner],
+    ...createdAt === void 0 ? {} : { createdAt },
+    dryRun: hasFlag(context, "dry-run")
+  });
+  if (!result.ok) {
+    return failure(
+      {
+        ...result,
+        nextAction: nextAction("legion validate", "Project state must be repaired before initialization can continue.")
+      },
+      startFailureHuman(result.diagnostics)
+    );
+  }
+  const action = result.status === "dry_run" ? nextAction("legion start", "Dry run completed; rerun without --dry-run to write .legion/project/project.json.") : nextAction("legion plan 1", "Project is initialized and ready for the first planned change.");
+  return withWarning(
+    success(
+      {
+        ...result,
+        intake: { status: "skipped", reason: "direct_initialization" },
+        nextAction: action
+      },
+      `${result.project.id}: ${result.status}.
+${renderNextAction(action)}`
+    ),
+    {
+      code: "intake_skipped",
+      // Countable rather than forbidden, for the same reason a `manual`
+      // acceptance criterion is: the shortcut is legitimate, and a project with
+      // no requirement set should be visible as such rather than looking like
+      // one whose interview happened to produce nothing.
+      message: "--name initializes the project without an interview, so it has no requirements and nothing to trace changes to. Run legion start with no arguments to record them."
+    }
+  );
+}
+function valuelessStartOption(context, key, valuelessMessage) {
+  const value = context.args.options.get(key);
+  return value === true ? usageError(valuelessMessage) : void 0;
+}
+function startFailureHuman(diagnostics) {
+  const rendered = renderDiagnostics(diagnostics);
+  return rendered.length > 0 ? `Project initialization failed.
+${rendered}` : "Project initialization failed.";
+}
+
 // packages/cli/src/workflow/codebase-map.ts
+import { createHash as createHash19 } from "node:crypto";
+import { readdir as readdir11, readFile as readFile17, stat as stat6 } from "node:fs/promises";
+import path26 from "node:path";
 var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
   ".git",
   ".hg",
@@ -27020,7 +29156,7 @@ async function getLatestCodebaseMap(repositoryRoot) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
     if (artifactPath === void 0) continue;
     try {
-      return JSON.parse(await readFile13(path22.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+      return JSON.parse(await readFile17(path26.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
     } catch {
       continue;
     }
@@ -27057,26 +29193,26 @@ function queryCodebaseMap(map, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path22.resolve(repositoryRoot, scope);
-  const relative = path22.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path26.resolve(repositoryRoot, scope);
+  const relative = path26.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path22.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path26.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path22.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path26.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat6(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path22.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path22.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path22.basename(relative))) continue;
+    const relative = path26.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path26.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path26.basename(relative))) continue;
     const fileStat = await stat6(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
-    const bytes = await readFile13(absolutePath);
+    const bytes = await readFile17(absolutePath);
     if (bytes.includes(0)) continue;
     const text = bytes.toString("utf8");
     const lines = text.split(/\r?\n/u);
@@ -27096,10 +29232,10 @@ async function collectSourceFiles(repositoryRoot, scope) {
 }
 async function walk(root) {
   const files = [];
-  const entries = await readdir9(root, { withFileTypes: true });
+  const entries = await readdir11(root, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path22.join(root, entry.name);
+    const absolute = path26.join(root, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -27144,7 +29280,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file of map.files) {
-    const extension = path22.extname(file.path).toLowerCase() || "(none)";
+    const extension = path26.extname(file.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -27203,16 +29339,16 @@ function isTextLikeName(name) {
   ].includes(name);
 }
 function sha256(bytes) {
-  return createHash17("sha256").update(bytes).digest("hex");
+  return createHash19("sha256").update(bytes).digest("hex");
 }
 
 // packages/cli/src/workflow/state.ts
-import { readdir as readdir11 } from "node:fs/promises";
-import path24 from "node:path";
+import { readdir as readdir13 } from "node:fs/promises";
+import path28 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir10, stat as stat7 } from "node:fs/promises";
-import path23 from "node:path";
+import { readdir as readdir12, stat as stat7 } from "node:fs/promises";
+import path27 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -27238,17 +29374,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path23.join(repositoryRoot, ".legion");
+  const legionRoot = path27.join(repositoryRoot, ".legion");
   if (!await pathExists5(legionRoot)) return [];
-  const entries = await readdir10(legionRoot, { withFileTypes: true });
+  const entries = await readdir12(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path23.join(legionRoot, "project");
-  const manifestPath = path23.join(projectRoot, "project.json");
+  const projectRoot = path27.join(legionRoot, "project");
+  const manifestPath = path27.join(projectRoot, "project.json");
   if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -27262,11 +29398,11 @@ async function pathExists5(absolutePath) {
     await stat7(absolutePath);
     return true;
   } catch (error2) {
-    if (isEnoent5(error2)) return false;
+    if (isEnoent6(error2)) return false;
     throw error2;
   }
 }
-function isEnoent5(error2) {
+function isEnoent6(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 function isIgnorableLegionRootEntry3(name) {
@@ -27403,10 +29539,10 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path24.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path28.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir11(changesRoot, { withFileTypes: true });
+    entries = await readdir13(changesRoot, { withFileTypes: true });
   } catch (error2) {
     if (isNodeErrorCode2(error2, "ENOENT")) {
       return noWorkflowChange(changesRoot);
@@ -27544,30 +29680,7 @@ async function resolveMapStatus(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
-import path25 from "node:path";
-
-// packages/cli/src/workflow/criteria.ts
-var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
-var MAX_CRITERION_SLUG_LENGTH = 48;
-function criterionIdFor(statement, index) {
-  const slug = statement.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_CRITERION_SLUG_LENGTH).replace(/-+$/g, "");
-  return slug.length > 0 ? `ac_${slug}-${index + 1}` : `ac_criterion-${index + 1}`;
-}
-function generatedCriterion(statement, index) {
-  return {
-    id: criterionIdFor(statement, index),
-    statement,
-    proof: {
-      mode: "manual",
-      reason: GENERATED_CRITERION_REASON
-    }
-  };
-}
-function generatedCriteria(statements) {
-  return statements.map((statement, index) => generatedCriterion(statement, index));
-}
-
-// packages/cli/src/workflow/change-input.ts
+import path29 from "node:path";
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -27655,8 +29768,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path25.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path25.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path29.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path29.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function buildChangeBundleInput(options) {
@@ -27744,24 +29857,24 @@ function firstDecisionOwner(project) {
 function phaseIdSuffix(phase) {
   const prefix = `phase-${phase.number}-`;
   const maxNameLength = Math.max(1, 63 - prefix.length);
-  const nameSlug = slugFromText(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
+  const nameSlug = slugFromText2(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
   return `${prefix}${nameSlug || "plan"}`;
 }
-function slugFromText(value) {
+function slugFromText2(value) {
   const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return slug.length > 0 ? slug : "plan";
 }
 function requirementStatement(phase) {
-  return truncate2(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
+  return truncate3(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
 }
 function summarizePhase(phase) {
-  return truncate2(phase.body || `Implement ${phase.name}.`, 512);
+  return truncate3(phase.body || `Implement ${phase.name}.`, 512);
 }
 function acceptanceCriteria(phase) {
   const bullets = phase.body.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.slice(2).trim()).filter((line) => line.length > 0).slice(0, 8);
   return bullets.length > 0 ? bullets : [`${phase.name} is implemented and reviewable.`];
 }
-function truncate2(value, maxLength) {
+function truncate3(value, maxLength) {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
   return normalized.slice(0, maxLength - 1).trimEnd();
@@ -27822,8 +29935,8 @@ function buildOracleArtifactInput(options) {
 }
 
 // packages/cli/src/workflow/phase-compat.ts
-import { readFile as readFile14 } from "node:fs/promises";
-import path26 from "node:path";
+import { readFile as readFile18 } from "node:fs/promises";
+import path30 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -27871,23 +29984,23 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path26.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path26.join(context.repositoryRoot, "ROADMAP.md")
+    path30.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path30.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path26.isAbsolute(roadmapPath) ? roadmapPath : path26.resolve(repositoryRoot, roadmapPath);
+  return path30.isAbsolute(roadmapPath) ? roadmapPath : path30.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
-    return await readFile14(sourcePath, "utf8");
+    return await readFile18(sourcePath, "utf8");
   } catch (error2) {
-    if (isEnoent6(error2)) return void 0;
+    if (isEnoent7(error2)) return void 0;
     throw error2;
   }
 }
-function isEnoent6(error2) {
+function isEnoent7(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 
@@ -28199,11 +30312,11 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
 
 // packages/cli/src/commands/workflow/build.ts
 import { execFileSync as execFileSync6 } from "node:child_process";
-import { readFile as readFile16 } from "node:fs/promises";
+import { readFile as readFile20 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir12, readFile as readFile15 } from "node:fs/promises";
-import path27 from "node:path";
+import { readdir as readdir14, readFile as readFile19 } from "node:fs/promises";
+import path31 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -28367,19 +30480,19 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path27.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path31.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir12(workflowRoot, { withFileTypes: true });
+      entries = await readdir14(workflowRoot, { withFileTypes: true });
     } catch (error2) {
       if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") continue;
       throw error2;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path27.join(workflowRoot, entry.name, "workflow-run.json") : path27.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path31.join(workflowRoot, entry.name, "workflow-run.json") : path31.join(workflowRoot, entry.name);
       let text = "";
       try {
-        text = await readFile15(absolutePath, "utf8");
+        text = await readFile19(absolutePath, "utf8");
       } catch {
         continue;
       }
@@ -28387,7 +30500,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
         `### ${workflow}/${entry.name}`,
         "",
         "```json",
-        truncate3(text.trim(), 4e3),
+        truncate4(text.trim(), 4e3),
         "```"
       ].join("\n"));
     }
@@ -28395,15 +30508,15 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path27.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path31.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const text = await readFile15(indexPath, "utf8");
-    return ["```json", truncate3(text.trim(), 4e3), "```"].join("\n");
+    const text = await readFile19(indexPath, "utf8");
+    return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
   } catch {
     return "No learned project guidance found.";
   }
 }
-function truncate3(text, maxLength) {
+function truncate4(text, maxLength) {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}
 ... [truncated]`;
@@ -28411,9 +30524,9 @@ function truncate3(text, maxLength) {
 
 // packages/cli/src/workflow/executor/verification-runner.ts
 import { spawn as spawn2 } from "node:child_process";
-import { createHash as createHash18 } from "node:crypto";
+import { createHash as createHash20 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path28 from "node:path";
+import path32 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -28422,12 +30535,12 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path28.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path32.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
 function sha2562(value) {
-  return `sha256:${createHash18("sha256").update(value, "utf8").digest("hex")}`;
+  return `sha256:${createHash20("sha256").update(value, "utf8").digest("hex")}`;
 }
 function terminateProcessTree2(pid) {
   if (pid === void 0) return;
@@ -28538,9 +30651,9 @@ function createVerificationRunner(options) {
 }
 
 // packages/cli/src/workflow/executor/worker-bundles.ts
-import { createHash as createHash19 } from "node:crypto";
+import { createHash as createHash21 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path29 from "node:path";
+import path33 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -28552,11 +30665,11 @@ var WorkerBundleIntegrityError = class extends Error {
   }
 };
 function sha256Hex5(value) {
-  return createHash19("sha256").update(value, "utf8").digest("hex");
+  return createHash21("sha256").update(value, "utf8").digest("hex");
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path29.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path33.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -28583,7 +30696,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path29.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path33.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -28618,15 +30731,15 @@ function createWorkerBundleRegistry(options) {
 
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
-import { createHash as createHash21 } from "node:crypto";
+import { createHash as createHash23 } from "node:crypto";
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path32 from "node:path";
+import path36 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
-import { createHash as createHash20 } from "node:crypto";
+import { createHash as createHash22 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path30 from "node:path";
+import path34 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -28655,7 +30768,7 @@ function splitLines(value) {
 function hashFileContent(absolutePath) {
   try {
     if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
-    return createHash20("sha256").update(readFileSync2(absolutePath)).digest("hex");
+    return createHash22("sha256").update(readFileSync2(absolutePath)).digest("hex");
   } catch {
     return void 0;
   }
@@ -28703,7 +30816,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path30.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path34.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -28719,7 +30832,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path30.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path34.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -28834,11 +30947,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path31 from "node:path";
+import path35 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path31.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path35.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -28851,7 +30964,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path31.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path35.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -28868,7 +30981,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path31.join(repositoryRoot, child)).size;
+        size = lstatSync(path35.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -28886,7 +30999,7 @@ function isHarnessPath(relative, harnessPaths) {
 }
 function digestOf(absolute) {
   try {
-    return createHash21("sha256").update(readFileSync3(absolute)).digest("hex");
+    return createHash23("sha256").update(readFileSync3(absolute)).digest("hex");
   } catch {
     return void 0;
   }
@@ -28916,7 +31029,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path32.join(input.repositoryRoot, entry.path);
+    const absolute = path36.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -28944,7 +31057,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path32.join(input.repositoryRoot, relative);
+    const absolute = path36.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -29027,7 +31140,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path32.join(input.repositoryRoot, relative);
+    const absolute = path36.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -29041,14 +31154,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path32.dirname(absolute), { recursive: true });
+        mkdirSync3(path36.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path32.dirname(absolute), { recursive: true });
+        mkdirSync3(path36.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -29156,8 +31269,8 @@ async function runGuardedExecution(input) {
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash22 } from "node:crypto";
-import path33 from "node:path";
+import { createHash as createHash24 } from "node:crypto";
+import path37 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -29175,7 +31288,7 @@ function reviewIdForChange(input) {
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash22("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const digest = createHash24("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   const reservedLength = tail.length + digest.length + 1;
   const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
   if (prefixLength < 1) {
@@ -29191,7 +31304,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path33.join(repositoryRoot, ...artifactPath.split("/"));
+  return path37.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -29666,7 +31779,7 @@ function taskRunDocument(input) {
 async function evidenceEntryForExecution(input) {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
-  const logBytes = await readFile16(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
+  const logBytes = await readFile20(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
   const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
   const traceRefs = [
     {
@@ -29767,7 +31880,7 @@ function commandForEvidence(result, logBytes, startedAt, endedAt) {
   };
 }
 async function referenceForFile(repositoryRoot, artifactPath) {
-  const bytes = await readFile16(absoluteArtifactPath(repositoryRoot, artifactPath));
+  const bytes = await readFile20(absoluteArtifactPath(repositoryRoot, artifactPath));
   return artifactReferenceForContent({
     path: artifactPath,
     content: bytes
@@ -30742,8 +32855,8 @@ function blockedReview(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
-import { readFile as readFile17 } from "node:fs/promises";
-import path35 from "node:path";
+import { readFile as readFile21 } from "node:fs/promises";
+import path39 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 async function createAdHocTaskgraph(input) {
@@ -31003,8 +33116,8 @@ function commandParts(parts) {
 }
 
 // packages/cli/src/commands/workflow/record.ts
-import { mkdir as mkdir12, writeFile as writeFile6 } from "node:fs/promises";
-import path34 from "node:path";
+import { mkdir as mkdir14, writeFile as writeFile9 } from "node:fs/promises";
+import path38 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -31290,9 +33403,9 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path35.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path39.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const parsed = JSON.parse(await readFile17(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile21(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
   } catch {
   }
@@ -31304,8 +33417,8 @@ async function readLessonIndex(repositoryRoot) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile18 } from "node:fs/promises";
-import path36 from "node:path";
+import { readFile as readFile22 } from "node:fs/promises";
+import path40 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -31977,9 +34090,9 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path36.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path40.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
-    const parsed = JSON.parse(await readFile18(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
   } catch {
   }
@@ -32206,7 +34319,7 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat8 } from "node:fs/promises";
-import path37 from "node:path";
+import path41 from "node:path";
 var VALIDATE_HELP = `legion validate
 
 Validate committed Legion project state under .legion/project.
@@ -32267,7 +34380,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat8(path37.join(root, relativePath));
+    await stat8(path41.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -32379,7 +34492,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path38.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path42.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -32431,8 +34544,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path38.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path38.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path42.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path42.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

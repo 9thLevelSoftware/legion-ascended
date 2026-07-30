@@ -334,7 +334,13 @@ test('installer source keeps one update generator and rejects non-200 registry r
   );
 });
 
-test('Codex prompt installs concrete template context paths for runtimes without at-refs', () => {
+test('Codex prompt installs concrete repository context paths for runtimes without at-refs', () => {
+  // This used to assert against `legion-start.md`, which carried
+  // `@skills/questioning-flow/templates/*` refs. `legion start` now drives a
+  // CLI-owned interview and writes typed requirements, so it reads none of
+  // those templates and the refs were removed with them. The behaviour under
+  // test is the installer's at-ref rewrite, not that one command in particular,
+  // so it moves to a command that still has refs to rewrite.
   const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'legion-codex-template-refs-'));
   const homeDir = path.join(sandboxRoot, 'home');
   const projectDir = path.join(sandboxRoot, 'project');
@@ -343,15 +349,16 @@ test('Codex prompt installs concrete template context paths for runtimes without
 
   try {
     const installResult = runInstaller(['--codex', '--local'], projectDir, homeDir);
-    assertRunOk(installResult, 'codex local install with template refs');
+    assertRunOk(installResult, 'codex local install with repository refs');
 
-    const startPrompt = path.join(projectDir, '.codex', 'prompts', 'legion-start.md');
-    const content = fs.readFileSync(startPrompt, 'utf8');
-    const templatesDir = normalizePath(path.join(projectDir, '.legion', 'skills', 'questioning-flow', 'templates'));
-    assert.match(content, new RegExp(`${templatesDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/project-template\\.md`));
-    assert.match(content, new RegExp(`${templatesDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/roadmap-template\\.md`));
-    assert.match(content, new RegExp(`${templatesDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/state-template\\.md`));
-    assert.doesNotMatch(content, /^@skills\/questioning-flow\/templates/m);
+    const agentPrompt = path.join(projectDir, '.codex', 'prompts', 'legion-agent.md');
+    const content = fs.readFileSync(agentPrompt, 'utf8');
+    const agentsDir = normalizePath(path.join(projectDir, '.legion', 'agents'));
+    const escaped = agentsDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(content, new RegExp(`${escaped}/engineering-senior-developer\\.md`));
+    assert.match(content, new RegExp(`${escaped}/testing-qa-verification-specialist\\.md`));
+    assert.match(content, new RegExp(`${escaped}/design-ui-designer\\.md`));
+    assert.doesNotMatch(content, /^@agents\//m);
   } finally {
     fs.rmSync(sandboxRoot, { recursive: true, force: true });
   }
