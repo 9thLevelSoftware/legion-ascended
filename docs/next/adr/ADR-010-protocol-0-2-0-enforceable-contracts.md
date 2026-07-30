@@ -1,7 +1,7 @@
 # ADR-010: Protocol 0.2.0 — Enforceable Task Contracts
 
 ## Status
-Proposed — awaiting decision-owner approval.
+Accepted
 
 Recorded retrospectively. The implementation landed in PRs #33, #34 and #35 before this record existed, which the charter does not permit for a breaking architecture decision. That sequencing error is noted here rather than hidden; approval of this ADR is what makes the protocol revision legitimate, and Phase C is the dependent work it gates.
 
@@ -76,6 +76,7 @@ Every generated requirement Legion writes for itself — roadmap bullets, the `.
 Revert to 0.1.0 only by a later accepted ADR that names ADR-010 and either supplies an alternative mechanism for declaring blast radius and executable acceptance, or demonstrates with recorded evidence that enforcement is more costly than the drift it prevents. A downcast migration must exist before any reversal, because 0.2.0 records budgets and proof modes that 0.1.0 cannot express.
 
 ## Review And Approval
-- Approver: dasbl — **not yet given**
+- Approver: dasbl
 - Proposed: 2026-07-30
+- Accepted: 2026-07-30
 - Supersession rule: Supersede only by a later accepted ADR that names ADR-010, preserves the requirement that a task declare its blast radius and that acceptance criteria state how they are proven, and provides a migration path in both directions.
