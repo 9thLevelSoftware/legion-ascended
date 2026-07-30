@@ -225,12 +225,71 @@ async function detectPreInitCollision(repositoryRoot: string): Promise<readonly 
   return [];
 }
 
+/**
+ * Whether `.legion/project` holds only records that legitimately predate a
+ * project manifest.
+ *
+ * Two things run before `legion start` writes a manifest: guidance runs under
+ * `workflow/`, and intake sessions under `intake/`. An intake session is
+ * written from the first question, and the project it describes does not exist
+ * until `--finalize`, so refusing to initialize because a session is present
+ * would make the interview unable to produce the project it interviewed for.
+ *
+ * The guard stays narrow on purpose. It exists to stop initialization from
+ * silently landing on top of unrecognized state, so each permitted root is
+ * checked for the specific shape it should have, and anything else still
+ * demands explicit migration.
+ */
 export async function containsOnlyPreInitWorkflowRecords(projectRoot: string): Promise<boolean> {
   const entries = await readdir(projectRoot, { withFileTypes: true });
-  if (entries.length !== 1 || entries[0]?.isDirectory() !== true || entries[0].name !== "workflow") {
+  let recordCount = 0;
+
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name)) continue;
+    if (!entry.isDirectory()) return false;
+
+    if (entry.name === "workflow") {
+      if (!(await containsOnlyRecognizedWorkflowRecords(path.join(projectRoot, entry.name)))) {
+        return false;
+      }
+      recordCount += 1;
+      continue;
+    }
+
+    if (entry.name === "intake") {
+      const intake = await intakeSessionDirectoryStats(path.join(projectRoot, entry.name));
+      if (!intake.valid) return false;
+      recordCount += intake.recordCount;
+      continue;
+    }
+
     return false;
   }
-  return containsOnlyRecognizedWorkflowRecords(path.join(projectRoot, "workflow"));
+
+  return recordCount > 0;
+}
+
+/** Intake sessions are `itk_*` directories, each holding a `session.json`. */
+async function intakeSessionDirectoryStats(
+  absoluteDirectory: string
+): Promise<{ readonly valid: boolean; readonly recordCount: number }> {
+  const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+  let recordCount = 0;
+
+  for (const entry of entries) {
+    if (isIgnorableLegionRootEntry(entry.name)) continue;
+    if (!entry.isDirectory() || !entry.name.startsWith("itk_")) return { valid: false, recordCount: 0 };
+    // A directory with no session.json is an abandoned ID reservation, left by a
+    // process interrupted between claiming the ID and writing the record.
+    // `listSessions` already skips these; rejecting them here made initProject
+    // report migration_required forever, so an interrupted start could complete
+    // a whole interview and then be unable to finalize it. Two classifications
+    // of the same directory is one too many.
+    if (!(await pathExists(path.join(absoluteDirectory, entry.name, "session.json")))) continue;
+    recordCount += 1;
+  }
+
+  return { valid: true, recordCount };
 }
 
 async function containsOnlyRecognizedWorkflowRecords(workflowRoot: string): Promise<boolean> {

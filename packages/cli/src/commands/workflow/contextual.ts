@@ -183,11 +183,12 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
   // Persist the typed exploration alongside the prose. The design document stays
   // human-readable; this is the machine-readable form.
   //
-  // Nothing reads it yet — `legion start` is still option-driven and does not
-  // discover explorations. The artifact and its schema exist so that handoff has
-  // a settled contract to consume rather than one invented at the time, but
-  // until the wiring lands the file is written and unused. Do not describe the
-  // handoff as working in user-facing text.
+  // `legion start --from-exploration <runId>` reads it, via
+  // `workflow/intake/exploration-source.ts`. What it takes is deliberately
+  // limited: proposals become suggestions the operator still has to accept, and
+  // open questions become extra required intake nodes. Nothing here can answer
+  // an intake question on its own, so a confident brainstorm cannot shorten the
+  // interview — only a decisive human can.
   let explorationArtifactPath: ArtifactPath | undefined;
   let explorationDiagnostics: readonly string[] = [];
   if (input.workflow === "explore") {

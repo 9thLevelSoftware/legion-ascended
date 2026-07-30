@@ -27,20 +27,30 @@ export interface CliResult {
 export type CommandHandler = (context: CliContext) => Promise<CliResult>;
 
 const VALUELESS_OPTIONS = new Set([
+  "abort",
+  "accept-proposal",
   "allow-replace-existing-project",
   "allow-dirty",
   "apply",
   "accept",
   "auto",
   "auto-refine",
+  "back",
   "dry-run",
+  "finalize",
+  "force-roadmap",
   "from-codex-legion",
   "from-planning",
   "help",
   "json",
+  // Without this, `legion start --next --json` is fine but `legion start --next`
+  // followed by any positional swallows it as the flag's value.
+  "next",
   "no-color",
   "review-accepted",
-  "rollback"
+  "rollback",
+  "session-status",
+  "skip"
 ]);
 
 export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {

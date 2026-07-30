@@ -8,6 +8,7 @@ import {
   stringOption,
   success,
   usageError,
+  withWarning,
   type CliContext,
   type CliResult
 } from "../../runtime.js";
@@ -17,22 +18,70 @@ import {
   repositoryReference,
   slugFromName
 } from "../../workflow/input.js";
+import {
+  handleAbort,
+  handleAcceptProposal,
+  handleAnswer,
+  handleBack,
+  handleBatchIntake,
+  handleFinalize,
+  handleNextQuestion,
+  handleSessionStatus,
+  handleSkip
+} from "../../workflow/intake/driver.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 
 const START_EXAMPLE = `Example: legion start --name "My Project" --summary "..." --owner dasbl`;
-const START_HELP = `legion start --name <name> [--summary <text>] [--owner <name>] [--created-at <utc>] [--slug <slug>] [--dry-run]
+const START_HELP = `legion start [--next] [--json]
 
-Initialize .legion project state and route to the first planning step.
+Run the intake interview. The CLI owns the question graph; a host renders each
+question and relays the answer. State lives in .legion/project/intake, so an
+interrupted interview resumes exactly where it stopped.
 
-Examples:
-  legion start --name "Asset Mapper" --summary "Metadata authoring and deterministic asset resolution" --owner dasbl
-  legion start --name "Asset Mapper" --dry-run --json`;
+  legion start                         Begin or resume; print the next question
+  legion start --next --json           The same question, machine-readable
+  legion start --answer "<node>=<v>"   Record one answer and advance
+  legion start --accept-proposal       Take the exploration's suggestion for this question
+  legion start --skip                  Decline an optional question
+  legion start --back                  Undo the most recent answer
+  legion start --session-status        Report progress without changing anything
+  legion start --abort                 Close the session without finalizing
+  legion start --intake <file>         Answer everything at once, same validators
+  legion start --finalize              Write requirements, constitution and ROADMAP.md
+  legion start --from-exploration <id> Seed a new session from a legion explore run
+
+Options: --session <id> selects a session explicitly, --slug overrides the derived
+project slug, --force-roadmap replaces a ROADMAP.md this command did not write.
+
+Direct initialization, which asks nothing and creates no requirements:
+  legion start --name <name> [--summary <text>] [--owner <name>] [--dry-run]`;
 
 export async function handleStartCommand(context: CliContext): Promise<CliResult> {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(START_HELP);
   }
 
+  // `--name` predates the interview and stays as the direct-initialization
+  // path: it is what the dogfood script, the e2e suite and any non-interactive
+  // caller use. It is not a shorter interview — it produces no requirements at
+  // all — so it warns rather than passing silently.
+  if (context.args.options.has("name")) {
+    return directInitialization(context);
+  }
+
+  if (hasFlag(context, "session-status")) return handleSessionStatus(context);
+  if (hasFlag(context, "abort")) return handleAbort(context);
+  if (hasFlag(context, "back")) return handleBack(context);
+  if (hasFlag(context, "finalize")) return handleFinalize(context);
+  if (hasFlag(context, "accept-proposal")) return handleAcceptProposal(context);
+  if (hasFlag(context, "skip")) return handleSkip(context);
+  if (context.args.options.has("answer")) return handleAnswer(context);
+  if (context.args.options.has("intake")) return handleBatchIntake(context);
+
+  return handleNextQuestion(context);
+}
+
+async function directInitialization(context: CliContext): Promise<CliResult> {
   const nameValueless = valuelessStartOption(
     context,
     "name",
@@ -118,12 +167,24 @@ export async function handleStartCommand(context: CliContext): Promise<CliResult
     ? nextAction("legion start", "Dry run completed; rerun without --dry-run to write .legion/project/project.json.")
     : nextAction("legion plan 1", "Project is initialized and ready for the first planned change.");
 
-  return success(
+  return withWarning(
+    success(
+      {
+        ...result,
+        intake: { status: "skipped", reason: "direct_initialization" },
+        nextAction: action
+      },
+      `${result.project.id}: ${result.status}.\n${renderNextAction(action)}`
+    ),
     {
-      ...result,
-      nextAction: action
-    },
-    `${result.project.id}: ${result.status}.\n${renderNextAction(action)}`
+      code: "intake_skipped",
+      // Countable rather than forbidden, for the same reason a `manual`
+      // acceptance criterion is: the shortcut is legitimate, and a project with
+      // no requirement set should be visible as such rather than looking like
+      // one whose interview happened to produce nothing.
+      message:
+        "--name initializes the project without an interview, so it has no requirements and nothing to trace changes to. Run legion start with no arguments to record them."
+    }
   );
 }
 
