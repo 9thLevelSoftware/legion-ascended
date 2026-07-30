@@ -87,7 +87,7 @@ const fakeAdapter: ExecutionAdapter = {
     const plan = readFakeExecutorPlan();
     const written = plan === undefined
       ? []
-      : applyFakeExecutorPlan({ repositoryRoot: request.repositoryRoot, plan });
+      : applyFakeExecutorPlan({ repositoryRoot: request.repositoryRoot, plan, readOnly: request.readOnly });
     const status = plan?.status ?? "succeeded";
 
     const result: ExecutionResult = {

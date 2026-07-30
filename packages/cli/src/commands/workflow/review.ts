@@ -617,6 +617,7 @@ async function runAutoFixCycle(
   const guarded = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
     task,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
     run: () =>
       adapterForKind(executor).run({

@@ -342,6 +342,9 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
   const guarded = await runGuardedExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
+    // The same SHA the task-run manifest records, so evidence, snapshot and
+    // reconciliation all describe one revision.
+    baseGitSha,
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
     run: () =>
       adapter.run({

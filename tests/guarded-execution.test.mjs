@@ -82,8 +82,12 @@ test("a build that rewrites its own contract is blocked and reverted", async (t)
   const payload = parseJsonOutput(build);
   assert.equal(payload.status, "blocked");
   assert.ok(
-    payload.diagnostics.some((entry) => /forbid/i.test(entry.message)),
-    `expected a forbidden-path diagnostic, got ${JSON.stringify(payload.diagnostics)}`
+    payload.diagnostics.some((entry) => /protected control artifact/i.test(entry.message)),
+    `expected a protected-artifact diagnostic, got ${JSON.stringify(payload.diagnostics)}`
+  );
+  assert.ok(
+    payload.diagnostics.some((entry) => /Restored 1 protected path/.test(entry.message)),
+    "the diagnostic should say the artifact was restored, not merely that it was touched"
   );
 
   // Detection without containment would leave the rewrite for the next command.

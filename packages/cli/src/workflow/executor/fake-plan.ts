@@ -5,22 +5,13 @@ import path from "node:path";
 import type { ExecutionResult } from "./types.js";
 
 /**
- * A scripted misbehaviour plan for the `fake` executor.
+ * A scripted misbehaviour plan for the `fake` executor, enabled only by
+ * `LEGION_FAKE_EXECUTOR_PLAN`. Without it the fake behaves exactly as before and
+ * touches nothing.
  *
- * The `fake` executor wrote nothing, so no test could exercise a write-path
- * violation end to end. That single gap is why an unsatisfiable task contract,
- * an unreconciled auto-fix path, a double-resolved base SHA and a missing
- * containment step all shipped through a green suite: every reconciliation test
- * operated on synthetic observations rather than on an executor actually doing
- * the wrong thing.
- *
- * This lets a test say "write here, claim you wrote there, then commit" and
- * assert that the harness catches it. It is deliberately blunt — the point is
- * to produce real filesystem and git effects the enforcement path must observe,
- * not to simulate a plausible agent.
- *
- * Activated only by `LEGION_FAKE_EXECUTOR_PLAN`, so ordinary `--executor fake`
- * runs behave exactly as before.
+ * Lets a test drive real filesystem and git effects — write here, claim you
+ * wrote there, then commit — so the enforcement path can be exercised against an
+ * executor that actually misbehaves rather than against synthetic observations.
  */
 
 export const FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
@@ -56,27 +47,63 @@ export function readFakeExecutorPlan(): FakeExecutorPlan | undefined {
  * report about itself. Keeping them separable is what makes claim-versus-
  * observation drift testable.
  */
-export function applyFakeExecutorPlan(input: {
+export interface ApplyFakeExecutorPlanInput {
   readonly repositoryRoot: string;
   readonly plan: FakeExecutorPlan;
-}): readonly string[] {
+  /** A read-only dispatch must stay read-only, test hook or not. */
+  readonly readOnly: boolean;
+}
+
+/**
+ * Resolve a planned path and require it to stay inside the repository.
+ *
+ * `path.join` is not a sandbox: `../..` walks out of the worktree, where nothing
+ * reconciliation does can see the change. A test hook that can write anywhere is
+ * a liability regardless of intent.
+ */
+function resolveInsideRepository(repositoryRoot: string, relative: string): string | undefined {
+  const root = path.resolve(repositoryRoot);
+  const absolute = path.resolve(root, relative);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  return absolute === root || absolute.startsWith(prefix) ? absolute : undefined;
+}
+
+/**
+ * Apply the plan and report what was actually written.
+ *
+ * The returned list is the truth; `claimFilesChanged` is what the executor will
+ * report about itself. Keeping them separable is what makes claim-versus-
+ * observation drift testable.
+ */
+export function applyFakeExecutorPlan(input: ApplyFakeExecutorPlanInput): readonly string[] {
+  // The plan is a test hook, not an authority to ignore the request contract.
+  if (input.readOnly) return [];
+
   const written: string[] = [];
+  const staged: string[] = [];
 
   for (const entry of input.plan.writes ?? []) {
-    const absolute = path.join(input.repositoryRoot, ...entry.path.split("/"));
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === undefined) continue;
     mkdirSync(path.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     written.push(entry.path);
+    staged.push(entry.path);
   }
 
   for (const entry of input.plan.deletes ?? []) {
-    rmSync(path.join(input.repositoryRoot, ...entry.split("/")), { force: true });
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry);
+    if (absolute === undefined) continue;
+    rmSync(absolute, { force: true });
     written.push(entry);
+    staged.push(entry);
   }
 
-  if (input.plan.commit === true) {
+  if (input.plan.commit === true && staged.length > 0) {
     try {
-      execFileSync("git", ["-C", input.repositoryRoot, "add", "-A"], { stdio: "ignore" });
+      // Stage only the planned paths. `git add -A` would sweep up the caller's
+      // unrelated edits and any harness output that happened to be present.
+      execFileSync("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
       execFileSync(
         "git",
         ["-C", input.repositoryRoot, "-c", "user.email=fake@legion", "-c", "user.name=Fake Executor", "commit", "-m", "fake executor commit"],
