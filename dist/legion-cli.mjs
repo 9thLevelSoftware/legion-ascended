@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path35 from "node:path";
+import path36 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path36) {
-  if (!path36)
+function getElementAtPath(obj, path37) {
+  if (!path37)
     return obj;
-  return path36.reduce((acc, key) => acc?.[key], obj);
+  return path37.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path36, issues) {
+function prefixIssues(path37, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path36);
+    iss.path.unshift(path37);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path36 = []) => {
+  const processError = (error3, path37 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path36, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path37, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path36, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path37, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path36, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path37, ...issue2.path]);
       } else {
-        const fullpath = [...path36, ...issue2.path];
+        const fullpath = [...path37, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -5935,11 +5935,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path36 = [...next.path, migration];
+      const path37 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path36;
+        return path37;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path36 });
+      queue.push({ version: migration.toVersion, path: path37 });
     }
     next = queue.shift();
   }
@@ -8624,17 +8624,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path36 = findProtocolMigrationPath({
+  const path37 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path36 === null) {
+  if (path37 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path36) {
+  for (const descriptor of path37) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -9697,10 +9697,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path36) {
-  if (path36.length === 0)
+function renderPath(path37) {
+  if (path37.length === 0)
     return "<root>";
-  return path36.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path37.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -17078,14 +17078,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path36) {
-  if (path36.endsWith(".json"))
+function mediaTypeForArtifactPath(path37) {
+  if (path37.endsWith(".json"))
     return "application/json";
-  if (path36.endsWith(".yaml") || path36.endsWith(".yml"))
+  if (path37.endsWith(".yaml") || path37.endsWith(".yml"))
     return "application/yaml";
-  if (path36.endsWith(".md"))
+  if (path37.endsWith(".md"))
     return "text/markdown";
-  if (path36.endsWith(".txt"))
+  if (path37.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -17128,16 +17128,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path36, issues) {
+function schemaDiagnostics(path37, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path36 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path37 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path36
+      path: path37
     });
   });
 }
@@ -18102,7 +18102,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path36 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path37 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -18116,7 +18116,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path36
+        path: path37
       }))
     };
   }
@@ -18864,13 +18864,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path36) {
+function parseRequirementId2(input, path37) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
@@ -18886,24 +18886,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path36) {
+function parseBaseGitSha(input, path37) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path36) {
+function parseOwners(input, path37) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path36
+        path: path37
       })
     ]);
   }
@@ -18915,7 +18915,7 @@ function parseOwners(input, path36) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path36
+        path: path37
       })));
       continue;
     }
@@ -19203,7 +19203,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path36) {
+function conflictDiagnostics(deltas, path37) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -19212,7 +19212,7 @@ function conflictDiagnostics(deltas, path36) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path36
+        path: path37
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -19989,18 +19989,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path36) {
+function parseOracleId2(input, path37) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path36) {
+function parseBaseGitSha2(input, path37) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20008,7 +20008,7 @@ function parseBaseGitSha2(input, path36) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
@@ -20352,7 +20352,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path36) {
+function parseBaseGitSha3(input, path37) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20360,18 +20360,18 @@ function parseBaseGitSha3(input, path36) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path36) {
+function assertExpectedRevision(value, path37) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path36
+        path: path37
       })
     ]);
   }
@@ -20689,7 +20689,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path36) {
+function parseBaseGitSha4(input, path37) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20697,18 +20697,18 @@ function parseBaseGitSha4(input, path36) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path36) {
+function assertExpectedRevision2(value, path37) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path36
+        path: path37
       })
     ]);
   }
@@ -21107,13 +21107,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path36) {
+function assertExpectedRevision3(value, path37) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path36
+        path: path37
       })
     ]);
   }
@@ -21385,13 +21385,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path36) {
+function assertExpectedRevision4(value, path37) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path36
+        path: path37
       })
     ]);
   }
@@ -21632,8 +21632,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path36) {
-  return nodeId("artifact", path36);
+function artifactNodeId(path37) {
+  return nodeId("artifact", path37);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -21669,8 +21669,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path36) {
-  const fileName = path36.split("/").at(-1);
+function oracleIdFromPath(path37) {
+  const fileName = path37.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -21785,13 +21785,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path36 = [];
+  const path37 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path36.indexOf(node);
+      const cycleStartIndex = path37.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path36.length; index++) {
-          const cyclicNode = path36[index];
+        for (let index = cycleStartIndex; index < path37.length; index++) {
+          const cyclicNode = path37[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -21801,11 +21801,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path36.push(node);
+    path37.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path36.pop();
+    path37.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -21833,10 +21833,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path36 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path37 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path36,
+        path: path37,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -22482,13 +22482,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path36) {
+function parseArchivedAt(input, path37) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path36
+      path: path37
     })));
   }
   return parsed.data;
@@ -22517,7 +22517,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path36) {
+function archiveHashDiagnostics(record2, path37) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -22525,11 +22525,11 @@ function archiveHashDiagnostics(record2, path36) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path36
+      path: path37
     })
   ];
 }
-async function assertWorktreeTarget(input, path36) {
+async function assertWorktreeTarget(input, path37) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -22543,7 +22543,7 @@ async function assertWorktreeTarget(input, path36) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path36
+        path: path37
       })
     ]);
   } catch (error2) {
@@ -22551,7 +22551,7 @@ async function assertWorktreeTarget(input, path36) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path36
+        path: path37
       })
     ]);
   }
@@ -22630,11 +22630,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path36 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path36 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path36)) : remaining;
+    const path37 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path37 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path37)) : remaining;
     return {
-      path: path36,
+      path: path37,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -22697,9 +22697,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path36, document) {
+function validatePlannedDocument(path37, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path36,
+    artifactPath: path37,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -22710,7 +22710,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path36, document]) => [path36, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path37, document]) => [path37, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -22734,17 +22734,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path36 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path36)) {
+      const path37 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path37)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path36}.`,
-            path: path36
+            message: `Archive add target already exists: ${path37}.`,
+            path: path37
           })
         ]);
       }
-      plannedDocs.set(path36, {
+      plannedDocs.set(path37, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -22757,7 +22757,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path36);
+      touchedPaths.add(path37);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -22942,8 +22942,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path36 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path36);
+  const path37 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path37);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -23181,10 +23181,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path36 = archivePath(changeId);
+  const path37 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path36,
+    artifactPath: path37,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -23196,22 +23196,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path36
+        path: path37
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path36);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path37);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path36,
+    artifactPath: path37,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path36,
+      path: path37,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -26132,7 +26132,7 @@ ${rendered}` : "Project initialization failed.";
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash17 } from "node:crypto";
 import { readdir as readdir9, readFile as readFile13, stat as stat6 } from "node:fs/promises";
-import path21 from "node:path";
+import path22 from "node:path";
 
 // packages/cli/src/workflow/executor/result.ts
 import { readFile as readFile11, writeFile as writeFile5 } from "node:fs/promises";
@@ -26264,7 +26264,7 @@ function parseReviewVerdict(value) {
 
 // packages/cli/src/workflow/guidance-run.ts
 import { mkdir as mkdir11, readdir as readdir8, readFile as readFile12 } from "node:fs/promises";
-import path20 from "node:path";
+import path21 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -26297,6 +26297,49 @@ function budgetForWriteScope(write, options = {}) {
 // packages/cli/src/workflow/executor/adapters.ts
 import { execFile as execFile4, spawn } from "node:child_process";
 import { promisify as promisify4 } from "node:util";
+
+// packages/cli/src/workflow/executor/fake-plan.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { mkdirSync as mkdirSync2, rmSync, writeFileSync } from "node:fs";
+import path20 from "node:path";
+var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
+function readFakeExecutorPlan() {
+  const raw = process.env[FAKE_PLAN_ENV];
+  if (raw === void 0 || raw.trim().length === 0) return void 0;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? parsed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function applyFakeExecutorPlan(input) {
+  const written = [];
+  for (const entry of input.plan.writes ?? []) {
+    const absolute = path20.join(input.repositoryRoot, ...entry.path.split("/"));
+    mkdirSync2(path20.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, entry.content, "utf8");
+    written.push(entry.path);
+  }
+  for (const entry of input.plan.deletes ?? []) {
+    rmSync(path20.join(input.repositoryRoot, ...entry.split("/")), { force: true });
+    written.push(entry);
+  }
+  if (input.plan.commit === true) {
+    try {
+      execFileSync2("git", ["-C", input.repositoryRoot, "add", "-A"], { stdio: "ignore" });
+      execFileSync2(
+        "git",
+        ["-C", input.repositoryRoot, "-c", "user.email=fake@legion", "-c", "user.name=Fake Executor", "commit", "-m", "fake executor commit"],
+        { stdio: "ignore" }
+      );
+    } catch {
+    }
+  }
+  return written;
+}
+
+// packages/cli/src/workflow/executor/adapters.ts
 var execFileAsync2 = promisify4(execFile4);
 var DEFAULT_CODEX_EXEC_TIMEOUT_MS = 3e5;
 function codexExecArgs(input) {
@@ -26352,11 +26395,15 @@ async function codexAvailable() {
 var fakeAdapter = {
   kind: "fake",
   async run(request) {
+    const plan = readFakeExecutorPlan();
+    const written = plan === void 0 ? [] : applyFakeExecutorPlan({ repositoryRoot: request.repositoryRoot, plan });
+    const status2 = plan?.status ?? "succeeded";
     const result = {
-      ok: true,
-      status: "succeeded",
-      summary: fakeSummary(request),
-      filesChanged: [],
+      ok: status2 === "succeeded",
+      status: status2,
+      summary: plan?.summary ?? fakeSummary(request),
+      // What it claims, which a plan may deliberately set at odds with `written`.
+      filesChanged: plan?.claimFilesChanged ?? written,
       commandsRun: [
         {
           command: "legion-executor",
@@ -26578,7 +26625,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path20.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path21.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -26586,7 +26633,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path20.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path21.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -26766,7 +26813,7 @@ async function latestGuidanceRuns(input) {
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
   for (const workflow of workflows) {
-    const workflowRoot = path20.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path21.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir8(workflowRoot, { withFileTypes: true });
@@ -26777,7 +26824,7 @@ async function latestGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const runPath = path20.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path21.join(workflowRoot, entry.name, "workflow-run.json");
       try {
         const parsed = JSON.parse(await readFile12(runPath, "utf8"));
         if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
@@ -26941,7 +26988,7 @@ async function getLatestCodebaseMap(repositoryRoot) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
     if (artifactPath === void 0) continue;
     try {
-      return JSON.parse(await readFile13(path21.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+      return JSON.parse(await readFile13(path22.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
     } catch {
       continue;
     }
@@ -26978,23 +27025,23 @@ function queryCodebaseMap(map, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path21.resolve(repositoryRoot, scope);
-  const relative = path21.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path22.resolve(repositoryRoot, scope);
+  const relative = path22.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path21.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path22.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path21.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path22.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat6(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path21.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path21.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path21.basename(relative))) continue;
+    const relative = path22.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path22.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path22.basename(relative))) continue;
     const fileStat = await stat6(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
     const bytes = await readFile13(absolutePath);
@@ -27020,7 +27067,7 @@ async function walk(root) {
   const entries = await readdir9(root, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path21.join(root, entry.name);
+    const absolute = path22.join(root, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -27065,7 +27112,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file of map.files) {
-    const extension = path21.extname(file.path).toLowerCase() || "(none)";
+    const extension = path22.extname(file.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -27129,11 +27176,11 @@ function sha256(bytes) {
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir11 } from "node:fs/promises";
-import path23 from "node:path";
+import path24 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir10, stat as stat7 } from "node:fs/promises";
-import path22 from "node:path";
+import path23 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -27159,7 +27206,7 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path22.join(repositoryRoot, ".legion");
+  const legionRoot = path23.join(repositoryRoot, ".legion");
   if (!await pathExists5(legionRoot)) return [];
   const entries = await readdir10(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
@@ -27168,8 +27215,8 @@ async function detectPreInitCollision2(repositoryRoot) {
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path22.join(legionRoot, "project");
-  const manifestPath = path22.join(projectRoot, "project.json");
+  const projectRoot = path23.join(legionRoot, "project");
+  const manifestPath = path23.join(projectRoot, "project.json");
   if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -27324,7 +27371,7 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path23.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path24.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir11(changesRoot, { withFileTypes: true });
@@ -27464,8 +27511,8 @@ async function resolveMapStatus(context) {
 }
 
 // packages/cli/src/workflow/change-input.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import path24 from "node:path";
+import { execFileSync as execFileSync3 } from "node:child_process";
+import path25 from "node:path";
 
 // packages/cli/src/workflow/criteria.ts
 var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
@@ -27566,7 +27613,7 @@ function currentUtcTimestamp() {
 }
 function resolveBaseGitSha(repositoryRoot) {
   try {
-    const value = execFileSync2("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+    const value = execFileSync3("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim().toLowerCase();
@@ -27576,8 +27623,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path24.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path24.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path25.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path25.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function buildChangeBundleInput(options) {
@@ -27744,7 +27791,7 @@ function buildOracleArtifactInput(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile14 } from "node:fs/promises";
-import path25 from "node:path";
+import path26 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -27792,13 +27839,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path25.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path25.join(context.repositoryRoot, "ROADMAP.md")
+    path26.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path26.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path25.isAbsolute(roadmapPath) ? roadmapPath : path25.resolve(repositoryRoot, roadmapPath);
+  return path26.isAbsolute(roadmapPath) ? roadmapPath : path26.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -28119,12 +28166,12 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
-import { execFileSync as execFileSync4 } from "node:child_process";
+import { execFileSync as execFileSync5 } from "node:child_process";
 import { readFile as readFile16 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
 import { readdir as readdir12, readFile as readFile15 } from "node:fs/promises";
-import path26 from "node:path";
+import path27 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -28288,7 +28335,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path26.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path27.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir12(workflowRoot, { withFileTypes: true });
@@ -28297,7 +28344,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error2;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path26.join(workflowRoot, entry.name, "workflow-run.json") : path26.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path27.join(workflowRoot, entry.name, "workflow-run.json") : path27.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile15(absolutePath, "utf8");
@@ -28316,7 +28363,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path26.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path27.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile15(indexPath, "utf8");
     return ["```json", truncate3(text.trim(), 4e3), "```"].join("\n");
@@ -28330,11 +28377,218 @@ function truncate3(text, maxLength) {
 ... [truncated]`;
 }
 
-// packages/cli/src/workflow/diff-reconciliation.ts
-import { execFileSync as execFileSync3 } from "node:child_process";
+// packages/cli/src/workflow/executor/verification-runner.ts
+import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash18 } from "node:crypto";
-import { readFileSync, rmSync, statSync } from "node:fs";
-import path27 from "node:path";
+import { existsSync as existsSync4 } from "node:fs";
+import path28 from "node:path";
+var DEFAULT_TIMEOUT_MS2 = 12e4;
+var TIMEOUT_EXIT_CODE = 124;
+var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
+var LEGION_BIN = "bin/legion.js";
+var GROUP_KILL_GRACE_MS = 500;
+function resolveCommand(command, args) {
+  if (command !== "legion") return { command, args };
+  const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
+  const binPath = path28.join(sourceRoot, ...LEGION_BIN.split("/"));
+  if (!existsSync4(binPath)) return { command, args };
+  return { command: process.execPath, args: [binPath, ...args] };
+}
+function sha2562(value) {
+  return `sha256:${createHash18("sha256").update(value, "utf8").digest("hex")}`;
+}
+function terminateProcessTree2(pid) {
+  if (pid === void 0) return;
+  if (process.platform === "win32") {
+    const killer = spawn2("taskkill", ["/pid", String(pid), "/t", "/f"], {
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    killer.on("error", () => {
+    });
+    return;
+  }
+  const signalGroup = (signal) => {
+    try {
+      process.kill(-pid, signal);
+    } catch {
+      try {
+        process.kill(pid, signal);
+      } catch {
+      }
+    }
+  };
+  signalGroup("SIGTERM");
+  setTimeout(() => signalGroup("SIGKILL"), GROUP_KILL_GRACE_MS).unref();
+}
+function runCommand(input) {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    const child = spawn2(input.command, [...input.args], {
+      cwd: input.cwd,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+      // POSIX only: lead a new process group so a timeout can signal the whole
+      // tree rather than just this process. Windows uses taskkill /t instead.
+      detached: process.platform !== "win32"
+    });
+    const settle = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(outcome);
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      terminateProcessTree2(child.pid);
+      setTimeout(
+        () => settle({ exitCode: TIMEOUT_EXIT_CODE, stdout, stderr, timedOut: true }),
+        1e3
+      ).unref();
+    }, input.timeoutMs);
+    const append = (current, chunk) => current.length >= MAX_CAPTURED_BYTES ? current : current + String(chunk);
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout = append(stdout, chunk);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr = append(stderr, chunk);
+    });
+    child.on("error", (error2) => {
+      settle({ exitCode: 1, stdout, stderr, timedOut, spawnError: error2 });
+    });
+    child.on("close", (code) => {
+      settle({ exitCode: timedOut ? TIMEOUT_EXIT_CODE : code ?? 1, stdout, stderr, timedOut });
+    });
+  });
+}
+function createVerificationRunner(options) {
+  const now = options.now ?? currentUtcTimestamp;
+  const defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS2;
+  return async (request) => {
+    const startedAt = now();
+    const startedMs = Date.now();
+    const resolved = resolveCommand(request.command, request.args);
+    const outcome = await runCommand({
+      command: resolved.command,
+      args: resolved.args,
+      cwd: options.repositoryRoot,
+      timeoutMs: request.timeoutMs ?? defaultTimeoutMs
+    });
+    const finishedAt = now();
+    const notes = outcome.spawnError !== void 0 ? `Verification command could not be started: ${outcome.spawnError.message}` : outcome.timedOut ? `Verification command timed out after ${request.timeoutMs ?? defaultTimeoutMs}ms.` : void 0;
+    return {
+      index: request.index,
+      command: request.command,
+      args: [...request.args],
+      exitCode: outcome.exitCode,
+      expectedExitCode: request.expectedExitCode,
+      stdoutSha256: sha2562(outcome.stdout),
+      stderrSha256: sha2562(outcome.stderr),
+      // `sha256(stdout ++ stderr)`, in that order — NOT a digest of the two
+      // streams interleaved as a terminal would show them. The streams are
+      // captured separately, so real arrival order is not recoverable here.
+      // Treat this as a cheap combined fingerprint, not a reproduction of the
+      // run's console output.
+      combinedSha256: sha2562(`${outcome.stdout}${outcome.stderr}`),
+      durationMs: Date.now() - startedMs,
+      timedOut: outcome.timedOut,
+      startedAt,
+      finishedAt,
+      ...notes === void 0 ? {} : { notes }
+    };
+  };
+}
+
+// packages/cli/src/workflow/executor/worker-bundles.ts
+import { createHash as createHash19 } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path29 from "node:path";
+var BUNDLE_DIRECTORY = "bundles";
+var BUNDLE_INDEX = "bundles/index.json";
+var WorkerBundleIntegrityError = class extends Error {
+  bundleId;
+  constructor(bundleId, message) {
+    super(message);
+    this.name = "WorkerBundleIntegrityError";
+    this.bundleId = bundleId;
+  }
+};
+function sha256Hex5(value) {
+  return createHash19("sha256").update(value, "utf8").digest("hex");
+}
+function loadWorkerBundles(sourceRoot) {
+  const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
+  const indexPath = path29.join(root, ...BUNDLE_INDEX.split("/"));
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(indexPath, "utf8"));
+  } catch (error2) {
+    throw new WorkerBundleIntegrityError(
+      "index",
+      `Worker bundle index could not be read at ${BUNDLE_INDEX}: ${error2 instanceof Error ? error2.message : String(error2)}`
+    );
+  }
+  const bundles = /* @__PURE__ */ new Map();
+  for (const entry of parsed.bundles ?? []) {
+    const manifest = workerBundleManifestSchema.parse({
+      id: entry.id,
+      version: entry.version,
+      role: entry.role,
+      domain: entry.domain,
+      capabilities: entry.capabilities,
+      promptContentContract: entry.promptContentContract
+    });
+    if (typeof entry.promptFile !== "string") {
+      throw new WorkerBundleIntegrityError(
+        manifest.id,
+        `Worker bundle ${manifest.id} declares promptContentContract.instructionsHash but names no promptFile, so its prompt cannot be content-addressed. Refusing to dispatch.`
+      );
+    }
+    {
+      const promptPath = path29.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      let promptBody;
+      try {
+        promptBody = readFileSync(promptPath, "utf8");
+      } catch (error2) {
+        throw new WorkerBundleIntegrityError(
+          manifest.id,
+          `Worker bundle ${manifest.id} declares prompt ${entry.promptFile}, which could not be read: ${error2 instanceof Error ? error2.message : String(error2)}`
+        );
+      }
+      const actual = `sha256:${sha256Hex5(promptBody)}`;
+      if (actual !== manifest.promptContentContract.instructionsHash) {
+        throw new WorkerBundleIntegrityError(
+          manifest.id,
+          `Worker bundle ${manifest.id} prompt hash mismatch: ${entry.promptFile} hashes to ${actual}, but the manifest declares ${manifest.promptContentContract.instructionsHash}. Refusing to dispatch.`
+        );
+      }
+    }
+    bundles.set(manifest.id, manifest);
+  }
+  return bundles;
+}
+function createWorkerBundleRegistry(options) {
+  const bundles = loadWorkerBundles(options.sourceRoot);
+  return {
+    forAgent(agentId) {
+      const bundle = bundles.get(agentId);
+      if (bundle === void 0) return [];
+      return [{ agentId, bundle, model: options.model }];
+    }
+  };
+}
+
+// packages/cli/src/workflow/diff-reconciliation.ts
+import { execFileSync as execFileSync4 } from "node:child_process";
+import { createHash as createHash20 } from "node:crypto";
+import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
+import path30 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -28345,14 +28599,10 @@ function summarizeObservation(files, baseGitSha) {
     baseGitSha
   };
 }
-function reconciliationBlocks(result) {
-  if (result === void 0) return false;
-  return result.status === "violated" || result.status === "unavailable";
-}
 var MAX_UNTRACKED_LINE_COUNT_BYTES = 2e6;
 var MAX_HASHED_BYTES = 64 * 1024 * 1024;
 function git(repositoryRoot, args) {
-  return execFileSync3("git", ["-C", repositoryRoot, ...args], {
+  return execFileSync4("git", ["-C", repositoryRoot, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     maxBuffer: 32 * 1024 * 1024
@@ -28367,7 +28617,7 @@ function splitLines(value) {
 function hashFileContent(absolutePath) {
   try {
     if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
-    return createHash18("sha256").update(readFileSync(absolutePath)).digest("hex");
+    return createHash20("sha256").update(readFileSync2(absolutePath)).digest("hex");
   } catch {
     return void 0;
   }
@@ -28375,7 +28625,7 @@ function hashFileContent(absolutePath) {
 function countUntrackedLines(absolutePath) {
   try {
     if (statSync(absolutePath).size > MAX_UNTRACKED_LINE_COUNT_BYTES) return 0;
-    const contents = readFileSync(absolutePath, "utf8");
+    const contents = readFileSync2(absolutePath, "utf8");
     if (contents.length === 0) return 0;
     return contents.split(/\r?\n/u).length;
   } catch {
@@ -28415,7 +28665,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path27.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path30.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -28431,7 +28681,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path27.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path30.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -28552,7 +28802,7 @@ function restorePathsToBase(input) {
     } catch {
     }
     try {
-      rmSync(path27.join(input.repositoryRoot, filePath), { force: true });
+      rmSync2(path30.join(input.repositoryRoot, filePath), { force: true });
     } catch {
       failed.push(filePath);
     }
@@ -28560,216 +28810,66 @@ function restorePathsToBase(input) {
   return failed;
 }
 
-// packages/cli/src/workflow/executor/verification-runner.ts
-import { spawn as spawn2 } from "node:child_process";
-import { createHash as createHash19 } from "node:crypto";
-import { existsSync as existsSync4 } from "node:fs";
-import path28 from "node:path";
-var DEFAULT_TIMEOUT_MS2 = 12e4;
-var TIMEOUT_EXIT_CODE = 124;
-var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
-var LEGION_BIN = "bin/legion.js";
-var GROUP_KILL_GRACE_MS = 500;
-function resolveCommand(command, args) {
-  if (command !== "legion") return { command, args };
-  const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path28.join(sourceRoot, ...LEGION_BIN.split("/"));
-  if (!existsSync4(binPath)) return { command, args };
-  return { command: process.execPath, args: [binPath, ...args] };
-}
-function sha2562(value) {
-  return `sha256:${createHash19("sha256").update(value, "utf8").digest("hex")}`;
-}
-function terminateProcessTree2(pid) {
-  if (pid === void 0) return;
-  if (process.platform === "win32") {
-    const killer = spawn2("taskkill", ["/pid", String(pid), "/t", "/f"], {
-      windowsHide: true,
-      stdio: "ignore"
-    });
-    killer.on("error", () => {
-    });
-    return;
-  }
-  const signalGroup = (signal) => {
-    try {
-      process.kill(-pid, signal);
-    } catch {
-      try {
-        process.kill(pid, signal);
-      } catch {
-      }
-    }
-  };
-  signalGroup("SIGTERM");
-  setTimeout(() => signalGroup("SIGKILL"), GROUP_KILL_GRACE_MS).unref();
-}
-function runCommand(input) {
-  return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    let timedOut = false;
-    const child = spawn2(input.command, [...input.args], {
-      cwd: input.cwd,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
-      // POSIX only: lead a new process group so a timeout can signal the whole
-      // tree rather than just this process. Windows uses taskkill /t instead.
-      detached: process.platform !== "win32"
-    });
-    const settle = (outcome) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(outcome);
-    };
-    const timer = setTimeout(() => {
-      timedOut = true;
-      terminateProcessTree2(child.pid);
-      setTimeout(
-        () => settle({ exitCode: TIMEOUT_EXIT_CODE, stdout, stderr, timedOut: true }),
-        1e3
-      ).unref();
-    }, input.timeoutMs);
-    const append = (current, chunk) => current.length >= MAX_CAPTURED_BYTES ? current : current + String(chunk);
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout = append(stdout, chunk);
-    });
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
-      stderr = append(stderr, chunk);
-    });
-    child.on("error", (error2) => {
-      settle({ exitCode: 1, stdout, stderr, timedOut, spawnError: error2 });
-    });
-    child.on("close", (code) => {
-      settle({ exitCode: timedOut ? TIMEOUT_EXIT_CODE : code ?? 1, stdout, stderr, timedOut });
-    });
-  });
-}
-function createVerificationRunner(options) {
-  const now = options.now ?? currentUtcTimestamp;
-  const defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS2;
-  return async (request) => {
-    const startedAt = now();
-    const startedMs = Date.now();
-    const resolved = resolveCommand(request.command, request.args);
-    const outcome = await runCommand({
-      command: resolved.command,
-      args: resolved.args,
-      cwd: options.repositoryRoot,
-      timeoutMs: request.timeoutMs ?? defaultTimeoutMs
-    });
-    const finishedAt = now();
-    const notes = outcome.spawnError !== void 0 ? `Verification command could not be started: ${outcome.spawnError.message}` : outcome.timedOut ? `Verification command timed out after ${request.timeoutMs ?? defaultTimeoutMs}ms.` : void 0;
+// packages/cli/src/workflow/guarded-execution.ts
+async function runGuardedExecution(input) {
+  const baseGitSha = resolveBaseGitSha(input.repositoryRoot);
+  const before = observeWorkingTreeDiff({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha
+  }).observation;
+  const result = await input.run();
+  if (input.afterRun !== void 0) await input.afterRun();
+  const reconciliation = input.task.completion.diffReconciliation.required ? reconcileTaskDiff({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha,
+    scope: input.task.scope,
+    harnessPaths: input.harnessPaths,
+    alwaysForbidden: [LEGION_PROJECT_ROOT],
+    ...before === void 0 ? {} : { before }
+  }) : void 0;
+  if (reconciliation === void 0 || reconciliation.status === "clean" || reconciliation.status === "not_applicable") {
     return {
-      index: request.index,
-      command: request.command,
-      args: [...request.args],
-      exitCode: outcome.exitCode,
-      expectedExitCode: request.expectedExitCode,
-      stdoutSha256: sha2562(outcome.stdout),
-      stderrSha256: sha2562(outcome.stderr),
-      // `sha256(stdout ++ stderr)`, in that order — NOT a digest of the two
-      // streams interleaved as a terminal would show them. The streams are
-      // captured separately, so real arrival order is not recoverable here.
-      // Treat this as a cheap combined fingerprint, not a reproduction of the
-      // run's console output.
-      combinedSha256: sha2562(`${outcome.stdout}${outcome.stderr}`),
-      durationMs: Date.now() - startedMs,
-      timedOut: outcome.timedOut,
-      startedAt,
-      finishedAt,
-      ...notes === void 0 ? {} : { notes }
+      result,
+      baseGitSha,
+      ...reconciliation === void 0 ? {} : { reconciliation },
+      inContract: true,
+      restored: [],
+      unrestored: []
     };
-  };
-}
-
-// packages/cli/src/workflow/executor/worker-bundles.ts
-import { createHash as createHash20 } from "node:crypto";
-import { readFileSync as readFileSync2 } from "node:fs";
-import path29 from "node:path";
-var BUNDLE_DIRECTORY = "bundles";
-var BUNDLE_INDEX = "bundles/index.json";
-var WorkerBundleIntegrityError = class extends Error {
-  bundleId;
-  constructor(bundleId, message) {
-    super(message);
-    this.name = "WorkerBundleIntegrityError";
-    this.bundleId = bundleId;
   }
-};
-function sha256Hex5(value) {
-  return createHash20("sha256").update(value, "utf8").digest("hex");
-}
-function loadWorkerBundles(sourceRoot) {
-  const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path29.join(root, ...BUNDLE_INDEX.split("/"));
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync2(indexPath, "utf8"));
-  } catch (error2) {
-    throw new WorkerBundleIntegrityError(
-      "index",
-      `Worker bundle index could not be read at ${BUNDLE_INDEX}: ${error2 instanceof Error ? error2.message : String(error2)}`
-    );
+  if (reconciliation.status === "unavailable") {
+    return {
+      result,
+      baseGitSha,
+      reconciliation,
+      inContract: false,
+      restored: [],
+      unrestored: [],
+      blockedReason: `The run could not be reconciled against its task contract, so it is not proven in contract. ${reconciliation.unavailableReason ?? ""}`.trim()
+    };
   }
-  const bundles = /* @__PURE__ */ new Map();
-  for (const entry of parsed.bundles ?? []) {
-    const manifest = workerBundleManifestSchema.parse({
-      id: entry.id,
-      version: entry.version,
-      role: entry.role,
-      domain: entry.domain,
-      capabilities: entry.capabilities,
-      promptContentContract: entry.promptContentContract
-    });
-    if (typeof entry.promptFile !== "string") {
-      throw new WorkerBundleIntegrityError(
-        manifest.id,
-        `Worker bundle ${manifest.id} declares promptContentContract.instructionsHash but names no promptFile, so its prompt cannot be content-addressed. Refusing to dispatch.`
-      );
-    }
-    {
-      const promptPath = path29.join(root, BUNDLE_DIRECTORY, entry.promptFile);
-      let promptBody;
-      try {
-        promptBody = readFileSync2(promptPath, "utf8");
-      } catch (error2) {
-        throw new WorkerBundleIntegrityError(
-          manifest.id,
-          `Worker bundle ${manifest.id} declares prompt ${entry.promptFile}, which could not be read: ${error2 instanceof Error ? error2.message : String(error2)}`
-        );
-      }
-      const actual = `sha256:${sha256Hex5(promptBody)}`;
-      if (actual !== manifest.promptContentContract.instructionsHash) {
-        throw new WorkerBundleIntegrityError(
-          manifest.id,
-          `Worker bundle ${manifest.id} prompt hash mismatch: ${entry.promptFile} hashes to ${actual}, but the manifest declares ${manifest.promptContentContract.instructionsHash}. Refusing to dispatch.`
-        );
-      }
-    }
-    bundles.set(manifest.id, manifest);
-  }
-  return bundles;
-}
-function createWorkerBundleRegistry(options) {
-  const bundles = loadWorkerBundles(options.sourceRoot);
+  const forbiddenPaths = reconciliation.violations.filter((violation) => violation.code === "forbidden_path_touched").flatMap((violation) => violation.paths);
+  const unrestored = forbiddenPaths.length === 0 ? [] : restorePathsToBase({
+    repositoryRoot: input.repositoryRoot,
+    baseGitSha,
+    paths: forbiddenPaths
+  });
+  const restored = forbiddenPaths.filter((entry) => !unrestored.includes(entry));
+  const containment = forbiddenPaths.length === 0 ? "" : unrestored.length === 0 ? ` Restored ${restored.length} protected path(s) to their pre-run state.` : ` Could not restore ${unrestored.join(", ")}; inspect the worktree before rerunning.`;
   return {
-    forAgent(agentId) {
-      const bundle = bundles.get(agentId);
-      if (bundle === void 0) return [];
-      return [{ agentId, bundle, model: options.model }];
-    }
+    result,
+    baseGitSha,
+    reconciliation,
+    inContract: false,
+    restored,
+    unrestored,
+    blockedReason: `${reconciliation.violations.map((violation) => violation.message).join(" ")}${containment}`.trim()
   };
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash21 } from "node:crypto";
-import path30 from "node:path";
+import path31 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -28803,7 +28903,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path30.join(repositoryRoot, ...artifactPath.split("/"));
+  return path31.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -29038,51 +29138,47 @@ async function executeTask(input) {
       ]
     };
   }
-  const beforeDispatch = observeWorkingTreeDiff({
-    repositoryRoot: input.context.repositoryRoot,
-    baseGitSha
-  }).observation;
+  let verification = { passed: true };
   const adapter = adapterForKind(input.executor);
-  const result = await adapter.run({
-    repositoryRoot: input.context.repositoryRoot,
-    changeId: input.task.changeId,
-    runId,
-    task: input.task,
-    mode: "build",
-    executor: input.executor,
-    readOnly: false,
-    prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath,
-    promptArtifactPath,
-    promptAbsolutePath,
-    resultArtifactPath,
-    resultAbsolutePath,
-    rawLogArtifactPath,
-    rawLogAbsolutePath,
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath
-  });
-  const finishedAt = currentUtcTimestamp();
-  const verification = await runContractVerification({
+  const guarded = await runGuardedExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
-    workerContext: workerContext.workerContext
-  });
-  const reconciliation = input.task.completion.diffReconciliation.required ? reconcileTaskDiff({
-    repositoryRoot: input.context.repositoryRoot,
-    baseGitSha,
-    scope: input.task.scope,
-    // The adapter writes the result and logs after dispatch; that is
-    // harness output, not executor work product.
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
-    // Enforced by the harness, not by the contract, so it also covers
-    // taskgraphs persisted before control artifacts were forbidden and
-    // cannot be waived by a contract that grants itself the authority.
-    alwaysForbidden: [LEGION_PROJECT_ROOT],
-    ...beforeDispatch === void 0 ? {} : { before: beforeDispatch }
-  }) : void 0;
-  const inContract = !reconciliationBlocks(reconciliation);
+    run: () => adapter.run({
+      repositoryRoot: input.context.repositoryRoot,
+      changeId: input.task.changeId,
+      runId,
+      task: input.task,
+      mode: "build",
+      executor: input.executor,
+      readOnly: false,
+      prompt,
+      contextPackArtifactPath,
+      contextPackAbsolutePath,
+      promptArtifactPath,
+      promptAbsolutePath,
+      resultArtifactPath,
+      resultAbsolutePath,
+      rawLogArtifactPath,
+      rawLogAbsolutePath,
+      redactedLogArtifactPath,
+      redactedLogAbsolutePath
+    }),
+    // Verification runs inside the guarded window so its own writes — snapshot
+    // updates, generated files, formatters — are reconciled rather than
+    // escaping the post-run snapshot.
+    afterRun: async () => {
+      verification = await runContractVerification({
+        repositoryRoot: input.context.repositoryRoot,
+        task: input.task,
+        workerContext: workerContext.workerContext
+      });
+    }
+  });
+  const result = guarded.result;
+  const finishedAt = currentUtcTimestamp();
+  const reconciliation = guarded.reconciliation;
+  const inContract = guarded.inContract;
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -29097,6 +29193,7 @@ async function executeTask(input) {
     redactedLogArtifactPath,
     taskgraphPath: input.taskgraph.artifactPath,
     verification,
+    inContract,
     ...reconciliation === void 0 ? {} : { reconciliation }
   });
   const completed = await writeTaskRun({
@@ -29120,7 +29217,7 @@ async function executeTask(input) {
       evidenceRefs: [evidenceId],
       error: !inContract ? {
         code: "diff_reconciliation_failed",
-        message: reconciliationSummary(reconciliation),
+        message: guarded.blockedReason ?? reconciliationSummary(reconciliation),
         retryable: false
       } : !verification.passed ? {
         code: "verification_failed",
@@ -29162,7 +29259,7 @@ async function executeTask(input) {
         ...inContract ? [] : [
           {
             code: "diff_reconciliation_failed",
-            message: reconciliationSummary(reconciliation),
+            message: guarded.blockedReason ?? reconciliationSummary(reconciliation),
             path: input.taskgraph.artifactPath
           }
         ],
@@ -29288,7 +29385,7 @@ async function evidenceEntryForExecution(input) {
     }
   ];
   const reconciliation = input.reconciliation;
-  const inContract = !reconciliationBlocks(reconciliation);
+  const inContract = input.inContract;
   const items = [
     {
       // The executor's own account of the run. Recorded as a claim, never as
@@ -29500,7 +29597,7 @@ function buildResultContract() {
 }
 function dirtyWorktreeDiagnostic(repositoryRoot) {
   try {
-    execFileSync4("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
+    execFileSync5("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     });
@@ -29509,7 +29606,7 @@ function dirtyWorktreeDiagnostic(repositoryRoot) {
   }
   let status2 = "";
   try {
-    status2 = execFileSync4("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+    status2 = execFileSync5("git", ["-C", repositoryRoot, "status", "--porcelain"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -30053,54 +30150,34 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
-  const fixBaseGitSha = resolveBaseGitSha(context.repositoryRoot);
-  const beforeFix = observeWorkingTreeDiff({
+  const guarded = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
-    baseGitSha: fixBaseGitSha
-  }).observation;
-  await adapterForKind(executor).run({
-    repositoryRoot: context.repositoryRoot,
-    changeId,
-    runId,
     task,
-    mode: "fix",
-    executor,
-    readOnly: false,
-    prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
-    promptArtifactPath,
-    promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
-    resultArtifactPath,
-    resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
-    rawLogArtifactPath,
-    rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
-  });
-  const reconciliation = reconcileTaskDiff({
-    repositoryRoot: context.repositoryRoot,
-    baseGitSha: fixBaseGitSha,
-    scope: task.scope,
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
-    alwaysForbidden: [LEGION_PROJECT_ROOT],
-    ...beforeFix === void 0 ? {} : { before: beforeFix }
-  });
-  if (reconciliation.status === "unavailable") {
-    throw new AutoFixScopeError(
-      `The auto-fix diff could not be observed, so the run is not proven in contract: ${reconciliation.unavailableReason ?? ""}`.trim()
-    );
-  }
-  if (reconciliation.status === "violated") {
-    const forbiddenPaths = reconciliation.violations.filter((violation) => violation.code === "forbidden_path_touched").flatMap((violation) => violation.paths);
-    const unrestored = forbiddenPaths.length === 0 ? [] : restorePathsToBase({
+    run: () => adapterForKind(executor).run({
       repositoryRoot: context.repositoryRoot,
-      baseGitSha: fixBaseGitSha,
-      paths: forbiddenPaths
-    });
-    const restoredNote = forbiddenPaths.length === 0 ? "" : unrestored.length === 0 ? ` Restored ${forbiddenPaths.length} protected path(s) to their pre-fix state.` : ` Could not restore ${unrestored.join(", ")}; inspect the worktree before rerunning.`;
+      changeId,
+      runId,
+      task,
+      mode: "fix",
+      executor,
+      readOnly: false,
+      prompt,
+      contextPackArtifactPath,
+      contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
+      promptArtifactPath,
+      promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
+      resultArtifactPath,
+      resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
+      rawLogArtifactPath,
+      rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
+      redactedLogArtifactPath,
+      redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
+    })
+  });
+  if (!guarded.inContract) {
     throw new AutoFixScopeError(
-      `The auto-fix run left the task contract: ${reconciliation.violations.map((violation) => violation.message).join(" ")}${restoredNote}`.trim()
+      guarded.blockedReason ?? "The auto-fix run left the task contract."
     );
   }
 }
@@ -30374,7 +30451,7 @@ function blockedReview(diagnostics, action, extras = {}) {
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile17 } from "node:fs/promises";
-import path32 from "node:path";
+import path33 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 async function createAdHocTaskgraph(input) {
@@ -30635,7 +30712,7 @@ function commandParts(parts) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir12, writeFile as writeFile6 } from "node:fs/promises";
-import path31 from "node:path";
+import path32 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -30921,7 +30998,7 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path32.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path33.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const parsed = JSON.parse(await readFile17(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
@@ -30936,7 +31013,7 @@ async function readLessonIndex(repositoryRoot) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 import { readFile as readFile18 } from "node:fs/promises";
-import path33 from "node:path";
+import path34 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -31608,7 +31685,7 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path33.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path34.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
     const parsed = JSON.parse(await readFile18(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
@@ -31837,7 +31914,7 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat8 } from "node:fs/promises";
-import path34 from "node:path";
+import path35 from "node:path";
 var VALIDATE_HELP = `legion validate
 
 Validate committed Legion project state under .legion/project.
@@ -31898,7 +31975,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat8(path34.join(root, relativePath));
+    await stat8(path35.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -32010,7 +32087,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path35.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path36.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -32062,8 +32139,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path35.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path35.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path36.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path36.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

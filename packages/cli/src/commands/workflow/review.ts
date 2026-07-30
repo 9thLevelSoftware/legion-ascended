@@ -32,11 +32,7 @@ import {
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
-import {
-  observeWorkingTreeDiff,
-  reconcileTaskDiff,
-  restorePathsToBase
-} from "../../workflow/diff-reconciliation.js";
+import { runGuardedExecution } from "../../workflow/guarded-execution.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
@@ -618,80 +614,36 @@ async function runAutoFixCycle(
   // follows snapshots the tree *before* its own dispatch — so the tampering is
   // already present, gets attributed to no one, and review and ship then load
   // the altered contract.
-  // Resolved once. Re-resolving after the run would return the executor's own
-  // commit as the base, so anything it committed would diff clean — committed
-  // source changes would evade budgets and committed control-artifact rewrites
-  // would evade the forbidden check entirely.
-  const fixBaseGitSha = resolveBaseGitSha(context.repositoryRoot);
-  const beforeFix = observeWorkingTreeDiff({
+  const guarded = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
-    baseGitSha: fixBaseGitSha
-  }).observation;
-
-  await adapterForKind(executor).run({
-    repositoryRoot: context.repositoryRoot,
-    changeId,
-    runId,
     task,
-    mode: "fix",
-    executor,
-    readOnly: false,
-    prompt,
-    contextPackArtifactPath,
-    contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
-    promptArtifactPath,
-    promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
-    resultArtifactPath,
-    resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
-    rawLogArtifactPath,
-    rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
-    redactedLogArtifactPath,
-    redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
-  });
-
-  const reconciliation = reconcileTaskDiff({
-    repositoryRoot: context.repositoryRoot,
-    baseGitSha: fixBaseGitSha,
-    scope: task.scope,
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
-    alwaysForbidden: [LEGION_PROJECT_ROOT],
-    ...(beforeFix === undefined ? {} : { before: beforeFix })
+    run: () =>
+      adapterForKind(executor).run({
+        repositoryRoot: context.repositoryRoot,
+        changeId,
+        runId,
+        task,
+        mode: "fix",
+        executor,
+        readOnly: false,
+        prompt,
+        contextPackArtifactPath,
+        contextPackAbsolutePath: absoluteArtifactPath(context.repositoryRoot, contextPackArtifactPath),
+        promptArtifactPath,
+        promptAbsolutePath: absoluteArtifactPath(context.repositoryRoot, promptArtifactPath),
+        resultArtifactPath,
+        resultAbsolutePath: absoluteArtifactPath(context.repositoryRoot, resultArtifactPath),
+        rawLogArtifactPath,
+        rawLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, rawLogArtifactPath),
+        redactedLogArtifactPath,
+        redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
+      })
   });
 
-  if (reconciliation.status === "unavailable") {
-    // A harness-side git failure is not an executor confession; saying so would
-    // send whoever triages a CI outage looking in the wrong place.
+  if (!guarded.inContract) {
     throw new AutoFixScopeError(
-      `The auto-fix diff could not be observed, so the run is not proven in contract: ${reconciliation.unavailableReason ?? ""}`.trim()
-    );
-  }
-
-  if (reconciliation.status === "violated") {
-    // Restore before aborting. Throwing alone leaves the rewritten control
-    // artifacts on disk, and the next `legion review` or `legion ship` reloads
-    // them — so a detected attack would still be a successful one.
-    const forbiddenPaths = reconciliation.violations
-      .filter((violation) => violation.code === "forbidden_path_touched")
-      .flatMap((violation) => violation.paths);
-
-    const unrestored = forbiddenPaths.length === 0
-      ? []
-      : restorePathsToBase({
-          repositoryRoot: context.repositoryRoot,
-          baseGitSha: fixBaseGitSha,
-          paths: forbiddenPaths
-        });
-
-    const restoredNote = forbiddenPaths.length === 0
-      ? ""
-      : unrestored.length === 0
-        ? ` Restored ${forbiddenPaths.length} protected path(s) to their pre-fix state.`
-        : ` Could not restore ${unrestored.join(", ")}; inspect the worktree before rerunning.`;
-
-    throw new AutoFixScopeError(
-      `The auto-fix run left the task contract: ${reconciliation.violations
-        .map((violation) => violation.message)
-        .join(" ")}${restoredNote}`.trim()
+      guarded.blockedReason ?? "The auto-fix run left the task contract."
     );
   }
 }
