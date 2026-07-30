@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 import {
+  LEGION_PROJECT_ROOT,
   artifactReferenceForContent,
   hashContent,
   readEvidenceIndex,
@@ -388,6 +389,10 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
         // The adapter writes the result and logs after dispatch; that is
         // harness output, not executor work product.
         harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+        // Enforced by the harness, not by the contract, so it also covers
+        // taskgraphs persisted before control artifacts were forbidden and
+        // cannot be waived by a contract that grants itself the authority.
+        alwaysForbidden: [LEGION_PROJECT_ROOT],
         ...(beforeDispatch === undefined ? {} : { before: beforeDispatch })
       })
     : undefined;

@@ -27853,17 +27853,10 @@ function buildTaskGraphInput(options) {
       // already makes when the caller cannot enumerate files in advance.
       // Phase D narrows this to the files a decomposed task actually touches.
       write: ["."],
-      // `.legion/project` is forbidden to implementation work, not merely
-      // out of scope. It holds the control artifacts — the taskgraph, change
-      // bundle, oracle and evidence index — that `review` and `ship` reload
-      // from disk after the executor runs. An executor able to write there
-      // could rewrite its own contract, including lowering `risk.tier`, and the
-      // ship gate would then derive a smaller gate set from the tampered file.
-      // The contract must not be amendable by the party it constrains.
-      //
-      // Harness-written run artifacts live under this prefix too, and are
-      // excluded from attribution before the forbidden check runs, so Legion's
-      // own bookkeeping is unaffected.
+      // `.legion/project` holds the control artifacts `review` and `ship`
+      // reload after the executor runs, so a contract must not let the party it
+      // constrains rewrite them. Harness run artifacts share the prefix but are
+      // excluded from attribution before the forbidden check.
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(["."])
@@ -28463,7 +28456,8 @@ function reconcileDiff(input) {
     input.observation.baseGitSha
   );
   const { changedFiles, newFiles, linesChanged } = attributable;
-  const { write, forbidden, budget } = input.scope;
+  const { write, budget } = input.scope;
+  const forbidden = [...input.scope.forbidden, ...input.alwaysForbidden ?? []];
   const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
   if (forbiddenHits.length > 0) {
     violations.push({
@@ -28538,7 +28532,11 @@ function reconcileTaskDiff(input) {
     delta.files.filter((file) => !coveredByAny(file.path, harnessPaths)),
     delta.baseGitSha
   );
-  const violations = reconcileDiff({ observation: attributable, scope: input.scope });
+  const violations = reconcileDiff({
+    observation: attributable,
+    scope: input.scope,
+    ...input.alwaysForbidden === void 0 ? {} : { alwaysForbidden: input.alwaysForbidden }
+  });
   return {
     status: violations.length === 0 ? "clean" : "violated",
     observation: attributable,
@@ -29062,6 +29060,10 @@ async function executeTask(input) {
     // The adapter writes the result and logs after dispatch; that is
     // harness output, not executor work product.
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+    // Enforced by the harness, not by the contract, so it also covers
+    // taskgraphs persisted before control artifacts were forbidden and
+    // cannot be waived by a contract that grants itself the authority.
+    alwaysForbidden: [LEGION_PROJECT_ROOT],
     ...beforeDispatch === void 0 ? {} : { before: beforeDispatch }
   }) : void 0;
   const inContract = !reconciliationBlocks(reconciliation);
@@ -30636,6 +30638,11 @@ async function createTypedAdHocWorkflow(context, kind) {
   const targetPath = kind === "polish" && text !== void 0 ? text.trim() : void 0;
   if (targetPath !== void 0 && !taskContractScopePathSchema.safeParse(targetPath).success) {
     return usageError(`Invalid polish target path: ${targetPath}`);
+  }
+  if (targetPath !== void 0 && pathIsCoveredBy(targetPath, LEGION_PROJECT_ROOT)) {
+    return usageError(
+      `Cannot polish ${targetPath}: ${LEGION_PROJECT_ROOT} holds Legion control artifacts, which implementation tasks may not write. Edit it directly, or use the workflow command that owns it.`
+    );
   }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,

@@ -272,6 +272,17 @@ export function reconcileDiff(input: {
    * is an exclusion for known-harness output, never a general escape hatch.
    */
   readonly harnessPaths?: readonly string[];
+  /**
+   * Paths forbidden regardless of what the contract says.
+   *
+   * `scope.forbidden` is contract data, so it only protects contracts written
+   * after a rule is introduced — a taskgraph persisted earlier keeps its old
+   * list and the rule simply does not apply to it. For an invariant like "the
+   * executor may not rewrite the control artifacts that review and ship reload",
+   * that is the wrong shape: it makes the protection opt-in by vintage, and
+   * lets any contract grant an authority the harness should never delegate.
+   */
+  readonly alwaysForbidden?: readonly string[];
 }): readonly ReconciliationViolation[] {
   const violations: ReconciliationViolation[] = [];
   const harnessPaths = input.harnessPaths ?? [];
@@ -283,7 +294,8 @@ export function reconcileDiff(input: {
     input.observation.baseGitSha
   );
   const { changedFiles, newFiles, linesChanged } = attributable;
-  const { write, forbidden, budget } = input.scope;
+  const { write, budget } = input.scope;
+  const forbidden = [...input.scope.forbidden, ...(input.alwaysForbidden ?? [])];
 
   const forbiddenHits = changedFiles.filter((filePath) => coveredByAny(filePath, forbidden));
   if (forbiddenHits.length > 0) {
@@ -405,6 +417,8 @@ export function reconcileTaskDiff(input: {
   readonly before?: DiffObservation;
   /** Harness-written paths to exclude; see `reconcileDiff`. */
   readonly harnessPaths?: readonly string[];
+  /** Forbidden regardless of contract; see `reconcileDiff`. */
+  readonly alwaysForbidden?: readonly string[];
 }): ReconciliationResult {
   const observed = observeWorkingTreeDiff(input);
   if (observed.observation === undefined) return observed;
@@ -427,7 +441,11 @@ export function reconcileTaskDiff(input: {
     delta.baseGitSha
   );
 
-  const violations = reconcileDiff({ observation: attributable, scope: input.scope });
+  const violations = reconcileDiff({
+    observation: attributable,
+    scope: input.scope,
+    ...(input.alwaysForbidden === undefined ? {} : { alwaysForbidden: input.alwaysForbidden })
+  });
   return {
     status: violations.length === 0 ? "clean" : "violated",
     observation: attributable,

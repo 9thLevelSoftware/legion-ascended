@@ -68,17 +68,10 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
       // already makes when the caller cannot enumerate files in advance.
       // Phase D narrows this to the files a decomposed task actually touches.
       write: ["."],
-      // `.legion/project` is forbidden to implementation work, not merely
-      // out of scope. It holds the control artifacts — the taskgraph, change
-      // bundle, oracle and evidence index — that `review` and `ship` reload
-      // from disk after the executor runs. An executor able to write there
-      // could rewrite its own contract, including lowering `risk.tier`, and the
-      // ship gate would then derive a smaller gate set from the tampered file.
-      // The contract must not be amendable by the party it constrains.
-      //
-      // Harness-written run artifacts live under this prefix too, and are
-      // excluded from attribution before the forbidden check runs, so Legion's
-      // own bookkeeping is unaffected.
+      // `.legion/project` holds the control artifacts `review` and `ship`
+      // reload after the executor runs, so a contract must not let the party it
+      // constrains rewrite them. Harness run artifacts share the prefix but are
+      // excluded from attribution before the forbidden check.
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(["."])
