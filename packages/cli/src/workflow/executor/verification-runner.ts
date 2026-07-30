@@ -31,6 +31,8 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const TIMEOUT_EXIT_CODE = 124;
 const MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
 const LEGION_BIN = "bin/legion.js";
+/** Grace between SIGTERM and SIGKILL for a timed-out process group. */
+const GROUP_KILL_GRACE_MS = 500;
 
 /**
  * Resolve a bare `legion` verification command to the Legion that is running.
@@ -59,8 +61,24 @@ function sha256(value: string): ContentHash {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}` as ContentHash;
 }
 
+/**
+ * Terminate a verification command and everything it spawned.
+ *
+ * Killing only the direct child is not enough. A declared command like
+ * `pnpm test` or a build script spawns descendants, and the timeout path
+ * resolves after a fixed grace period regardless — so survivors would keep
+ * running and could still be writing to the repository when the post-run
+ * reconciliation snapshot is taken. Anything they wrote after that point would
+ * never be checked against scope or budget, which turns a timeout into a way
+ * out of the enforcement.
+ *
+ * On Windows `taskkill /t` walks the tree. On POSIX the child is spawned
+ * detached so it leads its own process group, and a negative PID signals the
+ * whole group; SIGKILL follows SIGTERM for anything that ignores the first.
+ */
 function terminateProcessTree(pid: number | undefined): void {
   if (pid === undefined) return;
+
   if (process.platform === "win32") {
     const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
       windowsHide: true,
@@ -69,11 +87,22 @@ function terminateProcessTree(pid: number | undefined): void {
     killer.on("error", () => {});
     return;
   }
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch {
-    // The process already exited; nothing to terminate.
-  }
+
+  const signalGroup = (signal: NodeJS.Signals): void => {
+    try {
+      // Negative PID = the process group led by the detached child.
+      process.kill(-pid, signal);
+    } catch {
+      try {
+        process.kill(pid, signal);
+      } catch {
+        // Already gone.
+      }
+    }
+  };
+
+  signalGroup("SIGTERM");
+  setTimeout(() => signalGroup("SIGKILL"), GROUP_KILL_GRACE_MS).unref();
 }
 
 interface CommandOutcome {
@@ -103,7 +132,10 @@ function runCommand(input: {
       cwd: input.cwd,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: false
+      shell: false,
+      // POSIX only: lead a new process group so a timeout can signal the whole
+      // tree rather than just this process. Windows uses taskkill /t instead.
+      detached: process.platform !== "win32"
     });
 
     const settle = (outcome: CommandOutcome) => {

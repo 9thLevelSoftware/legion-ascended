@@ -364,11 +364,23 @@ export function diffDelta(before: DiffObservation, after: DiffObservation): Diff
     attributable.map((file) => {
       const prior = priorByPath.get(file.path);
       if (prior === undefined) return file;
-      // The file was already dirty and changed again. Only the additional churn
-      // belongs to this run; never report a negative count.
+
+      // The file was already dirty and the executor changed it again. Both
+      // counts are diffs against the same base, so their difference is the
+      // additional churn — except when the executor replaced one edit with a
+      // similarly sized different edit, where the net is zero or negative even
+      // though the content hash proves work happened. Subtracting alone would
+      // let arbitrary churn in already-dirty in-scope files bypass the line
+      // budget entirely.
+      //
+      // When the net is not positive, fall back to the file's whole diff against
+      // the base. That overstates the executor's share, which is the safe
+      // direction for a budget: it can block a run that deserved more room, but
+      // it cannot wave through unbounded rewriting.
+      const additional = file.linesChanged - prior.linesChanged;
       return {
         ...file,
-        linesChanged: Math.max(0, file.linesChanged - prior.linesChanged),
+        linesChanged: additional > 0 ? additional : file.linesChanged,
         // A file that already existed as a pre-existing new file is not newly
         // created by this run.
         isNew: file.isNew && !prior.isNew

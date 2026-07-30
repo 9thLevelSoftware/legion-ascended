@@ -57,10 +57,20 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     },
     scope: {
       read: [options.change.artifactPath, options.oracle.artifactPath],
-      write: [taskgraphPath],
-      forbidden: [".legion/var/runtime.sqlite"],
-      sequentialFiles: [taskgraphPath],
-      budget: budgetForWriteScope([taskgraphPath])
+      // This task's objective is to implement the phase, so its write scope has
+      // to be the implementation surface. It previously listed only the
+      // taskgraph artifact, which made the contract impossible to satisfy: any
+      // source edit was an out-of-scope write and every real build blocked. The
+      // test suite could not see it because the `fake` executor writes nothing.
+      //
+      // The stub planner cannot name that surface yet, so scope is
+      // repository-wide with a finite budget — the same trade `legion quick`
+      // already makes when the caller cannot enumerate files in advance.
+      // Phase D narrows this to the files a decomposed task actually touches.
+      write: ["."],
+      forbidden: [".git", "node_modules", ".legion/var/runtime.sqlite"],
+      sequentialFiles: [],
+      budget: budgetForWriteScope(["."])
     },
     interfaces: {
       consumes: [

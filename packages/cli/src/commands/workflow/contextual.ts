@@ -40,7 +40,7 @@ import { resolveWorkflowState } from "../../workflow/state.js";
 import { positionalText } from "./record.js";
 
 const HELP = {
-  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration whose proposals and open questions feed legion start. Nothing an exploration produces is authoritative.",
+  explore: "legion explore <topic> [--entry raw-idea|pasted-spec|existing-codebase|link] [--executor codex|manual|fake]\n\nBrainstorm freely before the structured start interview. Writes a design document plus a typed exploration recording proposals and unresolved questions. Nothing an exploration produces is authoritative. Note: legion start does not read explorations yet — that handoff is not wired up.",
   map: "legion map [--refresh] [--scope <path>] | [--check] | [--query <text>]\n\nGenerate, check, or query deterministic codebase context.",
   retro: "legion retro [--phase N|--milestone M] [--executor codex|manual|fake]\n\nAnalyze recent workflow evidence and write retrospective guidance.",
   milestone: "legion milestone --status | --define <name> --phases <range> | --complete <id> --summary <text> | --archive <id>\n\nManage milestone status, summaries, and archives.",
@@ -180,9 +180,14 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
     text: markdown
   });
 
-  // Persist the typed exploration alongside the prose. The design document
-  // stays human-readable; this is what `legion start` will consume as
-  // proposals and injected open questions.
+  // Persist the typed exploration alongside the prose. The design document stays
+  // human-readable; this is the machine-readable form.
+  //
+  // Nothing reads it yet — `legion start` is still option-driven and does not
+  // discover explorations. The artifact and its schema exist so that handoff has
+  // a settled contract to consume rather than one invented at the time, but
+  // until the wiring lands the file is written and unused. Do not describe the
+  // handoff as working in user-facing text.
   let explorationArtifactPath: ArtifactPath | undefined;
   let explorationDiagnostics: readonly string[] = [];
   if (input.workflow === "explore") {

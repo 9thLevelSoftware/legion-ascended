@@ -98,15 +98,26 @@ test("gates with no producer are unevaluable, not silently satisfied", () => {
   assert.equal(report.satisfied + report.unsatisfied + report.unevaluable, report.gates.length);
 });
 
-test("unevaluable gates do not block, but unsatisfied ones do", () => {
+test("unevaluable gates block, because a gate with no producer is unmet", () => {
+  // Otherwise an R2 change reports ready while the same payload lists its
+  // security, acceptance and rollback gates as unproven.
   const clean = derive(PASSING_R2);
   assert.equal(clean.unsatisfied, 0);
   assert.ok(clean.unevaluable > 0);
-  assert.equal(clean.ready, true);
+  assert.equal(clean.ready, false);
 
   const broken = derive({ ...PASSING_R2, reviews: [] });
   assert.ok(broken.unsatisfied > 0);
   assert.equal(broken.ready, false);
+});
+
+test("a tier whose gates are all evaluable can be ready", () => {
+  // R0 needs only a contract, deterministic verification and an evidence note —
+  // all of which Legion produces — so readiness remains reachable.
+  const r0 = derive({ tier: "R0", ...PASSING_R2 });
+  assert.equal(r0.unevaluable, 0);
+  assert.equal(r0.unsatisfied, 0);
+  assert.equal(r0.ready, true);
 });
 
 test("a lower risk tier requires fewer gates", () => {

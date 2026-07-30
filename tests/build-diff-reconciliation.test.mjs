@@ -170,14 +170,38 @@ test("only the additional churn on an already-dirty file is attributed", () => {
   assert.equal(diffDelta(before, after).linesChanged, 40);
 });
 
-test("a run that reverts more than it adds never reports a negative line count", () => {
-  const before = observation({ changedFiles: ["src/app/a.ts"], linesChanged: 80 });
+test("a run that shrinks a dirty file still consumes budget, never a negative count", () => {
+  // Net churn is negative here (80 -> 10 against the same base), but the content
+  // hash proves the executor edited the file. Attributing zero would let it
+  // rewrite freely inside the line budget, so the file's own diff is charged
+  // instead — overstated, never negative.
+  const before = observation({ changedFiles: ["src/app/a.ts"], lines: { "src/app/a.ts": 80 } });
   const after = observation({
     changedFiles: ["src/app/a.ts"],
-    linesChanged: 10,
+    lines: { "src/app/a.ts": 10 },
     hashes: { "src/app/a.ts": "changed-again" }
   });
-  assert.equal(diffDelta(before, after).linesChanged, 0);
+
+  const delta = diffDelta(before, after);
+  assert.equal(delta.linesChanged, 10);
+  assert.ok(delta.linesChanged >= 0);
+});
+
+test("replacing a dirty edit with a same-sized one still consumes line budget", () => {
+  // Net subtraction reports zero here, so churn in already-dirty in-scope files
+  // would bypass the line budget entirely. The fallback attributes the file's
+  // whole diff against the base instead — overstating, which is the safe
+  // direction for a budget.
+  const before = observation({ changedFiles: ["src/app/a.ts"], lines: { "src/app/a.ts": 100 } });
+  const after = observation({
+    changedFiles: ["src/app/a.ts"],
+    lines: { "src/app/a.ts": 100 },
+    hashes: { "src/app/a.ts": "different-100-line-edit" }
+  });
+
+  const delta = diffDelta(before, after);
+  assert.deepEqual(delta.changedFiles, ["src/app/a.ts"]);
+  assert.equal(delta.linesChanged, 100);
 });
 
 test("an executor edit to an already-dirty file is still attributed", () => {
