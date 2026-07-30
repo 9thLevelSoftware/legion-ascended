@@ -98,6 +98,24 @@ async function plannedProject(t, answers = ANSWERS) {
   };
 }
 
+/** A finalized project, without planning it — for tests that break it first. */
+async function scratchProject(t, answers = ANSWERS) {
+  const root = await mkdtemp(path.join(tmpdir(), "legion-plan-scratch-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  git(root, ["init", "--initial-branch=main"]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test"]);
+  git(root, ["config", "core.autocrlf", "false"]);
+
+  const run = (...args) => runCliCapture(["--repository-root", root, ...args]);
+  const supplied = Object.fromEntries(
+    Object.entries(answers).filter(([, value]) => value !== undefined)
+  );
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(supplied), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  return { root, run };
+}
+
 test("the planned task traces to the requirement the interview wrote", async (t) => {
   const { taskgraph, requirementId } = await plannedProject(t);
   const task = taskgraph.tasks[0];
@@ -279,4 +297,91 @@ test("a criterion expecting a non-zero exit does not suppress the project check"
     })
   );
   assert.deepEqual(identical, ["pnpm test => 0"]);
+
+  // Argument boundaries have to survive the identity too. Joining on spaces made
+  // `node -e "foo bar"` and `node -e foo bar` indistinguishable, so one
+  // suppressed the other even though the runner executes different commands.
+  const boundaries = phaseVerification({
+    enforcement: { ...enforcement, verification: { command: "node", args: ["-e", "foo", "bar"] } },
+    requirement: {
+      requirement: {},
+      executable: [
+        {
+          id: "ac_quoted-1",
+          statement: "The quoted form runs",
+          proof: { mode: "executable", command: "node", args: ["-e", "foo bar"], expectedExitCode: 0 }
+        }
+      ],
+      manual: []
+    }
+  });
+  assert.deepEqual(
+    boundaries.map((entry) => entry.args),
+    [["-e", "foo bar"], ["-e", "foo", "bar"]],
+    "distinct argument vectors must both survive"
+  );
+});
+
+test("planning refuses a requirement edited after it was written", async (t) => {
+  const { root, run } = await scratchProject(t);
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  // Schema-valid, so `readRequirementSet` succeeds — but the recorded hash no
+  // longer matches. Planning would copy this command into the task contract and
+  // `legion build` would run it. `validate` and `doctor` both detect the state;
+  // the path that actually consumes the content did not.
+  const requirementPath = path.join(root, ...finalize.requirementSet.paths[0].split("/"));
+  const requirement = JSON.parse(await readFile(requirementPath, "utf8"));
+  requirement.acceptance.criteria[0].proof.args = ["--", "curl", "attacker.example"];
+  await writeFile(requirementPath, `${JSON.stringify(requirement, undefined, 2)}\n`, "utf8");
+
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 1, "an edited requirement must not be planned against");
+  const payload = parseJsonOutput(planned);
+  assert.equal(payload.status, "requirement_set_drift");
+  assert.ok(payload.diagnostics.some((entry) => /requirement/.test(entry.code)));
+});
+
+test("aggregate review instructions stay inside the oracle limit", async () => {
+  const { buildOracleArtifactInput } = await import(
+    "../packages/cli/dist/workflow/oracle-input.js"
+  );
+
+  // Twenty manual criteria is a schema-valid interview: intake permits that many
+  // and each is bounded at 1024. Clamping the elements without bounding the sum
+  // left the joined instructions over the 4096-character limit, so the oracle
+  // threw after the spec and change bundle were already on disk.
+  const manual = Array.from({ length: 20 }, (_, index) => ({
+    id: `ac_manual-${index + 1}`,
+    statement: `Criterion ${index + 1}: ${"w".repeat(400)}`,
+    proof: { mode: "manual", reason: "z".repeat(500) }
+  }));
+
+  const input = buildOracleArtifactInput({
+    repositoryRoot: process.cwd(),
+    project: {
+      id: "prj_asset-mapper",
+      policy: { decisionOwners: [{ kind: "human", id: "dasbl", displayName: "dasbl" }] }
+    },
+    phase: { number: 1, name: "Foundation", body: "", sourcePath: "ROADMAP.md" },
+    change: {
+      artifactPath: ".legion/project/changes/chg_x/change.yaml",
+      reference: { path: ".legion/project/changes/chg_x/change.yaml", sha256: `sha256:${"0".repeat(64)}` }
+    },
+    requirement: {
+      requirement: { id: "req_many-manual-criteria", acceptance: { criteria: manual } },
+      executable: [],
+      manual
+    },
+    baseGitSha: "0".repeat(40),
+    createdAt: CREATED_AT
+  });
+
+  const instructions = input.oracle.execution.instructions;
+  assert.ok(instructions.length <= 4_096, `instructions were ${instructions.length} characters`);
+  // Omission is stated, not silent: a criterion that vanished from the review
+  // instructions is the gap this section exists to surface.
+  assert.match(instructions, /and \d+ more, listed in req_many-manual-criteria\./);
 });

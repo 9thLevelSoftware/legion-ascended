@@ -30468,6 +30468,8 @@ function describeCriterion(criterion) {
 }
 
 // packages/cli/src/workflow/oracle-input.ts
+var MAX_ORACLE_INSTRUCTIONS = 4096;
+var OMISSION_FOOTER_RESERVE = 160;
 function inspectionInstructions(options) {
   const resolved = options.requirement;
   if (resolved === void 0) {
@@ -30476,10 +30478,23 @@ function inspectionInstructions(options) {
   if (resolved.manual.length === 0) {
     return `Every acceptance criterion for ${resolved.requirement.id} is executable and runs as task verification. Confirm the evidence records those runs.`;
   }
-  return [
-    `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`,
-    ...resolved.manual.map((criterion) => `  - ${describeCriterion(criterion)}`)
-  ].join("\n");
+  const header = `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`;
+  const lines = [header];
+  let budget = MAX_ORACLE_INSTRUCTIONS - header.length - OMISSION_FOOTER_RESERVE;
+  let omitted = 0;
+  for (const criterion of resolved.manual) {
+    const line = `  - ${describeCriterion(criterion)}`;
+    if (line.length + 1 > budget) {
+      omitted += 1;
+      continue;
+    }
+    lines.push(line);
+    budget -= line.length + 1;
+  }
+  if (omitted > 0) {
+    lines.push(`  - and ${omitted} more, listed in ${resolved.requirement.id}.`);
+  }
+  return lines.join("\n");
 }
 function buildOracleArtifactInput(options) {
   const ids = phasePlanIds(options.phase);
@@ -30628,7 +30643,7 @@ function phaseVerification(options) {
     expectedExitCode: 0,
     timeoutMs: 6e5
   };
-  const key = (entry) => `${entry.command} ${entry.args.join(" ")} => ${entry.expectedExitCode}`;
+  const key = (entry) => JSON.stringify([entry.command, [...entry.args], entry.expectedExitCode]);
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
@@ -30817,6 +30832,23 @@ async function handlePlanWorkflow(context) {
       `The requirement set is invalid, so planning would silently use defaults instead of the recorded policy.
   - ${requirementSet.reason}`
     );
+  }
+  if (requirementSet.ok) {
+    const drift = await verifyRequirementSet(context.repositoryRoot);
+    if (drift.length > 0) {
+      return failure(
+        {
+          ok: false,
+          status: "requirement_set_drift",
+          diagnostics: drift.map((entry) => ({ code: entry.code, message: entry.message })),
+          nextAction: nextAction("legion validate", "Restore the requirement set, then plan again.")
+        },
+        [
+          "The requirement set has changed since it was written, so planning would carry unreviewed content into the task contract.",
+          ...drift.map((entry) => `  - ${entry.message}`)
+        ].join("\n")
+      );
+    }
   }
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : void 0;
   const phaseRequirement = await resolvePhaseRequirement(context.repositoryRoot, resolved.phase);

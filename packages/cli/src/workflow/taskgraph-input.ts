@@ -84,8 +84,11 @@ export function phaseVerification(options: BuildTaskGraphInputOptions) {
   // asserting `pnpm test` exits 1 would suppress the project check asserting it
   // exits 0 — so a failing regression suite would satisfy the task, which is the
   // opposite of what adding project verification was for.
+  // Structured, because joining on spaces loses argument boundaries:
+  // `node -e "foo bar"` and `node -e foo bar` flatten to the same string while
+  // the runner executes different commands, so one would suppress the other.
   const key = (entry: { command: string; args: readonly string[]; expectedExitCode: number }) =>
-    `${entry.command} ${entry.args.join(" ")} => ${entry.expectedExitCode}`;
+    JSON.stringify([entry.command, [...entry.args], entry.expectedExitCode]);
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }

@@ -4,6 +4,7 @@ import {
   createOracleArtifact,
   readCurrentSpec,
   readRequirementSet,
+  verifyRequirementSet,
   writeTaskGraph,
   type ArtifactDiagnostic,
   type CurrentSpecSuccess
@@ -136,6 +137,29 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   - ${requirementSet.reason}`
     );
   }
+  // Schema-valid is not the same as unmodified. A requirement file whose
+  // executable criterion command was edited still parses, so planning would copy
+  // that command into the task contract and `legion build` would then run it.
+  // `legion validate` and `legion doctor` both detect this; the path that
+  // actually consumes the content did not, which is the wrong way round.
+  if (requirementSet.ok) {
+    const drift = await verifyRequirementSet(context.repositoryRoot);
+    if (drift.length > 0) {
+      return failure(
+        {
+          ok: false,
+          status: "requirement_set_drift",
+          diagnostics: drift.map((entry) => ({ code: entry.code, message: entry.message })),
+          nextAction: nextAction("legion validate", "Restore the requirement set, then plan again.")
+        },
+        [
+          "The requirement set has changed since it was written, so planning would carry unreviewed content into the task contract.",
+          ...drift.map((entry) => `  - ${entry.message}`)
+        ].join("\n")
+      );
+    }
+  }
+
   const enforcement = requirementSet.ok ? requirementSet.set.enforcement : undefined;
 
   // The requirement this phase was rendered from. A roadmap that names one it

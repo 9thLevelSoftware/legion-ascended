@@ -15,6 +15,12 @@ import { currentUtcTimestamp, firstDecisionOwner, phasePlanIds } from "./change-
 import type { PhaseSource } from "./phase-compat.js";
 import { describeCriterion, type ResolvedPhaseRequirement } from "./phase-requirement.js";
 
+/** `oracleInspectionExecutionSchema` caps instructions at 4096 characters. */
+const MAX_ORACLE_INSTRUCTIONS = 4_096;
+
+/** Room kept for the "and N more" footer, so the count is never itself cut. */
+const OMISSION_FOOTER_RESERVE = 160;
+
 export interface BuildOracleInputOptions {
   readonly repositoryRoot: string;
   readonly project: Project;
@@ -41,10 +47,32 @@ function inspectionInstructions(options: BuildOracleInputOptions): string {
   if (resolved.manual.length === 0) {
     return `Every acceptance criterion for ${resolved.requirement.id} is executable and runs as task verification. Confirm the evidence records those runs.`;
   }
-  return [
-    `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`,
-    ...resolved.manual.map((criterion) => `  - ${describeCriterion(criterion)}`)
-  ].join("\n");
+  // Clamping each criterion to 1024 bounded the elements and not the aggregate:
+  // twenty criteria is a schema-valid interview, and the joined string then
+  // exceeded the 4096-character instruction limit and threw from
+  // `oracleSchema.parse` after the spec and change bundle were already written.
+  // Fixing the element and not the sum is the same mistake one level up.
+  const header = `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`;
+  const lines: string[] = [header];
+  let budget = MAX_ORACLE_INSTRUCTIONS - header.length - OMISSION_FOOTER_RESERVE;
+  let omitted = 0;
+
+  for (const criterion of resolved.manual) {
+    const line = `  - ${describeCriterion(criterion)}`;
+    if (line.length + 1 > budget) {
+      omitted += 1;
+      continue;
+    }
+    lines.push(line);
+    budget -= line.length + 1;
+  }
+
+  if (omitted > 0) {
+    // Named rather than dropped: an unproven criterion that vanished from the
+    // review instructions is exactly the gap this section exists to surface.
+    lines.push(`  - and ${omitted} more, listed in ${resolved.requirement.id}.`);
+  }
+  return lines.join("\n");
 }
 
 export function buildOracleArtifactInput(options: BuildOracleInputOptions): CreateOracleArtifactInput {
