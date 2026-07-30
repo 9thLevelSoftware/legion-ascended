@@ -1113,3 +1113,93 @@ test("a pinned exploration stays resolvable behind newer runs", async (t) => {
   );
   assert.equal(resumed.warnings, undefined, "no proposals should be withheld");
 });
+
+test("every value-taking option is refused when given without a value", async (t) => {
+  const { run } = await scratchRepo(t);
+  await run("start", "--next", "--json", "--created-at", CREATED_AT);
+
+  // Fixing `--session` alone left `--from-exploration` broken in exactly the
+  // same way, so this asserts the class rather than the case: the parser stores
+  // `true`, `stringOption` reads that as absent, and the command silently falls
+  // through to a default.
+  for (const option of ["session", "from-exploration", "intake", "answer", "slug"]) {
+    const result = await run("start", `--${option}`, "--json");
+    assert.equal(result.exitCode, 1, `--${option} without a value should be refused`);
+    assert.match(
+      parseJsonOutput(result).diagnostics[0].message,
+      new RegExp(`--${option}`),
+      `--${option} should be named in the diagnostic`
+    );
+  }
+
+  const status = parseJsonOutput(await run("start", "--session-status", "--json"));
+  assert.equal(status.session.status, "active", "no session should have been touched");
+});
+
+test("an all-wont requirement set does not route to legion plan 1", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const answers = {
+    ...ANSWERS,
+    "req-1-priority": "wont",
+    "req-1-category": "constraint"
+  };
+  delete answers["req-1-ac-1-statement"];
+  delete answers["req-1-ac-1-proof"];
+  delete answers["req-1-ac-1-detail"];
+  delete answers["req-1-ac-1-more"];
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(answers), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+
+  // renderRoadmap emits no `## Phase 1:` heading when nothing is buildable, and
+  // parseRoadmapPhase requires it — so the advertised next action would have
+  // failed with phase_source_missing.
+  const payload = parseJsonOutput(finalize);
+  assert.doesNotMatch(payload.nextAction.command, /plan 1/);
+  assert.match(payload.nextAction.reason, /nothing to plan/i);
+
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "intake"]);
+  const planned = await run("plan", "1", "--json");
+  assert.notEqual(planned.exitCode, 0, "the advice was right to steer away from plan");
+});
+
+test("an overlong risk reason is rejected, not silently truncated", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const tooLong = "x".repeat(200);
+  await writeFile(
+    path.join(root, "intake.json"),
+    JSON.stringify({ ...ANSWERS, "risk-reason": tooLong }),
+    "utf8"
+  );
+
+  // Accepting it and truncating at finalize left the session recording one
+  // rationale and the requirement set another, dropping the tail — which is
+  // usually the qualifier that justified the tier.
+  const applied = await run("start", "--intake", "intake.json", "--json", "--created-at", CREATED_AT);
+  assert.equal(applied.exitCode, 1);
+  assert.ok(
+    applied.stdout.includes("risk-reason") || applied.stderr.includes("risk-reason"),
+    "the overlong reason should be reported against its node"
+  );
+});
+
+test("an abandoned session reservation does not block initialization", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  // What a process interrupted between claiming an ID and writing the record
+  // leaves behind. listSessions already skips these; initProject rejecting them
+  // meant an interrupted start could complete a whole interview and then never
+  // finalize it.
+  await mkdir(path.join(root, ".legion/project/intake/itk_20260101-000000000"), { recursive: true });
+
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  const applied = await run("start", "--intake", "intake.json", "--json", "--created-at", CREATED_AT);
+  assert.equal(applied.exitCode, 0, applied.stderr);
+
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+  assert.equal(parseJsonOutput(finalize).projectStatus, "initialized");
+});

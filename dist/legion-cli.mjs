@@ -17686,9 +17686,8 @@ async function intakeSessionDirectoryStats(absoluteDirectory) {
       continue;
     if (!entry.isDirectory() || !entry.name.startsWith("itk_"))
       return { valid: false, recordCount: 0 };
-    if (!await pathExists2(path9.join(absoluteDirectory, entry.name, "session.json"))) {
-      return { valid: false, recordCount: 0 };
-    }
+    if (!await pathExists2(path9.join(absoluteDirectory, entry.name, "session.json")))
+      continue;
     recordCount += 1;
   }
   return { valid: true, recordCount };
@@ -26932,6 +26931,12 @@ function validateSlotText(node, value) {
     if (value.length > 128) return fail("too_long", "Keep the owner to 128 characters or fewer.");
     return void 0;
   }
+  if (node.slot === "risk.reason" && value.length > 128) {
+    return fail(
+      "too_long",
+      "Keep the reason to 128 characters or fewer; it is stored verbatim on every task's risk profile."
+    );
+  }
   if (node.slot === "project.summary" && value.length > 2048) {
     return fail("too_long", "Keep the summary to 2048 characters or fewer.");
   }
@@ -27294,6 +27299,7 @@ function enforcementPolicy(answers) {
   const reason = answerText2(answers, "risk-reason");
   const verification = answerText2(answers, "pref-verification");
   if (tier === void 0 || reason === void 0 || verification === void 0) return void 0;
+  if (reason.length > 128) return void 0;
   const numbers = ["budget-files", "budget-lines", "budget-new-files"].map((nodeId2) => {
     const raw = answerText2(answers, nodeId2);
     if (raw === void 0) return void 0;
@@ -27307,7 +27313,9 @@ function enforcementPolicy(answers) {
   const command = parseCommandLine(verification);
   if ("error" in command) return void 0;
   return {
-    risk: { tier, reason: reason.slice(0, 128) },
+    // Not truncated: the validator rejects an overlong reason at the node, so
+    // reaching here with one would mean the session and the policy disagree.
+    risk: { tier, reason },
     budget: { maxFilesChanged, maxLinesChanged, maxNewFiles },
     verification: { command: command.command, args: [...command.args] }
   };
@@ -28584,11 +28592,19 @@ async function proposalsFor(repositoryRoot, session) {
   }
   return { proposals, diagnostics: [] };
 }
+var VALUE_REQUIRED_OPTIONS = ["session", "from-exploration", "intake", "answer", "slug", "node"];
+function valuelessOption(context) {
+  for (const key of VALUE_REQUIRED_OPTIONS) {
+    if (context.args.options.get(key) === true) {
+      return usageError(`Missing required value for --${key}.`);
+    }
+  }
+  return void 0;
+}
 async function resolveSession(context, options) {
   const wantsProposals = options.proposals !== false;
-  if (context.args.options.get("session") === true) {
-    return usageError("Missing required value for --session. Pass the session ID, as in --session itk_...");
-  }
+  const missingValue = valuelessOption(context);
+  if (missingValue !== void 0) return missingValue;
   const explicitId = stringOption(context, "session");
   if (explicitId !== void 0) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
@@ -29270,7 +29286,11 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
   }
   const finalized = withDiagnostics(finalizeSession(session, projectId), notes);
   await saveSession(context.repositoryRoot, finalized);
-  const action = nextAction("legion plan 1", "The requirement set is written; plan the first phase.");
+  const buildable = requirements.some((requirement) => requirement.priority !== "wont");
+  const action = buildable ? nextAction("legion plan 1", "The requirement set is written; plan the first phase.") : nextAction(
+    "legion start",
+    "Every requirement was recorded as out of scope, so there is nothing to plan. Start a new interview to add one."
+  );
   const humanLines = [
     `${projectId}: ${initialized.status}.`,
     `Wrote ${requirements.length} requirement(s) to ${written.indexPath}.`,

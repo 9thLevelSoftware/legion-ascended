@@ -267,6 +267,17 @@ function validateSlotText(node: IntakeNode, value: string): IntakeDiagnostic | u
     return undefined;
   }
 
+  // The risk profile caps a reason at 128 characters. Accepting a longer answer
+  // and truncating it at finalize left the session and the requirement set
+  // recording different rationales — and the part dropped is the tail, which is
+  // usually the qualifier that justified the tier.
+  if (node.slot === "risk.reason" && value.length > 128) {
+    return fail(
+      "too_long",
+      "Keep the reason to 128 characters or fewer; it is stored verbatim on every task's risk profile."
+    );
+  }
+
   if (node.slot === "project.summary" && value.length > 2_048) {
     return fail("too_long", "Keep the summary to 2048 characters or fewer.");
   }

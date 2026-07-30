@@ -374,6 +374,7 @@ export function enforcementPolicy(
   const reason = answerText(answers, "risk-reason");
   const verification = answerText(answers, "pref-verification");
   if (tier === undefined || reason === undefined || verification === undefined) return undefined;
+  if (reason.length > 128) return undefined;
 
   const numbers = ["budget-files", "budget-lines", "budget-new-files"].map((nodeId) => {
     const raw = answerText(answers, nodeId);
@@ -390,7 +391,9 @@ export function enforcementPolicy(
   if ("error" in command) return undefined;
 
   return {
-    risk: { tier: tier as RiskTier, reason: reason.slice(0, 128) },
+    // Not truncated: the validator rejects an overlong reason at the node, so
+    // reaching here with one would mean the session and the policy disagree.
+    risk: { tier: tier as RiskTier, reason },
     budget: { maxFilesChanged, maxLinesChanged, maxNewFiles },
     verification: { command: command.command, args: [...command.args] }
   };

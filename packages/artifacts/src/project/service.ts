@@ -279,9 +279,13 @@ async function intakeSessionDirectoryStats(
   for (const entry of entries) {
     if (isIgnorableLegionRootEntry(entry.name)) continue;
     if (!entry.isDirectory() || !entry.name.startsWith("itk_")) return { valid: false, recordCount: 0 };
-    if (!(await pathExists(path.join(absoluteDirectory, entry.name, "session.json")))) {
-      return { valid: false, recordCount: 0 };
-    }
+    // A directory with no session.json is an abandoned ID reservation, left by a
+    // process interrupted between claiming the ID and writing the record.
+    // `listSessions` already skips these; rejecting them here made initProject
+    // report migration_required forever, so an interrupted start could complete
+    // a whole interview and then be unable to finalize it. Two classifications
+    // of the same directory is one too many.
+    if (!(await pathExists(path.join(absoluteDirectory, entry.name, "session.json")))) continue;
     recordCount += 1;
   }
 

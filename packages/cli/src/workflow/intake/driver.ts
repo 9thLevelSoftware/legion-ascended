@@ -169,6 +169,30 @@ async function proposalsFor(
 }
 
 /**
+ * Refuse an option supplied without its value.
+ *
+ * The parser stores `true` for `--session` with nothing after it, and
+ * `stringOption` reports that as absent — so the command silently fell through
+ * to a default. `legion start --abort --session --json` could abort a different
+ * interview than the operator named, and `--from-exploration` with no run ID
+ * quietly started an unseeded one.
+ *
+ * Checked as a set rather than per flag. Fixing `--session` alone left
+ * `--from-exploration` broken in exactly the same way, which is the recurring
+ * shape of this PR's findings: the case gets closed and the class does not.
+ */
+const VALUE_REQUIRED_OPTIONS = ["session", "from-exploration", "intake", "answer", "slug", "node"] as const;
+
+function valuelessOption(context: CliContext): CliResult | undefined {
+  for (const key of VALUE_REQUIRED_OPTIONS) {
+    if (context.args.options.get(key) === true) {
+      return usageError(`Missing required value for --${key}.`);
+    }
+  }
+  return undefined;
+}
+
+/**
  * Find the session this invocation acts on.
  *
  * `--session <id>` names one explicitly; otherwise the most recent active
@@ -193,13 +217,8 @@ async function resolveSession(
 ): Promise<ResolvedSession | CliResult> {
   const wantsProposals = options.proposals !== false;
 
-  // `--session` with no value parses as `true`, which `stringOption` reports as
-  // absent — so the command silently fell through to the newest active session.
-  // `legion start --abort --session --json` could therefore abort a different
-  // interview than the operator named.
-  if (context.args.options.get("session") === true) {
-    return usageError("Missing required value for --session. Pass the session ID, as in --session itk_...");
-  }
+  const missingValue = valuelessOption(context);
+  if (missingValue !== undefined) return missingValue;
 
   const explicitId = stringOption(context, "session");
   if (explicitId !== undefined) {
@@ -1100,7 +1119,17 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
   const finalized = withDiagnostics(finalizeSession(session, projectId), notes);
   await saveSession(context.repositoryRoot, finalized);
 
-  const action = nextAction("legion plan 1", "The requirement set is written; plan the first phase.");
+  // `renderRoadmap` emits no `## Phase 1:` heading when every requirement is
+  // `wont`, and `legion plan 1` needs that heading. Routing there anyway would
+  // be the fourth time in this PR that emitted advice named a command the code
+  // then refuses.
+  const buildable = requirements.some((requirement) => requirement.priority !== "wont");
+  const action = buildable
+    ? nextAction("legion plan 1", "The requirement set is written; plan the first phase.")
+    : nextAction(
+        "legion start",
+        "Every requirement was recorded as out of scope, so there is nothing to plan. Start a new interview to add one."
+      );
   const humanLines = [
     `${projectId}: ${initialized.status}.`,
     `Wrote ${requirements.length} requirement(s) to ${written.indexPath}.`,
