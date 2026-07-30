@@ -29029,7 +29029,10 @@ function restoreProtectedFiles(input) {
   for (const relative of ordered) {
     const absolute = path32.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
-    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) continue;
+    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
+      restored.push(relative);
+      continue;
+    }
     try {
       if (before === void 0) {
         rmSync3(absolute, { force: true, recursive: true });

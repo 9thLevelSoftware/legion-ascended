@@ -336,8 +336,15 @@ function restoreProtectedFiles(input: {
     const before = input.state.entries.get(relative);
 
     // When the root itself was a snapshotted non-directory, it is the whole
-    // protected tree; there are no descendants to walk into afterwards.
-    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) continue;
+    // protected tree, and restoring it already removed anything that appeared
+    // beneath the replacement. Count those descendants rather than skipping
+    // them silently: a diagnostic reading "modified N, restored M" with an
+    // unexplained gap invites the reader to assume the difference went
+    // unhandled.
+    if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
+      restored.push(relative);
+      continue;
+    }
 
     try {
       if (before === undefined) {
