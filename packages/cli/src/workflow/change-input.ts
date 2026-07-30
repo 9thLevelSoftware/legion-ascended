@@ -223,9 +223,18 @@ export function phaseSourceArtifactPath(repositoryRoot: string, phase: PhaseSour
  */
 function withSpecAnchor(requirement: Requirement): Requirement["traceRefs"] {
   const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
+  // The predicate has to match `createCurrentSpec`'s exactly, including the
+  // entity. A trace ref with the right path, anchor and relation but no entity —
+  // or one pointing at a different entity — read as anchored here and was then
+  // rejected downstream as `missing_stable_anchor`, so a valid requirement set
+  // could not be planned at all.
   const anchored = requirement.traceRefs.some(
     (traceRef) =>
-      traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines"
+      traceRef.path === specPath &&
+      traceRef.anchor === requirement.id &&
+      traceRef.relation === "defines" &&
+      traceRef.entity?.kind === "requirement" &&
+      traceRef.entity.id === requirement.id
   );
   if (anchored) return requirement.traceRefs;
   return [
@@ -280,9 +289,17 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
         })
       : requirementSchema.parse({
           ...options.requirement,
-          // The oracle that verifies this phase, added without touching the
-          // criteria the operator wrote.
-          acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+          // The oracle that verifies this phase, appended rather than assigned.
+          // Replacing the list dropped any coverage an imported requirement
+          // already carried, and shipping the change installs this as current
+          // truth — so the earlier links would be gone permanently.
+          acceptance: {
+            ...options.requirement.acceptance,
+            oracleRefs: [
+              ...options.requirement.acceptance.oracleRefs.filter((id) => id !== ids.oracleId),
+              ids.oracleId
+            ]
+          },
           traceRefs: withSpecAnchor(options.requirement)
         });
 

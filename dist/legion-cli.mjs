@@ -30290,7 +30290,7 @@ function phaseSourceArtifactPath(repositoryRoot, phase) {
 function withSpecAnchor(requirement) {
   const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
   const anchored = requirement.traceRefs.some(
-    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines"
+    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines" && traceRef.entity?.kind === "requirement" && traceRef.entity.id === requirement.id
   );
   if (anchored) return requirement.traceRefs;
   return [
@@ -30336,9 +30336,17 @@ function buildChangeBundleInput(options) {
     supersedes: []
   }) : requirementSchema.parse({
     ...options.requirement,
-    // The oracle that verifies this phase, added without touching the
-    // criteria the operator wrote.
-    acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+    // The oracle that verifies this phase, appended rather than assigned.
+    // Replacing the list dropped any coverage an imported requirement
+    // already carried, and shipping the change installs this as current
+    // truth — so the earlier links would be gone permanently.
+    acceptance: {
+      ...options.requirement.acceptance,
+      oracleRefs: [
+        ...options.requirement.acceptance.oracleRefs.filter((id) => id !== ids.oracleId),
+        ids.oracleId
+      ]
+    },
     traceRefs: withSpecAnchor(options.requirement)
   });
   return {

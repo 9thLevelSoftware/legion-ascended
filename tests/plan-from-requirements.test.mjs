@@ -385,3 +385,108 @@ test("aggregate review instructions stay inside the oracle limit", async () => {
   // instructions is the gap this section exists to surface.
   assert.match(instructions, /and \d+ more, listed in req_many-manual-criteria\./);
 });
+
+test("the spec self-anchor predicate matches what createCurrentSpec requires", async () => {
+  const { buildPhaseCurrentSpecInput } = await import(
+    "../packages/cli/dist/workflow/change-input.js"
+  );
+
+  const specPath = ".legion/project/specs/req_imported-requirement.md";
+  const base = {
+    schemaVersion: "0.2.0",
+    createdAt: CREATED_AT,
+    kind: "requirement",
+    id: "req_imported-requirement",
+    projectId: "prj_asset-mapper",
+    status: "accepted",
+    priority: "must",
+    category: "behavior",
+    statement: "An imported requirement",
+    acceptance: {
+      language: "An imported requirement",
+      criteria: [
+        { id: "ac_one-1", statement: "It holds", proof: { mode: "manual", reason: "Judgement." } }
+      ],
+      oracleRefs: ["orc_pre-existing-coverage"]
+    },
+    supersedes: []
+  };
+
+  // Right path, anchor and relation, but no entity. `createCurrentSpec` requires
+  // the entity too, so treating this as anchored produced a document it then
+  // rejected as `missing_stable_anchor` — a valid requirement set that could not
+  // be planned.
+  const input = buildPhaseCurrentSpecInput({
+    repositoryRoot: process.cwd(),
+    project: { id: "prj_asset-mapper" },
+    phase: { number: 1, name: "Foundation", body: "", sourcePath: "ROADMAP.md" },
+    requirement: {
+      ...base,
+      traceRefs: [{ path: specPath, anchor: "req_imported-requirement", relation: "defines" }]
+    },
+    createdAt: CREATED_AT
+  });
+
+  const placed = input.document.requirements[0];
+  assert.ok(
+    placed.traceRefs.some(
+      (ref) =>
+        ref.path === specPath &&
+        ref.anchor === "req_imported-requirement" &&
+        ref.relation === "defines" &&
+        ref.entity?.kind === "requirement" &&
+        ref.entity.id === "req_imported-requirement"
+    ),
+    `the entity-bearing anchor must be added: ${JSON.stringify(placed.traceRefs)}`
+  );
+});
+
+test("an imported requirement keeps the oracle coverage it already had", async () => {
+  const { buildChangeBundleInput } = await import(
+    "../packages/cli/dist/workflow/change-input.js"
+  );
+
+  // Shipping the change installs `proposedRequirement` as current truth, so
+  // replacing the list rather than appending would drop the earlier coverage
+  // links permanently.
+  const input = buildChangeBundleInput({
+    repositoryRoot: process.cwd(),
+    project: { id: "prj_asset-mapper", policy: { decisionOwners: [{ kind: "human", id: "dasbl" }] } },
+    phase: { number: 1, name: "Foundation", body: "Body", sourcePath: "ROADMAP.md" },
+    currentSpec: { document: { primaryRequirementId: "req_imported-requirement", revision: 1 } },
+    requirement: {
+      schemaVersion: "0.2.0",
+      createdAt: CREATED_AT,
+      kind: "requirement",
+      id: "req_imported-requirement",
+      projectId: "prj_asset-mapper",
+      status: "accepted",
+      priority: "must",
+      category: "behavior",
+      statement: "An imported requirement",
+      acceptance: {
+        language: "An imported requirement",
+        criteria: [
+          { id: "ac_one-1", statement: "It holds", proof: { mode: "manual", reason: "Judgement." } }
+        ],
+        oracleRefs: ["orc_pre-existing-coverage"]
+      },
+      traceRefs: [
+        {
+          path: ".legion/project/specs/req_imported-requirement.md",
+          anchor: "req_imported-requirement",
+          relation: "defines",
+          entity: { kind: "requirement", id: "req_imported-requirement" }
+        }
+      ],
+      supersedes: []
+    },
+    baseGitSha: "0".repeat(40),
+    createdAt: CREATED_AT
+  });
+
+  const refs = input.deltaSpecs[0].proposedRequirement.acceptance.oracleRefs;
+  assert.ok(refs.includes("orc_pre-existing-coverage"), `prior coverage was dropped: ${refs}`);
+  assert.equal(new Set(refs).size, refs.length, "oracle refs must not duplicate");
+  assert.equal(refs.at(-1), "orc_phase-1-foundation");
+});
