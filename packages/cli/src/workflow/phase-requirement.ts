@@ -140,6 +140,26 @@ function clamp(value: string): string {
 }
 
 /**
+ * Characters that need no quoting in any POSIX or PowerShell context.
+ *
+ * An allowlist, after four rounds of denylist. Quoting was extended for
+ * whitespace, then quote characters, then empty strings, then shell
+ * metacharacters — each time by naming what had just been found dangerous, and
+ * each time missing the next one. `safe;touch` is a single argument the runner
+ * passes intact, but rendered bare a reviewer pasting it into a shell runs
+ * `touch` as a second command.
+ *
+ * The rendered text is reproduction instructions, so the question is not "is
+ * this character dangerous" but "is this token unambiguous". Anything outside
+ * this set is quoted.
+ */
+const UNQUOTED_ARGUMENT = /^[A-Za-z0-9._\/=@:+-]+$/;
+
+function renderArgument(part: string): string {
+  return UNQUOTED_ARGUMENT.test(part) ? part : JSON.stringify(part);
+}
+
+/**
  * A criterion rendered as the line a reviewer reads.
  *
  * Executable criteria carry their command so the oracle states what decides
@@ -153,10 +173,7 @@ export function describeCriterion(criterion: RequirementCriterion): string {
     // would reproduce — the same argument-boundary collapse the verification
     // identity had, in the text a human acts on.
     const command = [criterion.proof.command, ...criterion.proof.args]
-      // Empty and whitespace-bearing arguments are both quoted: `[""]` rendered
-      // as nothing at all, so it read identically to `[]` and instructed the
-      // reviewer to reproduce a command the runner does not execute.
-      .map((part) => (part === "" || /[\s"'\\]/.test(part) ? JSON.stringify(part) : part))
+      .map(renderArgument)
       .join(" ");
     return clamp(`${criterion.statement} — \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }

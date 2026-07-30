@@ -30481,9 +30481,13 @@ function clamp(value) {
   if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
   return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
 }
+var UNQUOTED_ARGUMENT = /^[A-Za-z0-9._\/=@:+-]+$/;
+function renderArgument(part) {
+  return UNQUOTED_ARGUMENT.test(part) ? part : JSON.stringify(part);
+}
 function describeCriterion(criterion) {
   if (criterion.proof.mode === "executable") {
-    const command = [criterion.proof.command, ...criterion.proof.args].map((part) => part === "" || /[\s"'\\]/.test(part) ? JSON.stringify(part) : part).join(" ");
+    const command = [criterion.proof.command, ...criterion.proof.args].map(renderArgument).join(" ");
     return clamp(`${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
   }
   return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
@@ -30876,7 +30880,11 @@ async function handlePlanWorkflow(context) {
   const phaseRequirement = await resolvePhaseRequirement(
     context.repositoryRoot,
     resolved.phase,
-    requirementSet.ok ? requirementSet.requirements : void 0
+    // An empty verified set, not `undefined`. `undefined` means "no snapshot,
+    // read one", so the `not_found` branch made resolution reopen the set — and
+    // an index appearing between the two reads would be consumed without the
+    // drift verification above. There is nothing to read here by definition.
+    requirementSet.ok ? requirementSet.requirements : []
   );
   if (phaseRequirement.ok === false) {
     return failure(

@@ -173,7 +173,11 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   const phaseRequirement = await resolvePhaseRequirement(
     context.repositoryRoot,
     resolved.phase,
-    requirementSet.ok ? requirementSet.requirements : undefined
+    // An empty verified set, not `undefined`. `undefined` means "no snapshot,
+    // read one", so the `not_found` branch made resolution reopen the set — and
+    // an index appearing between the two reads would be consumed without the
+    // drift verification above. There is nothing to read here by definition.
+    requirementSet.ok ? requirementSet.requirements : []
   );
   if (phaseRequirement.ok === false) {
     return failure(

@@ -641,4 +641,33 @@ test("a rendered command keeps argument boundaries a reviewer can reproduce", as
   });
   assert.notEqual(empty, none, "an empty argument must be distinguishable from none");
   assert.match(empty, /node ""/);
+
+  // The rendered text is reproduction instructions, so a shell metacharacter in
+  // a single argument must not read as syntax. `safe;touch` is one argument the
+  // runner passes intact; rendered bare, a reviewer pasting it into a shell runs
+  // `touch` as a second command.
+  //
+  // Asserted with string containment rather than a regex, because the values
+  // under test are themselves full of regex metacharacters.
+  const describe = (arg) =>
+    describeCriterion({
+      id: "ac_meta-1",
+      statement: "s",
+      proof: { mode: "executable", command: "node", args: [arg], expectedExitCode: 0 }
+    });
+
+  for (const dangerous of ["safe;touch", "a&&b", "a|b", "$HOME", "`id`", "a>out", "a<in", "(x)", "a*b", "a~b"]) {
+    assert.ok(
+      describe(dangerous).includes(`node ${JSON.stringify(dangerous)}`),
+      `${dangerous} must be quoted: ${describe(dangerous)}`
+    );
+  }
+
+  // Ordinary tokens stay unquoted, so the common case stays readable.
+  for (const plain of ["--filter", "resolver", "src/main.ts", "a=b", "v1.2.3"]) {
+    assert.ok(
+      describe(plain).includes(`\`node ${plain}\``),
+      `${plain} should not be quoted: ${describe(plain)}`
+    );
+  }
 });
