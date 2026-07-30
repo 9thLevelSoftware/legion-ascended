@@ -26300,7 +26300,7 @@ import { promisify as promisify4 } from "node:util";
 
 // packages/cli/src/workflow/executor/fake-plan.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { mkdirSync as mkdirSync2, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path20 from "node:path";
 var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
 function readFakeExecutorPlan() {
@@ -26337,6 +26337,18 @@ function applyFakeExecutorPlan(input) {
     rmSync(absolute, { force: true });
     written.push(entry);
     staged.push(entry);
+  }
+  for (const entry of input.plan.symlinks ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === void 0) continue;
+    try {
+      mkdirSync2(path20.dirname(absolute), { recursive: true });
+      rmSync(absolute, { force: true });
+      symlinkSync(entry.target, absolute);
+      written.push(entry.path);
+      staged.push(entry.path);
+    } catch {
+    }
   }
   if (input.plan.commit === true && staged.length > 0) {
     try {
@@ -28179,7 +28191,7 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
 }
 
 // packages/cli/src/commands/workflow/build.ts
-import { execFileSync as execFileSync5 } from "node:child_process";
+import { execFileSync as execFileSync6 } from "node:child_process";
 import { readFile as readFile16 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
@@ -28598,7 +28610,9 @@ function createWorkerBundleRegistry(options) {
 }
 
 // packages/cli/src/workflow/guarded-execution.ts
-import { readFileSync as readFileSync3, writeFileSync as writeFileSync2, mkdirSync as mkdirSync3, rmSync as rmSync3 } from "node:fs";
+import { execFileSync as execFileSync5 } from "node:child_process";
+import { createHash as createHash21 } from "node:crypto";
+import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import path32 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
@@ -28852,67 +28866,109 @@ var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 function isHarnessPath(relative, harnessPaths) {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
 }
-function snapshotProtectedFiles(input) {
-  const snapshot = /* @__PURE__ */ new Map();
+function digestOf(absolute) {
+  try {
+    return createHash21("sha256").update(readFileSync3(absolute)).digest("hex");
+  } catch {
+    return void 0;
+  }
+}
+function readTarget(absolute) {
+  try {
+    return readlinkSync(absolute);
+  } catch {
+    return void 0;
+  }
+}
+function stagedProtectedPaths(repositoryRoot) {
+  try {
+    const output = execFileSync5(
+      "git",
+      ["-C", repositoryRoot, "diff", "--cached", "--name-only", "--", LEGION_PROJECT_ROOT],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return new Set(
+      output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0)
+    );
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+function snapshotProtectedState(input) {
+  const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
+    const absolute = path32.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
-      snapshot.set(entry.path, { kind: "symlink" });
+      entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
     }
     if (entry.size !== void 0 && entry.size > MAX_SNAPSHOT_BYTES) {
-      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
+      entries.set(entry.path, { kind: "oversized", sha256: digestOf(absolute) });
       continue;
     }
     try {
-      snapshot.set(entry.path, {
-        kind: "file",
-        bytes: readFileSync3(path32.join(input.repositoryRoot, entry.path))
-      });
+      entries.set(entry.path, { kind: "file", bytes: readFileSync3(absolute) });
     } catch {
-      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
+      entries.set(entry.path, { kind: "oversized", sha256: void 0 });
     }
   }
-  return snapshot;
+  return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
 }
 function protectedPathsTouched(input) {
   const touched = /* @__PURE__ */ new Set();
   const current = new Map(
     listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT).filter((entry) => !isHarnessPath(entry.path, input.harnessPaths)).map((entry) => [entry.path, entry])
   );
-  for (const [relative, before] of input.snapshot) {
+  for (const [relative, before] of input.state.entries) {
     const now = current.get(relative);
     if (now === void 0) {
       touched.add(relative);
       continue;
     }
-    if (before.kind === "symlink" || now.kind === "symlink") {
-      if (before.kind !== now.kind) touched.add(relative);
+    const absolute = path32.join(input.repositoryRoot, relative);
+    const nowIsSymlink = now.kind === "symlink";
+    if (before.kind === "symlink" || nowIsSymlink) {
+      if (before.kind !== "symlink" || !nowIsSymlink) {
+        touched.add(relative);
+        continue;
+      }
+      if (readTarget(absolute) !== before.target) touched.add(relative);
       continue;
     }
     if (before.kind === "oversized") {
-      if (before.size !== now.size) touched.add(relative);
+      if (digestOf(absolute) !== before.sha256) touched.add(relative);
       continue;
     }
     try {
-      if (!before.bytes.equals(readFileSync3(path32.join(input.repositoryRoot, relative)))) {
-        touched.add(relative);
-      }
+      if (!before.bytes.equals(readFileSync3(absolute))) touched.add(relative);
     } catch {
       touched.add(relative);
     }
   }
   for (const relative of current.keys()) {
-    if (!input.snapshot.has(relative)) touched.add(relative);
+    if (!input.state.entries.has(relative)) touched.add(relative);
   }
   return [...touched].sort();
+}
+function restoreProtectedIndex(input) {
+  if (input.paths.length === 0) return;
+  const run = (args) => {
+    try {
+      execFileSync5("git", ["-C", input.repositoryRoot, ...args], { stdio: "ignore" });
+    } catch {
+    }
+  };
+  run(["reset", "--quiet", "--", ...input.paths]);
+  const restage = input.paths.filter((relative) => input.state.staged.has(relative));
+  if (restage.length > 0) run(["add", "--", ...restage]);
 }
 function restoreProtectedFiles(input) {
   const restored = [];
   const unrestored = [];
   for (const relative of input.paths) {
     const absolute = path32.join(input.repositoryRoot, relative);
-    const before = input.snapshot.get(relative);
+    const before = input.state.entries.get(relative);
     try {
       if (before === void 0) {
         rmSync3(absolute, { force: true, recursive: true });
@@ -28920,8 +28976,16 @@ function restoreProtectedFiles(input) {
         continue;
       }
       if (before.kind === "file") {
+        rmSync3(absolute, { force: true, recursive: true });
         mkdirSync3(path32.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
+        restored.push(relative);
+        continue;
+      }
+      if (before.kind === "symlink" && before.target !== void 0) {
+        rmSync3(absolute, { force: true, recursive: true });
+        mkdirSync3(path32.dirname(absolute), { recursive: true });
+        symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
       }
@@ -28930,6 +28994,11 @@ function restoreProtectedFiles(input) {
       unrestored.push(relative);
     }
   }
+  restoreProtectedIndex({
+    repositoryRoot: input.repositoryRoot,
+    state: input.state,
+    paths: restored
+  });
   return { restored, unrestored };
 }
 async function runGuardedExecution(input) {
@@ -28937,7 +29006,7 @@ async function runGuardedExecution(input) {
     repositoryRoot: input.repositoryRoot,
     baseGitSha: input.baseGitSha
   }).observation;
-  const snapshot = snapshotProtectedFiles({
+  const state = snapshotProtectedState({
     repositoryRoot: input.repositoryRoot,
     harnessPaths: input.harnessPaths
   });
@@ -28951,12 +29020,12 @@ async function runGuardedExecution(input) {
   }
   const touchedProtected = protectedPathsTouched({
     repositoryRoot: input.repositoryRoot,
-    snapshot,
+    state,
     harnessPaths: input.harnessPaths
   });
   const containment = touchedProtected.length === 0 ? { restored: [], unrestored: [] } : restoreProtectedFiles({
     repositoryRoot: input.repositoryRoot,
-    snapshot,
+    state,
     paths: touchedProtected
   });
   const reconciliation = input.task.completion.diffReconciliation.required ? reconcileTaskDiff({
@@ -29007,7 +29076,7 @@ async function runGuardedExecution(input) {
 }
 
 // packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash21 } from "node:crypto";
+import { createHash as createHash22 } from "node:crypto";
 import path33 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
@@ -29026,7 +29095,7 @@ function reviewIdForChange(input) {
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash21("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const digest = createHash22("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
   const reservedLength = tail.length + digest.length + 1;
   const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
   if (prefixLength < 1) {
@@ -29739,7 +29808,7 @@ function buildResultContract() {
 }
 function dirtyWorktreeDiagnostic(repositoryRoot) {
   try {
-    execFileSync5("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
+    execFileSync6("git", ["-C", repositoryRoot, "rev-parse", "--is-inside-work-tree"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     });
@@ -29748,7 +29817,7 @@ function dirtyWorktreeDiagnostic(repositoryRoot) {
   }
   let status2 = "";
   try {
-    status2 = execFileSync5("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+    status2 = execFileSync6("git", ["-C", repositoryRoot, "status", "--porcelain"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();

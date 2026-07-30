@@ -1,4 +1,6 @@
-import { readFileSync, statSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { LEGION_PROJECT_ROOT } from "@legion/artifacts";
@@ -26,21 +28,19 @@ import type { ExecutionResult } from "./executor/types.js";
  *
  * Guarantees, in order:
  *
- *  1. The base SHA is supplied by the caller and used for everything, so the
- *     evidence, the snapshot and the reconciliation all describe one revision.
- *  2. The bytes of every protected file are captured before dispatch, because
- *     control artifacts are written by `plan` after the last commit and are
- *     therefore routinely untracked or dirty. Restoring them from git would roll
- *     a dirty artifact back to stale committed content and delete an untracked
- *     one outright — containment that destroys the state it defends.
- *  3. Dispatch and `afterRun` are wrapped, so an executor that throws after
- *     touching a protected file still gets reconciled and contained.
- *  4. The control-artifact prohibition runs **independently of**
+ *  1. The base SHA is supplied by the caller and used throughout, so evidence,
+ *     snapshot and reconciliation all describe one revision.
+ *  2. Protected files are captured by content before dispatch. Control
+ *     artifacts are written by `plan` after the last commit and are routinely
+ *     untracked, so restoring them from git would roll a dirty artifact back to
+ *     stale content and delete an untracked one outright.
+ *  3. Dispatch and `afterRun` are wrapped, so a run that throws after writing is
+ *     still reconciled and contained.
+ *  4. The control-artifact prohibition runs independently of
  *     `completion.diffReconciliation`. It is a harness invariant; a contract
- *     that could switch it off by setting a flag would not be constrained by it.
- *  5. Protected files that *disappear* are caught too. A deletion leaves no
- *     entry in the post-run observation, so a check that only walks observed
- *     files would call it clean.
+ *     able to switch it off with a flag would not be constrained by it.
+ *  5. Containment covers the index as well as the working tree, and never
+ *     writes through a symlink an executor may have left behind.
  */
 
 export interface GuardedExecutionInput {
@@ -68,55 +68,98 @@ const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 /**
  * What a protected path looked like before dispatch.
  *
- * `oversized` and `symlink` are distinct states rather than absences. Treating
- * "too big to snapshot" as "did not exist" made restoration delete a large
- * pre-existing artifact — an old executor log — on every writable run, so the
- * guard destroyed valid workflow state while reporting that it had protected it.
- * Absence from the map means, and only means, the path did not exist.
+ * Each variant carries enough to detect a change and, where possible, undo it.
+ * Absence from the map means one thing only: the path did not exist. An earlier
+ * version conflated "too large to capture" with absence, so restoration deleted
+ * large pre-existing artifacts.
  */
 type ProtectedEntry =
   | { readonly kind: "file"; readonly bytes: Buffer }
-  | { readonly kind: "oversized"; readonly size: number | undefined }
-  | { readonly kind: "symlink" };
+  /** Too large to hold; identified by digest so a same-length rewrite is still caught. */
+  | { readonly kind: "oversized"; readonly sha256: string | undefined }
+  /** Never followed. The target is recorded so a retarget is detectable and reversible. */
+  | { readonly kind: "symlink"; readonly target: string | undefined };
 
 type ProtectedSnapshot = ReadonlyMap<string, ProtectedEntry>;
+
+interface ProtectedState {
+  readonly entries: ProtectedSnapshot;
+  /** Protected paths already staged before dispatch, so staging can be put back. */
+  readonly staged: ReadonlySet<string>;
+}
 
 function isHarnessPath(relative: string, harnessPaths: readonly string[]): boolean {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
 }
 
-function snapshotProtectedFiles(input: {
+function digestOf(absolute: string): string | undefined {
+  try {
+    return createHash("sha256").update(readFileSync(absolute)).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+function readTarget(absolute: string): string | undefined {
+  try {
+    return readlinkSync(absolute);
+  } catch {
+    return undefined;
+  }
+}
+
+function stagedProtectedPaths(repositoryRoot: string): ReadonlySet<string> {
+  try {
+    const output = execFileSync(
+      "git",
+      ["-C", repositoryRoot, "diff", "--cached", "--name-only", "--", LEGION_PROJECT_ROOT],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    return new Set(
+      output
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function snapshotProtectedState(input: {
   readonly repositoryRoot: string;
   readonly harnessPaths: readonly string[];
-}): ProtectedSnapshot {
-  const snapshot = new Map<string, ProtectedEntry>();
+}): ProtectedState {
+  const entries = new Map<string, ProtectedEntry>();
+
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
+    const absolute = path.join(input.repositoryRoot, entry.path);
 
     if (entry.kind === "symlink") {
-      snapshot.set(entry.path, { kind: "symlink" });
+      entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
     }
     if (entry.size !== undefined && entry.size > MAX_SNAPSHOT_BYTES) {
-      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
+      // Digest rather than size: a rewrite preserving byte length would
+      // otherwise be invisible.
+      entries.set(entry.path, { kind: "oversized", sha256: digestOf(absolute) });
       continue;
     }
     try {
-      snapshot.set(entry.path, {
-        kind: "file",
-        bytes: readFileSync(path.join(input.repositoryRoot, entry.path))
-      });
+      entries.set(entry.path, { kind: "file", bytes: readFileSync(absolute) });
     } catch {
-      snapshot.set(entry.path, { kind: "oversized", size: entry.size });
+      entries.set(entry.path, { kind: "oversized", sha256: undefined });
     }
   }
-  return snapshot;
+
+  return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
 }
 
-/** Protected paths that differ from the pre-dispatch snapshot, including deletions and new symlinks. */
+/** Protected paths that differ from the snapshot: modified, deleted, retargeted or created. */
 function protectedPathsTouched(input: {
   readonly repositoryRoot: string;
-  readonly snapshot: ProtectedSnapshot;
+  readonly state: ProtectedState;
   readonly harnessPaths: readonly string[];
 }): readonly string[] {
   const touched = new Set<string>();
@@ -126,49 +169,90 @@ function protectedPathsTouched(input: {
       .map((entry) => [entry.path, entry] as const)
   );
 
-  for (const [relative, before] of input.snapshot) {
+  for (const [relative, before] of input.state.entries) {
     const now = current.get(relative);
     if (now === undefined) {
-      // Removed. A deletion leaves nothing in the post-run listing, so a scan
-      // that only walked observed files would call it clean.
+      // Deletion leaves nothing in the listing, so a scan that only walked
+      // observed files would call it clean.
       touched.add(relative);
       continue;
     }
-    if (before.kind === "symlink" || now.kind === "symlink") {
-      if (before.kind !== now.kind) touched.add(relative);
-      continue;
-    }
-    if (before.kind === "oversized") {
-      // Not snapshotted, so size is the only comparison available.
-      if (before.size !== now.size) touched.add(relative);
-      continue;
-    }
-    try {
-      if (!before.bytes.equals(readFileSync(path.join(input.repositoryRoot, relative)))) {
+
+    const absolute = path.join(input.repositoryRoot, relative);
+    const nowIsSymlink = now.kind === "symlink";
+
+    if (before.kind === "symlink" || nowIsSymlink) {
+      // A file swapped for a link, or the reverse, is a change even when the
+      // bytes behind it happen to match.
+      if (before.kind !== "symlink" || !nowIsSymlink) {
         touched.add(relative);
+        continue;
       }
+      if (readTarget(absolute) !== before.target) touched.add(relative);
+      continue;
+    }
+
+    if (before.kind === "oversized") {
+      if (digestOf(absolute) !== before.sha256) touched.add(relative);
+      continue;
+    }
+
+    try {
+      if (!before.bytes.equals(readFileSync(absolute))) touched.add(relative);
     } catch {
       touched.add(relative);
     }
   }
 
   for (const relative of current.keys()) {
-    if (!input.snapshot.has(relative)) touched.add(relative);
+    if (!input.state.entries.has(relative)) touched.add(relative);
   }
 
   return [...touched].sort();
 }
 
 /**
- * Restore protected paths to their pre-dispatch state.
+ * Put the Git index back for restored paths.
  *
- * Only a path genuinely absent before the run is removed. Anything that existed
- * but could not be snapshotted is left in place and reported, because deleting
- * it would be worse than the modification it is meant to undo.
+ * Rewriting the working tree is not enough: an executor that ran `git add`
+ * leaves its blob staged, and the operator's next commit would reintroduce the
+ * tampering even though the run was reported blocked and restored.
+ */
+function restoreProtectedIndex(input: {
+  readonly repositoryRoot: string;
+  readonly state: ProtectedState;
+  readonly paths: readonly string[];
+}): void {
+  if (input.paths.length === 0) return;
+  const run = (args: readonly string[]): void => {
+    try {
+      execFileSync("git", ["-C", input.repositoryRoot, ...args], { stdio: "ignore" });
+    } catch {
+      // Not a git repository, or nothing to unstage; the working tree is the
+      // authority either way.
+    }
+  };
+
+  run(["reset", "--quiet", "--", ...input.paths]);
+  const restage = input.paths.filter((relative) => input.state.staged.has(relative));
+  if (restage.length > 0) run(["add", "--", ...restage]);
+}
+
+/**
+ * Restore protected paths to their pre-dispatch state, working tree and index.
+ *
+ * Every replacement removes the current entry first. Writing straight to the
+ * path would follow a symlink an executor had put there, overwriting whatever it
+ * points at — possibly outside the repository — with the saved control-artifact
+ * bytes, while leaving the link in place and reporting the path restored. That
+ * turns containment into an arbitrary-write primitive.
+ *
+ * Anything that cannot be faithfully recreated is left alone and reported,
+ * because deleting it would be worse than the modification being undone.
  */
 function restoreProtectedFiles(input: {
   readonly repositoryRoot: string;
-  readonly snapshot: ProtectedSnapshot;
+  readonly state: ProtectedState;
   readonly paths: readonly string[];
 }): { readonly restored: readonly string[]; readonly unrestored: readonly string[] } {
   const restored: string[] = [];
@@ -176,28 +260,39 @@ function restoreProtectedFiles(input: {
 
   for (const relative of input.paths) {
     const absolute = path.join(input.repositoryRoot, relative);
-    const before = input.snapshot.get(relative);
+    const before = input.state.entries.get(relative);
+
     try {
       if (before === undefined) {
-        // Appeared during the run. `rmSync` removes a symlink itself rather
-        // than following it, which is what makes a planted link safe to clear.
         rmSync(absolute, { force: true, recursive: true });
         restored.push(relative);
         continue;
       }
       if (before.kind === "file") {
+        rmSync(absolute, { force: true, recursive: true });
         mkdirSync(path.dirname(absolute), { recursive: true });
         writeFileSync(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
-      // Existed as a symlink or was too large to capture: its original content
-      // cannot be reproduced, so say so rather than destroy it.
+      if (before.kind === "symlink" && before.target !== undefined) {
+        rmSync(absolute, { force: true, recursive: true });
+        mkdirSync(path.dirname(absolute), { recursive: true });
+        symlinkSync(before.target, absolute);
+        restored.push(relative);
+        continue;
+      }
       unrestored.push(relative);
     } catch {
       unrestored.push(relative);
     }
   }
+
+  restoreProtectedIndex({
+    repositoryRoot: input.repositoryRoot,
+    state: input.state,
+    paths: restored
+  });
 
   return { restored, unrestored };
 }
@@ -210,8 +305,7 @@ export async function runGuardedExecution(
     baseGitSha: input.baseGitSha
   }).observation;
 
-  // Byte-exact, because git cannot restore an artifact that was never committed.
-  const snapshot = snapshotProtectedFiles({
+  const state = snapshotProtectedState({
     repositoryRoot: input.repositoryRoot,
     harnessPaths: input.harnessPaths
   });
@@ -222,14 +316,14 @@ export async function runGuardedExecution(
     result = await input.run();
     if (input.afterRun !== undefined) await input.afterRun();
   } catch (error) {
-    // A run that throws after writing must still be contained; jumping straight
-    // to the caller would leave a poisoned control artifact on disk.
+    // A run that throws after writing must still be contained; returning here
+    // would leave a poisoned control artifact on disk.
     thrown = error;
   }
 
   const touchedProtected = protectedPathsTouched({
     repositoryRoot: input.repositoryRoot,
-    snapshot,
+    state,
     harnessPaths: input.harnessPaths
   });
 
@@ -237,7 +331,7 @@ export async function runGuardedExecution(
     ? { restored: [] as readonly string[], unrestored: [] as readonly string[] }
     : restoreProtectedFiles({
         repositoryRoot: input.repositoryRoot,
-        snapshot,
+        state,
         paths: touchedProtected
       });
 
@@ -277,7 +371,6 @@ export async function runGuardedExecution(
 
   const inContract = reasons.length === 0;
   if (result === undefined) {
-    // The run threw, so there is no executor result to report.
     result = {
       ok: false,
       status: "failed",

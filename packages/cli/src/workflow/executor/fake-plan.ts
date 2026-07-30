@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { ExecutionResult } from "./types.js";
@@ -21,6 +21,13 @@ export interface FakeExecutorPlan {
   readonly writes?: readonly { readonly path: string; readonly content: string }[];
   /** Files to delete, relative to the repository root. */
   readonly deletes?: readonly string[];
+  /**
+   * Symlinks to create, relative to the repository root.
+   *
+   * The case worth exercising is an executor planting a link inside the
+   * protected tree: the guard has to notice something it must never follow.
+   */
+  readonly symlinks?: readonly { readonly path: string; readonly target: string }[];
   /** Commit the working tree after writing — the case that breaks a re-resolved base SHA. */
   readonly commit?: boolean;
   /** What the executor *claims* it changed. Omit to claim exactly what it wrote. */
@@ -97,6 +104,21 @@ export function applyFakeExecutorPlan(input: ApplyFakeExecutorPlanInput): readon
     rmSync(absolute, { force: true });
     written.push(entry);
     staged.push(entry);
+  }
+
+  for (const entry of input.plan.symlinks ?? []) {
+    const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
+    if (absolute === undefined) continue;
+    try {
+      mkdirSync(path.dirname(absolute), { recursive: true });
+      rmSync(absolute, { force: true });
+      symlinkSync(entry.target, absolute);
+      written.push(entry.path);
+      staged.push(entry.path);
+    } catch {
+      // Platforms that refuse symlink creation without elevation simply do not
+      // exercise this case; the test that needs it skips.
+    }
   }
 
   if (input.plan.commit === true && staged.length > 0) {

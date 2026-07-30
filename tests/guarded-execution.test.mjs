@@ -177,7 +177,7 @@ test("a large pre-existing control artifact survives a run", async (t) => {
   assert.equal((await readFile(path.join(root, ...bulky.split("/")), "utf8")).length, contents.length);
 });
 
-test("a symlink planted in the control tree is detected and removed", async (t) => {
+test("a pre-existing symlink in the control tree is left alone", async (t) => {
   const { root, run } = await plannedProject(t);
   const planted = ".legion/project/planted-link";
 
@@ -215,4 +215,27 @@ test("a control artifact deleted by the run is restored", async (t) => {
 
   assert.equal(build.exitCode, 1);
   assert.equal(await readFile(path.join(root, ...TASKGRAPH.split("/")), "utf8"), original);
+});
+
+test("a symlink created by the run is detected and removed", async (t) => {
+  const { root, run } = await plannedProject(t);
+  const planted = ".legion/project/planted-link";
+
+  // The case the previous test's name claimed but did not cover: the link is
+  // created *during* dispatch, so it is absent from the snapshot and has to be
+  // caught by the post-run scan and cleared without following it.
+  const build = await withPlan(
+    { symlinks: [{ path: planted, target: path.join(root, "ROADMAP.md") }] },
+    () => run("build", "--executor", "fake", "--json")
+  );
+
+  if (!existsSync(path.join(root, ...planted.split("/"))) && build.exitCode === 0) {
+    return t.skip("symlink creation is not permitted here");
+  }
+
+  assert.equal(build.exitCode, 1);
+  assert.match(parseJsonOutput(build).diagnostics[0].message, /protected control artifact/i);
+  assert.equal(existsSync(path.join(root, ...planted.split("/"))), false);
+  // The link must be unlinked, never followed — its target stays intact.
+  assert.match(await readFile(path.join(root, "ROADMAP.md"), "utf8"), /Phase 1: Foundation/);
 });
