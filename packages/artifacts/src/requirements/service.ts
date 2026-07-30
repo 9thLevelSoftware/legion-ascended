@@ -89,6 +89,11 @@ async function writeProjectArtifact(
 ): Promise<void> {
   const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
   const temporary = `${resolved.absolutePath}.tmp`;
+  // The guard covers the final path, not the scratch file beside it. `writeFile`
+  // follows a symlink to its target, so a planted `req_*.json.tmp` would send
+  // the contents outside the repository before the rename ever happened.
+  // Removing it first is what makes the temporary genuinely ours.
+  await rm(temporary, { force: true });
   await writeFile(temporary, contents, "utf8");
   await rename(temporary, resolved.absolutePath);
 }
@@ -200,6 +205,14 @@ export type ReadRequirementSetResult =
       readonly ok: true;
       readonly set: RequirementSet;
       readonly requirements: readonly Requirement[];
+      /**
+       * The bytes each requirement was read from, in `entries` order.
+       *
+       * Returned rather than re-read, so drift detection hashes exactly what it
+       * parsed instead of opening every requirement a second time and comparing
+       * against a file that may have changed in between.
+       */
+      readonly contents: readonly string[];
     }
   | { readonly ok: false; readonly status: "not_found" | "invalid"; readonly reason: string };
 
@@ -235,11 +248,12 @@ export async function readRequirementSet(
   }
 
   const requirements: Requirement[] = [];
+  const contents: string[] = [];
   for (const entry of parsed.data.entries) {
     const absolute = path.join(repositoryRoot, ...entry.path.split("/"));
-    let contents: string;
+    let raw: string;
     try {
-      contents = await readFile(absolute, "utf8");
+      raw = await readFile(absolute, "utf8");
     } catch (error) {
       if (isEnoent(error)) {
         return {
@@ -257,7 +271,7 @@ export async function readRequirementSet(
     // is precisely the condition drift detection exists to name.
     let parsedRequirement: unknown;
     try {
-      parsedRequirement = JSON.parse(contents);
+      parsedRequirement = JSON.parse(raw);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { ok: false, status: "invalid", reason: `${entry.path} is not valid JSON: ${message}` };
@@ -274,9 +288,10 @@ export async function readRequirementSet(
       };
     }
     requirements.push(requirement.data);
+    contents.push(raw);
   }
 
-  return { ok: true, set: parsed.data, requirements };
+  return { ok: true, set: parsed.data, requirements, contents };
 }
 
 export interface RequirementSetDrift {
@@ -301,10 +316,9 @@ export async function verifyRequirementSet(
   }
 
   const drift: RequirementSetDrift[] = [];
-  for (const entry of read.set.entries) {
-    const absolute = path.join(repositoryRoot, ...entry.path.split("/"));
-    const contents = await readFile(absolute, "utf8");
-    if (hashBytes(contents) !== entry.sha256) {
+  for (const [index, entry] of read.set.entries.entries()) {
+    const contents = read.contents[index];
+    if (contents === undefined || hashBytes(contents) !== entry.sha256) {
       drift.push({
         code: "requirement_content_drift",
         message: `${entry.requirementId} has changed since the requirement set was written.`

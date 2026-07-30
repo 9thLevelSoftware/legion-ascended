@@ -57,7 +57,11 @@ const NON_ANSWERS = new Set([
 ]);
 
 function isNonAnswer(value: string): boolean {
-  return NON_ANSWERS.has(value.trim().toLowerCase().replace(/[.!]+$/, ""));
+  const normalized = value.trim().toLowerCase();
+  // Both forms, because stripping trailing punctuation is what makes "n/a."
+  // match — and what made the bare "." entry unmatchable, since it normalizes
+  // to the empty string.
+  return NON_ANSWERS.has(normalized) || NON_ANSWERS.has(normalized.replace(/[.!]+$/, ""));
 }
 
 function asText(value: IntakeAnswer["value"]): string | undefined {
@@ -77,11 +81,14 @@ export interface ParsedCommand {
   readonly args: readonly string[];
 }
 
+const SHELL_METACHARACTER = /[|&;<>$`\n]/;
+
 export function parseCommandLine(input: string): ParsedCommand | { readonly error: string } {
   const tokens: string[] = [];
   let current = "";
   let quote: '"' | "'" | undefined;
   let started = false;
+  let unquotedMetacharacter: string | undefined;
 
   for (const character of input.trim()) {
     if (quote !== undefined) {
@@ -105,6 +112,13 @@ export function parseCommandLine(input: string): ParsedCommand | { readonly erro
       }
       continue;
     }
+    // Scanned here rather than over the whole input, so the check sees what the
+    // operator wrote as syntax and not what they deliberately quoted. A
+    // criterion like `pnpm test --grep "a|b"` passes `a|b` as one literal
+    // argument under `shell: false` and is exactly as safe as any other.
+    if (unquotedMetacharacter === undefined && SHELL_METACHARACTER.test(character)) {
+      unquotedMetacharacter = character;
+    }
     current += character;
     started = true;
   }
@@ -118,13 +132,12 @@ export function parseCommandLine(input: string): ParsedCommand | { readonly erro
   if (command === undefined || command.length === 0) {
     return { error: "The command is empty." };
   }
-  // Shell metacharacters would be passed through literally as part of an
-  // argument, so a criterion written as `a && b` would silently verify only
+  // Unquoted shell metacharacters would be passed through literally as part of
+  // an argument, so a criterion written as `a && b` would silently verify only
   // `a`. Refusing is the honest outcome.
-  const metacharacter = /[|&;<>$`\n]/.exec(input);
-  if (metacharacter !== null) {
+  if (unquotedMetacharacter !== undefined) {
     return {
-      error: `Shell syntax is not available (${metacharacter[0]}); verification runs the command directly. Wrap it in a script and name that instead.`
+      error: `Shell syntax is not available (${unquotedMetacharacter}); verification runs the command directly. Wrap it in a script and name that instead.`
     };
   }
   return { command, args };

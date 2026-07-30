@@ -1,6 +1,8 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import { requirementSetIndexPath, verifyRequirementSet } from "@legion/artifacts";
+
 import {
   failure,
   helpResult,
@@ -40,16 +42,36 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
   }
 
   const result = await validateWorkflowProject(context);
+  // The requirement set hash is only worth writing if something recomputes it.
+  // Without this the set could be edited, truncated or reordered under the
+  // project and `legion validate` would still report "valid" — the drift the
+  // hash exists to name was the one condition nothing looked for.
+  const drift = await requirementSetDiagnostics(context.repositoryRoot);
+  const diagnostics = [...result.diagnostics, ...drift];
+  const ok = result.ok && drift.length === 0;
   const payload = {
     ...result,
-    status: result.ok ? "valid" : result.status
+    ok,
+    diagnostics,
+    status: ok ? "valid" : result.ok ? "requirement_set_drift" : result.status
   };
 
-  if (!result.ok) {
-    return failure(payload, validationFailureHuman(result.diagnostics));
+  if (!ok) {
+    return failure(payload, validationFailureHuman(diagnostics));
   }
 
   return success(payload, "Project is valid.");
+}
+
+async function requirementSetDiagnostics(
+  repositoryRoot: string
+): Promise<readonly { readonly code: string; readonly message: string; readonly source: { readonly path: string } }[]> {
+  const drift = await verifyRequirementSet(repositoryRoot);
+  return drift.map((entry) => ({
+    code: entry.code,
+    message: entry.message,
+    source: { path: requirementSetIndexPath() }
+  }));
 }
 
 export async function handleDoctorCommand(context: CliContext): Promise<CliResult> {

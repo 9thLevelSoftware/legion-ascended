@@ -78,20 +78,27 @@ export async function listExplorations(
     limitPerWorkflow: 10
   });
 
-  const candidates: ExplorationCandidate[] = [];
-  for (const run of runs) {
+  // Read in parallel. These are independent files and the list is walked on
+  // every `legion start` invocation against a seeded session, so serializing
+  // them put a round of disk latency per exploration in front of every single
+  // question.
+  const withArtifacts = runs.flatMap((run) => {
     const artifactPath = explorationArtifactPathOf(run);
-    if (artifactPath === undefined) continue;
-    const topic = run.input["topic"];
-    candidates.push({
-      runId: run.runId,
-      explorationRunId: (await readExplorationRunId(repositoryRoot, artifactPath)) ?? run.runId,
-      artifactPath,
-      createdAt: run.createdAt,
-      topic: typeof topic === "string" ? topic : "exploration"
-    });
-  }
-  return candidates;
+    return artifactPath === undefined ? [] : [{ run, artifactPath }];
+  });
+
+  return Promise.all(
+    withArtifacts.map(async ({ run, artifactPath }) => {
+      const topic = run.input["topic"];
+      return {
+        runId: run.runId,
+        explorationRunId: (await readExplorationRunId(repositoryRoot, artifactPath)) ?? run.runId,
+        artifactPath,
+        createdAt: run.createdAt,
+        topic: typeof topic === "string" ? topic : "exploration"
+      };
+    })
+  );
 }
 
 export interface LoadedExploration {

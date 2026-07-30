@@ -48,6 +48,7 @@ import {
   loadSession,
   nowTimestamp,
   recordAnswer,
+  releaseSessionId,
   saveSession,
   stepBack,
   withDiagnostics,
@@ -174,18 +175,34 @@ async function proposalsFor(
  * session is resumed. A new session is created only when `create` is set, so
  * that `--answer` against a finished interview reports that fact rather than
  * quietly opening a fresh one and losing the answer.
+ *
+ * `allowStaleGraph` is for the commands that neither advance the interview nor
+ * write artifacts from it. Without it the pin deadlocks: the mismatch message
+ * tells the operator to run `legion start --abort --session <id>`, and that
+ * command resolved the same session through the same check, so the only
+ * documented way out was refused by the thing it was escaping — and every later
+ * `legion start` failed on the same stale session.
  */
 async function resolveSession(
   context: CliContext,
-  options: { readonly create: boolean }
+  options: {
+    readonly create: boolean;
+    readonly allowStaleGraph?: boolean;
+    readonly proposals?: boolean;
+  }
 ): Promise<ResolvedSession | CliResult> {
+  const wantsProposals = options.proposals !== false;
   const explicitId = stringOption(context, "session");
   if (explicitId !== undefined) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
     if (!loaded.ok) return usageError(loaded.reason);
-    const stale = graphVersionMismatch(loaded.session);
-    if (stale !== undefined) return usageError(stale);
-    const seeded = await proposalsFor(context.repositoryRoot, loaded.session);
+    if (options.allowStaleGraph !== true) {
+      const stale = graphVersionMismatch(loaded.session);
+      if (stale !== undefined) return usageError(stale);
+    }
+    const seeded = wantsProposals
+      ? await proposalsFor(context.repositoryRoot, loaded.session)
+      : { proposals: new Map<string, ExplorationProposal>(), diagnostics: [] };
     return {
       session: loaded.session,
       proposals: seeded.proposals,
@@ -218,9 +235,13 @@ async function resolveSession(
       // than delete: the abandoned session stays on disk as a record.
       await saveSession(context.repositoryRoot, abortSession(active));
     } else {
-      const stale = graphVersionMismatch(active);
-      if (stale !== undefined) return usageError(stale);
-      const seeded = await proposalsFor(context.repositoryRoot, active);
+      if (options.allowStaleGraph !== true) {
+        const stale = graphVersionMismatch(active);
+        if (stale !== undefined) return usageError(stale);
+      }
+      const seeded = wantsProposals
+        ? await proposalsFor(context.repositoryRoot, active)
+        : { proposals: new Map<string, ExplorationProposal>(), diagnostics: [] };
       return {
         session: active,
         proposals: seeded.proposals,
@@ -237,28 +258,42 @@ async function resolveSession(
   }
 
   const createdAt = createdAtOption(context) ?? nowTimestamp();
+
+  // Everything that can refuse runs before the ID is claimed. Claiming first
+  // and validating after left an `itk_` directory with no `session.json` behind
+  // every rejected `--from-exploration`, and that directory then failed to load
+  // on every later invocation — one mistyped run ID took `legion start` out of
+  // service for the repository.
+  let exploration: Awaited<ReturnType<typeof loadExploration>> | undefined;
+  if (explorationRunId !== undefined) {
+    exploration = await loadExploration(context.repositoryRoot, explorationRunId);
+    if (!exploration.ok) return usageError(exploration.reason);
+  }
+
   // Allocated against the filesystem, not derived from the timestamp alone: two
   // starts sharing a `--created-at` would otherwise share an ID, and saving the
   // second would overwrite the first session's durable record.
   const sessionId = await allocateSessionId(context.repositoryRoot, createdAt);
-
-  if (explorationRunId !== undefined) {
-    const loaded = await loadExploration(context.repositoryRoot, explorationRunId);
-    if (!loaded.ok) return usageError(loaded.reason);
+  try {
     const seeded = createSession({
       sessionId,
       createdAt,
       schemaVersion: LEGION_PROTOCOL_VERSION,
-      exploration: loaded.loaded.exploration,
-      explorationArtifact: loaded.loaded.artifact
+      ...(exploration === undefined || !exploration.ok
+        ? {}
+        : {
+            exploration: exploration.loaded.exploration,
+            explorationArtifact: exploration.loaded.artifact
+          })
     });
     await saveSession(context.repositoryRoot, seeded.session);
     return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
+  } catch (error) {
+    // The claim only means something once a session sits behind it. Releasing
+    // it keeps a failure here from poisoning every later invocation.
+    await releaseSessionId(context.repositoryRoot, sessionId);
+    throw error;
   }
-
-  const seeded = createSession({ sessionId, createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
-  await saveSession(context.repositoryRoot, seeded.session);
-  return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
 }
 
 function isCliResult(value: ResolvedSession | CliResult): value is CliResult {
@@ -276,9 +311,14 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
     injectedNodes: session.injectedNodes
   });
 
-  const explorations = created && session.explorationRef === undefined
-    ? await listExplorations(context.repositoryRoot)
-    : [];
+  // Offered whenever seeding is still free — a session with no answers — rather
+  // than only on the invocation that created it. `commands/start.md` tells the
+  // host to act on this field, and an operator who closed the terminal before
+  // answering had no way to learn the exploration existed on resume. Seeding
+  // only applies at creation, so once an answer is recorded the offer would be
+  // advice that cannot be followed, which is the failure this PR keeps hitting.
+  const canStillSeed = session.explorationRef === undefined && session.answers.length === 0;
+  const explorations = canStillSeed ? await listExplorations(context.repositoryRoot) : [];
 
   if (node === undefined) {
     const action = nextAction(
@@ -330,7 +370,7 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
       status: "question",
       session: sessionPayload(session, answered, total),
       question: questionPayload(node, proposal),
-      ...(explorations.length > 0 && created
+      ...(explorations.length > 0
         ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) }
         : {}),
       ...(resolved.notes.length === 0
@@ -462,11 +502,18 @@ async function recordAndReport(
 ): Promise<CliResult> {
   const validated = validateAnswer(node, rawValue);
   if (validated.value === undefined) {
+    // The real counts, not zeroes: a host renders progress from this payload
+    // too, and a rejected answer would otherwise reset the interview to "0 of
+    // 0" on the one screen the operator is being asked to look at again.
+    const progress = nextNode({
+      answers: resolved.session.answers,
+      injectedNodes: resolved.session.injectedNodes
+    });
     return failure(
       {
         ok: false,
         status: "rejected",
-        session: sessionPayload(resolved.session, 0, 0),
+        session: sessionPayload(resolved.session, progress.answered, progress.total),
         question: questionPayload(node, resolved.proposals.get(node.slot)),
         diagnostics: validated.diagnostics
       },
@@ -585,7 +632,9 @@ export async function handleBack(context: CliContext): Promise<CliResult> {
 
 /** `legion start --session-status` — report without changing anything. */
 export async function handleSessionStatus(context: CliContext): Promise<CliResult> {
-  const resolved = await resolveSession(context, { create: false });
+  // Reporting is a read. Refusing it under a graph mismatch would hide the very
+  // state the operator has been told to go and inspect.
+  const resolved = await resolveSession(context, { create: false, allowStaleGraph: true });
   if (isCliResult(resolved)) return resolved;
 
   const { session } = resolved;
@@ -624,8 +673,25 @@ export async function handleSessionStatus(context: CliContext): Promise<CliResul
 
 /** `legion start --abort` — close a session without finalizing. */
 export async function handleAbort(context: CliContext): Promise<CliResult> {
-  const resolved = await resolveSession(context, { create: false });
+  // Aborting is the documented way out of a session pinned to an older graph,
+  // so it cannot be gated on that pin. It writes no artifacts from the answers,
+  // only a status, so nothing is reinterpreted under the current graph.
+  const resolved = await resolveSession(context, {
+    create: false,
+    allowStaleGraph: true,
+    proposals: false
+  });
   if (isCliResult(resolved)) return resolved;
+
+  // Only an interview in progress can be abandoned. A finalized session is the
+  // provenance record every requirement's `traceRefs` point at, and overwriting
+  // its status would both destroy that record and make the documented
+  // `--force-roadmap` retry impossible, since finalize refuses an aborted one.
+  if (resolved.session.status !== "active") {
+    return usageError(
+      `Session ${resolved.session.id} is already ${resolved.session.status} and cannot be aborted.`
+    );
+  }
 
   const aborted = abortSession(resolved.session);
   await saveSession(context.repositoryRoot, aborted);
@@ -690,6 +756,20 @@ export async function handleBatchIntake(context: CliContext): Promise<CliResult>
       diagnostics.push({
         code: "missing_answer",
         message: `The intake file has no answer for ${node.id}: ${node.prompt}`,
+        nodeId: node.id,
+        slot: node.slot
+      });
+      break;
+    }
+
+    // `String(raw)` on a JSON `null` records the literal text "null", and on an
+    // object "[object Object]" — both of which pass every free-text validator
+    // and land in the constitution and the requirement set as if someone had
+    // typed them. A value that is not an answer is refused, not stringified.
+    if (raw === null || (typeof raw === "object" && !Array.isArray(raw))) {
+      diagnostics.push({
+        code: "invalid_answer",
+        message: `The intake file's value for ${node.id} is ${raw === null ? "null" : "an object"}; answers must be text, a boolean, or a list.`,
         nodeId: node.id,
         slot: node.slot
       });

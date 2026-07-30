@@ -14,7 +14,7 @@
  * asked would defeat the point of keeping it.
  */
 
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { ensureProjectArtifactParent, resolveProjectArtifactPath } from "@legion/artifacts";
@@ -456,10 +456,40 @@ async function claimSessionDirectory(
 }
 
 /**
+ * Release a session ID claimed by `allocateSessionId` that never became a
+ * session.
+ *
+ * A claim that is not followed by a write is worse than no claim at all: the
+ * directory carries an `itk_` name with no `session.json`, so every later
+ * `findActiveSession` reports a corrupt session and `initProject` refuses the
+ * whole `.legion/project` tree as unmigrated — one failed `--from-exploration`
+ * takes the command out permanently.
+ *
+ * `rmdir` without `recursive` is the safety: it removes an empty reservation
+ * and refuses anything that has content, so a real session can never be deleted
+ * by a caller unwinding.
+ */
+export async function releaseSessionId(repositoryRoot: string, sessionId: string): Promise<void> {
+  try {
+    await rmdir(intakeSessionDirectory(repositoryRoot, sessionId));
+  } catch {
+    // Already gone, or no longer empty. Either way it is not ours to remove.
+  }
+}
+
+/**
  * Every session on disk, newest first.
  *
  * Sorted by ID, which encodes the creation instant, so the ordering does not
- * depend on directory-entry order or on mtimes that a checkout rewrites.
+ * depend on directory-entry order or on mtimes that a checkout rewrites. The
+ * comparison is by code unit rather than `localeCompare`, whose collation
+ * treats `-` and `_` as ignorable in some locales — the two characters these
+ * IDs are built out of.
+ *
+ * A directory with no `session.json` is skipped: it is a reservation from a
+ * start that failed or was interrupted before writing, not an interview. Left
+ * in the list it would fail to load and stop every later invocation, which
+ * makes an interrupted `legion start` unrecoverable without manual cleanup.
  */
 export async function listSessions(repositoryRoot: string): Promise<readonly string[]> {
   const root = path.join(repositoryRoot, ".legion", "project", "intake");
@@ -470,10 +500,26 @@ export async function listSessions(repositoryRoot: string): Promise<readonly str
     if (isEnoent(error)) return [];
     throw error;
   }
-  return entries
+
+  const candidates = entries
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("itk_"))
     .map((entry) => entry.name)
-    .sort((left, right) => right.localeCompare(left));
+    .sort((left, right) => (left < right ? 1 : left > right ? -1 : 0));
+
+  const recorded = await Promise.all(
+    candidates.map(async (name) => ((await pathExists(sessionFilePath(repositoryRoot, name))) ? name : undefined))
+  );
+  return recorded.filter((name): name is string => name !== undefined);
+}
+
+async function pathExists(absolutePath: string): Promise<boolean> {
+  try {
+    await stat(absolutePath);
+    return true;
+  } catch (error) {
+    if (isEnoent(error)) return false;
+    throw error;
+  }
 }
 
 export type FindActiveSessionResult =
@@ -523,7 +569,10 @@ export async function allocateSessionId(
     return intakeSessionIdFor(createdAt);
   }
   for (let attempt = 1; attempt <= 999; attempt += 1) {
-    const candidate = intakeSessionIdFor(createdAt, `-${attempt}`);
+    // Zero-padded so the salted IDs sort the way `listSessions` reads them.
+    // Unpadded, `-10` sorts before `-2` and "the most recent session" is the
+    // wrong one whenever two starts share a millisecond.
+    const candidate = intakeSessionIdFor(createdAt, `-${String(attempt).padStart(3, "0")}`);
     if (await claimSessionDirectory(repositoryRoot, candidate)) return candidate;
   }
   throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);

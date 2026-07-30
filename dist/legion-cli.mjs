@@ -17019,8 +17019,8 @@ async function nearestExistingAncestor(targetPath) {
 }
 async function rejectFinalSymlink(absolutePath, repositoryPath) {
   try {
-    const stat9 = await lstat(absolutePath);
-    if (stat9.isSymbolicLink()) {
+    const stat10 = await lstat(absolutePath);
+    if (stat10.isSymbolicLink()) {
       throw new ArtifactPathError(`Project artifact path cannot be a symbolic link: ${repositoryPath}`);
     }
   } catch (error2) {
@@ -18888,6 +18888,7 @@ function hashBytes(bytes) {
 async function writeProjectArtifact(repositoryRoot, artifactPath, contents) {
   const resolved = await ensureProjectArtifactParent({ repositoryRoot, artifactPath });
   const temporary = `${resolved.absolutePath}.tmp`;
+  await rm2(temporary, { force: true });
   await writeFile2(temporary, contents, "utf8");
   await rename2(temporary, resolved.absolutePath);
 }
@@ -18948,6 +18949,98 @@ async function writeRequirementSet(input) {
     await rm2(path11.join(root, entry.name), { force: true });
   }
   return { set, indexPath: indexRelative, requirementPaths };
+}
+async function readRequirementSet(repositoryRoot) {
+  const indexAbsolute = path11.join(repositoryRoot, ...requirementSetIndexPath().split("/"));
+  let raw;
+  try {
+    raw = await readFile6(indexAbsolute, "utf8");
+  } catch (error2) {
+    if (isEnoent3(error2)) {
+      return { ok: false, status: "not_found", reason: "This project has no requirement set." };
+    }
+    throw error2;
+  }
+  let parsedJson;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return { ok: false, status: "invalid", reason: `The requirement index is not valid JSON: ${message}` };
+  }
+  const parsed = requirementSetSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      status: "invalid",
+      reason: parsed.error.issues.map((issue2) => `${issue2.path.join(".")}: ${issue2.message}`).join("; ")
+    };
+  }
+  const requirements = [];
+  const contents = [];
+  for (const entry of parsed.data.entries) {
+    const absolute = path11.join(repositoryRoot, ...entry.path.split("/"));
+    let raw2;
+    try {
+      raw2 = await readFile6(absolute, "utf8");
+    } catch (error2) {
+      if (isEnoent3(error2)) {
+        return {
+          ok: false,
+          status: "invalid",
+          reason: `The requirement index names ${entry.path}, which does not exist.`
+        };
+      }
+      throw error2;
+    }
+    let parsedRequirement;
+    try {
+      parsedRequirement = JSON.parse(raw2);
+    } catch (error2) {
+      const message = error2 instanceof Error ? error2.message : String(error2);
+      return { ok: false, status: "invalid", reason: `${entry.path} is not valid JSON: ${message}` };
+    }
+    const requirement = requirementSchema.safeParse(parsedRequirement);
+    if (!requirement.success) {
+      return {
+        ok: false,
+        status: "invalid",
+        reason: `${entry.path} is not a valid requirement: ${requirement.error.issues.map((issue2) => issue2.message).join("; ")}`
+      };
+    }
+    requirements.push(requirement.data);
+    contents.push(raw2);
+  }
+  return { ok: true, set: parsed.data, requirements, contents };
+}
+async function verifyRequirementSet(repositoryRoot) {
+  const read = await readRequirementSet(repositoryRoot);
+  if (!read.ok) {
+    if (read.status === "not_found")
+      return [];
+    return [{ code: "requirement_set_drift", message: read.reason }];
+  }
+  const drift = [];
+  for (const [index, entry] of read.set.entries.entries()) {
+    const contents = read.contents[index];
+    if (contents === void 0 || hashBytes(contents) !== entry.sha256) {
+      drift.push({
+        code: "requirement_content_drift",
+        message: `${entry.requirementId} has changed since the requirement set was written.`
+      });
+    }
+  }
+  const recomputed = computeRequirementSetHash(read.requirements);
+  if (recomputed !== read.set.requirementSetHash) {
+    drift.push({
+      code: "requirement_set_drift",
+      message: "The requirement set hash does not match the requirements on disk. Re-run legion start --finalize, or restore the set."
+    });
+  }
+  return drift;
+}
+function isEnoent3(error2) {
+  return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 
 // packages/artifacts/dist/changes/schema.js
@@ -19075,7 +19168,7 @@ var changeBundleJsonSchema = jsonSchemaDocument7("https://schemas.9thlevelsoftwa
 // packages/artifacts/dist/changes/service.js
 import { readFile as readFile7, stat as stat3 } from "node:fs/promises";
 var INVALID_CHANGE_BUNDLE_PATH = `${PROJECT_ARTIFACT_PATHS.changes}/invalid-change/change.yaml`;
-function isEnoent3(error2) {
+function isEnoent4(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 function compareStrings(left, right) {
@@ -19272,7 +19365,7 @@ async function readMarkdownArtifact(input) {
   try {
     content = await readFile7(resolved.absolutePath, "utf8");
   } catch (error2) {
-    if (isEnoent3(error2)) {
+    if (isEnoent4(error2)) {
       return failure4("not_found", [
         changeDiagnostic({
           code: "not_found",
@@ -19320,7 +19413,7 @@ async function readCurrentSpecByArtifactPath(input) {
   try {
     content = await readFile7(resolved.absolutePath, "utf8");
   } catch (error2) {
-    if (isEnoent3(error2)) {
+    if (isEnoent4(error2)) {
       return failure4("not_found", [
         changeDiagnostic({
           code: "not_found",
@@ -19700,7 +19793,7 @@ async function preflightNewArtifactPaths(input) {
         path: resolved.repositoryPath
       }));
     } catch (error2) {
-      if (isEnoent3(error2))
+      if (isEnoent4(error2))
         continue;
       throw error2;
     }
@@ -24030,7 +24123,7 @@ function compareStrings7(left, right) {
 function toPosixPath(value) {
   return value.split(path17.sep).join("/");
 }
-function isEnoent4(error2) {
+function isEnoent5(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 async function pathExists3(absolutePath) {
@@ -24038,7 +24131,7 @@ async function pathExists3(absolutePath) {
     await stat4(absolutePath);
     return true;
   } catch (error2) {
-    if (isEnoent4(error2))
+    if (isEnoent5(error2))
       return false;
     throw error2;
   }
@@ -24063,7 +24156,7 @@ async function listFiles(root) {
     try {
       entries = await readdir7(directory, { withFileTypes: true });
     } catch (error2) {
-      if (isEnoent4(error2))
+      if (isEnoent5(error2))
         return;
       throw error2;
     }
@@ -24087,7 +24180,7 @@ async function listSymbolicLinks(root, displayedRoot) {
     try {
       entries = await readdir7(directory, { withFileTypes: true });
     } catch (error2) {
-      if (isEnoent4(error2))
+      if (isEnoent5(error2))
         return;
       throw error2;
     }
@@ -24228,7 +24321,7 @@ async function parseCodexManifest(repositoryRoot, legionRoot) {
   try {
     parsed = JSON.parse(await readFile10(manifestPath, "utf8"));
   } catch (error2) {
-    if (isEnoent4(error2)) {
+    if (isEnoent5(error2)) {
       return {
         generatedPaths: /* @__PURE__ */ new Set(),
         nativeSurfaces: [],
@@ -24672,7 +24765,7 @@ async function mergeStagedLegacyProtocol(input) {
     try {
       destinationStat = await stat4(destinationPath);
     } catch (error2) {
-      if (!isEnoent4(error2))
+      if (!isEnoent5(error2))
         throw error2;
     }
     if (destinationStat !== void 0) {
@@ -26658,16 +26751,19 @@ var NON_ANSWERS = /* @__PURE__ */ new Set([
   "later"
 ]);
 function isNonAnswer(value) {
-  return NON_ANSWERS.has(value.trim().toLowerCase().replace(/[.!]+$/, ""));
+  const normalized = value.trim().toLowerCase();
+  return NON_ANSWERS.has(normalized) || NON_ANSWERS.has(normalized.replace(/[.!]+$/, ""));
 }
 function asText(value) {
   return typeof value === "string" ? value : void 0;
 }
+var SHELL_METACHARACTER = /[|&;<>$`\n]/;
 function parseCommandLine(input) {
   const tokens = [];
   let current = "";
   let quote;
   let started = false;
+  let unquotedMetacharacter;
   for (const character of input.trim()) {
     if (quote !== void 0) {
       if (character === quote) {
@@ -26690,6 +26786,9 @@ function parseCommandLine(input) {
       }
       continue;
     }
+    if (unquotedMetacharacter === void 0 && SHELL_METACHARACTER.test(character)) {
+      unquotedMetacharacter = character;
+    }
     current += character;
     started = true;
   }
@@ -26701,10 +26800,9 @@ function parseCommandLine(input) {
   if (command === void 0 || command.length === 0) {
     return { error: "The command is empty." };
   }
-  const metacharacter = /[|&;<>$`\n]/.exec(input);
-  if (metacharacter !== null) {
+  if (unquotedMetacharacter !== void 0) {
     return {
-      error: `Shell syntax is not available (${metacharacter[0]}); verification runs the command directly. Wrap it in a script and name that instead.`
+      error: `Shell syntax is not available (${unquotedMetacharacter}); verification runs the command directly. Wrap it in a script and name that instead.`
     };
   }
   return { command, args };
@@ -26939,7 +27037,7 @@ function answerText2(answers, nodeId2) {
   const answer = answers.find((entry) => entry.nodeId === nodeId2);
   return typeof answer?.value === "string" && answer.value.length > 0 ? answer.value : void 0;
 }
-function criterionFor(draft, criterion, index) {
+function criterionFor(criterion, index) {
   const id = criterionIdFor(criterion.statement, index);
   if (criterion.proof === "executable") {
     const parsed = parseCommandLine(criterion.detail);
@@ -26995,7 +27093,7 @@ function buildRequirements(input) {
         statement: `Not built: ${draft.statement}`,
         proof: { mode: "manual", reason: WONT_CRITERION_REASON }
       }
-    ] : draft.criteria.map((criterion, index) => criterionFor(draft, criterion, index));
+    ] : draft.criteria.map((criterion, index) => criterionFor(criterion, index));
     requirements.push(
       requirementSchema.parse({
         schemaVersion: input.schemaVersion,
@@ -27965,20 +28063,22 @@ async function listExplorations(repositoryRoot) {
     // "recent explorations" stays a list a human can read.
     limitPerWorkflow: 10
   });
-  const candidates = [];
-  for (const run of runs) {
+  const withArtifacts = runs.flatMap((run) => {
     const artifactPath = explorationArtifactPathOf(run);
-    if (artifactPath === void 0) continue;
-    const topic = run.input["topic"];
-    candidates.push({
-      runId: run.runId,
-      explorationRunId: await readExplorationRunId(repositoryRoot, artifactPath) ?? run.runId,
-      artifactPath,
-      createdAt: run.createdAt,
-      topic: typeof topic === "string" ? topic : "exploration"
-    });
-  }
-  return candidates;
+    return artifactPath === void 0 ? [] : [{ run, artifactPath }];
+  });
+  return Promise.all(
+    withArtifacts.map(async ({ run, artifactPath }) => {
+      const topic = run.input["topic"];
+      return {
+        runId: run.runId,
+        explorationRunId: await readExplorationRunId(repositoryRoot, artifactPath) ?? run.runId,
+        artifactPath,
+        createdAt: run.createdAt,
+        topic: typeof topic === "string" ? topic : "exploration"
+      };
+    })
+  );
 }
 async function loadExploration(repositoryRoot, runId) {
   const candidates = await listExplorations(repositoryRoot);
@@ -28086,7 +28186,7 @@ function renderSessionStatus(input) {
 }
 
 // packages/cli/src/workflow/intake/session.ts
-import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, rm as rm6, writeFile as writeFile7 } from "node:fs/promises";
+import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
 import path24 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
@@ -28250,7 +28350,7 @@ async function loadSession(repositoryRoot, sessionId) {
   try {
     text = await readFile15(sessionFilePath(repositoryRoot, sessionId), "utf8");
   } catch (error2) {
-    if (isEnoent5(error2)) return { ok: false, reason: `No intake session ${sessionId} exists.` };
+    if (isEnoent6(error2)) return { ok: false, reason: `No intake session ${sessionId} exists.` };
     throw error2;
   }
   let parsedJson;
@@ -28296,16 +28396,35 @@ async function claimSessionDirectory(repositoryRoot, sessionId) {
     throw error2;
   }
 }
+async function releaseSessionId(repositoryRoot, sessionId) {
+  try {
+    await rmdir(intakeSessionDirectory(repositoryRoot, sessionId));
+  } catch {
+  }
+}
 async function listSessions(repositoryRoot) {
   const root = path24.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
     entries = await readdir10(root, { withFileTypes: true });
   } catch (error2) {
-    if (isEnoent5(error2)) return [];
+    if (isEnoent6(error2)) return [];
     throw error2;
   }
-  return entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("itk_")).map((entry) => entry.name).sort((left, right) => right.localeCompare(left));
+  const candidates = entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("itk_")).map((entry) => entry.name).sort((left, right) => left < right ? 1 : left > right ? -1 : 0);
+  const recorded = await Promise.all(
+    candidates.map(async (name) => await pathExists5(sessionFilePath(repositoryRoot, name)) ? name : void 0)
+  );
+  return recorded.filter((name) => name !== void 0);
+}
+async function pathExists5(absolutePath) {
+  try {
+    await stat6(absolutePath);
+    return true;
+  } catch (error2) {
+    if (isEnoent6(error2)) return false;
+    throw error2;
+  }
 }
 async function findActiveSession(repositoryRoot) {
   for (const sessionId of await listSessions(repositoryRoot)) {
@@ -28325,12 +28444,12 @@ async function allocateSessionId(repositoryRoot, createdAt) {
     return intakeSessionIdFor(createdAt);
   }
   for (let attempt = 1; attempt <= 999; attempt += 1) {
-    const candidate = intakeSessionIdFor(createdAt, `-${attempt}`);
+    const candidate = intakeSessionIdFor(createdAt, `-${String(attempt).padStart(3, "0")}`);
     if (await claimSessionDirectory(repositoryRoot, candidate)) return candidate;
   }
   throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
 }
-function isEnoent5(error2) {
+function isEnoent6(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 
@@ -28405,18 +28524,21 @@ async function proposalsFor(repositoryRoot, session) {
   return { proposals, diagnostics: [] };
 }
 async function resolveSession(context, options) {
+  const wantsProposals = options.proposals !== false;
   const explicitId = stringOption(context, "session");
   if (explicitId !== void 0) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
     if (!loaded.ok) return usageError(loaded.reason);
-    const stale = graphVersionMismatch(loaded.session);
-    if (stale !== void 0) return usageError(stale);
-    const seeded2 = await proposalsFor(context.repositoryRoot, loaded.session);
+    if (options.allowStaleGraph !== true) {
+      const stale = graphVersionMismatch(loaded.session);
+      if (stale !== void 0) return usageError(stale);
+    }
+    const seeded = wantsProposals ? await proposalsFor(context.repositoryRoot, loaded.session) : { proposals: /* @__PURE__ */ new Map(), diagnostics: [] };
     return {
       session: loaded.session,
-      proposals: seeded2.proposals,
+      proposals: seeded.proposals,
       created: false,
-      notes: seeded2.diagnostics
+      notes: seeded.diagnostics
     };
   }
   const explorationRunId = stringOption(context, "from-exploration");
@@ -28432,14 +28554,16 @@ async function resolveSession(context, options) {
       }
       await saveSession(context.repositoryRoot, abortSession(active));
     } else {
-      const stale = graphVersionMismatch(active);
-      if (stale !== void 0) return usageError(stale);
-      const seeded2 = await proposalsFor(context.repositoryRoot, active);
+      if (options.allowStaleGraph !== true) {
+        const stale = graphVersionMismatch(active);
+        if (stale !== void 0) return usageError(stale);
+      }
+      const seeded = wantsProposals ? await proposalsFor(context.repositoryRoot, active) : { proposals: /* @__PURE__ */ new Map(), diagnostics: [] };
       return {
         session: active,
-        proposals: seeded2.proposals,
+        proposals: seeded.proposals,
         created: false,
-        notes: seeded2.diagnostics
+        notes: seeded.diagnostics
       };
     }
   }
@@ -28449,23 +28573,28 @@ async function resolveSession(context, options) {
     );
   }
   const createdAt = createdAtOption(context) ?? nowTimestamp2();
-  const sessionId = await allocateSessionId(context.repositoryRoot, createdAt);
+  let exploration;
   if (explorationRunId !== void 0) {
-    const loaded = await loadExploration(context.repositoryRoot, explorationRunId);
-    if (!loaded.ok) return usageError(loaded.reason);
-    const seeded2 = createSession({
+    exploration = await loadExploration(context.repositoryRoot, explorationRunId);
+    if (!exploration.ok) return usageError(exploration.reason);
+  }
+  const sessionId = await allocateSessionId(context.repositoryRoot, createdAt);
+  try {
+    const seeded = createSession({
       sessionId,
       createdAt,
       schemaVersion: LEGION_PROTOCOL_VERSION,
-      exploration: loaded.loaded.exploration,
-      explorationArtifact: loaded.loaded.artifact
+      ...exploration === void 0 || !exploration.ok ? {} : {
+        exploration: exploration.loaded.exploration,
+        explorationArtifact: exploration.loaded.artifact
+      }
     });
-    await saveSession(context.repositoryRoot, seeded2.session);
-    return { session: seeded2.session, proposals: seeded2.proposals, created: true, notes: [] };
+    await saveSession(context.repositoryRoot, seeded.session);
+    return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
+  } catch (error2) {
+    await releaseSessionId(context.repositoryRoot, sessionId);
+    throw error2;
   }
-  const seeded = createSession({ sessionId, createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
-  await saveSession(context.repositoryRoot, seeded.session);
-  return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
 }
 function isCliResult3(value) {
   return "exitCode" in value;
@@ -28478,7 +28607,8 @@ async function handleNextQuestion(context) {
     answers: session.answers,
     injectedNodes: session.injectedNodes
   });
-  const explorations = created && session.explorationRef === void 0 ? await listExplorations(context.repositoryRoot) : [];
+  const canStillSeed = session.explorationRef === void 0 && session.answers.length === 0;
+  const explorations = canStillSeed ? await listExplorations(context.repositoryRoot) : [];
   if (node === void 0) {
     const action2 = nextAction(
       `legion start --finalize --session ${session.id}`,
@@ -28525,7 +28655,7 @@ ${renderNextAction(action2)}`
       status: "question",
       session: sessionPayload(session, answered, total),
       question: questionPayload(node, proposal),
-      ...explorations.length > 0 && created ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) } : {},
+      ...explorations.length > 0 ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) } : {},
       ...resolved.notes.length === 0 ? {} : { warnings: resolved.notes.map((note) => ({ code: "exploration_unavailable", message: note })) },
       nextAction: action
     },
@@ -28612,11 +28742,15 @@ async function handleSkip(context) {
 async function recordAndReport(context, resolved, node, rawValue, proposedFrom) {
   const validated = validateAnswer(node, rawValue);
   if (validated.value === void 0) {
+    const progress = nextNode({
+      answers: resolved.session.answers,
+      injectedNodes: resolved.session.injectedNodes
+    });
     return failure(
       {
         ok: false,
         status: "rejected",
-        session: sessionPayload(resolved.session, 0, 0),
+        session: sessionPayload(resolved.session, progress.answered, progress.total),
         question: questionPayload(node, resolved.proposals.get(node.slot)),
         diagnostics: validated.diagnostics
       },
@@ -28727,7 +28861,7 @@ ${renderQuestion({
   );
 }
 async function handleSessionStatus(context) {
-  const resolved = await resolveSession(context, { create: false });
+  const resolved = await resolveSession(context, { create: false, allowStaleGraph: true });
   if (isCliResult3(resolved)) return resolved;
   const { session } = resolved;
   const { answered, total } = nextNode({
@@ -28760,8 +28894,17 @@ async function handleSessionStatus(context) {
   );
 }
 async function handleAbort(context) {
-  const resolved = await resolveSession(context, { create: false });
+  const resolved = await resolveSession(context, {
+    create: false,
+    allowStaleGraph: true,
+    proposals: false
+  });
   if (isCliResult3(resolved)) return resolved;
+  if (resolved.session.status !== "active") {
+    return usageError(
+      `Session ${resolved.session.id} is already ${resolved.session.status} and cannot be aborted.`
+    );
+  }
   const aborted2 = abortSession(resolved.session);
   await saveSession(context.repositoryRoot, aborted2);
   const action = nextAction("legion start", "Begin a new intake session.");
@@ -28807,6 +28950,15 @@ async function handleBatchIntake(context) {
       diagnostics.push({
         code: "missing_answer",
         message: `The intake file has no answer for ${node.id}: ${node.prompt}`,
+        nodeId: node.id,
+        slot: node.slot
+      });
+      break;
+    }
+    if (raw === null || typeof raw === "object" && !Array.isArray(raw)) {
+      diagnostics.push({
+        code: "invalid_answer",
+        message: `The intake file's value for ${node.id} is ${raw === null ? "null" : "an object"}; answers must be text, a boolean, or a list.`,
         nodeId: node.id,
         slot: node.slot
       });
@@ -29226,7 +29378,7 @@ ${rendered}` : "Project initialization failed.";
 
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash19 } from "node:crypto";
-import { readdir as readdir11, readFile as readFile17, stat as stat6 } from "node:fs/promises";
+import { readdir as readdir11, readFile as readFile17, stat as stat7 } from "node:fs/promises";
 import path26 from "node:path";
 var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
   ".git",
@@ -29381,14 +29533,14 @@ function normalizeScope(repositoryRoot, scope) {
 }
 async function collectSourceFiles(repositoryRoot, scope) {
   const root = scope === "." ? repositoryRoot : path26.join(repositoryRoot, ...scope.split("/"));
-  const rootStat = await stat6(root);
+  const rootStat = await stat7(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
     const relative = path26.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
     const extension = path26.extname(relative).toLowerCase();
     if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path26.basename(relative))) continue;
-    const fileStat = await stat6(absolutePath);
+    const fileStat = await stat7(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
     const bytes = await readFile17(absolutePath);
     if (bytes.includes(0)) continue;
@@ -29525,7 +29677,7 @@ import { readdir as readdir13 } from "node:fs/promises";
 import path28 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir12, stat as stat7 } from "node:fs/promises";
+import { readdir as readdir12, stat as stat8 } from "node:fs/promises";
 import path27 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
@@ -29553,7 +29705,7 @@ async function validateWorkflowProject(context) {
 }
 async function detectPreInitCollision2(repositoryRoot) {
   const legionRoot = path27.join(repositoryRoot, ".legion");
-  if (!await pathExists5(legionRoot)) return [];
+  if (!await pathExists6(legionRoot)) return [];
   const entries = await readdir12(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
@@ -29563,7 +29715,7 @@ async function detectPreInitCollision2(repositoryRoot) {
   }
   const projectRoot = path27.join(legionRoot, "project");
   const manifestPath = path27.join(projectRoot, "project.json");
-  if (await pathExists5(projectRoot) && !await pathExists5(manifestPath)) {
+  if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
       migrationDiagnostic("Existing .legion/project data has no project manifest; explicit migration or reconciliation is required before initialization.")
@@ -29571,16 +29723,16 @@ async function detectPreInitCollision2(repositoryRoot) {
   }
   return [];
 }
-async function pathExists5(absolutePath) {
+async function pathExists6(absolutePath) {
   try {
-    await stat7(absolutePath);
+    await stat8(absolutePath);
     return true;
   } catch (error2) {
-    if (isEnoent6(error2)) return false;
+    if (isEnoent7(error2)) return false;
     throw error2;
   }
 }
-function isEnoent6(error2) {
+function isEnoent7(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 function isIgnorableLegionRootEntry3(name) {
@@ -30174,11 +30326,11 @@ async function readOptionalRoadmap(sourcePath) {
   try {
     return await readFile18(sourcePath, "utf8");
   } catch (error2) {
-    if (isEnoent7(error2)) return void 0;
+    if (isEnoent8(error2)) return void 0;
     throw error2;
   }
 }
-function isEnoent7(error2) {
+function isEnoent8(error2) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT");
 }
 
@@ -34496,7 +34648,7 @@ function blockedShip(diagnostics, action) {
 }
 
 // packages/cli/src/commands/workflow/validate.ts
-import { stat as stat8 } from "node:fs/promises";
+import { stat as stat9 } from "node:fs/promises";
 import path41 from "node:path";
 var VALIDATE_HELP = `legion validate
 
@@ -34517,14 +34669,27 @@ async function handleValidateCommand(context) {
     return helpResult(VALIDATE_HELP);
   }
   const result = await validateWorkflowProject(context);
+  const drift = await requirementSetDiagnostics(context.repositoryRoot);
+  const diagnostics = [...result.diagnostics, ...drift];
+  const ok = result.ok && drift.length === 0;
   const payload = {
     ...result,
-    status: result.ok ? "valid" : result.status
+    ok,
+    diagnostics,
+    status: ok ? "valid" : result.ok ? "requirement_set_drift" : result.status
   };
-  if (!result.ok) {
-    return failure(payload, validationFailureHuman(result.diagnostics));
+  if (!ok) {
+    return failure(payload, validationFailureHuman(diagnostics));
   }
   return success(payload, "Project is valid.");
+}
+async function requirementSetDiagnostics(repositoryRoot) {
+  const drift = await verifyRequirementSet(repositoryRoot);
+  return drift.map((entry) => ({
+    code: entry.code,
+    message: entry.message,
+    source: { path: requirementSetIndexPath() }
+  }));
 }
 async function handleDoctorCommand(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -34558,7 +34723,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat8(path41.join(root, relativePath));
+    await stat9(path41.join(root, relativePath));
     return {
       ok: true,
       status: "present",

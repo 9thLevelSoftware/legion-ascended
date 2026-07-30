@@ -54,7 +54,6 @@ export interface BuildRequirementsInput {
 }
 
 function criterionFor(
-  draft: RequirementDraft,
   criterion: RequirementDraft["criteria"][number],
   index: number
 ): RequirementCriterion {
@@ -127,7 +126,7 @@ export function buildRequirements(input: BuildRequirementsInput): readonly Requi
             proof: { mode: "manual", reason: WONT_CRITERION_REASON }
           }
         ]
-      : draft.criteria.map((criterion, index) => criterionFor(draft, criterion, index));
+      : draft.criteria.map((criterion, index) => criterionFor(criterion, index));
 
     requirements.push(
       requirementSchema.parse({

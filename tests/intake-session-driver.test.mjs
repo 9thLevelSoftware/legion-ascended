@@ -704,3 +704,209 @@ test("a malformed requirement file reports drift instead of throwing", async (t)
   assert.notEqual(validated.exitCode, 2, "a parse error must not escape as an unhandled rejection");
   assert.doesNotMatch(validated.stderr, /Unexpected token|SyntaxError/);
 });
+
+/**
+ * Regressions for the review round that found the requirement-set hash was
+ * written and never read.
+ *
+ * The test that was supposed to cover drift asserted only that `legion validate`
+ * did not crash, which was trivially true while nothing consumed the hash. These
+ * assert the diagnostic itself, so they fail if the wiring is removed again.
+ */
+
+async function finalizedProject(t) {
+  const scratch = await scratchRepo(t);
+  await writeFile(path.join(scratch.root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await scratch.run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = await scratch.run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+  return { ...scratch, finalize: parseJsonOutput(finalize) };
+}
+
+test("legion validate reports an edited requirement as drift", async (t) => {
+  const { root, run, finalize } = await finalizedProject(t);
+
+  const clean = await run("validate", "--json");
+  assert.equal(clean.exitCode, 0, "a freshly finalized set must validate");
+
+  // A semantically valid edit, not a corruption: the file still parses and still
+  // satisfies the schema. Only the recorded hash can tell that the contract
+  // moved, which is the whole reason it is recorded.
+  const requirementPath = path.join(root, ...finalize.requirementSet.paths[0].split("/"));
+  const requirement = JSON.parse(await readFile(requirementPath, "utf8"));
+  requirement.statement = "Something nobody agreed to";
+  await writeFile(requirementPath, `${JSON.stringify(requirement, undefined, 2)}\n`, "utf8");
+
+  const drifted = await run("validate", "--json");
+  assert.equal(drifted.exitCode, 1, "an edited requirement must fail validation");
+  const codes = parseJsonOutput(drifted).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("requirement_content_drift"),
+    `expected requirement_content_drift, got ${codes.join(", ")}`
+  );
+});
+
+test("legion validate reports a removed requirement as drift", async (t) => {
+  const { root, run, finalize } = await finalizedProject(t);
+
+  // Deleting a file the index still names is invisible to any per-file hash;
+  // only the set-level check sees it.
+  await rm(path.join(root, ...finalize.requirementSet.paths[0].split("/")), { force: true });
+
+  const drifted = await run("validate", "--json");
+  assert.equal(drifted.exitCode, 1);
+  assert.ok(
+    parseJsonOutput(drifted).diagnostics.some((entry) => /requirement/.test(entry.code)),
+    "a missing requirement must be reported"
+  );
+});
+
+test("a failed --from-exploration leaves no session directory behind", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  // The ID is reserved by creating its directory. Claiming it before the
+  // exploration was validated left an `itk_*` directory with no session.json,
+  // which `findActiveSession` then read as a corrupt record and refused — so one
+  // typo permanently bricked every later `legion start` in that repository.
+  const failed = await run("start", "--from-exploration", "does-not-exist", "--json");
+  assert.equal(failed.exitCode, 1);
+
+  assert.equal(
+    existsSync(path.join(root, ".legion/project/intake")),
+    false,
+    "a rejected exploration must not leave a reserved session directory"
+  );
+
+  const recovered = await run("start", "--next", "--json", "--created-at", CREATED_AT);
+  assert.equal(recovered.exitCode, 0, recovered.stderr);
+  assert.equal(parseJsonOutput(recovered).question.nodeId, "project-name");
+});
+
+test("a stale graph version does not deadlock recovery", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const started = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+  const sessionPath = path.join(root, ".legion/project/intake", started.session.id, "session.json");
+  const session = JSON.parse(await readFile(sessionPath, "utf8"));
+  await writeFile(sessionPath, JSON.stringify({ ...session, graphVersion: "0.9.0" }), "utf8");
+
+  // Advancing the interview is refused, as intended.
+  const advance = await run("start", "--answer", "project-name=Asset Mapper", "--json");
+  assert.equal(advance.exitCode, 1);
+
+  // But the recovery the refusal itself names has to work, and so does reading
+  // state. A check that forbids its own escape hatch is a deadlock, not a guard.
+  const status = await run("start", "--session-status", "--session", started.session.id, "--json");
+  assert.equal(status.exitCode, 0, status.stderr);
+
+  const aborted = await run("start", "--abort", "--session", started.session.id, "--json");
+  assert.equal(aborted.exitCode, 0, aborted.stderr);
+  assert.equal(parseJsonOutput(aborted).status, "aborted");
+
+  const fresh = await run("start", "--next", "--json", "--created-at", "2026-07-30T13:00:00.000Z");
+  assert.equal(fresh.exitCode, 0, fresh.stderr);
+});
+
+test("a finalized session cannot be aborted", async (t) => {
+  const { run, finalize } = await finalizedProject(t);
+
+  // The finalized session is the provenance record every requirement traceRef
+  // points at. Flipping it to aborted would make the record claim the interview
+  // was abandoned, and would block the documented --force-roadmap retry.
+  const aborted = await run("start", "--abort", "--session", finalize.session.id, "--json");
+  assert.equal(aborted.exitCode, 1);
+
+  const refinalized = await run(
+    "start", "--finalize", "--session", finalize.session.id, "--json"
+  );
+  assert.equal(refinalized.exitCode, 0, "the record must still be usable");
+});
+
+test("--intake refuses values that are not answers", async (t) => {
+  for (const [label, value] of [["null", null], ["an object", {}], ["a number-shaped object", { a: 1 }]]) {
+    const { root, run } = await scratchRepo(t);
+    await writeFile(
+      path.join(root, "intake.json"),
+      JSON.stringify({ ...ANSWERS, "project-name": value }),
+      "utf8"
+    );
+
+    // String() coercion turned null into "null" and an object into
+    // "[object Object]", both of which pass every free-text validator and become
+    // the project name.
+    const applied = await run("start", "--intake", "intake.json", "--json", "--created-at", CREATED_AT);
+    assert.equal(applied.exitCode, 1, `${label} should be refused`);
+    assert.ok(
+      parseJsonOutput(applied).diagnostics.some((entry) => entry.nodeId === "project-name"),
+      `${label} should be reported against the node it was given for`
+    );
+  }
+});
+
+test("a rejected answer reports real progress, not zero", async (t) => {
+  const { run } = await scratchRepo(t);
+  await run("start", "--next", "--json", "--created-at", CREATED_AT);
+  await run("start", "--answer", "project-name=Asset Mapper");
+  await run("start", "--answer", "project-summary=Deterministic resolution.");
+
+  // The rejection payload is the screen the operator is asked to look at again;
+  // reporting 0 of 0 makes the interview appear to reset on every mistake.
+  const rejected = await run("start", "--answer", "project-owner=", "--json");
+  assert.equal(rejected.exitCode, 1);
+  const payload = parseJsonOutput(rejected);
+  assert.equal(payload.session.answered, 2);
+  assert.ok(payload.session.total > 2);
+});
+
+test("a resumed unanswered session still offers its explorations", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await seedExplorationRun(root);
+
+  const first = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+  assert.ok(first.availableExplorations?.some((entry) => entry.runId === "explore-1"));
+
+  // commands/start.md tells the host to act on this field. An operator who
+  // closed the terminal before answering previously had no way to learn the
+  // exploration existed, even though seeding was still free.
+  const resumed = parseJsonOutput(await run("start", "--next", "--json"));
+  assert.equal(resumed.session.id, first.session.id);
+  assert.ok(
+    resumed.availableExplorations?.some((entry) => entry.runId === "explore-1"),
+    "a session with no answers can still be seeded, so the offer must persist"
+  );
+
+  // Once an answer exists, seeding is no longer possible and the offer stops —
+  // advice that cannot be followed is the failure being avoided here.
+  await run("start", "--answer", "project-name=Asset Mapper");
+  const answered = parseJsonOutput(await run("start", "--next", "--json"));
+  assert.equal(answered.availableExplorations, undefined);
+});
+
+test("a quoted shell metacharacter is a usable acceptance criterion", async (t) => {
+  const { run } = await scratchRepo(t);
+  const answers = {
+    ...ANSWERS,
+    "req-1-ac-1-detail": 'pnpm test --grep "resolve|reject"'
+  };
+
+  let recorded = false;
+  for (let guard = 0; guard < 200; guard += 1) {
+    const next = parseJsonOutput(await run("start", "--next", "--json", "--created-at", CREATED_AT));
+    if (next.status === "complete") break;
+    const nodeId = next.question.nodeId;
+    const value = answers[nodeId];
+    if (value === undefined) {
+      await run("start", "--skip");
+      continue;
+    }
+    const result = await run("start", "--answer", `${nodeId}=${value}`);
+    // The tokenizer already strips the quotes, so `resolve|reject` reaches the
+    // runner as one literal argument. Refusing it left the operator no way to
+    // express the criterion at all.
+    assert.equal(result.exitCode, 0, `${nodeId} was refused: ${result.stdout}${result.stderr}`);
+    if (nodeId === "req-1-ac-1-detail") recorded = true;
+  }
+  assert.equal(recorded, true, "the criterion detail should have been asked");
+
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+});
