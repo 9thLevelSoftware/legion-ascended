@@ -12,7 +12,7 @@
  * a fallback, not a second implementation of the interview.
  */
 
-import { access, readFile, writeFile } from "node:fs/promises";
+import { lstat, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { initProject, updateConstitution, writeRequirementSet } from "@legion/artifacts";
@@ -748,13 +748,39 @@ export async function handleBatchIntake(context: CliContext): Promise<CliResult>
   );
 }
 
-async function fileExists(target: string): Promise<boolean> {
+type RoadmapDestination =
+  | { readonly kind: "absent" }
+  | { readonly kind: "file" }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Classify the roadmap destination without following it.
+ *
+ * `access` follows symlinks, so a dangling one reported "absent" and the write
+ * created its target outside the repository; an intact one was followed
+ * whenever its target happened to carry the Legion marker. `lstat` sees the
+ * link itself, which is the only way to refuse it.
+ */
+async function classifyRoadmap(target: string): Promise<RoadmapDestination> {
+  let stats;
   try {
-    await access(target);
-    return true;
-  } catch {
-    return false;
+    stats = await lstat(target);
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return { kind: "absent" };
+    }
+    throw error;
   }
+  if (stats.isSymbolicLink()) {
+    return {
+      kind: "refused",
+      reason: `${ROADMAP_FILE} is a symbolic link; refusing to write through it. Remove or replace the link with a regular file.`
+    };
+  }
+  if (!stats.isFile()) {
+    return { kind: "refused", reason: `${ROADMAP_FILE} exists and is not a regular file.` };
+  }
+  return { kind: "file" };
 }
 
 /** `legion start --finalize` — write the typed artifacts. */
@@ -773,6 +799,11 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
   // impossible to follow. Re-finalizing rewrites the same artifacts from the
   // same answers, so it is a re-render rather than a second decision.
   const refinalizing = session.status === "finalized";
+
+  // Finalize writes artifacts, so the pinned graph binds here even for a
+  // session that is only being re-rendered.
+  const staleGraph = graphVersionMismatch(session, { producingArtifacts: true });
+  if (staleGraph !== undefined) return usageError(staleGraph);
 
   const { node, answered, total } = nextNode({
     answers: session.answers,
@@ -935,7 +966,10 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
   });
 
   let roadmapWritten = false;
-  if (await fileExists(roadmapPath)) {
+  const destination = await classifyRoadmap(roadmapPath);
+  if (destination.kind === "refused") {
+    notes.push(destination.reason);
+  } else if (destination.kind === "file") {
     const existing = await readFile(roadmapPath, "utf8");
     // Overwriting a hand-written roadmap would destroy work this command never
     // authored. Only a roadmap this command rendered is safe to replace.

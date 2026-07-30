@@ -544,3 +544,31 @@ test("an active session pinned to another graph version is refused", () => {
   });
   assert.equal(graphVersionMismatch(finalized), undefined);
 });
+
+test("the criterion cap is not asked as a question that does nothing", () => {
+  // At the cap the graph used to still ask "another?" and then ignore an
+  // affirmative answer, so an operator could explicitly request a criterion and
+  // finalize a contract that silently omitted it. The limit has to show up as
+  // an absent question rather than a dead one.
+  const answers = [answer("req-1-priority", "requirements.1.priority", "must")];
+  for (let criterion = 1; criterion < MAX_CRITERIA_PER_REQUIREMENT; criterion += 1) {
+    answers.push(
+      answer(`req-1-ac-${criterion}-more`, `requirements.1.criteria.${criterion}.more`, true)
+    );
+  }
+
+  const ids = materializeNodes({ answers, injectedNodes: [] }).map((node) => node.id);
+  assert.ok(
+    ids.includes(`req-1-ac-${MAX_CRITERIA_PER_REQUIREMENT}-statement`),
+    "the last permitted criterion is still asked"
+  );
+  assert.equal(
+    ids.includes(`req-1-ac-${MAX_CRITERIA_PER_REQUIREMENT}-more`),
+    false,
+    "the cap must not be presented as a question whose answer is discarded"
+  );
+  assert.ok(
+    ids.includes(`req-1-ac-${MAX_CRITERIA_PER_REQUIREMENT - 1}-more`),
+    "below the cap the question is still asked"
+  );
+});

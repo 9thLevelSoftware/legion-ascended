@@ -251,7 +251,19 @@ export async function readRequirementSet(
       throw error;
     }
 
-    const requirement = requirementSchema.safeParse(JSON.parse(contents));
+    // Unguarded, this threw instead of returning the advertised
+    // `{ ok: false, status: "invalid" }`, so a malformed requirement rejected
+    // out of `verifyRequirementSet` rather than being reported as drift — which
+    // is precisely the condition drift detection exists to name.
+    let parsedRequirement: unknown;
+    try {
+      parsedRequirement = JSON.parse(contents);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, status: "invalid", reason: `${entry.path} is not valid JSON: ${message}` };
+    }
+
+    const requirement = requirementSchema.safeParse(parsedRequirement);
     if (!requirement.success) {
       return {
         ok: false,

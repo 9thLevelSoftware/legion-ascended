@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -629,4 +630,77 @@ test("a requirements path that is not a directory is refused", async (t) => {
     "not a directory\n",
     "the blocking file must be left as it was"
   );
+});
+
+test("a symlinked ROADMAP.md is refused, not written through", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const outside = await mkdtemp(path.join(tmpdir(), "legion-outside-"));
+  t.after(() => rm(outside, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+
+  // A dangling link is the sharper case: `access` reports the path absent, so
+  // the write would create the target outside the repository rather than
+  // refusing.
+  const target = path.join(outside, "someone-elses-notes.md");
+  try {
+    await symlink(target, path.join(root, "ROADMAP.md"));
+  } catch (error) {
+    if (error?.code === "EPERM") return t.skip("symlink creation is not permitted here");
+    throw error;
+  }
+
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+
+  assert.equal(finalize.exitCode, 0, finalize.stderr);
+  const payload = parseJsonOutput(finalize);
+  assert.equal(payload.roadmap.written, false);
+  assert.ok(
+    payload.warnings.some((entry) => /symbolic link/i.test(entry.message)),
+    `the refusal must be explained, got ${JSON.stringify(payload.warnings)}`
+  );
+  assert.equal(existsSync(target), false, "the link target must not have been created");
+});
+
+test("finalizing under a different intake graph is refused", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  const applied = await run("start", "--intake", "intake.json", "--json", "--created-at", CREATED_AT);
+  const sessionId = parseJsonOutput(applied).session.id;
+
+  // Finalize was made re-runnable on a finalized session, and the version check
+  // exempted every non-active session — so a re-finalize after a graph upgrade
+  // would reinterpret the answers and overwrite the artifacts under a graph that
+  // never collected them. Reading history stays exempt; producing artifacts does
+  // not.
+  const sessionPath = path.join(root, ".legion/project/intake", sessionId, "session.json");
+  const session = JSON.parse(await readFile(sessionPath, "utf8"));
+  await writeFile(
+    sessionPath,
+    JSON.stringify({ ...session, graphVersion: "0.9.0" }, undefined, 2),
+    "utf8"
+  );
+
+  const finalize = await run("start", "--finalize", "--session", sessionId, "--json");
+  assert.equal(finalize.exitCode, 1);
+  assert.match(parseJsonOutput(finalize).diagnostics[0].message, /0\.9\.0/);
+});
+
+test("a malformed requirement file reports drift instead of throwing", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  const requirementPath = path.join(root, ...finalize.requirementSet.paths[0].split("/"));
+  await writeFile(requirementPath, "{ not json", "utf8");
+
+  // An unguarded JSON.parse rejected out of verifyRequirementSet rather than
+  // returning the advertised invalid result — so the one condition drift
+  // detection exists to name was the one that crashed it.
+  const validated = await run("validate", "--json");
+  assert.notEqual(validated.exitCode, 2, "a parse error must not escape as an unhandled rejection");
+  assert.doesNotMatch(validated.stderr, /Unexpected token|SyntaxError/);
 });

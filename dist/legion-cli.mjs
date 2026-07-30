@@ -26237,7 +26237,7 @@ function isStableDefaultBranch(branch) {
 }
 
 // packages/cli/src/workflow/intake/driver.ts
-import { access, readFile as readFile16, writeFile as writeFile8 } from "node:fs/promises";
+import { lstat as lstat3, readFile as readFile16, writeFile as writeFile8 } from "node:fs/promises";
 import path25 from "node:path";
 
 // packages/cli/src/workflow/render.ts
@@ -26489,7 +26489,7 @@ function requirementNodes(index) {
     }
   ];
 }
-function criterionNodes(requirementIndex, criterionIndex) {
+function criterionNodes(requirementIndex, criterionIndex, askForAnother = true) {
   const prefix = `req-${requirementIndex}-ac-${criterionIndex}`;
   const slotPrefix = `requirements.${requirementIndex}.criteria.${criterionIndex}`;
   const notWont = { nodeId: `req-${requirementIndex}-priority`, notEquals: "wont" };
@@ -26524,16 +26524,18 @@ function criterionNodes(requirementIndex, criterionIndex) {
       required: true,
       dependsOn: notWont
     },
-    {
-      id: `${prefix}-more`,
-      section: "requirements",
-      slot: `${slotPrefix}.more`,
-      prompt: `Requirement ${requirementIndex}: is there another acceptance criterion?`,
-      help: YES_NO_HELP,
-      kind: "confirm",
-      required: true,
-      dependsOn: notWont
-    }
+    ...askForAnother ? [
+      {
+        id: `${prefix}-more`,
+        section: "requirements",
+        slot: `${slotPrefix}.more`,
+        prompt: `Requirement ${requirementIndex}: is there another acceptance criterion?`,
+        help: YES_NO_HELP,
+        kind: "confirm",
+        required: true,
+        dependsOn: notWont
+      }
+    ] : []
   ];
 }
 function moreRequirementsNode(index) {
@@ -26587,7 +26589,7 @@ function materializeNodes(input) {
     nodes.push(...requirementNodes(requirement));
     if (answers.get(`req-${requirement}-priority`) === void 0) break;
     for (let criterion = 1; criterion <= MAX_CRITERIA_PER_REQUIREMENT; criterion += 1) {
-      nodes.push(...criterionNodes(requirement, criterion));
+      nodes.push(...criterionNodes(requirement, criterion, criterion < MAX_CRITERIA_PER_REQUIREMENT));
       if (!isAffirmative(answers.get(`req-${requirement}-ac-${criterion}-more`))) break;
     }
     if (requirement < MAX_REQUIREMENTS) {
@@ -28084,12 +28086,18 @@ function renderSessionStatus(input) {
 }
 
 // packages/cli/src/workflow/intake/session.ts
-import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
+import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, rm as rm6, writeFile as writeFile7 } from "node:fs/promises";
 import path24 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
   return path24.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+}
+function intakeSessionArtifactPath(sessionId) {
+  return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
+}
+function isNodeErrorCode2(error2, code) {
+  return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
   return path24.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
@@ -28231,8 +28239,9 @@ function finalizeSession(session, projectId) {
 function withDiagnostics(session, diagnostics) {
   return intakeSessionSchema.parse({ ...session, diagnostics: [...diagnostics] });
 }
-function graphVersionMismatch(session) {
-  if (session.status !== "active") return void 0;
+function graphVersionMismatch(session, options = {}) {
+  if (session.status !== "active" && options.producingArtifacts !== true) return void 0;
+  if (session.status === "aborted") return void 0;
   if (session.graphVersion === INTAKE_GRAPH_VERSION) return void 0;
   return `Session ${session.id} was started under intake graph ${session.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}. Its answers were given to a different set of questions. Run legion start --abort --session ${session.id} and begin again, or finish it with the CLI version it was started under.`;
 }
@@ -28262,13 +28271,30 @@ async function loadSession(repositoryRoot, sessionId) {
 }
 async function saveSession(repositoryRoot, session) {
   const validated = intakeSessionSchema.parse(session);
-  const directory = intakeSessionDirectory(repositoryRoot, validated.id);
-  await mkdir12(directory, { recursive: true });
-  const target = path24.join(directory, SESSION_FILE);
-  const temporary = `${target}.tmp`;
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot,
+    artifactPath: intakeSessionArtifactPath(validated.id)
+  });
+  const temporary = `${resolved.absolutePath}.tmp`;
+  await rm6(temporary, { force: true });
   await writeFile7(temporary, `${JSON.stringify(validated, void 0, 2)}
 `, "utf8");
-  await rename4(temporary, target);
+  await rename4(temporary, resolved.absolutePath);
+}
+async function claimSessionDirectory(repositoryRoot, sessionId) {
+  const resolved = await resolveProjectArtifactPath({
+    repositoryRoot,
+    artifactPath: intakeSessionArtifactPath(sessionId)
+  });
+  const sessionDirectory = path24.dirname(resolved.absolutePath);
+  await mkdir12(path24.dirname(sessionDirectory), { recursive: true });
+  try {
+    await mkdir12(sessionDirectory, { recursive: false });
+    return true;
+  } catch (error2) {
+    if (isNodeErrorCode2(error2, "EEXIST")) return false;
+    throw error2;
+  }
 }
 async function listSessions(repositoryRoot) {
   const root = path24.join(repositoryRoot, ".legion", "project", "intake");
@@ -28294,21 +28320,13 @@ async function findActiveSession(repositoryRoot) {
   }
   return { ok: true, session: void 0 };
 }
-async function intakeSessionExists(repositoryRoot, sessionId) {
-  try {
-    await readFile15(sessionFilePath(repositoryRoot, sessionId), "utf8");
-    return true;
-  } catch (error2) {
-    if (isEnoent5(error2)) return false;
-    return true;
-  }
-}
 async function allocateSessionId(repositoryRoot, createdAt) {
-  const base = intakeSessionIdFor(createdAt);
-  if (!await intakeSessionExists(repositoryRoot, base)) return base;
+  if (await claimSessionDirectory(repositoryRoot, intakeSessionIdFor(createdAt))) {
+    return intakeSessionIdFor(createdAt);
+  }
   for (let attempt = 1; attempt <= 999; attempt += 1) {
     const candidate = intakeSessionIdFor(createdAt, `-${attempt}`);
-    if (!await intakeSessionExists(repositoryRoot, candidate)) return candidate;
+    if (await claimSessionDirectory(repositoryRoot, candidate)) return candidate;
   }
   throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
 }
@@ -28319,7 +28337,7 @@ function isEnoent5(error2) {
 // packages/cli/src/workflow/intake/driver.ts
 var ROADMAP_MARKER = "<!-- Rendered by `legion start --finalize`";
 var ROADMAP_FILE = "ROADMAP.md";
-function intakeSessionArtifactPath(sessionId) {
+function intakeSessionArtifactPath2(sessionId) {
   return `.legion/project/intake/${sessionId}/session.json`;
 }
 function questionPayload(node, proposal) {
@@ -28842,13 +28860,26 @@ ${renderIntakeDiagnostics(diagnostics)}`
 ${renderNextAction(action)}`
   );
 }
-async function fileExists(target) {
+async function classifyRoadmap(target) {
+  let stats;
   try {
-    await access(target);
-    return true;
-  } catch {
-    return false;
+    stats = await lstat3(target);
+  } catch (error2) {
+    if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
+      return { kind: "absent" };
+    }
+    throw error2;
   }
+  if (stats.isSymbolicLink()) {
+    return {
+      kind: "refused",
+      reason: `${ROADMAP_FILE} is a symbolic link; refusing to write through it. Remove or replace the link with a regular file.`
+    };
+  }
+  if (!stats.isFile()) {
+    return { kind: "refused", reason: `${ROADMAP_FILE} exists and is not a regular file.` };
+  }
+  return { kind: "file" };
 }
 async function handleFinalize(context) {
   const resolved = await resolveSession(context, { create: false });
@@ -28858,6 +28889,8 @@ async function handleFinalize(context) {
     return usageError(`Session ${session.id} was aborted and cannot be finalized.`);
   }
   const refinalizing = session.status === "finalized";
+  const staleGraph = graphVersionMismatch(session, { producingArtifacts: true });
+  if (staleGraph !== void 0) return usageError(staleGraph);
   const { node, answered, total } = nextNode({
     answers: session.answers,
     injectedNodes: session.injectedNodes
@@ -28971,7 +29004,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     projectId,
     createdAt,
     schemaVersion: LEGION_PROTOCOL_VERSION,
-    intakeSessionPath: intakeSessionArtifactPath(session.id)
+    intakeSessionPath: intakeSessionArtifactPath2(session.id)
   });
   const written = await writeRequirementSet({
     repositoryRoot: context.repositoryRoot,
@@ -28989,7 +29022,10 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     intakeSessionId: session.id
   });
   let roadmapWritten = false;
-  if (await fileExists(roadmapPath)) {
+  const destination = await classifyRoadmap(roadmapPath);
+  if (destination.kind === "refused") {
+    notes.push(destination.reason);
+  } else if (destination.kind === "file") {
     const existing = await readFile16(roadmapPath, "utf8");
     if (existing.includes(ROADMAP_MARKER) || hasFlag(context, "force-roadmap")) {
       await writeFile8(roadmapPath, roadmap, "utf8");
@@ -29686,7 +29722,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   try {
     entries = await readdir13(changesRoot, { withFileTypes: true });
   } catch (error2) {
-    if (isNodeErrorCode2(error2, "ENOENT")) {
+    if (isNodeErrorCode3(error2, "ENOENT")) {
       return noWorkflowChange(changesRoot);
     }
     const message = error2 instanceof Error ? error2.message : String(error2);
@@ -29752,7 +29788,7 @@ function noWorkflowChange(changesRoot) {
     ]
   };
 }
-function isNodeErrorCode2(error2, code) {
+function isNodeErrorCode3(error2, code) {
   return error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === code;
 }
 

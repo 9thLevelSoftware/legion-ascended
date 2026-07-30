@@ -305,7 +305,11 @@ function requirementNodes(index: number): readonly IntakeNode[] {
   ];
 }
 
-function criterionNodes(requirementIndex: number, criterionIndex: number): readonly IntakeNode[] {
+function criterionNodes(
+  requirementIndex: number,
+  criterionIndex: number,
+  askForAnother = true
+): readonly IntakeNode[] {
   const prefix = `req-${requirementIndex}-ac-${criterionIndex}`;
   const slotPrefix = `requirements.${requirementIndex}.criteria.${criterionIndex}`;
   // Every criterion node hangs off the priority answer, so a `wont` requirement
@@ -344,16 +348,20 @@ function criterionNodes(requirementIndex: number, criterionIndex: number): reado
       required: true,
       dependsOn: notWont
     },
-    {
-      id: `${prefix}-more`,
-      section: "requirements",
-      slot: `${slotPrefix}.more`,
-      prompt: `Requirement ${requirementIndex}: is there another acceptance criterion?`,
-      help: YES_NO_HELP,
-      kind: "confirm",
-      required: true,
-      dependsOn: notWont
-    }
+    ...(askForAnother
+      ? [
+          {
+            id: `${prefix}-more`,
+            section: "requirements" as const,
+            slot: `${slotPrefix}.more`,
+            prompt: `Requirement ${requirementIndex}: is there another acceptance criterion?`,
+            help: YES_NO_HELP,
+            kind: "confirm" as const,
+            required: true,
+            dependsOn: notWont
+          }
+        ]
+      : [])
   ];
 }
 
@@ -455,7 +463,12 @@ export function materializeNodes(input: MaterializeInput): readonly IntakeNode[]
     if (answers.get(`req-${requirement}-priority`) === undefined) break;
 
     for (let criterion = 1; criterion <= MAX_CRITERIA_PER_REQUIREMENT; criterion += 1) {
-      nodes.push(...criterionNodes(requirement, criterion));
+      // At the cap the "another?" question is not asked at all. Asking it and
+      // then ignoring an affirmative answer let an operator explicitly request
+      // a criterion and finalize a contract that silently omitted it — the cap
+      // has to be visible as a limit rather than as a question that does
+      // nothing.
+      nodes.push(...criterionNodes(requirement, criterion, criterion < MAX_CRITERIA_PER_REQUIREMENT));
       if (!isAffirmative(answers.get(`req-${requirement}-ac-${criterion}-more`))) break;
     }
     // Criterion nodes are materialized regardless of priority and excluded from
@@ -463,9 +476,6 @@ export function materializeNodes(input: MaterializeInput): readonly IntakeNode[]
     // conditionality two mechanisms — a structural one and a declarative one —
     // that have to agree, and the structural one is invisible to the pruning
     // pass, so a requirement flipped to `wont` would keep the criteria it had.
-    //
-    // Answering "another" at the cap stops the loop anyway. Honouring it would
-    // make the interview unbounded, which the caps exist to prevent.
 
     if (requirement < MAX_REQUIREMENTS) {
       nodes.push(moreRequirementsNode(requirement));

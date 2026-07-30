@@ -14,9 +14,10 @@
  * asked would defeat the point of keeping it.
  */
 
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { ensureProjectArtifactParent, resolveProjectArtifactPath } from "@legion/artifacts";
 import {
   formatEntityId,
   intakeSessionSchema,
@@ -45,6 +46,15 @@ const SESSION_FILE = "session.json";
 
 export function intakeSessionDirectory(repositoryRoot: string, sessionId: string): string {
   return path.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+}
+
+/** Repository-relative path of a session record. */
+export function intakeSessionArtifactPath(sessionId: string): string {
+  return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
 }
 
 function sessionFilePath(repositoryRoot: string, sessionId: string): string {
@@ -333,8 +343,17 @@ export type LoadSessionResult =
  * in progress, and refusing to read a record because the graph moved on would
  * make history unreadable after every upgrade.
  */
-export function graphVersionMismatch(session: IntakeSession): string | undefined {
-  if (session.status !== "active") return undefined;
+export function graphVersionMismatch(
+  session: IntakeSession,
+  options: { readonly producingArtifacts?: boolean } = {}
+): string | undefined {
+  // Reading a finished session is exempt; *rewriting artifacts from it* is not.
+  // Finalize became re-runnable on a finalized session, which runs its answers
+  // through the current graph, validators and renderer — so exempting every
+  // non-active session reopened the exact reinterpretation this check exists to
+  // prevent. The exemption is about historical reads, not about status.
+  if (session.status !== "active" && options.producingArtifacts !== true) return undefined;
+  if (session.status === "aborted") return undefined;
   if (session.graphVersion === INTAKE_GRAPH_VERSION) return undefined;
   return (
     `Session ${session.id} was started under intake graph ${session.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}. ` +
@@ -380,13 +399,60 @@ export async function saveSession(repositoryRoot: string, session: IntakeSession
   // the last point before the bytes become the record of what was asked, and
   // the cost of being sure is one schema call.
   const validated = intakeSessionSchema.parse(session);
-  const directory = intakeSessionDirectory(repositoryRoot, validated.id);
-  await mkdir(directory, { recursive: true });
 
-  const target = path.join(directory, SESSION_FILE);
-  const temporary = `${target}.tmp`;
+  // Resolved through the repository's artifact-path guards rather than joined by
+  // hand. A symlinked `.legion/project/intake`, session directory, or planted
+  // `session.json.tmp` would otherwise be followed by mkdir/writeFile/rename, so
+  // `legion start` in an untrusted checkout could create or replace files
+  // outside the repository. The requirements writer was fixed for exactly this
+  // and this path was left behind — the same gap, one directory over.
+  const resolved = await ensureProjectArtifactParent({
+    repositoryRoot,
+    artifactPath: intakeSessionArtifactPath(validated.id)
+  });
+
+  const temporary = `${resolved.absolutePath}.tmp`;
+  // `rm` first so a planted `.tmp` symlink is removed rather than written
+  // through; `writeFile` on a symlink follows it to the target.
+  await rm(temporary, { force: true });
   await writeFile(temporary, `${JSON.stringify(validated, undefined, 2)}\n`, "utf8");
-  await rename(temporary, target);
+  await rename(temporary, resolved.absolutePath);
+}
+
+/**
+ * Claim a session directory, atomically.
+ *
+ * `mkdir` without `recursive` fails with EEXIST if the directory is already
+ * there, and that failure is the reservation. Checking existence and then
+ * writing — which is what the previous allocator did — leaves a window in which
+ * two `legion start` processes with the same `--created-at` both see the ID free
+ * and one then overwrites the other's record.
+ */
+async function claimSessionDirectory(
+  repositoryRoot: string,
+  sessionId: string
+): Promise<boolean> {
+  // Resolved, not created: `ensureProjectArtifactParent` would make the session
+  // directory itself, and the `mkdir` below would then always report EEXIST and
+  // conclude every ID was taken. The guard still runs — `resolveProjectArtifactPath`
+  // rejects a path that escapes the repository or ends in a symlink — it just
+  // does not create anything.
+  const resolved = await resolveProjectArtifactPath({
+    repositoryRoot,
+    artifactPath: intakeSessionArtifactPath(sessionId)
+  });
+  const sessionDirectory = path.dirname(resolved.absolutePath);
+
+  // Ancestors are created recursively; the session directory itself is not, so
+  // its creation is the reservation.
+  await mkdir(path.dirname(sessionDirectory), { recursive: true });
+  try {
+    await mkdir(sessionDirectory, { recursive: false });
+    return true;
+  } catch (error) {
+    if (isNodeErrorCode(error, "EEXIST")) return false;
+    throw error;
+  }
 }
 
 /**
@@ -441,38 +507,24 @@ export async function findActiveSession(
 }
 
 /**
- * Whether a session ID is already taken.
+ * Reserve an unused session ID at or after `createdAt`.
  *
- * IDs derive from the creation instant, so an explicit `--created-at` (or two
- * starts inside one millisecond) can collide with a session already on disk.
- * Overwriting it would erase a durable decision record and leave the earlier
- * requirement set's trace references pointing at a different interview.
+ * IDs derive from the creation instant, so an explicit `--created-at` — or two
+ * starts inside one millisecond — collides. The reservation is the successful
+ * `mkdir`, not a preceding existence check, so two concurrent processes cannot
+ * both conclude the same ID is free and have one overwrite the other's durable
+ * record.
  */
-export async function intakeSessionExists(
-  repositoryRoot: string,
-  sessionId: string
-): Promise<boolean> {
-  try {
-    await readFile(sessionFilePath(repositoryRoot, sessionId), "utf8");
-    return true;
-  } catch (error) {
-    if (isEnoent(error)) return false;
-    // Unreadable for any other reason still means occupied: claiming the ID
-    // would overwrite whatever is there.
-    return true;
-  }
-}
-
-/** An unused session ID at or after `createdAt`, salting until one is free. */
 export async function allocateSessionId(
   repositoryRoot: string,
   createdAt: UtcTimestamp
 ): Promise<string> {
-  const base = intakeSessionIdFor(createdAt);
-  if (!(await intakeSessionExists(repositoryRoot, base))) return base;
+  if (await claimSessionDirectory(repositoryRoot, intakeSessionIdFor(createdAt))) {
+    return intakeSessionIdFor(createdAt);
+  }
   for (let attempt = 1; attempt <= 999; attempt += 1) {
     const candidate = intakeSessionIdFor(createdAt, `-${attempt}`);
-    if (!(await intakeSessionExists(repositoryRoot, candidate))) return candidate;
+    if (await claimSessionDirectory(repositoryRoot, candidate)) return candidate;
   }
   throw new Error(`Could not allocate an intake session ID for ${createdAt}.`);
 }
