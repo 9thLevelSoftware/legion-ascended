@@ -234,9 +234,6 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
       write: adHocWriteScope,
-      // See taskgraph-input.ts: control artifacts are forbidden to the party
-      // the contract constrains, so an ad-hoc run cannot rewrite its own scope
-      // or risk tier before review and ship reload them.
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })

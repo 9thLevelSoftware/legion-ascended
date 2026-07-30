@@ -28333,7 +28333,7 @@ function truncate3(text, maxLength) {
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
 import { createHash as createHash18 } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, rmSync, statSync } from "node:fs";
 import path27 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
@@ -28542,6 +28542,22 @@ function reconcileTaskDiff(input) {
     observation: attributable,
     violations
   };
+}
+function restorePathsToBase(input) {
+  const failed = [];
+  for (const filePath of input.paths) {
+    try {
+      git(input.repositoryRoot, ["checkout", input.baseGitSha, "--", filePath]);
+      continue;
+    } catch {
+    }
+    try {
+      rmSync(path27.join(input.repositoryRoot, filePath), { force: true });
+    } catch {
+      failed.push(filePath);
+    }
+  }
+  return failed;
 }
 
 // packages/cli/src/workflow/executor/verification-runner.ts
@@ -30037,9 +30053,10 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  const fixBaseGitSha = resolveBaseGitSha(context.repositoryRoot);
   const beforeFix = observeWorkingTreeDiff({
     repositoryRoot: context.repositoryRoot,
-    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+    baseGitSha: fixBaseGitSha
   }).observation;
   await adapterForKind(executor).run({
     repositoryRoot: context.repositoryRoot,
@@ -30063,15 +30080,27 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
   });
   const reconciliation = reconcileTaskDiff({
     repositoryRoot: context.repositoryRoot,
-    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+    baseGitSha: fixBaseGitSha,
     scope: task.scope,
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
     alwaysForbidden: [LEGION_PROJECT_ROOT],
     ...beforeFix === void 0 ? {} : { before: beforeFix }
   });
-  if (reconciliationBlocks(reconciliation)) {
+  if (reconciliation.status === "unavailable") {
     throw new AutoFixScopeError(
-      `The auto-fix run left the task contract: ${reconciliation.violations.map((violation) => violation.message).join(" ")}`.trim()
+      `The auto-fix diff could not be observed, so the run is not proven in contract: ${reconciliation.unavailableReason ?? ""}`.trim()
+    );
+  }
+  if (reconciliation.status === "violated") {
+    const forbiddenPaths = reconciliation.violations.filter((violation) => violation.code === "forbidden_path_touched").flatMap((violation) => violation.paths);
+    const unrestored = forbiddenPaths.length === 0 ? [] : restorePathsToBase({
+      repositoryRoot: context.repositoryRoot,
+      baseGitSha: fixBaseGitSha,
+      paths: forbiddenPaths
+    });
+    const restoredNote = forbiddenPaths.length === 0 ? "" : unrestored.length === 0 ? ` Restored ${forbiddenPaths.length} protected path(s) to their pre-fix state.` : ` Could not restore ${unrestored.join(", ")}; inspect the worktree before rerunning.`;
+    throw new AutoFixScopeError(
+      `The auto-fix run left the task contract: ${reconciliation.violations.map((violation) => violation.message).join(" ")}${restoredNote}`.trim()
     );
   }
 }
@@ -30541,9 +30570,6 @@ async function createAdHocTaskgraph(input) {
     scope: {
       read: input.readScope ?? [input.sourceArtifactPath, change.artifactPath, oracle.artifactPath],
       write: adHocWriteScope,
-      // See taskgraph-input.ts: control artifacts are forbidden to the party
-      // the contract constrains, so an ad-hoc run cannot rewrite its own scope
-      // or risk tier before review and ship reload them.
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
       budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })
