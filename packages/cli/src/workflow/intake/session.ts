@@ -31,10 +31,12 @@ import {
 
 import {
   INTAKE_GRAPH_VERSION,
+  MAX_NODE_ID_LENGTH,
   answersByNodeId,
   applicableNodes,
   findNode,
   isNodeApplicable,
+  namespaceInjectedNodeId,
   nextNode
 } from "./graph.js";
 
@@ -111,9 +113,21 @@ export function createSession(input: CreateSessionInput): SeededSession {
         runId: input.exploration.runId
       });
     }
+    // Injected IDs are namespaced rather than checked for collisions: the graph
+    // never uses the `open-` prefix, so a slugified open question can never
+    // shadow a built-in node no matter what the exploration called it.
+    const takenNodeIds = new Set<string>();
     for (const question of input.exploration.openQuestions) {
+      let nodeId = namespaceInjectedNodeId(question.nodeId);
+      let collision = 0;
+      while (takenNodeIds.has(nodeId)) {
+        collision += 1;
+        const suffix = `-${collision}`;
+        nodeId = `${namespaceInjectedNodeId(question.nodeId).slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+      }
+      takenNodeIds.add(nodeId);
       injectedNodes.push({
-        nodeId: question.nodeId,
+        nodeId,
         slot: question.slot,
         prompt: question.question,
         origin: { runId: input.exploration.runId, anchor: question.slot }
@@ -300,6 +314,29 @@ export function withDiagnostics(
 export type LoadSessionResult =
   | { readonly ok: true; readonly session: IntakeSession }
   | { readonly ok: false; readonly reason: string };
+
+/**
+ * Whether an active session may still be advanced by this CLI.
+ *
+ * A session pins the graph version it started under. If the CLI has since moved
+ * to a different graph, the answers on disk were given to questions that may no
+ * longer exist, mean something else, or sit in a different order — and every
+ * cursor, prune and finalize would silently reinterpret them under the new
+ * graph. Pinning would be decoration if nothing enforced it.
+ *
+ * Finalized and aborted sessions are exempt. They are records rather than work
+ * in progress, and refusing to read a record because the graph moved on would
+ * make history unreadable after every upgrade.
+ */
+export function graphVersionMismatch(session: IntakeSession): string | undefined {
+  if (session.status !== "active") return undefined;
+  if (session.graphVersion === INTAKE_GRAPH_VERSION) return undefined;
+  return (
+    `Session ${session.id} was started under intake graph ${session.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}. ` +
+    `Its answers were given to a different set of questions. Run legion start --abort --session ${session.id} and begin again, ` +
+    `or finish it with the CLI version it was started under.`
+  );
+}
 
 export async function loadSession(
   repositoryRoot: string,

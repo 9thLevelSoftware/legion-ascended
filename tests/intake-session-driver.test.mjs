@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -240,12 +240,136 @@ test("a hand-written ROADMAP.md is not overwritten", async (t) => {
     "refusing to overwrite must say how to override it"
   );
 
-  // Re-finalizing with the override replaces it, and the replacement is a
-  // roadmap this command would recognise as its own next time.
-  const forced = await run(
-    "start", "--finalize", "--session", payload.session.id, "--force-roadmap", "--json", "--created-at", CREATED_AT
+  // The advice has to be followable. Finalizing already closed the session, so
+  // refusing the retry would make the warning tell the operator to run a command
+  // that cannot work.
+  const advice = payload.warnings.find((entry) => /--force-roadmap/.test(entry.message)).message;
+  const flags = /Replace it with: legion start (.+)$/.exec(advice)[1].trim().split(" ");
+  const forced = await run("start", ...flags, "--json", "--created-at", CREATED_AT);
+
+  assert.equal(forced.exitCode, 0, forced.stderr);
+  const forcedPayload = parseJsonOutput(forced);
+  assert.equal(forcedPayload.roadmap.written, true);
+
+  const replaced = await readFile(roadmapPath, "utf8");
+  assert.notEqual(replaced, handWritten);
+  assert.match(replaced, /^## Phase 1: /m);
+
+  // Re-finalizing is a re-render, not a second decision: the requirement set is
+  // byte-identical, so a retry cannot quietly change the contract.
+  assert.equal(forcedPayload.requirementSet.requirementSetHash, payload.requirementSet.requirementSetHash);
+});
+
+test("a re-finalized session rewrites identical requirements", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  await run("start", "--intake", "intake.json", "--created-at", CREATED_AT);
+
+  const first = parseJsonOutput(await run("start", "--finalize", "--json", "--created-at", CREATED_AT));
+  const requirementPath = path.join(root, ...first.requirementSet.paths[0].split("/"));
+  const before = await readFile(requirementPath, "utf8");
+
+  // No --created-at this time. The artifacts must still be identical, because
+  // finalize timestamps from the session rather than from the clock — otherwise
+  // every retry would produce a new hash and drift detection would fire on the
+  // command that is supposed to establish the baseline.
+  const again = await run("start", "--finalize", "--session", first.session.id, "--json");
+  assert.equal(again.exitCode, 0, again.stderr);
+  const second = parseJsonOutput(again);
+
+  assert.equal(second.requirementSet.requirementSetHash, first.requirementSet.requirementSetHash);
+  assert.equal(await readFile(requirementPath, "utf8"), before);
+  assert.ok(
+    second.warnings.some((entry) => /already finalized/.test(entry.message)),
+    "a re-finalize should say it was one"
   );
-  assert.equal(forced.exitCode, 1, "a finalized session must not finalize twice");
+});
+
+test("an exploration edited mid-interview has its proposals withheld", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  // Stand up a guidance run the way `legion explore` does, then seed from it.
+  const runId = "explore-1";
+  const artifactDir = path.join(root, ".legion/project/workflow/explore", runId);
+  await mkdir(artifactDir, { recursive: true });
+  const explorationPath = `.legion/project/workflow/explore/${runId}/exploration.json`;
+  const exploration = {
+    schemaVersion: "0.2.0",
+    createdAt: CREATED_AT,
+    kind: "exploration",
+    runId: "run_explore-1",
+    status: "exploratory",
+    entry: "raw-idea",
+    topic: "asset mapping",
+    summary: "An idea about resolving assets.",
+    proposals: [
+      {
+        slot: "project.name",
+        value: "Asset Mapper",
+        rationale: "The topic named it.",
+        anchor: "framing",
+        confidence: "inferred"
+      }
+    ],
+    openQuestions: [],
+    notes: []
+  };
+  await writeFile(path.join(artifactDir, "exploration.json"), JSON.stringify(exploration), "utf8");
+  await writeFile(
+    path.join(artifactDir, "workflow-run.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      kind: "workflow_run",
+      workflow: "explore",
+      runId,
+      createdAt: CREATED_AT,
+      status: "completed",
+      input: { topic: "asset mapping" },
+      outputs: { explorationArtifactPath: explorationPath },
+      nextAction: { command: "legion start", reason: "seed intake" },
+      diagnostics: []
+    }),
+    "utf8"
+  );
+
+  const seeded = await run(
+    "start", "--from-exploration", "run_explore-1", "--json", "--created-at", CREATED_AT
+  );
+  assert.equal(seeded.exitCode, 0, seeded.stderr);
+  assert.equal(
+    parseJsonOutput(seeded).question.proposal?.value,
+    "Asset Mapper",
+    "a matching artifact should offer its proposal"
+  );
+
+  // Edit the exploration after seeding. The session records the hash it was
+  // seeded from; accepting a proposal now would attest to bytes that no longer
+  // exist.
+  await writeFile(
+    path.join(artifactDir, "exploration.json"),
+    JSON.stringify({
+      ...exploration,
+      proposals: [{ ...exploration.proposals[0], value: "Something Else Entirely" }]
+    }),
+    "utf8"
+  );
+
+  const after = await run("start", "--next", "--json");
+  assert.equal(after.exitCode, 0, after.stderr);
+  const payload = parseJsonOutput(after);
+  assert.equal(payload.question.proposal, undefined, "a changed exploration must not still propose");
+  assert.ok(
+    payload.warnings.some((entry) => /has changed since this session was seeded/.test(entry.message)),
+    `the withholding must be explained, got ${JSON.stringify(payload.warnings)}`
+  );
+
+  // The question is still asked, so withholding costs a suggestion rather than
+  // an answer.
+  const answered = await run("start", "--answer", "project-name=Asset Mapper");
+  assert.equal(answered.exitCode, 0, answered.stderr);
+
+  const accepted = await run("start", "--accept-proposal", "--json");
+  assert.equal(accepted.exitCode, 1, "no proposal is available to accept");
 });
 
 test("a finalized project can be planned against", async (t) => {

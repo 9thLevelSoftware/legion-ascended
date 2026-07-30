@@ -20,8 +20,22 @@ import { explorationSchema, type Exploration } from "@legion/protocol";
 
 import { latestGuidanceRuns, type GuidanceRunDocument } from "../guidance-run.js";
 
+/**
+ * An exploration on disk, addressable by either of the two IDs it carries.
+ *
+ * A guidance run and the exploration entity it produced have *different* IDs:
+ * the run is named by its directory, the entity by `formatEntityId("run", ...)`
+ * derived from it. `--from-exploration` is given the run ID a human can see,
+ * while `intakeSessionSchema` stores the entity ID because its `runId` field is
+ * branded. Matching only one of them meant a seeded session could never reload
+ * the exploration it named, and every proposal silently disappeared on the
+ * second invocation.
+ */
 export interface ExplorationCandidate {
+  /** The guidance run directory name, as `--from-exploration` accepts it. */
   readonly runId: string;
+  /** The exploration entity's own `run_*` ID, as a session records it. */
+  readonly explorationRunId: string;
   readonly artifactPath: string;
   readonly createdAt: string;
   readonly topic: string;
@@ -32,7 +46,27 @@ function explorationArtifactPathOf(run: GuidanceRunDocument): string | undefined
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-/** Explorations on disk that carry a typed artifact, newest first. */
+async function readExplorationRunId(
+  repositoryRoot: string,
+  artifactPath: string
+): Promise<string | undefined> {
+  try {
+    const raw = await readFile(path.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    const runId = (parsed as { runId?: unknown }).runId;
+    return typeof runId === "string" ? runId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Explorations on disk that carry a typed artifact, newest first.
+ *
+ * Each artifact is opened to read its entity ID rather than re-deriving it from
+ * the run ID. Re-deriving would duplicate the naming rule in a second place,
+ * and the two would drift the moment either changed.
+ */
 export async function listExplorations(
   repositoryRoot: string
 ): Promise<readonly ExplorationCandidate[]> {
@@ -51,6 +85,7 @@ export async function listExplorations(
     const topic = run.input["topic"];
     candidates.push({
       runId: run.runId,
+      explorationRunId: (await readExplorationRunId(repositoryRoot, artifactPath)) ?? run.runId,
       artifactPath,
       createdAt: run.createdAt,
       topic: typeof topic === "string" ? topic : "exploration"
@@ -81,7 +116,11 @@ export async function loadExploration(
   runId: string
 ): Promise<LoadExplorationResult> {
   const candidates = await listExplorations(repositoryRoot);
-  const candidate = candidates.find((entry) => entry.runId === runId);
+  // Either ID resolves: the run ID a human types, or the entity ID a session
+  // recorded.
+  const candidate = candidates.find(
+    (entry) => entry.runId === runId || entry.explorationRunId === runId
+  );
   if (candidate === undefined) {
     const known = candidates.map((entry) => entry.runId).join(", ");
     return {

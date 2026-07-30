@@ -9,11 +9,14 @@ import {
 import {
   MAX_CRITERIA_PER_REQUIREMENT,
   MAX_REQUIREMENTS,
+  allGraphNodeIds,
+  isInjectedNodeId,
   materializeNodes,
   nextNode
 } from "../packages/cli/dist/workflow/intake/graph.js";
 import {
   createSession,
+  graphVersionMismatch,
   pruneOrphanedAnswers,
   recordAnswer,
   stepBack
@@ -389,7 +392,9 @@ test("an exploration adds questions and never removes them", () => {
   const withInjected = materializeNodes({ answers: [], injectedNodes: seeded.session.injectedNodes });
   const withoutInjected = materializeNodes({ answers: [], injectedNodes: [] });
   assert.equal(withInjected.length, withoutInjected.length + 1);
-  assert.equal(withInjected.at(-1)?.id, "which-runtime");
+  // Namespaced on the way in, so a slugified open question can never shadow a
+  // built-in node.
+  assert.equal(withInjected.at(-1)?.id, "open-which-runtime");
   assert.equal(withInjected.at(-1)?.required, true);
 });
 
@@ -457,4 +462,85 @@ test("the rendered roadmap satisfies the validator its own docs specify", () => 
   // `resolvePhaseSource` greps for this heading shape; a roadmap that does not
   // carry it cannot be planned against.
   assert.match(roadmap, /^## Phase 1: /m);
+});
+
+test("an exploration cannot inject a node ID the graph already uses", () => {
+  // Open questions become node IDs by slugifying their text, so a question
+  // phrased "Project name?" lands on `project-name`. Answers are keyed by node
+  // ID, so the collision would make answering the built-in question mark the
+  // injected one answered — and the operator would never be asked something the
+  // exploration explicitly flagged as unresolved.
+  const exploration = {
+    schemaVersion: SCHEMA_VERSION,
+    createdAt: CREATED_AT,
+    kind: "exploration",
+    runId: "run_explore-collide",
+    status: "exploratory",
+    entry: "raw-idea",
+    topic: "collision",
+    summary: "An exploration whose open questions collide with the graph.",
+    proposals: [],
+    openQuestions: [
+      { nodeId: "project-name", slot: "open.a", question: "Project name?", why: "unsettled" },
+      { nodeId: "req-1-statement", slot: "open.b", question: "First requirement?", why: "unsettled" },
+      { nodeId: "project-name", slot: "open.c", question: "Project name, again?", why: "unsettled" }
+    ],
+    notes: []
+  };
+
+  const { session } = createSession({
+    createdAt: CREATED_AT,
+    schemaVersion: SCHEMA_VERSION,
+    exploration
+  });
+
+  const graphIds = new Set(allGraphNodeIds());
+  const injectedIds = session.injectedNodes.map((node) => node.nodeId);
+
+  assert.equal(injectedIds.length, 3);
+  assert.equal(new Set(injectedIds).size, 3, "injected IDs must stay unique among themselves");
+  for (const id of injectedIds) {
+    assert.equal(graphIds.has(id), false, `${id} collides with a graph node`);
+    assert.doesNotThrow(() => intakeNodeIdSchema.parse(id), `${id} is not a valid node ID`);
+  }
+
+  // Every injected question is still asked, which is the invariant the
+  // collision would have broken.
+  const nodes = materializeNodes({ answers: [], injectedNodes: session.injectedNodes });
+  const ids = nodes.map((node) => node.id);
+  assert.equal(new Set(ids).size, ids.length, "materialized IDs must be unique");
+  for (const id of injectedIds) assert.ok(ids.includes(id), `${id} should be asked`);
+});
+
+test("the graph never emits an ID inside the injected namespace", () => {
+  // The namespace is only a guarantee if the graph stays out of it.
+  for (const id of allGraphNodeIds()) {
+    assert.equal(
+      isInjectedNodeId(id),
+      false,
+      `graph node ${id} sits in the namespace reserved for injected questions`
+    );
+  }
+});
+
+test("an active session pinned to another graph version is refused", () => {
+  const { session } = createSession({ createdAt: CREATED_AT, schemaVersion: SCHEMA_VERSION });
+  assert.equal(graphVersionMismatch(session), undefined);
+
+  // Answers given under one graph were given to different questions. Running
+  // them against a new graph would silently reinterpret them, which is the
+  // failure the pinning exists to catch.
+  const stale = intakeSessionSchema.parse({ ...session, graphVersion: "0.9.0" });
+  assert.match(graphVersionMismatch(stale) ?? "", /0\.9\.0/);
+  assert.match(graphVersionMismatch(stale) ?? "", /--abort/);
+
+  // A finalized session is a record, not work in progress. Refusing to read it
+  // after an upgrade would make history unreadable.
+  const finalized = intakeSessionSchema.parse({
+    ...stale,
+    status: "finalized",
+    projectId: "prj_asset-mapper",
+    cursor: undefined
+  });
+  assert.equal(graphVersionMismatch(finalized), undefined);
 });

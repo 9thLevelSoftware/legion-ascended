@@ -75,12 +75,15 @@ export interface IntakeNode {
   readonly injected?: boolean;
 }
 
+/** The protocol caps an intake node ID at 64 characters. */
+export const MAX_NODE_ID_LENGTH = 64;
+
 /**
  * Loop bounds.
  *
  * An interview whose length is chosen by the interviewee is not bounded, and an
  * unbounded interview is one nobody finishes. These caps also keep generated
- * node IDs inside the protocol's 64-character limit.
+ * node IDs inside `MAX_NODE_ID_LENGTH`.
  */
 export const MAX_REQUIREMENTS = 40;
 export const MAX_CRITERIA_PER_REQUIREMENT = 20;
@@ -366,6 +369,39 @@ function moreRequirementsNode(index: number): IntakeNode {
   };
 }
 
+/**
+ * The namespace every injected node ID lives in.
+ *
+ * Exploration derives node IDs by slugifying its own open questions, so a
+ * question phrased "Project name?" produces `project-name` — the ID of a graph
+ * node. Answers are keyed by node ID, so the collision would make answering the
+ * built-in question mark the injected one answered, and the operator would
+ * never be asked something the exploration explicitly flagged as unresolved.
+ *
+ * Namespacing is structural rather than a collision check because a check has
+ * to know the full graph ID space, which includes loop-generated IDs that
+ * depend on the answers so far. A reserved prefix needs to know nothing.
+ */
+export const INJECTED_NODE_PREFIX = "open-";
+
+/** Node IDs the graph itself may never use, so injection can own them. */
+export function isInjectedNodeId(nodeId: string): boolean {
+  return nodeId.startsWith(INJECTED_NODE_PREFIX);
+}
+
+/**
+ * Move a proposed injected node ID into the injected namespace.
+ *
+ * Idempotent, so an exploration that already produced a namespaced ID is left
+ * alone rather than accumulating prefixes.
+ */
+export function namespaceInjectedNodeId(nodeId: string): string {
+  if (isInjectedNodeId(nodeId)) return nodeId;
+  const available = MAX_NODE_ID_LENGTH - INJECTED_NODE_PREFIX.length;
+  const trimmed = nodeId.slice(0, available).replace(/-+$/g, "");
+  return `${INJECTED_NODE_PREFIX}${trimmed.length > 0 ? trimmed : "question"}`;
+}
+
 export function injectedNodeToIntakeNode(node: IntakeInjectedNode): IntakeNode {
   return {
     id: node.nodeId,
@@ -529,4 +565,43 @@ export function answersByNodeId(
 export function applicableNodes(input: MaterializeInput): readonly IntakeNode[] {
   const answers = answerMap(input.answers);
   return materializeNodes(input).filter((node) => isNodeApplicable(node, answers));
+}
+
+/**
+ * Every node ID the graph itself can produce, at full loop depth.
+ *
+ * Exported for the test that asserts the graph never enters the injected
+ * namespace. Without that assertion the namespace is a convention, and a
+ * convention is exactly what an injected node ID collided with in the first
+ * place.
+ */
+export function allGraphNodeIds(): readonly string[] {
+  const answers: IntakeAnswer[] = [];
+  const at = "1970-01-01T00:00:00.000Z";
+  for (let requirement = 1; requirement <= MAX_REQUIREMENTS; requirement += 1) {
+    answers.push({
+      nodeId: `req-${requirement}-priority`,
+      slot: `requirements.${requirement}.priority`,
+      value: "must",
+      answeredAt: at,
+      source: "human"
+    });
+    answers.push({
+      nodeId: `req-${requirement}-more`,
+      slot: `requirements.${requirement}.more`,
+      value: true,
+      answeredAt: at,
+      source: "human"
+    });
+    for (let criterion = 1; criterion <= MAX_CRITERIA_PER_REQUIREMENT; criterion += 1) {
+      answers.push({
+        nodeId: `req-${requirement}-ac-${criterion}-more`,
+        slot: `requirements.${requirement}.criteria.${criterion}.more`,
+        value: true,
+        answeredAt: at,
+        source: "human"
+      });
+    }
+  }
+  return materializeNodes({ answers, injectedNodes: [] }).map((node) => node.id);
 }

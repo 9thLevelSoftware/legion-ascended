@@ -26277,6 +26277,7 @@ function generatedCriteria(statements) {
 
 // packages/cli/src/workflow/intake/graph.ts
 var INTAKE_GRAPH_VERSION = "1.0.0";
+var MAX_NODE_ID_LENGTH = 64;
 var MAX_REQUIREMENTS = 40;
 var MAX_CRITERIA_PER_REQUIREMENT = 20;
 var PRIORITY_OPTIONS = [
@@ -26537,6 +26538,16 @@ function moreRequirementsNode(index) {
     kind: "confirm",
     required: true
   };
+}
+var INJECTED_NODE_PREFIX = "open-";
+function isInjectedNodeId(nodeId2) {
+  return nodeId2.startsWith(INJECTED_NODE_PREFIX);
+}
+function namespaceInjectedNodeId(nodeId2) {
+  if (isInjectedNodeId(nodeId2)) return nodeId2;
+  const available = MAX_NODE_ID_LENGTH - INJECTED_NODE_PREFIX.length;
+  const trimmed = nodeId2.slice(0, available).replace(/-+$/g, "");
+  return `${INJECTED_NODE_PREFIX}${trimmed.length > 0 ? trimmed : "question"}`;
 }
 function injectedNodeToIntakeNode(node) {
   return {
@@ -27926,6 +27937,16 @@ function explorationArtifactPathOf(run) {
   const value = run.outputs["explorationArtifactPath"];
   return typeof value === "string" && value.length > 0 ? value : void 0;
 }
+async function readExplorationRunId(repositoryRoot, artifactPath) {
+  try {
+    const raw = await readFile14(path23.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const parsed = JSON.parse(raw);
+    const runId = parsed.runId;
+    return typeof runId === "string" ? runId : void 0;
+  } catch {
+    return void 0;
+  }
+}
 async function listExplorations(repositoryRoot) {
   const runs = await latestGuidanceRuns({
     repositoryRoot,
@@ -27941,6 +27962,7 @@ async function listExplorations(repositoryRoot) {
     const topic = run.input["topic"];
     candidates.push({
       runId: run.runId,
+      explorationRunId: await readExplorationRunId(repositoryRoot, artifactPath) ?? run.runId,
       artifactPath,
       createdAt: run.createdAt,
       topic: typeof topic === "string" ? topic : "exploration"
@@ -27950,7 +27972,9 @@ async function listExplorations(repositoryRoot) {
 }
 async function loadExploration(repositoryRoot, runId) {
   const candidates = await listExplorations(repositoryRoot);
-  const candidate = candidates.find((entry) => entry.runId === runId);
+  const candidate = candidates.find(
+    (entry) => entry.runId === runId || entry.explorationRunId === runId
+  );
   if (candidate === void 0) {
     const known = candidates.map((entry) => entry.runId).join(", ");
     return {
@@ -28082,9 +28106,18 @@ function createSession(input) {
         runId: input.exploration.runId
       });
     }
+    const takenNodeIds = /* @__PURE__ */ new Set();
     for (const question of input.exploration.openQuestions) {
+      let nodeId2 = namespaceInjectedNodeId(question.nodeId);
+      let collision = 0;
+      while (takenNodeIds.has(nodeId2)) {
+        collision += 1;
+        const suffix = `-${collision}`;
+        nodeId2 = `${namespaceInjectedNodeId(question.nodeId).slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+      }
+      takenNodeIds.add(nodeId2);
       injectedNodes.push({
-        nodeId: question.nodeId,
+        nodeId: nodeId2,
         slot: question.slot,
         prompt: question.question,
         origin: { runId: input.exploration.runId, anchor: question.slot }
@@ -28189,6 +28222,11 @@ function finalizeSession(session, projectId) {
 function withDiagnostics(session, diagnostics) {
   return intakeSessionSchema.parse({ ...session, diagnostics: [...diagnostics] });
 }
+function graphVersionMismatch(session) {
+  if (session.status !== "active") return void 0;
+  if (session.graphVersion === INTAKE_GRAPH_VERSION) return void 0;
+  return `Session ${session.id} was started under intake graph ${session.graphVersion}, but this CLI ships ${INTAKE_GRAPH_VERSION}. Its answers were given to a different set of questions. Run legion start --abort --session ${session.id} and begin again, or finish it with the CLI version it was started under.`;
+}
 async function loadSession(repositoryRoot, sessionId) {
   let text;
   try {
@@ -28287,9 +28325,22 @@ function sessionPayload(session, answered, total) {
 }
 async function proposalsFor(repositoryRoot, session) {
   const reference = session.explorationRef;
-  if (reference === void 0) return /* @__PURE__ */ new Map();
+  if (reference === void 0) return { proposals: /* @__PURE__ */ new Map(), diagnostics: [] };
   const loaded = await loadExploration(repositoryRoot, reference.runId);
-  if (!loaded.ok) return /* @__PURE__ */ new Map();
+  if (!loaded.ok) {
+    return {
+      proposals: /* @__PURE__ */ new Map(),
+      diagnostics: [`Exploration ${reference.runId} could not be reloaded, so its proposals are unavailable: ${loaded.reason}`]
+    };
+  }
+  if (loaded.loaded.artifact.sha256 !== reference.artifact.sha256) {
+    return {
+      proposals: /* @__PURE__ */ new Map(),
+      diagnostics: [
+        `Exploration ${reference.runId} has changed since this session was seeded, so its proposals were withheld. The remaining questions are asked normally; start a new session to use the updated exploration.`
+      ]
+    };
+  }
   const proposals = /* @__PURE__ */ new Map();
   for (const proposal of loaded.loaded.exploration.proposals) {
     proposals.set(proposal.slot, {
@@ -28300,25 +28351,33 @@ async function proposalsFor(repositoryRoot, session) {
       runId: loaded.loaded.exploration.runId
     });
   }
-  return proposals;
+  return { proposals, diagnostics: [] };
 }
 async function resolveSession(context, options) {
   const explicitId = stringOption(context, "session");
   if (explicitId !== void 0) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
     if (!loaded.ok) return usageError(loaded.reason);
+    const stale = graphVersionMismatch(loaded.session);
+    if (stale !== void 0) return usageError(stale);
+    const seeded2 = await proposalsFor(context.repositoryRoot, loaded.session);
     return {
       session: loaded.session,
-      proposals: await proposalsFor(context.repositoryRoot, loaded.session),
-      created: false
+      proposals: seeded2.proposals,
+      created: false,
+      notes: seeded2.diagnostics
     };
   }
   const active = await findActiveSession(context.repositoryRoot);
   if (active !== void 0) {
+    const stale = graphVersionMismatch(active);
+    if (stale !== void 0) return usageError(stale);
+    const seeded2 = await proposalsFor(context.repositoryRoot, active);
     return {
       session: active,
-      proposals: await proposalsFor(context.repositoryRoot, active),
-      created: false
+      proposals: seeded2.proposals,
+      created: false,
+      notes: seeded2.diagnostics
     };
   }
   if (!options.create) {
@@ -28338,11 +28397,11 @@ async function resolveSession(context, options) {
       explorationArtifact: loaded.loaded.artifact
     });
     await saveSession(context.repositoryRoot, seeded2.session);
-    return { session: seeded2.session, proposals: seeded2.proposals, created: true };
+    return { session: seeded2.session, proposals: seeded2.proposals, created: true, notes: [] };
   }
   const seeded = createSession({ createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
   await saveSession(context.repositoryRoot, seeded.session);
-  return { session: seeded.session, proposals: seeded.proposals, created: true };
+  return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
 }
 function isCliResult3(value) {
   return "exitCode" in value;
@@ -28379,6 +28438,8 @@ ${renderNextAction(action2)}`
     "Record this answer; the next question follows."
   );
   const human = [];
+  for (const note of resolved.notes) human.push(`warning: ${note}`);
+  if (resolved.notes.length > 0) human.push("");
   if (created) {
     human.push(`Started intake session ${session.id} (graph ${session.graphVersion}).`);
     if (session.injectedNodes.length > 0) {
@@ -28401,6 +28462,7 @@ ${renderNextAction(action2)}`
       session: sessionPayload(session, answered, total),
       question: questionPayload(node, proposal),
       ...explorations.length > 0 && created ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) } : {},
+      ...resolved.notes.length === 0 ? {} : { warnings: resolved.notes.map((note) => ({ code: "exploration_unavailable", message: note })) },
       nextAction: action
     },
     human.join("\n")
@@ -28619,7 +28681,8 @@ async function handleSessionStatus(context) {
         source: answer.source,
         answeredAt: answer.answeredAt
       })),
-      diagnostics: session.diagnostics
+      diagnostics: session.diagnostics,
+      ...resolved.notes.length === 0 ? {} : { warnings: resolved.notes.map((note) => ({ code: "exploration_unavailable", message: note })) }
     },
     renderSessionStatus({
       sessionId: session.id,
@@ -28745,9 +28808,10 @@ async function handleFinalize(context) {
   const resolved = await resolveSession(context, { create: false });
   if (isCliResult3(resolved)) return resolved;
   const session = resolved.session;
-  if (session.status !== "active") {
-    return usageError(`Session ${session.id} is already ${session.status}.`);
+  if (session.status === "aborted") {
+    return usageError(`Session ${session.id} was aborted and cannot be finalized.`);
   }
+  const refinalizing = session.status === "finalized";
   const { node, answered, total } = nextNode({
     answers: session.answers,
     injectedNodes: session.injectedNodes
@@ -28793,7 +28857,7 @@ ${renderIntakeDiagnostics(semantic)}`
     const message = error2 instanceof Error ? error2.message : String(error2);
     return usageError(`The project name does not produce a valid slug. Pass --slug explicitly. ${message}`);
   }
-  const createdAt = createdAtOption(context) ?? nowTimestamp2();
+  const createdAt = createdAtOption(context) ?? session.createdAt;
   const constitution = renderConstitution({ answers: session.answers });
   const initialized = await initProject({
     repositoryRoot: context.repositoryRoot,
@@ -28857,12 +28921,15 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
       roadmapWritten = true;
     } else {
       notes.push(
-        `${ROADMAP_FILE} already exists and was not written by legion start; it was left alone. Pass --force-roadmap to replace it.`
+        `${ROADMAP_FILE} already exists and was not written by legion start; it was left alone. Replace it with: legion start --finalize --session ${session.id} --force-roadmap`
       );
     }
   } else {
     await writeFile8(roadmapPath, roadmap, "utf8");
     roadmapWritten = true;
+  }
+  if (refinalizing) {
+    notes.unshift(`Session ${session.id} was already finalized; its artifacts were rewritten.`);
   }
   const finalized = withDiagnostics(finalizeSession(session, projectId), notes);
   await saveSession(context.repositoryRoot, finalized);
@@ -33423,7 +33490,7 @@ import path40 from "node:path";
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
 var ENTRY_VALUES = /* @__PURE__ */ new Set(["raw-idea", "pasted-spec", "existing-codebase", "link"]);
-var MAX_NODE_ID_LENGTH = 63;
+var MAX_NODE_ID_LENGTH2 = 63;
 function explorationResultContract() {
   return [
     "Return only JSON with this shape:",
@@ -33452,7 +33519,7 @@ function asString(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : void 0;
 }
 function slugToNodeId(value, fallbackIndex) {
-  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_NODE_ID_LENGTH).replace(/-+$/g, "");
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_NODE_ID_LENGTH2).replace(/-+$/g, "");
   if (slug.length < 2 || !/^[a-z]/.test(slug)) return `open-question-${fallbackIndex + 1}`;
   return slug;
 }
@@ -33514,7 +33581,7 @@ function parseExploration(input) {
     while (seenNodeIds.has(nodeId2)) {
       collision += 1;
       const suffix = `-${collision}`;
-      nodeId2 = `${base.slice(0, MAX_NODE_ID_LENGTH - suffix.length)}${suffix}`;
+      nodeId2 = `${base.slice(0, MAX_NODE_ID_LENGTH2 - suffix.length)}${suffix}`;
     }
     seenNodeIds.add(nodeId2);
     openQuestions.push({ nodeId: nodeId2, slot, question, why });

@@ -43,6 +43,7 @@ import {
   createSession,
   finalizeSession,
   findActiveSession,
+  graphVersionMismatch,
   loadSession,
   nowTimestamp,
   recordAnswer,
@@ -60,6 +61,8 @@ interface ResolvedSession {
   readonly session: IntakeSession;
   readonly proposals: ReadonlyMap<string, ExplorationProposal>;
   readonly created: boolean;
+  /** Non-fatal notes about the seeding exploration, surfaced to the operator. */
+  readonly notes: readonly string[];
 }
 
 function intakeSessionArtifactPath(sessionId: string): string {
@@ -106,14 +109,50 @@ function sessionPayload(session: IntakeSession, answered: number, total: number)
   };
 }
 
+interface LoadedProposals {
+  readonly proposals: ReadonlyMap<string, ExplorationProposal>;
+  readonly diagnostics: readonly string[];
+}
+
+/**
+ * Reload the proposals a seeded session may offer.
+ *
+ * The recorded artifact hash is checked, not merely stored. `--accept-proposal`
+ * writes `source: proposed-accepted` together with the exploration it came
+ * from, and that provenance is worthless if the bytes it names have changed
+ * since — the session would attest to a value the exploration no longer
+ * contains.
+ *
+ * A mismatch drops every proposal rather than offering the new ones. Dropping
+ * degrades to asking the operator, which is the safe direction and the same
+ * asymmetry `parseExploration` already applies: a lost suggestion costs a
+ * question, an unnoticed substitution costs a decision.
+ */
 async function proposalsFor(
   repositoryRoot: string,
   session: IntakeSession
-): Promise<ReadonlyMap<string, ExplorationProposal>> {
+): Promise<LoadedProposals> {
   const reference = session.explorationRef;
-  if (reference === undefined) return new Map();
+  if (reference === undefined) return { proposals: new Map(), diagnostics: [] };
+
   const loaded = await loadExploration(repositoryRoot, reference.runId);
-  if (!loaded.ok) return new Map();
+  if (!loaded.ok) {
+    return {
+      proposals: new Map(),
+      diagnostics: [`Exploration ${reference.runId} could not be reloaded, so its proposals are unavailable: ${loaded.reason}`]
+    };
+  }
+
+  if (loaded.loaded.artifact.sha256 !== reference.artifact.sha256) {
+    return {
+      proposals: new Map(),
+      diagnostics: [
+        `Exploration ${reference.runId} has changed since this session was seeded, so its proposals were withheld. ` +
+          `The remaining questions are asked normally; start a new session to use the updated exploration.`
+      ]
+    };
+  }
+
   const proposals = new Map<string, ExplorationProposal>();
   for (const proposal of loaded.loaded.exploration.proposals) {
     proposals.set(proposal.slot, {
@@ -124,7 +163,7 @@ async function proposalsFor(
       runId: loaded.loaded.exploration.runId
     });
   }
-  return proposals;
+  return { proposals, diagnostics: [] };
 }
 
 /**
@@ -143,19 +182,27 @@ async function resolveSession(
   if (explicitId !== undefined) {
     const loaded = await loadSession(context.repositoryRoot, explicitId);
     if (!loaded.ok) return usageError(loaded.reason);
+    const stale = graphVersionMismatch(loaded.session);
+    if (stale !== undefined) return usageError(stale);
+    const seeded = await proposalsFor(context.repositoryRoot, loaded.session);
     return {
       session: loaded.session,
-      proposals: await proposalsFor(context.repositoryRoot, loaded.session),
-      created: false
+      proposals: seeded.proposals,
+      created: false,
+      notes: seeded.diagnostics
     };
   }
 
   const active = await findActiveSession(context.repositoryRoot);
   if (active !== undefined) {
+    const stale = graphVersionMismatch(active);
+    if (stale !== undefined) return usageError(stale);
+    const seeded = await proposalsFor(context.repositoryRoot, active);
     return {
       session: active,
-      proposals: await proposalsFor(context.repositoryRoot, active),
-      created: false
+      proposals: seeded.proposals,
+      created: false,
+      notes: seeded.diagnostics
     };
   }
 
@@ -177,12 +224,12 @@ async function resolveSession(
       explorationArtifact: loaded.loaded.artifact
     });
     await saveSession(context.repositoryRoot, seeded.session);
-    return { session: seeded.session, proposals: seeded.proposals, created: true };
+    return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
   }
 
   const seeded = createSession({ createdAt, schemaVersion: LEGION_PROTOCOL_VERSION });
   await saveSession(context.repositoryRoot, seeded.session);
-  return { session: seeded.session, proposals: seeded.proposals, created: true };
+  return { session: seeded.session, proposals: seeded.proposals, created: true, notes: [] };
 }
 
 function isCliResult(value: ResolvedSession | CliResult): value is CliResult {
@@ -228,6 +275,8 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
   );
 
   const human: string[] = [];
+  for (const note of resolved.notes) human.push(`warning: ${note}`);
+  if (resolved.notes.length > 0) human.push("");
   if (created) {
     human.push(`Started intake session ${session.id} (graph ${session.graphVersion}).`);
     if (session.injectedNodes.length > 0) {
@@ -255,6 +304,9 @@ export async function handleNextQuestion(context: CliContext): Promise<CliResult
       ...(explorations.length > 0 && created
         ? { availableExplorations: explorations.map((entry) => ({ runId: entry.runId, topic: entry.topic })) }
         : {}),
+      ...(resolved.notes.length === 0
+        ? {}
+        : { warnings: resolved.notes.map((note) => ({ code: "exploration_unavailable", message: note })) }),
       nextAction: action
     },
     human.join("\n")
@@ -524,7 +576,10 @@ export async function handleSessionStatus(context: CliContext): Promise<CliResul
         source: answer.source,
         answeredAt: answer.answeredAt
       })),
-      diagnostics: session.diagnostics
+      diagnostics: session.diagnostics,
+      ...(resolved.notes.length === 0
+        ? {}
+        : { warnings: resolved.notes.map((note) => ({ code: "exploration_unavailable", message: note })) })
     },
     renderSessionStatus({
       sessionId: session.id,
@@ -679,9 +734,16 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
   if (isCliResult(resolved)) return resolved;
 
   const session = resolved.session;
-  if (session.status !== "active") {
-    return usageError(`Session ${session.id} is already ${session.status}.`);
+  if (session.status === "aborted") {
+    return usageError(`Session ${session.id} was aborted and cannot be finalized.`);
   }
+
+  // A finalized session can be finalized again. It has to be: when a
+  // hand-written ROADMAP.md is left alone, the warning tells the operator to
+  // retry with --force-roadmap, and refusing that retry would make the advice
+  // impossible to follow. Re-finalizing rewrites the same artifacts from the
+  // same answers, so it is a re-render rather than a second decision.
+  const refinalizing = session.status === "finalized";
 
   const { node, answered, total } = nextNode({
     answers: session.answers,
@@ -731,7 +793,10 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
     return usageError(`The project name does not produce a valid slug. Pass --slug explicitly. ${message}`);
   }
 
-  const createdAt = createdAtOption(context) ?? nowTimestamp();
+  // The session's own creation instant, not "now": re-finalizing must produce
+  // byte-identical requirements, and a fresh timestamp would change every
+  // artifact and therefore the requirement set hash on every retry.
+  const createdAt = createdAtOption(context) ?? session.createdAt;
   const constitution = renderConstitution({ answers: session.answers });
 
   const initialized = await initProject({
@@ -808,12 +873,16 @@ export async function handleFinalize(context: CliContext): Promise<CliResult> {
       roadmapWritten = true;
     } else {
       notes.push(
-        `${ROADMAP_FILE} already exists and was not written by legion start; it was left alone. Pass --force-roadmap to replace it.`
+        `${ROADMAP_FILE} already exists and was not written by legion start; it was left alone. Replace it with: legion start --finalize --session ${session.id} --force-roadmap`
       );
     }
   } else {
     await writeFile(roadmapPath, roadmap, "utf8");
     roadmapWritten = true;
+  }
+
+  if (refinalizing) {
+    notes.unshift(`Session ${session.id} was already finalized; its artifacts were rewritten.`);
   }
 
   const finalized = withDiagnostics(finalizeSession(session, projectId), notes);
