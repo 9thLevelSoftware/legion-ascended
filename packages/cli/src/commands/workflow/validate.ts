@@ -58,13 +58,7 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
     ok,
     diagnostics,
     coverage: trace.coverage,
-    status: ok
-      ? "valid"
-      : result.ok
-        ? drift.length > 0
-          ? "requirement_set_drift"
-          : "traceability_broken"
-        : result.status
+    status: failureStatus(result, drift.length, trace.diagnostics.length)
   };
 
   if (!ok) {
@@ -82,6 +76,27 @@ ${renderCoverage(trace.coverage)}`);
  * is the normal state of a project mid-flight, so failing on it would make
  * `validate` red for everyone and teach operators to ignore the result.
  */
+/**
+ * One status label for a payload that can carry several kinds of failure.
+ *
+ * A nested ternary picked `requirement_set_drift` whenever drift was present,
+ * so a project with both drift and a broken task reference reported a label that
+ * excluded the traceability findings — the diagnostics told the truth while the
+ * status misled anything filtering on it. Traceability now takes precedence
+ * because it is the more specific failure, and both remain in `diagnostics`
+ * either way.
+ */
+function failureStatus(
+  result: { readonly ok: boolean; readonly status?: string },
+  driftCount: number,
+  traceCount: number
+): string {
+  if (!result.ok) return result.status ?? "invalid";
+  if (traceCount > 0) return "traceability_broken";
+  if (driftCount > 0) return "requirement_set_drift";
+  return "valid";
+}
+
 function renderCoverage(coverage: {
   readonly requirements: number;
   readonly planned: number;
@@ -142,13 +157,7 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
     ...result,
     ok,
     diagnostics,
-    status: ok
-      ? "valid"
-      : result.ok
-        ? drift.length > 0
-          ? "requirement_set_drift"
-          : "traceability_broken"
-        : result.status,
+    status: failureStatus(result, drift.length, trace.diagnostics.length),
     checks
   };
 

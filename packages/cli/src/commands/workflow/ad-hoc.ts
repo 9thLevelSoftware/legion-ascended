@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { LEGION_PROJECT_ROOT, stableProtocolJson } from "@legion/artifacts";
+import { LEGION_PROJECT_ROOT, readRequirementSet, stableProtocolJson } from "@legion/artifacts";
 import { artifactPathSchema, taskContractScopePathSchema } from "@legion/protocol";
 
 import {
@@ -131,6 +131,13 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
     ].join("\n")
   });
 
+  // The project's recorded blast-radius limit, so ad-hoc work cannot be granted
+  // more room than a planned phase just because it arrived through a different
+  // command. Absent for projects that held no interview, which keep the derived
+  // budget.
+  const requirementSet = await readRequirementSet(context.repositoryRoot);
+  const enforcementBudget = requirementSet.ok ? requirementSet.set.enforcement?.budget : undefined;
+
   const planned = await createAdHocTaskgraph({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -142,7 +149,8 @@ async function createTypedAdHocWorkflow(context: CliContext, kind: "quick" | "po
     createdAt,
     readScope: targetPath === undefined ? [".", requestArtifactPath] : [targetPath, requestArtifactPath],
     ...(targetPath === undefined ? {} : { writeScope: [targetPath] }),
-    verificationCommand: ["legion", "validate"]
+    verificationCommand: ["legion", "validate"],
+    ...(enforcementBudget === undefined ? {} : { enforcementBudget })
   });
   if (!planned.ok) {
     const action = nextAction("legion validate", "Ad-hoc task artifacts must be repaired before build.");

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -209,4 +210,95 @@ test("doctor reports the same traceability failures as validate", async (t) => {
   const doctored = await run("doctor", "--json");
   assert.equal(doctored.exitCode, 1, "doctor must not report a project validate refuses");
   assert.equal(parseJsonOutput(doctored).checks.traceability.ok, false);
+});
+
+test("an ad-hoc task resolves against its current spec", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // `legion quick` authors a requirement into a current spec without adding it
+  // to the intake set. Resolving against the set alone reported every ad-hoc
+  // task as unresolved — and because those tasks verify with `legion validate`,
+  // their builds could never complete. The requirement is real and typed; it
+  // entered through a different door.
+  const quick = await run("quick", "fix the failing tests", "--json");
+  assert.equal(quick.exitCode, 0, quick.stderr);
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 0, validated.stdout + validated.stderr);
+
+  const payload = parseJsonOutput(validated);
+  assert.equal(
+    payload.diagnostics.filter((entry) => entry.code === "task_requirement_unresolved").length,
+    0,
+    `ad-hoc tasks must resolve: ${JSON.stringify(payload.diagnostics)}`
+  );
+  assert.ok(existsSync(path.join(root, ".legion/project/specs")));
+});
+
+test("a taskgraph with a valid-JSON but invalid shape is reported", async (t) => {
+  const { run, taskgraphPath } = await plannedProject(t);
+
+  // Parsed by hand, `{"tasks":"corrupt"}` read as a change with no tasks, so
+  // validate reported success while every contract in it had disappeared.
+  await writeFile(taskgraphPath, JSON.stringify({ tasks: "corrupt" }), "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("taskgraph_unreadable"),
+    `expected taskgraph_unreadable, got ${codes.join(", ")}`
+  );
+});
+
+test("an oracle file that is not a valid oracle does not resolve", async (t) => {
+  const { root, run, readTaskgraph } = await plannedProject(t);
+
+  // Matching on basename alone meant a truncated, empty or ID-mismatched oracle
+  // still counted as present.
+  const taskgraph = await readTaskgraph();
+  const oracleId = taskgraph.tasks[0].oracleRefs[0];
+  const changeId = taskgraph.changeId ?? taskgraph.tasks[0].changeId;
+  await writeFile(
+    path.join(root, ".legion/project/changes", changeId, "oracle", `${oracleId}.yaml`),
+    "",
+    "utf8"
+  );
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("task_oracle_unresolved"),
+    `expected task_oracle_unresolved, got ${codes.join(", ")}`
+  );
+});
+
+test("a traceability failure is not hidden behind a drift label", async (t) => {
+  const { root, run, readTaskgraph, writeTaskgraph } = await plannedProject(t);
+
+  // Both kinds of failure at once. The status is what dashboards filter on, and
+  // a nested ternary let drift eclipse the more specific finding, so the label
+  // excluded the traceability findings the payload was carrying.
+  const taskgraph = await readTaskgraph();
+  taskgraph.tasks[0].requirementIds = ["req_never-existed"];
+  await writeTaskgraph(taskgraph);
+
+  const indexPath = path.join(root, ".legion/project/requirements/index.json");
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  index.requirementSetHash = `sha256:${"0".repeat(64)}`;
+  await writeFile(indexPath, `${JSON.stringify(index, undefined, 2)}\n`, "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const payload = parseJsonOutput(validated);
+  const codes = payload.diagnostics.map((entry) => entry.code);
+
+  assert.ok(codes.includes("task_requirement_unresolved"), codes.join(", "));
+  assert.ok(codes.some((code) => code.startsWith("requirement_")), codes.join(", "));
+  assert.equal(
+    payload.status,
+    "traceability_broken",
+    "the more specific failure must not be eclipsed by drift"
+  );
 });

@@ -11,12 +11,24 @@
  * reconciliation enforces, so a task contract that raises its own budget above
  * the project policy has escaped the limit the operator set, while still
  * appearing to be governed by it.
+ *
+ * Everything is read through the artifact services rather than by hand. A first
+ * version parsed JSON directly and treated a schema-invalid taskgraph as one
+ * with no tasks, so `legion validate` reported success while every task contract
+ * had effectively disappeared; and it resolved oracles by filename, so a
+ * truncated or replaced oracle still counted as present.
  */
 
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { readRequirementSet, type RequirementSet } from "@legion/artifacts";
+import {
+  listCurrentSpecs,
+  readOracleArtifact,
+  readRequirementSet,
+  readTaskGraph,
+  type RequirementSet
+} from "@legion/artifacts";
 
 export interface TraceabilityDiagnostic {
   readonly code:
@@ -32,7 +44,7 @@ export interface RequirementCoverage {
   /** Requirements in the set, excluding those recorded as out of scope. */
   readonly requirements: number;
   readonly planned: number;
-  /** IDs with no task yet, newest phase last. */
+  /** IDs with no task yet, in requirement-set order. */
   readonly unplanned: readonly string[];
 }
 
@@ -41,88 +53,25 @@ export interface TraceabilityReport {
   readonly coverage: RequirementCoverage;
 }
 
-interface LoadedTaskGraph {
-  readonly artifactPath: string;
-  readonly changeId: string;
-  readonly tasks: readonly Record<string, unknown>[];
-}
-
 const CHANGES_ROOT = ".legion/project/changes";
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+function taskgraphArtifactPath(changeId: string): string {
+  return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
 
-function stringsAt(task: Record<string, unknown>, key: string): readonly string[] {
-  const value = task[key];
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
-}
-
-/** Every taskgraph on disk, with the change directory it belongs to. */
-async function loadTaskGraphs(
-  repositoryRoot: string
-): Promise<{ readonly graphs: readonly LoadedTaskGraph[]; readonly unreadable: readonly string[] }> {
-  const root = path.join(repositoryRoot, ".legion", "project", "changes");
-  let entries;
+async function changeIds(repositoryRoot: string): Promise<readonly string[]> {
   try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return { graphs: [], unreadable: [] };
-  }
-
-  const graphs: LoadedTaskGraph[] = [];
-  const unreadable: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const artifactPath = `${CHANGES_ROOT}/${entry.name}/taskgraph.json`;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(await readFile(path.join(root, entry.name, "taskgraph.json"), "utf8"));
-    } catch (error) {
-      // A missing taskgraph is an unplanned change, which is ordinary. Anything
-      // else means a planned change cannot be checked, and silence there would
-      // be indistinguishable from having nothing to check.
-      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-        continue;
-      }
-      unreadable.push(artifactPath);
-      continue;
-    }
-
-    const document = asRecord(parsed);
-    const tasks = Array.isArray(document?.["tasks"]) ? document["tasks"] : [];
-    graphs.push({
-      artifactPath,
-      changeId: entry.name,
-      tasks: tasks.map(asRecord).filter((task): task is Record<string, unknown> => task !== undefined)
+    const entries = await readdir(path.join(repositoryRoot, ...CHANGES_ROOT.split("/")), {
+      withFileTypes: true
     });
-  }
-  return { graphs, unreadable };
-}
-
-/** Oracle IDs available to a change, taken from its own oracle directory. */
-async function oracleIdsForChange(repositoryRoot: string, changeId: string): Promise<ReadonlySet<string>> {
-  const oracleRoot = path.join(repositoryRoot, ".legion", "project", "changes", changeId, "oracle");
-  try {
-    const entries = await readdir(oracleRoot, { withFileTypes: true });
-    return new Set(
-      entries
-        .filter((entry) => entry.isFile())
-        .map((entry) => entry.name.replace(/\.(ya?ml|json)$/i, ""))
-    );
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   } catch {
-    return new Set();
+    return [];
   }
-}
-
-function budgetAt(task: Record<string, unknown>): Record<string, unknown> | undefined {
-  return asRecord(asRecord(task["scope"])?.["budget"]);
 }
 
 function budgetExceeds(
-  taskBudget: Record<string, unknown>,
+  taskBudget: { readonly [field: string]: number },
   policy: NonNullable<RequirementSet["enforcement"]>["budget"]
 ): readonly string[] {
   const over: string[] = [];
@@ -136,78 +85,109 @@ function budgetExceeds(
 }
 
 /**
+ * Requirement IDs a task may legitimately name.
+ *
+ * The intake set is not the only source. `legion quick` and `legion polish`
+ * author a requirement into a current spec without adding it to the intake set,
+ * so resolving against the set alone reported every ad-hoc task as unresolved —
+ * and because those tasks verify with `legion validate`, their builds could
+ * never complete. An ad-hoc requirement is still a real, typed requirement; it
+ * just entered through a different door.
+ */
+async function resolvableRequirementIds(
+  repositoryRoot: string,
+  set: Awaited<ReturnType<typeof readRequirementSet>>
+): Promise<ReadonlySet<string>> {
+  const ids = new Set<string>();
+  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
+
+  const specs = await listCurrentSpecs({ repositoryRoot });
+  if (specs.ok) {
+    for (const document of specs.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  }
+  return ids;
+}
+
+/**
  * Check the references and budgets of every planned task.
  *
- * Returns an empty report for a project with no requirement set: direct
- * initialization and the legacy importer both produce one, and their tasks have
- * nothing to trace to.
+ * A project with no requirement set still has its references checked — ad-hoc
+ * and imported projects have tasks too — but has no policy to check budgets
+ * against and no expected coverage surface.
  */
 export async function checkTraceability(repositoryRoot: string): Promise<TraceabilityReport> {
   const set = await readRequirementSet(repositoryRoot);
-  const { graphs, unreadable } = await loadTaskGraphs(repositoryRoot);
-
-  const diagnostics: TraceabilityDiagnostic[] = unreadable.map((artifactPath) => ({
-    code: "taskgraph_unreadable" as const,
-    message: `${artifactPath} exists but could not be read, so its tasks cannot be checked.`,
-    source: { path: artifactPath }
-  }));
-
-  if (!set.ok) {
-    return {
-      diagnostics,
-      coverage: { requirements: 0, planned: 0, unplanned: [] }
-    };
-  }
-
-  const requirementIds = new Set(set.requirements.map((requirement) => requirement.id));
-  // A `wont` requirement is a recorded decision not to build, so it is not part
-  // of the surface a project is expected to cover.
-  const expected = set.requirements
-    .filter((requirement) => requirement.priority !== "wont")
-    .map((requirement) => requirement.id);
+  const resolvable = await resolvableRequirementIds(repositoryRoot, set);
+  const diagnostics: TraceabilityDiagnostic[] = [];
   const covered = new Set<string>();
 
-  for (const graph of graphs) {
-    const oracleIds = await oracleIdsForChange(repositoryRoot, graph.changeId);
+  for (const changeId of await changeIds(repositoryRoot)) {
+    const artifactPath = taskgraphArtifactPath(changeId);
+    const graph = await readTaskGraph({ repositoryRoot, changeId });
 
-    for (const task of graph.tasks) {
-      const taskId = typeof task["id"] === "string" ? task["id"] : "<unknown task>";
+    if (!graph.ok) {
+      // `not_found` is an unplanned change, which is ordinary. Anything else is
+      // a taskgraph that exists and cannot be trusted: treating it as empty let
+      // `{"tasks":"corrupt"}` pass as a change with no tasks, so validate
+      // reported success while every contract in it had disappeared.
+      if (graph.status === "not_found") continue;
+      diagnostics.push({
+        code: "taskgraph_unreadable",
+        message: `${artifactPath} exists but is not a valid taskgraph, so its tasks cannot be checked: ${graph.diagnostics
+          .map((entry) => entry.message)
+          .join("; ")}`,
+        source: { path: artifactPath }
+      });
+      continue;
+    }
 
-      for (const requirementId of stringsAt(task, "requirementIds")) {
-        if (requirementIds.has(requirementId)) {
+    for (const task of graph.document.tasks) {
+      for (const requirementId of task.requirementIds) {
+        if (resolvable.has(requirementId)) {
           covered.add(requirementId);
           continue;
         }
         diagnostics.push({
           code: "task_requirement_unresolved",
-          message: `${taskId} names requirement ${requirementId}, which is not in the requirement set.`,
-          source: { path: graph.artifactPath }
+          message: `${task.id} names requirement ${requirementId}, which is not in the requirement set or any current spec.`,
+          source: { path: artifactPath }
         });
       }
 
-      for (const oracleId of stringsAt(task, "oracleRefs")) {
-        if (oracleIds.has(oracleId)) continue;
+      for (const oracleId of task.oracleRefs) {
+        // Read through the oracle service, not matched by filename. A file
+        // merely having the right basename made a truncated, empty or
+        // ID-mismatched oracle count as present.
+        const oracle = await readOracleArtifact({ repositoryRoot, changeId, oracleId });
+        if (oracle.ok && oracle.document.id === oracleId) continue;
         diagnostics.push({
           code: "task_oracle_unresolved",
-          message: `${taskId} names oracle ${oracleId}, which does not exist in ${graph.changeId}.`,
-          source: { path: graph.artifactPath }
+          message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+          source: { path: artifactPath }
         });
       }
 
-      const policy = set.set.enforcement?.budget;
-      const taskBudget = budgetAt(task);
-      if (policy !== undefined && taskBudget !== undefined) {
-        const over = budgetExceeds(taskBudget, policy);
+      const policy = set.ok ? set.set.enforcement?.budget : undefined;
+      if (policy !== undefined) {
+        const over = budgetExceeds(task.scope.budget, policy);
         if (over.length > 0) {
           diagnostics.push({
             code: "task_budget_exceeds_policy",
-            message: `${taskId} grants itself a wider blast radius than the project policy: ${over.join("; ")}.`,
-            source: { path: graph.artifactPath }
+            message: `${task.id} grants itself a wider blast radius than the project policy: ${over.join("; ")}.`,
+            source: { path: artifactPath }
           });
         }
       }
     }
   }
+
+  // A `wont` requirement is a recorded decision not to build, so it is not part
+  // of the surface a project is expected to cover.
+  const expected = set.ok
+    ? set.requirements.filter((requirement) => requirement.priority !== "wont").map((r) => r.id)
+    : [];
 
   return {
     diagnostics,

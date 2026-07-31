@@ -30045,11 +30045,11 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
       ]
     };
   }
-  const changeIds = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  if (changeIds.length === 0) return noWorkflowChange(changesRoot);
+  const changeIds2 = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  if (changeIds2.length === 0) return noWorkflowChange(changesRoot);
   const validChanges = [];
   const diagnostics = [];
-  for (const changeId of changeIds) {
+  for (const changeId of changeIds2) {
     const bundle = await loadChangeBundle({ repositoryRoot, changeId });
     if (bundle.ok) {
       validChanges.push({
@@ -33616,6 +33616,14 @@ import { readFile as readFile21 } from "node:fs/promises";
 import path39 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
+function narrowedToPolicy(derived, policy) {
+  if (policy === void 0) return derived;
+  return {
+    maxFilesChanged: Math.min(derived.maxFilesChanged, policy.maxFilesChanged),
+    maxLinesChanged: Math.min(derived.maxLinesChanged, policy.maxLinesChanged),
+    maxNewFiles: Math.min(derived.maxNewFiles, policy.maxNewFiles)
+  };
+}
 async function createAdHocTaskgraph(input) {
   const createdAt = input.createdAt ?? currentUtcTimestamp();
   const baseGitSha = resolveBaseGitSha(input.repositoryRoot);
@@ -33811,7 +33819,14 @@ async function createAdHocTaskgraph(input) {
       write: adHocWriteScope,
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
-      budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })
+      // Bounded by the project's own policy when the interview recorded one.
+      // A derived budget wider than the operator's limit is a task that escaped
+      // the policy through the ad-hoc door — `legion validate` reports exactly
+      // that, and it reported it here.
+      budget: narrowedToPolicy(
+        budgetForWriteScope(adHocWriteScope, { slackFiles: 2 }),
+        input.enforcementBudget
+      )
     },
     interfaces: {
       consumes: [{ name: "AdHocRequest", description: `The ${input.kind} request prepared by Legion.` }],
@@ -33955,6 +33970,8 @@ async function createTypedAdHocWorkflow(context, kind) {
       ""
     ].join("\n")
   });
+  const requirementSet = await readRequirementSet(context.repositoryRoot);
+  const enforcementBudget = requirementSet.ok ? requirementSet.set.enforcement?.budget : void 0;
   const planned = await createAdHocTaskgraph({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
@@ -33966,7 +33983,8 @@ async function createTypedAdHocWorkflow(context, kind) {
     createdAt,
     readScope: targetPath === void 0 ? [".", requestArtifactPath] : [targetPath, requestArtifactPath],
     ...targetPath === void 0 ? {} : { writeScope: [targetPath] },
-    verificationCommand: ["legion", "validate"]
+    verificationCommand: ["legion", "validate"],
+    ...enforcementBudget === void 0 ? {} : { enforcementBudget }
   });
   if (!planned.ok) {
     const action2 = nextAction("legion validate", "Ad-hoc task artifacts must be repaired before build.");
@@ -35079,62 +35097,21 @@ import { stat as stat9 } from "node:fs/promises";
 import path42 from "node:path";
 
 // packages/cli/src/workflow/traceability-check.ts
-import { readdir as readdir15, readFile as readFile23 } from "node:fs/promises";
+import { readdir as readdir15 } from "node:fs/promises";
 import path41 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
-function asRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
+function taskgraphArtifactPath(changeId) {
+  return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
-function stringsAt(task, key) {
-  const value = task[key];
-  return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
-}
-async function loadTaskGraphs(repositoryRoot) {
-  const root = path41.join(repositoryRoot, ".legion", "project", "changes");
-  let entries;
+async function changeIds(repositoryRoot) {
   try {
-    entries = await readdir15(root, { withFileTypes: true });
-  } catch {
-    return { graphs: [], unreadable: [] };
-  }
-  const graphs = [];
-  const unreadable = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const artifactPath = `${CHANGES_ROOT}/${entry.name}/taskgraph.json`;
-    let parsed;
-    try {
-      parsed = JSON.parse(await readFile23(path41.join(root, entry.name, "taskgraph.json"), "utf8"));
-    } catch (error2) {
-      if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
-        continue;
-      }
-      unreadable.push(artifactPath);
-      continue;
-    }
-    const document = asRecord(parsed);
-    const tasks = Array.isArray(document?.["tasks"]) ? document["tasks"] : [];
-    graphs.push({
-      artifactPath,
-      changeId: entry.name,
-      tasks: tasks.map(asRecord).filter((task) => task !== void 0)
+    const entries = await readdir15(path41.join(repositoryRoot, ...CHANGES_ROOT.split("/")), {
+      withFileTypes: true
     });
-  }
-  return { graphs, unreadable };
-}
-async function oracleIdsForChange(repositoryRoot, changeId) {
-  const oracleRoot = path41.join(repositoryRoot, ".legion", "project", "changes", changeId, "oracle");
-  try {
-    const entries = await readdir15(oracleRoot, { withFileTypes: true });
-    return new Set(
-      entries.filter((entry) => entry.isFile()).map((entry) => entry.name.replace(/\.(ya?ml|json)$/i, ""))
-    );
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   } catch {
-    return /* @__PURE__ */ new Set();
+    return [];
   }
-}
-function budgetAt(task) {
-  return asRecord(asRecord(task["scope"])?.["budget"]);
 }
 function budgetExceeds(taskBudget, policy) {
   const over = [];
@@ -35146,60 +35123,69 @@ function budgetExceeds(taskBudget, policy) {
   }
   return over;
 }
+async function resolvableRequirementIds(repositoryRoot, set) {
+  const ids = /* @__PURE__ */ new Set();
+  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
+  const specs = await listCurrentSpecs({ repositoryRoot });
+  if (specs.ok) {
+    for (const document of specs.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  }
+  return ids;
+}
 async function checkTraceability(repositoryRoot) {
   const set = await readRequirementSet(repositoryRoot);
-  const { graphs, unreadable } = await loadTaskGraphs(repositoryRoot);
-  const diagnostics = unreadable.map((artifactPath) => ({
-    code: "taskgraph_unreadable",
-    message: `${artifactPath} exists but could not be read, so its tasks cannot be checked.`,
-    source: { path: artifactPath }
-  }));
-  if (!set.ok) {
-    return {
-      diagnostics,
-      coverage: { requirements: 0, planned: 0, unplanned: [] }
-    };
-  }
-  const requirementIds = new Set(set.requirements.map((requirement) => requirement.id));
-  const expected = set.requirements.filter((requirement) => requirement.priority !== "wont").map((requirement) => requirement.id);
+  const resolvable = await resolvableRequirementIds(repositoryRoot, set);
+  const diagnostics = [];
   const covered = /* @__PURE__ */ new Set();
-  for (const graph of graphs) {
-    const oracleIds = await oracleIdsForChange(repositoryRoot, graph.changeId);
-    for (const task of graph.tasks) {
-      const taskId = typeof task["id"] === "string" ? task["id"] : "<unknown task>";
-      for (const requirementId of stringsAt(task, "requirementIds")) {
-        if (requirementIds.has(requirementId)) {
+  for (const changeId of await changeIds(repositoryRoot)) {
+    const artifactPath = taskgraphArtifactPath(changeId);
+    const graph = await readTaskGraph({ repositoryRoot, changeId });
+    if (!graph.ok) {
+      if (graph.status === "not_found") continue;
+      diagnostics.push({
+        code: "taskgraph_unreadable",
+        message: `${artifactPath} exists but is not a valid taskgraph, so its tasks cannot be checked: ${graph.diagnostics.map((entry) => entry.message).join("; ")}`,
+        source: { path: artifactPath }
+      });
+      continue;
+    }
+    for (const task of graph.document.tasks) {
+      for (const requirementId of task.requirementIds) {
+        if (resolvable.has(requirementId)) {
           covered.add(requirementId);
           continue;
         }
         diagnostics.push({
           code: "task_requirement_unresolved",
-          message: `${taskId} names requirement ${requirementId}, which is not in the requirement set.`,
-          source: { path: graph.artifactPath }
+          message: `${task.id} names requirement ${requirementId}, which is not in the requirement set or any current spec.`,
+          source: { path: artifactPath }
         });
       }
-      for (const oracleId of stringsAt(task, "oracleRefs")) {
-        if (oracleIds.has(oracleId)) continue;
+      for (const oracleId of task.oracleRefs) {
+        const oracle = await readOracleArtifact({ repositoryRoot, changeId, oracleId });
+        if (oracle.ok && oracle.document.id === oracleId) continue;
         diagnostics.push({
           code: "task_oracle_unresolved",
-          message: `${taskId} names oracle ${oracleId}, which does not exist in ${graph.changeId}.`,
-          source: { path: graph.artifactPath }
+          message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+          source: { path: artifactPath }
         });
       }
-      const policy = set.set.enforcement?.budget;
-      const taskBudget = budgetAt(task);
-      if (policy !== void 0 && taskBudget !== void 0) {
-        const over = budgetExceeds(taskBudget, policy);
+      const policy = set.ok ? set.set.enforcement?.budget : void 0;
+      if (policy !== void 0) {
+        const over = budgetExceeds(task.scope.budget, policy);
         if (over.length > 0) {
           diagnostics.push({
             code: "task_budget_exceeds_policy",
-            message: `${taskId} grants itself a wider blast radius than the project policy: ${over.join("; ")}.`,
-            source: { path: graph.artifactPath }
+            message: `${task.id} grants itself a wider blast radius than the project policy: ${over.join("; ")}.`,
+            source: { path: artifactPath }
           });
         }
       }
     }
   }
+  const expected = set.ok ? set.requirements.filter((requirement) => requirement.priority !== "wont").map((r) => r.id) : [];
   return {
     diagnostics,
     coverage: {
@@ -35242,13 +35228,19 @@ async function handleValidateCommand(context) {
     ok,
     diagnostics,
     coverage: trace.coverage,
-    status: ok ? "valid" : result.ok ? drift.length > 0 ? "requirement_set_drift" : "traceability_broken" : result.status
+    status: failureStatus(result, drift.length, trace.diagnostics.length)
   };
   if (!ok) {
     return failure(payload, validationFailureHuman(diagnostics));
   }
   return success(payload, `Project is valid.
 ${renderCoverage(trace.coverage)}`);
+}
+function failureStatus(result, driftCount, traceCount) {
+  if (!result.ok) return result.status ?? "invalid";
+  if (traceCount > 0) return "traceability_broken";
+  if (driftCount > 0) return "requirement_set_drift";
+  return "valid";
 }
 function renderCoverage(coverage) {
   if (coverage.requirements === 0) return "No requirement set; nothing to trace.";
@@ -35297,7 +35289,7 @@ async function handleDoctorCommand(context) {
     ...result,
     ok,
     diagnostics,
-    status: ok ? "valid" : result.ok ? drift.length > 0 ? "requirement_set_drift" : "traceability_broken" : result.status,
+    status: failureStatus(result, drift.length, trace.diagnostics.length),
     checks
   };
   if (!ok) {
