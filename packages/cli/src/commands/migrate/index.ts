@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   applyCodexLegionMigration,
   applyPlanningImport,
@@ -16,9 +18,80 @@ import {
   readJsonInput,
   requiredStringOption,
   stringOption,
+  usageError,
   type CliContext,
   type CliResult
 } from "../../runtime.js";
+
+/**
+ * Coerce the `--project` file into the shape the importer needs.
+ *
+ * Two shapes are accepted, because the file an operator reaches for is not the
+ * one the flag was documented with. `.legion/project/project.json` is the only
+ * project JSON a repository contains, so it is what gets pointed at — and it is
+ * a *manifest*: the project is nested, and its owners live under
+ * `policy.decisionOwners` rather than at the top level.
+ *
+ * That mismatch used to surface as `TypeError: Cannot read properties of
+ * undefined (reading 'map')` from inside `initProject`, several layers below the
+ * flag that caused it. Reading a file as arbitrary JSON and passing it through
+ * defers every shape question to whoever dereferences it first.
+ *
+ * Validated by hand rather than with a schema: `zod` is a protocol dependency,
+ * and widening the CLI's dependencies for one shape check is a worse trade than
+ * a dozen lines that read plainly.
+ */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** Actors need a kind and an id; anything else is not an owner list. */
+function decisionOwners(value: unknown): readonly Record<string, unknown>[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const owners = value.map(asRecord);
+  if (owners.some((owner) => owner === undefined)) return undefined;
+  const typed = owners as Record<string, unknown>[];
+  if (typed.some((owner) => nonEmptyString(owner["kind"]) === undefined)) return undefined;
+  if (typed.some((owner) => nonEmptyString(owner["id"]) === undefined)) return undefined;
+  return typed;
+}
+
+export function coercePlanningProjectInput(
+  value: Record<string, unknown>,
+  sourcePath: string
+): PlanningImportProjectInput | CliResult {
+  // A manifest wraps the project; accept either the manifest or the project it
+  // contains, since both are reasonable things to have extracted.
+  const candidate = asRecord(value["project"]) ?? value;
+  const slug = nonEmptyString(candidate["slug"]);
+  const name = nonEmptyString(candidate["name"]);
+  const owners =
+    decisionOwners(candidate["decisionOwners"]) ??
+    decisionOwners(asRecord(candidate["policy"])?.["decisionOwners"]);
+
+  if (slug === undefined || name === undefined || owners === undefined) {
+    return usageError(
+      `${sourcePath} is not a project input. Provide a JSON object with slug, name and decisionOwners, ` +
+        `or point --project at .legion/project/project.json.`
+    );
+  }
+
+  const description = nonEmptyString(candidate["description"]);
+  const createdAt = nonEmptyString(candidate["createdAt"]);
+  return {
+    slug,
+    name,
+    ...(description === undefined ? {} : { description }),
+    ...(createdAt === undefined ? {} : { createdAt }),
+    decisionOwners: owners as PlanningImportProjectInput["decisionOwners"]
+  };
+}
 
 const MIGRATE_HELP = `legion dev migrate --from-planning|--from-codex-legion --verify|--dry-run|--apply|--rollback
 
@@ -55,8 +128,15 @@ export async function handleMigrateCommand(context: CliContext): Promise<CliResu
 
 async function handlePlanning(context: CliContext, action: MigrationAction): Promise<CliResult> {
   if (action === "dry-run") {
-    const planningRoot = requiredStringOption(context, "planning-root");
-    if (typeof planningRoot !== "string") return planningRoot;
+    const planningRootOption = requiredStringOption(context, "planning-root");
+    if (typeof planningRootOption !== "string") return planningRootOption;
+    // Relative paths resolve against the repository, not the process cwd, for
+    // the same reason as `--project`: `--planning-root .planning` is the
+    // documented invocation and it named nothing unless the operator happened to
+    // be standing in the repository.
+    const planningRoot = path.isAbsolute(planningRootOption)
+      ? planningRootOption
+      : path.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
@@ -64,8 +144,19 @@ async function handlePlanning(context: CliContext, action: MigrationAction): Pro
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
 
-    const project = await readJsonInput(projectPath);
-    if (isCliResult(project)) return project;
+    // Resolved against the repository root, as `legion start --intake` already
+    // does. Resolving against the process cwd meant the documented invocation —
+    // `--project .legion/project/project.json` — only worked when the operator
+    // happened to be standing in the repository.
+    const projectFile = await readJsonInput(
+      path.isAbsolute(projectPath) ? projectPath : path.resolve(context.repositoryRoot, projectPath)
+    );
+    if (isCliResult(projectFile)) return projectFile;
+
+    // `isCliResult` narrows a record union; this returns a typed project, so the
+    // discriminant is checked directly.
+    const project = coercePlanningProjectInput(projectFile, projectPath);
+    if ("exitCode" in project) return project;
 
     const result = await createPlanningImportDryRun({
       repositoryRoot: context.repositoryRoot,
