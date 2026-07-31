@@ -342,7 +342,7 @@ test("a requirement proposed by a change delta resolves", async (t) => {
   const ids = await resolvableRequirementIds(
     root,
     { ok: false, status: "not_found", reason: "none" },
-    [changeId]
+    changeId
   );
   assert.ok(ids.has(proposed), `${proposed} should resolve from the change delta alone`);
 });
@@ -390,7 +390,77 @@ test("an unreadable changes directory is reported, not treated as empty", async 
   assert.equal(validated.exitCode, 1);
   const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
   assert.ok(
-    codes.includes("changes_root_unreadable"),
-    `expected changes_root_unreadable, got ${codes.join(", ")}`
+    codes.includes("artifact_root_unreadable"),
+    `expected artifact_root_unreadable, got ${codes.join(", ")}`
   );
+});
+
+test("a requirement proposed by another change does not resolve", async (t) => {
+  const { root, run } = await plannedProject(t);
+  const { resolvableRequirementIds } = await import(
+    "../packages/cli/dist/workflow/traceability-check.js"
+  );
+
+  // Pooling proposals from every pending change let a task in change A name a
+  // requirement proposed only by change B. That validates here and is rejected
+  // at archive, where the loader only ever sees one change's proposals.
+  const quick = await run("quick", "fix the failing tests", "--json");
+  assert.equal(quick.exitCode, 0, quick.stderr);
+
+  const changes = (await readdir(path.join(root, ".legion/project/changes"))).sort();
+  assert.equal(changes.length, 2, changes.join(", "));
+
+  const { loadChangeBundle } = await import("../packages/artifacts/dist/index.js");
+  const proposals = {};
+  for (const changeId of changes) {
+    const bundle = await loadChangeBundle({ repositoryRoot: root, changeId });
+    proposals[changeId] = bundle.ok
+      ? bundle.deltaSpecs.map((delta) => delta.proposedRequirement?.id).filter(Boolean)
+      : [];
+  }
+
+  const [first, second] = changes;
+  const foreign = proposals[second].find((id) => !proposals[first].includes(id));
+  assert.ok(foreign !== undefined, JSON.stringify(proposals));
+
+  // Current specs would otherwise supply the ID, which is the source being
+  // isolated from.
+  await rm(path.join(root, ".legion/project/specs"), { recursive: true, force: true });
+
+  const ids = await resolvableRequirementIds(
+    root,
+    { ok: false, status: "not_found", reason: "none" },
+    first
+  );
+  assert.equal(
+    ids.has(foreign),
+    false,
+    `${foreign} belongs to ${second} and must not resolve for ${first}`
+  );
+});
+
+test("an unreadable specs directory is reported, not thrown", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // `listCurrentSpecs` handles only ENOENT, so an unreadable specs root
+  // propagated ENOTDIR out of validate and doctor instead of producing their
+  // structured payloads. The changes root was guarded and this one was not,
+  // which is the same defect one directory over.
+  await rm(path.join(root, ".legion/project/specs"), { recursive: true, force: true });
+  await writeFile(path.join(root, ".legion/project/specs"), "not a directory\n", "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1, "an unreadable specs root must be reported");
+  assert.doesNotMatch(validated.stderr, /ENOTDIR|Unhandled|not a function/);
+
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("artifact_root_unreadable"),
+    `expected artifact_root_unreadable, got ${codes.join(", ")}`
+  );
+
+  // Doctor must not disagree by crashing where validate reports.
+  const doctored = await run("doctor", "--json");
+  assert.equal(doctored.exitCode, 1);
+  assert.doesNotMatch(doctored.stderr, /ENOTDIR|Unhandled/);
 });

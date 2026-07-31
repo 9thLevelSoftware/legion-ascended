@@ -35100,22 +35100,58 @@ import path42 from "node:path";
 import { readdir as readdir15 } from "node:fs/promises";
 import path41 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
+var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
   return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
-var ChangesRootUnreadable = class extends Error {
+var ScanFailure = class extends Error {
+  constructor(root, message) {
+    super(message);
+    this.root = root;
+  }
 };
-async function changeIds(repositoryRoot) {
+async function scan(root, read, empty) {
   try {
-    const entries = await readdir15(path41.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    return await read();
   } catch (error2) {
     if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
-      return [];
+      return empty;
     }
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    throw new ChangesRootUnreadable(message);
+    throw new ScanFailure(root, error2 instanceof Error ? error2.message : String(error2));
   }
+}
+async function changeIds(repositoryRoot) {
+  return scan(
+    CHANGES_ROOT,
+    async () => {
+      const entries = await readdir15(path41.join(repositoryRoot, CHANGES_ROOT), {
+        withFileTypes: true
+      });
+      return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    },
+    []
+  );
+}
+async function resolvableRequirementIds(repositoryRoot, set, changeId) {
+  const ids = /* @__PURE__ */ new Set();
+  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
+  const specs = await scan(
+    CURRENT_SPECS_ROOT,
+    () => listCurrentSpecs({ repositoryRoot }),
+    { ok: false }
+  );
+  if (specs.ok) {
+    for (const document of specs.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  }
+  const change = await loadChangeBundle({ repositoryRoot, changeId });
+  if (change.ok) {
+    for (const delta of change.deltaSpecs) {
+      if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
+    }
+  }
+  return ids;
 }
 function budgetExceeds(taskBudget, policy) {
   const over = [];
@@ -35127,47 +35163,34 @@ function budgetExceeds(taskBudget, policy) {
   }
   return over;
 }
-async function resolvableRequirementIds(repositoryRoot, set, changes) {
-  const ids = /* @__PURE__ */ new Set();
-  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
-  const specs = await listCurrentSpecs({ repositoryRoot });
-  if (specs.ok) {
-    for (const document of specs.documents) {
-      for (const requirement of document.requirements) ids.add(requirement.id);
-    }
-  }
-  for (const changeId of changes) {
-    const change = await loadChangeBundle({ repositoryRoot, changeId });
-    if (!change.ok) continue;
-    for (const delta of change.deltaSpecs) {
-      if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
-    }
-  }
-  return ids;
+function scanDiagnostic(error2) {
+  return {
+    code: "artifact_root_unreadable",
+    message: `${error2.root} could not be read, so its contents were not checked: ${error2.message}`,
+    source: { path: error2.root }
+  };
 }
 async function checkTraceability(repositoryRoot) {
   const empty = { requirements: 0, planned: 0, unplanned: [] };
+  const set = await readRequirementSet(repositoryRoot);
+  const diagnostics = [];
+  const covered = /* @__PURE__ */ new Set();
   let changes;
   try {
     changes = await changeIds(repositoryRoot);
   } catch (error2) {
-    if (!(error2 instanceof ChangesRootUnreadable)) throw error2;
-    return {
-      diagnostics: [
-        {
-          code: "changes_root_unreadable",
-          message: `${CHANGES_ROOT} could not be read, so no task contract was checked: ${error2.message}`,
-          source: { path: CHANGES_ROOT }
-        }
-      ],
-      coverage: empty
-    };
+    if (!(error2 instanceof ScanFailure)) throw error2;
+    return { diagnostics: [scanDiagnostic(error2)], coverage: empty };
   }
-  const set = await readRequirementSet(repositoryRoot);
-  const resolvable = await resolvableRequirementIds(repositoryRoot, set, changes);
-  const diagnostics = [];
-  const covered = /* @__PURE__ */ new Set();
   for (const changeId of changes) {
+    let resolvable;
+    try {
+      resolvable = await resolvableRequirementIds(repositoryRoot, set, changeId);
+    } catch (error2) {
+      if (!(error2 instanceof ScanFailure)) throw error2;
+      diagnostics.push(scanDiagnostic(error2));
+      continue;
+    }
     const artifactPath = taskgraphArtifactPath(changeId);
     const graph = await readTaskGraph({ repositoryRoot, changeId });
     if (!graph.ok) {

@@ -36,7 +36,7 @@ export interface TraceabilityDiagnostic {
     | "task_requirement_unresolved"
     | "task_oracle_unresolved"
     | "task_oracle_missing_coverage"
-    | "changes_root_unreadable"
+    | "artifact_root_unreadable"
     | "task_budget_exceeds_policy"
     | "taskgraph_unreadable";
   readonly message: string;
@@ -57,33 +57,105 @@ export interface TraceabilityReport {
 }
 
 const CHANGES_ROOT = ".legion/project/changes";
+const CURRENT_SPECS_ROOT = ".legion/project/specs";
 
 function taskgraphArtifactPath(changeId: string): string {
   return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
 
-class ChangesRootUnreadable extends Error {}
-
-/**
- * Change directories, or a thrown error for anything but an absent root.
- *
- * Swallowing every failure made an unreadable `.legion/project/changes` — or one
- * replaced by a file — indistinguishable from a project with no changes, so
- * `legion validate` reported success having checked no task contract at all.
- */
-async function changeIds(repositoryRoot: string): Promise<readonly string[]> {
-  try {
-    const entries = await readdir(path.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return [];
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ChangesRootUnreadable(message);
+class ScanFailure extends Error {
+  public constructor(
+    public readonly root: string,
+    message: string
+  ) {
+    super(message);
   }
 }
 
+/**
+ * Read a directory, distinguishing "absent" from "unreadable".
+ *
+ * Shared by every directory this module scans. Guarding the changes root and
+ * leaving the specs root unguarded was the same defect one directory over: an
+ * unreadable specs root threw out of `legion validate` entirely instead of
+ * producing a diagnostic, and a third scan added later would have repeated it.
+ */
+async function scan<T>(root: string, read: () => Promise<T>, empty: T): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return empty;
+    }
+    throw new ScanFailure(root, error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function changeIds(repositoryRoot: string): Promise<readonly string[]> {
+  return scan(
+    CHANGES_ROOT,
+    async () => {
+      const entries = await readdir(path.join(repositoryRoot, CHANGES_ROOT), {
+        withFileTypes: true
+      });
+      return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    },
+    []
+  );
+}
+
+/**
+ * Requirement IDs a task may legitimately name, resolved per change.
+ *
+ * Three sources, and each exists for a reason:
+ *
+ *  - the intake set, for anything the interview produced;
+ *  - current specs, because `legion quick` and `legion polish` author a
+ *    requirement into a spec without adding it to the set, and resolving
+ *    against the set alone reported every ad-hoc task as unresolved;
+ *  - the *owning change's* deltas, because an `add` delta proposes a
+ *    requirement that exists only under that change until it ships.
+ *
+ * The delta source is scoped to the change that owns the task. A first version
+ * pooled proposals from every pending change, so a task in change A could name a
+ * requirement proposed only by change B — which validates here and is then
+ * rejected at archive, where the loader only ever sees one change's proposals.
+ */
+export async function resolvableRequirementIds(
+  repositoryRoot: string,
+  set: Awaited<ReturnType<typeof readRequirementSet>>,
+  changeId: string
+): Promise<ReadonlySet<string>> {
+  const ids = new Set<string>();
+  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
+
+  const specs = await scan(
+    CURRENT_SPECS_ROOT,
+    () => listCurrentSpecs({ repositoryRoot }),
+    { ok: false } as Awaited<ReturnType<typeof listCurrentSpecs>>
+  );
+  if (specs.ok) {
+    for (const document of specs.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  }
+
+  const change = await loadChangeBundle({ repositoryRoot, changeId });
+  if (change.ok) {
+    for (const delta of change.deltaSpecs) {
+      if (delta.proposedRequirement !== undefined) ids.add(delta.proposedRequirement.id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Fields where a task's own budget is wider than the project policy.
+ *
+ * `scope.budget` is what diff reconciliation enforces, so a task contract that
+ * raises its own budget has escaped the operator's limit while still appearing
+ * to be governed by it.
+ */
 function budgetExceeds(
   taskBudget: { readonly [field: string]: number },
   policy: NonNullable<RequirementSet["enforcement"]>["budget"]
@@ -98,43 +170,12 @@ function budgetExceeds(
   return over;
 }
 
-/**
- * Requirement IDs a task may legitimately name.
- *
- * The intake set is not the only source. `legion quick` and `legion polish`
- * author a requirement into a current spec without adding it to the intake set,
- * so resolving against the set alone reported every ad-hoc task as unresolved —
- * and because those tasks verify with `legion validate`, their builds could
- * never complete. An ad-hoc requirement is still a real, typed requirement; it
- * just entered through a different door.
- */
-export async function resolvableRequirementIds(
-  repositoryRoot: string,
-  set: Awaited<ReturnType<typeof readRequirementSet>>,
-  changes: readonly string[]
-): Promise<ReadonlySet<string>> {
-  const ids = new Set<string>();
-  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
-
-  const specs = await listCurrentSpecs({ repositoryRoot });
-  if (specs.ok) {
-    for (const document of specs.documents) {
-      for (const requirement of document.requirements) ids.add(requirement.id);
-    }
-  }
-
-  // A change with an `add` delta proposes a requirement that exists only under
-  // that change until it ships, and `packages/artifacts/src/traceability`
-  // already treats those as real. Omitting them made a supported change report
-  // its own task as unresolved.
-  for (const changeId of changes) {
-    const change = await loadChangeBundle({ repositoryRoot, changeId });
-    if (!change.ok) continue;
-    for (const delta of change.deltaSpecs) {
-      if (delta.proposedRequirement !== undefined) ids.add(delta.proposedRequirement.id);
-    }
-  }
-  return ids;
+function scanDiagnostic(error: ScanFailure): TraceabilityDiagnostic {
+  return {
+    code: "artifact_root_unreadable",
+    message: `${error.root} could not be read, so its contents were not checked: ${error.message}`,
+    source: { path: error.root }
+  };
 }
 
 /**
@@ -147,29 +188,30 @@ export async function resolvableRequirementIds(
 export async function checkTraceability(repositoryRoot: string): Promise<TraceabilityReport> {
   const empty = { requirements: 0, planned: 0, unplanned: [] as readonly string[] };
 
+  const set = await readRequirementSet(repositoryRoot);
+  const diagnostics: TraceabilityDiagnostic[] = [];
+  const covered = new Set<string>();
+
   let changes: readonly string[];
   try {
     changes = await changeIds(repositoryRoot);
   } catch (error) {
-    if (!(error instanceof ChangesRootUnreadable)) throw error;
-    return {
-      diagnostics: [
-        {
-          code: "changes_root_unreadable",
-          message: `${CHANGES_ROOT} could not be read, so no task contract was checked: ${error.message}`,
-          source: { path: CHANGES_ROOT }
-        }
-      ],
-      coverage: empty
-    };
+    if (!(error instanceof ScanFailure)) throw error;
+    return { diagnostics: [scanDiagnostic(error)], coverage: empty };
   }
 
-  const set = await readRequirementSet(repositoryRoot);
-  const resolvable = await resolvableRequirementIds(repositoryRoot, set, changes);
-  const diagnostics: TraceabilityDiagnostic[] = [];
-  const covered = new Set<string>();
-
   for (const changeId of changes) {
+    // Per change: a task may only name a requirement its own change proposes,
+    // because that is all the archive-time loader will see.
+    let resolvable: ReadonlySet<string>;
+    try {
+      resolvable = await resolvableRequirementIds(repositoryRoot, set, changeId);
+    } catch (error) {
+      if (!(error instanceof ScanFailure)) throw error;
+      diagnostics.push(scanDiagnostic(error));
+      continue;
+    }
+
     const artifactPath = taskgraphArtifactPath(changeId);
     const graph = await readTaskGraph({ repositoryRoot, changeId });
 
