@@ -37,6 +37,8 @@ export interface TraceabilityDiagnostic {
     | "task_oracle_unresolved"
     | "task_oracle_missing_coverage"
     | "artifact_root_unreadable"
+    | "current_spec_invalid"
+    | "change_bundle_invalid"
     | "task_budget_exceeds_policy"
     | "taskgraph_unreadable";
   readonly message: string;
@@ -105,48 +107,81 @@ async function changeIds(repositoryRoot: string): Promise<readonly string[]> {
 }
 
 /**
- * Requirement IDs a task may legitimately name, resolved per change.
+ * The requirement IDs a task in one change may name, plus anything that went
+ * wrong finding them.
  *
- * Three sources, and each exists for a reason:
+ * Diagnostics are returned rather than swallowed. Three review rounds on this
+ * module were all the same defect: an artifact read that fails is not an
+ * artifact read that returns nothing. A schema-invalid current spec, a change
+ * bundle whose delta or design is corrupt, an unreadable directory — each was
+ * treated as "no requirements from here", so validation passed on a project
+ * whose committed artifacts archive would reject.
  *
- *  - the intake set, for anything the interview produced;
- *  - current specs, because `legion quick` and `legion polish` author a
- *    requirement into a spec without adding it to the set, and resolving
- *    against the set alone reported every ad-hoc task as unresolved;
- *  - the *owning change's* deltas, because an `add` delta proposes a
- *    requirement that exists only under that change until it ships.
- *
- * The delta source is scoped to the change that owns the task. A first version
- * pooled proposals from every pending change, so a task in change A could name a
- * requirement proposed only by change B — which validates here and is then
- * rejected at archive, where the loader only ever sees one change's proposals.
+ * Every read in this module now either contributes its result or contributes a
+ * diagnostic. None are dropped, and none escape as exceptions.
  */
+interface ResolvedRequirements {
+  readonly ids: ReadonlySet<string>;
+  readonly diagnostics: readonly TraceabilityDiagnostic[];
+}
+
 export async function resolvableRequirementIds(
   repositoryRoot: string,
   set: Awaited<ReturnType<typeof readRequirementSet>>,
   changeId: string
-): Promise<ReadonlySet<string>> {
+): Promise<ResolvedRequirements> {
   const ids = new Set<string>();
+  const diagnostics: TraceabilityDiagnostic[] = [];
   if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
 
-  const specs = await scan(
-    CURRENT_SPECS_ROOT,
-    () => listCurrentSpecs({ repositoryRoot }),
-    { ok: false } as Awaited<ReturnType<typeof listCurrentSpecs>>
-  );
+  let specs: Awaited<ReturnType<typeof listCurrentSpecs>>;
+  try {
+    specs = await scan(
+      CURRENT_SPECS_ROOT,
+      () => listCurrentSpecs({ repositoryRoot }),
+      { ok: true, status: "read", documents: [], index: undefined, diagnostics: [] } as never
+    );
+  } catch (error) {
+    if (!(error instanceof ScanFailure)) throw error;
+    return { ids, diagnostics: [scanDiagnostic(error)] };
+  }
+
   if (specs.ok) {
     for (const document of specs.documents) {
       for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  } else {
+    // A schema-invalid or duplicate-ID spec is a corrupted committed artifact.
+    // Discarding the failure let validation pass whenever the same IDs happened
+    // to resolve from the intake set.
+    for (const diagnostic of specs.diagnostics) {
+      diagnostics.push({
+        code: "current_spec_invalid",
+        message: `A current spec could not be used: ${diagnostic.message}`,
+        source: { path: diagnostic.source?.path ?? CURRENT_SPECS_ROOT }
+      });
     }
   }
 
   const change = await loadChangeBundle({ repositoryRoot, changeId });
   if (change.ok) {
+    // An `add` delta proposes a requirement that exists only under this change
+    // until it ships. Scoped to the owning change, because that is all the
+    // archive-time loader sees.
     for (const delta of change.deltaSpecs) {
       if (delta.proposedRequirement !== undefined) ids.add(delta.proposedRequirement.id);
     }
+  } else {
+    for (const diagnostic of change.diagnostics) {
+      diagnostics.push({
+        code: "change_bundle_invalid",
+        message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic.message}`,
+        source: { path: diagnostic.source?.path ?? `${CHANGES_ROOT}/${changeId}` }
+      });
+    }
   }
-  return ids;
+
+  return { ids, diagnostics };
 }
 
 /**
@@ -203,17 +238,25 @@ export async function checkTraceability(repositoryRoot: string): Promise<Traceab
   for (const changeId of changes) {
     // Per change: a task may only name a requirement its own change proposes,
     // because that is all the archive-time loader will see.
-    let resolvable: ReadonlySet<string>;
-    try {
-      resolvable = await resolvableRequirementIds(repositoryRoot, set, changeId);
-    } catch (error) {
-      if (!(error instanceof ScanFailure)) throw error;
-      diagnostics.push(scanDiagnostic(error));
-      continue;
-    }
+    const resolved = await resolvableRequirementIds(repositoryRoot, set, changeId);
+    diagnostics.push(...resolved.diagnostics);
+    const resolvable = resolved.ids;
 
     const artifactPath = taskgraphArtifactPath(changeId);
-    const graph = await readTaskGraph({ repositoryRoot, changeId });
+    // `readTaskGraph` rethrows a non-ENOENT filesystem error, which aborted
+    // `legion validate --json` instead of returning its payload. A taskgraph
+    // replaced by a directory is a finding, not a crash.
+    let graph: Awaited<ReturnType<typeof readTaskGraph>>;
+    try {
+      graph = await readTaskGraph({ repositoryRoot, changeId });
+    } catch (error) {
+      diagnostics.push({
+        code: "taskgraph_unreadable",
+        message: `${artifactPath} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+        source: { path: artifactPath }
+      });
+      continue;
+    }
 
     if (!graph.ok) {
       // `not_found` is an unplanned change, which is ordinary. Anything else is

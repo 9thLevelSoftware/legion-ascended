@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -339,7 +339,7 @@ test("a requirement proposed by a change delta resolves", async (t) => {
   // reason, and the reason reverting the fix is worth doing every time.
   await rm(path.join(root, ".legion/project/specs"), { recursive: true, force: true });
 
-  const ids = await resolvableRequirementIds(
+  const { ids } = await resolvableRequirementIds(
     root,
     { ok: false, status: "not_found", reason: "none" },
     changeId
@@ -427,7 +427,7 @@ test("a requirement proposed by another change does not resolve", async (t) => {
   // isolated from.
   await rm(path.join(root, ".legion/project/specs"), { recursive: true, force: true });
 
-  const ids = await resolvableRequirementIds(
+  const { ids } = await resolvableRequirementIds(
     root,
     { ok: false, status: "not_found", reason: "none" },
     first
@@ -463,4 +463,59 @@ test("an unreadable specs directory is reported, not thrown", async (t) => {
   const doctored = await run("doctor", "--json");
   assert.equal(doctored.exitCode, 1);
   assert.doesNotMatch(doctored.stderr, /ENOTDIR|Unhandled/);
+});
+
+test("a corrupt current spec is reported, not silently ignored", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // A schema-invalid committed spec is a corrupted artifact. Discarding the
+  // failure let validation pass whenever the same IDs happened to resolve from
+  // the intake set, while archive-time traceability would reject the project.
+  const specs = await readdir(path.join(root, ".legion/project/specs"));
+  await writeFile(path.join(root, ".legion/project/specs", specs[0]), "not a spec\n", "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("current_spec_invalid"),
+    `expected current_spec_invalid, got ${codes.join(", ")}`
+  );
+});
+
+test("a corrupt change bundle is reported, not silently ignored", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  const changeId = (await readdir(path.join(root, ".legion/project/changes")))[0];
+  await writeFile(
+    path.join(root, ".legion/project/changes", changeId, "change.yaml"),
+    JSON.stringify({ kind: "not-a-change" }),
+    "utf8"
+  );
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("change_bundle_invalid"),
+    `expected change_bundle_invalid, got ${codes.join(", ")}`
+  );
+});
+
+test("a taskgraph replaced by a directory is reported, not thrown", async (t) => {
+  const { root, run, taskgraphPath } = await plannedProject(t);
+
+  // `readTaskGraph` rethrows a non-ENOENT filesystem error, which aborted
+  // `legion validate --json` instead of returning its payload.
+  await rm(taskgraphPath, { force: true });
+  await mkdir(taskgraphPath, { recursive: true });
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  assert.doesNotMatch(validated.stderr, /EISDIR|Unhandled/);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("taskgraph_unreadable"),
+    `expected taskgraph_unreadable, got ${codes.join(", ")}`
+  );
 });

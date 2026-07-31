@@ -35134,15 +35134,30 @@ async function changeIds(repositoryRoot) {
 }
 async function resolvableRequirementIds(repositoryRoot, set, changeId) {
   const ids = /* @__PURE__ */ new Set();
+  const diagnostics = [];
   if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
-  const specs = await scan(
-    CURRENT_SPECS_ROOT,
-    () => listCurrentSpecs({ repositoryRoot }),
-    { ok: false }
-  );
+  let specs;
+  try {
+    specs = await scan(
+      CURRENT_SPECS_ROOT,
+      () => listCurrentSpecs({ repositoryRoot }),
+      { ok: true, status: "read", documents: [], index: void 0, diagnostics: [] }
+    );
+  } catch (error2) {
+    if (!(error2 instanceof ScanFailure)) throw error2;
+    return { ids, diagnostics: [scanDiagnostic(error2)] };
+  }
   if (specs.ok) {
     for (const document of specs.documents) {
       for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  } else {
+    for (const diagnostic3 of specs.diagnostics) {
+      diagnostics.push({
+        code: "current_spec_invalid",
+        message: `A current spec could not be used: ${diagnostic3.message}`,
+        source: { path: diagnostic3.source?.path ?? CURRENT_SPECS_ROOT }
+      });
     }
   }
   const change = await loadChangeBundle({ repositoryRoot, changeId });
@@ -35150,8 +35165,16 @@ async function resolvableRequirementIds(repositoryRoot, set, changeId) {
     for (const delta of change.deltaSpecs) {
       if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
     }
+  } else {
+    for (const diagnostic3 of change.diagnostics) {
+      diagnostics.push({
+        code: "change_bundle_invalid",
+        message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic3.message}`,
+        source: { path: diagnostic3.source?.path ?? `${CHANGES_ROOT}/${changeId}` }
+      });
+    }
   }
-  return ids;
+  return { ids, diagnostics };
 }
 function budgetExceeds(taskBudget, policy) {
   const over = [];
@@ -35183,16 +35206,21 @@ async function checkTraceability(repositoryRoot) {
     return { diagnostics: [scanDiagnostic(error2)], coverage: empty };
   }
   for (const changeId of changes) {
-    let resolvable;
+    const resolved = await resolvableRequirementIds(repositoryRoot, set, changeId);
+    diagnostics.push(...resolved.diagnostics);
+    const resolvable = resolved.ids;
+    const artifactPath = taskgraphArtifactPath(changeId);
+    let graph;
     try {
-      resolvable = await resolvableRequirementIds(repositoryRoot, set, changeId);
+      graph = await readTaskGraph({ repositoryRoot, changeId });
     } catch (error2) {
-      if (!(error2 instanceof ScanFailure)) throw error2;
-      diagnostics.push(scanDiagnostic(error2));
+      diagnostics.push({
+        code: "taskgraph_unreadable",
+        message: `${artifactPath} could not be read: ${error2 instanceof Error ? error2.message : String(error2)}`,
+        source: { path: artifactPath }
+      });
       continue;
     }
-    const artifactPath = taskgraphArtifactPath(changeId);
-    const graph = await readTaskGraph({ repositoryRoot, changeId });
     if (!graph.ok) {
       if (graph.status === "not_found") continue;
       diagnostics.push({
