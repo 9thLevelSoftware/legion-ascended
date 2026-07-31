@@ -30870,6 +30870,23 @@ async function handlePlanWorkflow(context) {
   - ${requirementSet.reason}`
     );
   }
+  if (requirementSet.ok && requirementSet.set.projectId !== loadedProject.loaded.project.id) {
+    const foreign = requirementSet.set.projectId;
+    return failure(
+      {
+        ok: false,
+        status: "requirement_set_foreign",
+        diagnostics: [
+          {
+            code: "requirement_set_foreign",
+            message: `The requirement set belongs to ${foreign}, but this project is ${loadedProject.loaded.project.id}. Remove it, or re-run legion start --finalize for this project.`
+          }
+        ],
+        nextAction: nextAction("legion validate", "Resolve the mismatched requirement set before planning.")
+      },
+      `The requirement set belongs to ${foreign}, not ${loadedProject.loaded.project.id}.`
+    );
+  }
   if (requirementSet.ok) {
     const drift = await verifyRequirementSet(context.repositoryRoot, requirementSet);
     if (drift.length > 0) {

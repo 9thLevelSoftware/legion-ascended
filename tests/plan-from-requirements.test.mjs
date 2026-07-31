@@ -681,3 +681,21 @@ test("a phase naming a declined requirement is refused", async (t) => {
   assert.equal(planned.exitCode, 1, "a declined requirement must not be planned");
   assert.match(parseJsonOutput(planned).diagnostics[0].message, /out of scope/i);
 });
+
+test("a requirement set from another project is refused", async (t) => {
+  const { root, run } = await scratchProject(t);
+  await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
+
+  // Hash-consistent with itself says nothing about whose project it describes.
+  // A set copied from another repository validates cleanly, and planning would
+  // embed a foreign requirement and run its executable criteria here.
+  const indexPath = path.join(root, ".legion/project/requirements/index.json");
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  index.projectId = "prj_somebody-elses-project";
+  await writeFile(indexPath, `${JSON.stringify(index, undefined, 2)}\n`, "utf8");
+
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 1);
+  assert.equal(parseJsonOutput(planned).status, "requirement_set_foreign");
+  assert.match(parseJsonOutput(planned).diagnostics[0].message, /prj_somebody-elses-project/);
+});

@@ -137,6 +137,28 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
   - ${requirementSet.reason}`
     );
   }
+  // A requirement set is hash-consistent with itself, which says nothing about
+  // whose project it describes. A set copied from another repository validates
+  // cleanly, and planning would then embed a foreign requirement and run its
+  // executable criteria against this project.
+  if (requirementSet.ok && requirementSet.set.projectId !== loadedProject.loaded.project.id) {
+    const foreign = requirementSet.set.projectId;
+    return failure(
+      {
+        ok: false,
+        status: "requirement_set_foreign",
+        diagnostics: [
+          {
+            code: "requirement_set_foreign",
+            message: `The requirement set belongs to ${foreign}, but this project is ${loadedProject.loaded.project.id}. Remove it, or re-run legion start --finalize for this project.`
+          }
+        ],
+        nextAction: nextAction("legion validate", "Resolve the mismatched requirement set before planning.")
+      },
+      `The requirement set belongs to ${foreign}, not ${loadedProject.loaded.project.id}.`
+    );
+  }
+
   // Schema-valid is not the same as unmodified. A requirement file whose
   // executable criterion command was edited still parses, so planning would copy
   // that command into the task contract and `legion build` would then run it.
