@@ -1,18 +1,43 @@
 import {
   listReviewDecisionsForChange,
   readEvidenceIndex,
-  isLegacyEvidenceDiagnostic,
+  partitionTraceabilityDiagnostics,
   readTaskGraph,
   validateChangeTraceability
 } from "@legion/artifacts";
 
-import { failure, helpResult, type CliContext, type CliResult } from "../../runtime.js";
+import { failure, hasFlag, helpResult, type CliContext, type CliResult } from "../../runtime.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { taskIdForContractId } from "../../workflow/run-artifacts.js";
 import { deriveShipGates } from "../../workflow/ship-gates.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
 const SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
+
+/**
+ * The command that can actually repair what failed.
+ *
+ * `legion build` reruns task execution and rewrites evidence, so it fixes an
+ * evidence-linkage failure and nothing else — pointing there for a malformed
+ * oracle or a missing requirement proof sends the operator round a loop that
+ * returns the same diagnostic.
+ */
+function recoveryFor(diagnostics: readonly { readonly code: string }[]) {
+  const evidenceOnly = diagnostics.every((diagnostic) => diagnostic.code.includes("evidence"));
+  if (evidenceOnly) {
+    return nextAction(
+      "legion build",
+      "Evidence is not linked to the requirements and oracles it proves; rebuilding the task rewrites those links."
+    );
+  }
+  // Specification and oracle defects live in the planned artifacts, so replanning
+  // the phase is what rewrites them. `legion validate` reports the state but
+  // repairs nothing.
+  return nextAction(
+    "legion plan",
+    "Requirement, oracle and task links must resolve before a change can ship; replanning the phase rewrites the artifacts that define them."
+  );
+}
 
 export async function handleShipWorkflow(context: CliContext): Promise<CliResult> {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -94,26 +119,19 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     // Every other traceability rule still blocks. New evidence carries the links
     // from the moment it is written, so this tolerance retires itself as changes
     // are rebuilt rather than needing a migration nobody would run.
-    const blocking = traceability.diagnostics.filter(
-      (diagnostic) => !isLegacyEvidenceDiagnostic(diagnostic)
-    );
-    const legacyEvidence = traceability.diagnostics.filter(isLegacyEvidenceDiagnostic);
+    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
+    });
+    const legacyEvidence = allowed;
 
     if (blocking.length > 0) {
       return blockedShip(
-        [...blocking, ...legacyEvidence].map((diagnostic) => ({
+        blocking.map((diagnostic) => ({
           code: "change_traceability_broken",
           message: diagnostic.message,
           path: diagnostic.source?.path ?? taskgraph.artifactPath
         })),
-        // Not `legion validate`: its checks read task references and never open
-        // the evidence index, so it cannot report — let alone repair — an
-        // evidence-linkage failure. Rebuilding the task is what rewrites those
-        // links, so that is what the operator is pointed at.
-        nextAction(
-          "legion build",
-          "Requirement, oracle, task and evidence links must resolve before a change can ship; rebuilding the task rewrites them."
-        )
+        recoveryFor(blocking)
       );
     }
 

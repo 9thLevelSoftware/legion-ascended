@@ -15394,6 +15394,7 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "accept-proposal",
   "allow-replace-existing-project",
   "allow-dirty",
+  "allow-legacy-evidence",
   "apply",
   "accept",
   "auto",
@@ -35051,6 +35052,19 @@ function deriveShipGates(input) {
 
 // packages/cli/src/commands/workflow/ship.ts
 var SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
+function recoveryFor(diagnostics) {
+  const evidenceOnly = diagnostics.every((diagnostic3) => diagnostic3.code.includes("evidence"));
+  if (evidenceOnly) {
+    return nextAction(
+      "legion build",
+      "Evidence is not linked to the requirements and oracles it proves; rebuilding the task rewrites those links."
+    );
+  }
+  return nextAction(
+    "legion plan",
+    "Requirement, oracle and task links must resolve before a change can ship; replanning the phase rewrites the artifacts that define them."
+  );
+}
 async function handleShipWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(SHIP_HELP);
@@ -35100,25 +35114,18 @@ async function handleShipWorkflow(context) {
     changeId: latestChange.changeId
   });
   if (!traceability.ok) {
-    const blocking = traceability.diagnostics.filter(
-      (diagnostic3) => !isLegacyEvidenceDiagnostic(diagnostic3)
-    );
-    const legacyEvidence = traceability.diagnostics.filter(isLegacyEvidenceDiagnostic);
+    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
+    });
+    const legacyEvidence = allowed;
     if (blocking.length > 0) {
       return blockedShip(
-        [...blocking, ...legacyEvidence].map((diagnostic3) => ({
+        blocking.map((diagnostic3) => ({
           code: "change_traceability_broken",
           message: diagnostic3.message,
           path: diagnostic3.source?.path ?? taskgraph.artifactPath
         })),
-        // Not `legion validate`: its checks read task references and never open
-        // the evidence index, so it cannot report — let alone repair — an
-        // evidence-linkage failure. Rebuilding the task is what rewrites those
-        // links, so that is what the operator is pointed at.
-        nextAction(
-          "legion build",
-          "Requirement, oracle, task and evidence links must resolve before a change can ship; rebuilding the task rewrites them."
-        )
+        recoveryFor(blocking)
       );
     }
     traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({

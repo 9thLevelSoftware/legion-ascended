@@ -179,7 +179,19 @@ test("a change built before evidence linking can still ship", async (t) => {
   await writeFile(indexPath, `${JSON.stringify(index, undefined, 2)}
 `, "utf8");
 
-  const shipped = await run("ship", "--json");
+  // Blocked by default. The same diagnostic is raised by current evidence that
+  // has lost its links, and nothing in it distinguishes the two — so exempting
+  // the code outright would discard the only signal that current evidence is
+  // corrupt. The operator says which case this is.
+  const blocked = await run("ship", "--json");
+  assert.equal(blocked.exitCode, 1, "unlinked evidence must not be waved through by default");
+  assert.match(
+    parseJsonOutput(blocked).nextAction.command,
+    /legion build/,
+    "an evidence-linkage failure is repaired by rebuilding"
+  );
+
+  const shipped = await run("ship", "--allow-legacy-evidence", "--json");
   assert.equal(shipped.exitCode, 0, shipped.stdout + shipped.stderr);
 
   // Tolerated, not ignored: the gap is reported so it is visible and retires
@@ -232,4 +244,25 @@ test("build still passes while a change is not yet accepted", async (t) => {
   const build = await run("build", "--executor", "fake", "--json");
   assert.equal(build.exitCode, 0, build.stdout + build.stderr);
   assert.equal((await run("validate", "--json")).exitCode, 0);
+});
+
+test("a specification defect is not sent to legion build", async (t) => {
+  const { root, run, changeId } = await acceptedProject(t);
+
+  // `legion build` reruns task execution and rewrites evidence, so pointing
+  // there for a malformed oracle sends the operator round a loop that returns
+  // the same diagnostic.
+  await writeFile(
+    path.join(root, ".legion/project/changes", changeId, "oracle", "orc_stray-artifact.yaml"),
+    "not an oracle\n",
+    "utf8"
+  );
+
+  const shipped = await run("ship", "--json");
+  assert.equal(shipped.exitCode, 1);
+  assert.doesNotMatch(
+    parseJsonOutput(shipped).nextAction.command,
+    /legion build/,
+    "rebuilding cannot repair a malformed oracle"
+  );
 });
