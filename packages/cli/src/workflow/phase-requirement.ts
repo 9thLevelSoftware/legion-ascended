@@ -96,7 +96,7 @@ export async function resolvePhaseRequirement(
         reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
       };
     }
-    return { ok: true, resolved: { requirement: found, ...partition(found) } };
+    return declinedOrResolved(found, phase);
   }
 
   const set = await readRequirementSet(repositoryRoot);
@@ -118,6 +118,27 @@ export async function resolvePhaseRequirement(
     };
   }
 
+  return declinedOrResolved(requirement, phase);
+}
+
+/**
+ * Refuse a roadmap anchor that names a declined requirement.
+ *
+ * `plannedRequirements` deliberately excludes `wont` from roadmap phases, so a
+ * phase naming one means the roadmap was hand-edited or is stale. Planning it
+ * would create a change, an oracle and a build task for work the operator
+ * explicitly said would not be done.
+ */
+function declinedOrResolved(
+  requirement: Requirement,
+  phase: PhaseSource
+): PhaseRequirementResult {
+  if (requirement.priority === "wont") {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
+    };
+  }
   return { ok: true, resolved: { requirement, ...partition(requirement) } };
 }
 
@@ -140,31 +161,25 @@ function clamp(value: string): string {
 }
 
 /**
- * Characters that need no quoting in any shell.
+ * Render an argv vector as data, not as a shell command line.
  *
- * An allowlist, after four rounds of denylist. Quoting was extended for
- * whitespace, then quote characters, then empty strings, then metacharacters —
- * each round naming what had just been found dangerous and missing the next.
+ * Five rounds of review went into quoting this text for a shell: whitespace,
+ * then quote characters, then empty strings, then metacharacters, then the
+ * quote style itself — and the last finding was that POSIX single-quote
+ * escaping is wrong in PowerShell, which is where most of this project's users
+ * are. That is not another missing case. It is proof that no single string is
+ * correct in every shell, so a rendering that claims to be shell-pasteable is
+ * making a promise it cannot keep.
+ *
+ * The runner never parses this. It receives the argv vector directly. So the
+ * text only has to say, unambiguously, what that vector was — and JSON array
+ * notation does, in any shell, for whitespace, quotes, empty strings and
+ * metacharacters alike. A reviewer reproducing it translates for their own
+ * shell, which is the step that was being guessed at on their behalf.
  */
-const UNQUOTED_ARGUMENT = /^[A-Za-z0-9._\/=@:+-]+$/;
-
-/**
- * Quote an argument so no shell interprets anything inside it.
- *
- * Single quotes, not `JSON.stringify`. Double quotes still perform variable and
- * command substitution in POSIX shells and PowerShell, so a literal argument of
- * `$(touch /tmp/pwned)` rendered as `"$(touch /tmp/pwned)"` executes when a
- * reviewer pastes the oracle text. Single quotes suppress every expansion in
- * both, and an embedded single quote is closed, escaped and reopened in the
- * standard POSIX way.
- *
- * This text is reproduction instructions for a human. The runner never parses
- * it — it receives the argv vector directly — so the only requirement is that
- * what a reviewer runs matches what the runner ran.
- */
-function renderArgument(part: string): string {
-  if (UNQUOTED_ARGUMENT.test(part)) return part;
-  return `'${part.split("'").join(`'\\''`)}'`;
+function renderInvocation(command: string, args: readonly string[]): string {
+  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
+  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
 }
 
 /**
@@ -176,14 +191,10 @@ function renderArgument(part: string): string {
  */
 export function describeCriterion(criterion: RequirementCriterion): string {
   if (criterion.proof.mode === "executable") {
-    // Quoted where it matters. Joining on spaces renders `["-e", "foo bar"]`
-    // as `node -e foo bar`, which is a different command and the one a reviewer
-    // would reproduce — the same argument-boundary collapse the verification
-    // identity had, in the text a human acts on.
-    const command = [criterion.proof.command, ...criterion.proof.args]
-      .map(renderArgument)
-      .join(" ");
-    return clamp(`${criterion.statement} — \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
+    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
+    return clamp(
+      `${criterion.statement} — run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
+    );
   }
   return clamp(`${criterion.statement} — manual: ${criterion.proof.reason}`);
 }

@@ -253,7 +253,7 @@ test("a rendered criterion never exceeds the oracle's field limit", async () => 
       statement: "Resolving a missing asset exits non-zero",
       proof: { mode: "executable", command: "pnpm", args: ["test"], expectedExitCode: 0 }
     }),
-    "Resolving a missing asset exits non-zero — `pnpm test` must exit 0"
+    'Resolving a missing asset exits non-zero — run "pnpm" with arguments ["test"]; it must exit 0'
   );
 });
 
@@ -603,94 +603,81 @@ test("planning consumes the requirement snapshot it verified", async (t) => {
   );
 });
 
-test("a rendered command keeps argument boundaries a reviewer can reproduce", async () => {
+test("a rendered command states the argv vector rather than a shell line", async () => {
   const { describeCriterion } = await import(
     "../packages/cli/dist/workflow/phase-requirement.js"
   );
 
-  // This text becomes the oracle postcondition and coverage criterion, so it is
-  // the command a reviewer retypes. Joining on spaces rendered
-  // `["-e", "foo bar"]` as `node -e foo bar` — a different command, and
-  // indistinguishable from `["-e", "foo", "bar"]`.
-  const quoted = describeCriterion({
-    id: "ac_quoted-1",
-    statement: "The quoted form runs",
-    proof: { mode: "executable", command: "node", args: ["-e", "foo bar"], expectedExitCode: 0 }
-  });
-  const split = describeCriterion({
-    id: "ac_split-1",
-    statement: "The quoted form runs",
-    proof: { mode: "executable", command: "node", args: ["-e", "foo", "bar"], expectedExitCode: 0 }
-  });
-
-  assert.notEqual(quoted, split, "distinct argument vectors must render distinctly");
-  assert.ok(quoted.includes("node -e 'foo bar'"), quoted);
-  assert.match(split, /node -e foo bar/);
-
-  // An empty argument is schema-valid and rendered as nothing at all, so `[""]`
-  // read identically to `[]`.
-  const empty = describeCriterion({
-    id: "ac_empty-1",
-    statement: "The empty argument is passed",
-    proof: { mode: "executable", command: "node", args: [""], expectedExitCode: 0 }
-  });
-  const none = describeCriterion({
-    id: "ac_none-1",
-    statement: "The empty argument is passed",
-    proof: { mode: "executable", command: "node", args: [], expectedExitCode: 0 }
-  });
-  assert.notEqual(empty, none, "an empty argument must be distinguishable from none");
-  assert.match(empty, /node ''/);
-
-  // The rendered text is reproduction instructions, so a shell metacharacter in
-  // a single argument must not read as syntax. `safe;touch` is one argument the
-  // runner passes intact; rendered bare, a reviewer pasting it into a shell runs
-  // `touch` as a second command.
-  //
-  // Single quotes specifically: double quotes still expand `$` and backticks in
-  // POSIX shells and PowerShell, so `"$(touch /tmp/pwned)"` executes.
-  //
-  // Asserted with string containment rather than a regex, because the values
-  // under test are themselves full of regex metacharacters.
-  const describe = (arg) =>
+  const describe = (args) =>
     describeCriterion({
-      id: "ac_meta-1",
+      id: "ac_argv-1",
       statement: "s",
-      proof: { mode: "executable", command: "node", args: [arg], expectedExitCode: 0 }
+      proof: { mode: "executable", command: "node", args, expectedExitCode: 0 }
     });
 
-  const dangerous = [
-    "safe;touch",
-    "a&&b",
-    "a|b",
-    "$HOME",
-    "$(touch /tmp/pwned)",
-    "`id`",
-    "a>out",
-    "a<in",
-    "(x)",
-    "a*b",
-    "a~b",
-    "foo bar"
-  ];
-  for (const arg of dangerous) {
-    const rendered = describe(arg);
-    assert.ok(
-      rendered.includes(`node '${arg}'`),
-      `${arg} must be single-quoted: ${rendered}`
-    );
-    assert.ok(!rendered.includes(`node "${arg}"`), `${arg} must not use double quotes`);
-  }
+  // Five rounds of review went into quoting this text for a shell, ending with
+  // "POSIX single-quote escaping is wrong in PowerShell". That was not another
+  // missing case — it is proof that no single string is correct in every shell,
+  // so a rendering that claims to be shell-pasteable cannot keep the promise.
+  //
+  // The runner receives the argv vector directly and never parses this text, so
+  // the text only has to say unambiguously what the vector was.
+  assert.notEqual(
+    describe(["-e", "foo bar"]),
+    describe(["-e", "foo", "bar"]),
+    "argument boundaries must be distinguishable"
+  );
+  assert.notEqual(describe([""]), describe([]), "an empty argument is not no arguments");
 
-  // An embedded single quote is closed, escaped and reopened, so the argument
-  // survives a round trip through a POSIX shell.
-  assert.ok(describe("it's").includes(`node 'it'\\''s'`), describe("it's"));
-
-  // Ordinary tokens stay unquoted, so the common case stays readable.
-  for (const plain of ["--filter", "resolver", "src/main.ts", "a=b", "v1.2.3"]) {
+  // Nothing in the rendering can be mistaken for shell syntax, whichever shell
+  // the reviewer uses.
+  for (const hostile of ["$(touch /tmp/pwned)", "`id`", "$HOME", "a;b", "a&&b", "O'Brien", 'say "hi"']) {
+    const rendered = describe([hostile]);
     assert.ok(
-      describe(plain).includes(`\`node ${plain}\``),
-      `${plain} should not be quoted: ${describe(plain)}`
+      rendered.includes(JSON.stringify([hostile])),
+      `${hostile} must appear as data: ${rendered}`
     );
   }
+
+  assert.match(describe([]), /with no arguments/);
+});
+
+test("a phase naming a declined requirement is refused", async (t) => {
+  // A `wont` requirement is kept in the set but excluded from roadmap phases, so
+  // reaching this state means the roadmap was hand-edited or is stale. The
+  // roadmap is edited here rather than the requirement, because editing the
+  // requirement would trip drift detection first and test the wrong guard.
+  const { root, run } = await scratchProject(t, {
+    ...ANSWERS,
+    "req-1-ac-1-more": "false",
+    "req-1-ac-2-statement": undefined,
+    "req-1-ac-2-proof": undefined,
+    "req-1-ac-2-detail": undefined,
+    "req-1-ac-2-more": undefined,
+    "req-1-more": "true",
+    "req-2-statement": "Rewriting history to hide a broken reference",
+    "req-2-priority": "wont",
+    "req-2-category": "constraint",
+    "req-2-more": "false"
+  });
+  const finalize = parseJsonOutput(
+    await run("start", "--finalize", "--json", "--created-at", CREATED_AT)
+  );
+
+  const declined = finalize.requirementSet.paths
+    .map((entry) => entry.split("/").at(-1).replace(/\.json$/, ""))
+    .find((id) => id.startsWith("req_rewriting-history"));
+  assert.ok(declined !== undefined, finalize.requirementSet.paths.join(", "));
+
+  const roadmapPath = path.join(root, "ROADMAP.md");
+  const roadmap = await readFile(roadmapPath, "utf8");
+  await writeFile(
+    roadmapPath,
+    roadmap.replace(/\*\*Requirement:\*\* `req_[^`]+`/, `**Requirement:** \`${declined}\``),
+    "utf8"
+  );
+
+  const planned = await run("plan", "1", "--json");
+  assert.equal(planned.exitCode, 1, "a declined requirement must not be planned");
+  assert.match(parseJsonOutput(planned).diagnostics[0].message, /out of scope/i);
 });

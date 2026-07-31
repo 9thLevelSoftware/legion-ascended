@@ -30455,7 +30455,7 @@ async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
         reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
       };
     }
-    return { ok: true, resolved: { requirement: found, ...partition(found) } };
+    return declinedOrResolved(found, phase);
   }
   const set = await readRequirementSet(repositoryRoot);
   if (!set.ok) {
@@ -30474,6 +30474,15 @@ async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
       reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
     };
   }
+  return declinedOrResolved(requirement, phase);
+}
+function declinedOrResolved(requirement, phase) {
+  if (requirement.priority === "wont") {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
+    };
+  }
   return { ok: true, resolved: { requirement, ...partition(requirement) } };
 }
 var MAX_CRITERION_DESCRIPTION = 1024;
@@ -30481,15 +30490,16 @@ function clamp(value) {
   if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
   return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
 }
-var UNQUOTED_ARGUMENT = /^[A-Za-z0-9._\/=@:+-]+$/;
-function renderArgument(part) {
-  if (UNQUOTED_ARGUMENT.test(part)) return part;
-  return `'${part.split("'").join(`'\\''`)}'`;
+function renderInvocation(command, args) {
+  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
+  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
 }
 function describeCriterion(criterion) {
   if (criterion.proof.mode === "executable") {
-    const command = [criterion.proof.command, ...criterion.proof.args].map(renderArgument).join(" ");
-    return clamp(`${criterion.statement} \u2014 \`${command}\` must exit ${criterion.proof.expectedExitCode}`);
+    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
+    return clamp(
+      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
+    );
   }
   return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
 }
