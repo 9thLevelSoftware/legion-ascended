@@ -35103,14 +35103,18 @@ var CHANGES_ROOT = ".legion/project/changes";
 function taskgraphArtifactPath(changeId) {
   return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
+var ChangesRootUnreadable = class extends Error {
+};
 async function changeIds(repositoryRoot) {
   try {
-    const entries = await readdir15(path41.join(repositoryRoot, ...CHANGES_ROOT.split("/")), {
-      withFileTypes: true
-    });
+    const entries = await readdir15(path41.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
+  } catch (error2) {
+    if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
+      return [];
+    }
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    throw new ChangesRootUnreadable(message);
   }
 }
 function budgetExceeds(taskBudget, policy) {
@@ -35123,7 +35127,7 @@ function budgetExceeds(taskBudget, policy) {
   }
   return over;
 }
-async function resolvableRequirementIds(repositoryRoot, set) {
+async function resolvableRequirementIds(repositoryRoot, set, changes) {
   const ids = /* @__PURE__ */ new Set();
   if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
   const specs = await listCurrentSpecs({ repositoryRoot });
@@ -35132,14 +35136,38 @@ async function resolvableRequirementIds(repositoryRoot, set) {
       for (const requirement of document.requirements) ids.add(requirement.id);
     }
   }
+  for (const changeId of changes) {
+    const change = await loadChangeBundle({ repositoryRoot, changeId });
+    if (!change.ok) continue;
+    for (const delta of change.deltaSpecs) {
+      if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
+    }
+  }
   return ids;
 }
 async function checkTraceability(repositoryRoot) {
+  const empty = { requirements: 0, planned: 0, unplanned: [] };
+  let changes;
+  try {
+    changes = await changeIds(repositoryRoot);
+  } catch (error2) {
+    if (!(error2 instanceof ChangesRootUnreadable)) throw error2;
+    return {
+      diagnostics: [
+        {
+          code: "changes_root_unreadable",
+          message: `${CHANGES_ROOT} could not be read, so no task contract was checked: ${error2.message}`,
+          source: { path: CHANGES_ROOT }
+        }
+      ],
+      coverage: empty
+    };
+  }
   const set = await readRequirementSet(repositoryRoot);
-  const resolvable = await resolvableRequirementIds(repositoryRoot, set);
+  const resolvable = await resolvableRequirementIds(repositoryRoot, set, changes);
   const diagnostics = [];
   const covered = /* @__PURE__ */ new Set();
-  for (const changeId of await changeIds(repositoryRoot)) {
+  for (const changeId of changes) {
     const artifactPath = taskgraphArtifactPath(changeId);
     const graph = await readTaskGraph({ repositoryRoot, changeId });
     if (!graph.ok) {
@@ -35163,12 +35191,24 @@ async function checkTraceability(repositoryRoot) {
           source: { path: artifactPath }
         });
       }
+      const oracleCoverage = /* @__PURE__ */ new Set();
       for (const oracleId of task.oracleRefs) {
         const oracle = await readOracleArtifact({ repositoryRoot, changeId, oracleId });
-        if (oracle.ok && oracle.document.id === oracleId) continue;
+        if (!oracle.ok || oracle.document.id !== oracleId) {
+          diagnostics.push({
+            code: "task_oracle_unresolved",
+            message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+            source: { path: artifactPath }
+          });
+          continue;
+        }
+        for (const entry of oracle.document.requirementCoverage) oracleCoverage.add(entry.requirementId);
+      }
+      for (const requirementId of task.requirementIds) {
+        if (task.oracleRefs.length === 0 || oracleCoverage.has(requirementId)) continue;
         diagnostics.push({
-          code: "task_oracle_unresolved",
-          message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+          code: "task_oracle_missing_coverage",
+          message: `${task.id} has no oracle covering ${requirementId}.`,
           source: { path: artifactPath }
         });
       }

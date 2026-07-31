@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -300,5 +300,97 @@ test("a traceability failure is not hidden behind a drift label", async (t) => {
     payload.status,
     "traceability_broken",
     "the more specific failure must not be eclipsed by drift"
+  );
+});
+
+test("a requirement proposed by a change delta resolves", async (t) => {
+  const { root } = await plannedProject(t);
+  const { resolvableRequirementIds } = await import(
+    "../packages/cli/dist/workflow/traceability-check.js"
+  );
+
+  // A change with an `add` delta proposes a requirement that exists only under
+  // that change until it ships. `packages/artifacts/src/traceability` already
+  // treats those as real, so omitting them made a supported change report its
+  // own task as unresolved.
+  //
+  // Asserted against the resolver directly: the fixture's delta proposes the
+  // same requirement the intake set holds, so an end-to-end run cannot tell
+  // which source resolved it.
+  // Read through the change service: `change.yaml` records delta *pointers*, and
+  // the proposed requirement lives in the per-delta spec the loader assembles.
+  const { loadChangeBundle } = await import("../packages/artifacts/dist/index.js");
+  const changeId = (await readdir(path.join(root, ".legion/project/changes")))[0];
+  const change = await loadChangeBundle({ repositoryRoot: root, changeId });
+  assert.equal(change.ok, true, "the planned change should load");
+
+  const proposed = change.deltaSpecs
+    .map((delta) => delta.proposedRequirement?.id)
+    .find((id) => typeof id === "string");
+  assert.ok(proposed !== undefined, "the planned change should propose a requirement");
+
+  // The current spec has to go, or it supplies the same ID and the delta path is
+  // never exercised. An `add` delta is precisely the case where the requirement
+  // is not yet in current specs, so this is the real shape rather than a
+  // convenience.
+  //
+  // A first version of this test omitted the removal and passed with the delta
+  // lookup disabled — the third assertion in this project to pass for the wrong
+  // reason, and the reason reverting the fix is worth doing every time.
+  await rm(path.join(root, ".legion/project/specs"), { recursive: true, force: true });
+
+  const ids = await resolvableRequirementIds(
+    root,
+    { ok: false, status: "not_found", reason: "none" },
+    [changeId]
+  );
+  assert.ok(ids.has(proposed), `${proposed} should resolve from the change delta alone`);
+});
+
+test("an oracle that covers a different requirement does not satisfy the task", async (t) => {
+  const { root, run, readTaskgraph } = await plannedProject(t);
+
+  // Existing is not the same as covering. `validateChangeTraceability` rejects
+  // this state as `task_missing_requirement_oracle`, so accepting it here would
+  // let a project pass validation and fail later at archive.
+  const taskgraph = await readTaskgraph();
+  const changeId = taskgraph.tasks[0].changeId;
+  const oracleId = taskgraph.tasks[0].oracleRefs[0];
+  const oraclePath = path.join(
+    root,
+    ".legion/project/changes",
+    changeId,
+    "oracle",
+    `${oracleId}.yaml`
+  );
+
+  const document = JSON.parse(await readFile(oraclePath, "utf8"));
+  document.oracle.requirementCoverage[0].requirementId = "req_something-else-entirely";
+  await writeFile(oraclePath, JSON.stringify(document), "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("task_oracle_missing_coverage"),
+    `expected task_oracle_missing_coverage, got ${codes.join(", ")}`
+  );
+});
+
+test("an unreadable changes directory is reported, not treated as empty", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // Swallowing every scan failure made an unreadable changes root
+  // indistinguishable from a project with no changes, so validate reported
+  // success having checked no task contract at all.
+  await rm(path.join(root, ".legion/project/changes"), { recursive: true, force: true });
+  await writeFile(path.join(root, ".legion/project/changes"), "not a directory\n", "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("changes_root_unreadable"),
+    `expected changes_root_unreadable, got ${codes.join(", ")}`
   );
 });

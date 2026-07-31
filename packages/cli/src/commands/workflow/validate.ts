@@ -70,13 +70,6 @@ ${renderCoverage(trace.coverage)}`);
 }
 
 /**
- * One line saying how much of the requirement set has been planned.
- *
- * Reported on success rather than as a diagnostic: later phases being unplanned
- * is the normal state of a project mid-flight, so failing on it would make
- * `validate` red for everyone and teach operators to ignore the result.
- */
-/**
  * One status label for a payload that can carry several kinds of failure.
  *
  * A nested ternary picked `requirement_set_drift` whenever drift was present,
@@ -97,6 +90,13 @@ function failureStatus(
   return "valid";
 }
 
+/**
+ * One line saying how much of the requirement set has been planned.
+ *
+ * Reported on success rather than as a diagnostic: later phases being unplanned
+ * is the normal state of a project mid-flight, so failing on it would make
+ * `validate` red for everyone and teach operators to ignore the result.
+ */
 function renderCoverage(coverage: {
   readonly requirements: number;
   readonly planned: number;

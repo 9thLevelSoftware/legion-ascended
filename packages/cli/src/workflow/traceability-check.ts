@@ -24,6 +24,7 @@ import path from "node:path";
 
 import {
   listCurrentSpecs,
+  loadChangeBundle,
   readOracleArtifact,
   readRequirementSet,
   readTaskGraph,
@@ -34,6 +35,8 @@ export interface TraceabilityDiagnostic {
   readonly code:
     | "task_requirement_unresolved"
     | "task_oracle_unresolved"
+    | "task_oracle_missing_coverage"
+    | "changes_root_unreadable"
     | "task_budget_exceeds_policy"
     | "taskgraph_unreadable";
   readonly message: string;
@@ -59,14 +62,25 @@ function taskgraphArtifactPath(changeId: string): string {
   return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
 
+class ChangesRootUnreadable extends Error {}
+
+/**
+ * Change directories, or a thrown error for anything but an absent root.
+ *
+ * Swallowing every failure made an unreadable `.legion/project/changes` — or one
+ * replaced by a file — indistinguishable from a project with no changes, so
+ * `legion validate` reported success having checked no task contract at all.
+ */
 async function changeIds(repositoryRoot: string): Promise<readonly string[]> {
   try {
-    const entries = await readdir(path.join(repositoryRoot, ...CHANGES_ROOT.split("/")), {
-      withFileTypes: true
-    });
+    const entries = await readdir(path.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return [];
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ChangesRootUnreadable(message);
   }
 }
 
@@ -94,9 +108,10 @@ function budgetExceeds(
  * never complete. An ad-hoc requirement is still a real, typed requirement; it
  * just entered through a different door.
  */
-async function resolvableRequirementIds(
+export async function resolvableRequirementIds(
   repositoryRoot: string,
-  set: Awaited<ReturnType<typeof readRequirementSet>>
+  set: Awaited<ReturnType<typeof readRequirementSet>>,
+  changes: readonly string[]
 ): Promise<ReadonlySet<string>> {
   const ids = new Set<string>();
   if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
@@ -105,6 +120,18 @@ async function resolvableRequirementIds(
   if (specs.ok) {
     for (const document of specs.documents) {
       for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+  }
+
+  // A change with an `add` delta proposes a requirement that exists only under
+  // that change until it ships, and `packages/artifacts/src/traceability`
+  // already treats those as real. Omitting them made a supported change report
+  // its own task as unresolved.
+  for (const changeId of changes) {
+    const change = await loadChangeBundle({ repositoryRoot, changeId });
+    if (!change.ok) continue;
+    for (const delta of change.deltaSpecs) {
+      if (delta.proposedRequirement !== undefined) ids.add(delta.proposedRequirement.id);
     }
   }
   return ids;
@@ -118,12 +145,31 @@ async function resolvableRequirementIds(
  * against and no expected coverage surface.
  */
 export async function checkTraceability(repositoryRoot: string): Promise<TraceabilityReport> {
+  const empty = { requirements: 0, planned: 0, unplanned: [] as readonly string[] };
+
+  let changes: readonly string[];
+  try {
+    changes = await changeIds(repositoryRoot);
+  } catch (error) {
+    if (!(error instanceof ChangesRootUnreadable)) throw error;
+    return {
+      diagnostics: [
+        {
+          code: "changes_root_unreadable",
+          message: `${CHANGES_ROOT} could not be read, so no task contract was checked: ${error.message}`,
+          source: { path: CHANGES_ROOT }
+        }
+      ],
+      coverage: empty
+    };
+  }
+
   const set = await readRequirementSet(repositoryRoot);
-  const resolvable = await resolvableRequirementIds(repositoryRoot, set);
+  const resolvable = await resolvableRequirementIds(repositoryRoot, set, changes);
   const diagnostics: TraceabilityDiagnostic[] = [];
   const covered = new Set<string>();
 
-  for (const changeId of await changeIds(repositoryRoot)) {
+  for (const changeId of changes) {
     const artifactPath = taskgraphArtifactPath(changeId);
     const graph = await readTaskGraph({ repositoryRoot, changeId });
 
@@ -156,15 +202,31 @@ export async function checkTraceability(repositoryRoot: string): Promise<Traceab
         });
       }
 
+      // Read through the oracle service, not matched by filename. A file merely
+      // having the right basename made a truncated, empty or ID-mismatched
+      // oracle count as present.
+      const oracleCoverage = new Set<string>();
       for (const oracleId of task.oracleRefs) {
-        // Read through the oracle service, not matched by filename. A file
-        // merely having the right basename made a truncated, empty or
-        // ID-mismatched oracle count as present.
         const oracle = await readOracleArtifact({ repositoryRoot, changeId, oracleId });
-        if (oracle.ok && oracle.document.id === oracleId) continue;
+        if (!oracle.ok || oracle.document.id !== oracleId) {
+          diagnostics.push({
+            code: "task_oracle_unresolved",
+            message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+            source: { path: artifactPath }
+          });
+          continue;
+        }
+        for (const entry of oracle.document.requirementCoverage) oracleCoverage.add(entry.requirementId);
+      }
+
+      // Existing is not the same as covering. `validateChangeTraceability`
+      // rejects a task whose oracle covers a different requirement, so accepting
+      // it here would let a project pass validation and fail later at archive.
+      for (const requirementId of task.requirementIds) {
+        if (task.oracleRefs.length === 0 || oracleCoverage.has(requirementId)) continue;
         diagnostics.push({
-          code: "task_oracle_unresolved",
-          message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+          code: "task_oracle_missing_coverage",
+          message: `${task.id} has no oracle covering ${requirementId}.`,
           source: { path: artifactPath }
         });
       }
