@@ -269,7 +269,24 @@ test("a specification defect is not sent to legion build", async (t) => {
 
   // Asserting only that it is not `legion build` would shrug if the action
   // regressed to `legion validate` — the original defect that started this
-  // thread. The command has to be the one that repairs a specification defect,
-  // and it has to be runnable as printed.
-  assert.equal(parseJsonOutput(shipped).nextAction.command, "legion plan 1");
+  // thread. Two earlier revisions named a command that could not perform the
+  // repair it promised, so this asserts the exact action and then runs it.
+  const action = parseJsonOutput(shipped).nextAction;
+  assert.equal(action.command, "legion ship");
+
+  // The defect is in a committed artifact and no command rewrites it, so the
+  // advice has to say where to edit. A recovery that named no location was the
+  // reason the previous two revisions pointed at create-only commands.
+  assert.match(action.reason, /orc_stray-artifact\.yaml|oracle/i);
+
+  // The advice has to work end to end: the named check still fails while the
+  // artifact is wrong, and passes once the operator does what it says. Asserting
+  // only that the command exists is what let two revisions ship a recovery that
+  // ran and did nothing useful.
+  const rerun = await run(...action.command.split(" ").slice(1));
+  assert.notEqual(rerun.exitCode, 0, `the named check should still fail: ${rerun.stdout}${rerun.stderr}`);
+
+  await rm(path.join(root, ".legion/project/changes", changeId, "oracle", "orc_stray-artifact.yaml"));
+  const repaired = await run(...action.command.split(" ").slice(1));
+  assert.equal(repaired.exitCode, 0, `the repair the action describes should clear it: ${repaired.stdout}${repaired.stderr}`);
 });

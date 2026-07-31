@@ -35055,7 +35055,7 @@ function deriveShipGates(input) {
 
 // packages/cli/src/commands/workflow/ship.ts
 var SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
-function recoveryFor(diagnostics) {
+function recoveryFor(_changeId, diagnostics) {
   const evidenceOnly = diagnostics.every((diagnostic3) => diagnostic3.code.includes("evidence"));
   if (evidenceOnly) {
     return nextAction(
@@ -35063,10 +35063,15 @@ function recoveryFor(diagnostics) {
       "Evidence is not linked to the requirements and oracles it proves; rebuilding the task rewrites those links."
     );
   }
+  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
+  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
   return nextAction(
-    "legion plan 1",
-    "Requirement, oracle and task links must resolve before a change can ship; replanning the phase rewrites the artifacts that define them."
+    "legion ship",
+    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: correct ${where} by hand, then rerun this to confirm the defect is gone.`
   );
+}
+function isPath(value) {
+  return value !== void 0 && value.length > 0;
 }
 async function handleShipWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -35128,7 +35133,7 @@ async function handleShipWorkflow(context) {
           message: diagnostic3.message,
           path: diagnostic3.source?.path ?? taskgraph.artifactPath
         })),
-        recoveryFor(blocking)
+        recoveryFor(latestChange.changeId, blocking)
       );
     }
     traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({

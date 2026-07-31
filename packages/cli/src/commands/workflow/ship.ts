@@ -14,6 +14,12 @@ import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
 const SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
 
+/** The shape `recoveryFor` needs: a code to classify by, and where the defect is. */
+type TraceabilityFailure = {
+  readonly code: string;
+  readonly source?: { readonly path?: string };
+};
+
 /**
  * The command that can actually repair what failed.
  *
@@ -21,8 +27,23 @@ const SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This l
  * evidence-linkage failure and nothing else — pointing there for a malformed
  * oracle or a missing requirement proof sends the operator round a loop that
  * returns the same diagnostic.
+ *
+ * A specification defect has no repair command, and saying so is the honest
+ * answer. `legion plan <phase>` and `legion dev change create` are both
+ * create-only: the change already exists, so `createChangeBundle` rejects the
+ * rerun with `artifact_already_exists`, and neither can delete a stray oracle.
+ * Two earlier revisions of this function named commands that could not perform
+ * the repair they promised — first one that wasn't runnable at all, then one
+ * that ran and did the wrong thing. The defect is in a committed artifact, and
+ * correcting a committed artifact is an edit.
+ *
+ * So the action names the artifact to edit, and the command to rerun is this
+ * one. `legion dev change validate` was the obvious candidate and reports
+ * "Change is valid." on a bundle with a malformed stray oracle — it checks the
+ * bundle's own schema, not the traceability the ship gate checks. Ship is the
+ * only command that re-reports this defect, so ship is what confirms the repair.
  */
-function recoveryFor(diagnostics: readonly { readonly code: string }[]) {
+function recoveryFor(_changeId: string, diagnostics: readonly TraceabilityFailure[]) {
   const evidenceOnly = diagnostics.every((diagnostic) => diagnostic.code.includes("evidence"));
   if (evidenceOnly) {
     return nextAction(
@@ -30,16 +51,18 @@ function recoveryFor(diagnostics: readonly { readonly code: string }[]) {
       "Evidence is not linked to the requirements and oracles it proves; rebuilding the task rewrites those links."
     );
   }
-  // Specification and oracle defects live in the planned artifacts, so replanning
-  // the phase is what rewrites them. `legion validate` reports the state but
-  // repairs nothing.
-  // `legion plan` alone is a usage error: the command parses a phase number from
-  // its first positional, so a recovery action without one cannot be run as
-  // printed.
+
+  const paths = [...new Set(diagnostics.map((diagnostic) => diagnostic.source?.path).filter(isPath))];
+  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
   return nextAction(
-    "legion plan 1",
-    "Requirement, oracle and task links must resolve before a change can ship; replanning the phase rewrites the artifacts that define them."
+    "legion ship",
+    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: ` +
+      `correct ${where} by hand, then rerun this to confirm the defect is gone.`
   );
+}
+
+function isPath(value: string | undefined): value is string {
+  return value !== undefined && value.length > 0;
 }
 
 export async function handleShipWorkflow(context: CliContext): Promise<CliResult> {
@@ -134,7 +157,7 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
           message: diagnostic.message,
           path: diagnostic.source?.path ?? taskgraph.artifactPath
         })),
-        recoveryFor(blocking)
+        recoveryFor(latestChange.changeId, blocking)
       );
     }
 
