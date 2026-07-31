@@ -33,6 +33,34 @@ export interface AdHocTaskgraphInput {
   readonly readScope?: readonly string[];
   readonly writeScope?: readonly string[];
   readonly verificationCommand?: readonly string[];
+  /** The blast-radius limit the interview recorded, when there was one. */
+  readonly enforcementBudget?: {
+    readonly maxFilesChanged: number;
+    readonly maxLinesChanged: number;
+    readonly maxNewFiles: number;
+  };
+}
+
+/**
+ * The narrower of a derived budget and the project policy, field by field.
+ *
+ * Ad-hoc work derives a budget from its write scope, which for a repository-wide
+ * request is deliberately generous. Where the operator recorded a limit, that
+ * limit wins: a task cannot be granted more room than the project allows just
+ * because it arrived through `legion quick` rather than through a plan.
+ */
+function narrowedToPolicy(
+  derived: { readonly maxFilesChanged: number; readonly maxLinesChanged: number; readonly maxNewFiles: number },
+  policy:
+    | { readonly maxFilesChanged: number; readonly maxLinesChanged: number; readonly maxNewFiles: number }
+    | undefined
+) {
+  if (policy === undefined) return derived;
+  return {
+    maxFilesChanged: Math.min(derived.maxFilesChanged, policy.maxFilesChanged),
+    maxLinesChanged: Math.min(derived.maxLinesChanged, policy.maxLinesChanged),
+    maxNewFiles: Math.min(derived.maxNewFiles, policy.maxNewFiles)
+  };
 }
 
 export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
@@ -236,7 +264,14 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
       write: adHocWriteScope,
       forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
       sequentialFiles: [],
-      budget: budgetForWriteScope(adHocWriteScope, { slackFiles: 2 })
+      // Bounded by the project's own policy when the interview recorded one.
+      // A derived budget wider than the operator's limit is a task that escaped
+      // the policy through the ad-hoc door — `legion validate` reports exactly
+      // that, and it reported it here.
+      budget: narrowedToPolicy(
+        budgetForWriteScope(adHocWriteScope, { slackFiles: 2 }),
+        input.enforcementBudget
+      )
     },
     interfaces: {
       consumes: [{ name: "AdHocRequest", description: `The ${input.kind} request prepared by Legion.` }],

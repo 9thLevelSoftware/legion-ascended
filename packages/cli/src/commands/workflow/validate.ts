@@ -11,6 +11,7 @@ import {
   type CliResult
 } from "../../runtime.js";
 import { validateWorkflowProject } from "../../workflow/context.js";
+import { checkTraceability } from "../../workflow/traceability-check.js";
 import { renderDiagnostics } from "../../workflow/render.js";
 
 interface ShallowCheck {
@@ -47,20 +48,64 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
   // project and `legion validate` would still report "valid" — the drift the
   // hash exists to name was the one condition nothing looked for.
   const drift = await requirementSetDiagnostics(context.repositoryRoot);
-  const diagnostics = [...result.diagnostics, ...drift];
-  const ok = result.ok && drift.length === 0;
+  // References between requirements, oracles and tasks are IDs, and an ID that
+  // resolves to nothing looks exactly like one that resolves.
+  const trace = await checkTraceability(context.repositoryRoot);
+  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics];
+  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0;
   const payload = {
     ...result,
     ok,
     diagnostics,
-    status: ok ? "valid" : result.ok ? "requirement_set_drift" : result.status
+    coverage: trace.coverage,
+    status: failureStatus(result, drift.length, trace.diagnostics.length)
   };
 
   if (!ok) {
     return failure(payload, validationFailureHuman(diagnostics));
   }
 
-  return success(payload, "Project is valid.");
+  return success(payload, `Project is valid.
+${renderCoverage(trace.coverage)}`);
+}
+
+/**
+ * One status label for a payload that can carry several kinds of failure.
+ *
+ * A nested ternary picked `requirement_set_drift` whenever drift was present,
+ * so a project with both drift and a broken task reference reported a label that
+ * excluded the traceability findings — the diagnostics told the truth while the
+ * status misled anything filtering on it. Traceability now takes precedence
+ * because it is the more specific failure, and both remain in `diagnostics`
+ * either way.
+ */
+function failureStatus(
+  result: { readonly ok: boolean; readonly status?: string },
+  driftCount: number,
+  traceCount: number
+): string {
+  if (!result.ok) return result.status ?? "invalid";
+  if (traceCount > 0) return "traceability_broken";
+  if (driftCount > 0) return "requirement_set_drift";
+  return "valid";
+}
+
+/**
+ * One line saying how much of the requirement set has been planned.
+ *
+ * Reported on success rather than as a diagnostic: later phases being unplanned
+ * is the normal state of a project mid-flight, so failing on it would make
+ * `validate` red for everyone and teach operators to ignore the result.
+ */
+function renderCoverage(coverage: {
+  readonly requirements: number;
+  readonly planned: number;
+  readonly unplanned: readonly string[];
+}): string {
+  if (coverage.requirements === 0) return "No requirement set; nothing to trace.";
+  const line = `Planned ${coverage.planned} of ${coverage.requirements} requirement(s).`;
+  if (coverage.unplanned.length === 0) return line;
+  return `${line} Not yet planned: ${coverage.unplanned.join(", ")}.`;
 }
 
 async function requirementSetDiagnostics(
@@ -84,6 +129,7 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
   // that `legion validate` refuses. Two validation entrances that disagree teach
   // operators to trust whichever one is currently passing.
   const drift = await requirementSetDiagnostics(context.repositoryRoot);
+  const trace = await checkTraceability(context.repositoryRoot);
   const checks = {
     project: {
       ok: result.ok,
@@ -95,17 +141,23 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
       status: drift.length === 0 ? "valid" : "requirement_set_drift",
       diagnostics: drift
     },
+    traceability: {
+      ok: trace.diagnostics.length === 0,
+      status: trace.diagnostics.length === 0 ? "valid" : "traceability_broken",
+      diagnostics: trace.diagnostics,
+      coverage: trace.coverage
+    },
     operationalStore: await pathCheck(context.repositoryRoot, ".legion/var"),
     workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
 
-  const ok = result.ok && drift.length === 0;
-  const diagnostics = [...result.diagnostics, ...drift];
+  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0;
+  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics];
   const payload = {
     ...result,
     ok,
     diagnostics,
-    status: ok ? "valid" : result.ok ? "requirement_set_drift" : result.status,
+    status: failureStatus(result, drift.length, trace.diagnostics.length),
     checks
   };
 
