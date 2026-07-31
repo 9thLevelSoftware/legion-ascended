@@ -51,7 +51,16 @@ export function requirementIdInPhase(phase: PhaseSource): string | undefined {
   return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
 }
 
-function partition(requirement: Requirement): {
+/**
+ * Split a requirement's criteria by whether a command can decide them.
+ *
+ * Exported because `change-input` derives the oracle IDs a phase will produce
+ * and `oracle-input` writes those oracles. Two partitions would let the two
+ * sides disagree about how many oracles exist, which is exactly the failure
+ * this became: the change bundle referenced an inspection oracle that was no
+ * longer written.
+ */
+export function partitionCriteria(requirement: Requirement): {
   readonly executable: readonly ExecutableCriterion[];
   readonly manual: readonly RequirementCriterion[];
 } {
@@ -139,7 +148,7 @@ function declinedOrResolved(
       reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
     };
   }
-  return { ok: true, resolved: { requirement, ...partition(requirement) } };
+  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
 }
 
 /**

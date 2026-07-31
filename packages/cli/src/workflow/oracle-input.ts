@@ -11,15 +11,29 @@ import {
   type UtcTimestamp
 } from "@legion/protocol";
 
-import { currentUtcTimestamp, firstDecisionOwner, phasePlanIds } from "./change-input.js";
+import {
+  currentUtcTimestamp,
+  firstDecisionOwner,
+  phaseOracleIds,
+  phasePlanIds
+} from "./change-input.js";
 import type { PhaseSource } from "./phase-compat.js";
-import { describeCriterion, type ResolvedPhaseRequirement } from "./phase-requirement.js";
+import {
+  describeCriterion,
+  type ExecutableCriterion,
+  type ResolvedPhaseRequirement
+} from "./phase-requirement.js";
 
 /** `oracleInspectionExecutionSchema` caps instructions at 4096 characters. */
 const MAX_ORACLE_INSTRUCTIONS = 4_096;
 
 /** Room kept for the "and N more" footer, so the count is never itself cut. */
 const OMISSION_FOOTER_RESERVE = 160;
+
+/** `oracleCommandExecutionSchema` allows no longer timeout than an hour. */
+const MAX_ORACLE_TIMEOUT_MS = 3_600_000;
+
+const DEFAULT_ORACLE_TIMEOUT_MS = 600_000;
 
 export interface BuildOracleInputOptions {
   readonly repositoryRoot: string;
@@ -35,17 +49,16 @@ export interface BuildOracleInputOptions {
 /**
  * What a reviewer is asked to decide.
  *
- * Manual criteria are named individually so the unproven surface is visible at
- * review time rather than buried in the requirement file. A phase whose criteria
- * are all executable says so, which is the case worth noticing.
+ * Only the criteria no command can decide reach here now that each executable
+ * criterion has an oracle of its own, so this is the unproven surface and
+ * nothing else. A phase with no manual criteria produces no inspection oracle at
+ * all rather than one that asks a reviewer to confirm what a command already
+ * decided.
  */
 function inspectionInstructions(options: BuildOracleInputOptions): string {
   const resolved = options.requirement;
   if (resolved === undefined) {
     return `Review implementation and evidence for phase ${options.phase.number}: ${options.phase.name}.`;
-  }
-  if (resolved.manual.length === 0) {
-    return `Every acceptance criterion for ${resolved.requirement.id} is executable and runs as task verification. Confirm the evidence records those runs.`;
   }
   // Clamping each criterion to 1024 bounded the elements and not the aggregate:
   // twenty criteria is a schema-valid interview, and the joined string then
@@ -75,7 +88,112 @@ function inspectionInstructions(options: BuildOracleInputOptions): string {
   return lines.join("\n");
 }
 
-export function buildOracleArtifactInput(options: BuildOracleInputOptions): CreateOracleArtifactInput {
+/**
+ * The oracle IDs this phase writes, taken from the change bundle's own source.
+ *
+ * Derived by `phaseOracleIds` rather than recomputed here. A second derivation
+ * is what broke this the first time: the bundle's `acceptance.oracleRefs` named
+ * an inspection oracle that this file had stopped writing, so every plan of a
+ * requirement decided entirely by commands referenced an artifact that did not
+ * exist. One function, two callers, no way to disagree.
+ *
+ * IDs are positional (`-c1`, `-c2`) rather than derived from criterion text: a
+ * criterion the operator rewords keeps its oracle, and two criteria that read
+ * alike do not collide into one. Reordering criteria reassigns them, which
+ * replanning rewrites anyway.
+ */
+function oracleIdsFor(options: BuildOracleInputOptions): readonly string[] {
+  return phaseOracleIds(options.phase, options.requirement?.requirement);
+}
+
+/**
+ * One oracle per executable criterion.
+ *
+ * A single `inspectable` oracle asserting "phase N acceptance criteria are
+ * satisfied" made every phase's acceptance identical and left a reviewer to
+ * decide, by hand, things a command had already decided. An executable
+ * criterion carries the command the operator said decides it, so it becomes an
+ * oracle a runner can execute — which is what `type: "executable"` is for and
+ * what nothing in this repository has ever emitted.
+ */
+function executableOracles(
+  options: BuildOracleInputOptions,
+  criteria: readonly ExecutableCriterion[]
+): readonly CreateOracleArtifactInput[] {
+  const resolved = options.requirement;
+  if (resolved === undefined) return [];
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const owner = firstDecisionOwner(options.project);
+
+  const oracleIds = oracleIdsFor(options);
+  return criteria.map((criterion, index) => {
+    const oracleId = oracleIds[index];
+    if (oracleId === undefined) {
+      // Unreachable while both sides partition the same requirement, which is
+      // the point of sharing the derivation — but a silent `undefined` here
+      // would be written into an artifact as a malformed ID.
+      throw new Error(`No oracle ID was derived for acceptance criterion ${index + 1}.`);
+    }
+    const oraclePath = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
+    const description = describeCriterion(criterion);
+
+    const oracle = oracleSchema.parse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "oracle",
+      id: oracleId,
+      projectId: options.project.id,
+      title: `Acceptance criterion ${index + 1} for ${resolved.requirement.id}`,
+      owner,
+      protectedPaths: [options.change.artifactPath],
+      sourceArtifacts: [options.change.reference],
+      expected: {
+        preconditions: ["The phase change bundle exists and validates."],
+        postconditions: [description],
+        evidence: ["The criterion command runs during legion build and exits as expected."]
+      },
+      requirementCoverage: [
+        {
+          requirementId: resolved.requirement.id,
+          // `partial`, not `primary`: this oracle decides one criterion of the
+          // requirement. Claiming primary coverage from each of several oracles
+          // would report the requirement fully covered by any one of them.
+          coverage: "partial",
+          criteria: [description]
+        }
+      ],
+      traceRefs: [
+        {
+          path: oraclePath,
+          anchor: oracleId,
+          relation: "verifies",
+          entity: { kind: "requirement", id: resolved.requirement.id }
+        }
+      ],
+      type: "executable",
+      execution: {
+        mode: "command",
+        command: criterion.proof.command,
+        args: [...criterion.proof.args],
+        expectedExitCode: criterion.proof.expectedExitCode,
+        // The schema's ceiling is an hour; an interview can ask for longer.
+        // Clamping keeps a legal interview from throwing here, after the change
+        // bundle is already on disk.
+        timeoutMs: Math.min(criterion.proof.timeoutMs ?? DEFAULT_ORACLE_TIMEOUT_MS, MAX_ORACLE_TIMEOUT_MS)
+      }
+    });
+
+    return {
+      repositoryRoot: options.repositoryRoot,
+      changeId: ids.changeId,
+      oracle,
+      baseGitSha: options.baseGitSha
+    };
+  });
+}
+
+function inspectionOracle(options: BuildOracleInputOptions): CreateOracleArtifactInput {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const owner = firstDecisionOwner(options.project);
@@ -85,6 +203,7 @@ export function buildOracleArtifactInput(options: BuildOracleInputOptions): Crea
     changeId: ids.changeId,
     oracleId: ids.oracleId
   });
+  const manual = options.requirement?.manual ?? [];
 
   const oracle = oracleSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
@@ -101,7 +220,7 @@ export function buildOracleArtifactInput(options: BuildOracleInputOptions): Crea
       postconditions:
         options.requirement === undefined
           ? [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`]
-          : options.requirement.requirement.acceptance.criteria.map(describeCriterion),
+          : manual.map(describeCriterion),
       evidence: ["Build and verification evidence is attached during legion build."]
     },
     // The operator's own criteria, not a restatement of the phase. "Phase N
@@ -111,11 +230,16 @@ export function buildOracleArtifactInput(options: BuildOracleInputOptions): Crea
     requirementCoverage: [
       {
         requirementId: coveredRequirementId,
-        coverage: "primary",
+        // `partial` only when something else covers the rest. A requirement
+        // whose criteria are all manual has this as its sole oracle covering
+        // every one of them, and calling that partial would report the
+        // requirement as having no full coverage at all — the traceability
+        // artifact claiming a gap that does not exist.
+        coverage: (options.requirement?.executable.length ?? 0) === 0 ? "primary" : "partial",
         criteria:
           options.requirement === undefined
             ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`]
-            : options.requirement.requirement.acceptance.criteria.map(describeCriterion)
+            : manual.map(describeCriterion)
       }
     ],
     traceRefs: [
@@ -127,11 +251,6 @@ export function buildOracleArtifactInput(options: BuildOracleInputOptions): Crea
       }
     ],
     type: "inspectable",
-    // Inspectable even when every criterion is executable: the task contract is
-    // what runs those commands, and duplicating them here would make the same
-    // proof pass twice while covering the manual criteria neither time. The
-    // instructions name the unproven ones so a reviewer knows what is left to
-    // them.
     execution: {
       mode: "manual-inspection",
       instructions: inspectionInstructions(options)
@@ -144,4 +263,29 @@ export function buildOracleArtifactInput(options: BuildOracleInputOptions): Crea
     oracle,
     baseGitSha: options.baseGitSha
   };
+}
+
+/**
+ * Every oracle this phase needs, in write order.
+ *
+ * An executable criterion gets an oracle a runner can execute; the manual
+ * criteria share one a reviewer decides. A phase with no manual criteria emits
+ * no inspection oracle, and a project with no interview emits only the
+ * inspection oracle — there are no criteria to derive commands from, and
+ * inventing one would be the fabrication protocol 0.2.0 exists to prevent.
+ */
+export function buildOracleArtifactInputs(
+  options: BuildOracleInputOptions
+): readonly CreateOracleArtifactInput[] {
+  const resolved = options.requirement;
+  if (resolved === undefined) return [inspectionOracle(options)];
+
+  const executable = executableOracles(options, resolved.executable);
+  // A requirement whose criteria are all executable still needs somewhere for a
+  // reviewer to land, but not a manufactured one: `legion review` reads the
+  // inspection oracle when there is one, and the executable oracles carry the
+  // decision when there is not.
+  return resolved.manual.length === 0 && executable.length > 0
+    ? executable
+    : [...executable, inspectionOracle(options)];
 }

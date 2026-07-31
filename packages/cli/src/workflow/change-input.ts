@@ -31,6 +31,7 @@ import {
 
 import { generatedCriteria } from "./criteria.js";
 import type { PhaseSource } from "./phase-compat.js";
+import { partitionCriteria } from "./phase-requirement.js";
 
 export interface PhasePlanIds {
   readonly suffix: string;
@@ -53,6 +54,49 @@ export interface BuildChangeInputOptions {
 }
 
 const ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
+
+/** `slugSuffixSchema` accepts at most 64 characters. */
+const MAX_ID_SUFFIX = 64;
+
+/**
+ * Append `tail` to `suffix` without overflowing the entity-ID limit.
+ *
+ * A phase slug of 62 characters is valid on its own and one character too long
+ * once `-c1` is appended, so deriving a criterion ID threw from `formatEntityId`
+ * — after the current spec and change bundle were already on disk. The phase
+ * portion gives way, since the tail is what makes the ID distinct.
+ */
+function suffixWithRoom(suffix: string, tail: string): string {
+  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
+  // The schema requires the suffix to end in an alphanumeric, so a cut that
+  // lands on a separator backs off rather than producing an invalid ID.
+  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
+  return `${trimmed}${tail}`;
+}
+
+/**
+ * The oracle IDs a phase will produce, in write order.
+ *
+ * The single source of truth for both sides: `oracle-input` writes these, and
+ * the change bundle's `acceptance.oracleRefs` names them. Computing them twice
+ * is what let the bundle reference `orc_<phase>` after that oracle stopped
+ * being written for a requirement decided entirely by commands — a reference to
+ * an artifact that does not exist, which archive reports as
+ * `missing_oracle_artifact` and refuses.
+ */
+export function phaseOracleIds(phase: PhaseSource, requirement?: Requirement): readonly OracleId[] {
+  const ids = phasePlanIds(phase);
+  if (requirement === undefined) return [ids.oracleId];
+
+  const { executable, manual } = partitionCriteria(requirement);
+  const criterionIds = executable.map((_criterion, index) =>
+    formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+  ) as readonly OracleId[];
+
+  return manual.length === 0 && criterionIds.length > 0
+    ? criterionIds
+    : [...criterionIds, ids.oracleId];
+}
 
 export function phasePlanIds(phase: PhaseSource): PhasePlanIds {
   const suffix = phaseIdSuffix(phase);
@@ -275,7 +319,7 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
           acceptance: {
             language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
             criteria: generatedCriteria(acceptanceCriteria(options.phase)),
-            oracleRefs: [ids.oracleId]
+            oracleRefs: [...phaseOracleIds(options.phase)]
           },
           traceRefs: [
             {
@@ -302,7 +346,10 @@ export function buildChangeBundleInput(options: BuildChangeInputOptions): Create
           // writes `oracleRefs: []` — so no coverage is lost today. The legacy
           // importer will be the first producer, and it must land together with
           // that resolution rather than trading a silent loss for a hard block.
-          acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+          acceptance: {
+            ...options.requirement.acceptance,
+            oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
+          },
           traceRefs: withSpecAnchor(options.requirement)
         });
 

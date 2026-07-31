@@ -2053,7 +2053,12 @@ test("legion plan phase creates typed artifacts from an explicit roadmap", async
     assert.equal(payload.ok, true);
     assert.equal(payload.status, "planned");
     assert.equal(payload.change.changeId, "chg_phase-1-editor-mvp");
-    assert.equal(payload.oracle.oracleId, "orc_phase-1-editor-mvp");
+    // A project with no interview has no criteria to derive commands from, so
+    // its acceptance surface is the single inspection oracle.
+    assert.deepEqual(
+      payload.oracles.map((entry) => entry.oracleId),
+      ["orc_phase-1-editor-mvp"]
+    );
     assert.equal(payload.taskgraph.artifactPath, ".legion/project/changes/chg_phase-1-editor-mvp/taskgraph.json");
     assert.equal(payload.nextAction.command, "legion build");
     assert.deepEqual(payload.diagnostics, []);

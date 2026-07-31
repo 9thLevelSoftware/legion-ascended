@@ -30235,7 +30235,98 @@ async function resolveMapStatus(context) {
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
 import path30 from "node:path";
+
+// packages/cli/src/workflow/phase-requirement.ts
+var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
+function requirementIdInPhase(phase) {
+  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
+}
+function partitionCriteria(requirement) {
+  const executable = [];
+  const manual = [];
+  for (const criterion of requirement.acceptance.criteria) {
+    if (criterion.proof.mode === "executable") executable.push(criterion);
+    else manual.push(criterion);
+  }
+  return { executable, manual };
+}
+async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
+  const requirementId = requirementIdInPhase(phase);
+  if (requirementId === void 0) return { ok: "absent" };
+  if (verified !== void 0) {
+    const found = verified.find((entry) => entry.id === requirementId);
+    if (found === void 0) {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+      };
+    }
+    return declinedOrResolved(found, phase);
+  }
+  const set = await readRequirementSet(repositoryRoot);
+  if (!set.ok) {
+    if (set.status === "not_found") {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
+      };
+    }
+    return { ok: false, reason: set.reason };
+  }
+  const requirement = set.requirements.find((entry) => entry.id === requirementId);
+  if (requirement === void 0) {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+    };
+  }
+  return declinedOrResolved(requirement, phase);
+}
+function declinedOrResolved(requirement, phase) {
+  if (requirement.priority === "wont") {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
+    };
+  }
+  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
+}
+var MAX_CRITERION_DESCRIPTION = 1024;
+function clamp(value) {
+  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
+  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
+}
+function renderInvocation(command, args) {
+  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
+  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
+}
+function describeCriterion(criterion) {
+  if (criterion.proof.mode === "executable") {
+    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
+    return clamp(
+      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
+    );
+  }
+  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
+}
+
+// packages/cli/src/workflow/change-input.ts
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
+var MAX_ID_SUFFIX = 64;
+function suffixWithRoom(suffix, tail) {
+  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
+  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
+  return `${trimmed}${tail}`;
+}
+function phaseOracleIds(phase, requirement) {
+  const ids = phasePlanIds(phase);
+  if (requirement === void 0) return [ids.oracleId];
+  const { executable, manual } = partitionCriteria(requirement);
+  const criterionIds = executable.map(
+    (_criterion, index) => formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+  );
+  return manual.length === 0 && criterionIds.length > 0 ? criterionIds : [...criterionIds, ids.oracleId];
+}
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
   return {
@@ -30392,7 +30483,7 @@ function buildChangeBundleInput(options) {
     acceptance: {
       language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
       criteria: generatedCriteria(acceptanceCriteria(options.phase)),
-      oracleRefs: [ids.oracleId]
+      oracleRefs: [...phaseOracleIds(options.phase)]
     },
     traceRefs: [
       {
@@ -30418,7 +30509,10 @@ function buildChangeBundleInput(options) {
     // writes `oracleRefs: []` — so no coverage is lost today. The legacy
     // importer will be the first producer, and it must land together with
     // that resolution rather than trading a silent loss for a hard block.
-    acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+    acceptance: {
+      ...options.requirement.acceptance,
+      oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
+    },
     traceRefs: withSpecAnchor(options.requirement)
   });
   return {
@@ -30498,90 +30592,15 @@ function truncate3(value, maxLength) {
   return normalized.slice(0, maxLength - 1).trimEnd();
 }
 
-// packages/cli/src/workflow/phase-requirement.ts
-var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
-function requirementIdInPhase(phase) {
-  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
-}
-function partition(requirement) {
-  const executable = [];
-  const manual = [];
-  for (const criterion of requirement.acceptance.criteria) {
-    if (criterion.proof.mode === "executable") executable.push(criterion);
-    else manual.push(criterion);
-  }
-  return { executable, manual };
-}
-async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
-  const requirementId = requirementIdInPhase(phase);
-  if (requirementId === void 0) return { ok: "absent" };
-  if (verified !== void 0) {
-    const found = verified.find((entry) => entry.id === requirementId);
-    if (found === void 0) {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-      };
-    }
-    return declinedOrResolved(found, phase);
-  }
-  const set = await readRequirementSet(repositoryRoot);
-  if (!set.ok) {
-    if (set.status === "not_found") {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
-      };
-    }
-    return { ok: false, reason: set.reason };
-  }
-  const requirement = set.requirements.find((entry) => entry.id === requirementId);
-  if (requirement === void 0) {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-    };
-  }
-  return declinedOrResolved(requirement, phase);
-}
-function declinedOrResolved(requirement, phase) {
-  if (requirement.priority === "wont") {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
-    };
-  }
-  return { ok: true, resolved: { requirement, ...partition(requirement) } };
-}
-var MAX_CRITERION_DESCRIPTION = 1024;
-function clamp(value) {
-  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
-  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
-}
-function renderInvocation(command, args) {
-  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
-  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
-}
-function describeCriterion(criterion) {
-  if (criterion.proof.mode === "executable") {
-    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
-    return clamp(
-      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
-    );
-  }
-  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
-}
-
 // packages/cli/src/workflow/oracle-input.ts
 var MAX_ORACLE_INSTRUCTIONS = 4096;
 var OMISSION_FOOTER_RESERVE = 160;
+var MAX_ORACLE_TIMEOUT_MS = 36e5;
+var DEFAULT_ORACLE_TIMEOUT_MS = 6e5;
 function inspectionInstructions(options) {
   const resolved = options.requirement;
   if (resolved === void 0) {
     return `Review implementation and evidence for phase ${options.phase.number}: ${options.phase.name}.`;
-  }
-  if (resolved.manual.length === 0) {
-    return `Every acceptance criterion for ${resolved.requirement.id} is executable and runs as task verification. Confirm the evidence records those runs.`;
   }
   const header = `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`;
   const lines = [header];
@@ -30601,7 +30620,77 @@ function inspectionInstructions(options) {
   }
   return lines.join("\n");
 }
-function buildOracleArtifactInput(options) {
+function oracleIdsFor(options) {
+  return phaseOracleIds(options.phase, options.requirement?.requirement);
+}
+function executableOracles(options, criteria) {
+  const resolved = options.requirement;
+  if (resolved === void 0) return [];
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const owner = firstDecisionOwner(options.project);
+  const oracleIds = oracleIdsFor(options);
+  return criteria.map((criterion, index) => {
+    const oracleId = oracleIds[index];
+    if (oracleId === void 0) {
+      throw new Error(`No oracle ID was derived for acceptance criterion ${index + 1}.`);
+    }
+    const oraclePath2 = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
+    const description = describeCriterion(criterion);
+    const oracle = oracleSchema.parse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "oracle",
+      id: oracleId,
+      projectId: options.project.id,
+      title: `Acceptance criterion ${index + 1} for ${resolved.requirement.id}`,
+      owner,
+      protectedPaths: [options.change.artifactPath],
+      sourceArtifacts: [options.change.reference],
+      expected: {
+        preconditions: ["The phase change bundle exists and validates."],
+        postconditions: [description],
+        evidence: ["The criterion command runs during legion build and exits as expected."]
+      },
+      requirementCoverage: [
+        {
+          requirementId: resolved.requirement.id,
+          // `partial`, not `primary`: this oracle decides one criterion of the
+          // requirement. Claiming primary coverage from each of several oracles
+          // would report the requirement fully covered by any one of them.
+          coverage: "partial",
+          criteria: [description]
+        }
+      ],
+      traceRefs: [
+        {
+          path: oraclePath2,
+          anchor: oracleId,
+          relation: "verifies",
+          entity: { kind: "requirement", id: resolved.requirement.id }
+        }
+      ],
+      type: "executable",
+      execution: {
+        mode: "command",
+        command: criterion.proof.command,
+        args: [...criterion.proof.args],
+        expectedExitCode: criterion.proof.expectedExitCode,
+        // The schema's ceiling is an hour; an interview can ask for longer.
+        // Clamping keeps a legal interview from throwing here, after the change
+        // bundle is already on disk.
+        timeoutMs: Math.min(criterion.proof.timeoutMs ?? DEFAULT_ORACLE_TIMEOUT_MS, MAX_ORACLE_TIMEOUT_MS)
+      }
+    });
+    return {
+      repositoryRoot: options.repositoryRoot,
+      changeId: ids.changeId,
+      oracle,
+      baseGitSha: options.baseGitSha
+    };
+  });
+}
+function inspectionOracle(options) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const owner = firstDecisionOwner(options.project);
@@ -30611,6 +30700,7 @@ function buildOracleArtifactInput(options) {
     changeId: ids.changeId,
     oracleId: ids.oracleId
   });
+  const manual = options.requirement?.manual ?? [];
   const oracle = oracleSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
@@ -30623,7 +30713,7 @@ function buildOracleArtifactInput(options) {
     sourceArtifacts: [options.change.reference],
     expected: {
       preconditions: ["The phase change bundle exists and validates."],
-      postconditions: options.requirement === void 0 ? [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`] : options.requirement.requirement.acceptance.criteria.map(describeCriterion),
+      postconditions: options.requirement === void 0 ? [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`] : manual.map(describeCriterion),
       evidence: ["Build and verification evidence is attached during legion build."]
     },
     // The operator's own criteria, not a restatement of the phase. "Phase N
@@ -30633,8 +30723,13 @@ function buildOracleArtifactInput(options) {
     requirementCoverage: [
       {
         requirementId: coveredRequirementId,
-        coverage: "primary",
-        criteria: options.requirement === void 0 ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`] : options.requirement.requirement.acceptance.criteria.map(describeCriterion)
+        // `partial` only when something else covers the rest. A requirement
+        // whose criteria are all manual has this as its sole oracle covering
+        // every one of them, and calling that partial would report the
+        // requirement as having no full coverage at all — the traceability
+        // artifact claiming a gap that does not exist.
+        coverage: (options.requirement?.executable.length ?? 0) === 0 ? "primary" : "partial",
+        criteria: options.requirement === void 0 ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`] : manual.map(describeCriterion)
       }
     ],
     traceRefs: [
@@ -30646,11 +30741,6 @@ function buildOracleArtifactInput(options) {
       }
     ],
     type: "inspectable",
-    // Inspectable even when every criterion is executable: the task contract is
-    // what runs those commands, and duplicating them here would make the same
-    // proof pass twice while covering the manual criteria neither time. The
-    // instructions name the unproven ones so a reviewer knows what is left to
-    // them.
     execution: {
       mode: "manual-inspection",
       instructions: inspectionInstructions(options)
@@ -30662,6 +30752,12 @@ function buildOracleArtifactInput(options) {
     oracle,
     baseGitSha: options.baseGitSha
   };
+}
+function buildOracleArtifactInputs(options) {
+  const resolved = options.requirement;
+  if (resolved === void 0) return [inspectionOracle(options)];
+  const executable = executableOracles(options, resolved.executable);
+  return resolved.manual.length === 0 && executable.length > 0 ? executable : [...executable, inspectionOracle(options)];
 }
 
 // packages/cli/src/workflow/phase-compat.ts
@@ -30757,7 +30853,7 @@ function buildTaskGraphInput(options) {
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const taskgraphPath2 = artifactPathForRole({ role: "taskgraph", changeId: ids.changeId });
   const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
-  const artifactInputs = [options.change.revision, options.oracle.revision];
+  const artifactInputs = [options.change.revision, ...options.oracles.map((entry) => entry.revision)];
   const task = taskContractSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
@@ -30783,7 +30879,7 @@ function buildTaskGraphInput(options) {
       predecessorArtifacts: artifactInputs.map((entry) => entry.artifact)
     },
     scope: {
-      read: [options.change.artifactPath, options.oracle.artifactPath],
+      read: [options.change.artifactPath, ...options.oracles.map((entry) => entry.artifactPath)],
       // This task's objective is to implement the phase, so its write scope has
       // to be the implementation surface. It previously listed only the
       // taskgraph artifact, which made the contract impossible to satisfy: any
@@ -30824,7 +30920,10 @@ function buildTaskGraphInput(options) {
         }
       ]
     },
-    oracleRefs: [ids.oracleId],
+    // Every oracle this phase wrote, not the inspection one alone. A task that
+    // referenced one of several would leave the criterion oracles uncovered, and
+    // `validateChangeTraceability` reports an oracle no task references.
+    oracleRefs: options.oracles.map((entry) => entry.document.id),
     // The project's own verification command when the interview recorded one.
     // `legion validate` alone is a tautology — it checks the artifacts this
     // command just wrote, not the code the task changed.
@@ -31018,7 +31117,8 @@ async function handlePlanWorkflow(context) {
   if (!change.ok) {
     return artifactCreationFailure("change", change.status, change.diagnostics, action);
   }
-  const oracle = await createOracleArtifact(buildOracleArtifactInput({
+  const oracles = [];
+  for (const input of buildOracleArtifactInputs({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
     phase: resolved.phase,
@@ -31026,16 +31126,19 @@ async function handlePlanWorkflow(context) {
     ...requirement === void 0 ? {} : { requirement },
     baseGitSha,
     createdAt
-  }));
-  if (!oracle.ok) {
-    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
+  })) {
+    const written = await createOracleArtifact(input);
+    if (!written.ok) {
+      return artifactCreationFailure("oracle", written.status, written.diagnostics, action);
+    }
+    oracles.push(written);
   }
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
     phase: resolved.phase,
     change,
-    oracle,
+    oracles,
     baseGitSha,
     createdAt,
     ...enforcement === void 0 ? {} : { enforcement },
@@ -31055,11 +31158,13 @@ async function handlePlanWorkflow(context) {
         artifactPath: change.artifactPath,
         status: change.status
       },
-      oracle: {
-        oracleId: oracle.document.id,
-        artifactPath: oracle.artifactPath,
-        status: oracle.status
-      },
+      // Reported as a list. Naming only the first would hide every criterion
+      // oracle from `--json`, which is the surface the skill reads.
+      oracles: oracles.map((written) => ({
+        oracleId: written.document.id,
+        artifactPath: written.artifactPath,
+        status: written.status
+      })),
       taskgraph: {
         artifactPath: taskgraph.artifactPath,
         status: taskgraph.status,
