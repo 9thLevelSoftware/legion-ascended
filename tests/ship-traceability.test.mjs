@@ -145,7 +145,50 @@ test("ship blocks a change with a malformed oracle no task references", async (t
 
   const shipped = await run("ship", "--json");
   assert.equal(shipped.exitCode, 1, "a malformed oracle must not ship");
-  assert.ok(parseJsonOutput(shipped).diagnostics.length > 0);
+  // Naming the stray artifact, not merely counting diagnostics: "something
+  // failed" keeps passing if ship later grows any other failure mode, and stops
+  // guarding the path this test was written for.
+  const diagnostics = parseJsonOutput(shipped).diagnostics;
+  assert.ok(
+    diagnostics.some(
+      (entry) => /orc_stray-artifact/.test(entry.message) || /orc_stray-artifact/.test(entry.path ?? "")
+    ),
+    `the stray oracle should be named: ${JSON.stringify(diagnostics)}`
+  );
+});
+
+test("a change built before evidence linking can still ship", async (t) => {
+  const { root, run, changeId } = await acceptedProject(t);
+
+  // Evidence written by an earlier release carried only a change reference,
+  // because nothing wrote requirement or oracle links. Blocking on that would
+  // tell a repository upgrading with an already-accepted change to run
+  // `legion validate` — which cannot add the links — and force a rebuild and a
+  // second review of work that was already approved.
+  const indexPath = path.join(root, ".legion/project/changes", changeId, "evidence-index.json");
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  // The service pools evidence-level and item-level references, so both are
+  // reduced to the change-only shape the previous release produced.
+  const changeOnly = (refs) => (refs ?? []).filter((ref) => ref.entity?.kind === "change");
+  for (const entry of index.entries) {
+    entry.evidence.traceRefs = changeOnly(entry.evidence.traceRefs);
+    for (const item of entry.evidence.items ?? []) {
+      item.traceRefs = changeOnly(item.traceRefs);
+    }
+  }
+  await writeFile(indexPath, `${JSON.stringify(index, undefined, 2)}
+`, "utf8");
+
+  const shipped = await run("ship", "--json");
+  assert.equal(shipped.exitCode, 0, shipped.stdout + shipped.stderr);
+
+  // Tolerated, not ignored: the gap is reported so it is visible and retires
+  // itself when the task is rebuilt.
+  const payload = parseJsonOutput(shipped);
+  assert.ok(
+    payload.warnings?.some((entry) => entry.code === "legacy_evidence_unlinked"),
+    `the unlinked evidence should be reported: ${JSON.stringify(payload.warnings)}`
+  );
 });
 
 test("build still passes while a change is not yet accepted", async (t) => {

@@ -35033,22 +35033,35 @@ async function handleShipWorkflow(context) {
   if (!taskgraph.ok) {
     return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
   }
+  let traceabilityWarnings = [];
   const traceability = await validateChangeTraceability({
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId
   });
   if (!traceability.ok) {
-    return blockedShip(
-      traceability.diagnostics.map((diagnostic3) => ({
-        code: "change_traceability_broken",
-        message: diagnostic3.message,
-        path: diagnostic3.source?.path ?? taskgraph.artifactPath
-      })),
-      nextAction(
-        "legion validate",
-        "Requirement, oracle, task and evidence links must resolve before a change can ship."
-      )
+    const blocking = traceability.diagnostics.filter(
+      (diagnostic3) => diagnostic3.code !== "orphan_evidence"
     );
+    const legacyEvidence = traceability.diagnostics.filter(
+      (diagnostic3) => diagnostic3.code === "orphan_evidence"
+    );
+    if (blocking.length > 0) {
+      return blockedShip(
+        [...blocking, ...legacyEvidence].map((diagnostic3) => ({
+          code: "change_traceability_broken",
+          message: diagnostic3.message,
+          path: diagnostic3.source?.path ?? taskgraph.artifactPath
+        })),
+        nextAction(
+          "legion validate",
+          "Requirement, oracle, task and evidence links must resolve before a change can ship."
+        )
+      );
+    }
+    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
+      code: "legacy_evidence_unlinked",
+      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
+    }));
   }
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
@@ -35086,6 +35099,7 @@ async function handleShipWorkflow(context) {
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
+      ...traceabilityWarnings.length === 0 ? {} : { warnings: traceabilityWarnings },
       riskGates: {
         satisfied: gateReport.satisfied,
         unsatisfied: gateReport.unsatisfied,

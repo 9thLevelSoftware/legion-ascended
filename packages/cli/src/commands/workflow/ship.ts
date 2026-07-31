@@ -76,22 +76,48 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   // accepted at review, review needs a passing build. By the time ship runs, an
   // accepted review already exists, and this is the last gate before archive
   // applies the same rules.
+  let traceabilityWarnings: readonly { readonly code: string; readonly message: string }[] = [];
   const traceability = await validateChangeTraceability({
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId
   });
   if (!traceability.ok) {
-    return blockedShip(
-      traceability.diagnostics.map((diagnostic) => ({
-        code: "change_traceability_broken",
-        message: diagnostic.message,
-        path: diagnostic.source?.path ?? taskgraph.artifactPath
-      })),
-      nextAction(
-        "legion validate",
-        "Requirement, oracle, task and evidence links must resolve before a change can ship."
-      )
+    // `orphan_evidence` is reported but not blocking.
+    //
+    // Evidence written before this release carried only a change reference,
+    // because nothing wrote requirement or oracle links. A repository upgrading
+    // with an already-accepted, ship-ready change would otherwise be told to run
+    // `legion validate` — which cannot add those links — and would need a full
+    // rebuild and a second review to ship work that was already approved.
+    //
+    // Every other traceability rule still blocks. New evidence carries the links
+    // from the moment it is written, so this tolerance retires itself as changes
+    // are rebuilt rather than needing a migration nobody would run.
+    const blocking = traceability.diagnostics.filter(
+      (diagnostic) => diagnostic.code !== "orphan_evidence"
     );
+    const legacyEvidence = traceability.diagnostics.filter(
+      (diagnostic) => diagnostic.code === "orphan_evidence"
+    );
+
+    if (blocking.length > 0) {
+      return blockedShip(
+        [...blocking, ...legacyEvidence].map((diagnostic) => ({
+          code: "change_traceability_broken",
+          message: diagnostic.message,
+          path: diagnostic.source?.path ?? taskgraph.artifactPath
+        })),
+        nextAction(
+          "legion validate",
+          "Requirement, oracle, task and evidence links must resolve before a change can ship."
+        )
+      );
+    }
+
+    traceabilityWarnings = legacyEvidence.map((diagnostic) => ({
+      code: "legacy_evidence_unlinked",
+      message: `${diagnostic.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
+    }));
   }
 
   const gateReport = deriveShipGates({
@@ -138,6 +164,7 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
+      ...(traceabilityWarnings.length === 0 ? {} : { warnings: traceabilityWarnings }),
       riskGates: {
         satisfied: gateReport.satisfied,
         unsatisfied: gateReport.unsatisfied,
