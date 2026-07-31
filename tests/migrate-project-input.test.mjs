@@ -52,7 +52,7 @@ async function legacyRepo(t) {
   return { root, staging, run };
 }
 
-const dryRun = (run, staging, project) => [
+const dryRun = (staging, project) => [
   "dev", "migrate", "--from-planning", "--dry-run",
   "--planning-root", ".planning",
   "--staging-root", staging,
@@ -68,7 +68,7 @@ test("the project manifest is accepted as --project input", async (t) => {
   // `.legion/project/project.json` is the only project JSON a repository has, so
   // it is what an operator will reach for. It previously crashed: a manifest
   // nests the project and keeps owners under `policy.decisionOwners`.
-  const imported = await run(...dryRun(run, staging, ".legion/project/project.json"));
+  const imported = await run(...dryRun(staging, ".legion/project/project.json"));
 
   assert.doesNotMatch(imported.stderr, /Cannot read properties of undefined/);
   assert.equal(imported.exitCode, 0, imported.stdout + imported.stderr);
@@ -81,7 +81,7 @@ test("a JSON file that is not a project is refused with a usage error", async (t
   const { root, staging, run } = await legacyRepo(t);
   await writeFile(path.join(root, "wrong.json"), JSON.stringify({ hello: "world" }), "utf8");
 
-  const imported = await run(...dryRun(run, staging, "wrong.json"));
+  const imported = await run(...dryRun(staging, "wrong.json"));
 
   // A shape mismatch is the operator pointing at the wrong file, which is a
   // usage error with a fixable message — not a stack trace from inside
@@ -107,7 +107,7 @@ test("an explicit project input still works", async (t) => {
     "utf8"
   );
 
-  const imported = await run(...dryRun(run, staging, "explicit.json"));
+  const imported = await run(...dryRun(staging, "explicit.json"));
   assert.equal(imported.exitCode, 0, imported.stdout + imported.stderr);
   assert.equal(parseJsonOutput(imported).ok, true);
 });
@@ -115,7 +115,7 @@ test("an explicit project input still works", async (t) => {
 test("imported requirements are flagged as unproven rather than invented", async (t) => {
   const { root, staging, run } = await legacyRepo(t);
   await run("start", "--name", "Legacy Project", "--owner", "dasbl");
-  const imported = await run(...dryRun(run, staging, ".legion/project/project.json"));
+  const imported = await run(...dryRun(staging, ".legion/project/project.json"));
   assert.equal(imported.exitCode, 0, imported.stderr);
 
   // A legacy checklist has no acceptance criteria. Restating the requirement as

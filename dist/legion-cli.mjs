@@ -25856,12 +25856,15 @@ function nonEmptyString(value) {
 }
 function decisionOwners(value) {
   if (!Array.isArray(value) || value.length === 0) return void 0;
-  const owners = value.map(asRecord);
-  if (owners.some((owner) => owner === void 0)) return void 0;
-  const typed = owners;
-  if (typed.some((owner) => nonEmptyString(owner["kind"]) === void 0)) return void 0;
-  if (typed.some((owner) => nonEmptyString(owner["id"]) === void 0)) return void 0;
-  return typed;
+  const owners = [];
+  for (const item of value) {
+    const owner = asRecord(item);
+    if (owner === void 0) return void 0;
+    if (nonEmptyString(owner["kind"]) === void 0) return void 0;
+    if (nonEmptyString(owner["id"]) === void 0) return void 0;
+    owners.push(owner);
+  }
+  return owners;
 }
 function coercePlanningProjectInput(value, sourcePath) {
   const candidate = asRecord(value["project"]) ?? value;
@@ -25913,16 +25916,14 @@ async function handlePlanning(context, action) {
   if (action === "dry-run") {
     const planningRootOption = requiredStringOption(context, "planning-root");
     if (typeof planningRootOption !== "string") return planningRootOption;
-    const planningRoot = path19.isAbsolute(planningRootOption) ? planningRootOption : path19.resolve(context.repositoryRoot, planningRootOption);
+    const planningRoot = path19.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
     if (typeof runId !== "string") return runId;
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
-    const projectFile = await readJsonInput(
-      path19.isAbsolute(projectPath) ? projectPath : path19.resolve(context.repositoryRoot, projectPath)
-    );
+    const projectFile = await readJsonInput(path19.resolve(context.repositoryRoot, projectPath));
     if (isCliResult(projectFile)) return projectFile;
     const project = coercePlanningProjectInput(projectFile, projectPath);
     if ("exitCode" in project) return project;

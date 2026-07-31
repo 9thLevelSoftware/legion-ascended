@@ -26,20 +26,13 @@ import {
 /**
  * Coerce the `--project` file into the shape the importer needs.
  *
- * Two shapes are accepted, because the file an operator reaches for is not the
- * one the flag was documented with. `.legion/project/project.json` is the only
- * project JSON a repository contains, so it is what gets pointed at — and it is
- * a *manifest*: the project is nested, and its owners live under
- * `policy.decisionOwners` rather than at the top level.
+ * Accepts either a bare project — `slug`, `name`, `decisionOwners` — or a
+ * `.legion/project/project.json` manifest, which nests the project and keeps its
+ * owners under `policy.decisionOwners`. The manifest is accepted because it is
+ * the only project JSON a repository contains, so it is what gets pointed at.
  *
- * That mismatch used to surface as `TypeError: Cannot read properties of
- * undefined (reading 'map')` from inside `initProject`, several layers below the
- * flag that caused it. Reading a file as arbitrary JSON and passing it through
- * defers every shape question to whoever dereferences it first.
- *
- * Validated by hand rather than with a schema: `zod` is a protocol dependency,
- * and widening the CLI's dependencies for one shape check is a worse trade than
- * a dozen lines that read plainly.
+ * Anything else is a usage error here rather than a `TypeError` from inside
+ * `initProject`, several layers below the flag that caused it.
  */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -54,12 +47,15 @@ function nonEmptyString(value: unknown): string | undefined {
 /** Actors need a kind and an id; anything else is not an owner list. */
 function decisionOwners(value: unknown): readonly Record<string, unknown>[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
-  const owners = value.map(asRecord);
-  if (owners.some((owner) => owner === undefined)) return undefined;
-  const typed = owners as Record<string, unknown>[];
-  if (typed.some((owner) => nonEmptyString(owner["kind"]) === undefined)) return undefined;
-  if (typed.some((owner) => nonEmptyString(owner["id"]) === undefined)) return undefined;
-  return typed;
+  const owners: Record<string, unknown>[] = [];
+  for (const item of value) {
+    const owner = asRecord(item);
+    if (owner === undefined) return undefined;
+    if (nonEmptyString(owner["kind"]) === undefined) return undefined;
+    if (nonEmptyString(owner["id"]) === undefined) return undefined;
+    owners.push(owner);
+  }
+  return owners;
 }
 
 export function coercePlanningProjectInput(
@@ -134,9 +130,7 @@ async function handlePlanning(context: CliContext, action: MigrationAction): Pro
     // the same reason as `--project`: `--planning-root .planning` is the
     // documented invocation and it named nothing unless the operator happened to
     // be standing in the repository.
-    const planningRoot = path.isAbsolute(planningRootOption)
-      ? planningRootOption
-      : path.resolve(context.repositoryRoot, planningRootOption);
+    const planningRoot = path.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
@@ -148,13 +142,9 @@ async function handlePlanning(context: CliContext, action: MigrationAction): Pro
     // does. Resolving against the process cwd meant the documented invocation —
     // `--project .legion/project/project.json` — only worked when the operator
     // happened to be standing in the repository.
-    const projectFile = await readJsonInput(
-      path.isAbsolute(projectPath) ? projectPath : path.resolve(context.repositoryRoot, projectPath)
-    );
+    const projectFile = await readJsonInput(path.resolve(context.repositoryRoot, projectPath));
     if (isCliResult(projectFile)) return projectFile;
 
-    // `isCliResult` narrows a record union; this returns a typed project, so the
-    // discriminant is checked directly.
     const project = coercePlanningProjectInput(projectFile, projectPath);
     if ("exitCode" in project) return project;
 
