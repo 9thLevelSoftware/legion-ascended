@@ -31,6 +31,7 @@ const VALUELESS_OPTIONS = new Set([
   "accept-proposal",
   "allow-replace-existing-project",
   "allow-dirty",
+  "allow-legacy-evidence",
   "apply",
   "accept",
   "auto",

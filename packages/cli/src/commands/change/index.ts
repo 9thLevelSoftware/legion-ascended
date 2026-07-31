@@ -35,7 +35,10 @@ Archive options:
   --dry-run                 Plan archive without writing current truth.
   --archived-by <id>        Actor ID used for archive records.
   --archived-at <timestamp> UTC timestamp used for archive records.
-  --output-branch <branch>  Branch metadata for archive records.`;
+  --output-branch <branch>  Branch metadata for archive records.
+  --allow-legacy-evidence   Accept evidence written before requirement and
+                            oracle linking. Repeat what was passed to
+                            \`legion ship\`; archive applies the same check.`;
 
 export async function handleChangeCommand(context: CliContext): Promise<CliResult> {
   const [command] = context.args.positionals;
@@ -121,10 +124,15 @@ async function archive(context: CliContext): Promise<CliResult> {
   if (changeId === undefined) return helpResult(CHANGE_HELP);
 
   const outputBranch = stringOption(context, "output-branch");
+  // Carried through from the same flag `legion ship` takes. Accepting it there
+  // and not here leaves an upgraded repository shipped-but-unarchivable, which
+  // is the disagreement this allowance exists to prevent — one layer up.
+  const allowLegacyEvidence = hasFlag(context, "allow-legacy-evidence");
   if (hasFlag(context, "dry-run")) {
     const result = await planAcceptedChangeArchive({
       repositoryRoot: context.repositoryRoot,
       changeId,
+      ...(allowLegacyEvidence ? { allowLegacyEvidence } : {}),
       ...(outputBranch === undefined ? {} : { outputBranch })
     });
     return fromServiceResult(result as unknown as Record<string, unknown>, result.ok ? "Archive plan created." : "Archive plan failed.");
@@ -140,6 +148,7 @@ async function archive(context: CliContext): Promise<CliResult> {
     changeId,
     archivedBy,
     archivedAt,
+    ...(allowLegacyEvidence ? { allowLegacyEvidence } : {}),
     ...(outputBranch === undefined ? {} : { outputBranch })
   };
   const result = await archiveAcceptedChange(input);

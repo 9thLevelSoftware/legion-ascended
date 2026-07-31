@@ -635,12 +635,30 @@ async function evidenceEntryForExecution(input: {
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
   const logBytes = await readFile(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
   const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
+  // Evidence traces to what it is evidence *for*, not only to the change it
+  // happened inside. The traceability service requires at least one reference to
+  // a requirement or an oracle and reports the rest as `orphan_evidence`; every
+  // run Legion produced named only its change, so its own output could not
+  // satisfy its own service. The task contract already carries both lists, so
+  // the link was available and simply never written.
   const traceRefs = [
     {
       path: input.taskgraphPath,
       relation: "records" as const,
       entity: { kind: "change" as const, id: input.task.changeId }
-    }
+    },
+    ...input.task.requirementIds.map((requirementId) => ({
+      path: input.taskgraphPath,
+      anchor: input.task.id,
+      relation: "verifies" as const,
+      entity: { kind: "requirement" as const, id: requirementId }
+    })),
+    ...input.task.oracleRefs.map((oracleId) => ({
+      path: input.taskgraphPath,
+      anchor: input.task.id,
+      relation: "verifies" as const,
+      entity: { kind: "oracle" as const, id: oracleId }
+    }))
   ];
   const reconciliation = input.reconciliation;
   // Supplied by the guarded execution rather than recomputed. Two places

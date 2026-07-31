@@ -1057,6 +1057,45 @@ async function loadTraceabilityArtifacts(input: {
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
 
+/**
+ * Diagnostics that describe an artifact written before this release rather than
+ * a change that is wrong.
+ *
+ * Evidence used to carry only a change reference, because nothing wrote
+ * requirement or oracle links. Every gate has to agree about that: a repository
+ * upgrading with an already-accepted change was otherwise told by `legion ship`
+ * that it was ready and by archive that it was not, for the identical evidence.
+ * Filtering in one caller and not the other is how two gates end up disagreeing.
+ *
+ * New evidence carries the links from the moment it is written, so this retires
+ * itself as changes are rebuilt rather than needing a migration nobody runs.
+ */
+export function isLegacyEvidenceDiagnostic(diagnostic: { readonly code: string }): boolean {
+  return diagnostic.code === "orphan_evidence";
+}
+
+/**
+ * Split diagnostics into those that block and those an explicit allowance
+ * covers.
+ *
+ * The allowance is opt-in, not automatic. `orphan_evidence` is emitted both by
+ * evidence written before requirement and oracle links existed and by current
+ * evidence that has lost them, and the diagnostic alone cannot tell those apart
+ * — so exempting the code outright discards the only signal that current
+ * evidence is corrupt. An operator upgrading a repository says so once; nothing
+ * is waved through on their behalf.
+ */
+export function partitionTraceabilityDiagnostics<T extends { readonly code: string }>(
+  diagnostics: readonly T[],
+  options: { readonly allowLegacyEvidence?: boolean } = {}
+): { readonly blocking: readonly T[]; readonly allowed: readonly T[] } {
+  if (options.allowLegacyEvidence !== true) return { blocking: diagnostics, allowed: [] };
+  return {
+    blocking: diagnostics.filter((diagnostic) => !isLegacyEvidenceDiagnostic(diagnostic)),
+    allowed: diagnostics.filter(isLegacyEvidenceDiagnostic)
+  };
+}
+
 export async function validateChangeTraceability(input: ValidateChangeTraceabilityInput): Promise<TraceabilityValidationResult> {
   const changeId = parseChangeId(input.changeId);
   if (typeof changeId !== "string") return changeId;

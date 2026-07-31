@@ -15394,6 +15394,7 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "accept-proposal",
   "allow-replace-existing-project",
   "allow-dirty",
+  "allow-legacy-evidence",
   "apply",
   "accept",
   "auto",
@@ -22747,6 +22748,17 @@ async function loadTraceabilityArtifacts(input) {
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
+function isLegacyEvidenceDiagnostic(diagnostic3) {
+  return diagnostic3.code === "orphan_evidence";
+}
+function partitionTraceabilityDiagnostics(diagnostics, options = {}) {
+  if (options.allowLegacyEvidence !== true)
+    return { blocking: diagnostics, allowed: [] };
+  return {
+    blocking: diagnostics.filter((diagnostic3) => !isLegacyEvidenceDiagnostic(diagnostic3)),
+    allowed: diagnostics.filter(isLegacyEvidenceDiagnostic)
+  };
+}
 async function validateChangeTraceability(input) {
   const changeId = parseChangeId8(input.changeId);
   if (typeof changeId !== "string")
@@ -23343,8 +23355,14 @@ async function buildArchivePlan(input) {
   if (!changeValidation.ok)
     return asArchiveFailure(changeValidation.status, changeValidation.diagnostics);
   const traceability = await validateChangeTraceability({ repositoryRoot: input.repositoryRoot, changeId });
-  if (!traceability.ok)
-    return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", traceability.diagnostics);
+  if (!traceability.ok) {
+    const { blocking } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      ...input.allowLegacyEvidence === void 0 ? {} : { allowLegacyEvidence: input.allowLegacyEvidence }
+    });
+    if (blocking.length > 0) {
+      return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", blocking);
+    }
+  }
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok)
     return asArchiveFailure(currentSpecs.status, currentSpecs.diagnostics);
@@ -23740,7 +23758,10 @@ Archive options:
   --dry-run                 Plan archive without writing current truth.
   --archived-by <id>        Actor ID used for archive records.
   --archived-at <timestamp> UTC timestamp used for archive records.
-  --output-branch <branch>  Branch metadata for archive records.`;
+  --output-branch <branch>  Branch metadata for archive records.
+  --allow-legacy-evidence   Accept evidence written before requirement and
+                            oracle linking. Repeat what was passed to
+                            \`legion ship\`; archive applies the same check.`;
 async function handleChangeCommand(context) {
   const [command] = context.args.positionals;
   if (hasFlag(context, "help") || command === void 0 || command === "help") return helpResult(CHANGE_HELP);
@@ -23812,10 +23833,12 @@ async function archive(context) {
   const changeId = context.args.positionals[0];
   if (changeId === void 0) return helpResult(CHANGE_HELP);
   const outputBranch = stringOption(context, "output-branch");
+  const allowLegacyEvidence = hasFlag(context, "allow-legacy-evidence");
   if (hasFlag(context, "dry-run")) {
     const result2 = await planAcceptedChangeArchive({
       repositoryRoot: context.repositoryRoot,
       changeId,
+      ...allowLegacyEvidence ? { allowLegacyEvidence } : {},
       ...outputBranch === void 0 ? {} : { outputBranch }
     });
     return fromServiceResult(result2, result2.ok ? "Archive plan created." : "Archive plan failed.");
@@ -23829,6 +23852,7 @@ async function archive(context) {
     changeId,
     archivedBy,
     archivedAt,
+    ...allowLegacyEvidence ? { allowLegacyEvidence } : {},
     ...outputBranch === void 0 ? {} : { outputBranch }
   };
   const result = await archiveAcceptedChange(input);
@@ -32587,7 +32611,19 @@ async function evidenceEntryForExecution(input) {
       path: input.taskgraphPath,
       relation: "records",
       entity: { kind: "change", id: input.task.changeId }
-    }
+    },
+    ...input.task.requirementIds.map((requirementId) => ({
+      path: input.taskgraphPath,
+      anchor: input.task.id,
+      relation: "verifies",
+      entity: { kind: "requirement", id: requirementId }
+    })),
+    ...input.task.oracleRefs.map((oracleId) => ({
+      path: input.taskgraphPath,
+      anchor: input.task.id,
+      relation: "verifies",
+      entity: { kind: "oracle", id: oracleId }
+    }))
   ];
   const reconciliation = input.reconciliation;
   const inContract = input.inContract;
@@ -35021,7 +35057,41 @@ function deriveShipGates(input) {
 }
 
 // packages/cli/src/commands/workflow/ship.ts
-var SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
+var SHIP_HELP = [
+  "legion ship [--canary] [--allow-legacy-evidence]",
+  "",
+  "Run the ship readiness gate. This layer does not publish or release.",
+  "",
+  "Options:",
+  "  --canary                  Report canary readiness alongside the gate.",
+  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
+  "                            linking. `legion dev change archive` applies the same",
+  "                            check, so pass it there too."
+].join("\n");
+var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
+function recoveryFor(diagnostics) {
+  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
+    return nextAction(
+      "legion build",
+      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
+    );
+  }
+  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
+    return nextAction(
+      "legion ship --allow-legacy-evidence",
+      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
+    );
+  }
+  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
+  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
+  return nextAction(
+    "legion ship",
+    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: correct ${where} by hand, then rerun this to confirm the defect is gone.`
+  );
+}
+function isPath(value) {
+  return value !== void 0 && value.length > 0;
+}
 async function handleShipWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(SHIP_HELP);
@@ -35065,6 +35135,31 @@ async function handleShipWorkflow(context) {
   if (!taskgraph.ok) {
     return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
   }
+  let traceabilityWarnings = [];
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!traceability.ok) {
+    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
+    });
+    const legacyEvidence = allowed;
+    if (blocking.length > 0) {
+      return blockedShip(
+        blocking.map((diagnostic3) => ({
+          code: "change_traceability_broken",
+          message: diagnostic3.message,
+          path: diagnostic3.source?.path ?? taskgraph.artifactPath
+        })),
+        recoveryFor(blocking)
+      );
+    }
+    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
+      code: "legacy_evidence_unlinked",
+      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
+    }));
+  }
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
     taskIdFor: (task) => taskIdForContractId(task.id),
@@ -35101,6 +35196,7 @@ async function handleShipWorkflow(context) {
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
+      ...traceabilityWarnings.length === 0 ? {} : { warnings: traceabilityWarnings },
       riskGates: {
         satisfied: gateReport.satisfied,
         unsatisfied: gateReport.unsatisfied,
@@ -35111,6 +35207,10 @@ async function handleShipWorkflow(context) {
     },
     human: [
       "Ship ready.",
+      // Shown, not only recorded. `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload was invisible to
+      // exactly the operator who opted into the allowance.
+      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...unevaluable.length === 0 ? [] : [
         `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,
