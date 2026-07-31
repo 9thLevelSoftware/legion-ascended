@@ -48,7 +48,7 @@ import {
 } from "../specs/service.js";
 import { readTaskGraph, type TaskGraphSuccess } from "../taskgraphs/service.js";
 import {
-  isLegacyEvidenceDiagnostic,
+  partitionTraceabilityDiagnostics,
   validateChangeTraceability
 } from "../traceability/service.js";
 import {
@@ -63,6 +63,13 @@ import {
 
 export interface PlanAcceptedChangeArchiveInput {
   readonly repositoryRoot: string;
+  /**
+   * Tolerate evidence written before requirement and oracle links existed.
+   *
+   * Opt-in, because the diagnostic cannot distinguish that from current evidence
+   * that has lost its links.
+   */
+  readonly allowLegacyEvidence?: boolean;
   readonly changeId: ChangeId | string;
   readonly outputBranch?: string;
 }
@@ -780,9 +787,11 @@ async function buildArchivePlan(input: PlanAcceptedChangeArchiveInput): Promise<
     // The same exception `legion ship` applies. Without it, ship reports ready
     // and archive refuses the identical evidence, which leaves an upgraded
     // repository stuck between two gates that disagree.
-    const blocking = traceability.diagnostics.filter(
-      (diagnostic) => !isLegacyEvidenceDiagnostic(diagnostic)
-    );
+    const { blocking } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      ...(input.allowLegacyEvidence === undefined
+        ? {}
+        : { allowLegacyEvidence: input.allowLegacyEvidence })
+    });
     if (blocking.length > 0) {
       return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", blocking);
     }

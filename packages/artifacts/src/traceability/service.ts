@@ -1074,6 +1074,28 @@ export function isLegacyEvidenceDiagnostic(diagnostic: { readonly code: string }
   return diagnostic.code === "orphan_evidence";
 }
 
+/**
+ * Split diagnostics into those that block and those an explicit allowance
+ * covers.
+ *
+ * The allowance is opt-in, not automatic. `orphan_evidence` is emitted both by
+ * evidence written before requirement and oracle links existed and by current
+ * evidence that has lost them, and the diagnostic alone cannot tell those apart
+ * — so exempting the code outright discards the only signal that current
+ * evidence is corrupt. An operator upgrading a repository says so once; nothing
+ * is waved through on their behalf.
+ */
+export function partitionTraceabilityDiagnostics<T extends { readonly code: string }>(
+  diagnostics: readonly T[],
+  options: { readonly allowLegacyEvidence?: boolean } = {}
+): { readonly blocking: readonly T[]; readonly allowed: readonly T[] } {
+  if (options.allowLegacyEvidence !== true) return { blocking: diagnostics, allowed: [] };
+  return {
+    blocking: diagnostics.filter((diagnostic) => !isLegacyEvidenceDiagnostic(diagnostic)),
+    allowed: diagnostics.filter(isLegacyEvidenceDiagnostic)
+  };
+}
+
 export async function validateChangeTraceability(input: ValidateChangeTraceabilityInput): Promise<TraceabilityValidationResult> {
   const changeId = parseChangeId(input.changeId);
   if (typeof changeId !== "string") return changeId;
