@@ -30575,13 +30575,12 @@ function describeCriterion(criterion) {
 // packages/cli/src/workflow/oracle-input.ts
 var MAX_ORACLE_INSTRUCTIONS = 4096;
 var OMISSION_FOOTER_RESERVE = 160;
+var MAX_ORACLE_TIMEOUT_MS = 36e5;
+var DEFAULT_ORACLE_TIMEOUT_MS = 6e5;
 function inspectionInstructions(options) {
   const resolved = options.requirement;
   if (resolved === void 0) {
     return `Review implementation and evidence for phase ${options.phase.number}: ${options.phase.name}.`;
-  }
-  if (resolved.manual.length === 0) {
-    return `Every acceptance criterion for ${resolved.requirement.id} is executable and runs as task verification. Confirm the evidence records those runs.`;
   }
   const header = `Decide the criteria that no command can decide, for ${resolved.requirement.id}:`;
   const lines = [header];
@@ -30601,7 +30600,73 @@ function inspectionInstructions(options) {
   }
   return lines.join("\n");
 }
-function buildOracleArtifactInput(options) {
+function criterionOracleId(phase, index) {
+  return formatEntityId("oracle", `${phasePlanIds(phase).suffix}-c${index + 1}`);
+}
+function executableOracles(options, criteria) {
+  const resolved = options.requirement;
+  if (resolved === void 0) return [];
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const owner = firstDecisionOwner(options.project);
+  return criteria.map((criterion, index) => {
+    const oracleId = criterionOracleId(options.phase, index);
+    const oraclePath2 = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
+    const description = describeCriterion(criterion);
+    const oracle = oracleSchema.parse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "oracle",
+      id: oracleId,
+      projectId: options.project.id,
+      title: `Acceptance criterion ${index + 1} for ${resolved.requirement.id}`,
+      owner,
+      protectedPaths: [options.change.artifactPath],
+      sourceArtifacts: [options.change.reference],
+      expected: {
+        preconditions: ["The phase change bundle exists and validates."],
+        postconditions: [description],
+        evidence: ["The criterion command runs during legion build and exits as expected."]
+      },
+      requirementCoverage: [
+        {
+          requirementId: resolved.requirement.id,
+          // `partial`, not `primary`: this oracle decides one criterion of the
+          // requirement. Claiming primary coverage from each of several oracles
+          // would report the requirement fully covered by any one of them.
+          coverage: "partial",
+          criteria: [description]
+        }
+      ],
+      traceRefs: [
+        {
+          path: oraclePath2,
+          anchor: oracleId,
+          relation: "verifies",
+          entity: { kind: "requirement", id: resolved.requirement.id }
+        }
+      ],
+      type: "executable",
+      execution: {
+        mode: "command",
+        command: criterion.proof.command,
+        args: [...criterion.proof.args],
+        expectedExitCode: criterion.proof.expectedExitCode,
+        // The schema's ceiling is an hour; an interview can ask for longer.
+        // Clamping keeps a legal interview from throwing here, after the change
+        // bundle is already on disk.
+        timeoutMs: Math.min(criterion.proof.timeoutMs ?? DEFAULT_ORACLE_TIMEOUT_MS, MAX_ORACLE_TIMEOUT_MS)
+      }
+    });
+    return {
+      repositoryRoot: options.repositoryRoot,
+      changeId: ids.changeId,
+      oracle,
+      baseGitSha: options.baseGitSha
+    };
+  });
+}
+function inspectionOracle(options) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const owner = firstDecisionOwner(options.project);
@@ -30611,6 +30676,7 @@ function buildOracleArtifactInput(options) {
     changeId: ids.changeId,
     oracleId: ids.oracleId
   });
+  const manual = options.requirement?.manual ?? [];
   const oracle = oracleSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
@@ -30623,7 +30689,7 @@ function buildOracleArtifactInput(options) {
     sourceArtifacts: [options.change.reference],
     expected: {
       preconditions: ["The phase change bundle exists and validates."],
-      postconditions: options.requirement === void 0 ? [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`] : options.requirement.requirement.acceptance.criteria.map(describeCriterion),
+      postconditions: options.requirement === void 0 ? [`Phase ${options.phase.number} build evidence addresses ${options.phase.name}.`] : manual.map(describeCriterion),
       evidence: ["Build and verification evidence is attached during legion build."]
     },
     // The operator's own criteria, not a restatement of the phase. "Phase N
@@ -30633,8 +30699,8 @@ function buildOracleArtifactInput(options) {
     requirementCoverage: [
       {
         requirementId: coveredRequirementId,
-        coverage: "primary",
-        criteria: options.requirement === void 0 ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`] : options.requirement.requirement.acceptance.criteria.map(describeCriterion)
+        coverage: options.requirement === void 0 ? "primary" : "partial",
+        criteria: options.requirement === void 0 ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`] : manual.map(describeCriterion)
       }
     ],
     traceRefs: [
@@ -30646,11 +30712,6 @@ function buildOracleArtifactInput(options) {
       }
     ],
     type: "inspectable",
-    // Inspectable even when every criterion is executable: the task contract is
-    // what runs those commands, and duplicating them here would make the same
-    // proof pass twice while covering the manual criteria neither time. The
-    // instructions name the unproven ones so a reviewer knows what is left to
-    // them.
     execution: {
       mode: "manual-inspection",
       instructions: inspectionInstructions(options)
@@ -30662,6 +30723,12 @@ function buildOracleArtifactInput(options) {
     oracle,
     baseGitSha: options.baseGitSha
   };
+}
+function buildOracleArtifactInputs(options) {
+  const resolved = options.requirement;
+  if (resolved === void 0) return [inspectionOracle(options)];
+  const executable = executableOracles(options, resolved.executable);
+  return resolved.manual.length === 0 && executable.length > 0 ? executable : [...executable, inspectionOracle(options)];
 }
 
 // packages/cli/src/workflow/phase-compat.ts
@@ -30757,7 +30824,7 @@ function buildTaskGraphInput(options) {
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const taskgraphPath2 = artifactPathForRole({ role: "taskgraph", changeId: ids.changeId });
   const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
-  const artifactInputs = [options.change.revision, options.oracle.revision];
+  const artifactInputs = [options.change.revision, ...options.oracles.map((entry) => entry.revision)];
   const task = taskContractSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
@@ -30783,7 +30850,7 @@ function buildTaskGraphInput(options) {
       predecessorArtifacts: artifactInputs.map((entry) => entry.artifact)
     },
     scope: {
-      read: [options.change.artifactPath, options.oracle.artifactPath],
+      read: [options.change.artifactPath, ...options.oracles.map((entry) => entry.artifactPath)],
       // This task's objective is to implement the phase, so its write scope has
       // to be the implementation surface. It previously listed only the
       // taskgraph artifact, which made the contract impossible to satisfy: any
@@ -30824,7 +30891,10 @@ function buildTaskGraphInput(options) {
         }
       ]
     },
-    oracleRefs: [ids.oracleId],
+    // Every oracle this phase wrote, not the inspection one alone. A task that
+    // referenced one of several would leave the criterion oracles uncovered, and
+    // `validateChangeTraceability` reports an oracle no task references.
+    oracleRefs: options.oracles.map((entry) => entry.document.id),
     // The project's own verification command when the interview recorded one.
     // `legion validate` alone is a tautology — it checks the artifacts this
     // command just wrote, not the code the task changed.
@@ -31018,7 +31088,8 @@ async function handlePlanWorkflow(context) {
   if (!change.ok) {
     return artifactCreationFailure("change", change.status, change.diagnostics, action);
   }
-  const oracle = await createOracleArtifact(buildOracleArtifactInput({
+  const oracles = [];
+  for (const input of buildOracleArtifactInputs({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
     phase: resolved.phase,
@@ -31026,16 +31097,19 @@ async function handlePlanWorkflow(context) {
     ...requirement === void 0 ? {} : { requirement },
     baseGitSha,
     createdAt
-  }));
-  if (!oracle.ok) {
-    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
+  })) {
+    const written = await createOracleArtifact(input);
+    if (!written.ok) {
+      return artifactCreationFailure("oracle", written.status, written.diagnostics, action);
+    }
+    oracles.push(written);
   }
   const taskgraph = await writeTaskGraph(buildTaskGraphInput({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
     phase: resolved.phase,
     change,
-    oracle,
+    oracles,
     baseGitSha,
     createdAt,
     ...enforcement === void 0 ? {} : { enforcement },
@@ -31055,11 +31129,13 @@ async function handlePlanWorkflow(context) {
         artifactPath: change.artifactPath,
         status: change.status
       },
-      oracle: {
-        oracleId: oracle.document.id,
-        artifactPath: oracle.artifactPath,
-        status: oracle.status
-      },
+      // Reported as a list. Naming only the first would hide every criterion
+      // oracle from `--json`, which is the surface the skill reads.
+      oracles: oracles.map((written) => ({
+        oracleId: written.document.id,
+        artifactPath: written.artifactPath,
+        status: written.status
+      })),
       taskgraph: {
         artifactPath: taskgraph.artifactPath,
         status: taskgraph.status,

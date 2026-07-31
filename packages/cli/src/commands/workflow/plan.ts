@@ -2,6 +2,7 @@ import {
   createChangeBundle,
   createCurrentSpec,
   createOracleArtifact,
+  type OracleArtifactSuccess,
   readCurrentSpec,
   readRequirementSet,
   verifyRequirementSet,
@@ -27,7 +28,7 @@ import {
   resolveBaseGitSha
 } from "../../workflow/change-input.js";
 import { loadWorkflowProject } from "../../workflow/context.js";
-import { buildOracleArtifactInput } from "../../workflow/oracle-input.js";
+import { buildOracleArtifactInputs } from "../../workflow/oracle-input.js";
 import { resolvePhaseSource, type PhaseSource } from "../../workflow/phase-compat.js";
 import { resolvePhaseRequirement } from "../../workflow/phase-requirement.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
@@ -241,7 +242,12 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     return artifactCreationFailure("change", change.status, change.diagnostics, action);
   }
 
-  const oracle = await createOracleArtifact(buildOracleArtifactInput({
+  // One oracle per executable acceptance criterion, plus an inspection oracle
+  // for the criteria no command can decide. Written in order and sequentially:
+  // each write takes the artifact lock, and issuing them concurrently made the
+  // later ones fail on a lock the earlier ones held.
+  const oracles: OracleArtifactSuccess[] = [];
+  for (const input of buildOracleArtifactInputs({
     repositoryRoot: context.repositoryRoot,
     project: loadedProject.loaded.project,
     phase: resolved.phase,
@@ -249,9 +255,12 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     ...(requirement === undefined ? {} : { requirement }),
     baseGitSha,
     createdAt
-  }));
-  if (!oracle.ok) {
-    return artifactCreationFailure("oracle", oracle.status, oracle.diagnostics, action);
+  })) {
+    const written = await createOracleArtifact(input);
+    if (!written.ok) {
+      return artifactCreationFailure("oracle", written.status, written.diagnostics, action);
+    }
+    oracles.push(written);
   }
 
 
@@ -260,7 +269,7 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     project: loadedProject.loaded.project,
     phase: resolved.phase,
     change,
-    oracle,
+    oracles,
     baseGitSha,
     createdAt,
     ...(enforcement === undefined ? {} : { enforcement }),
@@ -281,11 +290,13 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
         artifactPath: change.artifactPath,
         status: change.status
       },
-      oracle: {
-        oracleId: oracle.document.id,
-        artifactPath: oracle.artifactPath,
-        status: oracle.status
-      },
+      // Reported as a list. Naming only the first would hide every criterion
+      // oracle from `--json`, which is the surface the skill reads.
+      oracles: oracles.map((written) => ({
+        oracleId: written.document.id,
+        artifactPath: written.artifactPath,
+        status: written.status
+      })),
       taskgraph: {
         artifactPath: taskgraph.artifactPath,
         status: taskgraph.status,

@@ -35,7 +35,7 @@ export interface BuildTaskGraphInputOptions {
   readonly project: Project;
   readonly phase: PhaseSource;
   readonly change: ChangeBundleSuccess;
-  readonly oracle: OracleArtifactSuccess;
+  readonly oracles: readonly OracleArtifactSuccess[];
   readonly baseGitSha: GitSha;
   readonly createdAt?: UtcTimestamp;
 }
@@ -109,7 +109,7 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const taskgraphPath = artifactPathForRole({ role: "taskgraph", changeId: ids.changeId });
   const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
-  const artifactInputs = [options.change.revision, options.oracle.revision];
+  const artifactInputs = [options.change.revision, ...options.oracles.map((entry) => entry.revision)];
   const task = taskContractSchema.parse({
     schemaVersion: LEGION_PROTOCOL_VERSION,
     createdAt,
@@ -135,7 +135,7 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
       predecessorArtifacts: artifactInputs.map((entry) => entry.artifact)
     },
     scope: {
-      read: [options.change.artifactPath, options.oracle.artifactPath],
+      read: [options.change.artifactPath, ...options.oracles.map((entry) => entry.artifactPath)],
       // This task's objective is to implement the phase, so its write scope has
       // to be the implementation surface. It previously listed only the
       // taskgraph artifact, which made the contract impossible to satisfy: any
@@ -176,7 +176,10 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
         }
       ]
     },
-    oracleRefs: [ids.oracleId],
+    // Every oracle this phase wrote, not the inspection one alone. A task that
+    // referenced one of several would leave the criterion oracles uncovered, and
+    // `validateChangeTraceability` reports an oracle no task references.
+    oracleRefs: options.oracles.map((entry) => entry.document.id),
     // The project's own verification command when the interview recorded one.
     // `legion validate` alone is a tautology — it checks the artifacts this
     // command just wrote, not the code the task changed.

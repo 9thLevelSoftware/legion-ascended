@@ -92,10 +92,18 @@ async function plannedProject(t, answers = ANSWERS) {
       .at(-1)
       .replace(/\.json$/, ""),
     taskgraph: JSON.parse(await readText(payload.taskgraph.artifactPath)),
-    // The oracle is YAML, so it is asserted as text rather than parsed. The
-    // assertions are about which criteria appear, which reads the same either
-    // way and avoids adding a parser to the test suite.
-    oracle: await readText(payload.oracle.artifactPath)
+    // Kept as text for the assertions about which criteria appear, joined
+    // because that acceptance surface is now several files rather than one.
+    // (The `.yaml` extension is a misnomer the writer inherited — the contents
+    // are JSON, which an earlier comment here asserted the opposite of.)
+    oracle: (
+      await Promise.all(payload.oracles.map((entry) => readText(entry.artifactPath)))
+    ).join("\n"),
+    oracles: payload.oracles,
+    /** The oracle documents themselves, for assertions about structure. */
+    oracleDocuments: await Promise.all(
+      payload.oracles.map(async (entry) => JSON.parse(await readText(entry.artifactPath)).oracle)
+    )
   };
 }
 
@@ -346,7 +354,7 @@ test("planning refuses a requirement edited after it was written", async (t) => 
 });
 
 test("aggregate review instructions stay inside the oracle limit", async () => {
-  const { buildOracleArtifactInput } = await import(
+  const { buildOracleArtifactInputs } = await import(
     "../packages/cli/dist/workflow/oracle-input.js"
   );
 
@@ -360,7 +368,7 @@ test("aggregate review instructions stay inside the oracle limit", async () => {
     proof: { mode: "manual", reason: "z".repeat(500) }
   }));
 
-  const input = buildOracleArtifactInput({
+  const input = buildOracleArtifactInputs({
     repositoryRoot: process.cwd(),
     project: {
       id: "prj_asset-mapper",
@@ -380,7 +388,7 @@ test("aggregate review instructions stay inside the oracle limit", async () => {
     createdAt: CREATED_AT
   });
 
-  const instructions = input.oracle.execution.instructions;
+  const instructions = input.at(-1).oracle.execution.instructions;
   assert.ok(instructions.length <= 4_096, `instructions were ${instructions.length} characters`);
   // Omission is stated, not silent: a criterion that vanished from the review
   // instructions is the gap this section exists to surface.
@@ -698,4 +706,79 @@ test("a requirement set from another project is refused", async (t) => {
   assert.equal(planned.exitCode, 1);
   assert.equal(parseJsonOutput(planned).status, "requirement_set_foreign");
   assert.match(parseJsonOutput(planned).diagnostics[0].message, /prj_somebody-elses-project/);
+});
+
+test("an executable criterion becomes an oracle a runner can execute", async (t) => {
+  const { oracles, oracleDocuments } = await plannedProject(t);
+
+  // One executable criterion and one manual one, so two oracles: one a runner
+  // decides and one a reviewer does. A single inspectable oracle asserting
+  // "phase 1 acceptance criteria are satisfied" made every phase's acceptance
+  // identical and asked a person to decide what a command had already decided.
+  assert.equal(oracles.length, 2, JSON.stringify(oracles, undefined, 2));
+
+  // The schema has carried `type: "executable"` since 0.1.0 and nothing in this
+  // repository has ever written one — the same built-never-called shape that
+  // has produced a finding in every phase of this project.
+  const executable = oracleDocuments.filter((document) => document.type === "executable");
+  assert.equal(executable.length, 1, JSON.stringify(oracleDocuments.map((d) => d.type)));
+
+  // The operator's own command, argument for argument. Asserting the oracle
+  // merely mentions "pnpm" would pass on a placeholder that happened to name
+  // the project's verification command.
+  assert.deepEqual(executable[0].execution, {
+    mode: "command",
+    command: "pnpm",
+    args: ["test", "--filter", "resolver"],
+    expectedExitCode: 0,
+    timeoutMs: 600_000
+  });
+});
+
+test("every oracle a phase writes is referenced by a task", async (t) => {
+  const { taskgraph, oracles } = await plannedProject(t);
+  const referenced = new Set(taskgraph.tasks.flatMap((task) => task.oracleRefs));
+
+  // An oracle no task references is what `validateChangeTraceability` reports as
+  // `task_oracle_missing_coverage`, and writing a second oracle while the task
+  // still named the first would have created exactly that at every plan.
+  for (const entry of oracles) {
+    assert.ok(
+      referenced.has(entry.oracleId),
+      `${entry.oracleId} was written but no task references it`
+    );
+  }
+});
+
+test("a requirement decided entirely by commands writes no inspection oracle", async (t) => {
+  // The manual criterion removed: `req-1-ac-1-more` false prunes ac-2 and every
+  // answer that depended on it.
+  const answers = { ...ANSWERS, "req-1-ac-1-more": "false" };
+  delete answers["req-1-ac-2-statement"];
+  delete answers["req-1-ac-2-proof"];
+  delete answers["req-1-ac-2-detail"];
+  delete answers["req-1-ac-2-more"];
+
+  const { oracles, oracleDocuments } = await plannedProject(t, answers);
+
+  // Nothing is left for a reviewer to decide, so no oracle asks them to. An
+  // inspection oracle emitted anyway would say "confirm the evidence records
+  // those runs", which is the question answered by its own answer.
+  assert.equal(oracles.length, 1, JSON.stringify(oracles, undefined, 2));
+  assert.deepEqual(
+    oracleDocuments.map((document) => document.type),
+    ["executable"]
+  );
+});
+
+test("a criterion oracle claims partial coverage, not primary", async (t) => {
+  const { oracleDocuments } = await plannedProject(t);
+
+  // Each oracle decides one criterion of the requirement. Claiming `primary`
+  // from several of them would report the requirement fully covered by any one,
+  // which is how a partially proven requirement reads as fully proven.
+  const coverage = oracleDocuments.flatMap((document) =>
+    document.requirementCoverage.map((entry) => entry.coverage)
+  );
+  assert.deepEqual(coverage, ["partial", "partial"], JSON.stringify(coverage));
 });
