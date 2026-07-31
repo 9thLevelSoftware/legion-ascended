@@ -30235,7 +30235,98 @@ async function resolveMapStatus(context) {
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
 import path30 from "node:path";
+
+// packages/cli/src/workflow/phase-requirement.ts
+var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
+function requirementIdInPhase(phase) {
+  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
+}
+function partitionCriteria(requirement) {
+  const executable = [];
+  const manual = [];
+  for (const criterion of requirement.acceptance.criteria) {
+    if (criterion.proof.mode === "executable") executable.push(criterion);
+    else manual.push(criterion);
+  }
+  return { executable, manual };
+}
+async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
+  const requirementId = requirementIdInPhase(phase);
+  if (requirementId === void 0) return { ok: "absent" };
+  if (verified !== void 0) {
+    const found = verified.find((entry) => entry.id === requirementId);
+    if (found === void 0) {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+      };
+    }
+    return declinedOrResolved(found, phase);
+  }
+  const set = await readRequirementSet(repositoryRoot);
+  if (!set.ok) {
+    if (set.status === "not_found") {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
+      };
+    }
+    return { ok: false, reason: set.reason };
+  }
+  const requirement = set.requirements.find((entry) => entry.id === requirementId);
+  if (requirement === void 0) {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+    };
+  }
+  return declinedOrResolved(requirement, phase);
+}
+function declinedOrResolved(requirement, phase) {
+  if (requirement.priority === "wont") {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
+    };
+  }
+  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
+}
+var MAX_CRITERION_DESCRIPTION = 1024;
+function clamp(value) {
+  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
+  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
+}
+function renderInvocation(command, args) {
+  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
+  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
+}
+function describeCriterion(criterion) {
+  if (criterion.proof.mode === "executable") {
+    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
+    return clamp(
+      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
+    );
+  }
+  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
+}
+
+// packages/cli/src/workflow/change-input.ts
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
+var MAX_ID_SUFFIX = 64;
+function suffixWithRoom(suffix, tail) {
+  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
+  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
+  return `${trimmed}${tail}`;
+}
+function phaseOracleIds(phase, requirement) {
+  const ids = phasePlanIds(phase);
+  if (requirement === void 0) return [ids.oracleId];
+  const { executable, manual } = partitionCriteria(requirement);
+  const criterionIds = executable.map(
+    (_criterion, index) => formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+  );
+  return manual.length === 0 && criterionIds.length > 0 ? criterionIds : [...criterionIds, ids.oracleId];
+}
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
   return {
@@ -30392,7 +30483,7 @@ function buildChangeBundleInput(options) {
     acceptance: {
       language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
       criteria: generatedCriteria(acceptanceCriteria(options.phase)),
-      oracleRefs: [ids.oracleId]
+      oracleRefs: [...phaseOracleIds(options.phase)]
     },
     traceRefs: [
       {
@@ -30418,7 +30509,10 @@ function buildChangeBundleInput(options) {
     // writes `oracleRefs: []` — so no coverage is lost today. The legacy
     // importer will be the first producer, and it must land together with
     // that resolution rather than trading a silent loss for a hard block.
-    acceptance: { ...options.requirement.acceptance, oracleRefs: [ids.oracleId] },
+    acceptance: {
+      ...options.requirement.acceptance,
+      oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
+    },
     traceRefs: withSpecAnchor(options.requirement)
   });
   return {
@@ -30498,80 +30592,6 @@ function truncate3(value, maxLength) {
   return normalized.slice(0, maxLength - 1).trimEnd();
 }
 
-// packages/cli/src/workflow/phase-requirement.ts
-var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
-function requirementIdInPhase(phase) {
-  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
-}
-function partition(requirement) {
-  const executable = [];
-  const manual = [];
-  for (const criterion of requirement.acceptance.criteria) {
-    if (criterion.proof.mode === "executable") executable.push(criterion);
-    else manual.push(criterion);
-  }
-  return { executable, manual };
-}
-async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
-  const requirementId = requirementIdInPhase(phase);
-  if (requirementId === void 0) return { ok: "absent" };
-  if (verified !== void 0) {
-    const found = verified.find((entry) => entry.id === requirementId);
-    if (found === void 0) {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-      };
-    }
-    return declinedOrResolved(found, phase);
-  }
-  const set = await readRequirementSet(repositoryRoot);
-  if (!set.ok) {
-    if (set.status === "not_found") {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
-      };
-    }
-    return { ok: false, reason: set.reason };
-  }
-  const requirement = set.requirements.find((entry) => entry.id === requirementId);
-  if (requirement === void 0) {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-    };
-  }
-  return declinedOrResolved(requirement, phase);
-}
-function declinedOrResolved(requirement, phase) {
-  if (requirement.priority === "wont") {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
-    };
-  }
-  return { ok: true, resolved: { requirement, ...partition(requirement) } };
-}
-var MAX_CRITERION_DESCRIPTION = 1024;
-function clamp(value) {
-  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
-  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
-}
-function renderInvocation(command, args) {
-  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
-  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
-}
-function describeCriterion(criterion) {
-  if (criterion.proof.mode === "executable") {
-    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
-    return clamp(
-      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
-    );
-  }
-  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
-}
-
 // packages/cli/src/workflow/oracle-input.ts
 var MAX_ORACLE_INSTRUCTIONS = 4096;
 var OMISSION_FOOTER_RESERVE = 160;
@@ -30600,8 +30620,8 @@ function inspectionInstructions(options) {
   }
   return lines.join("\n");
 }
-function criterionOracleId(phase, index) {
-  return formatEntityId("oracle", `${phasePlanIds(phase).suffix}-c${index + 1}`);
+function oracleIdsFor(options) {
+  return phaseOracleIds(options.phase, options.requirement?.requirement);
 }
 function executableOracles(options, criteria) {
   const resolved = options.requirement;
@@ -30609,8 +30629,12 @@ function executableOracles(options, criteria) {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const owner = firstDecisionOwner(options.project);
+  const oracleIds = oracleIdsFor(options);
   return criteria.map((criterion, index) => {
-    const oracleId = criterionOracleId(options.phase, index);
+    const oracleId = oracleIds[index];
+    if (oracleId === void 0) {
+      throw new Error(`No oracle ID was derived for acceptance criterion ${index + 1}.`);
+    }
     const oraclePath2 = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
     const description = describeCriterion(criterion);
     const oracle = oracleSchema.parse({

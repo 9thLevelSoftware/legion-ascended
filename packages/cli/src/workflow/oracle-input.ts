@@ -5,14 +5,18 @@ import {
 } from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
-  formatEntityId,
   oracleSchema,
   type GitSha,
   type Project,
   type UtcTimestamp
 } from "@legion/protocol";
 
-import { currentUtcTimestamp, firstDecisionOwner, phasePlanIds } from "./change-input.js";
+import {
+  currentUtcTimestamp,
+  firstDecisionOwner,
+  phaseOracleIds,
+  phasePlanIds
+} from "./change-input.js";
 import type { PhaseSource } from "./phase-compat.js";
 import {
   describeCriterion,
@@ -85,15 +89,21 @@ function inspectionInstructions(options: BuildOracleInputOptions): string {
 }
 
 /**
- * The oracle ID for the criterion at `index`.
+ * The oracle IDs this phase writes, taken from the change bundle's own source.
  *
- * Positional rather than derived from the criterion text: a criterion the
- * operator rewords keeps its oracle, and two criteria that happen to read alike
- * do not collide into one. The trade is that reordering criteria reassigns
- * oracles, which replanning rewrites anyway.
+ * Derived by `phaseOracleIds` rather than recomputed here. A second derivation
+ * is what broke this the first time: the bundle's `acceptance.oracleRefs` named
+ * an inspection oracle that this file had stopped writing, so every plan of a
+ * requirement decided entirely by commands referenced an artifact that did not
+ * exist. One function, two callers, no way to disagree.
+ *
+ * IDs are positional (`-c1`, `-c2`) rather than derived from criterion text: a
+ * criterion the operator rewords keeps its oracle, and two criteria that read
+ * alike do not collide into one. Reordering criteria reassigns them, which
+ * replanning rewrites anyway.
  */
-export function criterionOracleId(phase: PhaseSource, index: number): string {
-  return formatEntityId("oracle", `${phasePlanIds(phase).suffix}-c${index + 1}`);
+function oracleIdsFor(options: BuildOracleInputOptions): readonly string[] {
+  return phaseOracleIds(options.phase, options.requirement?.requirement);
 }
 
 /**
@@ -116,8 +126,15 @@ function executableOracles(
   const createdAt = options.createdAt ?? currentUtcTimestamp();
   const owner = firstDecisionOwner(options.project);
 
+  const oracleIds = oracleIdsFor(options);
   return criteria.map((criterion, index) => {
-    const oracleId = criterionOracleId(options.phase, index);
+    const oracleId = oracleIds[index];
+    if (oracleId === undefined) {
+      // Unreachable while both sides partition the same requirement, which is
+      // the point of sharing the derivation — but a silent `undefined` here
+      // would be written into an artifact as a malformed ID.
+      throw new Error(`No oracle ID was derived for acceptance criterion ${index + 1}.`);
+    }
     const oraclePath = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
     const description = describeCriterion(criterion);
 

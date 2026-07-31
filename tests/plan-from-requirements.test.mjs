@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -781,4 +781,63 @@ test("a criterion oracle claims partial coverage, not primary", async (t) => {
     document.requirementCoverage.map((entry) => entry.coverage)
   );
   assert.deepEqual(coverage, ["partial", "partial"], JSON.stringify(coverage));
+});
+
+test("a requirement decided entirely by commands still validates", async (t) => {
+  const answers = { ...ANSWERS, "req-1-ac-1-more": "false" };
+  delete answers["req-1-ac-2-statement"];
+  delete answers["req-1-ac-2-proof"];
+  delete answers["req-1-ac-2-detail"];
+  delete answers["req-1-ac-2-more"];
+
+  const { root, run, oracles } = await plannedProject(t, answers);
+
+  // The change bundle names the oracles it expects, and dropping the inspection
+  // oracle left it naming one that was never written. Counting oracles caught
+  // nothing: the write side worked, and the reference that had gone stale lived
+  // in a different artifact.
+  const changes = path.join(root, ".legion/project/changes");
+  const changeId = (await readdir(changes))[0];
+  const deltaDir = path.join(changes, changeId, "delta-specs");
+  const deltas = await Promise.all(
+    (await readdir(deltaDir)).map((name) => readFile(path.join(deltaDir, name), "utf8"))
+  );
+
+  const written = new Set(oracles.map((entry) => entry.oracleId));
+  const referenced = deltas.flatMap((text) => text.match(/orc_[a-z0-9-]+/g) ?? []);
+
+  // An empty list would satisfy a loop without proving anything, which is how
+  // the first version of this assertion passed against the bug.
+  assert.ok(referenced.length > 0, "the proposed requirement must name its oracles");
+  for (const oracleId of referenced) {
+    assert.ok(written.has(oracleId), `${oracleId} is referenced but was never written`);
+  }
+
+  // And end to end, because the assertion above is still my own reading of what
+  // the gate wants. `legion validate` is what actually reports a reference to a
+  // missing oracle.
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 0, validated.stdout + validated.stderr);
+});
+
+test("a phase slug at the ID limit still derives criterion oracles", async (t) => {
+  // 62 characters is a valid entity-ID suffix on its own and one character too
+  // many once `-c1` is appended. Deriving the ID threw from `formatEntityId`
+  // after the current spec and change bundle were already on disk, so the
+  // failure landed mid-write rather than at the entrance.
+  const answers = {
+    ...ANSWERS,
+    "req-1-statement":
+      "Resolution fails loudly whenever any referenced asset is missing from the mapping"
+  };
+
+  const { oracles } = await plannedProject(t, answers);
+  for (const entry of oracles) {
+    const suffix = entry.oracleId.replace(/^orc_/, "");
+    assert.ok(suffix.length <= 64, `${entry.oracleId} suffix is ${suffix.length} characters`);
+    assert.match(suffix, /^[a-z0-9][a-z0-9-]*[a-z0-9]$/, entry.oracleId);
+  }
+
+  // Truncation must not collapse two criteria onto one ID.
+  assert.equal(new Set(oracles.map((entry) => entry.oracleId)).size, oracles.length);
 });
