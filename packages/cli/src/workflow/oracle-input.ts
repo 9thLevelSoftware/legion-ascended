@@ -14,7 +14,7 @@ import {
 import {
   currentUtcTimestamp,
   firstDecisionOwner,
-  phaseOracleIds,
+  phaseOracleAssignment,
   phasePlanIds
 } from "./change-input.js";
 import type { PhaseSource } from "./phase-compat.js";
@@ -97,13 +97,16 @@ function inspectionInstructions(options: BuildOracleInputOptions): string {
  * requirement decided entirely by commands referenced an artifact that did not
  * exist. One function, two callers, no way to disagree.
  *
- * IDs are positional (`-c1`, `-c2`) rather than derived from criterion text: a
- * criterion the operator rewords keeps its oracle, and two criteria that read
- * alike do not collide into one. Reordering criteria reassigns them, which
- * replanning rewrites anyway.
+ * Keyed by criterion ID, not by position. Three call sites agreeing to iterate
+ * in the same order is a covenant, not a contract.
+ *
+ * The IDs themselves are positional (`-c1`, `-c2`) rather than derived from
+ * criterion text: a criterion the operator rewords keeps its oracle, and two
+ * criteria that read alike do not collide into one. Reordering criteria
+ * reassigns them, which replanning rewrites anyway.
  */
-function oracleIdsFor(options: BuildOracleInputOptions): readonly string[] {
-  return phaseOracleIds(options.phase, options.requirement?.requirement);
+function oracleIdsFor(options: BuildOracleInputOptions): ReadonlyMap<string, string> {
+  return phaseOracleAssignment(options.phase, options.requirement?.requirement).byCriterionId;
 }
 
 /**
@@ -128,12 +131,12 @@ function executableOracles(
 
   const oracleIds = oracleIdsFor(options);
   return criteria.map((criterion, index) => {
-    const oracleId = oracleIds[index];
+    const oracleId = oracleIds.get(criterion.id);
     if (oracleId === undefined) {
       // Unreachable while both sides partition the same requirement, which is
       // the point of sharing the derivation — but a silent `undefined` here
       // would be written into an artifact as a malformed ID.
-      throw new Error(`No oracle ID was derived for acceptance criterion ${index + 1}.`);
+      throw new Error(`No oracle ID was derived for acceptance criterion ${criterion.id}.`);
     }
     const oraclePath = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
     const description = describeCriterion(criterion);

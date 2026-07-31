@@ -25,7 +25,12 @@ import {
 } from "./phase-requirement.js";
 
 import { budgetForWriteScope } from "./budget.js";
-import { currentUtcTimestamp, phasePlanIds, phaseRiskProfile } from "./change-input.js";
+import {
+  currentUtcTimestamp,
+  phaseOracleAssignment,
+  phasePlanIds,
+  phaseRiskProfile
+} from "./change-input.js";
 import type { PhaseSource } from "./phase-compat.js";
 
 export interface BuildTaskGraphInputOptions {
@@ -147,31 +152,6 @@ function contractIdWithRoom(suffix: string, tail: string): ContractId {
 }
 
 /**
- * Divide the operator's blast radius across the tasks that share it.
- *
- * The budget is the limit they chose for the phase, and it is enforced per
- * task. Giving every task the full figure would let a three-task phase change
- * three times what was agreed to — each task inside the limit and the phase well
- * outside it. A budget that is asked for and then multiplied is no better than
- * one that is ignored.
- *
- * Rounded up, and never below one file: a task permitted to change no files
- * cannot be satisfied at all.
- */
-function shareOfBudget(budget: TaskContractScopeBudget, tasks: number): TaskContractScopeBudget {
-  if (tasks <= 1) return budget;
-  const share = (value: number, floor: number) => Math.max(Math.ceil(value / tasks), floor);
-  const maxFilesChanged = share(budget.maxFilesChanged, 1);
-  return {
-    maxFilesChanged,
-    maxLinesChanged: share(budget.maxLinesChanged, 1),
-    // `maxNewFiles` may legitimately be zero, and the schema refuses a value
-    // above `maxFilesChanged`.
-    maxNewFiles: Math.min(share(budget.maxNewFiles, 0), maxFilesChanged)
-  };
-}
-
-/**
  * Split the phase into the tasks its acceptance criteria describe.
  *
  * A project with no interviewed requirement keeps the single task it always
@@ -181,6 +161,7 @@ function shareOfBudget(budget: TaskContractScopeBudget, tasks: number): TaskCont
 function taskUnits(options: BuildTaskGraphInputOptions): readonly TaskUnit[] {
   const ids = phasePlanIds(options.phase);
   const resolved = options.requirement;
+  const assignment = phaseOracleAssignment(options.phase, resolved?.requirement);
   const oracleIds = options.oracles.map((entry) => entry.document.id);
 
   if (resolved === undefined || oracleIds.length === 0) {
@@ -195,11 +176,13 @@ function taskUnits(options: BuildTaskGraphInputOptions): readonly TaskUnit[] {
     ];
   }
 
-  // `buildOracleArtifactInputs` writes the executable oracles first and the
-  // inspection oracle last, so positions line up with the criteria they prove.
+  // Bound by criterion ID through the shared assignment, not by agreeing with
+  // `buildOracleArtifactInputs` about iteration order. A positional handshake
+  // would bind a criterion to another criterion's oracle the moment either side
+  // reordered, and a test comparing the *set* of references would still pass.
   const units: TaskUnit[] = resolved.executable.map((criterion, index) => ({
     contractId: contractIdWithRoom(ids.suffix, `-c${index + 1}`),
-    oracleId: oracleIds[index] ?? ids.oracleId,
+    oracleId: assignment.byCriterionId.get(criterion.id) ?? ids.oracleId,
     title: `Satisfy acceptance criterion ${index + 1} of ${resolved.requirement.id}`,
     objective: describeCriterion(criterion),
     criteria: [criterion]
@@ -226,10 +209,13 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
   const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
   const artifactInputs = [options.change.revision, ...options.oracles.map((entry) => entry.revision)];
   const units = taskUnits(options);
-  const budget = shareOfBudget(
-    options.enforcement?.budget ?? budgetForWriteScope(["."]),
-    units.length
-  );
+  // The figure the interview recorded, unchanged. The prompts ask what a
+  // *single task* may change — "Small numbers force decomposition, which is the
+  // point" — so dividing it across decomposed tasks tightens a limit the
+  // operator already set per task, and blocks compliant work at a boundary they
+  // never chose. Decomposition is what the budget is for, not something to
+  // charge them for.
+  const budget = options.enforcement?.budget ?? budgetForWriteScope(["."]);
 
   const tasks = units.map((unit) =>
     taskContractSchema.parse({

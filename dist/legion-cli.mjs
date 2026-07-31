@@ -25277,6 +25277,24 @@ async function planSummaryConflicts(planningRoot, plans) {
   }
   return conflicts;
 }
+var UNPROVEN_LISTING_LIMIT = 20;
+function unprovenRequirementUncertainties(requirements) {
+  const unproven = requirements.filter((requirement) => requirement.statement.length > 0);
+  if (unproven.length === 0)
+    return [];
+  const listed = unproven.slice(0, UNPROVEN_LISTING_LIMIT).map((entry) => entry.code);
+  const omitted = unproven.length - listed.length;
+  const codes = omitted > 0 ? `${listed.join(", ")}, and ${omitted} more` : listed.join(", ");
+  return [
+    {
+      code: "imported_requirements_lack_acceptance_criteria",
+      severity: "warning",
+      message: `${unproven.length} imported requirement(s) carry no acceptance criterion, because the legacy source defined none: ${codes}. Each is recorded with a manual criterion saying so rather than an invented proof. Author a real criterion before planning work against them.`,
+      sourcePaths: [".planning/PROJECT.md"],
+      blocksAutomaticAcceptance: false
+    }
+  ];
+}
 async function stateUncertainties(planningRoot) {
   const state = await readUtf8IfExists(path18.join(planningRoot, "STATE.md"));
   if (state === void 0)
@@ -25585,7 +25603,10 @@ async function createPlanningImportDryRun(input) {
     source: inventory,
     mappings: mappings.sort((left, right) => compareStrings8(`${left.sourcePath}\0${left.targetPath}`, `${right.sourcePath}\0${right.targetPath}`)),
     conflicts: await planSummaryConflicts(planningRoot, plans),
-    uncertainties: await stateUncertainties(planningRoot),
+    uncertainties: [
+      ...await stateUncertainties(planningRoot),
+      ...unprovenRequirementUncertainties(requirements)
+    ],
     policy: {
       planningReadOnlyAfterApply: true,
       legacySourceDeleted: false,
@@ -30318,14 +30339,28 @@ function suffixWithRoom(suffix, tail) {
   const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
   return `${trimmed}${tail}`;
 }
-function phaseOracleIds(phase, requirement) {
+function phaseOracleAssignment(phase, requirement) {
   const ids = phasePlanIds(phase);
-  if (requirement === void 0) return [ids.oracleId];
+  if (requirement === void 0) {
+    return { byCriterionId: /* @__PURE__ */ new Map(), inspectionOracleId: ids.oracleId, all: [ids.oracleId] };
+  }
   const { executable, manual } = partitionCriteria(requirement);
-  const criterionIds = executable.map(
-    (_criterion, index) => formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+  const byCriterionId = new Map(
+    executable.map((criterion, index) => [
+      criterion.id,
+      formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+    ])
   );
-  return manual.length === 0 && criterionIds.length > 0 ? criterionIds : [...criterionIds, ids.oracleId];
+  const criterionIds = [...byCriterionId.values()];
+  const inspectionOracleId = manual.length === 0 && criterionIds.length > 0 ? void 0 : ids.oracleId;
+  return {
+    byCriterionId,
+    inspectionOracleId,
+    all: inspectionOracleId === void 0 ? criterionIds : [...criterionIds, inspectionOracleId]
+  };
+}
+function phaseOracleIds(phase, requirement) {
+  return phaseOracleAssignment(phase, requirement).all;
 }
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -30621,7 +30656,7 @@ function inspectionInstructions(options) {
   return lines.join("\n");
 }
 function oracleIdsFor(options) {
-  return phaseOracleIds(options.phase, options.requirement?.requirement);
+  return phaseOracleAssignment(options.phase, options.requirement?.requirement).byCriterionId;
 }
 function executableOracles(options, criteria) {
   const resolved = options.requirement;
@@ -30631,9 +30666,9 @@ function executableOracles(options, criteria) {
   const owner = firstDecisionOwner(options.project);
   const oracleIds = oracleIdsFor(options);
   return criteria.map((criterion, index) => {
-    const oracleId = oracleIds[index];
+    const oracleId = oracleIds.get(criterion.id);
     if (oracleId === void 0) {
-      throw new Error(`No oracle ID was derived for acceptance criterion ${index + 1}.`);
+      throw new Error(`No oracle ID was derived for acceptance criterion ${criterion.id}.`);
     }
     const oraclePath2 = artifactPathForRole({ role: "oracle", changeId: ids.changeId, oracleId });
     const description = describeCriterion(criterion);
@@ -30853,21 +30888,10 @@ function contractIdWithRoom(suffix, tail) {
   const base = suffix.length + tail.length <= MAX_ID_SUFFIX2 ? suffix : suffix.slice(0, MAX_ID_SUFFIX2 - tail.length).replace(/-+$/, "");
   return formatEntityId("contract", `${base}${tail}`);
 }
-function shareOfBudget(budget, tasks) {
-  if (tasks <= 1) return budget;
-  const share = (value, floor) => Math.max(Math.ceil(value / tasks), floor);
-  const maxFilesChanged = share(budget.maxFilesChanged, 1);
-  return {
-    maxFilesChanged,
-    maxLinesChanged: share(budget.maxLinesChanged, 1),
-    // `maxNewFiles` may legitimately be zero, and the schema refuses a value
-    // above `maxFilesChanged`.
-    maxNewFiles: Math.min(share(budget.maxNewFiles, 0), maxFilesChanged)
-  };
-}
 function taskUnits(options) {
   const ids = phasePlanIds(options.phase);
   const resolved = options.requirement;
+  const assignment = phaseOracleAssignment(options.phase, resolved?.requirement);
   const oracleIds = options.oracles.map((entry) => entry.document.id);
   if (resolved === void 0 || oracleIds.length === 0) {
     return [
@@ -30882,7 +30906,7 @@ function taskUnits(options) {
   }
   const units = resolved.executable.map((criterion, index) => ({
     contractId: contractIdWithRoom(ids.suffix, `-c${index + 1}`),
-    oracleId: oracleIds[index] ?? ids.oracleId,
+    oracleId: assignment.byCriterionId.get(criterion.id) ?? ids.oracleId,
     title: `Satisfy acceptance criterion ${index + 1} of ${resolved.requirement.id}`,
     objective: describeCriterion(criterion),
     criteria: [criterion]
@@ -30906,10 +30930,7 @@ function buildTaskGraphInput(options) {
   const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
   const artifactInputs = [options.change.revision, ...options.oracles.map((entry) => entry.revision)];
   const units = taskUnits(options);
-  const budget = shareOfBudget(
-    options.enforcement?.budget ?? budgetForWriteScope(["."]),
-    units.length
-  );
+  const budget = options.enforcement?.budget ?? budgetForWriteScope(["."]);
   const tasks = units.map(
     (unit) => taskContractSchema.parse({
       schemaVersion: LEGION_PROTOCOL_VERSION,

@@ -877,7 +877,19 @@ test("a phase becomes one task per acceptance criterion", async (t) => {
 });
 
 test("each task is decided by exactly one oracle", async (t) => {
-  const { taskgraph, oracles } = await plannedProject(t);
+  // Two executable criteria with different commands. With one, a criterion
+  // bound to the wrong oracle is indistinguishable from a correct binding, so
+  // the assertion below could not fail however wrong the code was.
+  const { taskgraph, oracles, oracleDocuments } = await plannedProject(t, {
+    ...ANSWERS,
+    "req-1-ac-2-proof": "executable",
+    "req-1-ac-2-detail": "pnpm test --filter reporter",
+    "req-1-ac-2-more": "true",
+    "req-1-ac-3-statement": "A stale mapping is rejected",
+    "req-1-ac-3-proof": "manual",
+    "req-1-ac-3-detail": "Staleness is a judgement call that no assertion should freeze.",
+    "req-1-ac-3-more": "false"
+  });
 
   const refs = taskgraph.tasks.flatMap((task) => task.oracleRefs);
   for (const task of taskgraph.tasks) {
@@ -888,23 +900,44 @@ test("each task is decided by exactly one oracle", async (t) => {
   // are different properties, and the previous shape had the first without the
   // second: every task named every oracle.
   assert.deepEqual([...refs].sort(), oracles.map((entry) => entry.oracleId).sort());
+
+  // And bound to the *right* one. Comparing the set of references would pass
+  // just as happily if two criteria swapped oracles, so this checks that the
+  // task running a criterion's command is decided by the oracle carrying that
+  // same command — the only pairing that means anything.
+  const executableOracles = new Map(
+    oracleDocuments
+      .filter((document) => document.type === "executable")
+      .map((document) => [document.id, `${document.execution.command} ${document.execution.args.join(" ")}`.trim()])
+  );
+  assert.ok(executableOracles.size > 0, "there must be an executable oracle to bind");
+
+  for (const task of taskgraph.tasks) {
+    const oracleCommand = executableOracles.get(task.oracleRefs[0]);
+    if (oracleCommand === undefined) continue;
+    const taskCommands = task.verification.map(
+      (entry) => `${entry.command} ${entry.args.join(" ")}`.trim()
+    );
+    assert.ok(
+      taskCommands.includes(oracleCommand),
+      `${task.id} is decided by an oracle running ${oracleCommand}, but runs ${JSON.stringify(taskCommands)}`
+    );
+  }
 });
 
-test("the operator's blast radius is divided across tasks, not repeated", async (t) => {
+test("each task carries the per-task budget the interview recorded", async (t) => {
   const { taskgraph } = await plannedProject(t);
 
-  // The interview asked for 12 files and 600 lines for the phase. Budgets are
-  // enforced per task, so two tasks each carrying the full figure would let the
-  // phase change 24 files while each task stayed inside the limit.
-  const budgets = taskgraph.tasks.map((task) => task.scope.budget);
-  assert.equal(
-    budgets.reduce((total, budget) => total + budget.maxFilesChanged, 0) <= 12,
-    true,
-    JSON.stringify(budgets)
-  );
-  for (const budget of budgets) {
-    assert.ok(budget.maxFilesChanged >= 1, "a task permitted no files cannot be satisfied");
-    assert.ok(budget.maxNewFiles <= budget.maxFilesChanged, JSON.stringify(budget));
+  // The intake prompts ask what a *single task* may change, and the help says
+  // "Small numbers force decomposition, which is the point". Dividing 12 files
+  // across two tasks would tighten a limit the operator already set per task and
+  // block compliant work at a boundary they never chose.
+  for (const task of taskgraph.tasks) {
+    assert.deepEqual(
+      task.scope.budget,
+      { maxFilesChanged: 12, maxLinesChanged: 600, maxNewFiles: 4 },
+      `${task.id} carries ${JSON.stringify(task.scope.budget)}`
+    );
   }
 });
 
