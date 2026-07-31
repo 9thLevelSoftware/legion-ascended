@@ -624,7 +624,7 @@ test("a rendered command keeps argument boundaries a reviewer can reproduce", as
   });
 
   assert.notEqual(quoted, split, "distinct argument vectors must render distinctly");
-  assert.match(quoted, /node -e "foo bar"/);
+  assert.ok(quoted.includes("node -e 'foo bar'"), quoted);
   assert.match(split, /node -e foo bar/);
 
   // An empty argument is schema-valid and rendered as nothing at all, so `[""]`
@@ -640,12 +640,15 @@ test("a rendered command keeps argument boundaries a reviewer can reproduce", as
     proof: { mode: "executable", command: "node", args: [], expectedExitCode: 0 }
   });
   assert.notEqual(empty, none, "an empty argument must be distinguishable from none");
-  assert.match(empty, /node ""/);
+  assert.match(empty, /node ''/);
 
   // The rendered text is reproduction instructions, so a shell metacharacter in
   // a single argument must not read as syntax. `safe;touch` is one argument the
   // runner passes intact; rendered bare, a reviewer pasting it into a shell runs
   // `touch` as a second command.
+  //
+  // Single quotes specifically: double quotes still expand `$` and backticks in
+  // POSIX shells and PowerShell, so `"$(touch /tmp/pwned)"` executes.
   //
   // Asserted with string containment rather than a regex, because the values
   // under test are themselves full of regex metacharacters.
@@ -656,12 +659,32 @@ test("a rendered command keeps argument boundaries a reviewer can reproduce", as
       proof: { mode: "executable", command: "node", args: [arg], expectedExitCode: 0 }
     });
 
-  for (const dangerous of ["safe;touch", "a&&b", "a|b", "$HOME", "`id`", "a>out", "a<in", "(x)", "a*b", "a~b"]) {
+  const dangerous = [
+    "safe;touch",
+    "a&&b",
+    "a|b",
+    "$HOME",
+    "$(touch /tmp/pwned)",
+    "`id`",
+    "a>out",
+    "a<in",
+    "(x)",
+    "a*b",
+    "a~b",
+    "foo bar"
+  ];
+  for (const arg of dangerous) {
+    const rendered = describe(arg);
     assert.ok(
-      describe(dangerous).includes(`node ${JSON.stringify(dangerous)}`),
-      `${dangerous} must be quoted: ${describe(dangerous)}`
+      rendered.includes(`node '${arg}'`),
+      `${arg} must be single-quoted: ${rendered}`
     );
+    assert.ok(!rendered.includes(`node "${arg}"`), `${arg} must not use double quotes`);
   }
+
+  // An embedded single quote is closed, escaped and reopened, so the argument
+  // survives a round trip through a POSIX shell.
+  assert.ok(describe("it's").includes(`node 'it'\\''s'`), describe("it's"));
 
   // Ordinary tokens stay unquoted, so the common case stays readable.
   for (const plain of ["--filter", "resolver", "src/main.ts", "a=b", "v1.2.3"]) {

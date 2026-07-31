@@ -140,23 +140,31 @@ function clamp(value: string): string {
 }
 
 /**
- * Characters that need no quoting in any POSIX or PowerShell context.
+ * Characters that need no quoting in any shell.
  *
  * An allowlist, after four rounds of denylist. Quoting was extended for
- * whitespace, then quote characters, then empty strings, then shell
- * metacharacters — each time by naming what had just been found dangerous, and
- * each time missing the next one. `safe;touch` is a single argument the runner
- * passes intact, but rendered bare a reviewer pasting it into a shell runs
- * `touch` as a second command.
- *
- * The rendered text is reproduction instructions, so the question is not "is
- * this character dangerous" but "is this token unambiguous". Anything outside
- * this set is quoted.
+ * whitespace, then quote characters, then empty strings, then metacharacters —
+ * each round naming what had just been found dangerous and missing the next.
  */
 const UNQUOTED_ARGUMENT = /^[A-Za-z0-9._\/=@:+-]+$/;
 
+/**
+ * Quote an argument so no shell interprets anything inside it.
+ *
+ * Single quotes, not `JSON.stringify`. Double quotes still perform variable and
+ * command substitution in POSIX shells and PowerShell, so a literal argument of
+ * `$(touch /tmp/pwned)` rendered as `"$(touch /tmp/pwned)"` executes when a
+ * reviewer pastes the oracle text. Single quotes suppress every expansion in
+ * both, and an embedded single quote is closed, escaped and reopened in the
+ * standard POSIX way.
+ *
+ * This text is reproduction instructions for a human. The runner never parses
+ * it — it receives the argv vector directly — so the only requirement is that
+ * what a reviewer runs matches what the runner ran.
+ */
 function renderArgument(part: string): string {
-  return UNQUOTED_ARGUMENT.test(part) ? part : JSON.stringify(part);
+  if (UNQUOTED_ARGUMENT.test(part)) return part;
+  return `'${part.split("'").join(`'\\''`)}'`;
 }
 
 /**

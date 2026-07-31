@@ -30483,7 +30483,8 @@ function clamp(value) {
 }
 var UNQUOTED_ARGUMENT = /^[A-Za-z0-9._\/=@:+-]+$/;
 function renderArgument(part) {
-  return UNQUOTED_ARGUMENT.test(part) ? part : JSON.stringify(part);
+  if (UNQUOTED_ARGUMENT.test(part)) return part;
+  return `'${part.split("'").join(`'\\''`)}'`;
 }
 function describeCriterion(criterion) {
   if (criterion.proof.mode === "executable") {
