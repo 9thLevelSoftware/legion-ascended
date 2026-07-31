@@ -32543,7 +32543,19 @@ async function evidenceEntryForExecution(input) {
       path: input.taskgraphPath,
       relation: "records",
       entity: { kind: "change", id: input.task.changeId }
-    }
+    },
+    ...input.task.requirementIds.map((requirementId) => ({
+      path: input.taskgraphPath,
+      anchor: input.task.id,
+      relation: "verifies",
+      entity: { kind: "requirement", id: requirementId }
+    })),
+    ...input.task.oracleRefs.map((oracleId) => ({
+      path: input.taskgraphPath,
+      anchor: input.task.id,
+      relation: "verifies",
+      entity: { kind: "oracle", id: oracleId }
+    }))
   ];
   const reconciliation = input.reconciliation;
   const inContract = input.inContract;
@@ -35020,6 +35032,23 @@ async function handleShipWorkflow(context) {
   });
   if (!taskgraph.ok) {
     return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
+  }
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!traceability.ok) {
+    return blockedShip(
+      traceability.diagnostics.map((diagnostic3) => ({
+        code: "change_traceability_broken",
+        message: diagnostic3.message,
+        path: diagnostic3.source?.path ?? taskgraph.artifactPath
+      })),
+      nextAction(
+        "legion validate",
+        "Requirement, oracle, task and evidence links must resolve before a change can ship."
+      )
+    );
   }
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,

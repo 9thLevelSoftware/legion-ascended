@@ -1,4 +1,9 @@
-import { listReviewDecisionsForChange, readEvidenceIndex, readTaskGraph } from "@legion/artifacts";
+import {
+  listReviewDecisionsForChange,
+  readEvidenceIndex,
+  readTaskGraph,
+  validateChangeTraceability
+} from "@legion/artifacts";
 
 import { failure, helpResult, type CliContext, type CliResult } from "../../runtime.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
@@ -58,6 +63,35 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   });
   if (!taskgraph.ok) {
     return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
+  }
+
+  // The artifacts traceability service is the authority on whether a change's
+  // requirements, oracles, tasks and evidence actually link up, and it had no
+  // production caller.
+  //
+  // Ship is where it belongs. It requires accepted evidence with review
+  // provenance, so it cannot run in `legion validate` — that is the default task
+  // verification command, and demanding accepted evidence there deadlocks the
+  // loop: build runs validate, validate wants accepted evidence, evidence is
+  // accepted at review, review needs a passing build. By the time ship runs, an
+  // accepted review already exists, and this is the last gate before archive
+  // applies the same rules.
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!traceability.ok) {
+    return blockedShip(
+      traceability.diagnostics.map((diagnostic) => ({
+        code: "change_traceability_broken",
+        message: diagnostic.message,
+        path: diagnostic.source?.path ?? taskgraph.artifactPath
+      })),
+      nextAction(
+        "legion validate",
+        "Requirement, oracle, task and evidence links must resolve before a change can ship."
+      )
+    );
   }
 
   const gateReport = deriveShipGates({
