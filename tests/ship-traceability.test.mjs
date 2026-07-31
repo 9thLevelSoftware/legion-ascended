@@ -300,3 +300,20 @@ test("a specification defect is not sent to legion build", async (t) => {
   const repaired = await run(...action.command.split(" ").slice(1));
   assert.equal(repaired.exitCode, 0, `the repair the action describes should clear it: ${repaired.stdout}${repaired.stderr}`);
 });
+
+// A flag the operator has to type twice, in two commands, and could not find in
+// either one's help. It was wired through the service, both callers and the CLI
+// before anyone could discover it existed — the write side working is not the
+// same as the feature being usable, which is the recurring shape of this PR.
+test("the legacy allowance is discoverable wherever it is accepted", async () => {
+  const shipHelp = await runCliCapture(["ship", "--help"]);
+  assert.match(shipHelp.stdout, /--allow-legacy-evidence/);
+
+  const archiveHelp = await runCliCapture(["dev", "change", "--help"]);
+  assert.match(archiveHelp.stdout, /--allow-legacy-evidence/);
+
+  // Each help has to point at the other command, because passing it to one and
+  // not the other is exactly the gate disagreement this flag exists to close.
+  assert.match(shipHelp.stdout, /change archive/);
+  assert.match(archiveHelp.stdout, /legion ship/);
+});

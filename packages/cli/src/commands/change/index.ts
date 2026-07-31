@@ -35,7 +35,10 @@ Archive options:
   --dry-run                 Plan archive without writing current truth.
   --archived-by <id>        Actor ID used for archive records.
   --archived-at <timestamp> UTC timestamp used for archive records.
-  --output-branch <branch>  Branch metadata for archive records.`;
+  --output-branch <branch>  Branch metadata for archive records.
+  --allow-legacy-evidence   Accept evidence written before requirement and
+                            oracle linking. Repeat what was passed to
+                            \`legion ship\`; archive applies the same check.`;
 
 export async function handleChangeCommand(context: CliContext): Promise<CliResult> {
   const [command] = context.args.positionals;

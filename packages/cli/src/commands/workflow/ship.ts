@@ -12,7 +12,17 @@ import { taskIdForContractId } from "../../workflow/run-artifacts.js";
 import { deriveShipGates } from "../../workflow/ship-gates.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
-const SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
+const SHIP_HELP = [
+  "legion ship [--canary] [--allow-legacy-evidence]",
+  "",
+  "Run the ship readiness gate. This layer does not publish or release.",
+  "",
+  "Options:",
+  "  --canary                  Report canary readiness alongside the gate.",
+  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
+  "                            linking. `legion dev change archive` applies the same",
+  "                            check, so pass it there too."
+].join("\n");
 
 /** The shape `recoveryFor` needs: a code to classify by, and where the defect is. */
 type TraceabilityFailure = {

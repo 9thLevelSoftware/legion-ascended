@@ -23758,7 +23758,10 @@ Archive options:
   --dry-run                 Plan archive without writing current truth.
   --archived-by <id>        Actor ID used for archive records.
   --archived-at <timestamp> UTC timestamp used for archive records.
-  --output-branch <branch>  Branch metadata for archive records.`;
+  --output-branch <branch>  Branch metadata for archive records.
+  --allow-legacy-evidence   Accept evidence written before requirement and
+                            oracle linking. Repeat what was passed to
+                            \`legion ship\`; archive applies the same check.`;
 async function handleChangeCommand(context) {
   const [command] = context.args.positionals;
   if (hasFlag(context, "help") || command === void 0 || command === "help") return helpResult(CHANGE_HELP);
@@ -35054,7 +35057,17 @@ function deriveShipGates(input) {
 }
 
 // packages/cli/src/commands/workflow/ship.ts
-var SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
+var SHIP_HELP = [
+  "legion ship [--canary] [--allow-legacy-evidence]",
+  "",
+  "Run the ship readiness gate. This layer does not publish or release.",
+  "",
+  "Options:",
+  "  --canary                  Report canary readiness alongside the gate.",
+  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
+  "                            linking. `legion dev change archive` applies the same",
+  "                            check, so pass it there too."
+].join("\n");
 var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
 function recoveryFor(diagnostics) {
   if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
