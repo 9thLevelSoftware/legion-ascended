@@ -35055,12 +35055,18 @@ function deriveShipGates(input) {
 
 // packages/cli/src/commands/workflow/ship.ts
 var SHIP_HELP = "legion ship [--canary]\n\nRun the ship readiness gate. This layer does not publish or release.";
-function recoveryFor(_changeId, diagnostics) {
-  const evidenceOnly = diagnostics.every((diagnostic3) => diagnostic3.code.includes("evidence"));
-  if (evidenceOnly) {
+var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
+function recoveryFor(diagnostics) {
+  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
     return nextAction(
       "legion build",
-      "Evidence is not linked to the requirements and oracles it proves; rebuilding the task rewrites those links."
+      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
+    );
+  }
+  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
+    return nextAction(
+      "legion ship --allow-legacy-evidence",
+      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
     );
   }
   const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
@@ -35133,7 +35139,7 @@ async function handleShipWorkflow(context) {
           message: diagnostic3.message,
           path: diagnostic3.source?.path ?? taskgraph.artifactPath
         })),
-        recoveryFor(latestChange.changeId, blocking)
+        recoveryFor(blocking)
       );
     }
     traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({

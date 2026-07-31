@@ -23,32 +23,47 @@ type TraceabilityFailure = {
 /**
  * The command that can actually repair what failed.
  *
- * `legion build` reruns task execution and rewrites evidence, so it fixes an
- * evidence-linkage failure and nothing else — pointing there for a malformed
- * oracle or a missing requirement proof sends the operator round a loop that
- * returns the same diagnostic.
+ * Three groups, split by what actually rewrites the artifact — not by whether
+ * the word "evidence" appears in the code, which is how this got it wrong.
  *
- * A specification defect has no repair command, and saying so is the honest
- * answer. `legion plan <phase>` and `legion dev change create` are both
- * create-only: the change already exists, so `createChangeBundle` rejects the
- * rerun with `artifact_already_exists`, and neither can delete a stray oracle.
- * Two earlier revisions of this function named commands that could not perform
- * the repair they promised — first one that wasn't runnable at all, then one
- * that ran and did the wrong thing. The defect is in a committed artifact, and
- * correcting a committed artifact is an edit.
+ * `legion build` produces evidence that does not exist yet, so it repairs a
+ * missing index and a task with no accepted evidence. It does not repair a
+ * *stale* entry: build seeds `producedEntries` from the existing index and only
+ * replaces an entry with the same evidence ID, while each attempt is issued a
+ * new one. The obsolete entry survives every rebuild, `validateChangeTraceability`
+ * scans the whole index, and the operator loops on the same diagnostic forever.
  *
- * So the action names the artifact to edit, and the command to rerun is this
- * one. `legion dev change validate` was the obvious candidate and reports
- * "Change is valid." on a bundle with a malformed stray oracle — it checks the
- * bundle's own schema, not the traceability the ship gate checks. Ship is the
- * only command that re-reports this defect, so ship is what confirms the repair.
+ * `orphan_evidence` is the one stale case with a real answer: it is what
+ * evidence written before requirement and oracle linking looks like, and the
+ * allowance exists for exactly that. Naming it here does not wave anything
+ * through — the operator still has to type it, which is the point of the flag.
+ *
+ * Everything else is a defect in a committed artifact, and correcting a
+ * committed artifact is an edit; no command rewrites it. `legion plan <phase>`
+ * and `legion dev change create` are create-only, so the change's own existence
+ * makes them fail with `artifact_already_exists`, and neither can delete a
+ * stray oracle. `legion dev change validate` runs but reports "Change is
+ * valid." on a bundle containing one, because it checks the bundle's schema
+ * rather than the traceability this gate checks. So the action names the
+ * artifact to correct and rerunning ship as the confirmation, since ship is the
+ * only command that re-reports the defect.
  */
-function recoveryFor(_changeId: string, diagnostics: readonly TraceabilityFailure[]) {
-  const evidenceOnly = diagnostics.every((diagnostic) => diagnostic.code.includes("evidence"));
-  if (evidenceOnly) {
+const REBUILDABLE = new Set(["missing_evidence_index", "missing_accepted_evidence"]);
+
+function recoveryFor(diagnostics: readonly TraceabilityFailure[]) {
+  if (diagnostics.every((diagnostic) => REBUILDABLE.has(diagnostic.code))) {
     return nextAction(
       "legion build",
-      "Evidence is not linked to the requirements and oracles it proves; rebuilding the task rewrites those links."
+      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
+    );
+  }
+
+  if (diagnostics.every((diagnostic) => diagnostic.code === "orphan_evidence")) {
+    return nextAction(
+      "legion ship --allow-legacy-evidence",
+      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it — a rebuild adds a new entry " +
+        "and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that " +
+        "lost its links, the index is corrupt and has to be corrected rather than allowed."
     );
   }
 
@@ -157,7 +172,7 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
           message: diagnostic.message,
           path: diagnostic.source?.path ?? taskgraph.artifactPath
         })),
-        recoveryFor(latestChange.changeId, blocking)
+        recoveryFor(blocking)
       );
     }
 

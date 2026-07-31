@@ -185,14 +185,24 @@ test("a change built before evidence linking can still ship", async (t) => {
   // corrupt. The operator says which case this is.
   const blocked = await run("ship", "--json");
   assert.equal(blocked.exitCode, 1, "unlinked evidence must not be waved through by default");
-  assert.match(
-    parseJsonOutput(blocked).nextAction.command,
-    /legion build/,
-    "an evidence-linkage failure is repaired by rebuilding"
+
+  // Run the advice rather than pattern-match it. The specification branch of
+  // this recovery named three commands that all read correctly and could not
+  // perform the repair; executing them is the only thing that told them apart.
+  // This branch said `legion build`, which exits 1 here and leaves ship failing:
+  // a rebuild seeds from the existing index and is issued a new evidence ID, so
+  // the stale entry survives every attempt.
+  const action = parseJsonOutput(blocked).nextAction;
+  const repaired = await run(...action.command.split(" ").slice(1));
+  assert.equal(
+    repaired.exitCode,
+    0,
+    `the emitted recovery has to clear the block it was emitted for: ${action.command} => ${repaired.stdout}${repaired.stderr}`
   );
 
   const shipped = await run("ship", "--allow-legacy-evidence", "--json");
   assert.equal(shipped.exitCode, 0, shipped.stdout + shipped.stderr);
+  assert.equal(action.command, "legion ship --allow-legacy-evidence");
 
   // Tolerated, not ignored: the gap is reported so it is visible and retires
   // itself when the task is rebuilt.
