@@ -153,8 +153,10 @@ test("the oracle covers the interview's real acceptance criteria", async (t) => 
 
 test("an executable criterion becomes task verification", async (t) => {
   const { taskgraph } = await plannedProject(t);
-  const commands = taskgraph.tasks[0].verification.map(
-    (entry) => `${entry.command} ${entry.args.join(" ")}`.trim()
+  // Across tasks, not `tasks[0]`: the graph is written in ID order, so which
+  // task lands first is an artifact of sorting rather than of decomposition.
+  const commands = taskgraph.tasks.flatMap((task) =>
+    task.verification.map((entry) => `${entry.command} ${entry.args.join(" ")}`.trim())
   );
 
   // The criterion the operator said decides this requirement has to be the
@@ -164,6 +166,10 @@ test("an executable criterion becomes task verification", async (t) => {
     commands.some((entry) => entry === "pnpm test --filter resolver"),
     `expected the criterion command, got ${JSON.stringify(commands)}`
   );
+
+  // And it runs in exactly one task. A criterion repeated in every task reports
+  // the same proof several times, and fails a task that never touched it.
+  assert.equal(commands.filter((entry) => entry === "pnpm test --filter resolver").length, 1);
 });
 
 test("a manual criterion is carried as an unproven gap, not as a command", async (t) => {
@@ -857,4 +863,60 @@ test("a requirement decided entirely by judgement gets a primary oracle", async 
     ),
     ["primary"]
   );
+});
+
+test("a phase becomes one task per acceptance criterion", async (t) => {
+  const { taskgraph } = await plannedProject(t);
+
+  // One executable criterion and one manual one, so two tasks: the work the
+  // command decides and the work a reviewer decides. A single task covering
+  // both made the phase all-or-nothing and gave the evidence no way to say
+  // which criterion a run had actually satisfied.
+  assert.equal(taskgraph.tasks.length, 2, JSON.stringify(taskgraph.tasks.map((task) => task.id)));
+  assert.equal(new Set(taskgraph.tasks.map((task) => task.id)).size, 2);
+});
+
+test("each task is decided by exactly one oracle", async (t) => {
+  const { taskgraph, oracles } = await plannedProject(t);
+
+  const refs = taskgraph.tasks.flatMap((task) => task.oracleRefs);
+  for (const task of taskgraph.tasks) {
+    assert.equal(task.oracleRefs.length, 1, `${task.id} names ${task.oracleRefs.length} oracles`);
+  }
+
+  // Every oracle still covered, and none of them twice. Coverage and exclusivity
+  // are different properties, and the previous shape had the first without the
+  // second: every task named every oracle.
+  assert.deepEqual([...refs].sort(), oracles.map((entry) => entry.oracleId).sort());
+});
+
+test("the operator's blast radius is divided across tasks, not repeated", async (t) => {
+  const { taskgraph } = await plannedProject(t);
+
+  // The interview asked for 12 files and 600 lines for the phase. Budgets are
+  // enforced per task, so two tasks each carrying the full figure would let the
+  // phase change 24 files while each task stayed inside the limit.
+  const budgets = taskgraph.tasks.map((task) => task.scope.budget);
+  assert.equal(
+    budgets.reduce((total, budget) => total + budget.maxFilesChanged, 0) <= 12,
+    true,
+    JSON.stringify(budgets)
+  );
+  for (const budget of budgets) {
+    assert.ok(budget.maxFilesChanged >= 1, "a task permitted no files cannot be satisfied");
+    assert.ok(budget.maxNewFiles <= budget.maxFilesChanged, JSON.stringify(budget));
+  }
+});
+
+test("a requirement decided entirely by judgement plans one task", async (t) => {
+  // Nothing to split: no criterion carries a command, so there is one piece of
+  // work and one reviewer deciding it. Inventing more from the phase heading
+  // would be the fabrication the protocol revision exists to prevent.
+  const { taskgraph } = await plannedProject(t, {
+    ...ANSWERS,
+    "req-1-ac-1-proof": "manual",
+    "req-1-ac-1-detail": "Loudness is a judgement call that no assertion should freeze."
+  });
+
+  assert.equal(taskgraph.tasks.length, 1, JSON.stringify(taskgraph.tasks.map((task) => task.id)));
 });
