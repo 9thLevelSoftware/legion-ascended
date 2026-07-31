@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path43 from "node:path";
+import path44 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -546,10 +546,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path44) {
-  if (!path44)
+function getElementAtPath(obj, path45) {
+  if (!path45)
     return obj;
-  return path44.reduce((acc, key) => acc?.[key], obj);
+  return path45.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -958,11 +958,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path44, issues) {
+function prefixIssues(path45, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path44);
+    iss.path.unshift(path45);
     return iss;
   });
 }
@@ -1109,16 +1109,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path44 = []) => {
+  const processError = (error3, path45 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path44, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path45, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path44, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path45, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path44, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path45, ...issue2.path]);
       } else {
-        const fullpath = [...path44, ...issue2.path];
+        const fullpath = [...path45, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -5935,11 +5935,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path44 = [...next.path, migration];
+      const path45 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path44;
+        return path45;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path44 });
+      queue.push({ version: migration.toVersion, path: path45 });
     }
     next = queue.shift();
   }
@@ -8624,17 +8624,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path44 = findProtocolMigrationPath({
+  const path45 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path44 === null) {
+  if (path45 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path44) {
+  for (const descriptor of path45) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -9697,10 +9697,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path44) {
-  if (path44.length === 0)
+function renderPath(path45) {
+  if (path45.length === 0)
     return "<root>";
-  return path44.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path45.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -17090,14 +17090,14 @@ function hashContent(content) {
   const hash = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash}`);
 }
-function mediaTypeForArtifactPath(path44) {
-  if (path44.endsWith(".json"))
+function mediaTypeForArtifactPath(path45) {
+  if (path45.endsWith(".json"))
     return "application/json";
-  if (path44.endsWith(".yaml") || path44.endsWith(".yml"))
+  if (path45.endsWith(".yaml") || path45.endsWith(".yml"))
     return "application/yaml";
-  if (path44.endsWith(".md"))
+  if (path45.endsWith(".md"))
     return "text/markdown";
-  if (path44.endsWith(".txt"))
+  if (path45.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -17140,16 +17140,16 @@ function jsonParseLocation(error2, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path44, issues) {
+function schemaDiagnostics(path45, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path44 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path45 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path44
+      path: path45
     });
   });
 }
@@ -17755,7 +17755,7 @@ function createConstitutionRevision(content) {
   });
 }
 function buildProject(input) {
-  const decisionOwners = input.decisionOwners.map((owner) => actorSchema.parse(owner));
+  const decisionOwners2 = input.decisionOwners.map((owner) => actorSchema.parse(owner));
   const repository = {
     provider: input.repository?.provider ?? "git",
     defaultBranch: input.repository?.defaultBranch ?? "main",
@@ -17777,7 +17777,7 @@ function buildProject(input) {
       adrRoot: PROJECT_ARTIFACT_PATHS.adr,
       riskPolicyRefs: [],
       oraclePolicyRefs: [],
-      decisionOwners
+      decisionOwners: decisionOwners2
     }
   });
 }
@@ -18206,7 +18206,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path44 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path45 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -18220,7 +18220,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path44
+        path: path45
       }))
     };
   }
@@ -19245,13 +19245,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path44) {
+function parseRequirementId2(input, path45) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
@@ -19267,24 +19267,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path44) {
+function parseBaseGitSha(input, path45) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path44) {
+function parseOwners(input, path45) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path44
+        path: path45
       })
     ]);
   }
@@ -19296,7 +19296,7 @@ function parseOwners(input, path44) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path44
+        path: path45
       })));
       continue;
     }
@@ -19584,7 +19584,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path44) {
+function conflictDiagnostics(deltas, path45) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -19593,7 +19593,7 @@ function conflictDiagnostics(deltas, path44) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path44
+        path: path45
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -20370,18 +20370,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path44) {
+function parseOracleId2(input, path45) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path44) {
+function parseBaseGitSha2(input, path45) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20389,7 +20389,7 @@ function parseBaseGitSha2(input, path44) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
@@ -20733,7 +20733,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path44) {
+function parseBaseGitSha3(input, path45) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -20741,18 +20741,18 @@ function parseBaseGitSha3(input, path44) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path44) {
+function assertExpectedRevision(value, path45) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path44
+        path: path45
       })
     ]);
   }
@@ -21070,7 +21070,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path44) {
+function parseBaseGitSha4(input, path45) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -21078,18 +21078,18 @@ function parseBaseGitSha4(input, path44) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path44) {
+function assertExpectedRevision2(value, path45) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path44
+        path: path45
       })
     ]);
   }
@@ -21488,13 +21488,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path44) {
+function assertExpectedRevision3(value, path45) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path44
+        path: path45
       })
     ]);
   }
@@ -21766,13 +21766,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path44) {
+function assertExpectedRevision4(value, path45) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path44
+        path: path45
       })
     ]);
   }
@@ -22013,8 +22013,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path44) {
-  return nodeId("artifact", path44);
+function artifactNodeId(path45) {
+  return nodeId("artifact", path45);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -22050,8 +22050,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path44) {
-  const fileName = path44.split("/").at(-1);
+function oracleIdFromPath(path45) {
+  const fileName = path45.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -22166,13 +22166,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path44 = [];
+  const path45 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path44.indexOf(node);
+      const cycleStartIndex = path45.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path44.length; index++) {
-          const cyclicNode = path44[index];
+        for (let index = cycleStartIndex; index < path45.length; index++) {
+          const cyclicNode = path45[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -22182,11 +22182,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path44.push(node);
+    path45.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path44.pop();
+    path45.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -22214,10 +22214,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path44 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path45 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path44,
+        path: path45,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -22863,13 +22863,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path44) {
+function parseArchivedAt(input, path45) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path44
+      path: path45
     })));
   }
   return parsed.data;
@@ -22898,7 +22898,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path44) {
+function archiveHashDiagnostics(record2, path45) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -22906,11 +22906,11 @@ function archiveHashDiagnostics(record2, path44) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path44
+      path: path45
     })
   ];
 }
-async function assertWorktreeTarget(input, path44) {
+async function assertWorktreeTarget(input, path45) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -22924,7 +22924,7 @@ async function assertWorktreeTarget(input, path44) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path44
+        path: path45
       })
     ]);
   } catch (error2) {
@@ -22932,7 +22932,7 @@ async function assertWorktreeTarget(input, path44) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error2 instanceof Error ? error2.message : String(error2),
-        path: path44
+        path: path45
       })
     ]);
   }
@@ -23011,11 +23011,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path44 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path44 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path44)) : remaining;
+    const path45 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path45 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path45)) : remaining;
     return {
-      path: path44,
+      path: path45,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -23078,9 +23078,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path44, document) {
+function validatePlannedDocument(path45, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path44,
+    artifactPath: path45,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -23091,7 +23091,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path44, document]) => [path44, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path45, document]) => [path45, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -23115,17 +23115,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path44 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path44)) {
+      const path45 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path45)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path44}.`,
-            path: path44
+            message: `Archive add target already exists: ${path45}.`,
+            path: path45
           })
         ]);
       }
-      plannedDocs.set(path44, {
+      plannedDocs.set(path45, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -23138,7 +23138,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path44);
+      touchedPaths.add(path45);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -23323,8 +23323,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path44 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path44);
+  const path45 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path45);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -23562,10 +23562,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path44 = archivePath(changeId);
+  const path45 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path44,
+    artifactPath: path45,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -23577,22 +23577,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path44
+        path: path45
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path44);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path45);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path44,
+    artifactPath: path45,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path44,
+      path: path45,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -24159,6 +24159,9 @@ async function runScript(context, scriptArgs) {
     };
   }
 }
+
+// packages/cli/src/commands/migrate/index.ts
+import path19 from "node:path";
 
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash16 } from "node:crypto";
@@ -25845,6 +25848,44 @@ async function rollbackPlanningImport(input) {
 }
 
 // packages/cli/src/commands/migrate/index.ts
+function asRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
+}
+function nonEmptyString(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function decisionOwners(value) {
+  if (!Array.isArray(value) || value.length === 0) return void 0;
+  const owners = [];
+  for (const item of value) {
+    const owner = asRecord(item);
+    if (owner === void 0) return void 0;
+    if (nonEmptyString(owner["kind"]) === void 0) return void 0;
+    if (nonEmptyString(owner["id"]) === void 0) return void 0;
+    owners.push(owner);
+  }
+  return owners;
+}
+function coercePlanningProjectInput(value, sourcePath) {
+  const candidate = asRecord(value["project"]) ?? value;
+  const slug = nonEmptyString(candidate["slug"]);
+  const name = nonEmptyString(candidate["name"]);
+  const owners = decisionOwners(candidate["decisionOwners"]) ?? decisionOwners(asRecord(candidate["policy"])?.["decisionOwners"]);
+  if (slug === void 0 || name === void 0 || owners === void 0) {
+    return usageError(
+      `${sourcePath} is not a project input. Provide a JSON object with slug, name and decisionOwners, or point --project at .legion/project/project.json.`
+    );
+  }
+  const description = nonEmptyString(candidate["description"]);
+  const createdAt = nonEmptyString(candidate["createdAt"]);
+  return {
+    slug,
+    name,
+    ...description === void 0 ? {} : { description },
+    ...createdAt === void 0 ? {} : { createdAt },
+    decisionOwners: owners
+  };
+}
 var MIGRATE_HELP = `legion dev migrate --from-planning|--from-codex-legion --verify|--dry-run|--apply|--rollback
 
 Compatibility verify:
@@ -25873,16 +25914,19 @@ async function handleMigrateCommand(context) {
 }
 async function handlePlanning(context, action) {
   if (action === "dry-run") {
-    const planningRoot = requiredStringOption(context, "planning-root");
-    if (typeof planningRoot !== "string") return planningRoot;
+    const planningRootOption = requiredStringOption(context, "planning-root");
+    if (typeof planningRootOption !== "string") return planningRootOption;
+    const planningRoot = path19.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
     if (typeof runId !== "string") return runId;
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
-    const project = await readJsonInput(projectPath);
-    if (isCliResult(project)) return project;
+    const projectFile = await readJsonInput(path19.resolve(context.repositoryRoot, projectPath));
+    if (isCliResult(projectFile)) return projectFile;
+    const project = coercePlanningProjectInput(projectFile, projectPath);
+    if ("exitCode" in project) return project;
     const result2 = await createPlanningImportDryRun({
       repositoryRoot: context.repositoryRoot,
       planningRoot,
@@ -26060,7 +26104,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path19 from "node:path";
+import path20 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -26118,10 +26162,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path19.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path20.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path19.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path20.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -26148,13 +26192,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path19.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path20.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path19.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path20.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -26205,7 +26249,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path19.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path20.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -26320,7 +26364,7 @@ async function handleDevCommand(context) {
 
 // packages/cli/src/workflow/input.ts
 import { execFileSync } from "node:child_process";
-import path20 from "node:path";
+import path21 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -26382,7 +26426,7 @@ function isStableDefaultBranch(branch) {
 
 // packages/cli/src/workflow/intake/driver.ts
 import { lstat as lstat3, readFile as readFile16, writeFile as writeFile8 } from "node:fs/promises";
-import path25 from "node:path";
+import path26 from "node:path";
 
 // packages/cli/src/workflow/render.ts
 function nextAction(command, reason) {
@@ -27368,11 +27412,11 @@ function resolvedOpenQuestions(session) {
 // packages/cli/src/workflow/intake/exploration-source.ts
 import { createHash as createHash18 } from "node:crypto";
 import { readFile as readFile14 } from "node:fs/promises";
-import path23 from "node:path";
+import path24 from "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
 import { mkdir as mkdir11, readdir as readdir9, readFile as readFile13 } from "node:fs/promises";
-import path22 from "node:path";
+import path23 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -27409,7 +27453,7 @@ import { promisify as promisify4 } from "node:util";
 // packages/cli/src/workflow/executor/fake-plan.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import path21 from "node:path";
+import path22 from "node:path";
 var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
 function readFakeExecutorPlan() {
   const raw = process.env[FAKE_PLAN_ENV];
@@ -27422,9 +27466,9 @@ function readFakeExecutorPlan() {
   }
 }
 function resolveInsideRepository(repositoryRoot, relative) {
-  const root = path21.resolve(repositoryRoot);
-  const absolute = path21.resolve(root, relative);
-  const prefix = root.endsWith(path21.sep) ? root : `${root}${path21.sep}`;
+  const root = path22.resolve(repositoryRoot);
+  const absolute = path22.resolve(root, relative);
+  const prefix = root.endsWith(path22.sep) ? root : `${root}${path22.sep}`;
   return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
 }
 function applyFakeExecutorPlan(input) {
@@ -27434,7 +27478,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writes ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path21.dirname(absolute), { recursive: true });
+    mkdirSync2(path22.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     written.push(entry.path);
     staged.push(entry.path);
@@ -27450,7 +27494,7 @@ function applyFakeExecutorPlan(input) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
     try {
-      mkdirSync2(path21.dirname(absolute), { recursive: true });
+      mkdirSync2(path22.dirname(absolute), { recursive: true });
       rmSync(absolute, { force: true });
       symlinkSync(entry.target, absolute);
       written.push(entry.path);
@@ -27472,7 +27516,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writesAfterCommit ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path21.dirname(absolute), { recursive: true });
+    mkdirSync2(path22.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     if (!written.includes(entry.path)) written.push(entry.path);
   }
@@ -27893,7 +27937,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path22.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path23.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -27901,7 +27945,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path22.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path23.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -28081,7 +28125,7 @@ async function latestGuidanceRuns(input) {
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
   for (const workflow of workflows) {
-    const workflowRoot = path22.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path23.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir9(workflowRoot, { withFileTypes: true });
@@ -28092,7 +28136,7 @@ async function latestGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const runPath = path22.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path23.join(workflowRoot, entry.name, "workflow-run.json");
       try {
         const parsed = JSON.parse(await readFile13(runPath, "utf8"));
         if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
@@ -28156,7 +28200,7 @@ function explorationArtifactPathOf(run) {
 }
 async function readExplorationRunId(repositoryRoot, artifactPath) {
   try {
-    const raw = await readFile14(path23.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const raw = await readFile14(path24.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
     const parsed = JSON.parse(raw);
     const runId = parsed.runId;
     return typeof runId === "string" ? runId : void 0;
@@ -28207,7 +28251,7 @@ async function loadExploration(repositoryRoot, runId) {
   }
   let raw;
   try {
-    raw = await readFile14(path23.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+    raw = await readFile14(path24.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
   } catch (error2) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };
@@ -28300,11 +28344,11 @@ function renderSessionStatus(input) {
 
 // packages/cli/src/workflow/intake/session.ts
 import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
-import path24 from "node:path";
+import path25 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path24.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+  return path25.join(repositoryRoot, ".legion", "project", "intake", sessionId);
 }
 function intakeSessionArtifactPath(sessionId) {
   return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
@@ -28313,7 +28357,7 @@ function isNodeErrorCode2(error2, code) {
   return Boolean(error2 && typeof error2 === "object" && "code" in error2 && error2.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
-  return path24.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+  return path25.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
 }
 function nowTimestamp2() {
   return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
@@ -28499,8 +28543,8 @@ async function claimSessionDirectory(repositoryRoot, sessionId) {
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(sessionId)
   });
-  const sessionDirectory = path24.dirname(resolved.absolutePath);
-  await mkdir12(path24.dirname(sessionDirectory), { recursive: true });
+  const sessionDirectory = path25.dirname(resolved.absolutePath);
+  await mkdir12(path25.dirname(sessionDirectory), { recursive: true });
   try {
     await mkdir12(sessionDirectory, { recursive: false });
     return true;
@@ -28516,7 +28560,7 @@ async function releaseSessionId(repositoryRoot, sessionId) {
   }
 }
 async function listSessions(repositoryRoot) {
-  const root = path24.join(repositoryRoot, ".legion", "project", "intake");
+  const root = path25.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
     entries = await readdir10(root, { withFileTypes: true });
@@ -29043,7 +29087,7 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path25.isAbsolute(filePath) ? filePath : path25.resolve(context.repositoryRoot, filePath);
+    const absolute = path26.isAbsolute(filePath) ? filePath : path26.resolve(context.repositoryRoot, filePath);
     parsed = JSON.parse(await readFile16(absolute, "utf8"));
   } catch (error2) {
     const message = error2 instanceof Error ? error2.message : String(error2);
@@ -29318,7 +29362,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path25.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path26.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name,
     answers: session.answers,
@@ -29535,7 +29579,7 @@ ${rendered}` : "Project initialization failed.";
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash19 } from "node:crypto";
 import { readdir as readdir11, readFile as readFile17, stat as stat7 } from "node:fs/promises";
-import path26 from "node:path";
+import path27 from "node:path";
 var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
   ".git",
   ".hg",
@@ -29642,7 +29686,7 @@ async function getLatestCodebaseMap(repositoryRoot) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
     if (artifactPath === void 0) continue;
     try {
-      return JSON.parse(await readFile17(path26.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+      return JSON.parse(await readFile17(path27.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
     } catch {
       continue;
     }
@@ -29679,23 +29723,23 @@ function queryCodebaseMap(map, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path26.resolve(repositoryRoot, scope);
-  const relative = path26.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path27.resolve(repositoryRoot, scope);
+  const relative = path27.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path26.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path27.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path26.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path27.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat7(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path26.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path26.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path26.basename(relative))) continue;
+    const relative = path27.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path27.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path27.basename(relative))) continue;
     const fileStat = await stat7(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
     const bytes = await readFile17(absolutePath);
@@ -29721,7 +29765,7 @@ async function walk(root) {
   const entries = await readdir11(root, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path26.join(root, entry.name);
+    const absolute = path27.join(root, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -29766,7 +29810,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file of map.files) {
-    const extension = path26.extname(file.path).toLowerCase() || "(none)";
+    const extension = path27.extname(file.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -29830,11 +29874,11 @@ function sha256(bytes) {
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir13 } from "node:fs/promises";
-import path28 from "node:path";
+import path29 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir12, stat as stat8 } from "node:fs/promises";
-import path27 from "node:path";
+import path28 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -29860,7 +29904,7 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path27.join(repositoryRoot, ".legion");
+  const legionRoot = path28.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
   const entries = await readdir12(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
@@ -29869,8 +29913,8 @@ async function detectPreInitCollision2(repositoryRoot) {
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path27.join(legionRoot, "project");
-  const manifestPath = path27.join(projectRoot, "project.json");
+  const projectRoot = path28.join(legionRoot, "project");
+  const manifestPath = path28.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -30025,7 +30069,7 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path28.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path29.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir13(changesRoot, { withFileTypes: true });
@@ -30166,7 +30210,7 @@ async function resolveMapStatus(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
-import path29 from "node:path";
+import path30 from "node:path";
 var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
 function phasePlanIds(phase) {
   const suffix = phaseIdSuffix(phase);
@@ -30284,8 +30328,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path29.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path29.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path30.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path30.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function withSpecAnchor(requirement) {
@@ -30598,7 +30642,7 @@ function buildOracleArtifactInput(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile18 } from "node:fs/promises";
-import path30 from "node:path";
+import path31 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -30646,13 +30690,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path30.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path30.join(context.repositoryRoot, "ROADMAP.md")
+    path31.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path31.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path30.isAbsolute(roadmapPath) ? roadmapPath : path30.resolve(repositoryRoot, roadmapPath);
+  return path31.isAbsolute(roadmapPath) ? roadmapPath : path31.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -31073,7 +31117,7 @@ import { readFile as readFile20 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
 import { readdir as readdir14, readFile as readFile19 } from "node:fs/promises";
-import path31 from "node:path";
+import path32 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -31237,7 +31281,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path31.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path32.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir14(workflowRoot, { withFileTypes: true });
@@ -31246,7 +31290,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error2;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path31.join(workflowRoot, entry.name, "workflow-run.json") : path31.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path32.join(workflowRoot, entry.name, "workflow-run.json") : path32.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile19(absolutePath, "utf8");
@@ -31265,7 +31309,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path31.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path32.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile19(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
@@ -31283,7 +31327,7 @@ function truncate4(text, maxLength) {
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash20 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path32 from "node:path";
+import path33 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -31292,7 +31336,7 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path32.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path33.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
@@ -31410,7 +31454,7 @@ function createVerificationRunner(options) {
 // packages/cli/src/workflow/executor/worker-bundles.ts
 import { createHash as createHash21 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path33 from "node:path";
+import path34 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -31426,7 +31470,7 @@ function sha256Hex5(value) {
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path33.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path34.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -31453,7 +31497,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path33.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path34.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -31490,13 +31534,13 @@ function createWorkerBundleRegistry(options) {
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash23 } from "node:crypto";
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path36 from "node:path";
+import path37 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
 import { createHash as createHash22 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path34 from "node:path";
+import path35 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -31573,7 +31617,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path34.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path35.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -31589,7 +31633,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path34.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path35.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -31704,11 +31748,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path35 from "node:path";
+import path36 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path35.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path36.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -31721,7 +31765,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path35.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path36.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -31738,7 +31782,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path35.join(repositoryRoot, child)).size;
+        size = lstatSync(path36.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -31786,7 +31830,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path36.join(input.repositoryRoot, entry.path);
+    const absolute = path37.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -31814,7 +31858,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path36.join(input.repositoryRoot, relative);
+    const absolute = path37.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -31897,7 +31941,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path36.join(input.repositoryRoot, relative);
+    const absolute = path37.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -31911,14 +31955,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path36.dirname(absolute), { recursive: true });
+        mkdirSync3(path37.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path36.dirname(absolute), { recursive: true });
+        mkdirSync3(path37.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -32027,7 +32071,7 @@ async function runGuardedExecution(input) {
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash24 } from "node:crypto";
-import path37 from "node:path";
+import path38 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -32061,7 +32105,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path37.join(repositoryRoot, ...artifactPath.split("/"));
+  return path38.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -33613,7 +33657,7 @@ function blockedReview(diagnostics, action, extras = {}) {
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile21 } from "node:fs/promises";
-import path39 from "node:path";
+import path40 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -33889,7 +33933,7 @@ function commandParts(parts) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
-import path38 from "node:path";
+import path39 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -34178,7 +34222,7 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path39.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path40.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const parsed = JSON.parse(await readFile21(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
@@ -34193,7 +34237,7 @@ async function readLessonIndex(repositoryRoot) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 import { readFile as readFile22 } from "node:fs/promises";
-import path40 from "node:path";
+import path41 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -34865,7 +34909,7 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path40.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path41.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
     const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
@@ -35094,11 +35138,11 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
-import path42 from "node:path";
+import path43 from "node:path";
 
 // packages/cli/src/workflow/traceability-check.ts
 import { readdir as readdir15 } from "node:fs/promises";
-import path41 from "node:path";
+import path42 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -35123,7 +35167,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir15(path41.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir15(path42.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -35397,7 +35441,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat9(path42.join(root, relativePath));
+    await stat9(path43.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -35509,7 +35553,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path43.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path44.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -35561,8 +35605,8 @@ function stringMapValue(map, key) {
   const value = map.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path43.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path43.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path44.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path44.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }
