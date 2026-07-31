@@ -6,19 +6,31 @@ import {
 } from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
+  formatEntityId,
   taskContractSchema,
   type ArtifactRevision,
   type ArtifactRole,
+  type ContractId,
   type GitSha,
   type Project,
+  type TaskContractScopeBudget,
   type UtcTimestamp
 } from "@legion/protocol";
 
 import type { RequirementSetEnforcement } from "./intake/finalize.js";
-import type { ResolvedPhaseRequirement } from "./phase-requirement.js";
+import {
+  describeCriterion,
+  type ExecutableCriterion,
+  type ResolvedPhaseRequirement
+} from "./phase-requirement.js";
 
 import { budgetForWriteScope } from "./budget.js";
-import { currentUtcTimestamp, phasePlanIds, phaseRiskProfile } from "./change-input.js";
+import {
+  currentUtcTimestamp,
+  phaseOracleAssignment,
+  phasePlanIds,
+  phaseRiskProfile
+} from "./change-input.js";
 import type { PhaseSource } from "./phase-compat.js";
 
 export interface BuildTaskGraphInputOptions {
@@ -65,9 +77,16 @@ export interface TaskVerification {
   readonly timeoutMs: number;
 }
 
-export function phaseVerification(options: BuildTaskGraphInputOptions): readonly TaskVerification[] {
-  // `executable` is narrowed by `partition`, so no runtime re-check is needed.
-  const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
+export function phaseVerification(
+  options: BuildTaskGraphInputOptions,
+  // The criteria this particular task proves. A decomposed task runs the one
+  // criterion it exists for, not every criterion of the requirement — running
+  // them all in each task would report the same proof once per task and make a
+  // task that changed nothing relevant fail on somebody else's criterion.
+  scoped: readonly ExecutableCriterion[] = options.requirement?.executable ?? []
+): readonly TaskVerification[] {
+  // `executable` is narrowed by `partitionCriteria`, so no runtime re-check is needed.
+  const criteria = scoped.map((criterion) => ({
     command: criterion.proof.command,
     args: [...criterion.proof.args],
     expectedExitCode: criterion.proof.expectedExitCode,
@@ -104,100 +123,195 @@ export function phaseVerification(options: BuildTaskGraphInputOptions): readonly
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
 
+/**
+ * The work a single task exists to do.
+ *
+ * One unit per executable acceptance criterion, plus one for the criteria no
+ * command can decide. That grouping is the only decomposition the CLI can make
+ * honestly: the operator said which criteria decide this requirement, so each
+ * one is a coherent piece of work with its own proof. Splitting by file or by
+ * component would need a mapping nobody supplied.
+ */
+interface TaskUnit {
+  readonly contractId: ContractId;
+  readonly oracleId: string;
+  readonly title: string;
+  readonly objective: string;
+  readonly criteria: readonly ExecutableCriterion[];
+}
+
+/** `slugSuffixSchema` accepts at most 64 characters. */
+const MAX_ID_SUFFIX = 64;
+
+function contractIdWithRoom(suffix: string, tail: string): ContractId {
+  const base =
+    suffix.length + tail.length <= MAX_ID_SUFFIX
+      ? suffix
+      : suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
+  return formatEntityId("contract", `${base}${tail}`) as ContractId;
+}
+
+/**
+ * Split the phase into the tasks its acceptance criteria describe.
+ *
+ * A project with no interviewed requirement keeps the single task it always
+ * had: there are no criteria to divide, and manufacturing a decomposition from
+ * the phase heading would be the fabrication protocol 0.2.0 exists to prevent.
+ */
+function taskUnits(options: BuildTaskGraphInputOptions): readonly TaskUnit[] {
+  const ids = phasePlanIds(options.phase);
+  const resolved = options.requirement;
+  const assignment = phaseOracleAssignment(options.phase, resolved?.requirement);
+  const oracleIds = options.oracles.map((entry) => entry.document.id);
+
+  if (resolved === undefined || oracleIds.length === 0) {
+    return [
+      {
+        contractId: ids.contractId,
+        oracleId: oracleIds[0] ?? ids.oracleId,
+        title: `Build phase ${options.phase.number}: ${options.phase.name}`,
+        objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
+        criteria: []
+      }
+    ];
+  }
+
+  // Bound by criterion ID through the shared assignment, not by agreeing with
+  // `buildOracleArtifactInputs` about iteration order. A positional handshake
+  // would bind a criterion to another criterion's oracle the moment either side
+  // reordered, and a test comparing the *set* of references would still pass.
+  const units: TaskUnit[] = resolved.executable.map((criterion, index) => ({
+    contractId: contractIdWithRoom(ids.suffix, `-c${index + 1}`),
+    oracleId: assignment.byCriterionId.get(criterion.id) ?? ids.oracleId,
+    title: `Satisfy acceptance criterion ${index + 1} of ${resolved.requirement.id}`,
+    objective: describeCriterion(criterion),
+    criteria: [criterion]
+  }));
+
+  if (resolved.manual.length > 0) {
+    units.push({
+      contractId: ids.contractId,
+      oracleId: ids.oracleId,
+      title: `Satisfy the reviewed criteria of ${resolved.requirement.id}`,
+      // No criterion command to run: this task is decided by the inspection
+      // oracle, and its verification is the project's own regression check.
+      objective: `Implement the criteria of ${resolved.requirement.id} that a reviewer decides.`,
+      criteria: []
+    });
+  }
+
+  return units;
+}
+
 export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteTaskGraphInput {
   const ids = phasePlanIds(options.phase);
   const createdAt = options.createdAt ?? currentUtcTimestamp();
-  const taskgraphPath = artifactPathForRole({ role: "taskgraph", changeId: ids.changeId });
   const designRevision = revisionForRole(options.change.bundle.artifactRevisions, "design");
   const artifactInputs = [options.change.revision, ...options.oracles.map((entry) => entry.revision)];
-  const task = taskContractSchema.parse({
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "task-contract",
-    id: ids.contractId,
-    projectId: options.project.id,
-    changeId: ids.changeId,
-    revision: 1,
-    title: `Build phase ${options.phase.number}: ${options.phase.name}`,
-    objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
-    // The requirement the interview wrote, so the contract traces to something
-    // the operator actually agreed to rather than to a stub minted from the
-    // phase heading.
-    requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
-    wave: "A",
-    // Bundle IDs from bundles/index.json. An agent with no worker bundle
-    // cannot be dispatched, so these must name real bundles.
-    agents: ["implementer"],
-    dependencies: [],
-    context: {
-      specRefs: [],
-      designRefs: [designRevision.artifact],
-      predecessorArtifacts: artifactInputs.map((entry) => entry.artifact)
-    },
-    scope: {
-      read: [options.change.artifactPath, ...options.oracles.map((entry) => entry.artifactPath)],
-      // This task's objective is to implement the phase, so its write scope has
-      // to be the implementation surface. It previously listed only the
-      // taskgraph artifact, which made the contract impossible to satisfy: any
-      // source edit was an out-of-scope write and every real build blocked. The
-      // test suite could not see it because the `fake` executor writes nothing.
-      //
-      // The stub planner cannot name that surface yet, so scope is
-      // repository-wide with a finite budget — the same trade `legion quick`
-      // already makes when the caller cannot enumerate files in advance.
-      // Phase D narrows this to the files a decomposed task actually touches.
-      write: ["."],
-      // `.legion/project` holds the control artifacts `review` and `ship`
-      // reload after the executor runs, so a contract must not let the party it
-      // constrains rewrite them. Harness run artifacts share the prefix but are
-      // excluded from attribution before the forbidden check.
-      forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
-      sequentialFiles: [],
-      // The operator's chosen blast radius, not a repository-wide default. A
-      // budget that is asked for and then ignored is worse than not asking:
-      // they believe a limit is in force and nothing enforces it.
-      budget: options.enforcement?.budget ?? budgetForWriteScope(["."])
-    },
-    interfaces: {
-      consumes: [
-        {
-          name: "ChangeBundle",
-          description: "The phase change bundle created by legion plan."
-        },
-        {
-          name: "OracleArtifact",
-          description: "The phase acceptance oracle created by legion plan."
-        }
-      ],
-      produces: [
-        {
-          name: "BuildEvidence",
-          description: "Implementation and verification evidence for the planned phase."
-        }
-      ]
-    },
-    // Every oracle this phase wrote, not the inspection one alone. A task that
-    // referenced one of several would leave the criterion oracles uncovered, and
-    // `validateChangeTraceability` reports an oracle no task references.
-    oracleRefs: options.oracles.map((entry) => entry.document.id),
-    // The project's own verification command when the interview recorded one.
-    // `legion validate` alone is a tautology — it checks the artifacts this
-    // command just wrote, not the code the task changed.
-    verification: phaseVerification(options),
-    risk: phaseRiskProfile(options.phase, options.enforcement?.risk),
-    approvals: [],
-    completion: {
-      expectedArtifacts: [options.change.reference],
-      requiredEvidence: ["legion validate verification output"],
-      blockedConditions: ["Build evidence is missing or fails oracle review."],
-      diffReconciliation: { required: true, allowUnlistedReads: true }
-    }
-  });
+  const units = taskUnits(options);
+  // The figure the interview recorded, unchanged. The prompts ask what a
+  // *single task* may change — "Small numbers force decomposition, which is the
+  // point" — so dividing it across decomposed tasks tightens a limit the
+  // operator already set per task, and blocks compliant work at a boundary they
+  // never chose. Decomposition is what the budget is for, not something to
+  // charge them for.
+  const budget = options.enforcement?.budget ?? budgetForWriteScope(["."]);
+
+  const tasks = units.map((unit) =>
+    taskContractSchema.parse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "task-contract",
+      id: unit.contractId,
+      projectId: options.project.id,
+      changeId: ids.changeId,
+      revision: 1,
+      title: unit.title,
+      objective: unit.objective,
+      // The requirement the interview wrote, so the contract traces to something
+      // the operator actually agreed to rather than to a stub minted from the
+      // phase heading.
+      requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
+      wave: "A",
+      // Bundle IDs from bundles/index.json. An agent with no worker bundle
+      // cannot be dispatched, so these must name real bundles.
+      agents: ["implementer"],
+      // Independent by construction: each task proves a different criterion of
+      // the same requirement, and nothing in the criteria states an order.
+      // Asserting a chain the operator did not describe would serialize work
+      // that can run together.
+      dependencies: [],
+      context: {
+        specRefs: [],
+        designRefs: [designRevision.artifact],
+        predecessorArtifacts: artifactInputs.map((entry) => entry.artifact)
+      },
+      scope: {
+        read: [options.change.artifactPath, ...options.oracles.map((entry) => entry.artifactPath)],
+        // This task's objective is to implement the phase, so its write scope has
+        // to be the implementation surface. It previously listed only the
+        // taskgraph artifact, which made the contract impossible to satisfy: any
+        // source edit was an out-of-scope write and every real build blocked. The
+        // test suite could not see it because the `fake` executor writes nothing.
+        //
+        // Still repository-wide with a finite budget. Decomposing by criterion
+        // does not tell the CLI which files a criterion touches, and the plan's
+        // answer for that — an executor proposing scope in a planning mode, the
+        // CLI validating it, the human confirming — is separate work. Narrowing
+        // by guesswork would block real builds on a boundary nobody drew.
+        write: ["."],
+        // `.legion/project` holds the control artifacts `review` and `ship`
+        // reload after the executor runs, so a contract must not let the party it
+        // constrains rewrite them. Harness run artifacts share the prefix but are
+        // excluded from attribution before the forbidden check.
+        forbidden: [".git", "node_modules", ".legion/project", ".legion/var/runtime.sqlite"],
+        sequentialFiles: [],
+        // The operator's chosen blast radius, divided across the tasks that
+        // share it. A budget that is asked for and then ignored is worse than
+        // not asking: they believe a limit is in force and nothing enforces it.
+        budget
+      },
+      interfaces: {
+        consumes: [
+          {
+            name: "ChangeBundle",
+            description: "The phase change bundle created by legion plan."
+          },
+          {
+            name: "OracleArtifact",
+            description: "The acceptance oracle this task is decided by."
+          }
+        ],
+        produces: [
+          {
+            name: "BuildEvidence",
+            description: "Implementation and verification evidence for the planned phase."
+          }
+        ]
+      },
+      // The one oracle that decides this task. Every task naming every oracle
+      // would make each claim to prove criteria it does not run, and leave the
+      // evidence unable to say which criterion a given run decided.
+      oracleRefs: [unit.oracleId],
+      // The task's own criterion, plus the project's verification command as a
+      // regression check. `legion validate` alone is a tautology — it checks the
+      // artifacts this command just wrote, not the code the task changed.
+      verification: phaseVerification(options, unit.criteria),
+      risk: phaseRiskProfile(options.phase, options.enforcement?.risk),
+      approvals: [],
+      completion: {
+        expectedArtifacts: [options.change.reference],
+        requiredEvidence: ["legion validate verification output"],
+        blockedConditions: ["Build evidence is missing or fails oracle review."],
+        diffReconciliation: { required: true, allowUnlistedReads: true }
+      }
+    })
+  );
 
   return {
     repositoryRoot: options.repositoryRoot,
     changeId: ids.changeId,
-    tasks: [task],
+    tasks,
     artifactInputs,
     baseGitSha: options.baseGitSha
   };

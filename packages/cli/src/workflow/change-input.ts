@@ -75,27 +75,59 @@ function suffixWithRoom(suffix: string, tail: string): string {
 }
 
 /**
- * The oracle IDs a phase will produce, in write order.
+ * Which oracle decides which criterion, and the phase's inspection oracle.
  *
- * The single source of truth for both sides: `oracle-input` writes these, and
- * the change bundle's `acceptance.oracleRefs` names them. Computing them twice
- * is what let the bundle reference `orc_<phase>` after that oracle stopped
- * being written for a requirement decided entirely by commands — a reference to
- * an artifact that does not exist, which archive reports as
- * `missing_oracle_artifact` and refuses.
+ * The single source of truth for every side: `oracle-input` writes these,
+ * `taskgraph-input` binds each task to one, and the change bundle's
+ * `acceptance.oracleRefs` names them all. Computing them twice is what let the
+ * bundle reference `orc_<phase>` after that oracle stopped being written for a
+ * requirement decided entirely by commands — a reference to an artifact that
+ * does not exist, which archive reports as `missing_oracle_artifact`.
+ *
+ * Keyed by criterion ID rather than by position. Three call sites agreeing to
+ * iterate in the same order is a covenant, not a contract: reordering one side
+ * would silently bind a criterion to another criterion's oracle, and a test that
+ * checks the *set* of references still passes. Criterion IDs are unique within a
+ * requirement, so the mapping cannot be ambiguous.
  */
-export function phaseOracleIds(phase: PhaseSource, requirement?: Requirement): readonly OracleId[] {
+export interface PhaseOracleAssignment {
+  readonly byCriterionId: ReadonlyMap<string, OracleId>;
+  /** Absent when every criterion is executable, so no reviewer decides anything. */
+  readonly inspectionOracleId: OracleId | undefined;
+  /** Every oracle the phase writes, in write order. */
+  readonly all: readonly OracleId[];
+}
+
+export function phaseOracleAssignment(
+  phase: PhaseSource,
+  requirement?: Requirement
+): PhaseOracleAssignment {
   const ids = phasePlanIds(phase);
-  if (requirement === undefined) return [ids.oracleId];
+  if (requirement === undefined) {
+    return { byCriterionId: new Map(), inspectionOracleId: ids.oracleId, all: [ids.oracleId] };
+  }
 
   const { executable, manual } = partitionCriteria(requirement);
-  const criterionIds = executable.map((_criterion, index) =>
-    formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
-  ) as readonly OracleId[];
+  const byCriterionId = new Map<string, OracleId>(
+    executable.map((criterion, index) => [
+      criterion.id,
+      formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`)) as OracleId
+    ])
+  );
 
-  return manual.length === 0 && criterionIds.length > 0
-    ? criterionIds
-    : [...criterionIds, ids.oracleId];
+  const criterionIds = [...byCriterionId.values()];
+  const inspectionOracleId =
+    manual.length === 0 && criterionIds.length > 0 ? undefined : ids.oracleId;
+
+  return {
+    byCriterionId,
+    inspectionOracleId,
+    all: inspectionOracleId === undefined ? criterionIds : [...criterionIds, inspectionOracleId]
+  };
+}
+
+export function phaseOracleIds(phase: PhaseSource, requirement?: Requirement): readonly OracleId[] {
+  return phaseOracleAssignment(phase, requirement).all;
 }
 
 export function phasePlanIds(phase: PhaseSource): PhasePlanIds {

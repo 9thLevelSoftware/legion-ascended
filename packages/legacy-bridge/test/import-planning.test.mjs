@@ -125,6 +125,21 @@ test("P02-T08 dry-run stages deterministic v9 artifacts without mutating legacy 
       mapping.classification === "direct"
     ));
     assert.ok(report.uncertainties.some((uncertainty) => uncertainty.code === "operational_state_not_authoritative"));
+
+    // The report is what an operator reads before applying, so the fact that
+    // every imported requirement arrives without an acceptance criterion has to
+    // be visible there. Recording it only inside the requirement is a footnote
+    // in a file nobody opens until after they have accepted the import.
+    const unproven = report.uncertainties.find(
+      (uncertainty) => uncertainty.code === "imported_requirements_lack_acceptance_criteria"
+    );
+    assert.ok(unproven, JSON.stringify(report.uncertainties.map((entry) => entry.code)));
+    assert.match(unproven.message, /DSC-01/, unproven.message);
+
+    // Flagged, not blocked. Every legacy `.planning` requirement is a prose
+    // checklist, so blocking on this would refuse every import the importer
+    // exists to perform.
+    assert.equal(unproven.blocksAutomaticAcceptance, false);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

@@ -153,8 +153,10 @@ test("the oracle covers the interview's real acceptance criteria", async (t) => 
 
 test("an executable criterion becomes task verification", async (t) => {
   const { taskgraph } = await plannedProject(t);
-  const commands = taskgraph.tasks[0].verification.map(
-    (entry) => `${entry.command} ${entry.args.join(" ")}`.trim()
+  // Across tasks, not `tasks[0]`: the graph is written in ID order, so which
+  // task lands first is an artifact of sorting rather than of decomposition.
+  const commands = taskgraph.tasks.flatMap((task) =>
+    task.verification.map((entry) => `${entry.command} ${entry.args.join(" ")}`.trim())
   );
 
   // The criterion the operator said decides this requirement has to be the
@@ -164,6 +166,10 @@ test("an executable criterion becomes task verification", async (t) => {
     commands.some((entry) => entry === "pnpm test --filter resolver"),
     `expected the criterion command, got ${JSON.stringify(commands)}`
   );
+
+  // And it runs in exactly one task. A criterion repeated in every task reports
+  // the same proof several times, and fails a task that never touched it.
+  assert.equal(commands.filter((entry) => entry === "pnpm test --filter resolver").length, 1);
 });
 
 test("a manual criterion is carried as an unproven gap, not as a command", async (t) => {
@@ -857,4 +863,93 @@ test("a requirement decided entirely by judgement gets a primary oracle", async 
     ),
     ["primary"]
   );
+});
+
+test("a phase becomes one task per acceptance criterion", async (t) => {
+  const { taskgraph } = await plannedProject(t);
+
+  // One executable criterion and one manual one, so two tasks: the work the
+  // command decides and the work a reviewer decides. A single task covering
+  // both made the phase all-or-nothing and gave the evidence no way to say
+  // which criterion a run had actually satisfied.
+  assert.equal(taskgraph.tasks.length, 2, JSON.stringify(taskgraph.tasks.map((task) => task.id)));
+  assert.equal(new Set(taskgraph.tasks.map((task) => task.id)).size, 2);
+});
+
+test("each task is decided by exactly one oracle", async (t) => {
+  // Two executable criteria with different commands. With one, a criterion
+  // bound to the wrong oracle is indistinguishable from a correct binding, so
+  // the assertion below could not fail however wrong the code was.
+  const { taskgraph, oracles, oracleDocuments } = await plannedProject(t, {
+    ...ANSWERS,
+    "req-1-ac-2-proof": "executable",
+    "req-1-ac-2-detail": "pnpm test --filter reporter",
+    "req-1-ac-2-more": "true",
+    "req-1-ac-3-statement": "A stale mapping is rejected",
+    "req-1-ac-3-proof": "manual",
+    "req-1-ac-3-detail": "Staleness is a judgement call that no assertion should freeze.",
+    "req-1-ac-3-more": "false"
+  });
+
+  const refs = taskgraph.tasks.flatMap((task) => task.oracleRefs);
+  for (const task of taskgraph.tasks) {
+    assert.equal(task.oracleRefs.length, 1, `${task.id} names ${task.oracleRefs.length} oracles`);
+  }
+
+  // Every oracle still covered, and none of them twice. Coverage and exclusivity
+  // are different properties, and the previous shape had the first without the
+  // second: every task named every oracle.
+  assert.deepEqual([...refs].sort(), oracles.map((entry) => entry.oracleId).sort());
+
+  // And bound to the *right* one. Comparing the set of references would pass
+  // just as happily if two criteria swapped oracles, so this checks that the
+  // task running a criterion's command is decided by the oracle carrying that
+  // same command — the only pairing that means anything.
+  const executableOracles = new Map(
+    oracleDocuments
+      .filter((document) => document.type === "executable")
+      .map((document) => [document.id, `${document.execution.command} ${document.execution.args.join(" ")}`.trim()])
+  );
+  assert.ok(executableOracles.size > 0, "there must be an executable oracle to bind");
+
+  for (const task of taskgraph.tasks) {
+    const oracleCommand = executableOracles.get(task.oracleRefs[0]);
+    if (oracleCommand === undefined) continue;
+    const taskCommands = task.verification.map(
+      (entry) => `${entry.command} ${entry.args.join(" ")}`.trim()
+    );
+    assert.ok(
+      taskCommands.includes(oracleCommand),
+      `${task.id} is decided by an oracle running ${oracleCommand}, but runs ${JSON.stringify(taskCommands)}`
+    );
+  }
+});
+
+test("each task carries the per-task budget the interview recorded", async (t) => {
+  const { taskgraph } = await plannedProject(t);
+
+  // The intake prompts ask what a *single task* may change, and the help says
+  // "Small numbers force decomposition, which is the point". Dividing 12 files
+  // across two tasks would tighten a limit the operator already set per task and
+  // block compliant work at a boundary they never chose.
+  for (const task of taskgraph.tasks) {
+    assert.deepEqual(
+      task.scope.budget,
+      { maxFilesChanged: 12, maxLinesChanged: 600, maxNewFiles: 4 },
+      `${task.id} carries ${JSON.stringify(task.scope.budget)}`
+    );
+  }
+});
+
+test("a requirement decided entirely by judgement plans one task", async (t) => {
+  // Nothing to split: no criterion carries a command, so there is one piece of
+  // work and one reviewer deciding it. Inventing more from the phase heading
+  // would be the fabrication the protocol revision exists to prevent.
+  const { taskgraph } = await plannedProject(t, {
+    ...ANSWERS,
+    "req-1-ac-1-proof": "manual",
+    "req-1-ac-1-detail": "Loudness is a judgement call that no assertion should freeze."
+  });
+
+  assert.equal(taskgraph.tasks.length, 1, JSON.stringify(taskgraph.tasks.map((task) => task.id)));
 });

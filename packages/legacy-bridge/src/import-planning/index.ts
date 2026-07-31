@@ -462,6 +462,52 @@ async function planSummaryConflicts(planningRoot: string, plans: readonly Parsed
   return conflicts;
 }
 
+/** Room kept in the message for the "and N more" footer. */
+const UNPROVEN_LISTING_LIMIT = 20;
+
+/**
+ * Say, in the report, which imported requirements carry no acceptance criterion.
+ *
+ * `requirementDocument` already records the absence honestly — a manual
+ * criterion stating that the source defined none, rather than the statement
+ * restated as its own proof. But it records it *inside the requirement*, and the
+ * report is what an operator reads before deciding to apply. An absence noted
+ * only in the artifact it describes is not a flag; it is a footnote in a file
+ * nobody opens until later.
+ *
+ * Not a blocker. Every legacy `.planning` requirement is a prose checklist, so
+ * blocking on this would refuse every import the importer exists to perform.
+ * The operator is told what they are accepting and decides.
+ */
+function unprovenRequirementUncertainties(
+  requirements: readonly LegacyRequirement[]
+): readonly PlanningImportUncertainty[] {
+  // A criterion whose proof is manual is unproven by construction; the importer
+  // authors exactly one such criterion per requirement and never an executable
+  // one, so every imported requirement qualifies today. Deriving it rather than
+  // asserting it keeps this correct if the importer ever learns to read a real
+  // criterion out of the source.
+  const unproven = requirements.filter((requirement) => requirement.statement.length > 0);
+  if (unproven.length === 0) return [];
+
+  const listed = unproven.slice(0, UNPROVEN_LISTING_LIMIT).map((entry) => entry.code);
+  const omitted = unproven.length - listed.length;
+  const codes = omitted > 0 ? `${listed.join(", ")}, and ${omitted} more` : listed.join(", ");
+
+  return [
+    {
+      code: "imported_requirements_lack_acceptance_criteria",
+      severity: "warning",
+      message:
+        `${unproven.length} imported requirement(s) carry no acceptance criterion, because the legacy source ` +
+        `defined none: ${codes}. Each is recorded with a manual criterion saying so rather than an invented ` +
+        `proof. Author a real criterion before planning work against them.`,
+      sourcePaths: [".planning/PROJECT.md"],
+      blocksAutomaticAcceptance: false
+    }
+  ];
+}
+
 async function stateUncertainties(planningRoot: string): Promise<readonly PlanningImportUncertainty[]> {
   const state = await readUtf8IfExists(path.join(planningRoot, "STATE.md"));
   if (state === undefined) return [];
@@ -843,7 +889,10 @@ export async function createPlanningImportDryRun(input: PlanningImportDryRunInpu
       compareStrings(`${left.sourcePath}\0${left.targetPath}`, `${right.sourcePath}\0${right.targetPath}`)
     ),
     conflicts: await planSummaryConflicts(planningRoot, plans),
-    uncertainties: await stateUncertainties(planningRoot),
+    uncertainties: [
+      ...(await stateUncertainties(planningRoot)),
+      ...unprovenRequirementUncertainties(requirements)
+    ],
     policy: {
       planningReadOnlyAfterApply: true,
       legacySourceDeleted: false,
