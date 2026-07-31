@@ -199,6 +199,10 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     },
     human: [
       "Ship ready.",
+      // Shown, not only recorded. `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload was invisible to
+      // exactly the operator who opted into the allowance.
+      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...(unevaluable.length === 0
         ? []

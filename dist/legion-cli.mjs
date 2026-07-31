@@ -35183,6 +35183,10 @@ async function handleShipWorkflow(context) {
     },
     human: [
       "Ship ready.",
+      // Shown, not only recorded. `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload was invisible to
+      // exactly the operator who opted into the allowance.
+      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...unevaluable.length === 0 ? [] : [
         `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,

@@ -202,6 +202,12 @@ test("a change built before evidence linking can still ship", async (t) => {
     `the unlinked evidence should be reported: ${JSON.stringify(payload.warnings)}`
   );
 
+  // And visible without --json, which is how the operator who opted in will run
+  // it. A warning only in the payload is invisible to exactly that person.
+  const human = await run("ship", "--allow-legacy-evidence");
+  assert.equal(human.exitCode, 0, human.stderr);
+  assert.match(human.stdout, /predates requirement and oracle linking/i);
+
   // Archive has to agree. Tolerating this in ship alone leaves an upgraded
   // repository between two gates that disagree about the same evidence: ready
   // here, refused there, with nothing the operator can do about it.
