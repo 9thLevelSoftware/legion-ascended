@@ -15,6 +15,7 @@ import {
 } from "@legion/protocol";
 
 import type { RequirementSetEnforcement } from "./intake/finalize.js";
+import type { ResolvedPhaseRequirement } from "./phase-requirement.js";
 
 import { budgetForWriteScope } from "./budget.js";
 import { currentUtcTimestamp, phasePlanIds, phaseRiskProfile } from "./change-input.js";
@@ -29,12 +30,78 @@ export interface BuildTaskGraphInputOptions {
    * therefore chose no limits; the repository-wide fallback applies then.
    */
   readonly enforcement?: RequirementSetEnforcement;
+  /** The requirement this phase was rendered from, when the roadmap names one. */
+  readonly requirement?: ResolvedPhaseRequirement;
   readonly project: Project;
   readonly phase: PhaseSource;
   readonly change: ChangeBundleSuccess;
   readonly oracle: OracleArtifactSuccess;
   readonly baseGitSha: GitSha;
   readonly createdAt?: UtcTimestamp;
+}
+
+/**
+ * What the task has to run to be believed.
+ *
+ * The requirement's own executable criteria come first: they are what the
+ * operator said decides this requirement, and a task that verified only the
+ * project-wide command would prove nothing broke rather than that the
+ * requirement holds. The project command follows as a regression check.
+ *
+ * Manual criteria are deliberately absent — they cannot be run, and inventing a
+ * command for one would be the fabrication protocol 0.2.0 exists to prevent.
+ * The oracle names them for a reviewer instead.
+ *
+ * Exported for direct testing: the intake graph pins every criterion to exit 0,
+ * so the case where a criterion and the project command differ only in expected
+ * exit code is unreachable through an interview and can only be exercised here.
+ * A test that drove this through intake would pass whether or not the exit code
+ * were part of the identity, which is no test at all.
+ */
+export interface TaskVerification {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly expectedExitCode: number;
+  readonly timeoutMs: number;
+}
+
+export function phaseVerification(options: BuildTaskGraphInputOptions): readonly TaskVerification[] {
+  // `executable` is narrowed by `partition`, so no runtime re-check is needed.
+  const criteria = (options.requirement?.executable ?? []).map((criterion) => ({
+    command: criterion.proof.command,
+    args: [...criterion.proof.args],
+    expectedExitCode: criterion.proof.expectedExitCode,
+    timeoutMs: criterion.proof.timeoutMs ?? 600_000
+  }));
+
+  const project =
+    options.enforcement === undefined
+      ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 120_000 }
+      : {
+          command: options.enforcement.verification.command,
+          args: [...options.enforcement.verification.args],
+          expectedExitCode: 0,
+          timeoutMs: 600_000
+        };
+
+  // De-duplicated: an operator whose criterion command is also the project
+  // command should not have it run twice and reported as two proofs.
+  //
+  // The expected exit code is part of the identity. Without it, a criterion
+  // asserting `pnpm test` exits 1 would suppress the project check asserting it
+  // exits 0 — so a failing regression suite would satisfy the task, which is the
+  // opposite of what adding project verification was for.
+  // Keyed on the whole entry, not an enumerated subset of its fields.
+  //
+  // This key has now been wrong three times: it ignored the expected exit code,
+  // then flattened argument boundaries, then ignored the timeout — each a field
+  // the runner acts on that the identity had quietly excluded. Every fix added
+  // one more field and left the next one out. Two verification entries are the
+  // same proof exactly when they are the same entry, so that is what it compares.
+  const key = (entry: TaskVerification) =>
+    JSON.stringify({ ...entry, args: [...entry.args] }, Object.keys(entry).sort());
+  const seen = new Set(criteria.map(key));
+  return seen.has(key(project)) ? criteria : [...criteria, project];
 }
 
 export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteTaskGraphInput {
@@ -53,7 +120,10 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     revision: 1,
     title: `Build phase ${options.phase.number}: ${options.phase.name}`,
     objective: `Implement and verify phase ${options.phase.number}: ${options.phase.name}.`,
-    requirementIds: [ids.requirementId],
+    // The requirement the interview wrote, so the contract traces to something
+    // the operator actually agreed to rather than to a stub minted from the
+    // phase heading.
+    requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
     wave: "A",
     // Bundle IDs from bundles/index.json. An agent with no worker bundle
     // cannot be dispatched, so these must name real bundles.
@@ -110,16 +180,7 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
     // The project's own verification command when the interview recorded one.
     // `legion validate` alone is a tautology — it checks the artifacts this
     // command just wrote, not the code the task changed.
-    verification: [
-      options.enforcement === undefined
-        ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 120_000 }
-        : {
-            command: options.enforcement.verification.command,
-            args: [...options.enforcement.verification.args],
-            expectedExitCode: 0,
-            timeoutMs: 600_000
-          }
-    ],
+    verification: phaseVerification(options),
     risk: phaseRiskProfile(options.phase, options.enforcement?.risk),
     approvals: [],
     completion: {

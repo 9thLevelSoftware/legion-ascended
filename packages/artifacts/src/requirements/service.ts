@@ -68,8 +68,24 @@ export function computeRequirementSetHash(requirements: readonly Requirement[]):
   return contentHashSchema.parse(`sha256:${digest.digest("hex")}`);
 }
 
+/**
+ * Hash a requirement file's *content*, not its bytes.
+ *
+ * Line endings are normalized first. `core.autocrlf=true` is the Windows default,
+ * so a fresh clone rewrites these LF files to CRLF and every recorded hash stops
+ * matching — which, once planning began enforcing drift, blocked every plan on an
+ * otherwise untouched project. A `.gitattributes` rule would fix the checkout but
+ * not the projects Legion generates into, and the hash is answering "has the
+ * content changed", to which a line-ending conversion is a no.
+ *
+ * `computeRequirementSetHash` already canonicalizes rather than hashing bytes,
+ * so this makes the two consistent.
+ */
 function hashBytes(bytes: string): ContentHash {
-  return contentHashSchema.parse(`sha256:${createHash("sha256").update(bytes, "utf8").digest("hex")}`);
+  const normalized = bytes.replace(/\r\n/g, "\n");
+  return contentHashSchema.parse(
+    `sha256:${createHash("sha256").update(normalized, "utf8").digest("hex")}`
+  );
 }
 
 /**
@@ -313,9 +329,18 @@ export interface RequirementSetDrift {
  * and removal, which no per-file check can see.
  */
 export async function verifyRequirementSet(
-  repositoryRoot: string
+  repositoryRoot: string,
+  /**
+   * An already-read set to validate, instead of reading again.
+   *
+   * Verifying one read and consuming another is not verification: a requirement
+   * drifted at read time and restored before the check would be approved, while
+   * the untrusted content is what planning copies into the task contract. The
+   * caller passes the snapshot it will actually use.
+   */
+  snapshot?: ReadRequirementSetResult
 ): Promise<readonly RequirementSetDrift[]> {
-  const read = await readRequirementSet(repositoryRoot);
+  const read = snapshot ?? (await readRequirementSet(repositoryRoot));
   if (!read.ok) {
     if (read.status === "not_found") return [];
     return [{ code: "requirement_set_drift", message: read.reason }];

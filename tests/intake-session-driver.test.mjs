@@ -1008,9 +1008,16 @@ test("the enforcement answers reach the generated task contract", async (t) => {
   });
 
   // `legion validate` alone is a tautology: it checks the artifacts plan just
-  // wrote, not the code the task changes.
-  assert.equal(task.verification[0].command, "pnpm");
-  assert.deepEqual(task.verification[0].args, ["run", "verify", "--strict"]);
+  // wrote, not the code the task changes. The project command is present, but no
+  // longer first — the requirement's own executable criteria run ahead of it,
+  // because those decide the requirement while this only decides that nothing
+  // else broke.
+  const commands = task.verification.map((entry) => `${entry.command} ${entry.args.join(" ")}`);
+  assert.ok(
+    commands.includes("pnpm run verify --strict"),
+    `expected the project command, got ${JSON.stringify(commands)}`
+  );
+  assert.equal(commands[0], "pnpm test --filter resolver", "criterion proofs run first");
 });
 
 test("a project with no interview still plans on repository defaults", async (t) => {
