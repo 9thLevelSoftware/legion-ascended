@@ -519,3 +519,64 @@ test("a taskgraph replaced by a directory is reported, not thrown", async (t) =>
     `expected taskgraph_unreadable, got ${codes.join(", ")}`
   );
 });
+
+test("a corrupt current spec is reported even with no changes", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // Current specs were read inside the per-change loop, so a project with no
+  // changes never read them at all and a corrupt committed spec went unreported.
+  await rm(path.join(root, ".legion/project/changes"), { recursive: true, force: true });
+  const specs = await readdir(path.join(root, ".legion/project/specs"));
+  await writeFile(path.join(root, ".legion/project/specs", specs[0]), "not a spec\n", "utf8");
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1, "a corrupt spec must be reported with zero changes");
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("current_spec_invalid"),
+    `expected current_spec_invalid, got ${codes.join(", ")}`
+  );
+});
+
+test("an unreadable change bundle is reported, not thrown", async (t) => {
+  const { root, run } = await plannedProject(t);
+
+  // `loadChangeBundle` rethrows a non-ENOENT filesystem error from the artifact
+  // reader, which aborted `legion validate --json` rather than returning its
+  // payload.
+  const changeId = (await readdir(path.join(root, ".legion/project/changes")))[0];
+  const changePath = path.join(root, ".legion/project/changes", changeId, "change.yaml");
+  await rm(changePath, { force: true });
+  await mkdir(changePath, { recursive: true });
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  assert.doesNotMatch(validated.stderr, /EISDIR|Unhandled/);
+  assert.ok(parseJsonOutput(validated).diagnostics.length > 0);
+});
+
+test("an unreadable oracle is reported, not thrown", async (t) => {
+  const { root, run, readTaskgraph } = await plannedProject(t);
+
+  const taskgraph = await readTaskgraph();
+  const changeId = taskgraph.tasks[0].changeId;
+  const oracleId = taskgraph.tasks[0].oracleRefs[0];
+  const oraclePath = path.join(
+    root,
+    ".legion/project/changes",
+    changeId,
+    "oracle",
+    `${oracleId}.yaml`
+  );
+  await rm(oraclePath, { force: true });
+  await mkdir(oraclePath, { recursive: true });
+
+  const validated = await run("validate", "--json");
+  assert.equal(validated.exitCode, 1);
+  assert.doesNotMatch(validated.stderr, /EISDIR|Unhandled/);
+  const codes = parseJsonOutput(validated).diagnostics.map((entry) => entry.code);
+  assert.ok(
+    codes.includes("task_oracle_unresolved"),
+    `expected task_oracle_unresolved, got ${codes.join(", ")}`
+  );
+});

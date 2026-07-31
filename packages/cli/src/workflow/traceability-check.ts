@@ -65,45 +65,58 @@ function taskgraphArtifactPath(changeId: string): string {
   return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
 
-class ScanFailure extends Error {
-  public constructor(
-    public readonly root: string,
-    message: string
-  ) {
-    super(message);
-  }
-}
-
 /**
- * Read a directory, distinguishing "absent" from "unreadable".
+ * Every artifact read in this module goes through here.
  *
- * Shared by every directory this module scans. Guarding the changes root and
- * leaving the specs root unguarded was the same defect one directory over: an
- * unreadable specs root threw out of `legion validate` entirely instead of
- * producing a diagnostic, and a third scan added later would have repeated it.
+ * Four review rounds on this file were all the same defect: a read that fails is
+ * not a read that returns nothing. Each round I fixed the call sites named and
+ * left the others — the changes root, then the specs root, then three service
+ * results, and still `loadChangeBundle` and `readOracleArtifact` could throw a
+ * non-ENOENT filesystem error straight out of `legion validate --json`.
+ *
+ * Last round I wrote that "every read either contributes its result or
+ * contributes a diagnostic, and none escape". That was an invariant I stated and
+ * did not enforce, because enforcement was still a thing to remember at each
+ * call site. This makes it structural: the raw functions are not called
+ * directly, so a new read cannot forget.
+ *
+ * `absent` distinguishes "there is nothing here", which is ordinary, from "there
+ * is something here I could not read", which is a finding.
  */
-async function scan<T>(root: string, read: () => Promise<T>, empty: T): Promise<T> {
+type GuardedRead<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly diagnostic: TraceabilityDiagnostic }
+  | { readonly ok: "absent" };
+
+async function guarded<T>(
+  artifactPath: string,
+  code: TraceabilityDiagnostic["code"],
+  read: () => Promise<T>
+): Promise<GuardedRead<T>> {
   try {
-    return await read();
+    return { ok: true, value: await read() };
   } catch (error) {
     if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return empty;
+      return { ok: "absent" };
     }
-    throw new ScanFailure(root, error instanceof Error ? error.message : String(error));
+    return {
+      ok: false,
+      diagnostic: {
+        code,
+        message: `${artifactPath} could not be read, so it was not checked: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        source: { path: artifactPath }
+      }
+    };
   }
 }
 
-async function changeIds(repositoryRoot: string): Promise<readonly string[]> {
-  return scan(
-    CHANGES_ROOT,
-    async () => {
-      const entries = await readdir(path.join(repositoryRoot, CHANGES_ROOT), {
-        withFileTypes: true
-      });
-      return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-    },
-    []
-  );
+async function changeIds(repositoryRoot: string): Promise<GuardedRead<readonly string[]>> {
+  return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
+    const entries = await readdir(path.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  });
 }
 
 /**
@@ -134,45 +147,23 @@ export async function resolvableRequirementIds(
   const diagnostics: TraceabilityDiagnostic[] = [];
   if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
 
-  let specs: Awaited<ReturnType<typeof listCurrentSpecs>>;
-  try {
-    specs = await scan(
-      CURRENT_SPECS_ROOT,
-      () => listCurrentSpecs({ repositoryRoot }),
-      { ok: true, status: "read", documents: [], index: undefined, diagnostics: [] } as never
-    );
-  } catch (error) {
-    if (!(error instanceof ScanFailure)) throw error;
-    return { ids, diagnostics: [scanDiagnostic(error)] };
-  }
+  const change = await guarded(
+    `${CHANGES_ROOT}/${changeId}`,
+    "change_bundle_invalid",
+    () => loadChangeBundle({ repositoryRoot, changeId })
+  );
+  if (change.ok === false) return { ids, diagnostics: [change.diagnostic] };
+  if (change.ok === "absent") return { ids, diagnostics };
 
-  if (specs.ok) {
-    for (const document of specs.documents) {
-      for (const requirement of document.requirements) ids.add(requirement.id);
-    }
-  } else {
-    // A schema-invalid or duplicate-ID spec is a corrupted committed artifact.
-    // Discarding the failure let validation pass whenever the same IDs happened
-    // to resolve from the intake set.
-    for (const diagnostic of specs.diagnostics) {
-      diagnostics.push({
-        code: "current_spec_invalid",
-        message: `A current spec could not be used: ${diagnostic.message}`,
-        source: { path: diagnostic.source?.path ?? CURRENT_SPECS_ROOT }
-      });
-    }
-  }
-
-  const change = await loadChangeBundle({ repositoryRoot, changeId });
-  if (change.ok) {
+  if (change.value.ok) {
     // An `add` delta proposes a requirement that exists only under this change
     // until it ships. Scoped to the owning change, because that is all the
     // archive-time loader sees.
-    for (const delta of change.deltaSpecs) {
+    for (const delta of change.value.deltaSpecs) {
       if (delta.proposedRequirement !== undefined) ids.add(delta.proposedRequirement.id);
     }
   } else {
-    for (const diagnostic of change.diagnostics) {
+    for (const diagnostic of change.value.diagnostics) {
       diagnostics.push({
         code: "change_bundle_invalid",
         message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic.message}`,
@@ -205,11 +196,41 @@ function budgetExceeds(
   return over;
 }
 
-function scanDiagnostic(error: ScanFailure): TraceabilityDiagnostic {
+/**
+ * Current-spec requirements, and any reason they could not be read.
+ *
+ * Read once per run rather than per change: a project with no changes never
+ * entered the loop, so a corrupt committed spec went unreported and both
+ * `validate` and `doctor` reported success.
+ */
+async function currentSpecRequirements(
+  repositoryRoot: string
+): Promise<{ readonly ids: ReadonlySet<string>; readonly diagnostics: readonly TraceabilityDiagnostic[] }> {
+  const ids = new Set<string>();
+  const specs = await guarded(CURRENT_SPECS_ROOT, "artifact_root_unreadable", () =>
+    listCurrentSpecs({ repositoryRoot })
+  );
+
+  if (specs.ok === false) return { ids, diagnostics: [specs.diagnostic] };
+  if (specs.ok === "absent") return { ids, diagnostics: [] };
+
+  if (specs.value.ok) {
+    for (const document of specs.value.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+    return { ids, diagnostics: [] };
+  }
+
+  // A schema-invalid or duplicate-ID spec is a corrupted committed artifact.
+  // Discarding the failure let validation pass whenever the same IDs happened to
+  // resolve from the intake set.
   return {
-    code: "artifact_root_unreadable",
-    message: `${error.root} could not be read, so its contents were not checked: ${error.message}`,
-    source: { path: error.root }
+    ids,
+    diagnostics: specs.value.diagnostics.map((diagnostic) => ({
+      code: "current_spec_invalid" as const,
+      message: `A current spec could not be used: ${diagnostic.message}`,
+      source: { path: diagnostic.source?.path ?? CURRENT_SPECS_ROOT }
+    }))
   };
 }
 
@@ -227,36 +248,30 @@ export async function checkTraceability(repositoryRoot: string): Promise<Traceab
   const diagnostics: TraceabilityDiagnostic[] = [];
   const covered = new Set<string>();
 
-  let changes: readonly string[];
-  try {
-    changes = await changeIds(repositoryRoot);
-  } catch (error) {
-    if (!(error instanceof ScanFailure)) throw error;
-    return { diagnostics: [scanDiagnostic(error)], coverage: empty };
-  }
+  const specs = await currentSpecRequirements(repositoryRoot);
+  diagnostics.push(...specs.diagnostics);
+
+  const scanned = await changeIds(repositoryRoot);
+  if (scanned.ok === false) return { diagnostics: [...diagnostics, scanned.diagnostic], coverage: empty };
+  const changes = scanned.ok === "absent" ? [] : scanned.value;
 
   for (const changeId of changes) {
     // Per change: a task may only name a requirement its own change proposes,
     // because that is all the archive-time loader will see.
     const resolved = await resolvableRequirementIds(repositoryRoot, set, changeId);
     diagnostics.push(...resolved.diagnostics);
-    const resolvable = resolved.ids;
+    const resolvable = new Set([...specs.ids, ...resolved.ids]);
 
     const artifactPath = taskgraphArtifactPath(changeId);
-    // `readTaskGraph` rethrows a non-ENOENT filesystem error, which aborted
-    // `legion validate --json` instead of returning its payload. A taskgraph
-    // replaced by a directory is a finding, not a crash.
-    let graph: Awaited<ReturnType<typeof readTaskGraph>>;
-    try {
-      graph = await readTaskGraph({ repositoryRoot, changeId });
-    } catch (error) {
-      diagnostics.push({
-        code: "taskgraph_unreadable",
-        message: `${artifactPath} could not be read: ${error instanceof Error ? error.message : String(error)}`,
-        source: { path: artifactPath }
-      });
+    const read = await guarded(artifactPath, "taskgraph_unreadable", () =>
+      readTaskGraph({ repositoryRoot, changeId })
+    );
+    if (read.ok === false) {
+      diagnostics.push(read.diagnostic);
       continue;
     }
+    if (read.ok === "absent") continue;
+    const graph = read.value;
 
     if (!graph.ok) {
       // `not_found` is an unplanned change, which is ordinary. Anything else is
@@ -292,8 +307,17 @@ export async function checkTraceability(repositoryRoot: string): Promise<Traceab
       // oracle count as present.
       const oracleCoverage = new Set<string>();
       for (const oracleId of task.oracleRefs) {
-        const oracle = await readOracleArtifact({ repositoryRoot, changeId, oracleId });
-        if (!oracle.ok || oracle.document.id !== oracleId) {
+        const read = await guarded(
+          `${CHANGES_ROOT}/${changeId}/oracle/${oracleId}`,
+          "task_oracle_unresolved",
+          () => readOracleArtifact({ repositoryRoot, changeId, oracleId })
+        );
+        if (read.ok === false) {
+          diagnostics.push(read.diagnostic);
+          continue;
+        }
+        const oracle = read.ok === "absent" ? undefined : read.value;
+        if (oracle === undefined || !oracle.ok || oracle.document.id !== oracleId) {
           diagnostics.push({
             code: "task_oracle_unresolved",
             message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,

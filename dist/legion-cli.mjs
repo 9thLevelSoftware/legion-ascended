@@ -32298,7 +32298,7 @@ async function executeTask(input) {
   }
   let verification = { passed: true };
   const adapter = adapterForKind(input.executor);
-  const guarded = await runGuardedExecution({
+  const guarded2 = await runGuardedExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
     // The same SHA the task-run manifest records, so evidence, snapshot and
@@ -32336,10 +32336,10 @@ async function executeTask(input) {
       });
     }
   });
-  const result = guarded.result;
+  const result = guarded2.result;
   const finishedAt = currentUtcTimestamp();
-  const reconciliation = guarded.reconciliation;
-  const inContract = guarded.inContract;
+  const reconciliation = guarded2.reconciliation;
+  const inContract = guarded2.inContract;
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -32378,7 +32378,7 @@ async function executeTask(input) {
       evidenceRefs: [evidenceId],
       error: !inContract ? {
         code: "diff_reconciliation_failed",
-        message: guarded.blockedReason ?? reconciliationSummary(reconciliation),
+        message: guarded2.blockedReason ?? reconciliationSummary(reconciliation),
         retryable: false
       } : !verification.passed ? {
         code: "verification_failed",
@@ -32420,7 +32420,7 @@ async function executeTask(input) {
         ...inContract ? [] : [
           {
             code: "diff_reconciliation_failed",
-            message: guarded.blockedReason ?? reconciliationSummary(reconciliation),
+            message: guarded2.blockedReason ?? reconciliationSummary(reconciliation),
             path: input.taskgraph.artifactPath
           }
         ],
@@ -33311,7 +33311,7 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
-  const guarded = await runGuardedExecution({
+  const guarded2 = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
     task,
     baseGitSha: resolveBaseGitSha(context.repositoryRoot),
@@ -33337,9 +33337,9 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
       redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
     })
   });
-  if (!guarded.inContract) {
+  if (!guarded2.inContract) {
     throw new AutoFixScopeError(
-      guarded.blockedReason ?? "The auto-fix run left the task contract."
+      guarded2.blockedReason ?? "The auto-fix run left the task contract."
     );
   }
 }
@@ -35104,69 +35104,46 @@ var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
   return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
 }
-var ScanFailure = class extends Error {
-  constructor(root, message) {
-    super(message);
-    this.root = root;
-  }
-};
-async function scan(root, read, empty) {
+async function guarded(artifactPath, code, read) {
   try {
-    return await read();
+    return { ok: true, value: await read() };
   } catch (error2) {
     if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
-      return empty;
+      return { ok: "absent" };
     }
-    throw new ScanFailure(root, error2 instanceof Error ? error2.message : String(error2));
+    return {
+      ok: false,
+      diagnostic: {
+        code,
+        message: `${artifactPath} could not be read, so it was not checked: ${error2 instanceof Error ? error2.message : String(error2)}`,
+        source: { path: artifactPath }
+      }
+    };
   }
 }
 async function changeIds(repositoryRoot) {
-  return scan(
-    CHANGES_ROOT,
-    async () => {
-      const entries = await readdir15(path41.join(repositoryRoot, CHANGES_ROOT), {
-        withFileTypes: true
-      });
-      return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-    },
-    []
-  );
+  return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
+    const entries = await readdir15(path41.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  });
 }
 async function resolvableRequirementIds(repositoryRoot, set, changeId) {
   const ids = /* @__PURE__ */ new Set();
   const diagnostics = [];
   if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
-  let specs;
-  try {
-    specs = await scan(
-      CURRENT_SPECS_ROOT,
-      () => listCurrentSpecs({ repositoryRoot }),
-      { ok: true, status: "read", documents: [], index: void 0, diagnostics: [] }
-    );
-  } catch (error2) {
-    if (!(error2 instanceof ScanFailure)) throw error2;
-    return { ids, diagnostics: [scanDiagnostic(error2)] };
-  }
-  if (specs.ok) {
-    for (const document of specs.documents) {
-      for (const requirement of document.requirements) ids.add(requirement.id);
-    }
-  } else {
-    for (const diagnostic3 of specs.diagnostics) {
-      diagnostics.push({
-        code: "current_spec_invalid",
-        message: `A current spec could not be used: ${diagnostic3.message}`,
-        source: { path: diagnostic3.source?.path ?? CURRENT_SPECS_ROOT }
-      });
-    }
-  }
-  const change = await loadChangeBundle({ repositoryRoot, changeId });
-  if (change.ok) {
-    for (const delta of change.deltaSpecs) {
+  const change = await guarded(
+    `${CHANGES_ROOT}/${changeId}`,
+    "change_bundle_invalid",
+    () => loadChangeBundle({ repositoryRoot, changeId })
+  );
+  if (change.ok === false) return { ids, diagnostics: [change.diagnostic] };
+  if (change.ok === "absent") return { ids, diagnostics };
+  if (change.value.ok) {
+    for (const delta of change.value.deltaSpecs) {
       if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
     }
   } else {
-    for (const diagnostic3 of change.diagnostics) {
+    for (const diagnostic3 of change.value.diagnostics) {
       diagnostics.push({
         code: "change_bundle_invalid",
         message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic3.message}`,
@@ -35186,11 +35163,28 @@ function budgetExceeds(taskBudget, policy) {
   }
   return over;
 }
-function scanDiagnostic(error2) {
+async function currentSpecRequirements(repositoryRoot) {
+  const ids = /* @__PURE__ */ new Set();
+  const specs = await guarded(
+    CURRENT_SPECS_ROOT,
+    "artifact_root_unreadable",
+    () => listCurrentSpecs({ repositoryRoot })
+  );
+  if (specs.ok === false) return { ids, diagnostics: [specs.diagnostic] };
+  if (specs.ok === "absent") return { ids, diagnostics: [] };
+  if (specs.value.ok) {
+    for (const document of specs.value.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+    return { ids, diagnostics: [] };
+  }
   return {
-    code: "artifact_root_unreadable",
-    message: `${error2.root} could not be read, so its contents were not checked: ${error2.message}`,
-    source: { path: error2.root }
+    ids,
+    diagnostics: specs.value.diagnostics.map((diagnostic3) => ({
+      code: "current_spec_invalid",
+      message: `A current spec could not be used: ${diagnostic3.message}`,
+      source: { path: diagnostic3.source?.path ?? CURRENT_SPECS_ROOT }
+    }))
   };
 }
 async function checkTraceability(repositoryRoot) {
@@ -35198,29 +35192,27 @@ async function checkTraceability(repositoryRoot) {
   const set = await readRequirementSet(repositoryRoot);
   const diagnostics = [];
   const covered = /* @__PURE__ */ new Set();
-  let changes;
-  try {
-    changes = await changeIds(repositoryRoot);
-  } catch (error2) {
-    if (!(error2 instanceof ScanFailure)) throw error2;
-    return { diagnostics: [scanDiagnostic(error2)], coverage: empty };
-  }
+  const specs = await currentSpecRequirements(repositoryRoot);
+  diagnostics.push(...specs.diagnostics);
+  const scanned = await changeIds(repositoryRoot);
+  if (scanned.ok === false) return { diagnostics: [...diagnostics, scanned.diagnostic], coverage: empty };
+  const changes = scanned.ok === "absent" ? [] : scanned.value;
   for (const changeId of changes) {
     const resolved = await resolvableRequirementIds(repositoryRoot, set, changeId);
     diagnostics.push(...resolved.diagnostics);
-    const resolvable = resolved.ids;
+    const resolvable = /* @__PURE__ */ new Set([...specs.ids, ...resolved.ids]);
     const artifactPath = taskgraphArtifactPath(changeId);
-    let graph;
-    try {
-      graph = await readTaskGraph({ repositoryRoot, changeId });
-    } catch (error2) {
-      diagnostics.push({
-        code: "taskgraph_unreadable",
-        message: `${artifactPath} could not be read: ${error2 instanceof Error ? error2.message : String(error2)}`,
-        source: { path: artifactPath }
-      });
+    const read = await guarded(
+      artifactPath,
+      "taskgraph_unreadable",
+      () => readTaskGraph({ repositoryRoot, changeId })
+    );
+    if (read.ok === false) {
+      diagnostics.push(read.diagnostic);
       continue;
     }
+    if (read.ok === "absent") continue;
+    const graph = read.value;
     if (!graph.ok) {
       if (graph.status === "not_found") continue;
       diagnostics.push({
@@ -35244,8 +35236,17 @@ async function checkTraceability(repositoryRoot) {
       }
       const oracleCoverage = /* @__PURE__ */ new Set();
       for (const oracleId of task.oracleRefs) {
-        const oracle = await readOracleArtifact({ repositoryRoot, changeId, oracleId });
-        if (!oracle.ok || oracle.document.id !== oracleId) {
+        const read2 = await guarded(
+          `${CHANGES_ROOT}/${changeId}/oracle/${oracleId}`,
+          "task_oracle_unresolved",
+          () => readOracleArtifact({ repositoryRoot, changeId, oracleId })
+        );
+        if (read2.ok === false) {
+          diagnostics.push(read2.diagnostic);
+          continue;
+        }
+        const oracle = read2.ok === "absent" ? void 0 : read2.value;
+        if (oracle === void 0 || !oracle.ok || oracle.document.id !== oracleId) {
           diagnostics.push({
             code: "task_oracle_unresolved",
             message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
