@@ -260,9 +260,10 @@ test("a specification defect is not sent to legion build", async (t) => {
 
   const shipped = await run("ship", "--json");
   assert.equal(shipped.exitCode, 1);
-  assert.doesNotMatch(
-    parseJsonOutput(shipped).nextAction.command,
-    /legion build/,
-    "rebuilding cannot repair a malformed oracle"
-  );
+
+  // Asserting only that it is not `legion build` would shrug if the action
+  // regressed to `legion validate` — the original defect that started this
+  // thread. The command has to be the one that repairs a specification defect,
+  // and it has to be runnable as printed.
+  assert.equal(parseJsonOutput(shipped).nextAction.command, "legion plan 1");
 });

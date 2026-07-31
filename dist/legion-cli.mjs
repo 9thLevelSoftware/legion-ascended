@@ -23830,10 +23830,12 @@ async function archive(context) {
   const changeId = context.args.positionals[0];
   if (changeId === void 0) return helpResult(CHANGE_HELP);
   const outputBranch = stringOption(context, "output-branch");
+  const allowLegacyEvidence = hasFlag(context, "allow-legacy-evidence");
   if (hasFlag(context, "dry-run")) {
     const result2 = await planAcceptedChangeArchive({
       repositoryRoot: context.repositoryRoot,
       changeId,
+      ...allowLegacyEvidence ? { allowLegacyEvidence } : {},
       ...outputBranch === void 0 ? {} : { outputBranch }
     });
     return fromServiceResult(result2, result2.ok ? "Archive plan created." : "Archive plan failed.");
@@ -23847,6 +23849,7 @@ async function archive(context) {
     changeId,
     archivedBy,
     archivedAt,
+    ...allowLegacyEvidence ? { allowLegacyEvidence } : {},
     ...outputBranch === void 0 ? {} : { outputBranch }
   };
   const result = await archiveAcceptedChange(input);
@@ -35061,7 +35064,7 @@ function recoveryFor(diagnostics) {
     );
   }
   return nextAction(
-    "legion plan",
+    "legion plan 1",
     "Requirement, oracle and task links must resolve before a change can ship; replanning the phase rewrites the artifacts that define them."
   );
 }

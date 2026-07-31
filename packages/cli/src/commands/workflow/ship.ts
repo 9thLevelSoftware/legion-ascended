@@ -33,8 +33,11 @@ function recoveryFor(diagnostics: readonly { readonly code: string }[]) {
   // Specification and oracle defects live in the planned artifacts, so replanning
   // the phase is what rewrites them. `legion validate` reports the state but
   // repairs nothing.
+  // `legion plan` alone is a usage error: the command parses a phase number from
+  // its first positional, so a recovery action without one cannot be run as
+  // printed.
   return nextAction(
-    "legion plan",
+    "legion plan 1",
     "Requirement, oracle and task links must resolve before a change can ship; replanning the phase rewrites the artifacts that define them."
   );
 }
