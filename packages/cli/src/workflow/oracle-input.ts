@@ -230,7 +230,12 @@ function inspectionOracle(options: BuildOracleInputOptions): CreateOracleArtifac
     requirementCoverage: [
       {
         requirementId: coveredRequirementId,
-        coverage: options.requirement === undefined ? "primary" : "partial",
+        // `partial` only when something else covers the rest. A requirement
+        // whose criteria are all manual has this as its sole oracle covering
+        // every one of them, and calling that partial would report the
+        // requirement as having no full coverage at all — the traceability
+        // artifact claiming a gap that does not exist.
+        coverage: (options.requirement?.executable.length ?? 0) === 0 ? "primary" : "partial",
         criteria:
           options.requirement === undefined
             ? [`Phase ${options.phase.number} acceptance criteria are satisfied.`]

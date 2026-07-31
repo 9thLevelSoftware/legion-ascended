@@ -841,3 +841,20 @@ test("a phase slug at the ID limit still derives criterion oracles", async (t) =
   // Truncation must not collapse two criteria onto one ID.
   assert.equal(new Set(oracles.map((entry) => entry.oracleId)).size, oracles.length);
 });
+
+test("a requirement decided entirely by judgement gets a primary oracle", async (t) => {
+  // Every criterion manual, so the inspection oracle is the only one and covers
+  // all of them. Calling that `partial` would report the requirement as having
+  // no full coverage — a gap in the traceability artifact that does not exist.
+  const answers = { ...ANSWERS, "req-1-ac-1-proof": "manual" };
+  answers["req-1-ac-1-detail"] = "Loudness is a judgement call that no assertion should freeze.";
+
+  const { oracleDocuments } = await plannedProject(t, answers);
+  assert.equal(oracleDocuments.length, 1, JSON.stringify(oracleDocuments.map((d) => d.type)));
+  assert.deepEqual(
+    oracleDocuments.flatMap((document) =>
+      document.requirementCoverage.map((entry) => entry.coverage)
+    ),
+    ["primary"]
+  );
+});
