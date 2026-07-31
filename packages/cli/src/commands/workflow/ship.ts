@@ -1,6 +1,7 @@
 import {
   listReviewDecisionsForChange,
   readEvidenceIndex,
+  isLegacyEvidenceDiagnostic,
   readTaskGraph,
   validateChangeTraceability
 } from "@legion/artifacts";
@@ -94,11 +95,9 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     // from the moment it is written, so this tolerance retires itself as changes
     // are rebuilt rather than needing a migration nobody would run.
     const blocking = traceability.diagnostics.filter(
-      (diagnostic) => diagnostic.code !== "orphan_evidence"
+      (diagnostic) => !isLegacyEvidenceDiagnostic(diagnostic)
     );
-    const legacyEvidence = traceability.diagnostics.filter(
-      (diagnostic) => diagnostic.code === "orphan_evidence"
-    );
+    const legacyEvidence = traceability.diagnostics.filter(isLegacyEvidenceDiagnostic);
 
     if (blocking.length > 0) {
       return blockedShip(
@@ -107,9 +106,13 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
           message: diagnostic.message,
           path: diagnostic.source?.path ?? taskgraph.artifactPath
         })),
+        // Not `legion validate`: its checks read task references and never open
+        // the evidence index, so it cannot report — let alone repair — an
+        // evidence-linkage failure. Rebuilding the task is what rewrites those
+        // links, so that is what the operator is pointed at.
         nextAction(
-          "legion validate",
-          "Requirement, oracle, task and evidence links must resolve before a change can ship."
+          "legion build",
+          "Requirement, oracle, task and evidence links must resolve before a change can ship; rebuilding the task rewrites them."
         )
       );
     }

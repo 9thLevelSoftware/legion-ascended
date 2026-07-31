@@ -189,6 +189,22 @@ test("a change built before evidence linking can still ship", async (t) => {
     payload.warnings?.some((entry) => entry.code === "legacy_evidence_unlinked"),
     `the unlinked evidence should be reported: ${JSON.stringify(payload.warnings)}`
   );
+
+  // Archive has to agree. Tolerating this in ship alone leaves an upgraded
+  // repository between two gates that disagree about the same evidence: ready
+  // here, refused there, with nothing the operator can do about it.
+  // Archive applies the same exception through `isLegacyEvidenceDiagnostic`,
+  // which both gates now share so they cannot diverge.
+  //
+  // That parity is deliberately not asserted end to end here. Archive checks
+  // worktree cleanliness, acceptance and bundle validity before it reaches
+  // traceability, so a fixture that gets that far needs more setup than this
+  // suite builds — and two earlier versions of an assertion here passed for
+  // those earlier failures rather than for the reason they named. A test that
+  // cannot fail for the right reason is worse than a stated gap.
+  const { isLegacyEvidenceDiagnostic } = await import("../packages/artifacts/dist/index.js");
+  assert.equal(isLegacyEvidenceDiagnostic({ code: "orphan_evidence" }), true);
+  assert.equal(isLegacyEvidenceDiagnostic({ code: "missing_requirement_oracle" }), false);
 });
 
 test("build still passes while a change is not yet accepted", async (t) => {

@@ -47,7 +47,10 @@ import {
   type CurrentSpecListSuccess
 } from "../specs/service.js";
 import { readTaskGraph, type TaskGraphSuccess } from "../taskgraphs/service.js";
-import { validateChangeTraceability } from "../traceability/service.js";
+import {
+  isLegacyEvidenceDiagnostic,
+  validateChangeTraceability
+} from "../traceability/service.js";
 import {
   ARCHIVE_SCHEMA_VERSION,
   archiveRecordSchema,
@@ -773,7 +776,17 @@ async function buildArchivePlan(input: PlanAcceptedChangeArchiveInput): Promise<
   if (!changeValidation.ok) return asArchiveFailure(changeValidation.status, changeValidation.diagnostics);
 
   const traceability = await validateChangeTraceability({ repositoryRoot: input.repositoryRoot, changeId });
-  if (!traceability.ok) return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", traceability.diagnostics);
+  if (!traceability.ok) {
+    // The same exception `legion ship` applies. Without it, ship reports ready
+    // and archive refuses the identical evidence, which leaves an upgraded
+    // repository stuck between two gates that disagree.
+    const blocking = traceability.diagnostics.filter(
+      (diagnostic) => !isLegacyEvidenceDiagnostic(diagnostic)
+    );
+    if (blocking.length > 0) {
+      return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", blocking);
+    }
+  }
 
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok) return asArchiveFailure(currentSpecs.status, currentSpecs.diagnostics);

@@ -22747,6 +22747,9 @@ async function loadTraceabilityArtifacts(input) {
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
+function isLegacyEvidenceDiagnostic(diagnostic3) {
+  return diagnostic3.code === "orphan_evidence";
+}
 async function validateChangeTraceability(input) {
   const changeId = parseChangeId8(input.changeId);
   if (typeof changeId !== "string")
@@ -23343,8 +23346,12 @@ async function buildArchivePlan(input) {
   if (!changeValidation.ok)
     return asArchiveFailure(changeValidation.status, changeValidation.diagnostics);
   const traceability = await validateChangeTraceability({ repositoryRoot: input.repositoryRoot, changeId });
-  if (!traceability.ok)
-    return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", traceability.diagnostics);
+  if (!traceability.ok) {
+    const blocking = traceability.diagnostics.filter((diagnostic3) => !isLegacyEvidenceDiagnostic(diagnostic3));
+    if (blocking.length > 0) {
+      return asArchiveFailure(traceability.status === "not_found" ? "not_found" : "invalid", blocking);
+    }
+  }
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok)
     return asArchiveFailure(currentSpecs.status, currentSpecs.diagnostics);
@@ -35040,11 +35047,9 @@ async function handleShipWorkflow(context) {
   });
   if (!traceability.ok) {
     const blocking = traceability.diagnostics.filter(
-      (diagnostic3) => diagnostic3.code !== "orphan_evidence"
+      (diagnostic3) => !isLegacyEvidenceDiagnostic(diagnostic3)
     );
-    const legacyEvidence = traceability.diagnostics.filter(
-      (diagnostic3) => diagnostic3.code === "orphan_evidence"
-    );
+    const legacyEvidence = traceability.diagnostics.filter(isLegacyEvidenceDiagnostic);
     if (blocking.length > 0) {
       return blockedShip(
         [...blocking, ...legacyEvidence].map((diagnostic3) => ({
@@ -35052,9 +35057,13 @@ async function handleShipWorkflow(context) {
           message: diagnostic3.message,
           path: diagnostic3.source?.path ?? taskgraph.artifactPath
         })),
+        // Not `legion validate`: its checks read task references and never open
+        // the evidence index, so it cannot report — let alone repair — an
+        // evidence-linkage failure. Rebuilding the task is what rewrites those
+        // links, so that is what the operator is pointed at.
         nextAction(
-          "legion validate",
-          "Requirement, oracle, task and evidence links must resolve before a change can ship."
+          "legion build",
+          "Requirement, oracle, task and evidence links must resolve before a change can ship; rebuilding the task rewrites them."
         )
       );
     }

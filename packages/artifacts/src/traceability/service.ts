@@ -1057,6 +1057,23 @@ async function loadTraceabilityArtifacts(input: {
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
 
+/**
+ * Diagnostics that describe an artifact written before this release rather than
+ * a change that is wrong.
+ *
+ * Evidence used to carry only a change reference, because nothing wrote
+ * requirement or oracle links. Every gate has to agree about that: a repository
+ * upgrading with an already-accepted change was otherwise told by `legion ship`
+ * that it was ready and by archive that it was not, for the identical evidence.
+ * Filtering in one caller and not the other is how two gates end up disagreeing.
+ *
+ * New evidence carries the links from the moment it is written, so this retires
+ * itself as changes are rebuilt rather than needing a migration nobody runs.
+ */
+export function isLegacyEvidenceDiagnostic(diagnostic: { readonly code: string }): boolean {
+  return diagnostic.code === "orphan_evidence";
+}
+
 export async function validateChangeTraceability(input: ValidateChangeTraceabilityInput): Promise<TraceabilityValidationResult> {
   const changeId = parseChangeId(input.changeId);
   if (typeof changeId !== "string") return changeId;
