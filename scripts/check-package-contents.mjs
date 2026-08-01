@@ -70,9 +70,11 @@ function isProtectedChecksumPath(filePath, prefixes = LEGACY_CHECKSUM_PREFIXES, 
 
 export function readNpmPackDryRun(filePath) {
   const raw = JSON.parse(readFileSync(filePath, "utf8"));
-  const pack = Array.isArray(raw) ? raw[0] : raw;
-  if (!pack || !Array.isArray(pack.files)) {
-    throw new TypeError(`${filePath} must be an npm pack --dry-run --json artifact.`);
+  const pack = selectPackReport(raw);
+  if (!pack) {
+    throw new TypeError(
+      `${filePath} must be an npm pack --dry-run --json artifact, but it was ${describePackShape(raw)}.`
+    );
   }
 
   return {
@@ -81,6 +83,40 @@ export function readNpmPackDryRun(filePath) {
     fileCount: pack.files.length,
     files: uniqueSorted(pack.files.map((entry) => entry.path))
   };
+}
+
+function hasFileList(candidate) {
+  return Boolean(candidate) && typeof candidate === "object" && Array.isArray(candidate.files);
+}
+
+/**
+ * `npm pack --dry-run --json` has reported three different top-level shapes:
+ * an array of reports (npm <=11), a bare report object, and — since npm 12 —
+ * an object keyed by package name. Accept all three so the gate does not break
+ * on an npm upgrade.
+ */
+export function selectPackReport(raw) {
+  if (Array.isArray(raw)) {
+    return raw.find(hasFileList) ?? undefined;
+  }
+  if (hasFileList(raw)) {
+    return raw;
+  }
+  if (raw && typeof raw === "object") {
+    return Object.values(raw).find(hasFileList) ?? undefined;
+  }
+  return undefined;
+}
+
+function describePackShape(raw) {
+  if (Array.isArray(raw)) {
+    return `an array of ${raw.length} entries, none carrying a files[]`;
+  }
+  if (raw && typeof raw === "object") {
+    const keys = Object.keys(raw);
+    return `an object with keys [${keys.join(", ")}], none carrying a files[]`;
+  }
+  return `of type ${typeof raw}`;
 }
 
 export function runNpmPackDryRun(root) {
@@ -99,9 +135,11 @@ export function runNpmPackDryRun(root) {
   }
 
   const raw = JSON.parse(result.stdout);
-  const pack = Array.isArray(raw) ? raw[0] : raw;
-  if (!pack || !Array.isArray(pack.files)) {
-    throw new TypeError("npm pack --dry-run did not return a package file list.");
+  const pack = selectPackReport(raw);
+  if (!pack) {
+    throw new TypeError(
+      `npm pack --dry-run did not return a package file list. Top-level JSON was ${describePackShape(raw)}.`
+    );
   }
 
   return {
