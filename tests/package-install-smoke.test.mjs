@@ -3,6 +3,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { test } from "node:test";
 
+import { selectPackReport } from "../scripts/check-package-contents.mjs";
+
 const execFileAsync = promisify(execFile);
 
 test("npm package dry-run includes workflow CLI and packaged quickstart", async () => {
@@ -16,7 +18,8 @@ test("npm package dry-run includes workflow CLI and packaged quickstart", async 
     timeout: 120_000,
     maxBuffer: 10 * 1024 * 1024
   });
-  const payload = JSON.parse(pack.stdout)[0];
+  const payload = selectPackReport(JSON.parse(pack.stdout));
+  assert.ok(payload, "npm pack --dry-run --json did not yield a report carrying files[]");
   const files = new Set(payload.files.map((entry) => entry.path));
 
   assert.equal(files.has("bin/legion.js"), true);
