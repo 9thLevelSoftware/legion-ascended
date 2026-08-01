@@ -29917,13 +29917,287 @@ function sha256(bytes) {
   return createHash19("sha256").update(bytes).digest("hex");
 }
 
+// packages/cli/src/workflow/traceability-check.ts
+import { readdir as readdir12 } from "node:fs/promises";
+import path28 from "node:path";
+var CHANGES_ROOT = ".legion/project/changes";
+var CURRENT_SPECS_ROOT = ".legion/project/specs";
+function taskgraphArtifactPath(changeId) {
+  return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
+}
+async function guarded(artifactPath, code, read) {
+  try {
+    return { ok: true, value: await read() };
+  } catch (error2) {
+    if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
+      return { ok: "absent" };
+    }
+    return {
+      ok: false,
+      diagnostic: {
+        code,
+        message: `${artifactPath} could not be read, so it was not checked: ${error2 instanceof Error ? error2.message : String(error2)}`,
+        source: { path: artifactPath }
+      }
+    };
+  }
+}
+async function changeIds(repositoryRoot) {
+  return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
+    const entries = await readdir12(path28.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  });
+}
+async function resolvableRequirementIds(repositoryRoot, set, changeId) {
+  const ids = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
+  const change = await guarded(
+    `${CHANGES_ROOT}/${changeId}`,
+    "change_bundle_invalid",
+    () => loadChangeBundle({ repositoryRoot, changeId })
+  );
+  if (change.ok === false) return { ids, diagnostics: [change.diagnostic] };
+  if (change.ok === "absent") return { ids, diagnostics };
+  if (change.value.ok) {
+    for (const delta of change.value.deltaSpecs) {
+      if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
+    }
+  } else {
+    for (const diagnostic3 of change.value.diagnostics) {
+      diagnostics.push({
+        code: "change_bundle_invalid",
+        message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic3.message}`,
+        source: { path: diagnostic3.source?.path ?? `${CHANGES_ROOT}/${changeId}` }
+      });
+    }
+  }
+  return { ids, diagnostics };
+}
+function budgetExceeds(taskBudget, policy) {
+  const over = [];
+  for (const [field, limit] of Object.entries(policy)) {
+    const value = taskBudget[field];
+    if (typeof value === "number" && value > limit) {
+      over.push(`${field} is ${value}, policy allows ${limit}`);
+    }
+  }
+  return over;
+}
+async function currentSpecRequirements(repositoryRoot) {
+  const ids = /* @__PURE__ */ new Set();
+  const specs = await guarded(
+    CURRENT_SPECS_ROOT,
+    "artifact_root_unreadable",
+    () => listCurrentSpecs({ repositoryRoot })
+  );
+  if (specs.ok === false) return { ids, diagnostics: [specs.diagnostic] };
+  if (specs.ok === "absent") return { ids, diagnostics: [] };
+  if (specs.value.ok) {
+    for (const document of specs.value.documents) {
+      for (const requirement of document.requirements) ids.add(requirement.id);
+    }
+    return { ids, diagnostics: [] };
+  }
+  return {
+    ids,
+    diagnostics: specs.value.diagnostics.map((diagnostic3) => ({
+      code: "current_spec_invalid",
+      message: `A current spec could not be used: ${diagnostic3.message}`,
+      source: { path: diagnostic3.source?.path ?? CURRENT_SPECS_ROOT }
+    }))
+  };
+}
+async function checkTraceability(repositoryRoot) {
+  const empty = { requirements: 0, planned: 0, unplanned: [] };
+  const set = await readRequirementSet(repositoryRoot);
+  const diagnostics = [];
+  const covered = /* @__PURE__ */ new Set();
+  const specs = await currentSpecRequirements(repositoryRoot);
+  diagnostics.push(...specs.diagnostics);
+  const scanned = await changeIds(repositoryRoot);
+  if (scanned.ok === false) return { diagnostics: [...diagnostics, scanned.diagnostic], coverage: empty };
+  const changes = scanned.ok === "absent" ? [] : scanned.value;
+  for (const changeId of changes) {
+    const resolved = await resolvableRequirementIds(repositoryRoot, set, changeId);
+    diagnostics.push(...resolved.diagnostics);
+    const resolvable = /* @__PURE__ */ new Set([...specs.ids, ...resolved.ids]);
+    const artifactPath = taskgraphArtifactPath(changeId);
+    const read = await guarded(
+      artifactPath,
+      "taskgraph_unreadable",
+      () => readTaskGraph({ repositoryRoot, changeId })
+    );
+    if (read.ok === false) {
+      diagnostics.push(read.diagnostic);
+      continue;
+    }
+    if (read.ok === "absent") continue;
+    const graph = read.value;
+    if (!graph.ok) {
+      if (graph.status === "not_found") continue;
+      diagnostics.push({
+        code: "taskgraph_unreadable",
+        message: `${artifactPath} exists but is not a valid taskgraph, so its tasks cannot be checked: ${graph.diagnostics.map((entry) => entry.message).join("; ")}`,
+        source: { path: artifactPath }
+      });
+      continue;
+    }
+    for (const task of graph.document.tasks) {
+      for (const requirementId of task.requirementIds) {
+        if (resolvable.has(requirementId)) {
+          covered.add(requirementId);
+          continue;
+        }
+        diagnostics.push({
+          code: "task_requirement_unresolved",
+          message: `${task.id} names requirement ${requirementId}, which is not in the requirement set or any current spec.`,
+          source: { path: artifactPath }
+        });
+      }
+      const oracleCoverage = /* @__PURE__ */ new Set();
+      for (const oracleId of task.oracleRefs) {
+        const read2 = await guarded(
+          `${CHANGES_ROOT}/${changeId}/oracle/${oracleId}`,
+          "task_oracle_unresolved",
+          () => readOracleArtifact({ repositoryRoot, changeId, oracleId })
+        );
+        if (read2.ok === false) {
+          diagnostics.push(read2.diagnostic);
+          continue;
+        }
+        const oracle = read2.ok === "absent" ? void 0 : read2.value;
+        if (oracle === void 0 || !oracle.ok || oracle.document.id !== oracleId) {
+          diagnostics.push({
+            code: "task_oracle_unresolved",
+            message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
+            source: { path: artifactPath }
+          });
+          continue;
+        }
+        for (const entry of oracle.document.requirementCoverage) oracleCoverage.add(entry.requirementId);
+      }
+      for (const requirementId of task.requirementIds) {
+        if (task.oracleRefs.length === 0 || oracleCoverage.has(requirementId)) continue;
+        diagnostics.push({
+          code: "task_oracle_missing_coverage",
+          message: `${task.id} has no oracle covering ${requirementId}.`,
+          source: { path: artifactPath }
+        });
+      }
+      const policy = set.ok ? set.set.enforcement?.budget : void 0;
+      if (policy !== void 0) {
+        const over = budgetExceeds(task.scope.budget, policy);
+        if (over.length > 0) {
+          diagnostics.push({
+            code: "task_budget_exceeds_policy",
+            message: `${task.id} grants itself a wider blast radius than the project policy: ${over.join("; ")}.`,
+            source: { path: artifactPath }
+          });
+        }
+      }
+    }
+  }
+  const expected = set.ok ? set.requirements.filter((requirement) => requirement.priority !== "wont").map((r) => r.id) : [];
+  return {
+    diagnostics,
+    coverage: {
+      requirements: expected.length,
+      planned: expected.filter((id) => covered.has(id)).length,
+      // Reported, never failed. Later phases being unplanned is the normal state
+      // of a project mid-flight; treating it as invalid would make `validate`
+      // red for every such project and teach operators to ignore it.
+      unplanned: expected.filter((id) => !covered.has(id))
+    }
+  };
+}
+
+// packages/cli/src/workflow/status-detail.ts
+async function resolveIntakeStatus(repositoryRoot) {
+  const active = await findActiveSession(repositoryRoot);
+  if (!active.ok) {
+    return { status: "unreadable", reason: active.reason };
+  }
+  const session = active.session;
+  if (session === void 0) {
+    return { status: "none" };
+  }
+  const materializeInput = {
+    answers: session.answers,
+    injectedNodes: session.injectedNodes
+  };
+  const pending = nextNode(materializeInput);
+  const mismatch = graphVersionMismatch(session);
+  return {
+    status: "active",
+    sessionId: session.id,
+    answered: pending.answered,
+    applicable: pending.total,
+    graphVersion: session.graphVersion,
+    ...pending.node === void 0 ? {} : { pendingNodeId: pending.node.id, pendingSection: pending.node.section },
+    ...mismatch === void 0 ? {} : { graphMismatch: mismatch }
+  };
+}
+async function resolveRequirementsStatus(repositoryRoot) {
+  const read = await readRequirementSet(repositoryRoot);
+  if (!read.ok) {
+    if (read.status === "not_found") return { status: "none" };
+    return { status: "invalid", reason: read.reason };
+  }
+  const drift = await verifyRequirementSet(repositoryRoot, read);
+  return {
+    status: drift.length === 0 ? "ready" : "drifted",
+    count: read.requirements.length,
+    setHash: read.set.requirementSetHash,
+    ...drift.length === 0 ? {} : { drift: drift.map((entry) => ({ code: entry.code, message: entry.message })) }
+  };
+}
+async function resolveTraceabilityStatus(repositoryRoot, requirements) {
+  if (requirements.status === "none") return { status: "none" };
+  const report = await checkTraceability(repositoryRoot);
+  const clean = report.diagnostics.length === 0 && report.coverage.unplanned.length === 0;
+  return {
+    status: clean ? "clean" : "incomplete",
+    requirements: report.coverage.requirements,
+    planned: report.coverage.planned,
+    unplanned: report.coverage.unplanned,
+    ...report.diagnostics.length === 0 ? {} : { diagnostics: report.diagnostics.map((entry) => ({ code: entry.code, message: entry.message })) }
+  };
+}
+function renderIntakeLine(intake) {
+  if (intake.status === "none") return "Intake: no active interview";
+  if (intake.status === "unreadable") return `Intake: unreadable \u2014 ${intake.reason ?? "unknown reason"}`;
+  const pending = intake.pendingNodeId === void 0 ? "ready to finalize" : `next ${intake.pendingNodeId}`;
+  const mismatch = intake.graphMismatch === void 0 ? "" : " (graph version mismatch)";
+  return `Intake: ${intake.sessionId} \u2014 ${intake.answered ?? 0} answered, ${pending}${mismatch}`;
+}
+function renderRequirementsLine(requirements) {
+  switch (requirements.status) {
+    case "none":
+      return "Requirements: none written";
+    case "invalid":
+      return `Requirements: invalid \u2014 ${requirements.reason ?? "unknown reason"}`;
+    case "drifted":
+      return `Requirements: ${requirements.count ?? 0}, DRIFTED from recorded hash (${requirements.drift?.length ?? 0})`;
+    case "ready":
+      return `Requirements: ${requirements.count ?? 0}, hash verified`;
+  }
+}
+function renderTraceabilityLine(traceability) {
+  if (traceability.status === "none") return "Traceability: no requirements to trace";
+  const planned = `${traceability.planned ?? 0} of ${traceability.requirements ?? 0} requirements planned`;
+  if (traceability.status === "clean") return `Traceability: ${planned}`;
+  const diagnostics = traceability.diagnostics?.length ?? 0;
+  return diagnostics === 0 ? `Traceability: ${planned}` : `Traceability: ${planned}, ${diagnostics} diagnostic${diagnostics === 1 ? "" : "s"}`;
+}
+
 // packages/cli/src/workflow/state.ts
-import { readdir as readdir13 } from "node:fs/promises";
-import path29 from "node:path";
+import { readdir as readdir14 } from "node:fs/promises";
+import path30 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir12, stat as stat8 } from "node:fs/promises";
-import path28 from "node:path";
+import { readdir as readdir13, stat as stat8 } from "node:fs/promises";
+import path29 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -29949,17 +30223,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path28.join(repositoryRoot, ".legion");
+  const legionRoot = path29.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
-  const entries = await readdir12(legionRoot, { withFileTypes: true });
+  const entries = await readdir13(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path28.join(legionRoot, "project");
-  const manifestPath = path28.join(projectRoot, "project.json");
+  const projectRoot = path29.join(legionRoot, "project");
+  const manifestPath = path29.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -30114,10 +30388,10 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path29.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path30.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir13(changesRoot, { withFileTypes: true });
+    entries = await readdir14(changesRoot, { withFileTypes: true });
   } catch (error2) {
     if (isNodeErrorCode3(error2, "ENOENT")) {
       return noWorkflowChange(changesRoot);
@@ -30202,15 +30476,22 @@ async function handleStatusCommand(context) {
     return helpResult(STATUS_HELP);
   }
   const workflowState = await resolveWorkflowState(context);
-  const [guidanceRuns, mapStatus] = await Promise.all([
+  const [guidanceRuns, mapStatus, intake, requirements] = await Promise.all([
     latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 1 }),
-    resolveMapStatus(context)
+    resolveMapStatus(context),
+    resolveIntakeStatus(context.repositoryRoot),
+    resolveRequirementsStatus(context.repositoryRoot)
   ]);
+  const traceability = await resolveTraceabilityStatus(context.repositoryRoot, requirements);
+  const resolvedNextAction = refineNextAction({ workflowState, intake, requirements });
   return success(
     {
       ok: true,
       status: "workflow_status",
       workflowState,
+      intake,
+      requirements,
+      traceability,
       guidance: {
         latestRuns: guidanceRuns.map((run) => ({
           workflow: run.workflow,
@@ -30220,18 +30501,44 @@ async function handleStatusCommand(context) {
         }))
       },
       map: mapStatus,
-      nextAction: workflowState.nextAction,
+      nextAction: resolvedNextAction,
       diagnostics: workflowState.diagnostics
     },
     [
       `Stage: ${workflowState.stage}`,
       `Project: ${workflowState.projectId ?? "not initialized"}`,
+      renderIntakeLine(intake),
+      renderRequirementsLine(requirements),
+      renderTraceabilityLine(traceability),
       `Current specs: ${workflowState.currentSpecCount}`,
       `Map: ${mapStatus.status}`,
       `Guidance runs: ${guidanceRuns.length}`,
-      renderNextAction(workflowState.nextAction)
+      renderNextAction(resolvedNextAction)
     ].join("\n")
   );
+}
+function refineNextAction(input) {
+  const { workflowState, intake, requirements } = input;
+  let resolved = workflowState.nextAction;
+  if (intake.status === "active" && workflowState.stage === "uninitialized") {
+    resolved = intake.pendingNodeId === void 0 ? nextAction(
+      "legion start --finalize",
+      `Interview ${intake.sessionId} has answered every question the graph asks and is ready to finalize.`
+    ) : nextAction(
+      "legion start",
+      `Interview ${intake.sessionId} is in progress \u2014 ${intake.answered ?? 0} answered, next question ${intake.pendingNodeId}.`
+    );
+  }
+  if (intake.status === "unreadable") {
+    resolved = nextAction("legion start --session-status", intake.reason ?? "An intake session could not be read.");
+  }
+  if (requirements.status === "drifted" || requirements.status === "invalid") {
+    resolved = nextAction(
+      "legion validate",
+      requirements.status === "drifted" ? `The requirement set no longer matches its recorded hash (${requirements.drift?.length ?? 0} drift finding(s)). Planning off a drifted set is what the hash exists to prevent.` : `The requirement set could not be read: ${requirements.reason ?? "unknown reason"}`
+    );
+  }
+  return resolved;
 }
 async function resolveMapStatus(context) {
   const latest = await getLatestCodebaseMap(context.repositoryRoot);
@@ -30255,7 +30562,7 @@ async function resolveMapStatus(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
-import path30 from "node:path";
+import path31 from "node:path";
 
 // packages/cli/src/workflow/phase-requirement.ts
 var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
@@ -30478,8 +30785,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path30.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path30.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path31.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path31.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function withSpecAnchor(requirement) {
@@ -30797,7 +31104,7 @@ function buildOracleArtifactInputs(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile18 } from "node:fs/promises";
-import path31 from "node:path";
+import path32 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -30845,13 +31152,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path31.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path31.join(context.repositoryRoot, "ROADMAP.md")
+    path32.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path32.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path31.isAbsolute(roadmapPath) ? roadmapPath : path31.resolve(repositoryRoot, roadmapPath);
+  return path32.isAbsolute(roadmapPath) ? roadmapPath : path32.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -31329,8 +31636,8 @@ import { execFileSync as execFileSync6 } from "node:child_process";
 import { readFile as readFile20 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir14, readFile as readFile19 } from "node:fs/promises";
-import path32 from "node:path";
+import { readdir as readdir15, readFile as readFile19 } from "node:fs/promises";
+import path33 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -31494,16 +31801,16 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path32.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path33.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir14(workflowRoot, { withFileTypes: true });
+      entries = await readdir15(workflowRoot, { withFileTypes: true });
     } catch (error2) {
       if (error2 && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") continue;
       throw error2;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path32.join(workflowRoot, entry.name, "workflow-run.json") : path32.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path33.join(workflowRoot, entry.name, "workflow-run.json") : path33.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile19(absolutePath, "utf8");
@@ -31522,7 +31829,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path32.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path33.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile19(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
@@ -31540,7 +31847,7 @@ function truncate4(text, maxLength) {
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash20 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path33 from "node:path";
+import path34 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -31549,7 +31856,7 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path33.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path34.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
@@ -31667,7 +31974,7 @@ function createVerificationRunner(options) {
 // packages/cli/src/workflow/executor/worker-bundles.ts
 import { createHash as createHash21 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path34 from "node:path";
+import path35 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -31683,7 +31990,7 @@ function sha256Hex5(value) {
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path34.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path35.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -31710,7 +32017,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path34.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path35.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -31747,13 +32054,13 @@ function createWorkerBundleRegistry(options) {
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash23 } from "node:crypto";
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path37 from "node:path";
+import path38 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
 import { createHash as createHash22 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path35 from "node:path";
+import path36 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -31830,7 +32137,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path35.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path36.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -31846,7 +32153,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path35.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path36.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -31961,11 +32268,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path36 from "node:path";
+import path37 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path36.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path37.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -31978,7 +32285,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path36.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path37.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -31995,7 +32302,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path36.join(repositoryRoot, child)).size;
+        size = lstatSync(path37.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -32043,7 +32350,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path37.join(input.repositoryRoot, entry.path);
+    const absolute = path38.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -32071,7 +32378,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path37.join(input.repositoryRoot, relative);
+    const absolute = path38.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -32154,7 +32461,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path37.join(input.repositoryRoot, relative);
+    const absolute = path38.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -32168,14 +32475,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path37.dirname(absolute), { recursive: true });
+        mkdirSync3(path38.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path37.dirname(absolute), { recursive: true });
+        mkdirSync3(path38.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -32284,7 +32591,7 @@ async function runGuardedExecution(input) {
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash24 } from "node:crypto";
-import path38 from "node:path";
+import path39 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -32318,7 +32625,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path38.join(repositoryRoot, ...artifactPath.split("/"));
+  return path39.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -33882,7 +34189,7 @@ function blockedReview(diagnostics, action, extras = {}) {
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile21 } from "node:fs/promises";
-import path40 from "node:path";
+import path41 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -34158,7 +34465,7 @@ function commandParts(parts) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
-import path39 from "node:path";
+import path40 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -34447,7 +34754,7 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path40.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path41.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const parsed = JSON.parse(await readFile21(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
@@ -34462,7 +34769,7 @@ async function readLessonIndex(repositoryRoot) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 import { readFile as readFile22 } from "node:fs/promises";
-import path41 from "node:path";
+import path42 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -35134,7 +35441,7 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path41.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path42.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
     const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
@@ -35428,203 +35735,6 @@ function blockedShip(diagnostics, action) {
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
 import path43 from "node:path";
-
-// packages/cli/src/workflow/traceability-check.ts
-import { readdir as readdir15 } from "node:fs/promises";
-import path42 from "node:path";
-var CHANGES_ROOT = ".legion/project/changes";
-var CURRENT_SPECS_ROOT = ".legion/project/specs";
-function taskgraphArtifactPath(changeId) {
-  return `${CHANGES_ROOT}/${changeId}/taskgraph.json`;
-}
-async function guarded(artifactPath, code, read) {
-  try {
-    return { ok: true, value: await read() };
-  } catch (error2) {
-    if (error2 !== null && typeof error2 === "object" && "code" in error2 && error2.code === "ENOENT") {
-      return { ok: "absent" };
-    }
-    return {
-      ok: false,
-      diagnostic: {
-        code,
-        message: `${artifactPath} could not be read, so it was not checked: ${error2 instanceof Error ? error2.message : String(error2)}`,
-        source: { path: artifactPath }
-      }
-    };
-  }
-}
-async function changeIds(repositoryRoot) {
-  return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir15(path42.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  });
-}
-async function resolvableRequirementIds(repositoryRoot, set, changeId) {
-  const ids = /* @__PURE__ */ new Set();
-  const diagnostics = [];
-  if (set.ok) for (const requirement of set.requirements) ids.add(requirement.id);
-  const change = await guarded(
-    `${CHANGES_ROOT}/${changeId}`,
-    "change_bundle_invalid",
-    () => loadChangeBundle({ repositoryRoot, changeId })
-  );
-  if (change.ok === false) return { ids, diagnostics: [change.diagnostic] };
-  if (change.ok === "absent") return { ids, diagnostics };
-  if (change.value.ok) {
-    for (const delta of change.value.deltaSpecs) {
-      if (delta.proposedRequirement !== void 0) ids.add(delta.proposedRequirement.id);
-    }
-  } else {
-    for (const diagnostic3 of change.value.diagnostics) {
-      diagnostics.push({
-        code: "change_bundle_invalid",
-        message: `${changeId} could not be loaded, so its proposed requirements were not checked: ${diagnostic3.message}`,
-        source: { path: diagnostic3.source?.path ?? `${CHANGES_ROOT}/${changeId}` }
-      });
-    }
-  }
-  return { ids, diagnostics };
-}
-function budgetExceeds(taskBudget, policy) {
-  const over = [];
-  for (const [field, limit] of Object.entries(policy)) {
-    const value = taskBudget[field];
-    if (typeof value === "number" && value > limit) {
-      over.push(`${field} is ${value}, policy allows ${limit}`);
-    }
-  }
-  return over;
-}
-async function currentSpecRequirements(repositoryRoot) {
-  const ids = /* @__PURE__ */ new Set();
-  const specs = await guarded(
-    CURRENT_SPECS_ROOT,
-    "artifact_root_unreadable",
-    () => listCurrentSpecs({ repositoryRoot })
-  );
-  if (specs.ok === false) return { ids, diagnostics: [specs.diagnostic] };
-  if (specs.ok === "absent") return { ids, diagnostics: [] };
-  if (specs.value.ok) {
-    for (const document of specs.value.documents) {
-      for (const requirement of document.requirements) ids.add(requirement.id);
-    }
-    return { ids, diagnostics: [] };
-  }
-  return {
-    ids,
-    diagnostics: specs.value.diagnostics.map((diagnostic3) => ({
-      code: "current_spec_invalid",
-      message: `A current spec could not be used: ${diagnostic3.message}`,
-      source: { path: diagnostic3.source?.path ?? CURRENT_SPECS_ROOT }
-    }))
-  };
-}
-async function checkTraceability(repositoryRoot) {
-  const empty = { requirements: 0, planned: 0, unplanned: [] };
-  const set = await readRequirementSet(repositoryRoot);
-  const diagnostics = [];
-  const covered = /* @__PURE__ */ new Set();
-  const specs = await currentSpecRequirements(repositoryRoot);
-  diagnostics.push(...specs.diagnostics);
-  const scanned = await changeIds(repositoryRoot);
-  if (scanned.ok === false) return { diagnostics: [...diagnostics, scanned.diagnostic], coverage: empty };
-  const changes = scanned.ok === "absent" ? [] : scanned.value;
-  for (const changeId of changes) {
-    const resolved = await resolvableRequirementIds(repositoryRoot, set, changeId);
-    diagnostics.push(...resolved.diagnostics);
-    const resolvable = /* @__PURE__ */ new Set([...specs.ids, ...resolved.ids]);
-    const artifactPath = taskgraphArtifactPath(changeId);
-    const read = await guarded(
-      artifactPath,
-      "taskgraph_unreadable",
-      () => readTaskGraph({ repositoryRoot, changeId })
-    );
-    if (read.ok === false) {
-      diagnostics.push(read.diagnostic);
-      continue;
-    }
-    if (read.ok === "absent") continue;
-    const graph = read.value;
-    if (!graph.ok) {
-      if (graph.status === "not_found") continue;
-      diagnostics.push({
-        code: "taskgraph_unreadable",
-        message: `${artifactPath} exists but is not a valid taskgraph, so its tasks cannot be checked: ${graph.diagnostics.map((entry) => entry.message).join("; ")}`,
-        source: { path: artifactPath }
-      });
-      continue;
-    }
-    for (const task of graph.document.tasks) {
-      for (const requirementId of task.requirementIds) {
-        if (resolvable.has(requirementId)) {
-          covered.add(requirementId);
-          continue;
-        }
-        diagnostics.push({
-          code: "task_requirement_unresolved",
-          message: `${task.id} names requirement ${requirementId}, which is not in the requirement set or any current spec.`,
-          source: { path: artifactPath }
-        });
-      }
-      const oracleCoverage = /* @__PURE__ */ new Set();
-      for (const oracleId of task.oracleRefs) {
-        const read2 = await guarded(
-          `${CHANGES_ROOT}/${changeId}/oracle/${oracleId}`,
-          "task_oracle_unresolved",
-          () => readOracleArtifact({ repositoryRoot, changeId, oracleId })
-        );
-        if (read2.ok === false) {
-          diagnostics.push(read2.diagnostic);
-          continue;
-        }
-        const oracle = read2.ok === "absent" ? void 0 : read2.value;
-        if (oracle === void 0 || !oracle.ok || oracle.document.id !== oracleId) {
-          diagnostics.push({
-            code: "task_oracle_unresolved",
-            message: `${task.id} names oracle ${oracleId}, which does not exist as a valid oracle in ${changeId}.`,
-            source: { path: artifactPath }
-          });
-          continue;
-        }
-        for (const entry of oracle.document.requirementCoverage) oracleCoverage.add(entry.requirementId);
-      }
-      for (const requirementId of task.requirementIds) {
-        if (task.oracleRefs.length === 0 || oracleCoverage.has(requirementId)) continue;
-        diagnostics.push({
-          code: "task_oracle_missing_coverage",
-          message: `${task.id} has no oracle covering ${requirementId}.`,
-          source: { path: artifactPath }
-        });
-      }
-      const policy = set.ok ? set.set.enforcement?.budget : void 0;
-      if (policy !== void 0) {
-        const over = budgetExceeds(task.scope.budget, policy);
-        if (over.length > 0) {
-          diagnostics.push({
-            code: "task_budget_exceeds_policy",
-            message: `${task.id} grants itself a wider blast radius than the project policy: ${over.join("; ")}.`,
-            source: { path: artifactPath }
-          });
-        }
-      }
-    }
-  }
-  const expected = set.ok ? set.requirements.filter((requirement) => requirement.priority !== "wont").map((r) => r.id) : [];
-  return {
-    diagnostics,
-    coverage: {
-      requirements: expected.length,
-      planned: expected.filter((id) => covered.has(id)).length,
-      // Reported, never failed. Later phases being unplanned is the normal state
-      // of a project mid-flight; treating it as invalid would make `validate`
-      // red for every such project and teach operators to ignore it.
-      unplanned: expected.filter((id) => !covered.has(id))
-    }
-  };
-}
-
-// packages/cli/src/commands/workflow/validate.ts
 var VALIDATE_HELP = `legion validate
 
 Validate committed Legion project state under .legion/project.
