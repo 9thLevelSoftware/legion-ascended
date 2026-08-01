@@ -189,6 +189,180 @@ items:
       - node --test tests/workflow-command-contract.test.mjs
       - node --test tests/cli-workflow-ux.test.mjs
       - pnpm run validate:next
+  # Phase 16 retires .planning/ from the installed command surface. Phase 15 is
+  # skipped: no backlog item claims it, but the control-artifacts branch used
+  # the name informally, and reusing it would make two different things share a
+  # number.
+  #
+  # commands/start.md and commands/status.md are already converted and are the
+  # worked examples. The remaining sixteen are not one kind of work — see
+  # P16-B001's conversion contract for the three classes and why thin-wrapping
+  # the orchestration commands would delete capability silently.
+  - id: P16-B001
+    phase: 16
+    title: Ratchet the command surface off .planning/
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P14-B001
+    maps_to:
+      - commands/start.md
+      - commands/status.md
+    acceptance:
+      - A test enumerates every commands/*.md and fails when one reads .planning/ outside a declared allowlist.
+      - The allowlist is seeded with the sixteen unconverted commands and may only ever be shortened.
+      - A conversion contract records, per class, what the CLI owns and what the host keeps.
+      - The contract states that a command whose host-only behaviour is not inventoried before editing must not be converted.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - pnpm run validate:next
+  - id: P16-B002
+    phase: 16
+    title: Convert validate and map to CLI renderers
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+    maps_to:
+      - commands/validate.md
+      - commands/map.md
+    acceptance:
+      - Each command renders legion validate --json or legion map --json and derives no state itself.
+      - Neither file reads .planning/, and both are removed from the allowlist.
+      - Any state the wrapper needs that the CLI does not expose is added to the CLI first, with tests.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/legacy/installer-smoke.test.cjs
+      - pnpm run validate:next
+  - id: P16-B003
+    phase: 16
+    title: Convert learn, retro, and milestone to CLI renderers
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+    maps_to:
+      - commands/learn.md
+      - commands/retro.md
+      - commands/milestone.md
+    acceptance:
+      - Each command renders its legion verb's JSON payload and records nothing to .planning/.
+      - Guidance artifacts continue to be written by the CLI, not by the host.
+      - All three are removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-guidance.test.mjs
+      - pnpm run validate:next
+  - id: P16-B004
+    phase: 16
+    title: Convert explore and advise to CLI renderers
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+    maps_to:
+      - commands/explore.md
+      - commands/advise.md
+    acceptance:
+      - Both commands render their legion verb's JSON payload and write no artifacts directly.
+      - explore continues to produce an exploration typed as exploratory that start can seed proposals from.
+      - Both are removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-guidance.test.mjs
+      - pnpm run validate:next
+  - id: P16-B005
+    phase: 16
+    title: Split plan, quick, and polish across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+    maps_to:
+      - commands/plan.md
+      - commands/quick.md
+      - commands/polish.md
+    acceptance:
+      - Host-only behaviour is inventoried and recorded before any file is edited.
+      - The CLI owns the taskgraph, the risk classification, and the decision that planning is complete.
+      - The host retains only agent selection and rendering, and reaches state through the CLI's typed artifacts.
+      - No capability present before the split is absent after it, or its removal is recorded as deliberate.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-command-contract.test.mjs
+      - pnpm run validate:next
+  - id: P16-B006
+    phase: 16
+    title: Split build across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B005
+    maps_to:
+      - commands/build.md
+    acceptance:
+      - The fourteen agent-dispatch sites in commands/build.md are inventoried before editing, each classified as host-only or CLI-owned.
+      - The CLI owns verification, diff reconciliation, and the task verdict; the host owns wave dispatch only.
+      - The wave executor survives the conversion, or its removal is recorded with a replacement.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/build-diff-reconciliation.test.mjs
+      - node scripts/dogfood-workflow.mjs --executor fake
+      - pnpm run validate:next
+  - id: P16-B007
+    phase: 16
+    title: Split review across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B005
+    maps_to:
+      - commands/review.md
+    acceptance:
+      - The sixteen agent-dispatch sites in commands/review.md are inventoried before editing, each classified as host-only or CLI-owned.
+      - The CLI owns the verification report, the gate set, and human acceptance; the host owns the review panel.
+      - legion review exposes what a panel needs before commands/review.md is thinned, not after.
+      - The multi-agent review panel survives the conversion, or its removal is recorded with a replacement.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-command-contract.test.mjs
+      - pnpm run validate:next
+  - id: P16-B008
+    phase: 16
+    title: Split ship, and rename board onto the council verb
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B005
+    maps_to:
+      - commands/ship.md
+      - commands/board.md
+    acceptance:
+      - ship renders the derived gate set and never asserts readiness the CLI did not derive.
+      - The user-facing /legion:board name is preserved while the command drives legion council.
+      - Neither file reads .planning/, and both are removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/ship-traceability.test.mjs
+      - pnpm run validate:next
+  - id: P16-B009
+    phase: 16
+    title: Decide where agent and portfolio belong
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+    maps_to:
+      - commands/agent.md
+      - commands/portfolio.md
+    acceptance:
+      - A recorded decision states, for each command, whether it gains a CLI verb or stays host-owned.
+      - The decision addresses that portfolio is cross-repo while every CLI verb is scoped by --repository-root, so a repo-scoped CLI may have no valid home for it.
+      - The decision addresses that agent authors personality files rather than workflow state, and so may not be a workflow verb at all.
+      - Whatever is decided, neither file reads .planning/ afterwards, and both leave the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - pnpm run validate:next
 deferred_placeholders:
   - id: P08-B001
     reason: CLI-first workflow UX backlog expands after protocol/core and board contracts exist.
