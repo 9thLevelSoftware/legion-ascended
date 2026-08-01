@@ -30154,6 +30154,12 @@ async function resolveRequirementsStatus(repositoryRoot) {
 }
 async function resolveTraceabilityStatus(repositoryRoot, requirements) {
   if (requirements.status === "none") return { status: "none" };
+  if (requirements.status === "invalid") {
+    return {
+      status: "unverifiable",
+      ...requirements.reason === void 0 ? {} : { reason: requirements.reason }
+    };
+  }
   const report = await checkTraceability(repositoryRoot);
   const clean = report.diagnostics.length === 0 && report.coverage.unplanned.length === 0;
   return {
@@ -30185,6 +30191,9 @@ function renderRequirementsLine(requirements) {
 }
 function renderTraceabilityLine(traceability) {
   if (traceability.status === "none") return "Traceability: no requirements to trace";
+  if (traceability.status === "unverifiable") {
+    return `Traceability: NOT VERIFIED \u2014 the requirement set could not be read${traceability.reason === void 0 ? "" : ` (${traceability.reason})`}`;
+  }
   const planned = `${traceability.planned ?? 0} of ${traceability.requirements ?? 0} requirements planned`;
   if (traceability.status === "clean") return `Traceability: ${planned}`;
   const diagnostics = traceability.diagnostics?.length ?? 0;
@@ -30528,6 +30537,9 @@ function refineNextAction(input) {
       "legion start",
       `Interview ${intake.sessionId} is in progress \u2014 ${intake.answered ?? 0} answered, next question ${intake.pendingNodeId}.`
     );
+  }
+  if (intake.status === "active" && intake.graphMismatch !== void 0) {
+    resolved = nextAction(`legion start --abort --session ${intake.sessionId}`, intake.graphMismatch);
   }
   if (intake.status === "unreadable") {
     resolved = nextAction("legion start --session-status", intake.reason ?? "An intake session could not be read.");

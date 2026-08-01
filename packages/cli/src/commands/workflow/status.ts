@@ -115,6 +115,15 @@ export function refineNextAction(input: {
         );
   }
 
+  // A session pinned to a superseded graph is refused by `resolveSession`, so
+  // both of the recommendations above are commands this CLI will reject. Naming
+  // one anyway is the same defect as the two caught in phase C review: an
+  // emitted instruction that its own code path cannot execute. The recovery is
+  // the one the mismatch message already names.
+  if (intake.status === "active" && intake.graphMismatch !== undefined) {
+    resolved = nextAction(`legion start --abort --session ${intake.sessionId}`, intake.graphMismatch);
+  }
+
   if (intake.status === "unreadable") {
     resolved = nextAction("legion start --session-status", intake.reason ?? "An intake session could not be read.");
   }

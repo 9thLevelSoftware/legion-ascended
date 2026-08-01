@@ -97,11 +97,12 @@ export async function resolveRequirementsStatus(repositoryRoot: string): Promise
 }
 
 export interface TraceabilityStatus {
-  readonly status: "none" | "clean" | "incomplete";
+  readonly status: "none" | "unverifiable" | "clean" | "incomplete";
   readonly requirements?: number;
   readonly planned?: number;
   readonly unplanned?: readonly string[];
   readonly diagnostics?: readonly { readonly code: string; readonly message: string }[];
+  readonly reason?: string;
 }
 
 export async function resolveTraceabilityStatus(
@@ -112,6 +113,18 @@ export async function resolveTraceabilityStatus(
   // would report a clean graph over an empty set — which reads as "traceability
   // satisfied" for a project that has not stated a single requirement.
   if (requirements.status === "none") return { status: "none" };
+
+  // The same reasoning, and the case the guard above originally missed: an
+  // unreadable set is also an empty one as far as `checkTraceability` can tell,
+  // so a malformed index reported `clean — 0 of 0 planned`. "Could not be
+  // verified" must never render as "verified"; that is the direction of error
+  // this whole surface exists to avoid.
+  if (requirements.status === "invalid") {
+    return {
+      status: "unverifiable",
+      ...(requirements.reason === undefined ? {} : { reason: requirements.reason })
+    };
+  }
 
   const report = await checkTraceability(repositoryRoot);
   const clean = report.diagnostics.length === 0 && report.coverage.unplanned.length === 0;
@@ -151,6 +164,11 @@ export function renderRequirementsLine(requirements: RequirementsStatus): string
 
 export function renderTraceabilityLine(traceability: TraceabilityStatus): string {
   if (traceability.status === "none") return "Traceability: no requirements to trace";
+  if (traceability.status === "unverifiable") {
+    return `Traceability: NOT VERIFIED — the requirement set could not be read${
+      traceability.reason === undefined ? "" : ` (${traceability.reason})`
+    }`;
+  }
   const planned = `${traceability.planned ?? 0} of ${traceability.requirements ?? 0} requirements planned`;
   if (traceability.status === "clean") return `Traceability: ${planned}`;
   const diagnostics = traceability.diagnostics?.length ?? 0;
