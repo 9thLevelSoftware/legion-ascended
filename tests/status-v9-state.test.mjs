@@ -223,6 +223,55 @@ test("an unreadable intake session is reported rather than skipped", async (t) =
   assert.equal(payload.nextAction.command, "legion start --session-status");
 });
 
+test("a session pinned to a superseded graph routes to a command that can run", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await interview(run, 4);
+
+  const sessions = await readdir(path.join(root, ".legion", "project", "intake"));
+  const sessionId = sessions.find((entry) => entry.startsWith("itk_"));
+  const sessionPath = path.join(root, ".legion", "project", "intake", sessionId, "session.json");
+  const session = JSON.parse(await readFile(sessionPath, "utf8"));
+  session.graphVersion = "0.9.0";
+  await writeFile(sessionPath, JSON.stringify(session, null, 2));
+
+  const payload = await status(run);
+  assert.ok(payload.intake.graphMismatch, "the mismatch is reported");
+
+  // Both `legion start` and `--finalize` are refused for a stale session, so
+  // recommending either is naming a command this CLI will reject.
+  assert.notEqual(payload.nextAction.command, "legion start");
+  assert.notEqual(payload.nextAction.command, "legion start --finalize");
+  assert.equal(payload.nextAction.command, `legion start --abort --session ${sessionId}`);
+
+  // The recommendation has to survive being run, which is the only check that
+  // would have caught this and the two like it before it.
+  const recovery = await run("start", "--abort", "--session", sessionId);
+  assert.equal(recovery.exitCode, 0, recovery.stderr);
+});
+
+test("an unreadable requirement set is never reported as traceable", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await interview(run);
+  assert.equal((await run("start", "--finalize")).exitCode, 0);
+
+  await writeFile(
+    path.join(root, ".legion", "project", "requirements", "index.json"),
+    "{ not json"
+  );
+
+  const payload = await status(run);
+  assert.equal(payload.requirements.status, "invalid");
+
+  // Previously this fell through to the checker, which cannot distinguish an
+  // unreadable set from an empty one and reported `clean — 0 of 0 planned`.
+  assert.equal(payload.traceability.status, "unverifiable");
+  assert.notEqual(payload.traceability.status, "clean");
+  assert.equal(payload.traceability.planned, undefined);
+
+  const rendered = await run("status");
+  assert.match(rendered.stdout, /^Traceability: NOT VERIFIED/m);
+});
+
 test("the human rendering names every v9 section", async (t) => {
   const { run } = await scratchRepo(t);
   await interview(run);

@@ -33,7 +33,7 @@ This matters more here than it looks. Status is the command someone runs *becaus
    - **Stage and project** — `workflowState.stage`, `workflowState.projectId`.
    - **Intake** — from `intake`. `status: "active"` means an interview is open: name `sessionId`, `answered`, and `pendingNodeId`. `status: "unreadable"` means a session is corrupt; show `reason`.
    - **Requirements** — from `requirements`. Show `count` and whether the hash verified. `status: "drifted"` means the requirement set no longer matches its recorded hash; list every `drift` entry.
-   - **Traceability** — from `traceability`. Show `planned` of `requirements`, and name the `unplanned` IDs when there are any.
+   - **Traceability** — from `traceability`. Show `planned` of `requirements`, and name the `unplanned` IDs when there are any. `status: "unverifiable"` means the requirement set could not be read, so nothing was checked — report that, never as a clean result.
    - **Specs, map, guidance** — `workflowState.currentSpecCount`, `map.status`, `guidance.latestRuns`.
    - **Diagnostics** — `diagnostics`, when non-empty. Show them; they are why the stage is what it is.
 
@@ -56,7 +56,9 @@ This matters more here than it looks. Status is the command someone runs *becaus
 | Situation | Action |
 |-----------|--------|
 | `intake.status` is `active` | Report the open interview and its pending question; the next action resumes it |
+| `intake.graphMismatch` is set | Show it; the session was started under a superseded graph and cannot be resumed or finalized by this CLI |
 | `intake.status` is `unreadable` | Show `reason`; the session needs repair before the interview can resume |
+| `traceability.status` is `unverifiable` | Say traceability could not be checked, and why. It is not a clean result |
 | `requirements.status` is `drifted` | Show every drift entry; the next action is `legion validate` and outranks resuming an interview |
 | `traceability.unplanned` is non-empty | Name the requirements no task covers |
 | `workflowState.stage` is `blocked` | Show `diagnostics`; they are the reason |
