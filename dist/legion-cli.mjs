@@ -35090,6 +35090,11 @@ async function handleMapWorkflow(context) {
   if (modes > 1) return usageError("legion map accepts one mode at a time: --refresh, --check, or --query <text>.");
   if (context.args.options.get("query") === true || query === "") return usageError("Missing required value for --query. Example: legion map --query taskgraph.");
   if (context.args.options.get("scope") === true || scope === "") return usageError("Missing required value for --scope. Example: legion map --refresh --scope packages/cli.");
+  if (query !== void 0 && scope !== void 0) {
+    return usageError(
+      "legion map --query does not accept --scope. The query runs over the stored map, whose scope was set when it was generated. Refresh with legion map --refresh --scope <path> to change it."
+    );
+  }
   if (check) return mapCheck(context, scope);
   if (query !== void 0) return mapQuery(context, query);
   return mapRefresh(context, scope);
@@ -35293,6 +35298,12 @@ async function runRetroWorkflow(context) {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
+  const scopeDiagnostics = phase === null && milestone === null ? [] : [{
+    id: "retro_scope_not_evidenced",
+    title: "Scope reached the prompt topic only",
+    body: `This retrospective is labelled ${phase === null ? `milestone ${milestone ?? ""}` : `phase ${phase}`} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
+    severity: "major"
+  }];
   const markdown = renderGuidanceMarkdown({
     title: "Workflow Retrospective",
     topic,
@@ -35308,6 +35319,7 @@ async function runRetroWorkflow(context) {
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status2 = executed.result.ok ? "completed" : "blocked";
+  const diagnostics = [...scopeDiagnostics, ...executed.result.findings];
   await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
     paths,
@@ -35322,7 +35334,7 @@ async function runRetroWorkflow(context) {
     },
     nextAction: action,
     executor: executed.executor,
-    diagnostics: executed.result.findings
+    diagnostics
   });
   const payload = {
     ok: executed.result.ok,
@@ -35333,9 +35345,15 @@ async function runRetroWorkflow(context) {
     markdownArtifactPath,
     executor: executed.executor,
     nextAction: action,
-    diagnostics: executed.result.findings
+    diagnostics
   };
-  return executed.result.ok ? success(payload, [`Retrospective: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n")) : failure(payload, [`Retrospective: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n"));
+  const human = [
+    `Retrospective: ${status2}.`,
+    ...scopeDiagnostics.map((finding) => `WARNING: ${finding.body}`),
+    `Artifact: ${markdownArtifactPath}`,
+    renderNextAction(action)
+  ].join("\n");
+  return executed.result.ok ? success(payload, human) : failure(payload, human);
 }
 async function handleMilestoneWorkflow(context) {
   const createdAt = guidanceCreatedAt(context);
@@ -35356,6 +35374,25 @@ async function handleMilestoneWorkflow(context) {
   if (define !== void 0 && phases === void 0) return usageError("legion milestone --define requires --phases <range>.");
   if (complete !== void 0 && summary === void 0) return usageError("legion milestone --complete requires --summary <text>.");
   const current = await readMilestoneIndex(context.repositoryRoot);
+  if (statusMode) {
+    const action2 = nextAction("legion status", "Review milestone state before changing release posture.");
+    return success(
+      {
+        ok: true,
+        status: "completed",
+        workflow: "milestone",
+        mode: "status",
+        milestones: current.milestones,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        `Milestones: ${current.milestones.length}.`,
+        renderMilestones(current).trimEnd(),
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
   let next = current;
   let status2 = "completed";
   let slugSource = "status";

@@ -1793,13 +1793,16 @@ const guidanceCommandCases = [
     slug: "retro"
   },
   {
+    // --define rather than --status: status is a read and writes no run record,
+    // which is what P16-B012 fixed. Reading state used to append a run on every
+    // invocation, so this case was asserting the defect.
     name: "milestone",
-    args: ["milestone", "--status", "--json"],
+    args: ["milestone", "--define", "MVP", "--phases", "1-3", "--json"],
     workflow: "milestone",
     status: "completed",
     nextAction: "legion status",
     outputKey: "markdownArtifactPath",
-    slug: "status"
+    slug: "milestone-mvp"
   },
   {
     name: "council",

@@ -22,6 +22,7 @@ import {
 } from "../../workflow/codebase-map.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
 import { parseResultFromText } from "../../workflow/executor/result.js";
+import type { ExecutionFinding } from "../../workflow/executor/types.js";
 import { explorationResultContract, parseExploration } from "../../workflow/exploration.js";
 import {
   createGuidanceRunPaths,
@@ -261,6 +262,17 @@ async function handleMapWorkflow(context: CliContext): Promise<CliResult> {
   if (modes > 1) return usageError("legion map accepts one mode at a time: --refresh, --check, or --query <text>.");
   if (context.args.options.get("query") === true || query === "") return usageError("Missing required value for --query. Example: legion map --query taskgraph.");
   if (context.args.options.get("scope") === true || scope === "") return usageError("Missing required value for --scope. Example: legion map --refresh --scope packages/cli.");
+  // `--scope` reaches `mapCheck` and `mapRefresh` but never `mapQuery`, and the
+  // mode guard above cannot catch the pair because scope is not a mode. So
+  // `legion map --query x --scope packages/cli` ran unscoped and reported
+  // success — an answer drawn from the whole repository, presented as one drawn
+  // from the path the caller named. Refusing is the honest reading: the query
+  // runs over the stored map, whose scope was fixed when it was generated.
+  if (query !== undefined && scope !== undefined) {
+    return usageError(
+      "legion map --query does not accept --scope. The query runs over the stored map, whose scope was set when it was generated. Refresh with legion map --refresh --scope <path> to change it."
+    );
+  }
 
   if (check) return mapCheck(context, scope);
   if (query !== undefined) return mapQuery(context, query);
@@ -473,6 +485,27 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
+
+  // `--phase` and `--milestone` reach the run slug, the run record, and the
+  // prompt topic, and nothing else. They gather no phase evidence, so what comes
+  // back is an unscoped retrospective wearing a scoped label. The stage and the
+  // recent runs read above do not close that gap either: they are handed to
+  // `renderGuidanceMarkdown` below, after the executor has already produced the
+  // findings, so the model never saw them.
+  //
+  // Saying so is the honest reading. The flags are not inert — the topic does
+  // steer the prompt — so refusing them would remove something that works, while
+  // leaving them silent would let a caller believe an unevidenced retrospective
+  // was grounded in the phase they named. P16-B003 makes the scope real.
+  const scopeDiagnostics: ExecutionFinding[] = phase === null && milestone === null
+    ? []
+    : [{
+        id: "retro_scope_not_evidenced",
+        title: "Scope reached the prompt topic only",
+        body: `This retrospective is labelled ${phase === null ? `milestone ${milestone ?? ""}` : `phase ${phase}`} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
+        severity: "major"
+      }];
+
   const markdown = renderGuidanceMarkdown({
     title: "Workflow Retrospective",
     topic,
@@ -488,6 +521,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status = executed.result.ok ? "completed" : "blocked";
+  const diagnostics = [...scopeDiagnostics, ...executed.result.findings];
   await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
     paths,
@@ -502,7 +536,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     },
     nextAction: action,
     executor: executed.executor,
-    diagnostics: executed.result.findings
+    diagnostics
   });
   const payload = {
     ok: executed.result.ok,
@@ -513,11 +547,15 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     markdownArtifactPath,
     executor: executed.executor,
     nextAction: action,
-    diagnostics: executed.result.findings
+    diagnostics
   };
-  return executed.result.ok
-    ? success(payload, [`Retrospective: ${status}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n"))
-    : failure(payload, [`Retrospective: ${status}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n"));
+  const human = [
+    `Retrospective: ${status}.`,
+    ...scopeDiagnostics.map((finding) => `WARNING: ${finding.body}`),
+    `Artifact: ${markdownArtifactPath}`,
+    renderNextAction(action)
+  ].join("\n");
+  return executed.result.ok ? success(payload, human) : failure(payload, human);
 }
 
 async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> {
@@ -540,6 +578,34 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
   if (complete !== undefined && summary === undefined) return usageError("legion milestone --complete requires --summary <text>.");
 
   const current = await readMilestoneIndex(context.repositoryRoot);
+
+  // Status is the implicit default, and it used to fall through to the same
+  // write path as define, complete and archive: rewriting milestones.json,
+  // regenerating milestones.md, and appending a guidance run on every
+  // invocation. Reading the state changed it, and every read left a run record
+  // behind. That matters more than it looks: a host thinned onto this verb
+  // renders status on every display, so the project's run history would fill
+  // with entries recording nothing but that someone looked.
+  if (statusMode) {
+    const action = nextAction("legion status", "Review milestone state before changing release posture.");
+    return success(
+      {
+        ok: true,
+        status: "completed",
+        workflow: "milestone",
+        mode: "status",
+        milestones: current.milestones,
+        nextAction: action,
+        diagnostics: []
+      },
+      [
+        `Milestones: ${current.milestones.length}.`,
+        renderMilestones(current).trimEnd(),
+        renderNextAction(action)
+      ].join("\n")
+    );
+  }
+
   let next = current;
   let status: "completed" | "accepted" = "completed";
   let slugSource = "status";
