@@ -199,12 +199,16 @@ items:
   # P16-B001's conversion contract for the three classes and why thin-wrapping
   # the orchestration commands would delete capability silently.
   #
-  # The first pass of this plan classified from one-line help text and got three
-  # wrong: advise, ship, and board each own orchestration no CLI verb performs.
-  # Review caught all three. The correction is B001's capability inventory,
-  # which compares what a command does against what its verb does and must be
-  # completed before any command is assigned a class. Every class assignment
-  # below is provisional until it is.
+  # The first pass of this plan classified from one-line help text and got four
+  # wrong: advise, ship, board, and explore each own orchestration no CLI verb
+  # performs. Review caught the first three. The fourth, and three false claims
+  # about what the verbs do, were caught only once B001's inventory was built
+  # from the implementations.
+  #
+  # The class assignments below are no longer the record. B001 delivered
+  # docs/next/command-capability-inventory.json, which is checked against the
+  # code by scripts/scan-command-surface.mjs and is authoritative where the two
+  # disagree. docs/next/COMMAND-CONVERSION-CONTRACT.md states the procedure.
   - id: P16-B001
     phase: 16
     title: Ratchet the command surface off .planning/
@@ -223,17 +227,24 @@ items:
       - >-
         A per-command capability inventory records what the markdown does and what the CLI verb
         actually does, and is completed before the command is assigned a class. Verb existence is
-        not evidence of parity: several verbs are the same generic guidance executor
-        (runExecutorBackedGuidance in packages/cli/src/commands/workflow/contextual.ts), which
-        writes an artifact and does not reproduce a selection, a panel, or a follow-up turn.
+        not evidence of parity: explore and council resolve to one shared implementation
+        (runExecutorBackedGuidance in packages/cli/src/commands/workflow/contextual.ts), as do
+        quick and polish (createTypedAdHocWorkflow), so those four verb names describe two
+        behaviours between them.
       - >-
-        The class assignments recorded in this backlog are provisional until that inventory exists.
-        The first pass assigned them from one-line help text and put advise, ship, and board in
-        classes that would have deleted an advisor selection, a publishing workflow, and a
-        multi-member panel respectively. That is the failure the inventory exists to prevent, and
-        it is a planning failure rather than an implementation one.
+        The inventory's claims are checked against the code rather than read. Every host-only
+        capability carries an anchor that must still appear in the command file, every verb claim
+        names a handler symbol that must still resolve, and executorBacked is recomputed from the
+        handler body instead of being asserted.
+      - >-
+        A command on the allowlist with no inventory entry fails the ratchet, so a class cannot be
+        assigned to a command nobody has looked at. That is the check the first pass lacked: it
+        classified from one-line help text and put advise, ship, board, and explore in classes
+        that would have deleted an advisor selection, a publishing workflow, a deliberating panel,
+        and the design conversation exploration exists to hold.
     verification:
       - node --test tests/command-surface.test.mjs
+      - node scripts/scan-command-surface.mjs
       - pnpm run validate:next
   - id: P16-B002
     phase: 16
@@ -250,9 +261,14 @@ items:
       - Neither file reads .planning/, and both are removed from the allowlist.
       - Any state the wrapper needs that the CLI does not expose is added to the CLI first, with tests.
       - >-
-        B001's capability inventory confirms parity before either is thinned. legion map is a
-        generic guidance executor, and the interactive prompts these commands own are host-only
-        even though neither dispatches an agent.
+        legion map is deterministic, not executor-backed: refresh, check, and query produce the
+        map artifacts directly. An earlier revision of this item called it a generic guidance
+        executor, which was false and understated the verb.
+      - >-
+        The gaps B001's inventory recorded are closed in the CLI first. legion validate has no
+        --fix and no --ci; legion map with no flags refreshes immediately where the command offers
+        the choice. The agent-roster check reads the .planning/ agent catalog and retires with it,
+        which is recorded as a deliberate removal rather than discovered as one.
     verification:
       - node --test tests/command-surface.test.mjs
       - node --test tests/legacy/installer-smoke.test.cjs
@@ -273,26 +289,14 @@ items:
       - Guidance artifacts continue to be written by the CLI, not by the host.
       - All three are removed from the allowlist.
       - >-
-        B001's capability inventory confirms parity before any is thinned. legion retro and legion
-        milestone are generic guidance executors, and all three commands own interactive prompts
-        that no CLI verb reproduces.
-    verification:
-      - node --test tests/command-surface.test.mjs
-      - node --test tests/workflow-guidance.test.mjs
-      - pnpm run validate:next
-  - id: P16-B004
-    phase: 16
-    title: Convert explore to a CLI renderer
-    milestone: GA-critical
-    owner: compatibility-owner
-    depends_on:
-      - P16-B001
-    maps_to:
-      - commands/explore.md
-    acceptance:
-      - The command renders legion explore's JSON payload and writes no artifacts directly.
-      - explore continues to produce an exploration typed as exploratory that start can seed proposals from.
-      - The command is removed from the allowlist.
+        legion milestone and legion learn are deterministic state machines, and legion retro is
+        executor-backed but purpose-built. An earlier revision of this item called retro and
+        milestone generic guidance executors, which was false for both.
+      - >-
+        The gaps B001's inventory recorded are closed in the CLI first. legion learn records only,
+        so the command's recall, list, and prune modes have no verb equivalent; legion retro has
+        no cross-project mode. Thinning before these land would delete three of learn's four
+        modes.
     verification:
       - node --test tests/command-surface.test.mjs
       - node --test tests/workflow-guidance.test.mjs
@@ -327,7 +331,11 @@ items:
     maps_to:
       - commands/build.md
     acceptance:
-      - The fourteen agent-dispatch sites in commands/build.md are inventoried before editing, each classified as host-only or CLI-owned.
+      - >-
+        Every agent-dispatch site in commands/build.md is inventoried before editing, each
+        classified as host-only or CLI-owned. An earlier revision of this item asserted fourteen
+        sites; no counting rule in the repository reproduces that number, so the criterion is
+        coverage of the sites the inventory records, not a count nobody can recompute.
       - The CLI owns verification, diff reconciliation, and the task verdict; the host owns wave dispatch only.
       - The wave executor survives the conversion, or its removal is recorded with a replacement.
     verification:
@@ -345,7 +353,10 @@ items:
     maps_to:
       - commands/review.md
     acceptance:
-      - The sixteen agent-dispatch sites in commands/review.md are inventoried before editing, each classified as host-only or CLI-owned.
+      - >-
+        Every agent-dispatch site in commands/review.md is inventoried before editing, each
+        classified as host-only or CLI-owned. An earlier revision asserted sixteen sites, which no
+        counting rule reproduces.
       - The CLI owns the verification report, the gate set, and human acceptance; the host owns the review panel.
       - legion review exposes what a panel needs before commands/review.md is thinned, not after.
       - The multi-agent review panel survives the conversion, or its removal is recorded with a replacement.
@@ -385,12 +396,16 @@ items:
     maps_to:
       - commands/advise.md
     acceptance:
-      - The three agent-dispatch sites in commands/advise.md are inventoried before editing.
+      - >-
+        Every agent-dispatch site in commands/advise.md is inventoried before editing. An earlier
+        revision asserted three, which no counting rule reproduces.
       - >-
         Advisor selection with personality injection (commands/advise.md:56-146) and the follow-up
         session (commands/advise.md:157-181) survive as host responsibilities. legion advise runs
-        one generic guidance executor, so thinning to a JSON renderer would replace a chosen
-        specialist and a multi-turn consultation with a single generic artifact.
+        one executor pass against fixed sections and supports no second turn, so thinning to a JSON
+        renderer would replace a chosen specialist and a multi-turn consultation with a single
+        generic artifact. An earlier revision called the verb a generic guidance executor; it is
+        purpose-built (runAdviceWorkflow), which does not change the conclusion but was not checked.
       - The advisory agent remains read-only, as the current dispatch specification requires.
       - The command is removed from the allowlist.
     verification:
@@ -417,6 +432,34 @@ items:
         generic guidance executor, so driving the verb alone would collapse a deliberating panel
         into a single opinion.
       - The CLI owns the recorded decision artifact; the host owns composition, deliberation, and tallying.
+      - The command is removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-guidance.test.mjs
+      - pnpm run validate:next
+  - id: P16-B004
+    phase: 16
+    title: Split explore across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B005
+    maps_to:
+      - commands/explore.md
+    acceptance:
+      - The CLI owns the typed exploration artifact and its exploratory status; the host owns the design conversation.
+      - >-
+        The entry-path choice, the bounded research pass, the iterative clarifying interview over
+        eight named decisions, and the two-to-three approach comparison with its choose, refine, or
+        keep-comparing loop all survive as host responsibilities. legion explore runs one executor
+        pass against fixed sections and shares that implementation with legion council, so
+        rendering its payload would replace the whole conversation with a single artifact.
+      - >-
+        This item previously classified explore as a thin renderer. That was the fourth
+        misclassification of the first pass and the one review did not catch. It is also the least
+        safe: the governing plan makes exploration the one step where wide latitude is correct,
+        because nothing it produces is authoritative.
+      - explore continues to produce an exploration typed as exploratory that start can seed proposals from.
       - The command is removed from the allowlist.
     verification:
       - node --test tests/command-surface.test.mjs

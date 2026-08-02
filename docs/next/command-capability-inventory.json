@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "kind": "command_capability_inventory",
+  "note": "Claims about the installed command surface, verified by scripts/scan-command-surface.mjs. Every hostOnly entry carries an anchor that must still appear in the command file, and every verb claim names a handler symbol that must still exist at the cited path. Nothing here is prose a reader has to trust: if a claim rots, tests/command-surface.test.mjs fails.",
+  "classes": {
+    "A": "The CLI verb performs the work. The host renders its JSON and derives no state. Gaps listed under cliGaps must be closed in the CLI, with tests, before the command is thinned.",
+    "B": "The command owns orchestration no verb performs. The CLI takes the derivable state; the host keeps the named capabilities. Thinning to a renderer would delete them.",
+    "C": "No legion verb exists. Placement is undecided; see P16-B009."
+  },
+  "commands": [
+    {
+      "command": "map",
+      "verb": "map",
+      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "handleMapWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "A",
+      "rationale": "The verb does the real work: refreshCodebaseMap, currentCodebaseFingerprint, and queryCodebaseMap are deterministic and produce the map artifacts directly. No executor is involved.",
+      "hostOnly": [
+        { "capability": "Offer a refresh rather than performing one when invoked with no flags", "anchor": "otherwise summarize the current dataset and offer refresh via AskUserQuestion" }
+      ],
+      "cliGaps": [
+        "legion map with no flags refreshes immediately (mapRefresh); the command offers the choice first. Either the CLI gains a no-flag summary mode or the host keeps the prompt."
+      ]
+    },
+    {
+      "command": "milestone",
+      "verb": "milestone",
+      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "handleMilestoneWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "A",
+      "rationale": "The verb is a deterministic state machine over milestones.json with define, complete, archive, and status modes, each validated. It is not executor-backed and needs no model to run.",
+      "hostOnly": [
+        { "capability": "Menu of available milestone actions", "anchor": "5. PRESENT OPTIONS" },
+        { "capability": "Routing a menu selection to the matching mode", "anchor": "6. HANDLE USER CHOICE" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "retro",
+      "verb": "retro",
+      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runRetroWorkflow" },
+      "executorBacked": true,
+      "sharedWith": [],
+      "class": "A",
+      "rationale": "The verb is executor-backed but purpose-built: it reads workflow state and recent guidance runs, and asks for retrospective sections specifically. The command file declares the Agent tool but contains no dispatch specification; its Agent references are retrospective content about which agents were used, not dispatch.",
+      "hostOnly": [
+        { "capability": "Save-or-discard choice over the retrospective", "anchor": "9. HANDLE SAVE CHOICE" }
+      ],
+      "cliGaps": [
+        "legion retro accepts --phase and --milestone only. The command's cross-project mode has no verb equivalent."
+      ]
+    },
+    {
+      "command": "learn",
+      "verb": "learn",
+      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "runLearnWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "A",
+      "rationale": "The verb writes the lesson and maintains knowledge-index.json deterministically. No executor is involved.",
+      "hostOnly": [
+        { "capability": "Continuation prompt after recording a lesson", "anchor": "7. OFFER CONTINUATION" }
+      ],
+      "cliGaps": [
+        "legion learn records only. The command's recall mode (--recall) has no verb equivalent.",
+        "The command's list mode (--list) has no verb equivalent.",
+        "The command's prune mode (--prune) has no verb equivalent."
+      ]
+    },
+    {
+      "command": "validate",
+      "verb": "validate",
+      "handler": { "file": "packages/cli/src/commands/workflow/validate.ts", "symbol": "handleValidateCommand" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "A",
+      "rationale": "The verb validates committed project state under .legion/project deterministically, which is the whole of what this command should assert.",
+      "hostOnly": [],
+      "cliGaps": [
+        "legion validate has no --fix. The command's auto-fix pass has no verb equivalent.",
+        "legion validate has no --ci. The command's CI mode has no verb equivalent.",
+        "The command's agent-roster consistency check reads the .planning/ agent catalog. It retires with .planning/ rather than moving to the CLI; record the removal as deliberate."
+      ]
+    },
+    {
+      "command": "explore",
+      "verb": "explore",
+      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runExecutorBackedGuidance" },
+      "executorBacked": true,
+      "sharedWith": ["council"],
+      "class": "B",
+      "rationale": "The verb runs one executor pass against fixed sections and writes one artifact. The command runs a divergent design conversation: an entry-path choice, a bounded research pass, an iterative clarifying interview over eight named decisions, and an approach-comparison loop. Rendering the verb's payload would delete all of it. Exploration is the one place the governing plan deliberately grants wide latitude, so this is the command least safe to thin.",
+      "hostOnly": [
+        { "capability": "Entry-path choice: fresh idea, existing exploration, or project context", "anchor": "2. CAPTURE THE INITIAL ASK" },
+        { "capability": "Bounded local and web research pass recorded as facts, inferences, and assumptions", "anchor": "3. RESEARCH PASS" },
+        { "capability": "Iterative clarifying interview, one material decision at a time, updating design constraints between answers", "anchor": "4. CLARIFY ONE DECISION AT A TIME" },
+        { "capability": "Two to three approaches with tradeoffs and a choose, refine, or keep-comparing loop", "anchor": "5. PROPOSE APPROACHES" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "plan",
+      "verb": "plan",
+      "handler": { "file": "packages/cli/src/commands/workflow/plan.ts", "symbol": "handlePlanWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The CLI owns the taskgraph, the risk classification, and the decision that planning is complete. Agent recommendation, human confirmation, and issue creation are host work.",
+      "hostOnly": [
+        { "capability": "Agent recommendation per plan", "anchor": "5. RECOMMEND AGENTS" },
+        { "capability": "Human confirmation of the decomposition before files are written", "anchor": "6. PRESENT TO USER FOR CONFIRMATION" },
+        { "capability": "GitHub issue creation", "anchor": "9. GITHUB ISSUE CREATION" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "quick",
+      "verb": "quick",
+      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "createTypedAdHocWorkflow" },
+      "executorBacked": false,
+      "sharedWith": ["polish"],
+      "class": "B",
+      "rationale": "The verb creates a typed change, oracle, and taskgraph and stops, routing execution to legion build. Everything the command does after planning is host work. The handler is shared with polish, so the verb name alone says nothing about behaviour.",
+      "hostOnly": [
+        { "capability": "Agent selection for the task", "anchor": "3. SELECT AGENT" },
+        { "capability": "Commit offer after files change", "anchor": "7. OFFER COMMIT" },
+        { "capability": "Inline review pass in fix mode", "anchor": "8. INLINE REVIEW" },
+        { "capability": "PR creation in fix mode", "anchor": "9. CREATE PR" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "polish",
+      "verb": "polish",
+      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "createTypedAdHocWorkflow" },
+      "executorBacked": false,
+      "sharedWith": ["quick"],
+      "class": "B",
+      "rationale": "The verb creates a typed taskgraph scoped to the target and stops. The dry run, the behaviour-preservation check, and the commit step are host work.",
+      "hostOnly": [
+        { "capability": "Dry-run preview before any edit", "anchor": "4. DRY-RUN CHECK" },
+        { "capability": "Post-polish safety verification that behaviour is unchanged", "anchor": "6. SAFETY VERIFICATION" },
+        { "capability": "Report and commit step", "anchor": "7. REPORT AND COMMIT" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "build",
+      "verb": "build",
+      "handler": { "file": "packages/cli/src/commands/workflow/build.ts", "symbol": "handleBuildWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The CLI owns verification, diff reconciliation, and the task verdict. The wave executor, its disjointness proof, and its gates are host work with no verb equivalent.",
+      "hostOnly": [
+        { "capability": "Wave A analysis dispatch and the architecture review gate", "anchor": "Gate: Architecture Review" },
+        { "capability": "Wave B parallel dispatch across execution and remediation streams", "anchor": "Spawn Wave B agents in parallel" },
+        { "capability": "File-overlap safety check that serializes waves whose write scopes intersect", "anchor": "File-overlap safety check (MANDATORY before dispatch)" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "review",
+      "verb": "review",
+      "handler": { "file": "packages/cli/src/commands/workflow/review.ts", "symbol": "handleReviewWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The CLI owns the verification report, the gate set, and human acceptance. The multi-agent review panel and its routing are host work.",
+      "hostOnly": [
+        { "capability": "Intent detection over natural-language invocation", "anchor": "Step 0.7: NATURAL LANGUAGE INTENT DETECTION" },
+        { "capability": "Review agent selection", "anchor": "4. SELECT REVIEW AGENTS" },
+        { "capability": "Review cycle execution with glob-routed fix agents", "anchor": "5. EXECUTE REVIEW CYCLE" },
+        { "capability": "Security-only output mode", "anchor": "SECURITY-ONLY OUTPUT" }
+      ],
+      "cliGaps": [
+        "legion review must expose what a panel needs before commands/review.md is thinned, not after."
+      ]
+    },
+    {
+      "command": "ship",
+      "verb": "ship",
+      "handler": { "file": "packages/cli/src/commands/workflow/ship.ts", "symbol": "handleShipWorkflow" },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb runs release readiness gates. It does not publish or release, so PR creation, pushing, and post-ship observation cannot move into it.",
+      "hostOnly": [
+        { "capability": "PR creation and pushing", "anchor": "5. PR CREATION" },
+        { "capability": "Post-ship verification and canary monitoring", "anchor": "7. POST-SHIP" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "advise",
+      "verb": "advise",
+      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "runAdviceWorkflow" },
+      "executorBacked": true,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb runs one executor pass against fixed sections and writes one advisory artifact. It selects no specialist and supports no second turn, so a chosen advisor and a multi-turn consultation would both be lost.",
+      "hostOnly": [
+        { "capability": "Advisor selection with personality injection", "anchor": "3. SELECT ADVISOR" },
+        { "capability": "Follow-up consultation turns against the same advisor", "anchor": "7. OFFER FOLLOW-UP" },
+        { "capability": "Read-only enforcement on the advisory dispatch", "anchor": "adapter.spawn_agent_readonly" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "board",
+      "verb": "council",
+      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runExecutorBackedGuidance" },
+      "executorBacked": true,
+      "sharedWith": ["explore"],
+      "class": "B",
+      "rationale": "The verb shares one generic implementation with explore and produces a single decision artifact. The command is a deliberating panel. Preserving the /legion:board name is necessary and not sufficient: the defining behaviour is the panel, not the label.",
+      "hostOnly": [
+        { "capability": "Board composition: a user-confirmed slate of members", "anchor": "Step 2: BOARD COMPOSITION" },
+        { "capability": "Three to five independent assessments with quorum and abstention on timeout", "anchor": "board-assessment" },
+        { "capability": "Vote tally and escalated tie resolution", "anchor": "ESCALATED: Present the tie to the user" }
+      ],
+      "cliGaps": []
+    },
+    {
+      "command": "agent",
+      "verb": null,
+      "handler": null,
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "C",
+      "rationale": "No legion verb creates agent personalities. The command is a three-stage guided generator with schema validation.",
+      "hostOnly": [
+        { "capability": "Three-stage guided identity, capability, and registry-tag capture", "anchor": "3. STAGE 1: AGENT IDENTITY" },
+        { "capability": "Schema validation of the generated personality", "anchor": "6. VALIDATE SCHEMA" }
+      ],
+      "cliGaps": [
+        "No verb exists. P16-B009 decides whether one should."
+      ]
+    },
+    {
+      "command": "portfolio",
+      "verb": null,
+      "handler": null,
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "C",
+      "rationale": "No workflow verb exists. legion dev board portfolio is unrelated: it replays a tenant-scoped projection and is not a multi-project dashboard.",
+      "hostOnly": [
+        { "capability": "Cross-project dependency display", "anchor": "4. DISPLAY CROSS-PROJECT DEPENDENCIES" },
+        { "capability": "Agent allocation across registered projects", "anchor": "5. DISPLAY AGENT ALLOCATION" },
+        { "capability": "Manual project registration fallback", "anchor": "8. MANUAL REGISTRATION" }
+      ],
+      "cliGaps": [
+        "No workflow verb exists. P16-B009 decides whether one should."
+      ]
+    }
+  ]
+}
