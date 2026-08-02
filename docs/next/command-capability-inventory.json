@@ -14,13 +14,20 @@
       "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "handleMapWorkflow" },
       "executorBacked": false,
       "sharedWith": [],
-      "class": "A",
-      "rationale": "The verb does the real work: refreshCodebaseMap, currentCodebaseFingerprint, and queryCodebaseMap are deterministic and produce the map artifacts directly. No executor is involved.",
+      "class": "B",
+      "rationale": "The verb is deterministic and executor-free, and an earlier revision read that as equivalent. It is not. The two produce different artifacts that share the name CODEBASE.md: renderCodebaseMarkdown emits a file-extension histogram over records of {path, sha256, sizeBytes, lineCount, symbols, headings, summary}, where symbols come from seven regexes. The command emits an architecture document with a dependency graph, an API surface, a coverage map, and ranked risk hotspots, produced by executing skills/codebase-mapper/SKILL.md. Thinning would replace the architecture document with the histogram, which is the deletion the contract says is indistinguishable from the intended outcome. The CLI owns the derivable state: the file set, the fingerprint, freshness, scope containment, and the run record.",
       "hostOnly": [
+        { "capability": "The analytical half of the map: architecture narrative, dependency and import graph, route and API surface, data and config map, test and coverage map, risk hotspots, and the package map", "anchor": "Run the full codebase-mapper protocol:" },
+        { "capability": "Ranked risk hotspots in the completion report", "anchor": "Top risks or `_None detected_`." },
+        { "capability": "Semantic search that classifies a query into keyword, path, symbol, and domain hints and returns why each chunk matched", "anchor": "Follow codebase-mapper Section 18 Semantic Search Protocol:" },
         { "capability": "Offer a refresh rather than performing one when invoked with no flags", "anchor": "otherwise summarize the current dataset and offer refresh via AskUserQuestion" }
       ],
       "cliGaps": [
-        "legion map with no flags refreshes immediately (mapRefresh); the command offers the choice first. Either the CLI gains a no-flag summary mode or the host keeps the prompt."
+        "legion map with no flags calls mapRefresh unconditionally, walking the repository and overwriting the artifact set with no prompt. The CLI needs a non-mutating default, or --refresh must become mandatory for the destructive path.",
+        "Freshness has four states in the command (fresh, stale, partial, absent) and two in mapCheck, which computes one boolean. A project that never ran map reports the same status as one whose fingerprint moved.",
+        "The command's 30-day age rule is not implemented. CodebaseMapDocument already carries generatedAt, so the data is on disk and unused.",
+        "collectSourceFiles returning nothing is not special-cased: refreshCodebaseMap writes all five artifacts with sourceFileCount 0 and reports success.",
+        "legion map --query <text> --scope <path> silently ignores the scope. mapQuery is called without it, and the mode-conflict guard does not catch it because scope is not a mode."
       ]
     },
     {
@@ -29,13 +36,24 @@
       "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "handleMilestoneWorkflow" },
       "executorBacked": false,
       "sharedWith": [],
-      "class": "A",
-      "rationale": "The verb is a deterministic state machine over milestones.json with define, complete, archive, and status modes, each validated. It is not executor-backed and needs no model to run.",
+      "class": "B",
+      "rationale": "Deterministic, but not equivalent. handleMilestoneWorkflow reads exactly one file, its own milestones.json, and never reads a roadmap, phase, or requirement artifact. --define stores the free-text --phases string opaquely without cross-referencing it. --complete checks only that the id exists and stamps the operator's own --summary. --archive sets a status field and moves nothing. No git commit and no gh invocation exists anywhere in packages/cli/src, so the completion commit and the GitHub milestone close have no counterpart at all.",
       "hostOnly": [
-        { "capability": "Menu of available milestone actions", "anchor": "5. PRESENT OPTIONS" },
-        { "capability": "Routing a menu selection to the matching mode", "anchor": "6. HANDLE USER CHOICE" }
+        { "capability": "Cluster roadmap phases into proposed milestone groupings by theme and dependency, then negotiate the grouping with the operator", "anchor": "b. Analyze for logical groupings:" },
+        { "capability": "Interactive action loop offering only the actions the current milestone state permits", "anchor": "5. PRESENT OPTIONS" },
+        { "capability": "Routing a menu selection to the matching mode", "anchor": "6. HANDLE USER CHOICE" },
+        { "capability": "Explicit confirmation before archiving, naming how many phase directories move and where", "anchor": "c. Confirm with user:" },
+        { "capability": "Commit the milestone completion in the project's conventional format", "anchor": "Create git commit following execution-tracker Section 6 milestone completion format" },
+        { "capability": "Close the corresponding GitHub milestone when gh and a remote are available", "anchor": "CLOSE GITHUB MILESTONE" },
+        { "capability": "Per-milestone deep dive naming which requirements the milestone satisfies", "anchor": "Requirement coverage: which requirements are satisfied by this milestone" }
       ],
-      "cliGaps": []
+      "cliGaps": [
+        "--complete has no pre-flight gate requiring every phase in the milestone to be complete. The command's stated invariant is no partial completions, and the verb's only check is that the id exists.",
+        "--archive flips status to archived and sets archivedAt. It relocates nothing and updates no project state, so thinning as-is would make the word archive a label with no effect.",
+        "Status mode is the implicit default and still rewrites milestones.json, writes a fresh milestones.md, and appends a guidance run on every invocation. A host that renders status on every display would mutate project state each time. A genuinely read-only query is needed first.",
+        "Progress rendering requires joining milestone records to phase status, which is exactly the link the handler lacks. renderMilestones has no percentage, bar, or phase table.",
+        "--summary is stored verbatim, so a completed milestone's summary is whatever the caller typed rather than derived from the artifacts the CLI owns."
+      ]
     },
     {
       "command": "retro",
@@ -43,13 +61,20 @@
       "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runRetroWorkflow" },
       "executorBacked": true,
       "sharedWith": [],
-      "class": "A",
-      "rationale": "The verb is executor-backed but purpose-built: it reads workflow state and recent guidance runs, and asks for retrospective sections specifically. The command file declares the Agent tool but contains no dispatch specification; its Agent references are retrospective content about which agents were used, not dispatch.",
+      "class": "B",
+      "rationale": "The verb is executor-backed and purpose-built, and an earlier revision stopped there. Follow --phase through the handler: it reaches slugSource, runInput, and an interpolated topic string handed to guidancePrompt, and nothing else. It is never parsed as a phase number and never selects any evidence. The evidence set is hardcoded to resolveWorkflowState().stage plus the last two guidance runs per workflow; no phase summary, review, or plan is read. A scoped retrospective over completed work is not a mode this verb has, it is a word pasted into a prompt.",
       "hostOnly": [
-        { "capability": "Save-or-discard choice over the retrospective", "anchor": "9. HANDLE SAVE CHOICE" }
+        { "capability": "Save-or-discard decision, including a view-only path that persists nothing", "anchor": "9. HANDLE SAVE CHOICE" },
+        { "capability": "Section-by-section correction of the findings before they are recorded", "anchor": "**Path C: Edit before saving**" },
+        { "capability": "Cross-project aggregation across every project in the portfolio", "anchor": "10. CROSS-PROJECT MODE" }
       ],
       "cliGaps": [
-        "legion retro accepts --phase and --milestone only. The command's cross-project mode has no verb equivalent."
+        "--phase and --milestone are decorative: they select no evidence. Making them real scope selectors is the load-bearing gap and the reason retro cannot be thinned.",
+        "Evidence gathering from completed-work artifacts (phase summaries, review findings and cycle counts, plan frontmatter) does not exist. latestGuidanceRuns returns run metadata, not build or review evidence.",
+        "No completeness gate. The command refuses to run on incomplete work; the verb's only validation is that the flags are non-empty strings.",
+        "No computed metrics (plans completed, first-pass review rate, escalation counts). These are counts over typed artifacts and are what make the findings falsifiable.",
+        "No --dry-run. writeProjectTextFile and writeGuidanceRun both fire before the handler returns, so a host-side flag could suppress rendering but not persistence.",
+        "Findings are written only inside the run directory. The command promises retro findings reach later planning, and nothing reads retro.md."
       ]
     },
     {
@@ -58,15 +83,18 @@
       "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "runLearnWorkflow" },
       "executorBacked": false,
       "sharedWith": [],
-      "class": "A",
-      "rationale": "The verb writes the lesson and maintains knowledge-index.json deterministically. No executor is involved.",
+      "class": "B",
+      "rationale": "The verb implements one of the command's four modes, and implements it without the type system the other three are built on. LessonIndex records carry {id, lesson, createdAt, artifactPath} and nothing else, so pattern, pitfall, and preference do not exist in the CLI's data model. There is no read path: the only consumer dumps the whole index into a context pack truncated at 4,000 characters with no query. Recall, list, and prune have no verb surface at all.",
       "hostOnly": [
-        { "capability": "Continuation prompt after recording a lesson", "anchor": "7. OFFER CONTINUATION" }
+        { "capability": "Classify the lesson as pattern, pitfall, or preference and confirm the classification before recording", "anchor": "Present classification via adapter.ask_user:" },
+        { "capability": "Enrich the lesson with derived tags, a one-line summary, and the current phase context", "anchor": "5. ENRICH" },
+        { "capability": "Multi-turn recording session that loops back for the next lesson after each save", "anchor": "7. OFFER CONTINUATION" }
       ],
       "cliGaps": [
-        "legion learn records only. The command's recall mode (--recall) has no verb equivalent.",
-        "The command's list mode (--list) has no verb equivalent.",
-        "The command's prune mode (--prune) has no verb equivalent."
+        "No typed lesson kind on the record path. This is the prerequisite for the rest: --list groups by type and --recall scores tag matches, and neither can be implemented over records carrying only id, lesson, createdAt, and artifactPath.",
+        "No --recall. The scoring rule is deterministic and the corpus already lives in knowledge-index.json, but the CLI has no read verb at all.",
+        "No --list. Pure rendering over CLI-owned state, blocked on the typed-kind gap.",
+        "--prune targets .planning/memory/OUTCOMES.md, which does not survive. No outcome record store exists in the CLI; record as a deliberate removal."
       ]
     },
     {
@@ -75,13 +103,18 @@
       "handler": { "file": "packages/cli/src/commands/workflow/validate.ts", "symbol": "handleValidateCommand" },
       "executorBacked": false,
       "sharedWith": [],
-      "class": "A",
-      "rationale": "The verb validates committed project state under .legion/project deterministically, which is the whole of what this command should assert.",
-      "hostOnly": [],
+      "class": "B",
+      "rationale": "Proposed as class A on the grounds that the command dispatches no agent and its writes all target .planning/ files. A skeptic refuted it and was right: the command scores every check PASS, WARN, or FAIL, and the verb has no severity concept. ArtifactDiagnostic and TraceabilityDiagnostic carry only code, message, and source, and validateProject fails as soon as any diagnostic exists. Thinning today would turn every warning into a hard failure, which is a behaviour change for anyone running validate in CI.",
+      "hostOnly": [
+        { "capability": "Repair-then-reverify loop that re-runs validation over the fixed files and presents an updated result set", "anchor": "Then re-run validation on fixed files and show updated results." },
+        { "capability": "Per-check fixability policy that declines to auto-fix dangling agent references and emits human guidance instead", "anchor": "Do NOT auto-fix dangling agent references." }
+      ],
       "cliGaps": [
-        "legion validate has no --fix. The command's auto-fix pass has no verb equivalent.",
-        "legion validate has no --ci. The command's CI mode has no verb equivalent.",
-        "The command's agent-roster consistency check reads the .planning/ agent catalog. It retires with .planning/ rather than moving to the CLI; record the removal as deliberate."
+        "No WARN severity. The command has six scoring rules that produce a warning rather than a failure; the verb collapses every finding into one failing bucket. Its only non-failing report is coverage.unplanned, a single documented exemption.",
+        "No --ci. Its substance is a three-valued exit code (0 clean, 1 warnings, 2 failures); success and failure hardcode 0 and 1 and nothing returns 2. Blocked on the severity gap, since there is nothing to tier without it.",
+        "No validation of the root settings.json. This is NOT under .planning/: it sits at the repository root, has a published schema at docs/settings.schema.json, and nothing in packages/ reads control_mode, max_tasks_per_plan, or max_cycles. Thinning before this lands would leave the only enforcement of a schema the file itself references silently absent.",
+        "No --fix. Every current fix target is a .planning/ file that retires, and the one remaining mechanically repairable diagnostic is a one-line .gitignore append. Record as a deliberate removal; note that parseCliArgs does not reject unknown options, so legion validate --fix parses and is silently ignored rather than erroring.",
+        "The agent-roster check compares against strings in STATE.md and .planning/config/authority-matrix.yaml. Both retire, so the check has nothing left to compare. Deliberate removal."
       ]
     },
     {

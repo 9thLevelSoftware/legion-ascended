@@ -24,6 +24,24 @@ This is not a hypothetical failure mode. The first pass of the phase 16 plan cla
 
 Class A is the destructive direction. Misfiling a class-B command as class A deletes capability; misfiling class A as class B leaves work in the host that the CLI could have owned, which is waste rather than loss. **When the evidence is ambiguous, assign B.**
 
+### Class A is currently empty, and that is the finding
+
+Five commands were proposed as class A — `map`, `milestone`, `retro`, `learn`, `validate`. Grounding each in its handler moved all five to B.
+
+The pattern was identical every time: the verb is **deterministic and executor-free**, that was read as **equivalent**, and it is a different claim. Deterministic says how the verb computes. Equivalent says what it produces.
+
+| Command | Read as | Actually |
+|---|---|---|
+| `map` | Produces CODEBASE.md | Produces a *file-extension histogram*. The command produces an architecture document. Same filename, different artifact. |
+| `retro` | Takes `--phase` | `--phase` reaches a slug, a run record, and a prompt topic string. It selects no evidence. The flag looks implemented and does nothing. |
+| `milestone` | Has an `--archive` mode | Sets a status field. Nothing moves. No `git commit` or `gh` call exists anywhere in the CLI. |
+| `learn` | Records lessons | Records lessons *untyped*. Pattern, pitfall, and preference do not exist in the data model, so the three modes built on them cannot be. |
+| `validate` | Reports diagnostics | Reports them without severity. The command's WARN tier collapses into failure, so thinning turns every warning into a hard CI failure. |
+
+The lesson is narrower than "be careful". **A verb that shares a name, a flag, and an output filename with a command can still produce something else entirely**, and every one of those three surface similarities is what made the wrong answer look checked. The only reading that distinguished them was the handler body.
+
+Class A is not deleted — a genuinely equivalent verb should still take the work. But an assignment to it now requires showing the artifacts match, not that the verb is deterministic.
+
 ## Procedure
 
 1. **Inventory the command.** For each behaviour, record what it is and an anchor string that locates it in the file. Anchors are checked by `scripts/scan-command-surface.mjs`; a capability with no anchor is a capability no test can protect.
