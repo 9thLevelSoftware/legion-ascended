@@ -15,7 +15,7 @@
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The verb is deterministic and executor-free, and an earlier revision read that as equivalent. It is not. The two produce different artifacts that share the name CODEBASE.md: renderCodebaseMarkdown emits a file-extension histogram over records of {path, sha256, sizeBytes, lineCount, symbols, headings, summary}, where symbols come from seven regexes. The command emits an architecture document with a dependency graph, an API surface, a coverage map, and ranked risk hotspots, produced by executing skills/codebase-mapper/SKILL.md. Thinning would replace the architecture document with the histogram, which is the deletion the contract says is indistinguishable from the intended outcome. The CLI owns the derivable state: the file set, the fingerprint, freshness, scope containment, and the run record.",
+      "rationale": "The verb is deterministic and executor-free, and an earlier revision read that as equivalent. It is not. Both are called the codebase map and they are different artifacts: renderCodebaseMarkdown emits a file-extension histogram over records of {path, sha256, sizeBytes, lineCount, symbols, headings, summary}, where symbols come from seven regexes. The command emits an architecture document with a dependency graph, an API surface, a coverage map, and ranked risk hotspots, produced by executing skills/codebase-mapper/SKILL.md. They do not share a path either: the command writes .planning/CODEBASE.md and refreshCodebaseMap writes a run-scoped .legion/project/workflow/map/<run>/codebase.md. Thinning would replace the architecture document with the histogram, which is the deletion the contract says is indistinguishable from the intended outcome. The CLI owns the derivable state: the file set, the fingerprint, freshness, scope containment, and the run record.",
       "hostOnly": [
         { "capability": "The analytical half of the map: architecture narrative, dependency and import graph, route and API surface, data and config map, test and coverage map, risk hotspots, and the package map", "anchor": "Run the full codebase-mapper protocol:" },
         { "capability": "Ranked risk hotspots in the completion report", "anchor": "Top risks or `_None detected_`." },
@@ -62,7 +62,7 @@
       "executorBacked": true,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The verb is executor-backed and purpose-built, and an earlier revision stopped there. Follow --phase through the handler: it reaches slugSource, runInput, and an interpolated topic string handed to guidancePrompt, and nothing else. It is never parsed as a phase number and never selects any evidence. The evidence set is hardcoded to resolveWorkflowState().stage plus the last two guidance runs per workflow; no phase summary, review, or plan is read. A scoped retrospective over completed work is not a mode this verb has, it is a word pasted into a prompt.",
+      "rationale": "The verb is executor-backed and purpose-built, and an earlier revision stopped there. Follow --phase through the handler: it reaches slugSource, runInput, and an interpolated topic string handed to guidancePrompt, and nothing else. It is never parsed as a phase number and never selects any evidence. Worse than scope being ignored: guidancePrompt receives only the workflow, the topic, and four section names, so the executor producing the findings sees no project evidence at all. resolveWorkflowState().stage and the last two guidance runs are read before the run but consumed only by renderGuidanceMarkdown after it. A scoped retrospective over completed work is not a mode this verb has, it is a word pasted into a prompt.",
       "hostOnly": [
         { "capability": "Save-or-discard decision, including a view-only path that persists nothing", "anchor": "9. HANDLE SAVE CHOICE" },
         { "capability": "Section-by-section correction of the findings before they are recorded", "anchor": "**Path C: Edit before saving**" },
@@ -70,6 +70,7 @@
       ],
       "cliGaps": [
         "--phase and --milestone are decorative: they select no evidence. Making them real scope selectors is the load-bearing gap and the reason retro cannot be thinned.",
+        "The executor receives no evidence of any kind. guidancePrompt is handed the workflow, the topic, and four section names; the workflow stage and recent runs reach only the rendered markdown afterwards. Scoping the flags without also feeding the executor would leave the analysis exactly as unevidenced.",
         "Evidence gathering from completed-work artifacts (phase summaries, review findings and cycle counts, plan frontmatter) does not exist. latestGuidanceRuns returns run metadata, not build or review evidence.",
         "No completeness gate. The command refuses to run on incomplete work; the verb's only validation is that the flags are non-empty strings.",
         "No computed metrics (plans completed, first-pass review rate, escalation counts). These are counts over typed artifacts and are what make the findings falsifiable.",

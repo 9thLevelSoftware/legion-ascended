@@ -246,95 +246,6 @@ items:
       - node --test tests/command-surface.test.mjs
       - node scripts/scan-command-surface.mjs
       - pnpm run validate:next
-  - id: P16-B002
-    phase: 16
-    title: Split validate and map across the CLI and host boundary
-    milestone: GA-critical
-    owner: compatibility-owner
-    depends_on:
-      - P16-B001
-    maps_to:
-      - commands/validate.md
-      - commands/map.md
-    acceptance:
-      - >-
-        Both commands were class A in the first two revisions of this item, on the grounds that
-        their verbs are deterministic and executor-free. That is true and is a different claim from
-        equivalence. Grounding both in their handlers moved both to class B.
-      - >-
-        map keeps the analytical half: the architecture narrative, dependency graph, API surface,
-        coverage map, and ranked risk hotspots. legion map produces a file-extension histogram over
-        {path, sha256, sizeBytes, lineCount, symbols, headings, summary} records, where symbols come
-        from seven regexes. Both write a file named CODEBASE.md and they are not the same artifact,
-        which is precisely why the earlier reading passed for checked.
-      - >-
-        validate keeps the repair-then-reverify loop and the per-check fixability policy. The CLI
-        gains a WARN severity before the command is thinned: the command scores every check PASS,
-        WARN, or FAIL, and the verb fails on any diagnostic, so converting today would turn every
-        warning into a hard CI failure.
-      - >-
-        legion validate gains validation of the root settings.json, with tests. It is not under
-        .planning/, it has a published schema at docs/settings.schema.json, and nothing in packages/
-        reads control_mode, max_tasks_per_plan, or max_cycles. It is the one capability in the
-        command that outlives the directory and has no verb equivalent.
-      - >-
-        legion map gains a non-mutating default, four freshness states, the 30-day age rule, and
-        empty-source handling. Deliberate removals are recorded before the edit: validate --fix and
-        --prune targets that retire with .planning/, and the agent-roster check, whose comparands
-        in STATE.md and authority-matrix.yaml both retire.
-      - Neither file reads .planning/, and both are removed from the allowlist.
-      - Any state the host needs that the CLI does not expose is added to the CLI first, with tests.
-    verification:
-      - node --test tests/command-surface.test.mjs
-      - node --test tests/legacy/installer-smoke.test.cjs
-      - pnpm run validate:next
-  - id: P16-B003
-    phase: 16
-    title: Split learn, retro, and milestone across the CLI and host boundary
-    milestone: GA-critical
-    owner: compatibility-owner
-    depends_on:
-      - P16-B001
-    maps_to:
-      - commands/learn.md
-      - commands/retro.md
-      - commands/milestone.md
-    acceptance:
-      - >-
-        All three were class A in the first two revisions of this item. Grounding each in its
-        handler moved all three to class B, for the same reason as B002: deterministic was read as
-        equivalent.
-      - >-
-        legion learn gains a typed lesson kind first, then --recall and --list. LessonIndex records
-        carry only {id, lesson, createdAt, artifactPath}, so pattern, pitfall, and preference do not
-        exist in the CLI's data model and the two modes built on them cannot be implemented over it.
-        --prune targets .planning/memory/OUTCOMES.md and is a recorded deliberate removal.
-      - >-
-        legion retro's --phase and --milestone become real scope selectors that gather that scope's
-        evidence. Today they reach a slug, a run record, and an interpolated prompt topic, and
-        select nothing: the evidence set is hardcoded to the workflow stage plus the last two
-        guidance runs per workflow. A flag that appears implemented and does nothing is the sharpest
-        form of the parity trap this phase exists to catch.
-      - >-
-        legion milestone gains a read-only status query before the host renders it. Status is the
-        implicit default and still rewrites milestones.json, writes milestones.md, and appends a
-        guidance run on every invocation, so a thinned host would mutate project state on every
-        display.
-      - >-
-        legion milestone gains a pre-flight gate on --complete requiring every phase to be complete.
-        The command's stated invariant is no partial completions, and the verb checks only that the
-        milestone id exists. --archive relocating nothing is recorded as a gap, not thinned as-is.
-      - >-
-        The host keeps what has no verb: learn's classification prompt and recording loop, retro's
-        save-or-discard decision, edit-before-saving path, and cross-project mode, and milestone's
-        phase clustering, archive confirmation, completion commit, and GitHub milestone close. No
-        git commit and no gh invocation exists anywhere in packages/cli/src.
-      - Guidance artifacts continue to be written by the CLI, not by the host.
-      - All three are removed from the allowlist.
-    verification:
-      - node --test tests/command-surface.test.mjs
-      - node --test tests/workflow-guidance.test.mjs
-      - pnpm run validate:next
   # Found while inventorying for B002 and B003, and true of the CLI today rather
   # than of the conversion. Kept separate because they are defects a user hits
   # now, not work the conversion creates.
@@ -363,6 +274,100 @@ items:
         silently produces an unscoped one.
       - Each fix carries a test that fails against the current behaviour.
     verification:
+      - node --test tests/workflow-guidance.test.mjs
+      - pnpm run validate:next
+  - id: P16-B002
+    phase: 16
+    title: Split validate and map across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+    maps_to:
+      - commands/validate.md
+      - commands/map.md
+    acceptance:
+      - >-
+        Both commands were class A in the first two revisions of this item, on the grounds that
+        their verbs are deterministic and executor-free. That is true and is a different claim from
+        equivalence. Grounding both in their handlers moved both to class B.
+      - >-
+        map keeps the analytical half: the architecture narrative, dependency graph, API surface,
+        coverage map, and ranked risk hotspots. legion map produces a file-extension histogram over
+        {path, sha256, sizeBytes, lineCount, symbols, headings, summary} records, where symbols come
+        from seven regexes. Both are called the codebase map and neither is the other. An earlier
+        revision claimed they write the same filename; they do not. The command writes
+        .planning/CODEBASE.md and refreshCodebaseMap writes a run-scoped
+        .legion/project/workflow/map/<run>/codebase.md.
+      - >-
+        validate keeps the repair-then-reverify loop and the per-check fixability policy. The CLI
+        gains a WARN severity before the command is thinned: the command scores every check PASS,
+        WARN, or FAIL, and the verb fails on any diagnostic, so converting today would turn every
+        warning into a hard CI failure.
+      - >-
+        legion validate gains validation of the root settings.json, with tests. It is not under
+        .planning/, it has a published schema at docs/settings.schema.json, and nothing in packages/
+        reads control_mode, max_tasks_per_plan, or max_cycles. It is the one capability in the
+        command that outlives the directory and has no verb equivalent.
+      - >-
+        legion map gains a non-mutating default, four freshness states, the 30-day age rule, and
+        empty-source handling. Deliberate removals are recorded before the edit: validate --fix and
+        --prune targets that retire with .planning/, and the agent-roster check, whose comparands
+        in STATE.md and authority-matrix.yaml both retire.
+      - Neither file reads .planning/, and both are removed from the allowlist.
+      - Any state the host needs that the CLI does not expose is added to the CLI first, with tests.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/legacy/installer-smoke.test.cjs
+      - pnpm run validate:next
+  - id: P16-B003
+    phase: 16
+    title: Split learn, retro, and milestone across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B001
+      - P16-B012
+    maps_to:
+      - commands/learn.md
+      - commands/retro.md
+      - commands/milestone.md
+    acceptance:
+      - >-
+        All three were class A in the first two revisions of this item. Grounding each in its
+        handler moved all three to class B, for the same reason as B002: deterministic was read as
+        equivalent.
+      - >-
+        legion learn gains a typed lesson kind first, then --recall and --list. LessonIndex records
+        carry only {id, lesson, createdAt, artifactPath}, so pattern, pitfall, and preference do not
+        exist in the CLI's data model and the two modes built on them cannot be implemented over it.
+        --prune targets .planning/memory/OUTCOMES.md and is a recorded deliberate removal.
+      - >-
+        P16-B012 lands first and owns the two defect fixes: making retro's scope flags select
+        evidence or be rejected, and making milestone status read-only. An earlier revision of this
+        item claimed both while B012 also claimed them, which would have put two owners on one
+        handler.
+      - >-
+        Building on that, legion retro puts the selected scope's evidence in front of the executor.
+        This is a separate requirement from scoping the flags and is not satisfied by it: today
+        guidancePrompt carries the workflow, the topic, and four section names, and nothing else.
+        resolveWorkflowState().stage and the last two guidance runs are read before the run but
+        consumed only by renderGuidanceMarkdown afterwards, so the model producing the findings sees
+        no project evidence at all. An implementation that made --phase select those two metadata
+        sources would leave the analysis exactly as unevidenced as it is now.
+      - >-
+        legion milestone gains a pre-flight gate on --complete requiring every phase to be complete.
+        The command's stated invariant is no partial completions, and the verb checks only that the
+        milestone id exists. --archive relocating nothing is recorded as a gap, not thinned as-is.
+      - >-
+        The host keeps what has no verb: learn's classification prompt and recording loop, retro's
+        save-or-discard decision, edit-before-saving path, and cross-project mode, and milestone's
+        phase clustering, archive confirmation, completion commit, and GitHub milestone close. No
+        git commit and no gh invocation exists anywhere in packages/cli/src.
+      - Guidance artifacts continue to be written by the CLI, not by the host.
+      - All three are removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
       - node --test tests/workflow-guidance.test.mjs
       - pnpm run validate:next
   - id: P16-B005
