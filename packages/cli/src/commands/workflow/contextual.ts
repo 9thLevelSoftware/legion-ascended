@@ -497,12 +497,18 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   // steer the prompt — so refusing them would remove something that works, while
   // leaving them silent would let a caller believe an unevidenced retrospective
   // was grounded in the phase they named. P16-B003 makes the scope real.
-  const scopeDiagnostics: ExecutionFinding[] = phase === null && milestone === null
+  // Both flags can be given together, and naming only one of them would put a
+  // narrower label on the warning than on the retrospective it is warning about.
+  const scopeLabel = [
+    phase === null ? undefined : `phase ${phase}`,
+    milestone === null ? undefined : `milestone ${milestone}`
+  ].filter((part) => part !== undefined).join(" and ");
+  const scopeDiagnostics: ExecutionFinding[] = scopeLabel === ""
     ? []
     : [{
         id: "retro_scope_not_evidenced",
         title: "Scope reached the prompt topic only",
-        body: `This retrospective is labelled ${phase === null ? `milestone ${milestone ?? ""}` : `phase ${phase}`} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
+        body: `This retrospective is labelled ${scopeLabel} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
         severity: "major"
       }];
 
@@ -511,6 +517,11 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     topic,
     summary: executed.result.summary,
     sections: [
+      // First, and in the artifact rather than only on stdout. retro.md is the
+      // durable output and the one the run record points readers at; a warning
+      // that lives only in the terminal is gone by the time anyone reads the
+      // retrospective it applies to.
+      ...scopeDiagnostics.map((finding) => ({ heading: "Scope Warning", body: finding.body })),
       { heading: "Workflow State", body: `Current stage: ${state.stage}` },
       { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
       { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -121,7 +121,7 @@ test("legion milestone define, complete, and archive still record", async (t) =>
 });
 
 test("a scoped retro says plainly that no scoped evidence was gathered", async (t) => {
-  const { run } = await scratchRepo(t);
+  const { root, run } = await scratchRepo(t);
   const result = await run("retro", "--phase", "3", "--executor", "fake", "--json");
   assert.equal(result.exitCode, 0, result.stderr);
 
@@ -138,6 +138,27 @@ test("a scoped retro says plainly that no scoped evidence was gathered", async (
   const rendered = await run("retro", "--phase", "3", "--executor", "fake");
   assert.equal(rendered.exitCode, 0, rendered.stderr);
   assert.match(rendered.stdout, /WARNING: /, "the warning must reach the human rendering, not only --json");
+
+  // The artifact is the durable output and the one the run record points at.
+  // A warning that lives only on stdout is gone by the time anyone reads the
+  // retrospective it applies to, which is the audience that most needs it.
+  const artifact = await readFile(path.join(root, ...payload.markdownArtifactPath.split("/")), "utf8");
+  assert.match(artifact, /Scope Warning/);
+  assert.match(artifact, /Treat the findings as unscoped/);
+});
+
+test("a retro scoped by both flags names both in the warning", async (t) => {
+  const { run } = await scratchRepo(t);
+  const result = await run("retro", "--phase", "3", "--milestone", "MVP", "--executor", "fake", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+
+  // Naming only one of them would put a narrower label on the warning than on
+  // the retrospective it warns about.
+  const scope = parseJsonOutput(result).diagnostics
+    .find((entry) => entry.id === "retro_scope_not_evidenced");
+  assert.ok(scope, "expected a scope diagnostic");
+  assert.match(scope.body, /phase 3/);
+  assert.match(scope.body, /milestone MVP/);
 });
 
 test("an unscoped retro carries no scope warning", async (t) => {
