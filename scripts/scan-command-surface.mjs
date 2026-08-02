@@ -59,6 +59,9 @@ const INVENTORY_PATH = "docs/next/command-capability-inventory.json";
 /** The call that makes a verb executor-backed, whoever wraps it. */
 const EXECUTOR_CALL = "runGuidanceExecutor(";
 
+/** Who owns a capability the verb does not have. There is no fourth answer. */
+const DISPOSITIONS = new Set(["build-in-cli", "keep-in-host", "deliberate-removal"]);
+
 export async function scanCommandSurface({ root = DEFAULT_ROOT } = {}) {
   const violations = [];
   const commandsDir = path.join(root, "commands");
@@ -179,6 +182,22 @@ async function verifyInventory({ root, inventory, sources, allowed, violations }
           `commands/${name}.md no longer contains the anchor for "${capability.capability}" ` +
           `(${JSON.stringify(capability.anchor)}). Either the capability moved and the inventory ` +
           `needs updating, or it was removed and that removal was never recorded.`
+      });
+    }
+
+    // A gap with no disposition is a capability assigned to nobody. That is how
+    // a conversion passes every criterion while the behaviour disappears: the
+    // CLI was never required to gain it, the host was never told to keep it, and
+    // nothing recorded that it was meant to go. Review found that shape four
+    // separate times in one backlog item, so it is checked rather than reviewed.
+    for (const gap of entry.cliGaps ?? []) {
+      if (DISPOSITIONS.has(gap?.disposition)) continue;
+      violations.push({
+        kind: "gap_unassigned",
+        command: name,
+        message:
+          `a cliGap on ${name} has no valid disposition (${JSON.stringify(gap?.disposition)}). ` +
+          `Every gap must be one of ${[...DISPOSITIONS].join(", ")}: ${JSON.stringify(String(gap?.gap ?? gap).slice(0, 80))}`
       });
     }
 

@@ -157,6 +157,55 @@ test("every inventory claim about a verb is checked against the code, not taken 
   }
 });
 
+test("every capability the verb lacks is assigned to someone", async (t) => {
+  const root = await fixtureRoot(t, {
+    commands: { advise: "Read `.planning/agents/`. Step: 3. SELECT ADVISOR\n" },
+    inventory: {
+      schemaVersion: 1,
+      kind: "command_capability_inventory",
+      commands: [
+        {
+          command: "advise",
+          verb: "advise",
+          handler: { file: "packages/cli/src/commands/workflow/ad-hoc.ts", symbol: "runAdviceWorkflow" },
+          executorBacked: true,
+          class: "B",
+          hostOnly: [{ capability: "Advisor selection", anchor: "3. SELECT ADVISOR" }],
+          // No disposition: nobody is required to build it, keep it, or drop it.
+          cliGaps: [{ gap: "legion advise selects no specialist" }]
+        }
+      ]
+    }
+  });
+  const report = await scanCommandSurface({ root });
+
+  assert.equal(report.ok, false);
+  const violation = report.violations.find((entry) => entry.kind === "gap_unassigned");
+  assert.ok(violation, `expected a gap_unassigned violation, got ${JSON.stringify(report.violations)}`);
+  assert.equal(violation.command, "advise");
+});
+
+test("the shipped inventory assigns every gap", async () => {
+  const inventory = JSON.parse(
+    await readFile(path.join(ROOT, "docs", "next", "command-capability-inventory.json"), "utf8")
+  );
+  const allowed = new Set(["build-in-cli", "keep-in-host", "deliberate-removal"]);
+
+  // Review found unassigned capabilities in one backlog item four separate
+  // times. Each time the conversion would still have satisfied every written
+  // criterion, because nothing required the CLI to gain the behaviour, told the
+  // host to keep it, or recorded that it was meant to go.
+  for (const entry of inventory.commands) {
+    for (const gap of entry.cliGaps ?? []) {
+      assert.ok(
+        allowed.has(gap.disposition),
+        `${entry.command} has a gap with no disposition: ${JSON.stringify(gap)}`
+      );
+      assert.ok(gap.gap?.length > 0, `${entry.command} has a gap with no text`);
+    }
+  }
+});
+
 test("a verb whose implementation is shared says so, because the name proves nothing", async () => {
   const inventory = JSON.parse(
     await readFile(path.join(ROOT, "docs", "next", "command-capability-inventory.json"), "utf8")

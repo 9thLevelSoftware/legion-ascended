@@ -24,6 +24,28 @@ This is not a hypothetical failure mode. The first pass of the phase 16 plan cla
 
 Class A is the destructive direction. Misfiling a class-B command as class A deletes capability; misfiling class A as class B leaves work in the host that the CLI could have owned, which is waste rather than loss. **When the evidence is ambiguous, assign B.**
 
+### Class A is currently empty, and that is the finding
+
+Five commands were proposed as class A — `map`, `milestone`, `retro`, `learn`, `validate`. Grounding each in its handler moved all five to B.
+
+The pattern was identical every time: the verb is **deterministic and executor-free**, that was read as **equivalent**, and it is a different claim. Deterministic says how the verb computes. Equivalent says what it produces.
+
+| Command | Read as | Actually |
+|---|---|---|
+| `map` | Produces the codebase map | Produces a *file-extension histogram*. The command produces an architecture document. |
+| `retro` | Takes `--phase` | `--phase` reaches a slug, a run record, and a prompt topic string. It selects no evidence. The flag looks implemented and does nothing. |
+| `milestone` | Has an `--archive` mode | Sets a status field. Nothing moves. No `git commit` or `gh` call exists anywhere in the CLI. |
+| `learn` | Records lessons | Records lessons *untyped*. Pattern, pitfall, and preference do not exist in the data model, so the three modes built on them cannot be. |
+| `validate` | Reports diagnostics | Reports them without severity. The command's WARN tier collapses into failure, so thinning turns every warning into a hard CI failure. |
+
+The lesson is narrower than "be careful". **A verb that shares a name and a flag with a command, and describes its output the same way, can still produce something else entirely** — and each of those similarities is what made the wrong answer look checked. The only reading that distinguished them was the handler body.
+
+One correction belongs here rather than in a changelog, because it is the same error one level up. The first draft of this section claimed `map` and `commands/map.md` write **the same filename**, offering that as the third surface similarity. They do not: the command writes `.planning/CODEBASE.md`, and `refreshCodebaseMap` writes a run-scoped `.legion/project/workflow/map/<run>/codebase.md`. The names are near-identical and the paths are unrelated. Review caught it.
+
+The conclusion held — the artifacts are behaviourally different, which is the actual argument — but the evidence offered for it was a surface similarity asserted without checking, inside the document that exists to forbid exactly that. Treat it as the standing example: **the reflex survives being written down, and reaches for the argument's own supporting detail next.**
+
+Class A is not deleted — a genuinely equivalent verb should still take the work. But an assignment to it now requires showing the artifacts match, not that the verb is deterministic.
+
 ## Procedure
 
 1. **Inventory the command.** For each behaviour, record what it is and an anchor string that locates it in the file. Anchors are checked by `scripts/scan-command-surface.mjs`; a capability with no anchor is a capability no test can protect.
@@ -45,8 +67,23 @@ Class A is the destructive direction. Misfiling a class-B command as class A del
 
 The allowlist may only ever shorten, and that is enforced rather than asked for: the list and the set of commands that actually read `.planning/` are asserted equal, so neither direction can drift.
 
-## Recording a deliberate removal
+## Every gap is assigned to someone
 
-Some capability should not survive. `commands/validate.md` checks agent-roster consistency against the `.planning/` agent catalog, which retires with `.planning/` itself.
+Each `cliGaps` entry carries a `disposition`, and there is no fourth answer:
 
-A removal is deliberate when it is written down as a `cliGaps` entry saying so before the edit lands. A removal discovered afterwards is a regression, whatever its merits — the distinction is the record, not the judgment.
+| `disposition` | Meaning |
+|---|---|
+| `build-in-cli` | The CLI gains it, with tests, before the command is thinned |
+| `keep-in-host` | It is inherently host work — interactive, agentic, or external |
+| `deliberate-removal` | It does not survive, and the entry says why |
+
+**A gap with no disposition is a capability assigned to nobody.** That is the failure mode this field exists for: the CLI was never required to gain the behaviour, the host was never told to keep it, and nothing recorded that it was meant to go — so the conversion satisfies every written criterion and the behaviour is simply gone.
+
+This is not a hypothetical either. Review found that exact shape four times in one backlog item: `validate --ci`, milestone summary generation, the milestone archive relocation, and the retro-to-plan feedback loop. Each was described accurately and assigned to no one. The field is checked by `scripts/scan-command-surface.mjs`, so it is no longer something a reviewer has to notice.
+
+Two adjacent traps worth naming, both found the same way:
+
+- **Removing a capability can orphan the thing that guards it.** Dropping the milestone archive relocation left a retained confirmation whose text promises to move phase directories. Check what *pointed at* a capability before removing it.
+- **Some capability lives between two commands.** `commands/plan.md` reads the latest retrospective and injects its actions into decomposition. Converting `retro` and `plan` separately breaks that loop while both files' criteria pass, because it belongs to neither inventory entry. Inventory the seams, not only the commands.
+
+A removal is deliberate when it is written down before the edit lands. A removal discovered afterwards is a regression, whatever its merits — the distinction is the record, not the judgment.
