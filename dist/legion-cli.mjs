@@ -35298,10 +35298,14 @@ async function runRetroWorkflow(context) {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
-  const scopeDiagnostics = phase === null && milestone === null ? [] : [{
+  const scopeLabel = [
+    phase === null ? void 0 : `phase ${phase}`,
+    milestone === null ? void 0 : `milestone ${milestone}`
+  ].filter((part) => part !== void 0).join(" and ");
+  const scopeDiagnostics = scopeLabel === "" ? [] : [{
     id: "retro_scope_not_evidenced",
     title: "Scope reached the prompt topic only",
-    body: `This retrospective is labelled ${phase === null ? `milestone ${milestone ?? ""}` : `phase ${phase}`} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
+    body: `This retrospective is labelled ${scopeLabel} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
     severity: "major"
   }];
   const markdown = renderGuidanceMarkdown({
@@ -35309,6 +35313,11 @@ async function runRetroWorkflow(context) {
     topic,
     summary: executed.result.summary,
     sections: [
+      // First, and in the artifact rather than only on stdout. retro.md is the
+      // durable output and the one the run record points readers at; a warning
+      // that lives only in the terminal is gone by the time anyone reads the
+      // retrospective it applies to.
+      ...scopeDiagnostics.map((finding) => ({ heading: "Scope Warning", body: finding.body })),
       { heading: "Workflow State", body: `Current stage: ${state.stage}` },
       { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
       { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },
