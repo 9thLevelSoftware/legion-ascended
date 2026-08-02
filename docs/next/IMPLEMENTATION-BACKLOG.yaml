@@ -198,6 +198,13 @@ items:
   # worked examples. The remaining sixteen are not one kind of work — see
   # P16-B001's conversion contract for the three classes and why thin-wrapping
   # the orchestration commands would delete capability silently.
+  #
+  # The first pass of this plan classified from one-line help text and got three
+  # wrong: advise, ship, and board each own orchestration no CLI verb performs.
+  # Review caught all three. The correction is B001's capability inventory,
+  # which compares what a command does against what its verb does and must be
+  # completed before any command is assigned a class. Every class assignment
+  # below is provisional until it is.
   - id: P16-B001
     phase: 16
     title: Ratchet the command surface off .planning/
@@ -213,6 +220,18 @@ items:
       - The allowlist is seeded with the sixteen unconverted commands and may only ever be shortened.
       - A conversion contract records, per class, what the CLI owns and what the host keeps.
       - The contract states that a command whose host-only behaviour is not inventoried before editing must not be converted.
+      - >-
+        A per-command capability inventory records what the markdown does and what the CLI verb
+        actually does, and is completed before the command is assigned a class. Verb existence is
+        not evidence of parity: several verbs are the same generic guidance executor
+        (runExecutorBackedGuidance in packages/cli/src/commands/workflow/contextual.ts), which
+        writes an artifact and does not reproduce a selection, a panel, or a follow-up turn.
+      - >-
+        The class assignments recorded in this backlog are provisional until that inventory exists.
+        The first pass assigned them from one-line help text and put advise, ship, and board in
+        classes that would have deleted an advisor selection, a publishing workflow, and a
+        multi-member panel respectively. That is the failure the inventory exists to prevent, and
+        it is a planning failure rather than an implementation one.
     verification:
       - node --test tests/command-surface.test.mjs
       - pnpm run validate:next
@@ -230,6 +249,10 @@ items:
       - Each command renders legion validate --json or legion map --json and derives no state itself.
       - Neither file reads .planning/, and both are removed from the allowlist.
       - Any state the wrapper needs that the CLI does not expose is added to the CLI first, with tests.
+      - >-
+        B001's capability inventory confirms parity before either is thinned. legion map is a
+        generic guidance executor, and the interactive prompts these commands own are host-only
+        even though neither dispatches an agent.
     verification:
       - node --test tests/command-surface.test.mjs
       - node --test tests/legacy/installer-smoke.test.cjs
@@ -249,24 +272,27 @@ items:
       - Each command renders its legion verb's JSON payload and records nothing to .planning/.
       - Guidance artifacts continue to be written by the CLI, not by the host.
       - All three are removed from the allowlist.
+      - >-
+        B001's capability inventory confirms parity before any is thinned. legion retro and legion
+        milestone are generic guidance executors, and all three commands own interactive prompts
+        that no CLI verb reproduces.
     verification:
       - node --test tests/command-surface.test.mjs
       - node --test tests/workflow-guidance.test.mjs
       - pnpm run validate:next
   - id: P16-B004
     phase: 16
-    title: Convert explore and advise to CLI renderers
+    title: Convert explore to a CLI renderer
     milestone: GA-critical
     owner: compatibility-owner
     depends_on:
       - P16-B001
     maps_to:
       - commands/explore.md
-      - commands/advise.md
     acceptance:
-      - Both commands render their legion verb's JSON payload and write no artifacts directly.
+      - The command renders legion explore's JSON payload and writes no artifacts directly.
       - explore continues to produce an exploration typed as exploratory that start can seed proposals from.
-      - Both are removed from the allowlist.
+      - The command is removed from the allowlist.
     verification:
       - node --test tests/command-surface.test.mjs
       - node --test tests/workflow-guidance.test.mjs
@@ -329,21 +355,72 @@ items:
       - pnpm run validate:next
   - id: P16-B008
     phase: 16
-    title: Split ship, and rename board onto the council verb
+    title: Split ship across the CLI and host boundary
     milestone: GA-critical
     owner: compatibility-owner
     depends_on:
       - P16-B005
     maps_to:
       - commands/ship.md
-      - commands/board.md
     acceptance:
       - ship renders the derived gate set and never asserts readiness the CLI did not derive.
-      - The user-facing /legion:board name is preserved while the command drives legion council.
-      - Neither file reads .planning/, and both are removed from the allowlist.
+      - >-
+        PR creation and pushing (commands/ship.md:152-229) and post-ship verification and canary
+        monitoring (commands/ship.md:235-308) survive the split as host responsibilities.
+        packages/cli/src/commands/workflow/ship.ts states that this layer does not publish or
+        release, so the CLI cannot absorb them and a readiness-only rendering would delete the
+        actual shipping workflow while every listed test still passed.
+      - The command is removed from the allowlist.
     verification:
       - node --test tests/command-surface.test.mjs
       - node --test tests/ship-traceability.test.mjs
+      - pnpm run validate:next
+  - id: P16-B010
+    phase: 16
+    title: Split advise across the CLI and host boundary
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B005
+    maps_to:
+      - commands/advise.md
+    acceptance:
+      - The three agent-dispatch sites in commands/advise.md are inventoried before editing.
+      - >-
+        Advisor selection with personality injection (commands/advise.md:56-146) and the follow-up
+        session (commands/advise.md:157-181) survive as host responsibilities. legion advise runs
+        one generic guidance executor, so thinning to a JSON renderer would replace a chosen
+        specialist and a multi-turn consultation with a single generic artifact.
+      - The advisory agent remains read-only, as the current dispatch specification requires.
+      - The command is removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-guidance.test.mjs
+      - pnpm run validate:next
+  - id: P16-B011
+    phase: 16
+    title: Split board across the CLI and host boundary, keeping its panel
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B005
+    maps_to:
+      - commands/board.md
+    acceptance:
+      - >-
+        The user-facing /legion:board name is preserved. Preserving the name is necessary and not
+        sufficient: the defining behaviour is the panel, not the label.
+      - >-
+        The user-confirmed slate and the 3-5 independent assessments with quorum semantics
+        (commands/board.md:67-129), and the vote tally and tie resolution
+        (commands/board.md:139-202), survive as host responsibilities. legion council invokes one
+        generic guidance executor, so driving the verb alone would collapse a deliberating panel
+        into a single opinion.
+      - The CLI owns the recorded decision artifact; the host owns composition, deliberation, and tallying.
+      - The command is removed from the allowlist.
+    verification:
+      - node --test tests/command-surface.test.mjs
+      - node --test tests/workflow-guidance.test.mjs
       - pnpm run validate:next
   - id: P16-B009
     phase: 16
