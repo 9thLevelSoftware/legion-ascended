@@ -67,8 +67,23 @@ Class A is not deleted — a genuinely equivalent verb should still take the wor
 
 The allowlist may only ever shorten, and that is enforced rather than asked for: the list and the set of commands that actually read `.planning/` are asserted equal, so neither direction can drift.
 
-## Recording a deliberate removal
+## Every gap is assigned to someone
 
-Some capability should not survive. `commands/validate.md` checks agent-roster consistency against the `.planning/` agent catalog, which retires with `.planning/` itself.
+Each `cliGaps` entry carries a `disposition`, and there is no fourth answer:
 
-A removal is deliberate when it is written down as a `cliGaps` entry saying so before the edit lands. A removal discovered afterwards is a regression, whatever its merits — the distinction is the record, not the judgment.
+| `disposition` | Meaning |
+|---|---|
+| `build-in-cli` | The CLI gains it, with tests, before the command is thinned |
+| `keep-in-host` | It is inherently host work — interactive, agentic, or external |
+| `deliberate-removal` | It does not survive, and the entry says why |
+
+**A gap with no disposition is a capability assigned to nobody.** That is the failure mode this field exists for: the CLI was never required to gain the behaviour, the host was never told to keep it, and nothing recorded that it was meant to go — so the conversion satisfies every written criterion and the behaviour is simply gone.
+
+This is not a hypothetical either. Review found that exact shape four times in one backlog item: `validate --ci`, milestone summary generation, the milestone archive relocation, and the retro-to-plan feedback loop. Each was described accurately and assigned to no one. The field is checked by `scripts/scan-command-surface.mjs`, so it is no longer something a reviewer has to notice.
+
+Two adjacent traps worth naming, both found the same way:
+
+- **Removing a capability can orphan the thing that guards it.** Dropping the milestone archive relocation left a retained confirmation whose text promises to move phase directories. Check what *pointed at* a capability before removing it.
+- **Some capability lives between two commands.** `commands/plan.md` reads the latest retrospective and injects its actions into decomposition. Converting `retro` and `plan` separately breaks that loop while both files' criteria pass, because it belongs to neither inventory entry. Inventory the seams, not only the commands.
+
+A removal is deliberate when it is written down before the edit lands. A removal discovered afterwards is a regression, whatever its merits — the distinction is the record, not the judgment.

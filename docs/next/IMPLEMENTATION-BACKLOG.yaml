@@ -312,8 +312,15 @@ items:
         command that outlives the directory and has no verb equivalent.
       - >-
         legion map gains a non-mutating default, four freshness states, the 30-day age rule, and
-        empty-source handling. Deliberate removals are recorded before the edit: validate --fix and
-        the agent-roster check, whose comparands in STATE.md and authority-matrix.yaml both retire.
+        empty-source handling.
+      - >-
+        Three deliberate removals are recorded before the edit, each assigned rather than implied:
+        validate --fix, whose targets all retire; the agent-roster check, whose comparands in
+        STATE.md and authority-matrix.yaml both retire; and validate --ci, whose one-line summary is
+        already covered by --json and whose three-valued exit code has no counterpart, since success
+        and failure hardcode 0 and 1. Adding WARN severity does not preserve --ci, and leaving that
+        unsaid would let the command be removed while every criterion passed and CI consumers lost
+        the interface.
       - >-
         P16-B012 owns the map --query --scope fix and lands first. Without that ordering this item
         could remove commands/map.md while the replacement still answered scoped queries from the
@@ -381,10 +388,33 @@ items:
         recorded only that --archive relocates nothing, which assigned the operation to no one and
         would have let every criterion pass while the behaviour simply disappeared.
       - >-
+        The archive confirmation goes with it. Its text reports how many phase directories will move
+        and where, so retaining it once the relocation is gone would ask the operator to approve an
+        operation that no longer happens. A revision that removed the relocation while still
+        requiring the host to keep this prompt left the two criteria contradicting each other. If a
+        confirmation survives it is a new one about the status transition.
+      - >-
+        legion milestone gains summary generation from the artifacts it already owns. The command
+        composes the completion summary from plan, requirement, file, agent, outcome and decision
+        data; the verb stores the caller's --summary verbatim. Neither side claimed this, so
+        conversion could have replaced computed milestone evidence with an operator-typed string and
+        satisfied every criterion.
+      - >-
+        legion retro gains a non-persisting run followed by an explicit save. runRetroWorkflow writes
+        retro.md and the guidance run before it returns, so the host's view-only choice still
+        persists and edit-before-saving edits findings that were already recorded. Requiring
+        artifacts to stay CLI-written while also retaining those choices was a contradiction between
+        two criteria, not a boundary.
+      - >-
+        The retro-to-plan loop is preserved or its removal recorded. commands/plan.md reads the
+        latest retrospective and injects its high-priority actions and agent adjustments into
+        decomposition, and nothing in the repository reads retro.md. Converting retro and plan
+        separately would break that loop with no criterion noticing, because it is the one capability
+        here that lives between two commands rather than inside either.
+      - >-
         The host keeps what has no verb: learn's classification prompt and recording loop, retro's
-        save-or-discard decision, edit-before-saving path, and cross-project mode, and milestone's
-        phase clustering, archive confirmation, completion commit, and GitHub milestone close. No
-        git commit and no gh invocation exists anywhere in packages/cli/src.
+        cross-project mode, and milestone's phase clustering, completion commit, and GitHub milestone
+        close. No git commit and no gh invocation exists anywhere in packages/cli/src.
       - Guidance artifacts continue to be written by the CLI, not by the host.
       - All three are removed from the allowlist.
     verification:

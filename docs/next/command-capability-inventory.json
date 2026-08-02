@@ -5,255 +5,543 @@
   "classes": {
     "A": "The CLI verb performs the work. The host renders its JSON and derives no state. Gaps listed under cliGaps must be closed in the CLI, with tests, before the command is thinned.",
     "B": "The command owns orchestration no verb performs. The CLI takes the derivable state; the host keeps the named capabilities. Thinning to a renderer would delete them.",
-    "C": "No legion verb exists. Placement is undecided; see P16-B009."
+    "C": "No legion verb exists. Placement is undecided; see P16-B009.",
+    "cliGaps": "Every gap carries a disposition: build-in-cli (the CLI gains it before the command is thinned), keep-in-host (it is inherently host work), or deliberate-removal (it does not survive, and why). A gap with no disposition is a capability assigned to nobody, which is how a conversion passes every criterion while the behaviour disappears."
   },
   "commands": [
     {
       "command": "map",
       "verb": "map",
-      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "handleMapWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/contextual.ts",
+        "symbol": "handleMapWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "The verb is deterministic and executor-free, and an earlier revision read that as equivalent. It is not. Both are called the codebase map and they are different artifacts: renderCodebaseMarkdown emits a file-extension histogram over records of {path, sha256, sizeBytes, lineCount, symbols, headings, summary}, where symbols come from seven regexes. The command emits an architecture document with a dependency graph, an API surface, a coverage map, and ranked risk hotspots, produced by executing skills/codebase-mapper/SKILL.md. They do not share a path either: the command writes .planning/CODEBASE.md and refreshCodebaseMap writes a run-scoped .legion/project/workflow/map/<run>/codebase.md. Thinning would replace the architecture document with the histogram, which is the deletion the contract says is indistinguishable from the intended outcome. The CLI owns the derivable state: the file set, the fingerprint, freshness, scope containment, and the run record.",
       "hostOnly": [
-        { "capability": "The analytical half of the map: architecture narrative, dependency and import graph, route and API surface, data and config map, test and coverage map, risk hotspots, and the package map", "anchor": "Run the full codebase-mapper protocol:" },
-        { "capability": "Ranked risk hotspots in the completion report", "anchor": "Top risks or `_None detected_`." },
-        { "capability": "Semantic search that classifies a query into keyword, path, symbol, and domain hints and returns why each chunk matched", "anchor": "Follow codebase-mapper Section 18 Semantic Search Protocol:" },
-        { "capability": "Offer a refresh rather than performing one when invoked with no flags", "anchor": "otherwise summarize the current dataset and offer refresh via AskUserQuestion" }
+        {
+          "capability": "The analytical half of the map: architecture narrative, dependency and import graph, route and API surface, data and config map, test and coverage map, risk hotspots, and the package map",
+          "anchor": "Run the full codebase-mapper protocol:"
+        },
+        {
+          "capability": "Ranked risk hotspots in the completion report",
+          "anchor": "Top risks or `_None detected_`."
+        },
+        {
+          "capability": "Semantic search that classifies a query into keyword, path, symbol, and domain hints and returns why each chunk matched",
+          "anchor": "Follow codebase-mapper Section 18 Semantic Search Protocol:"
+        },
+        {
+          "capability": "Offer a refresh rather than performing one when invoked with no flags",
+          "anchor": "otherwise summarize the current dataset and offer refresh via AskUserQuestion"
+        }
       ],
       "cliGaps": [
-        "legion map with no flags calls mapRefresh unconditionally, walking the repository and overwriting the artifact set with no prompt. The CLI needs a non-mutating default, or --refresh must become mandatory for the destructive path.",
-        "Freshness has four states in the command (fresh, stale, partial, absent) and two in mapCheck, which computes one boolean. A project that never ran map reports the same status as one whose fingerprint moved.",
-        "The command's 30-day age rule is not implemented. CodebaseMapDocument already carries generatedAt, so the data is on disk and unused.",
-        "collectSourceFiles returning nothing is not special-cased: refreshCodebaseMap writes all five artifacts with sourceFileCount 0 and reports success.",
-        "legion map --query <text> --scope <path> silently ignores the scope. mapQuery is called without it, and the mode-conflict guard does not catch it because scope is not a mode."
+        {
+          "gap": "legion map with no flags calls mapRefresh unconditionally, walking the repository and overwriting the artifact set with no prompt. The CLI needs a non-mutating default, or --refresh must become mandatory for the destructive path.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "Freshness has four states in the command (fresh, stale, partial, absent) and two in mapCheck, which computes one boolean. A project that never ran map reports the same status as one whose fingerprint moved.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "The command's 30-day age rule is not implemented. CodebaseMapDocument already carries generatedAt, so the data is on disk and unused.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "collectSourceFiles returning nothing is not special-cased: refreshCodebaseMap writes all five artifacts with sourceFileCount 0 and reports success.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "legion map --query <text> --scope <path> silently ignores the scope. mapQuery is called without it, and the mode-conflict guard does not catch it because scope is not a mode.",
+          "disposition": "build-in-cli"
+        }
       ]
     },
     {
       "command": "milestone",
       "verb": "milestone",
-      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "handleMilestoneWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/contextual.ts",
+        "symbol": "handleMilestoneWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "Deterministic, but not equivalent. handleMilestoneWorkflow reads exactly one file, its own milestones.json, and never reads a roadmap, phase, or requirement artifact. --define stores the free-text --phases string opaquely without cross-referencing it. --complete checks only that the id exists and stamps the operator's own --summary. --archive sets a status field and moves nothing. No git commit and no gh invocation exists anywhere in packages/cli/src, so the completion commit and the GitHub milestone close have no counterpart at all.",
       "hostOnly": [
-        { "capability": "Cluster roadmap phases into proposed milestone groupings by theme and dependency, then negotiate the grouping with the operator", "anchor": "b. Analyze for logical groupings:" },
-        { "capability": "Interactive action loop offering only the actions the current milestone state permits", "anchor": "5. PRESENT OPTIONS" },
-        { "capability": "Routing a menu selection to the matching mode", "anchor": "6. HANDLE USER CHOICE" },
-        { "capability": "Explicit confirmation before archiving, naming how many phase directories move and where", "anchor": "c. Confirm with user:" },
-        { "capability": "Commit the milestone completion in the project's conventional format", "anchor": "Create git commit following execution-tracker Section 6 milestone completion format" },
-        { "capability": "Close the corresponding GitHub milestone when gh and a remote are available", "anchor": "CLOSE GITHUB MILESTONE" },
-        { "capability": "Per-milestone deep dive naming which requirements the milestone satisfies", "anchor": "Requirement coverage: which requirements are satisfied by this milestone" }
+        {
+          "capability": "Cluster roadmap phases into proposed milestone groupings by theme and dependency, then negotiate the grouping with the operator",
+          "anchor": "b. Analyze for logical groupings:"
+        },
+        {
+          "capability": "Interactive action loop offering only the actions the current milestone state permits",
+          "anchor": "5. PRESENT OPTIONS"
+        },
+        {
+          "capability": "Routing a menu selection to the matching mode",
+          "anchor": "6. HANDLE USER CHOICE"
+        },
+        {
+          "capability": "Commit the milestone completion in the project's conventional format",
+          "anchor": "Create git commit following execution-tracker Section 6 milestone completion format"
+        },
+        {
+          "capability": "Close the corresponding GitHub milestone when gh and a remote are available",
+          "anchor": "CLOSE GITHUB MILESTONE"
+        },
+        {
+          "capability": "Per-milestone deep dive naming which requirements the milestone satisfies",
+          "anchor": "Requirement coverage: which requirements are satisfied by this milestone"
+        }
       ],
       "cliGaps": [
-        "--complete has no pre-flight gate requiring every phase in the milestone to be complete. The command's stated invariant is no partial completions, and the verb's only check is that the id exists.",
-        "--archive flips status to archived and sets archivedAt. The command moves phase directories from .planning/phases/ to .planning/archive/milestone-N/; both paths retire, so the relocation is a recorded deliberate removal rather than an open gap. An equivalent over .legion artifacts would be new work, not preservation.",
-        "Status mode is the implicit default and still rewrites milestones.json, writes a fresh milestones.md, and appends a guidance run on every invocation. A host that renders status on every display would mutate project state each time. A genuinely read-only query is needed first.",
-        "Progress rendering requires joining milestone records to phase status, which is exactly the link the handler lacks. renderMilestones has no percentage, bar, or phase table.",
-        "--summary is stored verbatim, so a completed milestone's summary is whatever the caller typed rather than derived from the artifacts the CLI owns."
+        {
+          "gap": "--complete has no pre-flight gate requiring every phase in the milestone to be complete. The command's stated invariant is no partial completions, and the verb's only check is that the id exists.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "--archive flips status to archived and sets archivedAt. The command moves phase directories from .planning/phases/ to .planning/archive/milestone-N/; both paths retire, so the relocation is a recorded deliberate removal rather than an open gap. An equivalent over .legion artifacts would be new work, not preservation.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "Status mode is the implicit default and still rewrites milestones.json, writes a fresh milestones.md, and appends a guidance run on every invocation. A host that renders status on every display would mutate project state each time. A genuinely read-only query is needed first.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "Progress rendering requires joining milestone records to phase status, which is exactly the link the handler lacks. renderMilestones has no percentage, bar, or phase table.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "--summary is stored verbatim, so a completed milestone's summary is whatever the caller typed rather than derived from the artifacts the CLI owns.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "Summary generation is unowned. The command gathers plan, requirement, file, agent, outcome and decision data to compose a completion summary; the verb stores the caller's free-text --summary verbatim. Neither the CLI requirement nor the host-retained list claimed it, so conversion could replace computed milestone evidence with an operator-typed string and satisfy every criterion.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "The archive confirmation goes with the relocation. Its text reports how many phase directories will move and where, so retaining it after the relocation is removed would ask the operator to approve an operation that no longer happens. If a confirmation survives it is a new one about the status transition, not this one.",
+          "disposition": "deliberate-removal"
+        }
       ]
     },
     {
       "command": "retro",
       "verb": "retro",
-      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runRetroWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/contextual.ts",
+        "symbol": "runRetroWorkflow"
+      },
       "executorBacked": true,
       "sharedWith": [],
       "class": "B",
       "rationale": "The verb is executor-backed and purpose-built, and an earlier revision stopped there. Follow --phase through the handler: it reaches slugSource, runInput, and an interpolated topic string handed to guidancePrompt, and nothing else. It is never parsed as a phase number and never selects any evidence. Worse than scope being ignored: guidancePrompt receives only the workflow, the topic, and four section names, so the executor producing the findings sees no project evidence at all. resolveWorkflowState().stage and the last two guidance runs are read before the run but consumed only by renderGuidanceMarkdown after it. A scoped retrospective over completed work is not a mode this verb has, it is a word pasted into a prompt.",
       "hostOnly": [
-        { "capability": "Save-or-discard decision, including a view-only path that persists nothing", "anchor": "9. HANDLE SAVE CHOICE" },
-        { "capability": "Section-by-section correction of the findings before they are recorded", "anchor": "**Path C: Edit before saving**" },
-        { "capability": "Cross-project aggregation across every project in the portfolio", "anchor": "10. CROSS-PROJECT MODE" }
+        {
+          "capability": "Save-or-discard decision, including a view-only path that persists nothing",
+          "anchor": "9. HANDLE SAVE CHOICE"
+        },
+        {
+          "capability": "Section-by-section correction of the findings before they are recorded",
+          "anchor": "**Path C: Edit before saving**"
+        },
+        {
+          "capability": "Cross-project aggregation across every project in the portfolio",
+          "anchor": "10. CROSS-PROJECT MODE"
+        }
       ],
       "cliGaps": [
-        "--phase and --milestone are decorative: they select no evidence. Making them real scope selectors is the load-bearing gap and the reason retro cannot be thinned.",
-        "The executor receives no evidence of any kind. guidancePrompt is handed the workflow, the topic, and four section names; the workflow stage and recent runs reach only the rendered markdown afterwards. Scoping the flags without also feeding the executor would leave the analysis exactly as unevidenced.",
-        "Evidence gathering from completed-work artifacts (phase summaries, review findings and cycle counts, plan frontmatter) does not exist. latestGuidanceRuns returns run metadata, not build or review evidence.",
-        "No completeness gate. The command refuses to run on incomplete work; the verb's only validation is that the flags are non-empty strings.",
-        "No computed metrics (plans completed, first-pass review rate, escalation counts). These are counts over typed artifacts and are what make the findings falsifiable.",
-        "No --dry-run. writeProjectTextFile and writeGuidanceRun both fire before the handler returns, so a host-side flag could suppress rendering but not persistence.",
-        "Findings are written only inside the run directory. The command promises retro findings reach later planning, and nothing reads retro.md."
+        {
+          "gap": "--phase and --milestone are decorative: they select no evidence. Making them real scope selectors is the load-bearing gap and the reason retro cannot be thinned.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "The executor receives no evidence of any kind. guidancePrompt is handed the workflow, the topic, and four section names; the workflow stage and recent runs reach only the rendered markdown afterwards. Scoping the flags without also feeding the executor would leave the analysis exactly as unevidenced.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "Evidence gathering from completed-work artifacts (phase summaries, review findings and cycle counts, plan frontmatter) does not exist. latestGuidanceRuns returns run metadata, not build or review evidence.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No completeness gate. The command refuses to run on incomplete work; the verb's only validation is that the flags are non-empty strings.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No computed metrics (plans completed, first-pass review rate, escalation counts). These are counts over typed artifacts and are what make the findings falsifiable.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No --dry-run. writeProjectTextFile and writeGuidanceRun both fire before the handler returns, so a host-side flag could suppress rendering but not persistence.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "Findings are written only inside the run directory. The command promises retro findings reach later planning, and nothing reads retro.md.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No staged-write path. runRetroWorkflow writes retro.md and the guidance run before it returns, so the host's view-only choice still persists and edit-before-saving edits findings already recorded. The retained save/discard and edit choices are impossible at this boundary until the CLI gains a non-persisting run followed by an explicit save.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "The retro-to-plan loop has no v9 reader. commands/plan.md reads the latest retrospective and injects its high-priority actions and agent adjustments into decomposition; nothing in the repository reads retro.md. Converting both commands would break the loop silently, so either the planning path consumes the retained artifacts or the loop is recorded as removed.",
+          "disposition": "build-in-cli"
+        }
       ]
     },
     {
       "command": "learn",
       "verb": "learn",
-      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "runLearnWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/ad-hoc.ts",
+        "symbol": "runLearnWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "The verb implements one of the command's four modes, and implements it without the type system the other three are built on. LessonIndex records carry {id, lesson, createdAt, artifactPath} and nothing else, so pattern, pitfall, and preference do not exist in the CLI's data model. There is no read path: the only consumer dumps the whole index into a context pack truncated at 4,000 characters with no query. Recall, list, and prune have no verb surface at all.",
       "hostOnly": [
-        { "capability": "Classify the lesson as pattern, pitfall, or preference and confirm the classification before recording", "anchor": "Present classification via adapter.ask_user:" },
-        { "capability": "Enrich the lesson with derived tags, a one-line summary, and the current phase context", "anchor": "5. ENRICH" },
-        { "capability": "Multi-turn recording session that loops back for the next lesson after each save", "anchor": "7. OFFER CONTINUATION" }
+        {
+          "capability": "Classify the lesson as pattern, pitfall, or preference and confirm the classification before recording",
+          "anchor": "Present classification via adapter.ask_user:"
+        },
+        {
+          "capability": "Enrich the lesson with derived tags, a one-line summary, and the current phase context",
+          "anchor": "5. ENRICH"
+        },
+        {
+          "capability": "Multi-turn recording session that loops back for the next lesson after each save",
+          "anchor": "7. OFFER CONTINUATION"
+        }
       ],
       "cliGaps": [
-        "No typed lesson kind, tags, or summary on the record path. All three are prerequisites, not just the kind: --list groups by type, and --recall scores a tag match 3, a summary match 2, and a body match 1. Records carrying only id, lesson, createdAt, and artifactPath can support body matching alone, which silently drops two thirds of the ranking.",
-        "No --recall. The scoring rule is deterministic, but the corpus is not only knowledge-index.json. The command searches five files, and RETRO.md among them cross-references retrospective findings; in v9 those live in run-scoped retro.md artifacts. Either the query path includes them or their exclusion is recorded as a deliberate removal, otherwise recall silently stops returning retrospective findings.",
-        "No --list. Pure rendering over CLI-owned state, blocked on the typed-kind gap.",
-        "--prune targets .planning/memory/OUTCOMES.md, which does not survive. No outcome record store exists in the CLI; record as a deliberate removal."
+        {
+          "gap": "No typed lesson kind, tags, or summary on the record path. All three are prerequisites, not just the kind: --list groups by type, and --recall scores a tag match 3, a summary match 2, and a body match 1. Records carrying only id, lesson, createdAt, and artifactPath can support body matching alone, which silently drops two thirds of the ranking.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No --recall. The scoring rule is deterministic, but the corpus is not only knowledge-index.json. The command searches five files, and RETRO.md among them cross-references retrospective findings; in v9 those live in run-scoped retro.md artifacts. Either the query path includes them or their exclusion is recorded as a deliberate removal, otherwise recall silently stops returning retrospective findings.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No --list. Pure rendering over CLI-owned state, blocked on the typed-kind gap.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "--prune targets .planning/memory/OUTCOMES.md, which does not survive. No outcome record store exists in the CLI; record as a deliberate removal.",
+          "disposition": "deliberate-removal"
+        }
       ]
     },
     {
       "command": "validate",
       "verb": "validate",
-      "handler": { "file": "packages/cli/src/commands/workflow/validate.ts", "symbol": "handleValidateCommand" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/validate.ts",
+        "symbol": "handleValidateCommand"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "Proposed as class A on the grounds that the command dispatches no agent and its writes all target .planning/ files. A skeptic refuted it and was right: the command scores every check PASS, WARN, or FAIL, and the verb has no severity concept. ArtifactDiagnostic and TraceabilityDiagnostic carry only code, message, and source, and validateProject fails as soon as any diagnostic exists. Thinning today would turn every warning into a hard failure, which is a behaviour change for anyone running validate in CI.",
       "hostOnly": [
-        { "capability": "Repair-then-reverify loop that re-runs validation over the fixed files and presents an updated result set", "anchor": "Then re-run validation on fixed files and show updated results." },
-        { "capability": "Per-check fixability policy that declines to auto-fix dangling agent references and emits human guidance instead", "anchor": "Do NOT auto-fix dangling agent references." }
+        {
+          "capability": "Repair-then-reverify loop that re-runs validation over the fixed files and presents an updated result set",
+          "anchor": "Then re-run validation on fixed files and show updated results."
+        },
+        {
+          "capability": "Per-check fixability policy that declines to auto-fix dangling agent references and emits human guidance instead",
+          "anchor": "Do NOT auto-fix dangling agent references."
+        }
       ],
       "cliGaps": [
-        "No WARN severity. The command has six scoring rules that produce a warning rather than a failure; the verb collapses every finding into one failing bucket. Its only non-failing report is coverage.unplanned, a single documented exemption.",
-        "No --ci. Its substance is a three-valued exit code (0 clean, 1 warnings, 2 failures); success and failure hardcode 0 and 1 and nothing returns 2. Blocked on the severity gap, since there is nothing to tier without it.",
-        "No validation of the root settings.json. This is NOT under .planning/: it sits at the repository root, has a published schema at docs/settings.schema.json, and nothing in packages/ reads control_mode, max_tasks_per_plan, or max_cycles. Thinning before this lands would leave the only enforcement of a schema the file itself references silently absent.",
-        "No --fix. Every current fix target is a .planning/ file that retires, and the one remaining mechanically repairable diagnostic is a one-line .gitignore append. Record as a deliberate removal; note that parseCliArgs does not reject unknown options, so legion validate --fix parses and is silently ignored rather than erroring.",
-        "The agent-roster check compares against strings in STATE.md and .planning/config/authority-matrix.yaml. Both retire, so the check has nothing left to compare. Deliberate removal."
+        {
+          "gap": "No WARN severity. The command has six scoring rules that produce a warning rather than a failure; the verb collapses every finding into one failing bucket. Its only non-failing report is coverage.unplanned, a single documented exemption.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No --ci. Its substance is a one-line machine-readable summary and a three-valued exit code (0 clean, 1 warnings, 2 failures); success and failure hardcode 0 and 1 and nothing returns 2. Deliberate removal, and it must be stated rather than implied by the WARN work: --json already carries the full typed payload, so the output half is redundant, and CI consumers relying on exit 2 lose that interface. Recording it is what stops the command being thinned while every criterion passes.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "No validation of the root settings.json. This is NOT under .planning/: it sits at the repository root, has a published schema at docs/settings.schema.json, and nothing in packages/ reads control_mode, max_tasks_per_plan, or max_cycles. Thinning before this lands would leave the only enforcement of a schema the file itself references silently absent.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "No --fix. Every current fix target is a .planning/ file that retires, and the one remaining mechanically repairable diagnostic is a one-line .gitignore append. Record as a deliberate removal; note that parseCliArgs does not reject unknown options, so legion validate --fix parses and is silently ignored rather than erroring.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "The agent-roster check compares against strings in STATE.md and .planning/config/authority-matrix.yaml. Both retire, so the check has nothing left to compare. Deliberate removal.",
+          "disposition": "deliberate-removal"
+        }
       ]
     },
     {
       "command": "explore",
       "verb": "explore",
-      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runExecutorBackedGuidance" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/contextual.ts",
+        "symbol": "runExecutorBackedGuidance"
+      },
       "executorBacked": true,
-      "sharedWith": ["council"],
+      "sharedWith": [
+        "council"
+      ],
       "class": "B",
       "rationale": "The verb runs one executor pass against fixed sections and writes one artifact. The command runs a divergent design conversation: an entry-path choice, a bounded research pass, an iterative clarifying interview over eight named decisions, and an approach-comparison loop. Rendering the verb's payload would delete all of it. Exploration is the one place the governing plan deliberately grants wide latitude, so this is the command least safe to thin.",
       "hostOnly": [
-        { "capability": "Entry-path choice: fresh idea, existing exploration, or project context", "anchor": "2. CAPTURE THE INITIAL ASK" },
-        { "capability": "Bounded local and web research pass recorded as facts, inferences, and assumptions", "anchor": "3. RESEARCH PASS" },
-        { "capability": "Iterative clarifying interview, one material decision at a time, updating design constraints between answers", "anchor": "4. CLARIFY ONE DECISION AT A TIME" },
-        { "capability": "Two to three approaches with tradeoffs and a choose, refine, or keep-comparing loop", "anchor": "5. PROPOSE APPROACHES" }
+        {
+          "capability": "Entry-path choice: fresh idea, existing exploration, or project context",
+          "anchor": "2. CAPTURE THE INITIAL ASK"
+        },
+        {
+          "capability": "Bounded local and web research pass recorded as facts, inferences, and assumptions",
+          "anchor": "3. RESEARCH PASS"
+        },
+        {
+          "capability": "Iterative clarifying interview, one material decision at a time, updating design constraints between answers",
+          "anchor": "4. CLARIFY ONE DECISION AT A TIME"
+        },
+        {
+          "capability": "Two to three approaches with tradeoffs and a choose, refine, or keep-comparing loop",
+          "anchor": "5. PROPOSE APPROACHES"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "plan",
       "verb": "plan",
-      "handler": { "file": "packages/cli/src/commands/workflow/plan.ts", "symbol": "handlePlanWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/plan.ts",
+        "symbol": "handlePlanWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "The CLI owns the taskgraph, the risk classification, and the decision that planning is complete. Agent recommendation, human confirmation, and issue creation are host work.",
       "hostOnly": [
-        { "capability": "Agent recommendation per plan", "anchor": "5. RECOMMEND AGENTS" },
-        { "capability": "Human confirmation of the decomposition before files are written", "anchor": "6. PRESENT TO USER FOR CONFIRMATION" },
-        { "capability": "GitHub issue creation", "anchor": "9. GITHUB ISSUE CREATION" }
+        {
+          "capability": "Agent recommendation per plan",
+          "anchor": "5. RECOMMEND AGENTS"
+        },
+        {
+          "capability": "Human confirmation of the decomposition before files are written",
+          "anchor": "6. PRESENT TO USER FOR CONFIRMATION"
+        },
+        {
+          "capability": "GitHub issue creation",
+          "anchor": "9. GITHUB ISSUE CREATION"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "quick",
       "verb": "quick",
-      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "createTypedAdHocWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/ad-hoc.ts",
+        "symbol": "createTypedAdHocWorkflow"
+      },
       "executorBacked": false,
-      "sharedWith": ["polish"],
+      "sharedWith": [
+        "polish"
+      ],
       "class": "B",
       "rationale": "The verb creates a typed change, oracle, and taskgraph and stops, routing execution to legion build. Everything the command does after planning is host work. The handler is shared with polish, so the verb name alone says nothing about behaviour.",
       "hostOnly": [
-        { "capability": "Agent selection for the task", "anchor": "3. SELECT AGENT" },
-        { "capability": "Commit offer after files change", "anchor": "7. OFFER COMMIT" },
-        { "capability": "Inline review pass in fix mode", "anchor": "8. INLINE REVIEW" },
-        { "capability": "PR creation in fix mode", "anchor": "9. CREATE PR" }
+        {
+          "capability": "Agent selection for the task",
+          "anchor": "3. SELECT AGENT"
+        },
+        {
+          "capability": "Commit offer after files change",
+          "anchor": "7. OFFER COMMIT"
+        },
+        {
+          "capability": "Inline review pass in fix mode",
+          "anchor": "8. INLINE REVIEW"
+        },
+        {
+          "capability": "PR creation in fix mode",
+          "anchor": "9. CREATE PR"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "polish",
       "verb": "polish",
-      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "createTypedAdHocWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/ad-hoc.ts",
+        "symbol": "createTypedAdHocWorkflow"
+      },
       "executorBacked": false,
-      "sharedWith": ["quick"],
+      "sharedWith": [
+        "quick"
+      ],
       "class": "B",
       "rationale": "The verb creates a typed taskgraph scoped to the target and stops. The dry run, the behaviour-preservation check, and the commit step are host work.",
       "hostOnly": [
-        { "capability": "Dry-run preview before any edit", "anchor": "4. DRY-RUN CHECK" },
-        { "capability": "Post-polish safety verification that behaviour is unchanged", "anchor": "6. SAFETY VERIFICATION" },
-        { "capability": "Report and commit step", "anchor": "7. REPORT AND COMMIT" }
+        {
+          "capability": "Dry-run preview before any edit",
+          "anchor": "4. DRY-RUN CHECK"
+        },
+        {
+          "capability": "Post-polish safety verification that behaviour is unchanged",
+          "anchor": "6. SAFETY VERIFICATION"
+        },
+        {
+          "capability": "Report and commit step",
+          "anchor": "7. REPORT AND COMMIT"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "build",
       "verb": "build",
-      "handler": { "file": "packages/cli/src/commands/workflow/build.ts", "symbol": "handleBuildWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/build.ts",
+        "symbol": "handleBuildWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "The CLI owns verification, diff reconciliation, and the task verdict. The wave executor, its disjointness proof, and its gates are host work with no verb equivalent.",
       "hostOnly": [
-        { "capability": "Wave A analysis dispatch and the architecture review gate", "anchor": "Gate: Architecture Review" },
-        { "capability": "Wave B parallel dispatch across execution and remediation streams", "anchor": "Spawn Wave B agents in parallel" },
-        { "capability": "File-overlap safety check that serializes waves whose write scopes intersect", "anchor": "File-overlap safety check (MANDATORY before dispatch)" }
+        {
+          "capability": "Wave A analysis dispatch and the architecture review gate",
+          "anchor": "Gate: Architecture Review"
+        },
+        {
+          "capability": "Wave B parallel dispatch across execution and remediation streams",
+          "anchor": "Spawn Wave B agents in parallel"
+        },
+        {
+          "capability": "File-overlap safety check that serializes waves whose write scopes intersect",
+          "anchor": "File-overlap safety check (MANDATORY before dispatch)"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "review",
       "verb": "review",
-      "handler": { "file": "packages/cli/src/commands/workflow/review.ts", "symbol": "handleReviewWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/review.ts",
+        "symbol": "handleReviewWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "The CLI owns the verification report, the gate set, and human acceptance. The multi-agent review panel and its routing are host work.",
       "hostOnly": [
-        { "capability": "Intent detection over natural-language invocation", "anchor": "Step 0.7: NATURAL LANGUAGE INTENT DETECTION" },
-        { "capability": "Review agent selection", "anchor": "4. SELECT REVIEW AGENTS" },
-        { "capability": "Review cycle execution with glob-routed fix agents", "anchor": "5. EXECUTE REVIEW CYCLE" },
-        { "capability": "Security-only output mode", "anchor": "SECURITY-ONLY OUTPUT" }
+        {
+          "capability": "Intent detection over natural-language invocation",
+          "anchor": "Step 0.7: NATURAL LANGUAGE INTENT DETECTION"
+        },
+        {
+          "capability": "Review agent selection",
+          "anchor": "4. SELECT REVIEW AGENTS"
+        },
+        {
+          "capability": "Review cycle execution with glob-routed fix agents",
+          "anchor": "5. EXECUTE REVIEW CYCLE"
+        },
+        {
+          "capability": "Security-only output mode",
+          "anchor": "SECURITY-ONLY OUTPUT"
+        }
       ],
       "cliGaps": [
-        "legion review must expose what a panel needs before commands/review.md is thinned, not after."
+        {
+          "gap": "legion review must expose what a panel needs before commands/review.md is thinned, not after.",
+          "disposition": "build-in-cli"
+        }
       ]
     },
     {
       "command": "ship",
       "verb": "ship",
-      "handler": { "file": "packages/cli/src/commands/workflow/ship.ts", "symbol": "handleShipWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/ship.ts",
+        "symbol": "handleShipWorkflow"
+      },
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
       "rationale": "The verb runs release readiness gates. It does not publish or release, so PR creation, pushing, and post-ship observation cannot move into it.",
       "hostOnly": [
-        { "capability": "PR creation and pushing", "anchor": "5. PR CREATION" },
-        { "capability": "Post-ship verification and canary monitoring", "anchor": "7. POST-SHIP" }
+        {
+          "capability": "PR creation and pushing",
+          "anchor": "5. PR CREATION"
+        },
+        {
+          "capability": "Post-ship verification and canary monitoring",
+          "anchor": "7. POST-SHIP"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "advise",
       "verb": "advise",
-      "handler": { "file": "packages/cli/src/commands/workflow/ad-hoc.ts", "symbol": "runAdviceWorkflow" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/ad-hoc.ts",
+        "symbol": "runAdviceWorkflow"
+      },
       "executorBacked": true,
       "sharedWith": [],
       "class": "B",
       "rationale": "The verb runs one executor pass against fixed sections and writes one advisory artifact. It selects no specialist and supports no second turn, so a chosen advisor and a multi-turn consultation would both be lost.",
       "hostOnly": [
-        { "capability": "Advisor selection with personality injection", "anchor": "3. SELECT ADVISOR" },
-        { "capability": "Follow-up consultation turns against the same advisor", "anchor": "7. OFFER FOLLOW-UP" },
-        { "capability": "Read-only enforcement on the advisory dispatch", "anchor": "adapter.spawn_agent_readonly" }
+        {
+          "capability": "Advisor selection with personality injection",
+          "anchor": "3. SELECT ADVISOR"
+        },
+        {
+          "capability": "Follow-up consultation turns against the same advisor",
+          "anchor": "7. OFFER FOLLOW-UP"
+        },
+        {
+          "capability": "Read-only enforcement on the advisory dispatch",
+          "anchor": "adapter.spawn_agent_readonly"
+        }
       ],
       "cliGaps": []
     },
     {
       "command": "board",
       "verb": "council",
-      "handler": { "file": "packages/cli/src/commands/workflow/contextual.ts", "symbol": "runExecutorBackedGuidance" },
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/contextual.ts",
+        "symbol": "runExecutorBackedGuidance"
+      },
       "executorBacked": true,
-      "sharedWith": ["explore"],
+      "sharedWith": [
+        "explore"
+      ],
       "class": "B",
       "rationale": "The verb shares one generic implementation with explore and produces a single decision artifact. The command is a deliberating panel. Preserving the /legion:board name is necessary and not sufficient: the defining behaviour is the panel, not the label.",
       "hostOnly": [
-        { "capability": "Board composition: a user-confirmed slate of members", "anchor": "Step 2: BOARD COMPOSITION" },
-        { "capability": "Three to five independent assessments with quorum and abstention on timeout", "anchor": "board-assessment" },
-        { "capability": "Vote tally and escalated tie resolution", "anchor": "ESCALATED: Present the tie to the user" }
+        {
+          "capability": "Board composition: a user-confirmed slate of members",
+          "anchor": "Step 2: BOARD COMPOSITION"
+        },
+        {
+          "capability": "Three to five independent assessments with quorum and abstention on timeout",
+          "anchor": "board-assessment"
+        },
+        {
+          "capability": "Vote tally and escalated tie resolution",
+          "anchor": "ESCALATED: Present the tie to the user"
+        }
       ],
       "cliGaps": []
     },
@@ -266,11 +554,20 @@
       "class": "C",
       "rationale": "No legion verb creates agent personalities. The command is a three-stage guided generator with schema validation.",
       "hostOnly": [
-        { "capability": "Three-stage guided identity, capability, and registry-tag capture", "anchor": "3. STAGE 1: AGENT IDENTITY" },
-        { "capability": "Schema validation of the generated personality", "anchor": "6. VALIDATE SCHEMA" }
+        {
+          "capability": "Three-stage guided identity, capability, and registry-tag capture",
+          "anchor": "3. STAGE 1: AGENT IDENTITY"
+        },
+        {
+          "capability": "Schema validation of the generated personality",
+          "anchor": "6. VALIDATE SCHEMA"
+        }
       ],
       "cliGaps": [
-        "No verb exists. P16-B009 decides whether one should."
+        {
+          "gap": "No verb exists. P16-B009 decides whether one should.",
+          "disposition": "keep-in-host"
+        }
       ]
     },
     {
@@ -282,12 +579,24 @@
       "class": "C",
       "rationale": "No workflow verb exists. legion dev board portfolio is unrelated: it replays a tenant-scoped projection and is not a multi-project dashboard.",
       "hostOnly": [
-        { "capability": "Cross-project dependency display", "anchor": "4. DISPLAY CROSS-PROJECT DEPENDENCIES" },
-        { "capability": "Agent allocation across registered projects", "anchor": "5. DISPLAY AGENT ALLOCATION" },
-        { "capability": "Manual project registration fallback", "anchor": "8. MANUAL REGISTRATION" }
+        {
+          "capability": "Cross-project dependency display",
+          "anchor": "4. DISPLAY CROSS-PROJECT DEPENDENCIES"
+        },
+        {
+          "capability": "Agent allocation across registered projects",
+          "anchor": "5. DISPLAY AGENT ALLOCATION"
+        },
+        {
+          "capability": "Manual project registration fallback",
+          "anchor": "8. MANUAL REGISTRATION"
+        }
       ],
       "cliGaps": [
-        "No workflow verb exists. P16-B009 decides whether one should."
+        {
+          "gap": "No workflow verb exists. P16-B009 decides whether one should.",
+          "disposition": "keep-in-host"
+        }
       ]
     }
   ]
