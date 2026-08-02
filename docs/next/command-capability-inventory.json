@@ -49,7 +49,7 @@
       ],
       "cliGaps": [
         "--complete has no pre-flight gate requiring every phase in the milestone to be complete. The command's stated invariant is no partial completions, and the verb's only check is that the id exists.",
-        "--archive flips status to archived and sets archivedAt. It relocates nothing and updates no project state, so thinning as-is would make the word archive a label with no effect.",
+        "--archive flips status to archived and sets archivedAt. The command moves phase directories from .planning/phases/ to .planning/archive/milestone-N/; both paths retire, so the relocation is a recorded deliberate removal rather than an open gap. An equivalent over .legion artifacts would be new work, not preservation.",
         "Status mode is the implicit default and still rewrites milestones.json, writes a fresh milestones.md, and appends a guidance run on every invocation. A host that renders status on every display would mutate project state each time. A genuinely read-only query is needed first.",
         "Progress rendering requires joining milestone records to phase status, which is exactly the link the handler lacks. renderMilestones has no percentage, bar, or phase table.",
         "--summary is stored verbatim, so a completed milestone's summary is whatever the caller typed rather than derived from the artifacts the CLI owns."
@@ -92,8 +92,8 @@
         { "capability": "Multi-turn recording session that loops back for the next lesson after each save", "anchor": "7. OFFER CONTINUATION" }
       ],
       "cliGaps": [
-        "No typed lesson kind on the record path. This is the prerequisite for the rest: --list groups by type and --recall scores tag matches, and neither can be implemented over records carrying only id, lesson, createdAt, and artifactPath.",
-        "No --recall. The scoring rule is deterministic and the corpus already lives in knowledge-index.json, but the CLI has no read verb at all.",
+        "No typed lesson kind, tags, or summary on the record path. All three are prerequisites, not just the kind: --list groups by type, and --recall scores a tag match 3, a summary match 2, and a body match 1. Records carrying only id, lesson, createdAt, and artifactPath can support body matching alone, which silently drops two thirds of the ranking.",
+        "No --recall. The scoring rule is deterministic, but the corpus is not only knowledge-index.json. The command searches five files, and RETRO.md among them cross-references retrospective findings; in v9 those live in run-scoped retro.md artifacts. Either the query path includes them or their exclusion is recorded as a deliberate removal, otherwise recall silently stops returning retrospective findings.",
         "No --list. Pure rendering over CLI-owned state, blocked on the typed-kind gap.",
         "--prune targets .planning/memory/OUTCOMES.md, which does not survive. No outcome record store exists in the CLI; record as a deliberate removal."
       ]

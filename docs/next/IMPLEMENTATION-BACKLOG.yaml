@@ -283,6 +283,7 @@ items:
     owner: compatibility-owner
     depends_on:
       - P16-B001
+      - P16-B012
     maps_to:
       - commands/validate.md
       - commands/map.md
@@ -312,8 +313,13 @@ items:
       - >-
         legion map gains a non-mutating default, four freshness states, the 30-day age rule, and
         empty-source handling. Deliberate removals are recorded before the edit: validate --fix and
-        --prune targets that retire with .planning/, and the agent-roster check, whose comparands
-        in STATE.md and authority-matrix.yaml both retire.
+        the agent-roster check, whose comparands in STATE.md and authority-matrix.yaml both retire.
+      - >-
+        P16-B012 owns the map --query --scope fix and lands first. Without that ordering this item
+        could remove commands/map.md while the replacement still answered scoped queries from the
+        whole repository. An earlier revision made only B003 depend on B012 and left this item
+        eligible in parallel — the same defect, applied to one neighbour and not the other, which
+        is the pattern the phase-C reviews already named twice.
       - Neither file reads .planning/, and both are removed from the allowlist.
       - Any state the host needs that the CLI does not expose is added to the CLI first, with tests.
     verification:
@@ -338,10 +344,18 @@ items:
         handler moved all three to class B, for the same reason as B002: deterministic was read as
         equivalent.
       - >-
-        legion learn gains a typed lesson kind first, then --recall and --list. LessonIndex records
-        carry only {id, lesson, createdAt, artifactPath}, so pattern, pitfall, and preference do not
-        exist in the CLI's data model and the two modes built on them cannot be implemented over it.
-        --prune targets .planning/memory/OUTCOMES.md and is a recorded deliberate removal.
+        legion learn gains a typed lesson kind, tags, and a summary on the record path first, then
+        --recall and --list. LessonIndex records carry only {id, lesson, createdAt, artifactPath}.
+        The kind alone is not enough: --recall scores a tag match 3, a summary match 2, and a body
+        match 1, so records without tags and summaries can support body matching alone and the
+        ranking silently degrades to one third of the rule.
+      - >-
+        --recall's corpus is decided before it is built. The command searches five memory files, and
+        RETRO.md among them cross-references retrospective findings, which in v9 are run-scoped
+        retro.md artifacts rather than lessons. Either the query path includes them or their
+        exclusion is recorded as a deliberate removal; implementing recall over knowledge-index.json
+        alone would silently stop returning retrospective findings.
+      - --prune targets .planning/memory/OUTCOMES.md and is a recorded deliberate removal.
       - >-
         P16-B012 lands first and owns the two defect fixes: making retro's scope flags select
         evidence or be rejected, and making milestone status read-only. An earlier revision of this
@@ -358,7 +372,14 @@ items:
       - >-
         legion milestone gains a pre-flight gate on --complete requiring every phase to be complete.
         The command's stated invariant is no partial completions, and the verb checks only that the
-        milestone id exists. --archive relocating nothing is recorded as a gap, not thinned as-is.
+        milestone id exists.
+      - >-
+        The archive relocation is a recorded deliberate removal, assigned rather than left open. The
+        command moves phase directories from .planning/phases/ to .planning/archive/milestone-N/ and
+        both paths retire with the directory, so there is nothing in v9 for the operation to move;
+        an equivalent over .legion artifacts would be new work, not preservation. An earlier revision
+        recorded only that --archive relocates nothing, which assigned the operation to no one and
+        would have let every criterion pass while the behaviour simply disappeared.
       - >-
         The host keeps what has no verb: learn's classification prompt and recording loop, retro's
         save-or-discard decision, edit-before-saving path, and cross-project mode, and milestone's
