@@ -27,6 +27,7 @@ import {
   loadChangeBundle,
   readOracleArtifact,
   readRequirementSet,
+  requirementSetIndexPath,
   readTaskGraph,
   type RequirementSet
 } from "@legion/artifacts";
@@ -40,7 +41,8 @@ export interface TraceabilityDiagnostic {
     | "current_spec_invalid"
     | "change_bundle_invalid"
     | "task_budget_exceeds_policy"
-    | "taskgraph_unreadable";
+    | "taskgraph_unreadable"
+    | "requirement_set_unreadable";
   readonly message: string;
   readonly source: { readonly path: string };
 }
@@ -245,6 +247,30 @@ export async function checkTraceability(repositoryRoot: string): Promise<Traceab
   const empty = { requirements: 0, planned: 0, unplanned: [] as readonly string[] };
 
   const set = await readRequirementSet(repositoryRoot);
+
+  // A requirement set that cannot be read is not an empty one, and the two are
+  // indistinguishable from here: without this, an unreadable index produced a
+  // clean report over zero requirements — "0 of 0 planned", which reads as
+  // traceability satisfied for a project whose requirements nobody could load.
+  //
+  // The guard was already applied once, in `resolveTraceabilityStatus`, and only
+  // there — so `legion status` refused while `legion validate` and `legion
+  // doctor` reported clean over the same broken set. It belongs here, where the
+  // rule lives, rather than at each of the three entrances that has to remember
+  // it.
+  if (!set.ok && set.status !== "not_found") {
+    return {
+      diagnostics: [
+        {
+          code: "requirement_set_unreadable",
+          message: `The requirement set could not be read, so traceability was not checked: ${set.reason ?? "unknown reason"}`,
+          source: { path: requirementSetIndexPath() }
+        }
+      ],
+      coverage: empty
+    };
+  }
+
   const diagnostics: TraceabilityDiagnostic[] = [];
   const covered = new Set<string>();
 

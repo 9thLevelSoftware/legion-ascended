@@ -19,6 +19,7 @@ import {
   getLatestCodebaseMap,
   queryCodebaseMap,
   collectMapSource,
+  queryTerms,
   refreshCodebaseMap,
   resolveMapState,
   type MapState
@@ -455,6 +456,16 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
       ["Map query is blocked.", renderNextAction(action)].join("\n")
     );
   }
+  // An empty query is refused, and a query whose every token the tokenizer
+  // discards is the same input in a different costume: `legion map --query "!!"`
+  // reported a successful search with zero results, which reads as "nothing in
+  // this repository matches" rather than "nothing was searched for".
+  if (queryTerms(query).length === 0) {
+    return usageError(
+      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
+    );
+  }
+
   const matches = queryCodebaseMap(latest, query);
   const action = nextAction("legion status", "Use the query result as context for the next workflow action.");
   // A search over a stored map, writing nothing. Like `--check`, recording it
