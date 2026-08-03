@@ -3,6 +3,15 @@ import { readFile } from "node:fs/promises";
 export interface ParsedCliArgs {
   readonly positionals: readonly string[];
   readonly options: ReadonlyMap<string, string | true>;
+  /**
+   * Valueless options that were given a value, as `--flag=value`.
+   *
+   * Refused rather than ignored. Silently dropping the value would read
+   * `--json=false` as `--json`, and silently keeping it reproduces the defect
+   * this list exists to close: the flag binds a string, `hasFlag` reads false,
+   * and the handler runs the branch the caller did not ask for.
+   */
+  readonly invalidOptions: readonly string[];
 }
 
 export interface CliContext {
@@ -76,6 +85,7 @@ const VALUELESS_OPTIONS = new Set([
 export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
   const positionals: string[] = [];
   const options = new Map<string, string | true>();
+  const invalidOptions: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -90,6 +100,14 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
     if (equalsIndex !== -1) {
       const key = withoutPrefix.slice(0, equalsIndex);
       const value = withoutPrefix.slice(equalsIndex + 1);
+      // This branch runs before the valueless check, so `--check=src` bound a
+      // string and `hasFlag` read false — the same vanishing flag as the space
+      // form, reached by the syntax the first fix did not cover.
+      if (VALUELESS_OPTIONS.has(key)) {
+        invalidOptions.push(key);
+        options.set(key, true);
+        continue;
+      }
       options.set(key, value);
       continue;
     }
@@ -109,7 +127,16 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
     options.set(withoutPrefix, true);
   }
 
-  return { positionals, options };
+  return { positionals, options, invalidOptions };
+}
+
+/** The usage error for `--flag=value` on a flag that takes no value, if any. */
+export function invalidOptionError(args: ParsedCliArgs): CliResult | undefined {
+  if (args.invalidOptions.length === 0) return undefined;
+  const named = args.invalidOptions.map((key) => `--${key}`).join(", ");
+  return usageError(
+    `${named} ${args.invalidOptions.length === 1 ? "does" : "do"} not take a value. Pass the flag on its own, and give any path or text to the option that expects it.`
+  );
 }
 
 export function hasFlag(context: CliContext, key: string): boolean {

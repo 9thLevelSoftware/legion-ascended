@@ -9,6 +9,7 @@ import {
   helpResult,
   parseCliArgs,
   stripCommand,
+  invalidOptionError,
   unexpectedError,
   withWarning,
   type CliContext,
@@ -52,7 +53,9 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2), io
 
   let result: CliResult;
   try {
-    result = await dispatch(context);
+    // Before any handler runs, because the whole point is that no handler ever
+    // sees a flag that has silently become a string.
+    result = invalidOptionError(parsed) ?? await dispatch(context);
   } catch (error) {
     result = unexpectedError(error);
   }

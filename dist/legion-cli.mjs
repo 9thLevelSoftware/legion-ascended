@@ -15423,6 +15423,7 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
 function parseCliArgs(argv) {
   const positionals = [];
   const options = /* @__PURE__ */ new Map();
+  const invalidOptions = [];
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === void 0) continue;
@@ -15435,6 +15436,11 @@ function parseCliArgs(argv) {
     if (equalsIndex !== -1) {
       const key = withoutPrefix.slice(0, equalsIndex);
       const value = withoutPrefix.slice(equalsIndex + 1);
+      if (VALUELESS_OPTIONS.has(key)) {
+        invalidOptions.push(key);
+        options.set(key, true);
+        continue;
+      }
       options.set(key, value);
       continue;
     }
@@ -15450,7 +15456,14 @@ function parseCliArgs(argv) {
     }
     options.set(withoutPrefix, true);
   }
-  return { positionals, options };
+  return { positionals, options, invalidOptions };
+}
+function invalidOptionError(args) {
+  if (args.invalidOptions.length === 0) return void 0;
+  const named = args.invalidOptions.map((key) => `--${key}`).join(", ");
+  return usageError(
+    `${named} ${args.invalidOptions.length === 1 ? "does" : "do"} not take a value. Pass the flag on its own, and give any path or text to the option that expects it.`
+  );
 }
 function hasFlag(context, key) {
   return context.args.options.get(key) === true;
@@ -34120,7 +34133,9 @@ async function refreshBuildEvidenceAfterAutoFix(context, executor, changeId) {
       options: /* @__PURE__ */ new Map([
         ["executor", executor],
         ["allow-dirty", true]
-      ])
+      ]),
+      // Constructed rather than parsed, so nothing here can be malformed.
+      invalidOptions: []
     }
   });
   if (build.exitCode !== 0) {
@@ -36017,7 +36032,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   };
   let result;
   try {
-    result = await dispatch(context);
+    result = invalidOptionError(parsed) ?? await dispatch(context);
   } catch (error2) {
     result = unexpectedError(error2);
   }
