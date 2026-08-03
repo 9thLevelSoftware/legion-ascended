@@ -7,11 +7,14 @@ import {
   failure,
   helpResult,
   success,
+  withWarning,
   type CliContext,
-  type CliResult
+  type CliResult,
+  type CliWarning
 } from "../../runtime.js";
 import { validateWorkflowProject } from "../../workflow/context.js";
 import { checkTraceability } from "../../workflow/traceability-check.js";
+import { checkSettings, type SettingsCheck } from "../../workflow/settings-check.js";
 import { renderDiagnostics } from "../../workflow/render.js";
 
 interface ShallowCheck {
@@ -23,7 +26,8 @@ interface ShallowCheck {
 
 const VALIDATE_HELP = `legion validate
 
-Validate committed Legion project state under .legion/project.
+Validate committed Legion project state under .legion/project, and the root settings.json.
+An absent settings.json is not an error; an unparseable one is.
 
 Examples:
   legion validate
@@ -31,7 +35,7 @@ Examples:
 
 const DOCTOR_HELP = `legion doctor
 
-Validate project state and check shallow operational paths such as .legion/var and bundles/index.json.
+Validate project state, the root settings.json, and shallow operational paths such as .legion/var and bundles/index.json.
 
 Examples:
   legion doctor
@@ -51,22 +55,26 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
   // References between requirements, oracles and tasks are IDs, and an ID that
   // resolves to nothing looks exactly like one that resolves.
   const trace = await checkTraceability(context.repositoryRoot);
-  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics];
-  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0;
+  const settings = await checkSettings(context.repositoryRoot);
+  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0 && settings.diagnostics.length === 0;
   const payload = {
     ...result,
     ok,
     diagnostics,
     coverage: trace.coverage,
-    status: failureStatus(result, drift.length, trace.diagnostics.length)
+    settings: { status: settings.status, path: settings.path },
+    status: failureStatus(result, drift.length, trace.diagnostics.length, settings)
   };
 
-  if (!ok) {
-    return failure(payload, validationFailureHuman(diagnostics));
-  }
+  const base = ok
+    ? success(payload, `Project is valid.\n${renderCoverage(trace.coverage)}`)
+    : failure(payload, validationFailureHuman(diagnostics));
+  return applyWarnings(base, settings.warnings);
+}
 
-  return success(payload, `Project is valid.
-${renderCoverage(trace.coverage)}`);
+function applyWarnings(result: CliResult, warnings: readonly CliWarning[]): CliResult {
+  return warnings.reduce((carried, warning) => withWarning(carried, warning), result);
 }
 
 /**
@@ -82,11 +90,15 @@ ${renderCoverage(trace.coverage)}`);
 function failureStatus(
   result: { readonly ok: boolean; readonly status?: string },
   driftCount: number,
-  traceCount: number
+  traceCount: number,
+  settings: SettingsCheck
 ): string {
   if (!result.ok) return result.status ?? "invalid";
   if (traceCount > 0) return "traceability_broken";
   if (driftCount > 0) return "requirement_set_drift";
+  // Reported after the artifact failures, because a settings file that does not
+  // parse says nothing about whether the project's own state is sound.
+  if (settings.diagnostics.length > 0) return "settings_unparseable";
   return "valid";
 }
 
@@ -127,9 +139,12 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
   const result = await validateWorkflowProject(context);
   // Doctor is the broader diagnostic, so it must not report a project healthy
   // that `legion validate` refuses. Two validation entrances that disagree teach
-  // operators to trust whichever one is currently passing.
+  // operators to trust whichever one is currently passing. That is why the
+  // settings check is added to both handlers together rather than to the one
+  // that motivated it.
   const drift = await requirementSetDiagnostics(context.repositoryRoot);
   const trace = await checkTraceability(context.repositoryRoot);
+  const settings = await checkSettings(context.repositoryRoot);
   const checks = {
     project: {
       ok: result.ok,
@@ -147,25 +162,30 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
       diagnostics: trace.diagnostics,
       coverage: trace.coverage
     },
+    settings: {
+      ok: settings.diagnostics.length === 0,
+      status: settings.status,
+      path: settings.path,
+      diagnostics: settings.diagnostics
+    },
     operationalStore: await pathCheck(context.repositoryRoot, ".legion/var"),
     workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
 
-  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0;
-  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics];
+  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0 && settings.diagnostics.length === 0;
+  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
   const payload = {
     ...result,
     ok,
     diagnostics,
-    status: failureStatus(result, drift.length, trace.diagnostics.length),
+    status: failureStatus(result, drift.length, trace.diagnostics.length, settings),
     checks
   };
 
-  if (!ok) {
-    return failure(payload, `Doctor found project validation issues.\n${renderDiagnostics(diagnostics)}`);
-  }
-
-  return success(payload, doctorHuman(checks));
+  const base = ok
+    ? success(payload, doctorHuman(checks))
+    : failure(payload, `Doctor found project validation issues.\n${renderDiagnostics(diagnostics)}`);
+  return applyWarnings(base, settings.warnings);
 }
 
 function validationFailureHuman(diagnostics: readonly unknown[]): string {
