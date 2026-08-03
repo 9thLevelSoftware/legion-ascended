@@ -6,6 +6,7 @@ import { artifactPathSchema, taskContractScopePathSchema } from "@legion/protoco
 
 import {
   failure,
+  hasFlag,
   helpResult,
   stringOption,
   success,
@@ -38,15 +39,32 @@ const HELP = {
 
 export type AdHocWorkflowCommand = keyof typeof HELP;
 
+/**
+ * What a lesson is, rather than what it says.
+ *
+ * `commands/learn.md` classifies every lesson as one of these and groups by them
+ * in `--list`. The CLI recorded `{id, lesson, createdAt, artifactPath}` and
+ * nothing else, so the taxonomy did not exist in the data model and the two
+ * modes built on it could not be implemented over it.
+ */
+export const LESSON_KINDS = ["pattern", "pitfall", "preference"] as const;
+export type LessonKind = (typeof LESSON_KINDS)[number];
+
+interface LessonRecord {
+  readonly id: string;
+  readonly lesson: string;
+  readonly createdAt: string;
+  readonly artifactPath: string;
+  readonly kind?: LessonKind;
+  /** Recall scores a tag match 3 and a summary match 2, so both must persist. */
+  readonly tags?: readonly string[];
+  readonly summary?: string;
+}
+
 interface LessonIndex {
   readonly schemaVersion: 1;
   readonly kind: "lesson_index";
-  readonly lessons: readonly {
-    readonly id: string;
-    readonly lesson: string;
-    readonly createdAt: string;
-    readonly artifactPath: string;
-  }[];
+  readonly lessons: readonly LessonRecord[];
 }
 
 export async function handleAdHocWorkflow(
@@ -280,8 +298,37 @@ async function runAdviceWorkflow(context: CliContext): Promise<CliResult> {
 }
 
 async function runLearnWorkflow(context: CliContext): Promise<CliResult> {
+  const recall = stringOption(context, "recall")?.trim();
+  if (context.args.options.get("recall") === true || recall === "") {
+    return usageError('Missing required value for --recall. Example: legion learn --recall "taskgraph".');
+  }
+  if (recall !== undefined) return runLearnRecall(context, recall);
+  if (hasFlag(context, "list")) return runLearnList(context);
+
   const lesson = positionalText(context);
   if (lesson === undefined) return usageError('legion learn requires a lesson. Example: legion learn "prefer artifact-backed plans".');
+
+  const kindOption = stringOption(context, "type")?.trim();
+  if (context.args.options.get("type") === true || kindOption === "") {
+    return usageError(`Missing required value for --type. One of ${LESSON_KINDS.join(", ")}.`);
+  }
+  if (kindOption !== undefined && !LESSON_KINDS.includes(kindOption as LessonKind)) {
+    return usageError(`Unknown lesson type: ${kindOption}. One of ${LESSON_KINDS.join(", ")}.`);
+  }
+  const kind = kindOption as LessonKind | undefined;
+
+  const tagOption = stringOption(context, "tags")?.trim();
+  if (context.args.options.get("tags") === true || tagOption === "") {
+    return usageError('Missing required value for --tags. Example: legion learn "..." --tags planning,evidence.');
+  }
+  const tags = tagOption === undefined
+    ? []
+    : [...new Set(tagOption.split(",").map((tag) => tag.trim().toLowerCase()).filter((tag) => tag.length > 0))];
+
+  const summaryOption = stringOption(context, "summary")?.trim();
+  if (context.args.options.get("summary") === true || summaryOption === "") {
+    return usageError('Missing required value for --summary. Example: legion learn "..." --summary "one line".');
+  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const paths = await createGuidanceRunPaths({
@@ -305,7 +352,10 @@ async function runLearnWorkflow(context: CliContext): Promise<CliResult> {
         id: paths.runId,
         lesson,
         createdAt,
-        artifactPath: lessonArtifactPath
+        artifactPath: lessonArtifactPath,
+        ...(kind === undefined ? {} : { kind }),
+        ...(tags.length === 0 ? {} : { tags }),
+        ...(summaryOption === undefined ? {} : { summary: summaryOption })
       }
     ]
   };
@@ -338,6 +388,8 @@ async function runLearnWorkflow(context: CliContext): Promise<CliResult> {
       lessonArtifactPath,
       indexArtifactPath,
       lessonCount: nextIndex.lessons.length,
+      ...(kind === undefined ? {} : { kind }),
+      ...(tags.length === 0 ? {} : { tags }),
       nextAction: action,
       diagnostics: []
     },
@@ -362,4 +414,127 @@ async function readLessonIndex(repositoryRoot: string): Promise<LessonIndex> {
     kind: "lesson_index",
     lessons: []
   };
+}
+
+/**
+ * Scored search over recorded learning.
+ *
+ * The scoring rule is the command's: a tag match counts 3, a summary match 2,
+ * and a body match 1. It is deterministic and the corpus is CLI-owned, so it
+ * belongs here rather than in a host reading knowledge-index.json directly.
+ */
+function scoreLesson(record: LessonRecord, terms: readonly string[]): number {
+  const tags = (record.tags ?? []).map((tag) => tag.toLowerCase());
+  const summary = (record.summary ?? "").toLowerCase();
+  const body = record.lesson.toLowerCase();
+  return terms.reduce((total, term) => {
+    let score = total;
+    if (tags.includes(term)) score += 3;
+    if (summary.includes(term)) score += 2;
+    if (body.includes(term)) score += 1;
+    return score;
+  }, 0);
+}
+
+function recallTerms(topic: string): readonly string[] {
+  const normalized = topic.toLowerCase().trim();
+  // Split on whitespace and punctuation that never carries meaning, and keep
+  // everything else. An ASCII-only split erased `C++`, `C#`, `R`, and every
+  // non-Latin word, so recall reported zero matches for a topic present
+  // verbatim in a lesson. The whole normalized topic is always a term, so a
+  // single-character or wholly-symbolic query still searches for itself.
+  const parts = normalized
+    .split(/[\s,;:!?()[\]{}"'`]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  return [...new Set([normalized, ...parts])].filter((term) => term.length > 0);
+}
+
+async function runLearnRecall(context: CliContext, topic: string): Promise<CliResult> {
+  const index = await readLessonIndex(context.repositoryRoot);
+  const terms = recallTerms(topic);
+  const matches = index.lessons
+    .map((record) => ({ record, score: scoreLesson(record, terms) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.record.createdAt.localeCompare(right.record.createdAt))
+    .map((entry) => ({
+      id: entry.record.id,
+      score: entry.score,
+      kind: entry.record.kind ?? null,
+      summary: entry.record.summary ?? entry.record.lesson,
+      artifactPath: entry.record.artifactPath
+    }));
+
+  const action = nextAction("legion status", "Apply the recalled learning to the next workflow action.");
+  return success(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      mode: "recall",
+      topic,
+      matches,
+      // Recorded lessons only. The command also searched retrospective findings,
+      // which in v9 live in run-scoped retro.md artifacts that nothing reads;
+      // P16-B003 owns wiring those in, and saying so here is better than a
+      // silently narrower corpus that looks complete.
+      corpus: ["lessons"],
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Recall "${topic}": ${matches.length} match${matches.length === 1 ? "" : "es"}.`,
+      ...matches.slice(0, 10).map((match) => `- [${match.score}] ${match.kind ?? "unclassified"}: ${match.summary}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+async function runLearnList(context: CliContext): Promise<CliResult> {
+  const index = await readLessonIndex(context.repositoryRoot);
+  const grouped = LESSON_KINDS.map((kind) => ({
+    kind,
+    lessons: index.lessons.filter((record) => record.kind === kind)
+  }));
+  const unclassified = index.lessons.filter((record) => record.kind === undefined);
+
+  const action = nextAction("legion status", "Recorded learning is available to future context packs.");
+  return success(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      mode: "list",
+      total: index.lessons.length,
+      byKind: Object.fromEntries(grouped.map((group) => [group.kind, group.lessons.length])),
+      unclassified: unclassified.length,
+      lessons: index.lessons.map((record) => ({
+        id: record.id,
+        kind: record.kind ?? null,
+        summary: record.summary ?? record.lesson,
+        tags: record.tags ?? [],
+        createdAt: record.createdAt
+      })),
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Lessons: ${index.lessons.length}.`,
+      // The counts alone made --list a tally of a thing it would not show. The
+      // mode exists to display the recorded learning, so it displays it.
+      ...grouped.flatMap((group) => group.lessons.length === 0
+        ? []
+        : ["", `${group.kind} (${group.lessons.length}):`, ...group.lessons.map(renderLessonLine)]),
+      ...(unclassified.length === 0
+        ? []
+        : ["", `unclassified (${unclassified.length}):`, ...unclassified.map(renderLessonLine)]),
+      "",
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+function renderLessonLine(record: LessonRecord): string {
+  const tags = (record.tags ?? []).length === 0 ? "" : ` [${(record.tags ?? []).join(", ")}]`;
+  return `  ${record.id}  ${record.createdAt.slice(0, 10)}  ${record.summary ?? record.lesson}${tags}`;
 }

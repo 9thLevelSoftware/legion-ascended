@@ -104,7 +104,7 @@
       ],
       "cliGaps": [
         {
-          "gap": "--complete has no pre-flight gate requiring every phase in the milestone to be complete. The command's stated invariant is no partial completions, and the verb's only check is that the id exists.",
+          "gap": "--complete refuses a milestone that is already completed or archived, so a second completion cannot overwrite a recorded summary. A phase-level completeness gate remains open until the CLI can join milestones to phase state.",
           "disposition": "build-in-cli"
         },
         {
@@ -164,7 +164,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "The executor receives no evidence of any kind. guidancePrompt is handed the workflow, the topic, and four section names; the workflow stage and recent runs reach only the rendered markdown afterwards. Scoping the flags without also feeding the executor would leave the analysis exactly as unevidenced.",
+          "gap": "The executor now receives the project's committed evidence: stage, change count, task count, passing reviews and recent runs, rendered into the prompt rather than only into the markdown written afterwards.",
           "disposition": "build-in-cli"
         },
         {
@@ -176,11 +176,11 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No computed metrics (plans completed, first-pass review rate, escalation counts). These are counts over typed artifacts and are what make the findings falsifiable.",
+          "gap": "Counts over typed artifacts (changes, tasks, passing reviews) are gathered and put in front of the executor. Per-phase metrics remain open with the scope selectors.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --dry-run. writeProjectTextFile and writeGuidanceRun both fire before the handler returns, so a host-side flag could suppress rendering but not persistence.",
+          "gap": "--dry-run reports the gathered evidence and writes nothing, decided before the run directory is created.",
           "disposition": "build-in-cli"
         },
         {
@@ -224,15 +224,15 @@
       ],
       "cliGaps": [
         {
-          "gap": "No typed lesson kind, tags, or summary on the record path. All three are prerequisites, not just the kind: --list groups by type, and --recall scores a tag match 3, a summary match 2, and a body match 1. Records carrying only id, lesson, createdAt, and artifactPath can support body matching alone, which silently drops two thirds of the ranking.",
+          "gap": "Lesson records carry a typed kind, tags, and a summary, so --list can group and --recall can score a tag match 3 and a summary match 2.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --recall. The scoring rule is deterministic, but the corpus is not only knowledge-index.json. The command searches five files, and RETRO.md among them cross-references retrospective findings; in v9 those live in run-scoped retro.md artifacts. Either the query path includes them or their exclusion is recorded as a deliberate removal, otherwise recall silently stops returning retrospective findings.",
+          "gap": "--recall implements the command's scoring rule over recorded lessons. Its corpus is declared in the payload: retrospective findings live in run-scoped retro.md artifacts nothing reads yet, so they are excluded and said to be excluded rather than passed off as searched.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --list. Pure rendering over CLI-owned state, blocked on the typed-kind gap.",
+          "gap": "--list groups recorded learning by kind and reports the unclassified count.",
           "disposition": "build-in-cli"
         },
         {

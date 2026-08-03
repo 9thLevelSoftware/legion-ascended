@@ -251,3 +251,47 @@ test("legion status and legion map agree about the same map", async (t) => {
   assert.equal(reported, checked);
   assert.equal(reported, "fresh");
 });
+
+test("legion retro --dry-run reports the evidence and writes nothing", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const result = await run("retro", "--dry-run", "--executor", "fake", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+
+  // Only the verb can suppress the verb's writes: retro.md and the run record
+  // both landed before the handler returned, so a host-side flag could suppress
+  // rendering but not persistence — the opposite of what the flag promises.
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.dryRun, true);
+  assert.ok(payload.evidence.summary.length > 0);
+  assert.equal(await guidanceRunCount(root), 0, "a dry run must write nothing");
+});
+
+test("a retrospective is given the evidence it is drawn from", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const result = await run("retro", "--executor", "fake", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+
+  // The stage and recent runs were read before the run and handed to the
+  // renderer afterwards, so the model producing the findings had seen none of
+  // it. The prompt artifact is the check that it now does.
+  const runs = await readdir(path.join(root, ".legion", "project", "workflow", "retro"));
+  const promptPath = path.join(root, ".legion", "project", "workflow", "retro", runs[0], "executor-prompt.md");
+  const prompt = await readFile(promptPath, "utf8").catch(() => "");
+  assert.match(prompt, /Evidence from the project's committed artifacts/);
+  assert.match(prompt, /Workflow stage:/);
+});
+
+test("completing a milestone twice is refused", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-3")).exitCode, 0);
+  assert.equal((await run("milestone", "--complete", "milestone-mvp", "--summary", "done")).exitCode, 0);
+
+  // The only check was that the id existed, so a second completion silently
+  // overwrote the recorded summary of the first.
+  const again = await run("milestone", "--complete", "milestone-mvp", "--summary", "different", "--json");
+  assert.notEqual(again.exitCode, 0);
+  assert.match(parseJsonOutput(again).diagnostics[0].message, /already completed/);
+
+  const status = await run("milestone", "--status", "--json");
+  assert.equal(parseJsonOutput(status).milestones[0].summary, "done", "the first summary must survive");
+});

@@ -361,7 +361,13 @@ export function guidancePrompt(input: {
     "",
     "The summary must cover these sections:",
     ...input.requiredSections.map((section) => `- ${section}`),
-    ""
+    "",
+    // Documented as "appended verbatim" and never appended. `legion explore` has
+    // been passing `explorationResultContract()` since it was written, and the
+    // executor never saw it — so every exploration was parsed for a typed shape
+    // nothing had asked it to produce, and `legion start --from-exploration`
+    // read whatever survived that mismatch.
+    ...(input.extraContract === undefined ? [] : [input.extraContract, ""])
   ].join("\n");
 }
 

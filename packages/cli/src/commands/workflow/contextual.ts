@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
-import { loadProject, stableProtocolJson } from "@legion/artifacts";
+import { listReviewDecisionsForChange, loadProject, readTaskGraph, stableProtocolJson } from "@legion/artifacts";
 import { LEGION_PROTOCOL_VERSION, artifactPathSchema, formatEntityId, type ArtifactPath } from "@legion/protocol";
 
 import {
@@ -168,6 +168,7 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
   });
   if ("exitCode" in executed) return executed;
 
+
   const action = await input.nextCommand;
   const summary = executed.result.summary;
   const markdown = renderGuidanceMarkdown({
@@ -196,7 +197,10 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
   let explorationDiagnostics: readonly string[] = [];
   if (input.workflow === "explore") {
     const parsed = parseExploration({
-      raw: parseResultFromText(executed.result.rawOutput ?? ""),
+      // The structured reply when the adapter produced one; rawOutput is
+      // process stdout and stderr, and parsing typed fields out of that read log
+      // noise rather than the JSON the contract asked for.
+      raw: parseResultFromText(executed.result.structuredOutput ?? executed.result.rawOutput ?? ""),
       runId: formatEntityId("run", slugFromName(`explore-${paths.runId}`)),
       topic: topic ?? input.workflow,
       entry: stringOption(context, "entry") ?? "raw-idea",
@@ -512,19 +516,30 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
 
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+
+  const dryRun = hasFlag(context, "dry-run");
+  const state = await resolveWorkflowState(context);
+  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
+  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns);
+
+
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
     slugSource: "retro",
     createdAt
   });
-  const state = await resolveWorkflowState(context);
-  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
   const topic = phase === null && milestone === null ? `workflow stage ${state.stage}` : `phase ${phase ?? ""} milestone ${milestone ?? ""}`.trim();
+  // The evidence goes into the prompt, not only into the rendered markdown.
+  // resolveWorkflowState and latestGuidanceRuns were read before the run and
+  // then handed to renderGuidanceMarkdown afterwards, so the model producing the
+  // findings had seen none of it: the retrospective was an unevidenced essay
+  // wearing an evidence section.
   const prompt = guidancePrompt({
     workflow: "retro",
     topic,
-    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"]
+    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"],
+    extraContract: renderRetroEvidence(evidence)
   });
   const executed = await runGuidanceExecutor({
     context,
@@ -536,6 +551,48 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
+
+  // A dry run displays the analysis and suppresses persistence, which means it
+  // has to run the analysis. An earlier revision returned before the executor,
+  // making the mode a metadata preview of counts rather than the retrospective
+  // it claims to preview. Only the verb can do this properly: both writes fire
+  // before this handler returns, so a host-side flag could suppress rendering
+  // but not persistence.
+  if (dryRun) {
+    // The executor needs somewhere to write its prompt and logs, so the run
+    // directory exists by the time the analysis has run. Removing it is what
+    // makes "suppresses persistence" true rather than nearly true: a dry run
+    // that left a run directory behind would still be findable by every reader
+    // that scans them.
+    await rm(path.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 50
+    });
+    const previewAction = nextAction("legion retro", "Run without --dry-run to record this retrospective.");
+    return success(
+      {
+        ok: executed.result.ok,
+        status: "ready",
+        dryRun: true,
+        workflow: "retro",
+        evidence,
+        summary: executed.result.summary,
+        findings: executed.result.findings,
+        executor: executed.executor,
+        nextAction: previewAction,
+        diagnostics: executed.result.findings
+      },
+      [
+        "Retrospective (dry run) — nothing was written.",
+        `Evidence: ${evidence.summary}`,
+        "",
+        executed.result.summary,
+        renderNextAction(previewAction)
+      ].join("\n")
+    );
+  }
 
 
   const markdown = renderGuidanceMarkdown({
@@ -652,8 +709,16 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
     };
     slugSource = id;
   } else if (complete !== undefined && summary !== undefined) {
-    if (!current.milestones.some((milestone) => milestone.id === complete)) {
+    const target = current.milestones.find((milestone) => milestone.id === complete);
+    if (target === undefined) {
       return usageError(`Milestone not found: ${complete}`);
+    }
+    // The command's stated invariant is no partial completions, and the verb's
+    // only check was that the id existed — so a milestone could be marked
+    // complete while its phases were not, and nothing downstream could tell the
+    // difference between finished and declared finished.
+    if (target.status === "completed" || target.status === "archived") {
+      return usageError(`Milestone ${complete} is already ${target.status}. Completing it again would overwrite its recorded summary.`);
     }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
@@ -784,5 +849,71 @@ function renderMilestones(index: MilestoneIndex): string {
       milestone.summary === undefined ? "" : `Summary: ${milestone.summary}`
     ].filter((line) => line.length > 0).join("\n")).join("\n\n"),
     ""
+  ].join("\n");
+}
+
+interface RetroEvidence {
+  readonly stage: string;
+  readonly changeCount: number;
+  readonly taskCount: number;
+  readonly acceptedReviews: number;
+  readonly recentRuns: readonly string[];
+  readonly summary: string;
+}
+
+/**
+ * The evidence a retrospective is drawn from.
+ *
+ * Counts over typed artifacts rather than impressions: what makes a finding
+ * falsifiable is that the numbers behind it came from the same files the reader
+ * can open. `latestGuidanceRuns` returns run metadata, not build or review
+ * evidence, so the change and review counts are read directly.
+ */
+async function gatherRetroEvidence(
+  repositoryRoot: string,
+  state: Awaited<ReturnType<typeof resolveWorkflowState>>,
+  recentRuns: readonly GuidanceRunDocument[]
+): Promise<RetroEvidence> {
+  let changeCount = 0;
+  let taskCount = 0;
+  let acceptedReviews = 0;
+  try {
+    const changesRoot = path.join(repositoryRoot, ".legion", "project", "changes");
+    const entries = await readdir(changesRoot, { withFileTypes: true });
+    const changeIds = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    changeCount = changeIds.length;
+    for (const changeId of changeIds) {
+      const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
+      if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
+      const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
+      if (reviews.ok) {
+        acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
+      }
+    }
+  } catch {
+    // No changes directory yet. A project with nothing built has an honest
+    // retrospective to give, so this is not an error.
+  }
+
+  return {
+    stage: state.stage,
+    changeCount,
+    taskCount,
+    acceptedReviews,
+    recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
+    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s)`
+  };
+}
+
+function renderRetroEvidence(evidence: RetroEvidence): string {
+  return [
+    "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:",
+    `- Workflow stage: ${evidence.stage}`,
+    `- Changes recorded: ${evidence.changeCount}`,
+    `- Tasks planned across those changes: ${evidence.taskCount}`,
+    `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
+    evidence.recentRuns.length === 0
+      ? "- Recent workflow runs: none"
+      : `- Recent workflow runs:\n${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
   ].join("\n");
 }

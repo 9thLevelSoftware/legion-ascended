@@ -24629,6 +24629,7 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "from-planning",
   "help",
   "json",
+  "list",
   // Without this, `legion start --next --json` is fine but `legion start --next`
   // followed by any positional swallows it as the flag's value.
   "next",
@@ -37100,8 +37101,9 @@ var codexAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
     const result = processResult.timedOut ? {
-      ...normalized,
+      ...withStructured,
       ok: false,
       status: "blocked",
       findings: [
@@ -37113,7 +37115,7 @@ var codexAdapter = {
           severity: "blocking"
         }
       ]
-    } : normalized;
+    } : withStructured;
     const redacted = redactTranscript(rawOutput);
     await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
 ` });
@@ -37466,7 +37468,13 @@ function guidancePrompt(input) {
     "",
     "The summary must cover these sections:",
     ...input.requiredSections.map((section) => `- ${section}`),
-    ""
+    "",
+    // Documented as "appended verbatim" and never appended. `legion explore` has
+    // been passing `explorationResultContract()` since it was written, and the
+    // executor never saw it — so every exploration was parsed for a typed shape
+    // nothing had asked it to produce, and `legion start --from-exploration`
+    // read whatever survived that mismatch.
+    ...input.extraContract === void 0 ? [] : [input.extraContract, ""]
   ].join("\n");
 }
 function renderGuidanceMarkdown(input) {
@@ -43791,6 +43799,7 @@ var HELP = {
   polish: "legion polish [target]\n\nCreate a typed polish taskgraph scoped to the target or current worktree.",
   learn: "legion learn <lesson>\n\nRecord project-specific operational learning and update the knowledge index."
 };
+var LESSON_KINDS = ["pattern", "pitfall", "preference"];
 async function handleAdHocWorkflow(context, command) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(HELP[command]);
@@ -43998,8 +44007,31 @@ async function runAdviceWorkflow(context) {
   return executed.result.ok ? success2(payload, human) : failure(payload, human);
 }
 async function runLearnWorkflow(context) {
+  const recall = stringOption(context, "recall")?.trim();
+  if (context.args.options.get("recall") === true || recall === "") {
+    return usageError('Missing required value for --recall. Example: legion learn --recall "taskgraph".');
+  }
+  if (recall !== void 0) return runLearnRecall(context, recall);
+  if (hasFlag(context, "list")) return runLearnList(context);
   const lesson = positionalText(context);
   if (lesson === void 0) return usageError('legion learn requires a lesson. Example: legion learn "prefer artifact-backed plans".');
+  const kindOption = stringOption(context, "type")?.trim();
+  if (context.args.options.get("type") === true || kindOption === "") {
+    return usageError(`Missing required value for --type. One of ${LESSON_KINDS.join(", ")}.`);
+  }
+  if (kindOption !== void 0 && !LESSON_KINDS.includes(kindOption)) {
+    return usageError(`Unknown lesson type: ${kindOption}. One of ${LESSON_KINDS.join(", ")}.`);
+  }
+  const kind = kindOption;
+  const tagOption = stringOption(context, "tags")?.trim();
+  if (context.args.options.get("tags") === true || tagOption === "") {
+    return usageError('Missing required value for --tags. Example: legion learn "..." --tags planning,evidence.');
+  }
+  const tags = tagOption === void 0 ? [] : [...new Set(tagOption.split(",").map((tag) => tag.trim().toLowerCase()).filter((tag) => tag.length > 0))];
+  const summaryOption = stringOption(context, "summary")?.trim();
+  if (context.args.options.get("summary") === true || summaryOption === "") {
+    return usageError('Missing required value for --summary. Example: legion learn "..." --summary "one line".');
+  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const paths = await createGuidanceRunPaths({
@@ -44023,7 +44055,10 @@ async function runLearnWorkflow(context) {
         id: paths.runId,
         lesson,
         createdAt,
-        artifactPath: lessonArtifactPath
+        artifactPath: lessonArtifactPath,
+        ...kind === void 0 ? {} : { kind },
+        ...tags.length === 0 ? {} : { tags },
+        ...summaryOption === void 0 ? {} : { summary: summaryOption }
       }
     ]
   };
@@ -44056,6 +44091,8 @@ async function runLearnWorkflow(context) {
       lessonArtifactPath,
       indexArtifactPath,
       lessonCount: nextIndex.lessons.length,
+      ...kind === void 0 ? {} : { kind },
+      ...tags.length === 0 ? {} : { tags },
       nextAction: action,
       diagnostics: []
     },
@@ -44079,9 +44116,102 @@ async function readLessonIndex(repositoryRoot) {
     lessons: []
   };
 }
+function scoreLesson(record2, terms) {
+  const tags = (record2.tags ?? []).map((tag) => tag.toLowerCase());
+  const summary = (record2.summary ?? "").toLowerCase();
+  const body = record2.lesson.toLowerCase();
+  return terms.reduce((total, term) => {
+    let score = total;
+    if (tags.includes(term)) score += 3;
+    if (summary.includes(term)) score += 2;
+    if (body.includes(term)) score += 1;
+    return score;
+  }, 0);
+}
+function recallTerms(topic) {
+  const normalized = topic.toLowerCase().trim();
+  const parts = normalized.split(/[\s,;:!?()[\]{}"'`]+/).map((part) => part.trim()).filter((part) => part.length > 0);
+  return [.../* @__PURE__ */ new Set([normalized, ...parts])].filter((term) => term.length > 0);
+}
+async function runLearnRecall(context, topic) {
+  const index = await readLessonIndex(context.repositoryRoot);
+  const terms = recallTerms(topic);
+  const matches = index.lessons.map((record2) => ({ record: record2, score: scoreLesson(record2, terms) })).filter((entry) => entry.score > 0).sort((left, right) => right.score - left.score || left.record.createdAt.localeCompare(right.record.createdAt)).map((entry) => ({
+    id: entry.record.id,
+    score: entry.score,
+    kind: entry.record.kind ?? null,
+    summary: entry.record.summary ?? entry.record.lesson,
+    artifactPath: entry.record.artifactPath
+  }));
+  const action = nextAction("legion status", "Apply the recalled learning to the next workflow action.");
+  return success2(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      mode: "recall",
+      topic,
+      matches,
+      // Recorded lessons only. The command also searched retrospective findings,
+      // which in v9 live in run-scoped retro.md artifacts that nothing reads;
+      // P16-B003 owns wiring those in, and saying so here is better than a
+      // silently narrower corpus that looks complete.
+      corpus: ["lessons"],
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Recall "${topic}": ${matches.length} match${matches.length === 1 ? "" : "es"}.`,
+      ...matches.slice(0, 10).map((match) => `- [${match.score}] ${match.kind ?? "unclassified"}: ${match.summary}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function runLearnList(context) {
+  const index = await readLessonIndex(context.repositoryRoot);
+  const grouped = LESSON_KINDS.map((kind) => ({
+    kind,
+    lessons: index.lessons.filter((record2) => record2.kind === kind)
+  }));
+  const unclassified = index.lessons.filter((record2) => record2.kind === void 0);
+  const action = nextAction("legion status", "Recorded learning is available to future context packs.");
+  return success2(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      mode: "list",
+      total: index.lessons.length,
+      byKind: Object.fromEntries(grouped.map((group) => [group.kind, group.lessons.length])),
+      unclassified: unclassified.length,
+      lessons: index.lessons.map((record2) => ({
+        id: record2.id,
+        kind: record2.kind ?? null,
+        summary: record2.summary ?? record2.lesson,
+        tags: record2.tags ?? [],
+        createdAt: record2.createdAt
+      })),
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Lessons: ${index.lessons.length}.`,
+      // The counts alone made --list a tally of a thing it would not show. The
+      // mode exists to display the recorded learning, so it displays it.
+      ...grouped.flatMap((group) => group.lessons.length === 0 ? [] : ["", `${group.kind} (${group.lessons.length}):`, ...group.lessons.map(renderLessonLine)]),
+      ...unclassified.length === 0 ? [] : ["", `unclassified (${unclassified.length}):`, ...unclassified.map(renderLessonLine)],
+      "",
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function renderLessonLine(record2) {
+  const tags = (record2.tags ?? []).length === 0 ? "" : ` [${(record2.tags ?? []).join(", ")}]`;
+  return `  ${record2.id}  ${record2.createdAt.slice(0, 10)}  ${record2.summary ?? record2.lesson}${tags}`;
+}
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile22 } from "node:fs/promises";
+import { readFile as readFile22, readdir as readdir16, rm as rm7 } from "node:fs/promises";
 import path42 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
@@ -44326,7 +44456,10 @@ async function runExecutorBackedGuidance(context, input) {
   let explorationDiagnostics = [];
   if (input.workflow === "explore") {
     const parsed = parseExploration({
-      raw: parseResultFromText(executed.result.rawOutput ?? ""),
+      // The structured reply when the adapter produced one; rawOutput is
+      // process stdout and stderr, and parsing typed fields out of that read log
+      // noise rather than the JSON the contract asked for.
+      raw: parseResultFromText(executed.result.structuredOutput ?? executed.result.rawOutput ?? ""),
       runId: formatEntityId("run", slugFromName(`explore-${paths.runId}`)),
       topic: topic ?? input.workflow,
       entry: stringOption(context, "entry") ?? "raw-idea",
@@ -44583,19 +44716,22 @@ async function runRetroWorkflow(context) {
   }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+  const dryRun = hasFlag(context, "dry-run");
+  const state = await resolveWorkflowState(context);
+  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
+  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns);
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
     slugSource: "retro",
     createdAt
   });
-  const state = await resolveWorkflowState(context);
-  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
   const topic = phase === null && milestone === null ? `workflow stage ${state.stage}` : `phase ${phase ?? ""} milestone ${milestone ?? ""}`.trim();
   const prompt = guidancePrompt({
     workflow: "retro",
     topic,
-    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"]
+    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"],
+    extraContract: renderRetroEvidence(evidence)
   });
   const executed = await runGuidanceExecutor({
     context,
@@ -44607,6 +44743,36 @@ async function runRetroWorkflow(context) {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
+  if (dryRun) {
+    await rm7(path42.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 50
+    });
+    const previewAction = nextAction("legion retro", "Run without --dry-run to record this retrospective.");
+    return success2(
+      {
+        ok: executed.result.ok,
+        status: "ready",
+        dryRun: true,
+        workflow: "retro",
+        evidence,
+        summary: executed.result.summary,
+        findings: executed.result.findings,
+        executor: executed.executor,
+        nextAction: previewAction,
+        diagnostics: executed.result.findings
+      },
+      [
+        "Retrospective (dry run) \u2014 nothing was written.",
+        `Evidence: ${evidence.summary}`,
+        "",
+        executed.result.summary,
+        renderNextAction(previewAction)
+      ].join("\n")
+    );
+  }
   const markdown = renderGuidanceMarkdown({
     title: "Workflow Retrospective",
     topic,
@@ -44710,8 +44876,12 @@ async function handleMilestoneWorkflow(context) {
     };
     slugSource = id;
   } else if (complete !== void 0 && summary !== void 0) {
-    if (!current.milestones.some((milestone) => milestone.id === complete)) {
+    const target = current.milestones.find((milestone) => milestone.id === complete);
+    if (target === void 0) {
       return usageError(`Milestone not found: ${complete}`);
+    }
+    if (target.status === "completed" || target.status === "archived") {
+      return usageError(`Milestone ${complete} is already ${target.status}. Completing it again would overwrite its recorded summary.`);
     }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
@@ -44832,6 +45002,45 @@ function renderMilestones(index) {
       milestone.summary === void 0 ? "" : `Summary: ${milestone.summary}`
     ].filter((line) => line.length > 0).join("\n")).join("\n\n"),
     ""
+  ].join("\n");
+}
+async function gatherRetroEvidence(repositoryRoot, state, recentRuns) {
+  let changeCount = 0;
+  let taskCount = 0;
+  let acceptedReviews = 0;
+  try {
+    const changesRoot = path42.join(repositoryRoot, ".legion", "project", "changes");
+    const entries = await readdir16(changesRoot, { withFileTypes: true });
+    const changeIds2 = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    changeCount = changeIds2.length;
+    for (const changeId of changeIds2) {
+      const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
+      if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
+      const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
+      if (reviews.ok) {
+        acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
+      }
+    }
+  } catch {
+  }
+  return {
+    stage: state.stage,
+    changeCount,
+    taskCount,
+    acceptedReviews,
+    recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
+    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s)`
+  };
+}
+function renderRetroEvidence(evidence) {
+  return [
+    "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:",
+    `- Workflow stage: ${evidence.stage}`,
+    `- Changes recorded: ${evidence.changeCount}`,
+    `- Tasks planned across those changes: ${evidence.taskCount}`,
+    `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
+    evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
+${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
   ].join("\n");
 }
 
