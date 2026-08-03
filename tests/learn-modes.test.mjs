@@ -94,3 +94,28 @@ test("recall and list read without recording a run", async (t) => {
 
   assert.equal(parseJsonOutput(await run("learn", "--list", "--json")).total, before, "reads must not add records");
 });
+
+test("recall keeps technical and non-ASCII topics searchable", async (t) => {
+  const { run } = await scratchRepo(t);
+  await run("learn", "prefer C++ move semantics", "--type", "pattern", "--tags", "c++", "--json");
+  await run("learn", "日本語のレッスン", "--type", "pitfall", "--json");
+
+  // An ASCII-only split erased `C++`, `C#`, `R`, and every non-Latin word, so
+  // recall reported zero matches for a topic present verbatim in the lesson.
+  const plus = parseJsonOutput(await run("learn", "--recall", "C++", "--json"));
+  assert.ok(plus.matches.length > 0, "C++ must be searchable");
+
+  const japanese = parseJsonOutput(await run("learn", "--recall", "日本語", "--json"));
+  assert.ok(japanese.matches.length > 0, "a non-ASCII topic must be searchable");
+});
+
+test("list renders the entries it counts", async (t) => {
+  const { run } = await scratchRepo(t);
+  await run("learn", "a recorded lesson", "--type", "pattern", "--tags", "alpha", "--summary", "Alpha summary", "--json");
+
+  // Counts alone made --list a tally of a thing it would not show.
+  const rendered = await run("learn", "--list");
+  assert.equal(rendered.exitCode, 0, rendered.stderr);
+  assert.match(rendered.stdout, /Alpha summary/);
+  assert.match(rendered.stdout, /alpha/);
+});

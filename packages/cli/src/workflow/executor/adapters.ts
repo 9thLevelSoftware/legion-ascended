@@ -189,9 +189,14 @@ const codexAdapter: ExecutionAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
+    // Kept separate from rawOutput, which is process output. Downstream typed
+    // parsing needs the reply the contract asked for, not the log around it.
+    const withStructured: ExecutionResult = lastMessage.length > 0
+      ? { ...normalized, structuredOutput: lastMessage }
+      : normalized;
     const result: ExecutionResult = processResult.timedOut
       ? {
-          ...normalized,
+          ...withStructured,
           ok: false,
           status: "blocked",
           findings: [
@@ -204,7 +209,7 @@ const codexAdapter: ExecutionAdapter = {
             }
           ]
         }
-      : normalized;
+      : withStructured;
     const redacted = redactTranscript(rawOutput);
     await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}\n` });
     await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.redactedLogArtifactPath, text: redacted.length > 0 ? redacted : `${result.summary}\n` });

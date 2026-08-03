@@ -437,7 +437,17 @@ function scoreLesson(record: LessonRecord, terms: readonly string[]): number {
 }
 
 function recallTerms(topic: string): readonly string[] {
-  return [...new Set(topic.toLowerCase().split(/[^a-z0-9_-]+/).filter((term) => term.length > 1))];
+  const normalized = topic.toLowerCase().trim();
+  // Split on whitespace and punctuation that never carries meaning, and keep
+  // everything else. An ASCII-only split erased `C++`, `C#`, `R`, and every
+  // non-Latin word, so recall reported zero matches for a topic present
+  // verbatim in a lesson. The whole normalized topic is always a term, so a
+  // single-character or wholly-symbolic query still searches for itself.
+  const parts = normalized
+    .split(/[\s,;:!?()[\]{}"'`]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  return [...new Set([normalized, ...parts])].filter((term) => term.length > 0);
 }
 
 async function runLearnRecall(context: CliContext, topic: string): Promise<CliResult> {
@@ -510,9 +520,21 @@ async function runLearnList(context: CliContext): Promise<CliResult> {
     },
     [
       `Lessons: ${index.lessons.length}.`,
-      ...grouped.map((group) => `${group.kind}: ${group.lessons.length}`),
-      unclassified.length === 0 ? "" : `unclassified: ${unclassified.length}`,
+      // The counts alone made --list a tally of a thing it would not show. The
+      // mode exists to display the recorded learning, so it displays it.
+      ...grouped.flatMap((group) => group.lessons.length === 0
+        ? []
+        : ["", `${group.kind} (${group.lessons.length}):`, ...group.lessons.map(renderLessonLine)]),
+      ...(unclassified.length === 0
+        ? []
+        : ["", `unclassified (${unclassified.length}):`, ...unclassified.map(renderLessonLine)]),
+      "",
       renderNextAction(action)
-    ].filter((line) => line.length > 0).join("\n")
+    ].join("\n")
   );
+}
+
+function renderLessonLine(record: LessonRecord): string {
+  const tags = (record.tags ?? []).length === 0 ? "" : ` [${(record.tags ?? []).join(", ")}]`;
+  return `  ${record.id}  ${record.createdAt.slice(0, 10)}  ${record.summary ?? record.lesson}${tags}`;
 }

@@ -37101,8 +37101,9 @@ var codexAdapter = {
       rawOutput,
       exitCode: processResult.exitCode
     });
+    const withStructured = lastMessage.length > 0 ? { ...normalized, structuredOutput: lastMessage } : normalized;
     const result = processResult.timedOut ? {
-      ...normalized,
+      ...withStructured,
       ok: false,
       status: "blocked",
       findings: [
@@ -37114,7 +37115,7 @@ var codexAdapter = {
           severity: "blocking"
         }
       ]
-    } : normalized;
+    } : withStructured;
     const redacted = redactTranscript(rawOutput);
     await writeProjectTextFile({ repositoryRoot: request.repositoryRoot, artifactPath: request.rawLogArtifactPath, text: rawOutput.length > 0 ? rawOutput : `${result.summary}
 ` });
@@ -44128,7 +44129,9 @@ function scoreLesson(record2, terms) {
   }, 0);
 }
 function recallTerms(topic) {
-  return [...new Set(topic.toLowerCase().split(/[^a-z0-9_-]+/).filter((term) => term.length > 1))];
+  const normalized = topic.toLowerCase().trim();
+  const parts = normalized.split(/[\s,;:!?()[\]{}"'`]+/).map((part) => part.trim()).filter((part) => part.length > 0);
+  return [.../* @__PURE__ */ new Set([normalized, ...parts])].filter((term) => term.length > 0);
 }
 async function runLearnRecall(context, topic) {
   const index = await readLessonIndex(context.repositoryRoot);
@@ -44193,15 +44196,22 @@ async function runLearnList(context) {
     },
     [
       `Lessons: ${index.lessons.length}.`,
-      ...grouped.map((group) => `${group.kind}: ${group.lessons.length}`),
-      unclassified.length === 0 ? "" : `unclassified: ${unclassified.length}`,
+      // The counts alone made --list a tally of a thing it would not show. The
+      // mode exists to display the recorded learning, so it displays it.
+      ...grouped.flatMap((group) => group.lessons.length === 0 ? [] : ["", `${group.kind} (${group.lessons.length}):`, ...group.lessons.map(renderLessonLine)]),
+      ...unclassified.length === 0 ? [] : ["", `unclassified (${unclassified.length}):`, ...unclassified.map(renderLessonLine)],
+      "",
       renderNextAction(action)
-    ].filter((line) => line.length > 0).join("\n")
+    ].join("\n")
   );
+}
+function renderLessonLine(record2) {
+  const tags = (record2.tags ?? []).length === 0 ? "" : ` [${(record2.tags ?? []).join(", ")}]`;
+  return `  ${record2.id}  ${record2.createdAt.slice(0, 10)}  ${record2.summary ?? record2.lesson}${tags}`;
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile22, readdir as readdir16 } from "node:fs/promises";
+import { readFile as readFile22, readdir as readdir16, rm as rm7 } from "node:fs/promises";
 import path42 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
@@ -44446,7 +44456,10 @@ async function runExecutorBackedGuidance(context, input) {
   let explorationDiagnostics = [];
   if (input.workflow === "explore") {
     const parsed = parseExploration({
-      raw: parseResultFromText(executed.result.rawOutput ?? ""),
+      // The structured reply when the adapter produced one; rawOutput is
+      // process stdout and stderr, and parsing typed fields out of that read log
+      // noise rather than the JSON the contract asked for.
+      raw: parseResultFromText(executed.result.structuredOutput ?? executed.result.rawOutput ?? ""),
       runId: formatEntityId("run", slugFromName(`explore-${paths.runId}`)),
       topic: topic ?? input.workflow,
       entry: stringOption(context, "entry") ?? "raw-idea",
@@ -44703,29 +44716,10 @@ async function runRetroWorkflow(context) {
   }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+  const dryRun = hasFlag(context, "dry-run");
   const state = await resolveWorkflowState(context);
   const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
   const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns);
-  if (hasFlag(context, "dry-run")) {
-    const action2 = nextAction("legion retro", "Run without --dry-run to record the retrospective.");
-    return success2(
-      {
-        ok: true,
-        status: "ready",
-        dryRun: true,
-        workflow: "retro",
-        evidence,
-        nextAction: action2,
-        diagnostics: []
-      },
-      [
-        "Retrospective ready.",
-        `Evidence: ${evidence.summary}`,
-        "Nothing was written.",
-        renderNextAction(action2)
-      ].join("\n")
-    );
-  }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
@@ -44749,6 +44743,36 @@ async function runRetroWorkflow(context) {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
+  if (dryRun) {
+    await rm7(path42.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 50
+    });
+    const previewAction = nextAction("legion retro", "Run without --dry-run to record this retrospective.");
+    return success2(
+      {
+        ok: executed.result.ok,
+        status: "ready",
+        dryRun: true,
+        workflow: "retro",
+        evidence,
+        summary: executed.result.summary,
+        findings: executed.result.findings,
+        executor: executed.executor,
+        nextAction: previewAction,
+        diagnostics: executed.result.findings
+      },
+      [
+        "Retrospective (dry run) \u2014 nothing was written.",
+        `Evidence: ${evidence.summary}`,
+        "",
+        executed.result.summary,
+        renderNextAction(previewAction)
+      ].join("\n")
+    );
+  }
   const markdown = renderGuidanceMarkdown({
     title: "Workflow Retrospective",
     topic,

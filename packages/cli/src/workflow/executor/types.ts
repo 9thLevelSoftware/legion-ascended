@@ -25,6 +25,16 @@ export interface ExecutionReviewVerdicts {
 }
 
 export interface ExecutionResult {
+  /**
+   * The adapter's structured reply, when it produced one separately from its
+   * process output.
+   *
+   * `rawOutput` is stdout and stderr. Parsing typed fields back out of that
+   * found log noise, not the JSON the contract asked for, so an exploration
+   * could return a valid typed reply and still be recorded with nothing but a
+   * fallback summary.
+   */
+  readonly structuredOutput?: string;
   readonly ok: boolean;
   readonly status: ExecutionStatus;
   readonly summary: string;

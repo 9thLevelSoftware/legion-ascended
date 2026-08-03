@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { listReviewDecisionsForChange, loadProject, readTaskGraph, stableProtocolJson } from "@legion/artifacts";
@@ -168,6 +168,7 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
   });
   if ("exitCode" in executed) return executed;
 
+
   const action = await input.nextCommand;
   const summary = executed.result.summary;
   const markdown = renderGuidanceMarkdown({
@@ -196,7 +197,10 @@ async function runExecutorBackedGuidance(context: CliContext, input: {
   let explorationDiagnostics: readonly string[] = [];
   if (input.workflow === "explore") {
     const parsed = parseExploration({
-      raw: parseResultFromText(executed.result.rawOutput ?? ""),
+      // The structured reply when the adapter produced one; rawOutput is
+      // process stdout and stderr, and parsing typed fields out of that read log
+      // noise rather than the JSON the contract asked for.
+      raw: parseResultFromText(executed.result.structuredOutput ?? executed.result.rawOutput ?? ""),
       runId: formatEntityId("run", slugFromName(`explore-${paths.runId}`)),
       topic: topic ?? input.workflow,
       entry: stringOption(context, "entry") ?? "raw-idea",
@@ -513,35 +517,11 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
 
+  const dryRun = hasFlag(context, "dry-run");
   const state = await resolveWorkflowState(context);
   const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
   const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns);
 
-  // A real dry run. Only the verb can suppress the verb's writes: both
-  // writeProjectTextFile and writeGuidanceRun fired before this handler
-  // returned, so a host-side flag could suppress rendering but not persistence,
-  // and the artifact and run record landed anyway — the opposite of what the
-  // flag promises.
-  if (hasFlag(context, "dry-run")) {
-    const action = nextAction("legion retro", "Run without --dry-run to record the retrospective.");
-    return success(
-      {
-        ok: true,
-        status: "ready",
-        dryRun: true,
-        workflow: "retro",
-        evidence,
-        nextAction: action,
-        diagnostics: []
-      },
-      [
-        "Retrospective ready.",
-        `Evidence: ${evidence.summary}`,
-        "Nothing was written.",
-        renderNextAction(action)
-      ].join("\n")
-    );
-  }
 
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
@@ -571,6 +551,48 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
+
+  // A dry run displays the analysis and suppresses persistence, which means it
+  // has to run the analysis. An earlier revision returned before the executor,
+  // making the mode a metadata preview of counts rather than the retrospective
+  // it claims to preview. Only the verb can do this properly: both writes fire
+  // before this handler returns, so a host-side flag could suppress rendering
+  // but not persistence.
+  if (dryRun) {
+    // The executor needs somewhere to write its prompt and logs, so the run
+    // directory exists by the time the analysis has run. Removing it is what
+    // makes "suppresses persistence" true rather than nearly true: a dry run
+    // that left a run directory behind would still be findable by every reader
+    // that scans them.
+    await rm(path.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 50
+    });
+    const previewAction = nextAction("legion retro", "Run without --dry-run to record this retrospective.");
+    return success(
+      {
+        ok: executed.result.ok,
+        status: "ready",
+        dryRun: true,
+        workflow: "retro",
+        evidence,
+        summary: executed.result.summary,
+        findings: executed.result.findings,
+        executor: executed.executor,
+        nextAction: previewAction,
+        diagnostics: executed.result.findings
+      },
+      [
+        "Retrospective (dry run) — nothing was written.",
+        `Evidence: ${evidence.summary}`,
+        "",
+        executed.result.summary,
+        renderNextAction(previewAction)
+      ].join("\n")
+    );
+  }
 
 
   const markdown = renderGuidanceMarkdown({
