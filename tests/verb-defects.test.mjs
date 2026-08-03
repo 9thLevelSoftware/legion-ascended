@@ -1,0 +1,165 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { test } from "node:test";
+
+import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
+
+/**
+ * Three defects the phase-16 capability inventory surfaced (P16-B012).
+ *
+ * All three share a shape: the verb accepted an input, reported success, and
+ * did something other than what the caller asked for. None of them failed, so
+ * none of them showed up as a bug — they showed up as an answer.
+ *
+ * Each defect test below fails against the behaviour that shipped before this
+ * change; the control tests alongside them pass against both.
+ */
+
+function git(root, args) {
+  execFileSync("git", ["-C", root, ...args], { stdio: ["ignore", "pipe", "ignore"] });
+}
+
+async function scratchRepo(t) {
+  const root = await mkdtemp(path.join(tmpdir(), "legion-defects-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  git(root, ["init", "--initial-branch=main"]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test"]);
+  git(root, ["config", "core.autocrlf", "false"]);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "asset.ts"), "export function resolveAsset() {\n  return 1;\n}\n");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "initial"]);
+  return { root, run: (...args) => runCliCapture(["--repository-root", root, ...args]) };
+}
+
+/** Every workflow-run record currently on disk, across all workflows. */
+async function guidanceRunCount(root) {
+  const workflowRoot = path.join(root, ".legion", "project", "workflow");
+  let total = 0;
+  let workflows;
+  try {
+    workflows = await readdir(workflowRoot);
+  } catch {
+    return 0;
+  }
+  for (const workflow of workflows) {
+    try {
+      const runs = await readdir(path.join(workflowRoot, workflow));
+      total += runs.filter((entry) => entry !== "milestones.json" && entry !== "knowledge-index.json").length;
+    } catch {
+      // Not a directory; nothing to count.
+    }
+  }
+  return total;
+}
+
+test("legion map --query refuses --scope rather than silently ignoring it", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+
+  const result = await run("map", "--query", "resolveAsset", "--scope", "src", "--json");
+
+  // Previously this ran an unscoped query over the whole map and exited 0, so a
+  // caller who asked about one path got an answer drawn from all of them and
+  // had no way to tell.
+  assert.notEqual(result.exitCode, 0, "a scoped query the CLI cannot honour must not report success");
+  assert.match(`${result.stdout}${result.stderr}`, /--scope/);
+});
+
+test("legion map --query still works without --scope", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+
+  const result = await run("map", "--query", "resolveAsset", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.mode, "query");
+});
+
+test("legion milestone status writes nothing", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const defined = await run("milestone", "--define", "MVP", "--phases", "1-3", "--json");
+  assert.equal(defined.exitCode, 0, defined.stderr);
+
+  const before = await guidanceRunCount(root);
+  const first = await run("milestone", "--status", "--json");
+  assert.equal(first.exitCode, 0, first.stderr);
+  const second = await run("milestone", "--json");
+  assert.equal(second.exitCode, 0, second.stderr);
+
+  // Two reads used to append two run records and rewrite both artifacts. A host
+  // rendering status on every display would fill the history with entries
+  // recording nothing but that someone looked.
+  assert.equal(await guidanceRunCount(root), before, "reading milestone status must not append a run record");
+
+  const payload = parseJsonOutput(first);
+  assert.equal(payload.mode, "status");
+  assert.equal(payload.milestones.length, 1);
+  assert.equal(payload.milestones[0].name, "MVP");
+  assert.equal(Object.hasOwn(payload, "indexArtifactPath"), false, "a read must not report writing an artifact");
+});
+
+test("legion milestone define, complete, and archive still record", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-3")).exitCode, 0);
+  const afterDefine = await guidanceRunCount(root);
+  assert.ok(afterDefine > 0, "define must still write a run record");
+
+  const completed = await run("milestone", "--complete", "milestone-mvp", "--summary", "done", "--json");
+  assert.equal(completed.exitCode, 0, completed.stderr);
+  assert.equal(parseJsonOutput(completed).status, "accepted");
+
+  const archived = await run("milestone", "--archive", "milestone-mvp", "--json");
+  assert.equal(archived.exitCode, 0, archived.stderr);
+  assert.ok(await guidanceRunCount(root) > afterDefine, "mutations must still be recorded");
+
+  const status = await run("milestone", "--status", "--json");
+  assert.equal(parseJsonOutput(status).milestones[0].status, "archived", "status must read what the mutations wrote");
+});
+
+test("legion retro refuses a scope it cannot honour", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  const result = await run("retro", "--phase", "3", "--executor", "fake", "--json");
+
+  // The flags reach the run slug, the run record, and the prompt topic, and
+  // gather no evidence from the named scope. Previously this exited 0 and wrote
+  // a retro.md labelled "phase 3", so a consumer had a successful run and a
+  // scoped-looking artifact describing an unscoped analysis.
+  //
+  // An intermediate revision emitted a diagnostic instead. That was the wrong
+  // call for the reason the map test above states: a scoped request the CLI
+  // cannot honour must not report success, and a diagnostic nothing is obliged
+  // to read does not retract an exit code.
+  assert.notEqual(result.exitCode, 0, "a scope the CLI cannot honour must not report success");
+  assert.match(`${result.stdout}${result.stderr}`, /--phase 3/);
+
+  // Refusing has to mean refusing. A usage error that still left an artifact
+  // behind would be the same claim in a quieter voice.
+  assert.equal(await guidanceRunCount(root), 0, "a refused retro must write nothing");
+});
+
+test("legion retro names every scope flag it refuses", async (t) => {
+  const { run } = await scratchRepo(t);
+  const result = await run("retro", "--phase", "3", "--milestone", "MVP", "--executor", "fake", "--json");
+
+  assert.notEqual(result.exitCode, 0);
+  const output = `${result.stdout}${result.stderr}`;
+  assert.match(output, /--phase 3/);
+  assert.match(output, /--milestone MVP/, "naming one flag while refusing two misdescribes the refusal");
+});
+
+test("an unscoped retro still runs", async (t) => {
+  const { run } = await scratchRepo(t);
+  const result = await run("retro", "--executor", "fake", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+
+  // The refusal is scoped to the scope flags. An unscoped retrospective claims
+  // nothing it cannot deliver, so it still runs and still writes its artifact.
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.workflow, "retro");
+  assert.ok(payload.markdownArtifactPath, "an unscoped retro still writes its artifact");
+});

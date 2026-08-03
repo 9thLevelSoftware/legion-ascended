@@ -35090,6 +35090,11 @@ async function handleMapWorkflow(context) {
   if (modes > 1) return usageError("legion map accepts one mode at a time: --refresh, --check, or --query <text>.");
   if (context.args.options.get("query") === true || query === "") return usageError("Missing required value for --query. Example: legion map --query taskgraph.");
   if (context.args.options.get("scope") === true || scope === "") return usageError("Missing required value for --scope. Example: legion map --refresh --scope packages/cli.");
+  if (query !== void 0 && scope !== void 0) {
+    return usageError(
+      "legion map --query does not accept --scope. The query runs over the stored map, whose scope was set when it was generated. Refresh with legion map --refresh --scope <path> to change it."
+    );
+  }
   if (check) return mapCheck(context, scope);
   if (query !== void 0) return mapQuery(context, query);
   return mapRefresh(context, scope);
@@ -35267,12 +35272,21 @@ async function runRetroWorkflow(context) {
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
+  if (phase !== null || milestone !== null) {
+    const requested = [
+      phase === null ? void 0 : `--phase ${phase}`,
+      milestone === null ? void 0 : `--milestone ${milestone}`
+    ].filter((part) => part !== void 0).join(" ");
+    return usageError(
+      `legion retro cannot scope a retrospective yet, so ${requested} is refused rather than ignored. The scope would reach the prompt topic only and gather no evidence from it, producing an unscoped retrospective under a scoped label. Run legion retro with no scope for a retrospective over current workflow state.`
+    );
+  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
-    slugSource: phase ?? milestone ?? "retro",
+    slugSource: "retro",
     createdAt
   });
   const state = await resolveWorkflowState(context);
@@ -35308,6 +35322,7 @@ async function runRetroWorkflow(context) {
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status2 = executed.result.ok ? "completed" : "blocked";
+  const diagnostics = executed.result.findings;
   await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
     paths,
@@ -35322,7 +35337,7 @@ async function runRetroWorkflow(context) {
     },
     nextAction: action,
     executor: executed.executor,
-    diagnostics: executed.result.findings
+    diagnostics
   });
   const payload = {
     ok: executed.result.ok,
@@ -35333,9 +35348,14 @@ async function runRetroWorkflow(context) {
     markdownArtifactPath,
     executor: executed.executor,
     nextAction: action,
-    diagnostics: executed.result.findings
+    diagnostics
   };
-  return executed.result.ok ? success(payload, [`Retrospective: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n")) : failure(payload, [`Retrospective: ${status2}.`, `Artifact: ${markdownArtifactPath}`, renderNextAction(action)].join("\n"));
+  const human = [
+    `Retrospective: ${status2}.`,
+    `Artifact: ${markdownArtifactPath}`,
+    renderNextAction(action)
+  ].join("\n");
+  return executed.result.ok ? success(payload, human) : failure(payload, human);
 }
 async function handleMilestoneWorkflow(context) {
   const createdAt = guidanceCreatedAt(context);
@@ -35356,6 +35376,25 @@ async function handleMilestoneWorkflow(context) {
   if (define !== void 0 && phases === void 0) return usageError("legion milestone --define requires --phases <range>.");
   if (complete !== void 0 && summary === void 0) return usageError("legion milestone --complete requires --summary <text>.");
   const current = await readMilestoneIndex(context.repositoryRoot);
+  if (statusMode) {
+    const action2 = nextAction("legion status", "Review milestone state before changing release posture.");
+    return success(
+      {
+        ok: true,
+        status: "completed",
+        workflow: "milestone",
+        mode: "status",
+        milestones: current.milestones,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        `Milestones: ${current.milestones.length}.`,
+        renderMilestones(current).trimEnd(),
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
   let next = current;
   let status2 = "completed";
   let slugSource = "status";
