@@ -19475,55 +19475,59 @@ var settingsSchema = external_exports.object({
   $schema: external_exports.string().optional(),
   control_mode: controlMode.optional(),
   models: external_exports.object({
-    planning: external_exports.string().optional(),
-    execution: external_exports.string().optional(),
-    check: external_exports.string().optional(),
+    planning: external_exports.string(),
+    execution: external_exports.string(),
+    check: external_exports.string(),
     planning_reasoning: external_exports.boolean().optional()
   }).strict().optional(),
   planning: external_exports.object({
-    max_tasks_per_plan: external_exports.number().int().min(1).max(5).optional(),
-    architecture_proposals_default: always.optional(),
-    spec_pipeline_default: always.optional()
+    max_tasks_per_plan: external_exports.number().int().min(1).max(5),
+    architecture_proposals_default: always,
+    spec_pipeline_default: always
   }).strict().optional(),
   execution: external_exports.object({
-    auto_commit: external_exports.boolean().optional(),
-    commit_prefix: external_exports.string().optional(),
-    agent_personality_verbosity: external_exports.enum(["full", "condensed"]).optional(),
+    auto_commit: external_exports.boolean(),
+    commit_prefix: external_exports.string().min(1),
+    agent_personality_verbosity: external_exports.enum(["full", "condensed"]),
     use_worktrees: external_exports.boolean().optional()
   }).strict().optional(),
   review: external_exports.object({
-    default_mode: external_exports.enum(["classic", "panel"]).optional(),
-    max_cycles: external_exports.number().int().min(1).max(5).optional(),
+    default_mode: external_exports.enum(["classic", "panel"]),
+    max_cycles: external_exports.number().int().min(1).max(5),
     evaluator_depth: external_exports.enum(["single", "multi-pass"]).optional(),
     polish: external_exports.boolean().optional(),
     polish_scope: external_exports.enum(["changed", "dependents", "directory"]).optional(),
-    coverage_thresholds: external_exports.object({}).loose().optional()
+    coverage_thresholds: external_exports.object({
+      overall: external_exports.number().int().min(0).max(100).optional(),
+      business_logic: external_exports.number().int().min(0).max(100).optional(),
+      api_routes: external_exports.number().int().min(0).max(100).optional()
+    }).strict().optional()
   }).strict().optional(),
   board: external_exports.object({
-    default_size: external_exports.number().int().min(2).max(7).optional(),
-    min_size: external_exports.number().int().min(2).max(5).optional(),
-    discussion_rounds: external_exports.number().int().min(1).max(5).optional(),
-    assessment_timeout_ms: external_exports.number().int().min(3e4).optional(),
-    persist_artifacts: external_exports.boolean().optional()
+    default_size: external_exports.number().int().min(2).max(7),
+    min_size: external_exports.number().int().min(2).max(5),
+    discussion_rounds: external_exports.number().int().min(1).max(5),
+    assessment_timeout_ms: external_exports.number().int().min(3e4),
+    persist_artifacts: external_exports.boolean()
   }).strict().optional(),
   dispatch: external_exports.object({
-    enabled: external_exports.boolean().optional(),
-    fallback_to_internal: external_exports.boolean().optional(),
-    timeout_ms: external_exports.number().int().min(1e4).optional(),
-    max_retries: external_exports.number().int().min(0).max(3).optional()
+    enabled: external_exports.boolean(),
+    fallback_to_internal: external_exports.boolean(),
+    timeout_ms: external_exports.number().int().min(1e4),
+    max_retries: external_exports.number().int().min(0).max(3)
   }).strict().optional(),
   memory: external_exports.object({
-    enabled: external_exports.boolean().optional(),
+    enabled: external_exports.boolean(),
     // Const in the published schema, and it means what it says: memory is
     // project-scoped and a file claiming otherwise is claiming a mode that
     // does not exist.
-    project_scoped_only: external_exports.literal(true).optional(),
+    project_scoped_only: external_exports.literal(true),
     auto_prune: external_exports.boolean().optional(),
     prune_threshold: external_exports.number().int().min(1).optional(),
     prune_age_days: external_exports.number().int().min(1).optional()
   }).strict().optional(),
   integrations: external_exports.object({
-    github: external_exports.enum(["enabled", "disabled", "prompt"]).optional()
+    github: external_exports.enum(["enabled", "disabled", "prompt"])
   }).strict().optional()
 }).strict();
 function parseSettings(value) {
@@ -45099,15 +45103,12 @@ async function handleValidateCommand(context) {
     ok,
     diagnostics,
     coverage: trace.coverage,
-    settings: settingsSummary(settings),
+    settings: { status: settings.status, path: settings.path },
     status: failureStatus(result, drift.length, trace.diagnostics.length, settings)
   };
   const base = ok ? success2(payload, `Project is valid.
 ${renderCoverage(trace.coverage)}`) : failure(payload, validationFailureHuman(diagnostics));
   return applyWarnings(base, settings.warnings);
-}
-function settingsSummary(settings) {
-  return { status: settings.status, path: settings.path };
 }
 function applyWarnings(result, warnings) {
   return warnings.reduce((carried, warning) => withWarning(carried, warning), result);

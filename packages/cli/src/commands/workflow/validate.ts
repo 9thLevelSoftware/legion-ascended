@@ -14,7 +14,7 @@ import {
 } from "../../runtime.js";
 import { validateWorkflowProject } from "../../workflow/context.js";
 import { checkTraceability } from "../../workflow/traceability-check.js";
-import { checkSettings, type SettingsCheck, type SettingsStatus } from "../../workflow/settings-check.js";
+import { checkSettings, type SettingsCheck } from "../../workflow/settings-check.js";
 import { renderDiagnostics } from "../../workflow/render.js";
 
 interface ShallowCheck {
@@ -63,7 +63,7 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
     ok,
     diagnostics,
     coverage: trace.coverage,
-    settings: settingsSummary(settings),
+    settings: { status: settings.status, path: settings.path },
     status: failureStatus(result, drift.length, trace.diagnostics.length, settings)
   };
 
@@ -71,11 +71,6 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
     ? success(payload, `Project is valid.\n${renderCoverage(trace.coverage)}`)
     : failure(payload, validationFailureHuman(diagnostics));
   return applyWarnings(base, settings.warnings);
-}
-
-/** The settings check as reported, without the CLI-shaped warning objects. */
-function settingsSummary(settings: SettingsCheck): { readonly status: SettingsStatus; readonly path: string } {
-  return { status: settings.status, path: settings.path };
 }
 
 function applyWarnings(result: CliResult, warnings: readonly CliWarning[]): CliResult {

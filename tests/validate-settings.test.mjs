@@ -126,7 +126,7 @@ test("unknown keys warn while documented keys are accepted", async (t) => {
   await settings({
     $schema: "./docs/settings.schema.json",
     control_mode: "guarded",
-    review: { max_cycles: 3, polish_scope: "changed" },
+    review: { default_mode: "classic", max_cycles: 3, polish_scope: "changed" },
     nonsense: 1
   });
 
@@ -149,6 +149,49 @@ test("omitting a block is taking the defaults, not a finding", async (t) => {
   const payload = parseJsonOutput(result);
   assert.equal(payload.settings.status, "valid");
   assert.equal(Object.hasOwn(payload, "warnings"), false);
+});
+
+test("a present block must be complete, because a half-written block is not a defaulted one", async (t) => {
+  const { run, settings } = await scratchRepo(t);
+  // `{"models": {}}` names a models configuration and supplies none of it. An
+  // earlier revision made every member optional and documented only the
+  // top-level relaxation, so a block like this passed unvalidated.
+  await settings({ models: {} });
+
+  const result = await run("validate", "--json");
+  assert.equal(result.exitCode, 0);
+  const warnings = parseJsonOutput(result).warnings ?? [];
+  for (const required of ["planning", "execution", "check"]) {
+    assert.ok(
+      warnings.some((warning) => warning.message.includes(required)),
+      `expected a warning naming models.${required}, got ${JSON.stringify(warnings)}`
+    );
+  }
+});
+
+test("coverage thresholds are constrained, not merely an object", async (t) => {
+  const { run, settings } = await scratchRepo(t);
+  await settings({
+    review: { default_mode: "classic", max_cycles: 3, coverage_thresholds: { overall: "high", typo: -1 } }
+  });
+
+  const result = await run("validate", "--json");
+  assert.equal(result.exitCode, 0);
+  const warnings = parseJsonOutput(result).warnings ?? [];
+  assert.ok(warnings.some((warning) => warning.message.includes("overall")), "a string threshold must be reported");
+  assert.ok(warnings.some((warning) => warning.message.includes("typo")), "an unknown threshold must be reported");
+});
+
+test("an empty commit prefix is reported", async (t) => {
+  const { run, settings } = await scratchRepo(t);
+  await settings({
+    execution: { auto_commit: true, commit_prefix: "", agent_personality_verbosity: "full" }
+  });
+
+  const result = await run("validate", "--json");
+  assert.equal(result.exitCode, 0);
+  const warnings = parseJsonOutput(result).warnings ?? [];
+  assert.ok(warnings.some((warning) => warning.message.includes("commit_prefix")));
 });
 
 test("doctor reports every settings finding validate reports", async (t) => {
@@ -215,23 +258,53 @@ test("the executable mirror agrees with the published schema", async () => {
     if (definition.type !== "object" || definition.properties === undefined) continue;
     const mirroredBlock = unwrapOptional(mirrored.properties?.[block]);
     assert.ok(mirroredBlock?.properties, `the mirror is missing the ${block} block`);
-    assert.deepEqual(
-      Object.keys(mirroredBlock.properties).sort(),
-      Object.keys(definition.properties).sort(),
-      `the mirror and the published schema disagree on the keys of ${block}`
-    );
-    for (const [key, spec] of Object.entries(definition.properties)) {
-      const mirroredKey = unwrapOptional(mirroredBlock.properties[key]);
-      for (const bound of ["minimum", "maximum"]) {
-        if (spec[bound] === undefined) continue;
-        assert.equal(mirroredKey?.[bound], spec[bound], `${block}.${key} ${bound} must match the published schema`);
-      }
-      if (spec.enum !== undefined) {
-        assert.deepEqual([...(mirroredKey?.enum ?? [])].sort(), [...spec.enum].sort(), `${block}.${key} enum must match`);
-      }
-    }
+    assertObjectMatches(mirroredBlock, definition, block);
   }
 });
+
+/**
+ * Compare every constraint, not the convenient ones.
+ *
+ * An earlier revision of this test compared enums and numeric bounds only, and
+ * three mirror/schema divergences slipped past it — required members inside a
+ * present block, an unconstrained `coverage_thresholds`, and a missing
+ * `minLength` on `commit_prefix`. All three were exactly the drift the test
+ * claimed to prevent, and it was the strongest claim in the file resting on the
+ * weakest assertion in it.
+ */
+function assertObjectMatches(mirroredBlock, definition, label) {
+  assert.deepEqual(
+    Object.keys(mirroredBlock.properties ?? {}).sort(),
+    Object.keys(definition.properties ?? {}).sort(),
+    `the mirror and the published schema disagree on the keys of ${label}`
+  );
+  assert.deepEqual(
+    [...(mirroredBlock.required ?? [])].sort(),
+    [...(definition.required ?? [])].sort(),
+    `${label}: a member required by the published schema must be required by the mirror`
+  );
+  assert.equal(
+    mirroredBlock.additionalProperties ?? false,
+    definition.additionalProperties ?? false,
+    `${label}: unknown keys must be treated the same way by both`
+  );
+
+  for (const [key, spec] of Object.entries(definition.properties ?? {})) {
+    const mirroredKey = unwrapOptional(mirroredBlock.properties[key]);
+    for (const bound of ["minimum", "maximum", "minLength", "const"]) {
+      if (spec[bound] === undefined) continue;
+      assert.equal(mirroredKey?.[bound], spec[bound], `${label}.${key} ${bound} must match the published schema`);
+    }
+    if (spec.enum !== undefined) {
+      assert.deepEqual([...(mirroredKey?.enum ?? [])].sort(), [...spec.enum].sort(), `${label}.${key} enum must match`);
+    }
+    // Nested objects are where the loosest shortcut hides: `z.object({}).loose()`
+    // reads as "an object" and accepts anything at all.
+    if (spec.type === "object" && spec.properties !== undefined) {
+      assertObjectMatches(mirroredKey ?? {}, spec, `${label}.${key}`);
+    }
+  }
+}
 
 /** Zod emits optional members as themselves or wrapped; read through either. */
 function unwrapOptional(node) {
