@@ -35272,12 +35272,21 @@ async function runRetroWorkflow(context) {
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
+  if (phase !== null || milestone !== null) {
+    const requested = [
+      phase === null ? void 0 : `--phase ${phase}`,
+      milestone === null ? void 0 : `--milestone ${milestone}`
+    ].filter((part) => part !== void 0).join(" ");
+    return usageError(
+      `legion retro cannot scope a retrospective yet, so ${requested} is refused rather than ignored. The scope would reach the prompt topic only and gather no evidence from it, producing an unscoped retrospective under a scoped label. Run legion retro with no scope for a retrospective over current workflow state.`
+    );
+  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
-    slugSource: phase ?? milestone ?? "retro",
+    slugSource: "retro",
     createdAt
   });
   const state = await resolveWorkflowState(context);
@@ -35298,26 +35307,11 @@ async function runRetroWorkflow(context) {
     explicitExecutor: stringOption(context, "executor")
   });
   if ("exitCode" in executed) return executed;
-  const scopeLabel = [
-    phase === null ? void 0 : `phase ${phase}`,
-    milestone === null ? void 0 : `milestone ${milestone}`
-  ].filter((part) => part !== void 0).join(" and ");
-  const scopeDiagnostics = scopeLabel === "" ? [] : [{
-    id: "retro_scope_not_evidenced",
-    title: "Scope reached the prompt topic only",
-    body: `This retrospective is labelled ${scopeLabel} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
-    severity: "major"
-  }];
   const markdown = renderGuidanceMarkdown({
     title: "Workflow Retrospective",
     topic,
     summary: executed.result.summary,
     sections: [
-      // First, and in the artifact rather than only on stdout. retro.md is the
-      // durable output and the one the run record points readers at; a warning
-      // that lives only in the terminal is gone by the time anyone reads the
-      // retrospective it applies to.
-      ...scopeDiagnostics.map((finding) => ({ heading: "Scope Warning", body: finding.body })),
       { heading: "Workflow State", body: `Current stage: ${state.stage}` },
       { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
       { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },
@@ -35328,7 +35322,7 @@ async function runRetroWorkflow(context) {
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status2 = executed.result.ok ? "completed" : "blocked";
-  const diagnostics = [...scopeDiagnostics, ...executed.result.findings];
+  const diagnostics = executed.result.findings;
   await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
     paths,
@@ -35358,7 +35352,6 @@ async function runRetroWorkflow(context) {
   };
   const human = [
     `Retrospective: ${status2}.`,
-    ...scopeDiagnostics.map((finding) => `WARNING: ${finding.body}`),
     `Artifact: ${markdownArtifactPath}`,
     renderNextAction(action)
   ].join("\n");

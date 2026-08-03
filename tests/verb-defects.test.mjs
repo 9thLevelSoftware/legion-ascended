@@ -14,7 +14,8 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
  * did something other than what the caller asked for. None of them failed, so
  * none of them showed up as a bug — they showed up as an answer.
  *
- * Each test below fails against the behaviour that shipped before this change.
+ * Each defect test below fails against the behaviour that shipped before this
+ * change; the control tests alongside them pass against both.
  */
 
 function git(root, args) {
@@ -120,59 +121,45 @@ test("legion milestone define, complete, and archive still record", async (t) =>
   assert.equal(parseJsonOutput(status).milestones[0].status, "archived", "status must read what the mutations wrote");
 });
 
-test("a scoped retro says plainly that no scoped evidence was gathered", async (t) => {
+test("legion retro refuses a scope it cannot honour", async (t) => {
   const { root, run } = await scratchRepo(t);
   const result = await run("retro", "--phase", "3", "--executor", "fake", "--json");
-  assert.equal(result.exitCode, 0, result.stderr);
 
-  const payload = parseJsonOutput(result);
-  const scope = payload.diagnostics.find((entry) => entry.id === "retro_scope_not_evidenced");
+  // The flags reach the run slug, the run record, and the prompt topic, and
+  // gather no evidence from the named scope. Previously this exited 0 and wrote
+  // a retro.md labelled "phase 3", so a consumer had a successful run and a
+  // scoped-looking artifact describing an unscoped analysis.
+  //
+  // An intermediate revision emitted a diagnostic instead. That was the wrong
+  // call for the reason the map test above states: a scoped request the CLI
+  // cannot honour must not report success, and a diagnostic nothing is obliged
+  // to read does not retract an exit code.
+  assert.notEqual(result.exitCode, 0, "a scope the CLI cannot honour must not report success");
+  assert.match(`${result.stdout}${result.stderr}`, /--phase 3/);
 
-  // The flags reach the run slug, the run record, and the prompt topic. They
-  // gather no phase evidence, so what comes back is an unscoped retrospective
-  // wearing a scoped label — and previously nothing said so.
-  assert.ok(scope, `expected a scope diagnostic, got ${JSON.stringify(payload.diagnostics)}`);
-  assert.match(scope.body, /phase 3/);
-  assert.match(scope.body, /unscoped/);
-
-  const rendered = await run("retro", "--phase", "3", "--executor", "fake");
-  assert.equal(rendered.exitCode, 0, rendered.stderr);
-  assert.match(rendered.stdout, /WARNING: /, "the warning must reach the human rendering, not only --json");
-
-  // The artifact is the durable output and the one the run record points at.
-  // A warning that lives only on stdout is gone by the time anyone reads the
-  // retrospective it applies to, which is the audience that most needs it.
-  const artifact = await readFile(path.join(root, ...payload.markdownArtifactPath.split("/")), "utf8");
-  assert.match(artifact, /Scope Warning/);
-  assert.match(artifact, /Treat the findings as unscoped/);
+  // Refusing has to mean refusing. A usage error that still left an artifact
+  // behind would be the same claim in a quieter voice.
+  assert.equal(await guidanceRunCount(root), 0, "a refused retro must write nothing");
 });
 
-test("a retro scoped by both flags names both in the warning", async (t) => {
+test("legion retro names every scope flag it refuses", async (t) => {
   const { run } = await scratchRepo(t);
   const result = await run("retro", "--phase", "3", "--milestone", "MVP", "--executor", "fake", "--json");
-  assert.equal(result.exitCode, 0, result.stderr);
 
-  // Naming only one of them would put a narrower label on the warning than on
-  // the retrospective it warns about.
-  const scope = parseJsonOutput(result).diagnostics
-    .find((entry) => entry.id === "retro_scope_not_evidenced");
-  assert.ok(scope, "expected a scope diagnostic");
-  assert.match(scope.body, /phase 3/);
-  assert.match(scope.body, /milestone MVP/);
+  assert.notEqual(result.exitCode, 0);
+  const output = `${result.stdout}${result.stderr}`;
+  assert.match(output, /--phase 3/);
+  assert.match(output, /--milestone MVP/, "naming one flag while refusing two misdescribes the refusal");
 });
 
-test("an unscoped retro carries no scope warning", async (t) => {
+test("an unscoped retro still runs", async (t) => {
   const { run } = await scratchRepo(t);
   const result = await run("retro", "--executor", "fake", "--json");
   assert.equal(result.exitCode, 0, result.stderr);
 
+  // The refusal is scoped to the scope flags. An unscoped retrospective claims
+  // nothing it cannot deliver, so it still runs and still writes its artifact.
   const payload = parseJsonOutput(result);
-  assert.equal(
-    payload.diagnostics.some((entry) => entry.id === "retro_scope_not_evidenced"),
-    false,
-    "a retro that claimed no scope has no scope to warn about"
-  );
-
-  const rendered = await run("retro", "--executor", "fake");
-  assert.doesNotMatch(rendered.stdout, /WARNING: /);
+  assert.equal(payload.workflow, "retro");
+  assert.ok(payload.markdownArtifactPath, "an unscoped retro still writes its artifact");
 });

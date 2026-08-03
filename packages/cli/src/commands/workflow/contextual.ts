@@ -22,7 +22,6 @@ import {
 } from "../../workflow/codebase-map.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
 import { parseResultFromText } from "../../workflow/executor/result.js";
-import type { ExecutionFinding } from "../../workflow/executor/types.js";
 import { explorationResultContract, parseExploration } from "../../workflow/exploration.js";
 import {
   createGuidanceRunPaths,
@@ -459,12 +458,39 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
+  // `--phase` and `--milestone` reach the run slug, the run record, and the
+  // prompt topic, and nothing else. No evidence from the named scope is gathered:
+  // the stage and recent runs read below are handed to `renderGuidanceMarkdown`
+  // after the executor has already produced its findings, so the model never sees
+  // them. What comes back is an unscoped retrospective wearing a scoped label.
+  //
+  // An earlier revision emitted a diagnostic instead of refusing, on the grounds
+  // that the topic does steer the prompt and refusing removes something that
+  // works. That was the wrong call, and the argument against it is the `--query
+  // --scope` fix in this same change: a scoped query the CLI cannot honour must
+  // not report success. Exit 0 plus a persisted retro.md labelled with the
+  // requested scope is a claim, and a diagnostic nothing is obliged to read does
+  // not retract it. The steering was never worth much either — it produced an
+  // unscoped analysis under a scoped heading.
+  //
+  // P16-B003 makes the scope real by putting the selected evidence in front of
+  // the executor. Until then the mode does not exist and says so.
+  if (phase !== null || milestone !== null) {
+    const requested = [
+      phase === null ? undefined : `--phase ${phase}`,
+      milestone === null ? undefined : `--milestone ${milestone}`
+    ].filter((part) => part !== undefined).join(" ");
+    return usageError(
+      `legion retro cannot scope a retrospective yet, so ${requested} is refused rather than ignored. The scope would reach the prompt topic only and gather no evidence from it, producing an unscoped retrospective under a scoped label. Run legion retro with no scope for a retrospective over current workflow state.`
+    );
+  }
+
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
-    slugSource: phase ?? milestone ?? "retro",
+    slugSource: "retro",
     createdAt
   });
   const state = await resolveWorkflowState(context);
@@ -486,42 +512,12 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   });
   if ("exitCode" in executed) return executed;
 
-  // `--phase` and `--milestone` reach the run slug, the run record, and the
-  // prompt topic, and nothing else. They gather no phase evidence, so what comes
-  // back is an unscoped retrospective wearing a scoped label. The stage and the
-  // recent runs read above do not close that gap either: they are handed to
-  // `renderGuidanceMarkdown` below, after the executor has already produced the
-  // findings, so the model never saw them.
-  //
-  // Saying so is the honest reading. The flags are not inert — the topic does
-  // steer the prompt — so refusing them would remove something that works, while
-  // leaving them silent would let a caller believe an unevidenced retrospective
-  // was grounded in the phase they named. P16-B003 makes the scope real.
-  // Both flags can be given together, and naming only one of them would put a
-  // narrower label on the warning than on the retrospective it is warning about.
-  const scopeLabel = [
-    phase === null ? undefined : `phase ${phase}`,
-    milestone === null ? undefined : `milestone ${milestone}`
-  ].filter((part) => part !== undefined).join(" and ");
-  const scopeDiagnostics: ExecutionFinding[] = scopeLabel === ""
-    ? []
-    : [{
-        id: "retro_scope_not_evidenced",
-        title: "Scope reached the prompt topic only",
-        body: `This retrospective is labelled ${scopeLabel} but no evidence from that scope was gathered. The executor received the topic and the required section names, and nothing else. Treat the findings as unscoped.`,
-        severity: "major"
-      }];
 
   const markdown = renderGuidanceMarkdown({
     title: "Workflow Retrospective",
     topic,
     summary: executed.result.summary,
     sections: [
-      // First, and in the artifact rather than only on stdout. retro.md is the
-      // durable output and the one the run record points readers at; a warning
-      // that lives only in the terminal is gone by the time anyone reads the
-      // retrospective it applies to.
-      ...scopeDiagnostics.map((finding) => ({ heading: "Scope Warning", body: finding.body })),
       { heading: "Workflow State", body: `Current stage: ${state.stage}` },
       { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
       { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },
@@ -532,7 +528,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status = executed.result.ok ? "completed" : "blocked";
-  const diagnostics = [...scopeDiagnostics, ...executed.result.findings];
+  const diagnostics = executed.result.findings;
   await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
     paths,
@@ -562,7 +558,6 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   };
   const human = [
     `Retrospective: ${status}.`,
-    ...scopeDiagnostics.map((finding) => `WARNING: ${finding.body}`),
     `Artifact: ${markdownArtifactPath}`,
     renderNextAction(action)
   ].join("\n");
