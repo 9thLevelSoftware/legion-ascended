@@ -276,6 +276,108 @@ items:
     verification:
       - node --test tests/workflow-guidance.test.mjs
       - pnpm run validate:next
+  # An adversarial sweep run before writing B002, hunting siblings of the three
+  # defects B012 fixed rather than waiting for review to find them one at a time.
+  # It returned 26 confirmed instances. The parse hazard below was fixed
+  # immediately because it destroys data; the rest are recorded here because
+  # they are live defects with no owner, and an unowned defect list is the thing
+  # this phase exists to stop producing.
+  - id: P16-B013
+    phase: 16
+    title: Reject advertised options the handler never reads
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B012
+    maps_to:
+      - packages/cli/src/runtime.ts
+    acceptance:
+      - >-
+        parseCliArgs accepts any option, so a flag no handler reads is silently ignored rather than
+        refused. Every defect below is that one mechanism. Each command declares the options it
+        reads and the runtime refuses the rest, which converts the whole class into a usage error at
+        the boundary instead of a wrong answer at the end.
+      - >-
+        Three of these change which artifact is acted on, and are the reason this is GA-critical
+        rather than tidy-up. legion review --phase N reviews and can accept a change other than the
+        one named; legion build --phase N builds the latest taskgraph rather than phase N; legion
+        start --session <id> --from-exploration <runId> returns before the exploration is read and
+        discards it.
+      - >-
+        legion review --accept --reject-reason "<text>" accepts and discards the rejection: the
+        accept branch returns before reject-reason is read. Two contradictory instructions must not
+        resolve silently in favour of the destructive one.
+      - >-
+        The remaining unread options are either implemented or removed from the help text that
+        advertises them, and the choice is recorded per option: ship --canary; plan --auto,
+        --skip-board, --skip-security and --auto-refine (read only to be echoed back into the
+        payload); polish --dry-run, --phase and --scope; retro --dry-run; validate --fix and --ci;
+        learn --recall, --list and --prune; review --max-cycles outside --auto.
+      - legion explore --entry <anything> validates against its closed set instead of silently recording raw-idea.
+    verification:
+      - node --test tests/cli-option-parsing.test.mjs
+      - node --test tests/cli-workflow-ux.test.mjs
+      - pnpm run validate:next
+  - id: P16-B014
+    phase: 16
+    title: Stop guidance reads from writing run records
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B012
+    maps_to:
+      - packages/cli/src/commands/workflow/contextual.ts
+      - packages/cli/src/workflow/codebase-map.ts
+    acceptance:
+      - >-
+        legion map --check and legion map --query write a guidance run each time they are called,
+        though both only inspect an existing map. This is the milestone-status defect B012 fixed,
+        in the two neighbours the fix did not reach.
+      - >-
+        It is worse than clutter here. getLatestCodebaseMap finds the current map by scanning only
+        the newest 20 guidance runs of workflow "map", so twenty checks or queries evict the refresh
+        that produced the map, and the CLI then reports no map exists. Reads currently destroy the
+        ability to find what they read.
+      - >-
+        mapCheck claims its run directory before the work that can refuse, so an invalid --scope
+        leaves an empty run directory behind after returning a usage error.
+      - Each fix carries a test that fails against the current behaviour.
+    verification:
+      - node --test tests/verb-defects.test.mjs
+      - node --test tests/workflow-guidance.test.mjs
+      - pnpm run validate:next
+  - id: P16-B015
+    phase: 16
+    title: Close the guard asymmetries the sweep found
+    milestone: GA-critical
+    owner: compatibility-owner
+    depends_on:
+      - P16-B012
+    maps_to:
+      - packages/cli/src/commands/workflow/contextual.ts
+      - packages/cli/src/commands/workflow/validate.ts
+    acceptance:
+      - >-
+        mapQuery refuses to run when no codebase map exists; mapCheck treats the same condition as
+        merely stale. One reports a missing prerequisite, the other reports a comparison it never
+        made.
+      - >-
+        handleDoctorCommand computes five checks and derives ok from three. A missing
+        bundles/index.json produces no diagnostic and no failure, so doctor reports healthy while
+        holding the evidence that it is not.
+      - >-
+        checkTraceability is called without the guard resolveTraceabilityStatus applies, and the
+        comment on that guard records it as a defect already fixed once on the status surface. The
+        same unreadable requirement set is refused on one surface and silently treated as empty on
+        two others.
+      - >-
+        legion map --query rejects an empty string but reports a successful search with zero results
+        when every token is discarded by the tokenizer, which is the same input in a different
+        costume.
+    verification:
+      - node --test tests/verb-defects.test.mjs
+      - node --test tests/validate-traceability.test.mjs
+      - pnpm run validate:next
   - id: P16-B002
     phase: 16
     title: Split validate and map across the CLI and host boundary

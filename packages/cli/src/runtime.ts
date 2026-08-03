@@ -26,6 +26,21 @@ export interface CliResult {
 
 export type CommandHandler = (context: CliContext) => Promise<CliResult>;
 
+/**
+ * Options that never take a value.
+ *
+ * Membership is not cosmetic. `hasFlag` requires the parsed value to be exactly
+ * `true`, so an option missing from this set silently binds the next argument
+ * and then reads as *absent*. `legion map --check src` did not check a scope, and
+ * did not fail: `check` bound to "src", `hasFlag` returned false, and the handler
+ * fell through to the destructive branch and refreshed the whole repository —
+ * overwriting the map the caller asked it to inspect.
+ *
+ * So this set must contain every key any handler reads with `hasFlag`, and
+ * `tests/cli-option-parsing.test.mjs` asserts that by scanning the source rather
+ * than trusting this comment. Adding a boolean flag and forgetting this line is
+ * the whole defect, and it is not the kind of thing review catches.
+ */
 const VALUELESS_OPTIONS = new Set([
   "abort",
   "accept-proposal",
@@ -37,6 +52,7 @@ const VALUELESS_OPTIONS = new Set([
   "auto",
   "auto-refine",
   "back",
+  "check",
   "dry-run",
   "finalize",
   "force-roadmap",
@@ -48,10 +64,13 @@ const VALUELESS_OPTIONS = new Set([
   // followed by any positional swallows it as the flag's value.
   "next",
   "no-color",
+  "refresh",
   "review-accepted",
   "rollback",
   "session-status",
-  "skip"
+  "skip",
+  "status",
+  "verify"
 ]);
 
 export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
