@@ -2020,7 +2020,11 @@ test("legion plan phase dry-run resolves phase 1 from an explicit roadmap", asyn
 
     const result = await runCliCapture([
       "--repository-root", root,
-      "plan", "--auto", "--auto-refine", "1",
+      // --auto was passed here and plan has never read it: the sweep found it
+      // advertised in commands/plan.md and echoed into the payload without
+      // affecting anything. Declared options refuse it now, so the test no
+      // longer asserts a flag the command ignores.
+      "plan", "--auto-refine", "1",
       "--from-roadmap", "ROADMAP.md",
       "--dry-run",
       "--json"

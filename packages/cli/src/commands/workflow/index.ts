@@ -16,6 +16,7 @@ import { handleAdHocWorkflow } from "./ad-hoc.js";
 import { handleContextualWorkflow } from "./contextual.js";
 import { handleShipWorkflow } from "./ship.js";
 import { handleDoctorCommand, handleValidateCommand } from "./validate.js";
+import { undeclaredOptionError } from "./declared-options.js";
 
 const WORKFLOW_HELP = `legion <workflow>
 
@@ -52,6 +53,10 @@ export async function handleWorkflowCommand(context: CliContext): Promise<CliRes
   }
 
   const commandContext = stripCommand(context, 1);
+  // Before the handler, so no handler can receive an option it does not read.
+  const undeclared = undeclaredOptionError(commandContext, command);
+  if (undeclared !== undefined) return undeclared;
+
   switch (command) {
     case "start":
       return handleStartCommand(commandContext);
