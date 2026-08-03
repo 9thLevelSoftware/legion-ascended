@@ -19,9 +19,21 @@ skills/agent-registry/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/STATE.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
 </context>
+
+<authority>
+The CLI owns the typed work. `legion polish [target]` creates the taskgraph
+scoped to the target, applies the project's recorded blast-radius budget, and
+refuses a target under `.legion/` because implementation tasks may not write
+control artifacts. Execution happens through `legion build`.
+
+What stays here is what no verb performs: the dry-run preview, the
+behaviour-preservation check after the edits, and the commit step. Derive no
+state you can ask the CLI for.
+</authority>
 
 <process>
 1. PARSE ARGUMENTS
@@ -60,13 +72,13 @@ skills/agent-registry/SKILL.md
    - Display: "Polish target: {TARGET_PATH or 'Phase ' + PHASE_NUMBER or 'auto-detected'}{' (dry run)' if DRY_RUN}"
 
 2. LOAD PROJECT CONTEXT
-   - Attempt to read .planning/PROJECT.md
+   - Run `legion status --json` for project context.
      - If found: extract project name, tech stack, constraints, conventions
      - If not found: proceed without project context — polish works with or without an initialized project
    - Attempt to read CLAUDE.md at project root
      - If found: extract naming, formatting, import, comment, and error handling conventions
      - If not found: skip — conventions will be detected from codebase sampling
-   - Attempt to read .planning/CODEBASE.md
+   - Run `legion map --query <term> --json` when the polish target needs locating.
      - If found: extract "Conventions" or "Patterns" sections
      - If not found: skip
 
@@ -89,7 +101,7 @@ skills/agent-registry/SKILL.md
 
    a. Determine base file set:
       - If TARGET_PATH provided: resolve glob or literal path to file list
-      - If PHASE_NUMBER provided: read .planning/phases/ plan files, extract files_modified
+      - If PHASE_NUMBER provided: `legion status --json` names the current change; the CLI owns which files a phase touched.
       - If SCOPE_MODE == "directory" AND TARGET_PATH is a directory: recurse for all source files
       - If auto-detected from STATE.md: extract files_modified from current phase plans
 
@@ -305,7 +317,7 @@ skills/agent-registry/SKILL.md
        - Otherwise: use "project scope"
      Create commit:
        ```
-       git add {only files modified by polish agent — not .planning/ files}
+       git add {only files modified by polish agent — never .legion/ control artifacts}
        git commit -m "refactor: polish {target_label}
 
        Polish applied {N} changes across {M} files.

@@ -6,7 +6,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
 ---
 
 <objective>
-Decompose a roadmap phase into as many wave-structured plans as needed, using `settings.planning.max_tasks_per_plan` (default 3) only as the per-plan task cap. Recommend agents from the registry for each plan and get user confirmation. Generate plan files to `.planning/phases/{NN}-{slug}/`.
+Decompose a roadmap phase into as many wave-structured plans as needed, using `settings.planning.max_tasks_per_plan` (default 3) only as the per-plan task cap. Recommend agents from the registry for each plan and get user confirmation. The CLI writes the typed taskgraph; this command decomposes, recommends and confirms.
 
 Every generated plan must be a decision-complete implementation contract that
 follows the shared execution harness:
@@ -21,10 +21,13 @@ skills/phase-decomposer/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
-@.planning/REQUIREMENTS.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+    legion validate --json
+
+`workflowState`, `requirements` and `traceability` carry what planning needs to
+know. Reading project files yourself reintroduces a second source of truth.
 </context>
 
 <process>
@@ -42,11 +45,11 @@ DRY-RUN MODE (deterministic, no side effects)
 0. CONDITIONAL SKILL LOADING (context budget)
    Load optional skills only if their activation condition is true:
    
-   - `skills/workflow-common-memory/SKILL.md` only if `.planning/memory/OUTCOMES.md` exists.
-   - `.planning/memory/RETRO.md` consumed during phase decomposition (Step 3) if file exists. Retro action items from prior phases inform plan constraints and agent selection.
+   - `skills/workflow-common-memory/SKILL.md` only when `legion learn --list --json` reports recorded learning.
+   - `legion learn --recall <phase topic> --json` during phase decomposition (Step 3). Recorded lessons inform plan constraints and agent selection.
 
    - `skills/workflow-common-github/SKILL.md` only if `gh auth status` succeeds and a git remote exists.
-   - `skills/codebase-mapper/SKILL.md` only if `.planning/CODEBASE.md` exists or `.planning/codebase/index.jsonl` exists.
+   - `skills/codebase-mapper/SKILL.md` only when `legion map --json` reports a status other than `absent`.
    - `skills/marketing-workflows/SKILL.md` only for MKT-* requirements or marketing keyword detection.
    - `skills/design-workflows/SKILL.md` only for DSN-* requirements or design keyword detection.
 
@@ -66,7 +69,7 @@ DRY-RUN MODE (deterministic, no side effects)
    | Skipped gate | Default selection |
    |---|---|
    | Step 3.5b (board quick-assess offer) | Run board quick-assessment (equivalent to selecting "Yes, run quick assessment") |
-   | Step 3.6b (design review offer) | Run design review if phase type includes "design" AND `.planning/designs/` has files; otherwise skip |
+   | Step 3.6b (design review offer) | Run design review if phase type includes "design" AND an exploration or design artifact is recorded; otherwise skip |
    | Step 6 (plan confirmation) | Select "Looks good, generate the plans" — do NOT swap agents or adjust structure in auto mode |
    | Step 8.5 (plan critique offer) | Select "Run plan critique" (equivalent to selecting the Recommended option) |
 
@@ -103,7 +106,7 @@ DRY-RUN MODE (deterministic, no side effects)
 
 2. CHECK FOR EXISTING PLANS
    - Construct the phase directory path using workflow-common conventions:
-     `.planning/phases/{NN}-{phase-slug}/`
+     the taskgraph `legion plan {N} --json` reports at `taskgraph.artifactPath`
    - Check if any {NN}-{PP}-PLAN.md files already exist in that directory
    - If plans exist: use adapter.ask_user
      - "Phase {N} already has {count} plan(s). What would you like to do?"
@@ -114,25 +117,25 @@ DRY-RUN MODE (deterministic, no side effects)
 3. READ PHASE DETAILS
    Follow phase-decomposer skill Section 2 (Phase Analysis):
    - Read ROADMAP.md and extract phase goal, requirements list, success criteria
-   - If .planning/REQUIREMENTS.md exists, read it and cross-reference full requirement descriptions
+   - Cross-reference `requirements` from `legion status --json`; the CLI owns the requirement set and its hash
    - If REQUIREMENTS.md is absent (between milestones), rely on ROADMAP.md requirement summaries and note the limitation
    - Read PROJECT.md for broader context
    - Read STATE.md for current progress and completed phase outputs
    - If this phase builds on prior phases, read prior phase summaries
-   - If .planning/memory/RETRO.md exists:
+   - If `legion learn --recall <phase topic> --json` returns matches:
      - Read RETRO.md and extract action items from the most recent retrospective
      - Include HIGH-priority action items as additional constraints in the decomposition prompt
      - Include agent recommendation adjustments (e.g., "prefer {agent} for {task_type}")
      - This creates the learn/retro/plan feedback loop
 
    CODEBASE MAP CONTEXT (optional — follows codebase-mapper Sections 6.3 and 18):
-   - Check if .planning/CODEBASE.md exists
+   - Check `legion map --json` for a map that is not `absent`
    - If yes:
-     a. Read .planning/CODEBASE.md
+     a. Read the map artifact `legion map --json` names
      b. Check map freshness metadata (`generated_at`, `map_schema_version`, `source_fingerprint`) using codebase-mapper Section 17
         - If stale or partial: warn user "Codebase map is stale or incomplete. Consider running `/legion:map --refresh`."
         - Do NOT auto-re-analyze — let user decide. Continue with existing data.
-     c. If `.planning/codebase/index.jsonl` and `.planning/codebase/symbols.json` exist:
+     c. If the map is fresh, query it:
         - Form a map query from the phase goal, requirements, likely domains, known target files, and agent specialties.
         - Follow codebase-mapper Section 18 to retrieve the top relevant chunks.
         - Read original source files for any chunk used as implementation evidence.
@@ -167,7 +170,7 @@ DRY-RUN MODE (deterministic, no side effects)
         Per-channel: one specialist per selected channel
      d. Before generating plan files, run campaign brief questioning
         (marketing-workflows Section 2.1) and generate campaign document
-        at .planning/campaigns/{campaign-slug}.md
+        as a recorded exploration (`legion explore`)
      e. All plan files reference the campaign document in their context section
    - If not marketing phase:
      Skip silently (standard decomposition applies)
@@ -193,7 +196,7 @@ DRY-RUN MODE (deterministic, no side effects)
      d. Before generating plan files, run design brief questioning
         (design-workflows Section 2.1) followed by design consultation
         (design-workflows Section 8) and generate design documents
-        at .planning/designs/{project-slug}-system.md
+        as a recorded exploration (`legion explore`)
      e. All plan files reference the design documents in their context section
    - If not design phase:
      Skip silently (standard decomposition applies)
@@ -225,7 +228,7 @@ DRY-RUN MODE (deterministic, no side effects)
       | When | User selects "Yes, generate 2-3 proposals" in Step 3.5b. Fires exactly once per plan-phase invocation (no retry loop). |
       | Why parallel is safe | All proposal agents are read-only (Explore sub-agents — no file writes). Each operates in its own context window and returns a structured proposal summary (~200 tokens). No shared write targets. No cross-agent reads. |
       | How many | Exactly 2 or 3 agents (philosophies: Minimal, Clean, and — optionally — Pragmatic per phase-decomposer Section 2.5). Select count based on phase complexity signal from Step 3.5a; default to 3 when phase has ≥5 requirements. Do not reduce fan-out. |
-      | Mechanism | adapter.spawn_agent_readonly (Explore sub-agent on Claude Code; platform-equivalent on other CLIs). Issue all N spawn calls in a SINGLE tool call if `adapter.parallel_execution == true`; otherwise sequential. Model: adapter.model_execution. Include CODEBASE.md plus relevant `.planning/codebase/index.jsonl` chunks when present, and `.planning/specs/{NN}-{phase-slug}-spec.md` (if present) as additional context in each spawn. |
+      | Mechanism | adapter.spawn_agent_readonly (Explore sub-agent on Claude Code; platform-equivalent on other CLIs). Issue all N spawn calls in a SINGLE tool call if `adapter.parallel_execution == true`; otherwise sequential. Model: adapter.model_execution. Include `legion map --query <term> --json` results and any recorded spec artifact as additional context in each spawn. |
 
       - Collect and present proposals side-by-side
       - User selects an approach (or requests hybrid)
@@ -241,7 +244,7 @@ DRY-RUN MODE (deterministic, no side effects)
    pre-coding specification. Follows spec-pipeline skill.
 
    a. Check if a spec already exists:
-      - Look for `.planning/specs/{NN}-{phase-slug}-spec.md`
+      - Look for a recorded spec artifact for this phase in `legion status --json`
       - If exists: inform user "Spec document already exists for Phase {N}."
         Use adapter.ask_user:
         "Use existing spec or regenerate?"
@@ -261,7 +264,7 @@ DRY-RUN MODE (deterministic, no side effects)
    c. If user selects "Yes":
       - Read spec-pipeline skill
       - Execute all 5 stages sequentially
-      - Write output to `.planning/specs/{NN}-{phase-slug}-spec.md`
+      - The CLI owns spec artifacts; record the spec through the workflow rather than writing the file directly
       - Pass spec document as additional context to step 4
 
    d. If user selects "No":
@@ -321,7 +324,7 @@ DRY-RUN MODE (deterministic, no side effects)
 
 7. GENERATE CONTEXT FILE
    Follow phase-decomposer skill Section 7 (Context File Generation):
-   - Create `.planning/phases/{NN}-{phase-slug}/` directory
+   - `legion plan {N}` creates the typed change and taskgraph; do not create directories yourself
    - Write `{NN}-CONTEXT.md` with phase goal, requirements, existing assets, decisions, plan structure
 
 8. GENERATE PLAN FILES
@@ -462,7 +465,7 @@ DRY-RUN MODE (deterministic, no side effects)
    e. Confirm to user: "Created GitHub issue #{number} for Phase {N}: {phase_name}"
 
 10. UPDATE STATE
-   - Read current .planning/STATE.md
+   - Read current state from `legion status --json`
    - Update:
      - Phase: {N} of {total} (planned)
      - Status: Phase {N} planned -- {plan_count} plans across {wave_count} waves

@@ -21,9 +21,25 @@ skills/workflow-common-github/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/STATE.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+
+`workflowState.projectId` and `workflowState.stage` are what a quick task needs
+to know about the project. Reading project files yourself reintroduces a second
+source of truth that can disagree with the one the CLI derives.
 </context>
+
+<authority>
+The CLI owns the typed work. `legion quick "<task>"` creates the change, the
+oracle and the taskgraph, applies the project's recorded blast-radius budget,
+and stops — execution happens through `legion build` and acceptance through
+`legion review --accept`.
+
+What stays here is what no verb performs: choosing the agent, offering the
+commit, the inline review pass, and PR creation in fix mode. Derive no state
+you can ask the CLI for, and do not write project artifacts directly.
+</authority>
 
 <process>
 1. PARSE TASK DESCRIPTION
@@ -56,13 +72,12 @@ skills/workflow-common-github/SKILL.md
      Exit without selecting or spawning a quick-task agent.
 
 2. LOAD PROJECT CONTEXT (optional)
-   - Attempt to read .planning/PROJECT.md
-   - If found: extract project name, tech stack, constraints
-     - This context helps inform agent selection and task execution
-   - If not found: proceed without project context
-     - Quick tasks work with or without an initialized project
-   - Attempt to read .planning/STATE.md
-   - If found: note current phase for awareness (but quick tasks don't modify phase state)
+   - Run `legion status --json`.
+   - `workflowState.projectId` names the project; `workflowState.stage` says where it stands.
+     That context informs agent selection.
+   - An uninitialized project is not an error here: quick tasks work with or without one.
+     `legion quick` refuses if it needs project state and there is none, and says so in
+     its diagnostics.
 
 3. SELECT AGENT
    Follow agent-registry Section 3 (Recommendation Algorithm) at single-task scope:
