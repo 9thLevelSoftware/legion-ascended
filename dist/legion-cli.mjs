@@ -44347,11 +44347,35 @@ async function handleMapWorkflow(context) {
   }
   if (check2) return mapCheck(context, scope);
   if (query !== void 0) return mapQuery(context, query);
-  return mapRefresh(context, scope);
+  if (refresh) return mapRefresh(context, scope);
+  return mapSummary(context, scope);
 }
 async function mapRefresh(context, scope) {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+  let detected;
+  try {
+    detected = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return usageError(`Unable to refresh codebase map. ${message}`);
+  }
+  if (detected.sourceFileCount === 0) {
+    const action = nextAction("legion map --refresh --scope <path>", "Point the map at a path that contains source files.");
+    return failure(
+      {
+        ok: false,
+        status: "absent",
+        workflow: "map",
+        mode: "refresh",
+        scope: detected.scope,
+        sourceFileCount: 0,
+        nextAction: action,
+        diagnostics: [{ code: "map_no_source", message: `No source files were detected under ${detected.scope}.` }]
+      },
+      [`No source files were detected under ${detected.scope}. Nothing was written.`, renderNextAction(action)].join("\n")
+    );
+  }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "map",
@@ -44406,53 +44430,94 @@ async function mapRefresh(context, scope) {
     return usageError(`Unable to refresh codebase map. ${message}`);
   }
 }
+var MAP_MAX_AGE_DAYS = 30;
+async function resolveMapState(repositoryRoot, scope, now) {
+  const latest = await getLatestCodebaseMap(repositoryRoot);
+  let current;
+  try {
+    current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return usageError(`Unable to read the codebase map. ${message}`);
+  }
+  const base = {
+    scope: current.scope,
+    sourceFingerprint: current.sourceFingerprint,
+    sourceFileCount: current.sourceFileCount,
+    latestSourceFingerprint: latest?.sourceFingerprint ?? null,
+    generatedAt: latest?.generatedAt ?? null
+  };
+  if (latest === void 0) {
+    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
+  }
+  const ageDays = ageInDays(latest.generatedAt, now);
+  if (latest.scope !== current.scope) {
+    return {
+      ...base,
+      freshness: "partial",
+      reason: `The stored map covers ${latest.scope}, which is not the scope being checked (${current.scope}).`,
+      ageDays
+    };
+  }
+  if (latest.sourceFingerprint !== current.sourceFingerprint) {
+    return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
+  }
+  if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
+    return {
+      ...base,
+      freshness: "stale",
+      reason: `The map is ${Math.floor(ageDays)} days old, past the ${MAP_MAX_AGE_DAYS}-day limit.`,
+      ageDays
+    };
+  }
+  return { ...base, freshness: "fresh", reason: "The map matches the current source files.", ageDays };
+}
+function ageInDays(generatedAt, now) {
+  const from = Date.parse(generatedAt);
+  const to = Date.parse(now);
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  return (to - from) / 864e5;
+}
+function mapStatePayload(state, mode) {
+  return {
+    ok: true,
+    status: state.freshness,
+    workflow: "map",
+    mode,
+    scope: state.scope,
+    sourceFingerprint: state.sourceFingerprint,
+    sourceFileCount: state.sourceFileCount,
+    latestSourceFingerprint: state.latestSourceFingerprint,
+    generatedAt: state.generatedAt,
+    diagnostics: []
+  };
+}
+function mapStateAction(state) {
+  return state.freshness === "fresh" ? nextAction("legion plan 1", "The codebase map is fresh enough for planning.") : nextAction("legion map --refresh", state.reason);
+}
 async function mapCheck(context, scope) {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const paths = await createGuidanceRunPaths({
-    repositoryRoot: context.repositoryRoot,
-    workflow: "map",
-    slugSource: "check",
-    createdAt
-  });
-  const latest = await getLatestCodebaseMap(context.repositoryRoot);
-  let current;
-  try {
-    current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
-  } catch (error51) {
-    const message = error51 instanceof Error ? error51.message : String(error51);
-    return usageError(`Unable to check codebase map. ${message}`);
-  }
-  const fresh = latest !== void 0 && latest.scope === current.scope && latest.sourceFingerprint === current.sourceFingerprint;
-  const action = fresh ? nextAction("legion plan 1", "The codebase map is fresh enough for planning.") : nextAction("legion map --refresh", "Refresh the codebase map before relying on mapped context.");
-  await writeGuidanceRun({
-    repositoryRoot: context.repositoryRoot,
-    paths,
-    status: fresh ? "completed" : "stale",
-    runInput: { mode: "check", scope: current.scope },
-    outputs: {
-      currentSourceFingerprint: current.sourceFingerprint,
-      latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-      sourceFileCount: current.sourceFileCount
-    },
-    nextAction: action
-  });
+  const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
+  if ("exitCode" in state) return state;
+  const action = mapStateAction(state);
   return success2(
-    {
-      ok: true,
-      status: fresh ? "fresh" : "stale",
-      workflow: "map",
-      mode: "check",
-      runId: paths.runId,
-      artifactPath: paths.workflowRunArtifactPath,
-      scope: current.scope,
-      sourceFingerprint: current.sourceFingerprint,
-      latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-      nextAction: action,
-      diagnostics: []
-    },
+    { ...mapStatePayload(state, "check"), nextAction: action },
+    [`Codebase map: ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
+  );
+}
+async function mapSummary(context, scope) {
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
+  if ("exitCode" in state) return state;
+  const action = mapStateAction(state);
+  return success2(
+    { ...mapStatePayload(state, "summary"), nextAction: action },
     [
-      fresh ? "Codebase map is fresh." : "Codebase map is stale or missing.",
+      `Codebase map: ${state.freshness}. ${state.reason}`,
+      `Scope: ${state.scope}. Source files: ${state.sourceFileCount}.`,
+      state.generatedAt === null ? "Never generated." : `Generated: ${state.generatedAt}.`,
       renderNextAction(action)
     ].join("\n")
   );
@@ -44475,37 +44540,15 @@ async function mapQuery(context, query) {
       ["Map query is blocked.", renderNextAction(action2)].join("\n")
     );
   }
-  const paths = await createGuidanceRunPaths({
-    repositoryRoot: context.repositoryRoot,
-    workflow: "map",
-    slugSource: `query ${query}`,
-    createdAt
-  });
   const matches = queryCodebaseMap(latest, query);
-  const queryArtifactPath = guidanceArtifactPath(paths, "query-results.json");
-  await writeProjectTextFile({
-    repositoryRoot: context.repositoryRoot,
-    artifactPath: queryArtifactPath,
-    text: stableProtocolJson({ query, matches })
-  });
   const action = nextAction("legion status", "Use the query result as context for the next workflow action.");
-  await writeGuidanceRun({
-    repositoryRoot: context.repositoryRoot,
-    paths,
-    status: "completed",
-    runInput: { mode: "query", query },
-    outputs: { queryArtifactPath, matchCount: matches.length },
-    nextAction: action
-  });
   return success2(
     {
       ok: true,
       status: "completed",
       workflow: "map",
       mode: "query",
-      runId: paths.runId,
-      artifactPath: paths.workflowRunArtifactPath,
-      queryArtifactPath,
+      query,
       matches,
       nextAction: action,
       diagnostics: []
@@ -44513,8 +44556,11 @@ async function mapQuery(context, query) {
     [
       `Map query returned ${matches.length} matches.`,
       ...matches.slice(0, 5).map((match) => `- ${match.path}: ${match.summary}`),
+      // The index is a lexical score over generated summaries, so acting on it
+      // without opening the file is how a caller edits the wrong one.
+      matches.length === 0 ? "" : "Read the matched files before acting on them; the index ranks, it does not confirm.",
       renderNextAction(action)
-    ].join("\n")
+    ].filter((line) => line.length > 0).join("\n")
   );
 }
 async function runRetroWorkflow(context) {

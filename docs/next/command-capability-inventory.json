@@ -40,23 +40,27 @@
       ],
       "cliGaps": [
         {
-          "gap": "legion map with no flags calls mapRefresh unconditionally, walking the repository and overwriting the artifact set with no prompt. The CLI needs a non-mutating default, or --refresh must become mandatory for the destructive path.",
+          "gap": "A bare legion map is now a read-only summary; --refresh is required for the destructive path.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "Freshness has four states in the command (fresh, stale, partial, absent) and two in mapCheck, which computes one boolean. A project that never ran map reports the same status as one whose fingerprint moved.",
+          "gap": "Freshness now has four states: fresh, stale, partial (the stored map covers a different scope) and absent.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "The command's 30-day age rule is not implemented. CodebaseMapDocument already carries generatedAt, so the data is on disk and unused.",
+          "gap": "The 30-day age rule is implemented against the map's generatedAt.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "collectSourceFiles returning nothing is not special-cased: refreshCodebaseMap writes all five artifacts with sourceFileCount 0 and reports success.",
+          "gap": "An empty source set now refuses with map_no_source and writes nothing.",
           "disposition": "build-in-cli"
         },
         {
           "gap": "legion map --query <text> --scope <path> silently ignores the scope. mapQuery is called without it, and the mode-conflict guard does not catch it because scope is not a mode.",
+          "disposition": "build-in-cli"
+        },
+        {
+          "gap": "legion map --check and --query no longer write guidance runs. Recording a read evicted the refresh that produced the map from the twenty-run window getLatestCodebaseMap scans, so reads destroyed the ability to find what they read.",
           "disposition": "build-in-cli"
         }
       ]

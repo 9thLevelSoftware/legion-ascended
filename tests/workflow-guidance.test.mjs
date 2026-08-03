@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -97,7 +97,12 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
     assert.equal(map.kind, "codebase_map");
     assert.equal(map.files.some((file) => file.path === "src/asset-service.ts"), true);
 
-    const check = await runCliCapture(["--repository-root", root, "map", "--check", "--json"]);
+    // Pinned: the map was generated at 2026-06-23, and freshness now includes a
+    // 30-day age limit, so checking with the wall clock would correctly report
+    // stale and say nothing about the fingerprint comparison under test.
+    const check = await runCliCapture([
+      "--repository-root", root, "map", "--check", "--created-at", "2026-06-23T12:05:00.000Z", "--json"
+    ]);
     assert.equal(check.exitCode, 0, check.stderr);
     const checkPayload = parseJsonOutput(check);
     assert.equal(checkPayload.status, "fresh");
@@ -107,13 +112,19 @@ test("map refresh, check, and query produce deterministic codebase artifacts", a
     assert.equal(missingScope.exitCode, 1);
     const missingScopePayload = parseJsonOutput(missingScope);
     assert.equal(missingScopePayload.status, "usage_error");
-    assert.match(missingScopePayload.diagnostics[0].message, /Unable to check codebase map/);
+    assert.match(missingScopePayload.diagnostics[0].message, /Unable to read the codebase map/);
 
     const query = await runCliCapture(["--repository-root", root, "map", "--query", "resolveAsset", "--json"]);
     assert.equal(query.exitCode, 0, query.stderr);
     const queryPayload = parseJsonOutput(query);
     assert.equal(queryPayload.status, "completed");
     assert.equal(queryPayload.matches[0].path, "src/asset-service.ts");
+
+    // Neither a check nor a query is a change, so neither leaves a run record.
+    // getLatestCodebaseMap scans the newest twenty map runs to find the map, so
+    // recording reads evicted the refresh that produced it.
+    const mapRuns = await readdir(path.join(root, ".legion", "project", "workflow", "map"));
+    assert.equal(mapRuns.length, 1, `expected only the refresh to be recorded, found ${mapRuns.join(", ")}`);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
