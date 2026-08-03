@@ -19,9 +19,10 @@ skills/execution-tracker/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+
 </context>
 
 <process>
@@ -38,7 +39,7 @@ skills/execution-tracker/SKILL.md
    - `skills/ship-pipeline/SKILL.md` always loaded
 
 1. CHECK PROJECT EXISTS
-   - Attempt to read .planning/PROJECT.md
+   - Run `legion status --json` for project context.
    - If not found:
      Display:
      "No Legion project found in this directory.
@@ -47,8 +48,8 @@ skills/execution-tracker/SKILL.md
 
 2. DETERMINE SHIP SCOPE
    - Read $ARGUMENTS for `--phase N`
-   - Read .planning/STATE.md to determine current phase and status
-   - Read .planning/ROADMAP.md to extract phase list with progress
+   - `workflowState.stage` from `legion status --json` determines current phase and status
+   - `legion validate --json` reports requirement coverage; `legion ship --json` reports the derived gate set
 
    **If `--phase N` provided**:
    - Verify phase N exists in ROADMAP.md
@@ -69,12 +70,12 @@ skills/execution-tracker/SKILL.md
    Run ship-pipeline Section 1 quality gate checks. Each check must pass before proceeding:
 
    a. **Build completeness**: All plans in scope have SUMMARY.md files
-      - Glob for .planning/phases/phase-{N}/PLAN-*.md — count plans
+      - `legion status --json` reports the current change and its task count
       - Check each plan has a corresponding entry in SUMMARY.md completed tasks
       - If incomplete: "GATE FAIL: {count} plans missing build output. Run `/legion:build` to complete."
 
    b. **Review status**: REVIEW.md exists with passing status or no unresolved blockers
-      - Read .planning/phases/phase-{N}/REVIEW.md
+      - `legion review --json` reports the review decisions the CLI recorded
       - Check for passing status (no open blockers)
       - If no REVIEW.md: "GATE FAIL: No review found. Run `/legion:review` before shipping."
       - If blockers exist: "GATE FAIL: {count} unresolved blockers in review. Resolve before shipping."
@@ -242,8 +243,8 @@ skills/execution-tracker/SKILL.md
       - Reference PR URL if created
    c. Update ROADMAP.md:
       - Mark phase as "Shipped" in Progress table
-   d. Record outcome to memory (if .planning/memory/ exists):
-      - Append to .planning/memory/OUTCOMES.md:
+   d. Record the outcome as durable learning:
+      - `legion learn "<outcome>" --type pattern --tags ship --summary "<one line>"`:
         ```
         ## Phase {N} — Shipped {date}
         task_type: ship
@@ -254,7 +255,7 @@ skills/execution-tracker/SKILL.md
         ```
    e. Create git commit for state updates:
       ```
-      git add .planning/STATE.md .planning/ROADMAP.md
+      git add {only the files the ship changed — never .legion/ control artifacts}
       git commit -m "chore(legion): ship phase {N} — {phase_name}
 
       All quality gates passed. {plan_count} plans shipped.

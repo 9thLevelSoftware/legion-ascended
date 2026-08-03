@@ -36,18 +36,12 @@ const PLANNING_REFERENCE = /\.planning\//;
  * same change. A list that could grow would record the debt without bounding it.
  */
 export const PLANNING_ALLOWLIST = Object.freeze([
-  "advise",
   "agent",
-  "board",
-  "build",
-  "explore",
   "learn",
   "map",
   "milestone",
   "portfolio",
   "retro",
-  "review",
-  "ship",
   "validate"
 ]);
 

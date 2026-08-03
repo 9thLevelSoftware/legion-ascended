@@ -17,16 +17,17 @@ skills/cli-dispatch/SKILL.md
 </execution_context>
 
 <context>
-@.planning/STATE.md
-@.planning/ROADMAP.md
-@.planning/PROJECT.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+
 </context>
 
 <process>
 0. CONDITIONAL SKILL LOADING (context budget)
    Load optional skills only when prerequisites are present:
 
-   - `skills/workflow-common-memory/SKILL.md` only if `.planning/memory/` exists.
+   - `skills/workflow-common-memory/SKILL.md` only when `legion learn --list --json` reports recorded learning.
 
    - `skills/workflow-common-github/SKILL.md` only if `gh auth status` succeeds and a git remote exists.
 
@@ -52,9 +53,21 @@ skills/cli-dispatch/SKILL.md
    - If mode is `"review"`:
      Set topic to `"Current phase assessment"` if no topic was provided.
 
+<authority>
+The CLI records the decision. `legion council "<topic>" --json` writes the
+decision artifact and returns its path.
+
+What stays here is the panel: composing a user-confirmed slate, running three to
+five independent assessments with quorum, and tallying the votes including tie
+escalation. `legion council` invokes one generic guidance executor shared with
+`legion explore`, so driving the verb alone would collapse a deliberating board
+into a single opinion. Preserving the /legion:board name is necessary and not
+sufficient — the defining behaviour is the panel, not the label.
+</authority>
+
 ## Step 1: VALIDATE PROJECT STATE
 
-1. Attempt to read `.planning/STATE.md`
+1. Run `legion status --json` for workflow state
    - If file does not exist: output the following and stop:
      ```
      No active project found. Run /legion:start to initialize a project before
@@ -72,7 +85,7 @@ Follow board-of-directors skill Section 1 for the full composition protocol.
    Use the agent-registry recommendation engine to score agents against the topic:
    - Pass the topic string as the task description
    - Apply scoring: exact metadata match (3 pts), partial match (1 pt), division match (2 pts)
-   - Apply memory boost if `.planning/memory/OUTCOMES.md` exists
+   - Apply memory boost from `legion learn --recall <topic> --json` when it returns matches
    - Select top 5–7 candidates from diverse divisions as board candidates
 
 2. **Present Candidates**
@@ -216,7 +229,8 @@ Follow board-of-directors skill Section 5.
 Follow board-of-directors skill Section 6.
 
 1. **Write Decision Record**
-   Create `.planning/board/{YYYY-MM-DD}-{topic-slug}.md`:
+   Record the decision with `legion council "<topic>" --json`. The CLI writes the decision
+   artifact and returns its path; the deliberation below is what produces the content:
    ```markdown
    # Board Decision: {topic}
 
@@ -244,7 +258,7 @@ Follow board-of-directors skill Section 6.
 
 2. **Commit Decision Record**
    ```
-   git add .planning/board/{filename}
+   git add {the decision artifact legion council reported}
    git commit -m "chore(board): record governance decision — {topic-slug}
 
    Outcome: {outcome}
@@ -255,7 +269,7 @@ Follow board-of-directors skill Section 6.
    ```
 
 3. **Display Confirmation**
-   "Board decision recorded at `.planning/board/{filename}`"
+   "Board decision recorded at {the path legion council reported}"
 
 ## Step 4b: IF REVIEW MODE — QUICK SUMMARY
 

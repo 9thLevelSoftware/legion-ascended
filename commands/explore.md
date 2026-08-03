@@ -17,31 +17,46 @@ skills/polymath-engine/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md (if exists)
-@.planning/ROADMAP.md (if exists)
-@.planning/STATE.md (if exists)
-@.planning/CODEBASE.md (if exists)
-@.planning/codebase/index.jsonl (if exists)
-@.planning/explorations/ (if exists)
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+    legion map --json
+    legion status --json
+
+Recorded explorations are listed by `legion status --json` under
+`guidance.latestRuns`.
 </context>
+
+<authority>
+The CLI owns the recorded artifact. `legion explore "<topic>" --json` writes the
+design document and the typed exploration, marks it exploratory so nothing
+downstream treats it as a requirement, and returns their paths.
+
+What stays here is the conversation: the entry-path choice, the bounded research
+pass, the clarifying interview, and the approach comparison. That is the whole
+value of this command — the verb runs one pass against fixed sections and shares
+that implementation with `legion council`, so rendering its payload would
+replace a design discussion with a single artifact. Exploration is the one step
+where wide latitude is correct, because nothing it produces is authoritative.
+</authority>
 
 <process>
 1. PRE-FLIGHT CONTEXT INSPECTION
    - Read existing Legion state if present.
-   - If `.planning/CODEBASE.md` or `.planning/codebase/index.jsonl` exists, use it to understand the current project before asking questions.
-   - Look for recent `.planning/explorations/*.md` design documents and offer to resume the latest one or start a new exploration via AskUserQuestion.
+   - If `legion map --json` reports a map that is not `absent`, query it with `legion map --query <term> --json` to understand the current project before asking questions.
+   - Look for recent explorations in `legion status --json` under `guidance.latestRuns` and offer to resume the latest one or start a new exploration via AskUserQuestion.
    - Do not treat an existing project as a reason to cancel. Existing project context informs the design discussion.
 
 2. CAPTURE THE INITIAL ASK
    - Use AskUserQuestion for the entry path:
      - "Start from a fresh idea" — opens one scoped free-text capture for the raw idea.
-     - "Start from an existing exploration" — resume the latest or selected `.planning/explorations/*.md`.
+     - "Start from an existing exploration" — resume the latest or selected recorded exploration.
      - "Start from project context" — derive exploration candidates from PROJECT/ROADMAP/CODEBASE and ask the user to choose one.
    - The raw idea capture is the only default open-ended input. After that, use focused, bounded choices unless the user explicitly selects an option that opens a scoped free-text correction.
 
 3. RESEARCH PASS
    - Research before clarifying:
-     - Local context: PROJECT/ROADMAP/STATE, CODEBASE.md, `.planning/codebase/index.jsonl`, README/docs, relevant source paths.
+     - Local context: `legion status --json`, `legion map --query <term> --json`, README/docs, relevant source paths.
      - Web/domain context: use available web research tools or documented web-research skills when the idea depends on current libraries, APIs, market conventions, regulations, or external products.
    - Keep research bounded. If research cannot be completed quickly, document the gap and ask the user whether to proceed with assumptions, narrow scope, or park.
    - Record research as facts, inferences, and assumptions separately.
@@ -69,8 +84,8 @@ skills/polymath-engine/SKILL.md
    - Ask the user to choose, refine, or keep comparing via AskUserQuestion.
 
 6. WRITE THE DESIGN DOCUMENT
-   - Save the final design to `.planning/explorations/YYYY-MM-DD-<slug>-design.md`.
-   - Create `.planning/explorations/` if needed.
+   - Record the design through `legion explore "<topic>" --json`. The CLI writes the design
+     document and the typed exploration, and returns their paths; do not write them yourself.
    - Document structure:
      ```markdown
      # Design Exploration — {title}
@@ -130,11 +145,11 @@ skills/polymath-engine/SKILL.md
 - Do not automatically invoke `/legion:start`.
 - Do not skip local context inspection before questions.
 - Do not ask broad open-ended questions after the initial scoped idea capture.
-- Do not save new exploration docs at `.planning/exploration-*.md`; new docs belong under `.planning/explorations/`.
+- Do not write exploration artifacts directly; `legion explore` owns them.
 </anti_patterns>
 
 <completion_gate>
-- A design document is saved under `.planning/explorations/`.
+- `legion explore` reports the design document and typed exploration it wrote.
 - The document includes research, decisions, alternatives, MVP scope, technical direction, and open questions.
 - The final user decision is explicit: start, keep discussing, or park.
 - If start is chosen, the handoff command is `/legion:start <design-doc-path>`.
