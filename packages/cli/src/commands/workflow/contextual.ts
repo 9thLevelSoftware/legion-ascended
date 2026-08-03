@@ -18,7 +18,10 @@ import {
   currentCodebaseFingerprint,
   getLatestCodebaseMap,
   queryCodebaseMap,
-  refreshCodebaseMap
+  collectMapSource,
+  refreshCodebaseMap,
+  resolveMapState,
+  type MapState
 } from "../../workflow/codebase-map.js";
 import { writeProjectTextFile } from "../../workflow/executor/index.js";
 import { parseResultFromText } from "../../workflow/executor/result.js";
@@ -275,12 +278,45 @@ async function handleMapWorkflow(context: CliContext): Promise<CliResult> {
 
   if (check) return mapCheck(context, scope);
   if (query !== undefined) return mapQuery(context, query);
-  return mapRefresh(context, scope);
+  if (refresh) return mapRefresh(context, scope);
+  // A bare `legion map` walked the repository and overwrote the artifact set
+  // with no prompt and no confirmation. The command it backs summarizes the
+  // current dataset and offers a refresh, so the destructive path now requires
+  // asking for it by name.
+  return mapSummary(context, scope);
 }
 
 async function mapRefresh(context: CliContext, scope: string | undefined): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+
+  // Collected before the run directory is claimed, so a refusal leaves nothing
+  // behind, and collected once, so the decision and the artifacts describe the
+  // same snapshot.
+  let source: Awaited<ReturnType<typeof collectMapSource>>;
+  try {
+    source = await collectMapSource({ repositoryRoot: context.repositoryRoot, ...(scope === undefined ? {} : { scope }) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return usageError(`Unable to refresh codebase map. ${message}`);
+  }
+  if (source.files.length === 0) {
+    const emptyAction = nextAction("legion map --refresh --scope <path>", "Point the map at a path that contains source files.");
+    return failure(
+      {
+        ok: false,
+        status: "absent",
+        workflow: "map",
+        mode: "refresh",
+        scope: source.scope,
+        sourceFileCount: 0,
+        nextAction: emptyAction,
+        diagnostics: [{ code: "map_no_source", message: `No source files were detected under ${source.scope}.` }]
+      },
+      [`No source files were detected under ${source.scope}. Nothing was written.`, renderNextAction(emptyAction)].join("\n")
+    );
+  }
+
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "map",
@@ -291,7 +327,8 @@ async function mapRefresh(context: CliContext, scope: string | undefined): Promi
     const artifacts = await refreshCodebaseMap({
       repositoryRoot: context.repositoryRoot,
       paths,
-      ...(scope === undefined ? {} : { scope })
+      scope: source.scope,
+      files: source.files
     });
     const action = nextAction("legion plan 1", "Use refreshed map context when planning the next change.");
     await writeGuidanceRun({
@@ -336,57 +373,61 @@ async function mapRefresh(context: CliContext, scope: string | undefined): Promi
   }
 }
 
+
+function mapStatePayload(state: MapState, mode: "check" | "summary") {
+  return {
+    ok: true,
+    status: state.freshness,
+    workflow: "map",
+    mode,
+    scope: state.scope,
+    sourceFingerprint: state.sourceFingerprint,
+    sourceFileCount: state.sourceFileCount,
+    latestSourceFingerprint: state.latestSourceFingerprint,
+    generatedAt: state.generatedAt,
+    diagnostics: []
+  };
+}
+
+function mapStateAction(state: MapState) {
+  return state.freshness === "fresh"
+    ? nextAction("legion plan 1", "The codebase map is fresh enough for planning.")
+    : nextAction("legion map --refresh", state.reason);
+}
+
 async function mapCheck(context: CliContext, scope: string | undefined): Promise<CliResult> {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  const paths = await createGuidanceRunPaths({
-    repositoryRoot: context.repositoryRoot,
-    workflow: "map",
-    slugSource: "check",
-    createdAt
-  });
-  const latest = await getLatestCodebaseMap(context.repositoryRoot);
-  let current: Awaited<ReturnType<typeof currentCodebaseFingerprint>>;
-  try {
-    current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...(scope === undefined ? {} : { scope }) });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return usageError(`Unable to check codebase map. ${message}`);
-  }
-  const fresh = latest !== undefined &&
-    latest.scope === current.scope &&
-    latest.sourceFingerprint === current.sourceFingerprint;
-  const action = fresh
-    ? nextAction("legion plan 1", "The codebase map is fresh enough for planning.")
-    : nextAction("legion map --refresh", "Refresh the codebase map before relying on mapped context.");
-  await writeGuidanceRun({
-    repositoryRoot: context.repositoryRoot,
-    paths,
-    status: fresh ? "completed" : "stale",
-    runInput: { mode: "check", scope: current.scope },
-    outputs: {
-      currentSourceFingerprint: current.sourceFingerprint,
-      latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-      sourceFileCount: current.sourceFileCount
-    },
-    nextAction: action
-  });
+  const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
+  if ("error" in state) return usageError(state.error);
+
+  // No guidance run. `--check` compares two fingerprints and writes nothing the
+  // caller asked to change, and recording it did active harm:
+  // `getLatestCodebaseMap` finds the current map by scanning only the newest 20
+  // map runs, so twenty checks evicted the refresh that produced the map and the
+  // CLI then reported that none existed. Reads destroyed the ability to find
+  // what they read.
+  const action = mapStateAction(state);
   return success(
-    {
-      ok: true,
-      status: fresh ? "fresh" : "stale",
-      workflow: "map",
-      mode: "check",
-      runId: paths.runId,
-      artifactPath: paths.workflowRunArtifactPath,
-      scope: current.scope,
-      sourceFingerprint: current.sourceFingerprint,
-      latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-      nextAction: action,
-      diagnostics: []
-    },
+    { ...mapStatePayload(state, "check"), nextAction: action },
+    [`Codebase map: ${state.freshness}. ${state.reason}`, renderNextAction(action)].join("\n")
+  );
+}
+
+/** A read-only summary, which is what a bare `legion map` now does. */
+async function mapSummary(context: CliContext, scope: string | undefined): Promise<CliResult> {
+  const createdAt = guidanceCreatedAt(context);
+  if (typeof createdAt !== "string") return createdAt;
+  const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
+  if ("error" in state) return usageError(state.error);
+
+  const action = mapStateAction(state);
+  return success(
+    { ...mapStatePayload(state, "summary"), nextAction: action },
     [
-      fresh ? "Codebase map is fresh." : "Codebase map is stale or missing.",
+      `Codebase map: ${state.freshness}. ${state.reason}`,
+      `Scope: ${state.scope}. Source files: ${state.sourceFileCount}.`,
+      state.generatedAt === null ? "Never generated." : `Generated: ${state.generatedAt}.`,
       renderNextAction(action)
     ].join("\n")
   );
@@ -410,37 +451,18 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
       ["Map query is blocked.", renderNextAction(action)].join("\n")
     );
   }
-  const paths = await createGuidanceRunPaths({
-    repositoryRoot: context.repositoryRoot,
-    workflow: "map",
-    slugSource: `query ${query}`,
-    createdAt
-  });
   const matches = queryCodebaseMap(latest, query);
-  const queryArtifactPath = guidanceArtifactPath(paths, "query-results.json");
-  await writeProjectTextFile({
-    repositoryRoot: context.repositoryRoot,
-    artifactPath: queryArtifactPath,
-    text: stableProtocolJson({ query, matches })
-  });
   const action = nextAction("legion status", "Use the query result as context for the next workflow action.");
-  await writeGuidanceRun({
-    repositoryRoot: context.repositoryRoot,
-    paths,
-    status: "completed",
-    runInput: { mode: "query", query },
-    outputs: { queryArtifactPath, matchCount: matches.length },
-    nextAction: action
-  });
+  // A search over a stored map, writing nothing. Like `--check`, recording it
+  // pushed the run that produced the map out of the twenty-run window that
+  // `getLatestCodebaseMap` scans.
   return success(
     {
       ok: true,
       status: "completed",
       workflow: "map",
       mode: "query",
-      runId: paths.runId,
-      artifactPath: paths.workflowRunArtifactPath,
-      queryArtifactPath,
+      query,
       matches,
       nextAction: action,
       diagnostics: []
@@ -448,8 +470,11 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
     [
       `Map query returned ${matches.length} matches.`,
       ...matches.slice(0, 5).map((match) => `- ${match.path}: ${match.summary}`),
+      // The index is a lexical score over generated summaries, so acting on it
+      // without opening the file is how a caller edits the wrong one.
+      matches.length === 0 ? "" : "Read the matched files before acting on them; the index ranks, it does not confirm.",
       renderNextAction(action)
-    ].join("\n")
+    ].filter((line) => line.length > 0).join("\n")
   );
 }
 

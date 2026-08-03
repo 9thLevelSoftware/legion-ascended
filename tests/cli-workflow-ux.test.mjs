@@ -12,6 +12,12 @@ async function tempRepo() {
 }
 
 async function initializeAssetMapperProject(root) {
+  // A source file, so `legion map --refresh` has something to map. Refreshing an
+  // empty tree used to write five artifacts describing nothing and report
+  // success; it now refuses, so a fixture with no source is no longer a valid
+  // stand-in for a project.
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "resolve-asset.ts"), "export function resolveAsset() {\n  return 1;\n}\n");
   const result = await runCliCapture([
     "--repository-root", root,
     "start",
@@ -1846,7 +1852,7 @@ for (const recordCase of guidanceCommandCases) {
   });
 }
 
-test("legion map --check reports stale state and writes a guidance run", async () => {
+test("legion map --check reports freshness and writes nothing", async () => {
   const root = await tempRepo();
   try {
     await initializeAssetMapperProject(root);
@@ -1855,11 +1861,14 @@ test("legion map --check reports stale state and writes a guidance run", async (
     assert.equal(result.exitCode, 0, result.stderr);
     const payload = parseJsonOutput(result);
     assert.equal(payload.ok, true);
-    assert.equal(payload.status, "stale");
+    assert.equal(payload.status, "absent", "no map has been generated in this fixture");
     assert.equal(payload.workflow, "map");
     assert.equal(payload.mode, "check");
     assert.equal(payload.nextAction.command, "legion map --refresh");
-    await assertFileExists(path.join(root, ...payload.artifactPath.split("/")));
+    // A check compares two fingerprints. Recording it evicted the refresh that
+    // produced the map from the twenty-run window getLatestCodebaseMap scans.
+    assert.equal(Object.hasOwn(payload, "artifactPath"), false, "a check must not write a run record");
+    await assertPathMissing(path.join(root, ".legion", "project", "workflow", "map"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

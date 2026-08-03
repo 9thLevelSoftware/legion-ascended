@@ -4,7 +4,7 @@ import {
   type CliContext,
   type CliResult
 } from "../../runtime.js";
-import { currentCodebaseFingerprint, getLatestCodebaseMap } from "../../workflow/codebase-map.js";
+import { getLatestCodebaseMap, resolveMapState, type MapState } from "../../workflow/codebase-map.js";
 import { latestGuidanceRuns } from "../../workflow/guidance-run.js";
 import { nextAction, renderNextAction, type NextAction } from "../../workflow/render.js";
 import {
@@ -140,27 +140,39 @@ export function refineNextAction(input: {
   return resolved;
 }
 
+/**
+ * Map freshness, resolved by the same rule `legion map` uses.
+ *
+ * This had its own comparison — fingerprint only, against the stored scope — so
+ * once `legion map` gained the age limit and the scope check, the two commands
+ * disagreed about the same map: `map --check` reported stale for a map more than
+ * thirty days old and `status` reported it fresh. A user reading both is told to
+ * refresh and told not to bother.
+ */
 async function resolveMapStatus(context: CliContext): Promise<{
-  readonly status: "missing" | "fresh" | "stale" | "unknown";
+  readonly status: MapState["freshness"] | "unknown";
+  readonly reason?: string;
   readonly sourceFileCount?: number;
   readonly scope?: string;
   readonly sourceFingerprint?: string;
 }> {
   const latest = await getLatestCodebaseMap(context.repositoryRoot);
-  if (latest === undefined) return { status: "missing" };
-  try {
-    const current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, scope: latest.scope });
-    return {
-      status: current.sourceFingerprint === latest.sourceFingerprint ? "fresh" : "stale",
-      sourceFileCount: current.sourceFileCount,
-      scope: latest.scope,
-      sourceFingerprint: latest.sourceFingerprint
-    };
-  } catch {
+  const now = new Date().toISOString();
+  // Scoped to the stored map's own scope, so status reports on the map that
+  // exists rather than comparing it against a scope nobody asked for.
+  const state = await resolveMapState(context.repositoryRoot, latest?.scope, now);
+  if ("error" in state) {
     return {
       status: "unknown",
-      scope: latest.scope,
-      sourceFingerprint: latest.sourceFingerprint
+      reason: state.error,
+      ...(latest === undefined ? {} : { scope: latest.scope, sourceFingerprint: latest.sourceFingerprint })
     };
   }
+  return {
+    status: state.freshness,
+    reason: state.reason,
+    sourceFileCount: state.sourceFileCount,
+    scope: state.scope,
+    ...(state.latestSourceFingerprint === null ? {} : { sourceFingerprint: state.latestSourceFingerprint })
+  };
 }

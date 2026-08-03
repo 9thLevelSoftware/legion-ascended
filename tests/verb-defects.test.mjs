@@ -163,3 +163,91 @@ test("an unscoped retro still runs", async (t) => {
   assert.equal(payload.workflow, "retro");
   assert.ok(payload.markdownArtifactPath, "an unscoped retro still writes its artifact");
 });
+
+test("a bare legion map summarizes and writes nothing", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+  const before = await guidanceRunCount(root);
+
+  // A bare `legion map` walked the repository and overwrote the artifact set
+  // with no prompt. The destructive path now has to be asked for by name.
+  const result = await run("map", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.mode, "summary");
+  assert.equal(payload.status, "fresh");
+  assert.equal(await guidanceRunCount(root), before, "a summary must not record a run");
+});
+
+test("legion map --check and --query leave no run records", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+  const afterRefresh = await guidanceRunCount(root);
+
+  for (let index = 0; index < 3; index += 1) {
+    assert.equal((await run("map", "--check", "--json")).exitCode, 0);
+    assert.equal((await run("map", "--query", "resolveAsset", "--json")).exitCode, 0);
+  }
+
+  // getLatestCodebaseMap finds the map by scanning the newest twenty map runs,
+  // so recording reads evicted the refresh that produced it and the CLI then
+  // reported no map existed. Reads destroyed the ability to find what they read.
+  assert.equal(await guidanceRunCount(root), afterRefresh, "reads must not record runs");
+  assert.equal(parseJsonOutput(await run("map", "--check", "--json")).status, "fresh");
+});
+
+test("legion map distinguishes absent from stale", async (t) => {
+  const { root, run } = await scratchRepo(t);
+
+  // A project that never ran map reported the same status as one whose
+  // fingerprint had moved, because freshness was a single boolean.
+  assert.equal(parseJsonOutput(await run("map", "--check", "--json")).status, "absent");
+
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+  assert.equal(parseJsonOutput(await run("map", "--check", "--json")).status, "fresh");
+
+  await writeFile(path.join(root, "src", "added.ts"), "export const added = 2;\n");
+  assert.equal(parseJsonOutput(await run("map", "--check", "--json")).status, "stale");
+});
+
+test("a map older than the age limit is stale even when nothing changed", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh", "--created-at", "2026-01-01T00:00:00.000Z")).exitCode, 0);
+
+  const same = await run("map", "--check", "--created-at", "2026-01-10T00:00:00.000Z", "--json");
+  assert.equal(parseJsonOutput(same).status, "fresh", "unchanged and recent");
+
+  // The fingerprint still matches; the schema and the reader have moved on.
+  const later = await run("map", "--check", "--created-at", "2026-03-01T00:00:00.000Z", "--json");
+  assert.equal(parseJsonOutput(later).status, "stale");
+  assert.match(parseJsonOutput(later).nextAction.reason, /30-day/);
+});
+
+test("refreshing a tree with no source files refuses instead of mapping nothing", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "legion-empty-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  execFileSync("git", ["-C", root, "init", "--initial-branch=main"], { stdio: ["ignore", "pipe", "ignore"] });
+
+  // Previously this wrote all five artifacts over an empty file set, fingerprinted
+  // the empty string, and reported "refreshed for 0 source files" as a success —
+  // a map of nothing that every later read would trust.
+  const result = await runCliCapture(["--repository-root", root, "map", "--refresh", "--json"]);
+  assert.notEqual(result.exitCode, 0);
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.status, "absent");
+  assert.ok(payload.diagnostics.some((entry) => entry.code === "map_no_source"));
+  assert.equal(await guidanceRunCount(root), 0, "a refusal must not leave a run directory behind");
+});
+
+test("legion status and legion map agree about the same map", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+
+  // status had its own comparison — fingerprint only — so once map gained the
+  // age limit and the scope check the two commands disagreed about one map, and
+  // a user reading both was told to refresh and told not to bother.
+  const checked = parseJsonOutput(await run("map", "--check", "--json")).status;
+  const reported = parseJsonOutput(await run("status", "--json")).map.status;
+  assert.equal(reported, checked);
+  assert.equal(reported, "fresh");
+});
