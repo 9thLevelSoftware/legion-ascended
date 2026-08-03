@@ -35,10 +35,37 @@ export interface ArtifactSourceLocation {
   readonly column?: number;
 }
 
+/**
+ * How much a diagnostic should cost.
+ *
+ * Absent means `"error"`. Optional rather than required because making it
+ * required would touch every `diagnosticForPath` call site across the archive,
+ * change, evidence, oracle, review, revision, spec, task-run and taskgraph
+ * services, forcing a severity decision at a dozen places that have never had a
+ * warning to express. Silence keeps meaning what it has always meant.
+ */
+export type ArtifactDiagnosticSeverity = "error" | "warning";
+
 export interface ArtifactDiagnostic {
   readonly code: string;
   readonly message: string;
   readonly source: ArtifactSourceLocation;
+  readonly severity?: ArtifactDiagnosticSeverity;
+}
+
+/**
+ * Whether a diagnostic should stop the thing that produced it.
+ *
+ * Takes `code` as well as `severity` so the parameter is not a weak type: with
+ * every property optional, TypeScript rejects any diagnostic that has not opted
+ * into severity — which is every diagnostic in the tree, and precisely the ones
+ * this must accept and treat as blocking.
+ */
+export function isBlockingDiagnostic(diagnostic: {
+  readonly code: string;
+  readonly severity?: ArtifactDiagnosticSeverity;
+}): boolean {
+  return diagnostic.severity !== "warning";
 }
 
 export interface ResolvedProjectArtifactPath {

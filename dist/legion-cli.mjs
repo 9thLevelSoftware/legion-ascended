@@ -26119,6 +26119,9 @@ var PROJECT_ARTIFACT_PATHS = Object.freeze({
   changes: ".legion/project/changes",
   adr: ".legion/project/adr"
 });
+function isBlockingDiagnostic(diagnostic3) {
+  return diagnostic3.severity !== "warning";
+}
 var ArtifactPathError = class extends Error {
   constructor(message) {
     super(message);
@@ -27194,10 +27197,17 @@ async function validateVarIgnore(repositoryRoot) {
       throw error51;
   }
   return [
-    pathDiagnostic({
-      code: "var_not_ignored",
-      message: ".legion/var/ must be ignored so operational files do not become committed intent."
-    })
+    {
+      ...pathDiagnostic({
+        code: "var_not_ignored",
+        message: ".legion/var/ must be ignored so operational files do not become committed intent."
+      }),
+      // Repository hygiene, not a corrupted artifact, and mechanically fixable
+      // by appending one line. As an error it stopped more than validate:
+      // `resolveWorkflowState` reads the same result, so a missing .gitignore
+      // entry reported the whole project `blocked` and halted planning.
+      severity: "warning"
+    }
   ];
 }
 async function validateProject(input) {
@@ -27223,9 +27233,9 @@ async function validateProject(input) {
     }));
   }
   diagnostics.push(...await validateVarIgnore(input.repositoryRoot));
-  if (diagnostics.length > 0)
+  if (diagnostics.some(isBlockingDiagnostic))
     return failure2("invalid", diagnostics);
-  return { ok: true, diagnostics: [] };
+  return { ok: true, diagnostics };
 }
 async function updateConstitution(input) {
   const loaded = await loadProject({ repositoryRoot: input.repositoryRoot });
@@ -45096,29 +45106,37 @@ async function handleValidateCommand(context) {
   const drift = await requirementSetDiagnostics(context.repositoryRoot);
   const trace = await checkTraceability(context.repositoryRoot);
   const settings = await checkSettings(context.repositoryRoot);
-  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
-  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0 && settings.diagnostics.length === 0;
+  const all = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  const diagnostics = all.filter(isBlockingDiagnostic);
+  const demoted = all.filter((entry) => !isBlockingDiagnostic(entry));
+  const ok = diagnostics.length === 0;
   const payload = {
     ...result,
     ok,
     diagnostics,
     coverage: trace.coverage,
     settings: { status: settings.status, path: settings.path },
-    status: failureStatus(result, drift.length, trace.diagnostics.length, settings)
+    status: validateStatus(result, drift, trace.diagnostics, settings, diagnostics, demoted.length + settings.warnings.length)
   };
   const base = ok ? success2(payload, `Project is valid.
 ${renderCoverage(trace.coverage)}`) : failure(payload, validationFailureHuman(diagnostics));
-  return applyWarnings(base, settings.warnings);
+  return applyWarnings(base, [...demoted.map(asWarning), ...settings.warnings]);
+}
+function asWarning(diagnostic3) {
+  return { code: diagnostic3.code, message: diagnostic3.message };
 }
 function applyWarnings(result, warnings) {
   return warnings.reduce((carried, warning) => withWarning(carried, warning), result);
 }
-function failureStatus(result, driftCount, traceCount, settings) {
-  if (!result.ok) return result.status ?? "invalid";
-  if (traceCount > 0) return "traceability_broken";
-  if (driftCount > 0) return "requirement_set_drift";
-  if (settings.diagnostics.length > 0) return "settings_unparseable";
-  return "valid";
+function validateStatus(result, drift, traceDiagnostics, settings, blocking, warningCount) {
+  if (blocking.length > 0) {
+    if (!result.ok) return result.status ?? "invalid";
+    if (traceDiagnostics.length > 0) return "traceability_broken";
+    if (drift.length > 0) return "requirement_set_drift";
+    if (settings.diagnostics.length > 0) return "settings_unparseable";
+    return "invalid";
+  }
+  return warningCount > 0 ? "valid_with_warnings" : "valid";
 }
 function renderCoverage(coverage) {
   if (coverage.requirements === 0) return "No requirement set; nothing to trace.";
@@ -45168,18 +45186,21 @@ async function handleDoctorCommand(context) {
     operationalStore: await pathCheck(context.repositoryRoot, ".legion/var"),
     workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
-  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0 && settings.diagnostics.length === 0;
-  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  const all = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  const diagnostics = all.filter(isBlockingDiagnostic);
+  const demoted = all.filter((entry) => !isBlockingDiagnostic(entry));
+  const shallow = [checks.operationalStore, checks.workerBundles].filter((check2) => !check2.ok).map((check2) => ({ code: `shallow_path_${check2.status}`, message: check2.message ?? `${check2.path} is ${check2.status}.` }));
+  const ok = diagnostics.length === 0;
   const payload = {
     ...result,
     ok,
     diagnostics,
-    status: failureStatus(result, drift.length, trace.diagnostics.length, settings),
+    status: validateStatus(result, drift, trace.diagnostics, settings, diagnostics, demoted.length + settings.warnings.length + shallow.length),
     checks
   };
   const base = ok ? success2(payload, doctorHuman(checks)) : failure(payload, `Doctor found project validation issues.
 ${renderDiagnostics(diagnostics)}`);
-  return applyWarnings(base, settings.warnings);
+  return applyWarnings(base, [...demoted.map(asWarning), ...settings.warnings, ...shallow]);
 }
 function validationFailureHuman(diagnostics) {
   const rendered = renderDiagnostics(diagnostics);

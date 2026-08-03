@@ -260,7 +260,7 @@
       ],
       "cliGaps": [
         {
-          "gap": "No WARN severity. The command has six scoring rules that produce a warning rather than a failure; the verb collapses every finding into one failing bucket. Its only non-failing report is coverage.unplanned, a single documented exemption.",
+          "gap": "WARN severity exists: ArtifactDiagnostic carries an optional severity where absent means error, only blocking diagnostics decide ok, and warnings are reported through the existing warnings channel with status valid_with_warnings. var_not_ignored is the first demotion, and doctor's two shallow path checks are now reported rather than computed and dropped.",
           "disposition": "build-in-cli"
         },
         {

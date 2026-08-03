@@ -19,6 +19,7 @@ import {
   PROJECT_ARTIFACT_PATHS,
   artifactPathForRole,
   diagnosticForPath,
+  isBlockingDiagnostic,
   resolveProjectArtifactPath,
   type ArtifactDiagnostic
 } from "../paths.js";
@@ -111,7 +112,9 @@ export interface ProjectFailure {
 
 export type InitProjectResult = ProjectSuccess | ProjectFailure;
 export type LoadProjectResult = LoadedProjectSuccess | ProjectFailure;
-export type ValidateProjectResult = { readonly ok: true; readonly diagnostics: readonly [] } | ProjectFailure;
+export type ValidateProjectResult =
+  | { readonly ok: true; readonly diagnostics: readonly ArtifactDiagnostic[] }
+  | ProjectFailure;
 export type UpdateConstitutionResult = ProjectSuccess | ProjectFailure;
 
 function nowTimestamp(): UtcTimestamp {
@@ -634,10 +637,17 @@ async function validateVarIgnore(repositoryRoot: string): Promise<readonly Artif
   }
 
   return [
-    pathDiagnostic({
-      code: "var_not_ignored",
-      message: ".legion/var/ must be ignored so operational files do not become committed intent."
-    })
+    {
+      ...pathDiagnostic({
+        code: "var_not_ignored",
+        message: ".legion/var/ must be ignored so operational files do not become committed intent."
+      }),
+      // Repository hygiene, not a corrupted artifact, and mechanically fixable
+      // by appending one line. As an error it stopped more than validate:
+      // `resolveWorkflowState` reads the same result, so a missing .gitignore
+      // entry reported the whole project `blocked` and halted planning.
+      severity: "warning"
+    }
   ];
 }
 
@@ -671,8 +681,16 @@ export async function validateProject(input: ValidateProjectInput): Promise<Vali
 
   diagnostics.push(...(await validateVarIgnore(input.repositoryRoot)));
 
-  if (diagnostics.length > 0) return failure("invalid", diagnostics);
-  return { ok: true, diagnostics: [] };
+  // Only blocking diagnostics decide `ok`, but every diagnostic is returned
+  // either way. A warning that vanished from the payload when the project was
+  // otherwise valid would be a finding nothing could report.
+  //
+  // This is the read-time entrance. The two write gates that also call
+  // `validateConstitutionText` — `initProject` and `updateConstitution` — keep
+  // refusing on any diagnostic at all, deliberately: a project may be reported
+  // with a warning, but must never be written with one.
+  if (diagnostics.some(isBlockingDiagnostic)) return failure("invalid", diagnostics);
+  return { ok: true, diagnostics };
 }
 
 export async function updateConstitution(input: UpdateConstitutionInput): Promise<UpdateConstitutionResult> {

@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
-import { requirementSetIndexPath, verifyRequirementSet } from "@legion/artifacts";
+import { isBlockingDiagnostic, requirementSetIndexPath, verifyRequirementSet } from "@legion/artifacts";
 
 import {
   failure,
@@ -56,21 +56,31 @@ export async function handleValidateCommand(context: CliContext): Promise<CliRes
   // resolves to nothing looks exactly like one that resolves.
   const trace = await checkTraceability(context.repositoryRoot);
   const settings = await checkSettings(context.repositoryRoot);
-  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
-  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0 && settings.diagnostics.length === 0;
+  const all = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  // A warning is reported and does not fail. Without the split, every finding
+  // the command scores WARN would have become a hard CI failure the moment
+  // commands/validate.md was thinned onto this verb.
+  const diagnostics = all.filter(isBlockingDiagnostic);
+  const demoted = all.filter((entry) => !isBlockingDiagnostic(entry));
+  const ok = diagnostics.length === 0;
   const payload = {
     ...result,
     ok,
     diagnostics,
     coverage: trace.coverage,
     settings: { status: settings.status, path: settings.path },
-    status: failureStatus(result, drift.length, trace.diagnostics.length, settings)
+    status: validateStatus(result, drift, trace.diagnostics, settings, diagnostics, demoted.length + settings.warnings.length)
   };
 
   const base = ok
     ? success(payload, `Project is valid.\n${renderCoverage(trace.coverage)}`)
     : failure(payload, validationFailureHuman(diagnostics));
-  return applyWarnings(base, settings.warnings);
+  return applyWarnings(base, [...demoted.map(asWarning), ...settings.warnings]);
+}
+
+/** A demoted diagnostic, in the shape the warnings channel already carries. */
+function asWarning(diagnostic: { readonly code: string; readonly message: string }): CliWarning {
+  return { code: diagnostic.code, message: diagnostic.message };
 }
 
 function applyWarnings(result: CliResult, warnings: readonly CliWarning[]): CliResult {
@@ -87,19 +97,25 @@ function applyWarnings(result: CliResult, warnings: readonly CliWarning[]): CliR
  * because it is the more specific failure, and both remain in `diagnostics`
  * either way.
  */
-function failureStatus(
+function validateStatus(
   result: { readonly ok: boolean; readonly status?: string },
-  driftCount: number,
-  traceCount: number,
-  settings: SettingsCheck
+  drift: readonly unknown[],
+  traceDiagnostics: readonly unknown[],
+  settings: SettingsCheck,
+  blocking: readonly unknown[],
+  warningCount: number
 ): string {
-  if (!result.ok) return result.status ?? "invalid";
-  if (traceCount > 0) return "traceability_broken";
-  if (driftCount > 0) return "requirement_set_drift";
-  // Reported after the artifact failures, because a settings file that does not
-  // parse says nothing about whether the project's own state is sound.
-  if (settings.diagnostics.length > 0) return "settings_unparseable";
-  return "valid";
+  if (blocking.length > 0) {
+    if (!result.ok) return result.status ?? "invalid";
+    if (traceDiagnostics.length > 0) return "traceability_broken";
+    if (drift.length > 0) return "requirement_set_drift";
+    if (settings.diagnostics.length > 0) return "settings_unparseable";
+    return "invalid";
+  }
+  // The discriminator anything filtering on status needs, and the reason no exit
+  // code was added: a machine-readable label separates clean from clean-with-
+  // findings without a third exit value that every handler in the CLI shares.
+  return warningCount > 0 ? "valid_with_warnings" : "valid";
 }
 
 /**
@@ -172,20 +188,29 @@ export async function handleDoctorCommand(context: CliContext): Promise<CliResul
     workerBundles: await pathCheck(context.repositoryRoot, "bundles/index.json")
   };
 
-  const ok = result.ok && drift.length === 0 && trace.diagnostics.length === 0 && settings.diagnostics.length === 0;
-  const diagnostics = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  const all = [...result.diagnostics, ...drift, ...trace.diagnostics, ...settings.diagnostics];
+  const diagnostics = all.filter(isBlockingDiagnostic);
+  const demoted = all.filter((entry) => !isBlockingDiagnostic(entry));
+  // The two shallow path checks were computed and then dropped from `ok`, so a
+  // missing bundles/index.json produced no diagnostic at all and doctor reported
+  // healthy while holding the evidence that it was not. They are warnings now:
+  // reported, and still not fatal.
+  const shallow = [checks.operationalStore, checks.workerBundles]
+    .filter((check) => !check.ok)
+    .map((check) => ({ code: `shallow_path_${check.status}`, message: check.message ?? `${check.path} is ${check.status}.` }));
+  const ok = diagnostics.length === 0;
   const payload = {
     ...result,
     ok,
     diagnostics,
-    status: failureStatus(result, drift.length, trace.diagnostics.length, settings),
+    status: validateStatus(result, drift, trace.diagnostics, settings, diagnostics, demoted.length + settings.warnings.length + shallow.length),
     checks
   };
 
   const base = ok
     ? success(payload, doctorHuman(checks))
     : failure(payload, `Doctor found project validation issues.\n${renderDiagnostics(diagnostics)}`);
-  return applyWarnings(base, settings.warnings);
+  return applyWarnings(base, [...demoted.map(asWarning), ...settings.warnings, ...shallow]);
 }
 
 function validationFailureHuman(diagnostics: readonly unknown[]): string {

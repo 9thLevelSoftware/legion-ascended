@@ -204,8 +204,16 @@ test("doctor reports every settings finding validate reports", async (t) => {
   // Doctor must never report healthy what validate refuses, and must never be
   // silent about what validate warns on. Two validation entrances that disagree
   // teach operators to trust whichever one is currently passing.
+  //
+  // Containment rather than equality: doctor is a superset and also warns about
+  // its two shallow path checks, which validate does not perform.
   assert.equal(doctored.checks.settings.status, validated.settings.status);
-  assert.deepEqual(doctored.warnings, validated.warnings);
+  for (const warning of validated.warnings) {
+    assert.ok(
+      doctored.warnings.some((entry) => entry.code === warning.code && entry.message === warning.message),
+      `doctor is missing a warning validate reported: ${JSON.stringify(warning)}`
+    );
+  }
 });
 
 test("doctor fails wherever validate fails on settings", async (t) => {
@@ -312,3 +320,43 @@ function unwrapOptional(node) {
   if (Array.isArray(node.anyOf)) return node.anyOf.find((entry) => entry.type !== "null") ?? node;
   return node;
 }
+
+test("a warning is reported without failing, and names itself in the status", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  // `.legion/var/` not ignored is repository hygiene, mechanically fixable by
+  // appending one line. As a blocking diagnostic it did more than fail validate:
+  // resolveWorkflowState reads the same result, so a missing .gitignore entry
+  // reported the project blocked and stopped planning.
+  await writeFile(path.join(root, ".gitignore"), "node_modules\n");
+
+  const result = await run("validate", "--json");
+  assert.equal(result.exitCode, 0, "a warning must not fail the build");
+  const payload = parseJsonOutput(result);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.status, "valid_with_warnings");
+  assert.equal(payload.diagnostics.length, 0, "a warning does not belong in the blocking set");
+  assert.ok(payload.warnings.some((warning) => warning.code === "var_not_ignored"));
+});
+
+test("a warning does not block the workflow stage", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await writeFile(path.join(root, ".gitignore"), "node_modules\n");
+
+  const status = await run("status", "--json");
+  assert.equal(status.exitCode, 0, status.stderr);
+  assert.notEqual(parseJsonOutput(status).workflowState.stage, "blocked");
+});
+
+test("doctor reports its shallow path checks instead of holding them silently", async (t) => {
+  const { run } = await scratchRepo(t);
+  const payload = parseJsonOutput(await run("doctor", "--json"));
+
+  // Both checks were computed and then dropped from `ok`, so a missing
+  // bundles/index.json produced no diagnostic at all — doctor reported healthy
+  // while holding the evidence that it was not.
+  assert.equal(payload.checks.workerBundles.ok, false, "the fixture has no bundles/index.json");
+  assert.ok(
+    (payload.warnings ?? []).some((warning) => warning.message.includes("bundles/index.json")),
+    `expected a warning naming the missing bundle index, got ${JSON.stringify(payload.warnings)}`
+  );
+});
