@@ -19,8 +19,22 @@ skills/agent-registry/CATALOG.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+
 </context>
+
+<authority>
+The CLI records the advisory artifact. `legion advise "<topic>" --json` runs one
+read-only pass and writes it.
+
+What stays here is what no verb performs: selecting the advisor and injecting
+its personality, and the follow-up turns against that same advisor. `legion
+advise` selects no specialist and supports no second turn, so rendering its
+payload would replace a chosen expert and a multi-turn consultation with one
+generic artifact. The advisory dispatch stays read-only.
+</authority>
 
 <process>
 1. PARSE TOPIC
@@ -47,7 +61,7 @@ skills/agent-registry/CATALOG.md
    - Display: "Advisory topic: {topic}"
 
 2. LOAD PROJECT CONTEXT (optional)
-   - Attempt to read .planning/PROJECT.md
+   - Run `legion status --json` for project context.
    - If found: extract project name, description, tech stack, constraints, current state
      - This context helps the advisor give project-relevant recommendations
    - If not found: proceed without project context
@@ -185,7 +199,7 @@ skills/agent-registry/CATALOG.md
       - This allows a completely fresh advisory cycle
 
    c. If "End session":
-      - If .planning/memory/ directory exists:
+      - To record a durable lesson:
         Use adapter.ask_user:
         "Was this advisory session useful?"
         Options:
@@ -200,7 +214,7 @@ skills/agent-registry/CATALOG.md
           Options:
           - "Type your summary" -- "Your words will be recorded as a pattern"
           - "Auto-generate" -- "The advisor's main recommendation will be extracted"
-        - Record to .planning/memory/PATTERNS.md using the memory-manager format:
+        - Record it with `legion learn "<lesson>" --type pattern --tags <a,b> --summary "<one line>"`:
           - ID: PAT-{next_sequential}
           - Type: pattern
           - Tags: advisory, {agent_id}, {topic keywords}
@@ -208,7 +222,7 @@ skills/agent-registry/CATALOG.md
           - Full text: "Advisory from {agent_id} on {topic}: {condensed key recommendation}"
         - Display: "Takeaway recorded as {ID}. Run `/legion:learn --recall {topic}` to retrieve later."
 
-      - If .planning/memory/ directory does not exist:
+      - If the operator declines to record it:
         Display: "Advisory session ended. Run `/legion:advise <topic>` anytime for another consultation."
 
    Note: Advisory sessions do NOT update STATE.md, ROADMAP.md, or any project state.

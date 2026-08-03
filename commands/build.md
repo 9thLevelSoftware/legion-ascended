@@ -24,9 +24,10 @@ skills/intent-router/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+
 </context>
 
 ## Two-Wave Execution Mode
@@ -160,6 +161,18 @@ Examples:
 - `/legion:build --skip-frontend` — Backend-only implementation
 - `/legion:build --skip-frontend --skip-backend` — Invalid (error)
 
+<authority>
+The CLI owns verification, diff reconciliation, and the task verdict. `legion
+build --json` runs the declared verification, reconciles what changed against
+`scope.write`, `scope.forbidden` and `scope.budget`, and derives the verdict
+from what it observed rather than from what the executor reported.
+
+What stays here is the wave executor: the analysis dispatch and its architecture
+gate, the parallel Wave B streams, and the file-overlap safety check that
+serializes waves whose write scopes intersect. No verb performs any of it. Never
+assert a task passed; that is the CLI's finding to make.
+</authority>
+
 <process>
 DRY-RUN MODE (deterministic, no side effects)
    - If `$ARGUMENTS` contains `--dry-run`, DO NOT write files, spawn agents, open Teams, create Tasks, send messages, commit, or call external side-effecting integrations.
@@ -175,10 +188,10 @@ DRY-RUN MODE (deterministic, no side effects)
 0. CONDITIONAL SKILL LOADING (context budget)
    Load optional high-cost skills only when needed:
 
-   - `skills/workflow-common-memory/SKILL.md` only if `.planning/memory/` exists OR this run creates memory outcomes.
+   - `skills/workflow-common-memory/SKILL.md` only when `legion learn --list --json` reports recorded learning.
 
    - `skills/workflow-common-github/SKILL.md` only if `gh auth status` succeeds and a git remote exists.
-   - `skills/codebase-mapper/SKILL.md` only if `.planning/CODEBASE.md` exists or `.planning/codebase/index.jsonl` exists.
+   - `skills/codebase-mapper/SKILL.md` only when `legion map --json` reports a map that is not `absent`.
    If a condition is not met, skip that skill silently and continue.
 
 ## Step 0.5: INTENT DETECTION AND VALIDATION
@@ -250,12 +263,12 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
      - If status says "planned" or "pending": that's the target phase
      - If status says "executed" or "complete": error — "Phase {N} already executed. Run /legion:plan {N+1} for the next phase."
    - Validate: the phase number must exist in ROADMAP.md
-   - Check if the phase directory exists: .planning/phases/{NN}-{slug}/
+   - Check `legion status --json` for a planned change; `legion plan {N}` creates one if absent
    - If no plan files exist in the directory: error — "No plans found for Phase {N}. Run /legion:plan {N} first."
 
 2. DISCOVER PLANS
    Follow wave-executor skill Section 2 (Plan Discovery):
-   - Read the phase directory: .planning/phases/{NN}-{slug}/
+   - Read the taskgraph `legion status --json` names; the CLI owns the task contracts
    - Find all {NN}-{PP}-PLAN.md files (exclude CONTEXT.md and SUMMARY.md files)
    - Parse YAML frontmatter from each plan file:
      - wave: which execution wave this plan belongs to
@@ -296,7 +309,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
 4. EXECUTE WAVES
 
    **CODEBASE MAP CONTEXT** (optional — follows codebase-mapper Sections 6.4 and 18):
-   If `.planning/CODEBASE.md` exists, wave-executor Section 3, Step 3.5 will automatically
+   If `legion map --json` reports a map, wave-executor Section 3, Step 3.5 will automatically
    load map context (retrieved index chunks when available, conventions, dependency warnings,
    directory mappings, agent guidance, and risk areas) and inject it into each agent's
    execution prompt as a `## Codebase Context` block. No action needed here — this is
@@ -389,7 +402,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
         under a "## Auto-Remediation" section with what was fixed and the retry result
       - An agent that auto-remediated and succeeded is still "Complete" (not "Complete with Warnings")
       - An agent that escalated an ENVIRONMENT issue to BLOCKER is "Failed" for that task
-      - Write the plan summary file to .planning/phases/{NN}-{slug}/{NN}-{PP}-SUMMARY.md
+      - The CLI records task evidence; do not write summary files directly
         using the format defined in wave-executor Section 5, Step 3
       - Verify the summary file was written successfully
 
@@ -406,7 +419,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
       - If the plan failed: do NOT commit — leave changes unstaged for diagnosis
 
    g2. Record outcome in memory (optional — follows memory-manager Section 6)
-       If .planning/memory/OUTCOMES.md exists or .planning/memory/ directory can be created:
+       To record a durable outcome:
          Follow memory-manager Section 3 (Store Outcome):
          - Agent: the agent that executed this plan (from plan's agent assignment, or "autonomous" if autonomous: true)
          - Task Type: primary task type from the plan (match plan's tasks against agent-registry task type tags)
@@ -448,7 +461,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
 For intents with mode: "ad_hoc" (e.g., --just-harden):
 
 1. **Load Intent Template**
-   - Load: .planning/config/intent-teams.yaml
+   - Load the intent-team mapping from the installed bundle
    - Get: harden template (agents, domains, mode)
 
 2. **Resolve Team**
@@ -487,7 +500,7 @@ For intents with mode: "ad_hoc" (e.g., --just-harden):
    - Fix: {suggested remediation}
 
    ## Authority Boundaries
-   @.planning/config/authority-matrix.yaml (security domains)
+   Security domains come from the installed bundle
    ```
 
 4. **Collect Results**
@@ -495,12 +508,12 @@ For intents with mode: "ad_hoc" (e.g., --just-harden):
    - Aggregate findings from all agents
 
 5. **Generate Report**
-   - Write: .planning/security-audit-{timestamp}.md
+   - Write the audit outside control artifacts, e.g. `security-audit-{timestamp}.md` at the repository root
    - Include: Summary statistics, findings by severity, remediation guide
    - Format: Standard Legion finding blocks
 
 6. **EXIT** (ad_hoc doesn't proceed to normal build)
-   - Display: "Security audit complete. Report: .planning/security-audit-{timestamp}.md"
+   - Display: "Security audit complete. Report: security-audit-{timestamp}.md"
 
 5. COMPLETE PHASE EXECUTION
    Follow execution-tracker Section 4 (Phase Completion Tracking):
@@ -591,7 +604,7 @@ For intents with mode: "ad_hoc" (e.g., --just-harden):
 
    - If some plans failed:
      "Phase {N}: {phase_name} partial — {count} plan(s) failed.
-      Review summaries: .planning/phases/{NN}-{slug}/{NN}-{PP}-SUMMARY.md
+      Review evidence: `legion review --json`
       Then run `/legion:review` for diagnosis."
 
    - Do NOT automatically trigger /legion:review — let the user decide when to proceed.

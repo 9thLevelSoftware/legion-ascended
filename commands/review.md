@@ -21,10 +21,22 @@ skills/code-polish/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
+Project state comes from the CLI, not from files read directly.
+
+    legion status --json
+
 </context>
+
+<authority>
+The CLI owns the verification report, the gate set, and human acceptance.
+`legion review --json` reports what it verified; `legion review --accept` records
+acceptance, and a passing review still requires it.
+
+What stays here is the panel: intent detection over natural-language invocation,
+review agent selection, the review cycle with its glob-routed fix agents, and the
+security-only output mode. Never record an acceptance the operator did not give,
+and never assert a verdict the CLI did not derive.
+</authority>
 
 <process>
 DRY-RUN MODE (deterministic, no side effects)
@@ -51,11 +63,11 @@ Examples:
 0. CONDITIONAL SKILL LOADING (context budget)
    Load optional skills only when prerequisites are present:
 
-   - `skills/workflow-common-memory/SKILL.md` only if `.planning/memory/` exists or this review stores outcomes/preferences.
+   - `skills/workflow-common-memory/SKILL.md` only when `legion learn --list --json` reports recorded learning.
 
    - `skills/workflow-common-github/SKILL.md` only if `gh auth status` succeeds and a git remote exists.
 
-   - `skills/codebase-mapper/SKILL.md` only if `.planning/CODEBASE.md` exists or `.planning/codebase/index.jsonl` exists. Review-loop Step 2.5 uses map conventions, risk areas, API surface, and test map context when available.
+   - `skills/codebase-mapper/SKILL.md` only when `legion map --json` reports a map that is not `absent`. Review-loop Step 2.5 uses map conventions, risk areas, API surface, and test map context when available.
 
    - `skills/workflow-common-domains/SKILL.md` only for design/marketing domain review contexts.
 
@@ -129,7 +141,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
      - If status says "complete": error — "Phase {N} already passed review. Run /legion:plan {N+1} for the next phase."
    - Validate: phase must exist in ROADMAP.md
    - Check that phase directory has SUMMARY.md files (proof of execution):
-     - Look for files matching .planning/phases/{NN}-{slug}/{NN}-{PP}-SUMMARY.md
+     - Look for recorded task evidence in `legion review --json`
      - If no SUMMARY.md files found: error — "Phase {N} has no execution summaries. Run /legion:build first."
    - Display: "Reviewing Phase {N}: {phase_name}"
 
@@ -140,7 +152,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
 
 3. GATHER PHASE CONTEXT
    Follow review-loop skill Section 3, Step 1 (Gather phase artifacts):
-   - Read the phase CONTEXT.md at .planning/phases/{NN}-{slug}/{NN}-CONTEXT.md for the phase
+   - Read the change context the CLI recorded for the phase
      goal and success criteria
    - Read all {NN}-{PP}-PLAN.md files in the phase directory to understand what should have
      been built — extract files_modified list from each plan's YAML frontmatter
@@ -260,7 +272,7 @@ c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed wi
       Validate each selection exists in agent-registry.
 
    DESIGN REVIEW ENHANCEMENT (optional — follows design-workflows Section 4):
-   - If phase type includes "design" AND design documents exist at .planning/designs/:
+   - If phase type includes "design" AND a recorded exploration exists:
      a. Use three-lens design review instead of default single-reviewer mapping
      b. Select three design reviewers (within the max 3 reviewer limit):
         - design-brand-guardian (brand lens — visual identity compliance, voice consistency)
@@ -419,7 +431,7 @@ If `"single"`:
         skills/**/*.md              → autonomous (no personality)
         commands/**/*.md            → autonomous (no personality)
         agents/**/*.md              → autonomous (no personality)
-        .planning/**/*.md           → autonomous (no personality)
+        .legion/**                  → never written by review agents
         **/*.tsx, **/*.jsx          → engineering-frontend-developer
         src/components/**/*.{ts,js} → engineering-frontend-developer
         src/pages/**/*.{ts,js}      → engineering-frontend-developer
@@ -487,7 +499,7 @@ If `"single"`:
 If REVIEW_MODE === "security-only":
 
 1. **Generate Security Report**
-   Write to: `.planning/security-review-{timestamp}.md`
+   Write to: `security-review-{timestamp}.md` at the repository root
    
    Template:
    ```markdown
@@ -533,7 +545,7 @@ If REVIEW_MODE === "security-only":
    Security-only review complete.
    
    Findings: {total} (BLOCKER: {blocker}, WARNING: {warning}, SUGGESTION: {suggestion})
-   Report: .planning/security-review-{timestamp}.md
+   Report: security-review-{timestamp}.md
    
    Next steps:
    - Review BLOCKER findings immediately
@@ -546,7 +558,7 @@ If REVIEW_MODE === "security-only":
    **Path A: Review Passed** (follow review-loop Section 7)
 
    a. Generate review summary file (review-loop Section 7, Step 1):
-      Write .planning/phases/{NN}-{slug}/{NN}-REVIEW.md with:
+      Record the decision with `legion review --accept` or `legion review --reject-reason "<text>"`, which writes:
       - "# Phase {N}: {phase_name} — Review Summary"
       - "## Result: PASSED"
       - Cycles used, reviewer list, completion date
@@ -570,9 +582,7 @@ If REVIEW_MODE === "security-only":
       Write updated ROADMAP.md
 
    c. Create review completion commit:
-      git add .planning/phases/{NN}-{slug}/{NN}-REVIEW.md
-      git add .planning/STATE.md
-      git add .planning/ROADMAP.md
+      git add {only the files the change touched — never .legion/ control artifacts}
       git commit -m "chore(legion): phase {N} review passed — {phase_name}
 
       Review passed after {cycles} cycle(s).
@@ -588,7 +598,7 @@ If REVIEW_MODE === "security-only":
          - If github_available is false: skip silently
 
    c2. RECORD REVIEW OUTCOME (optional — follows memory-manager Section 6):
-       If .planning/memory/OUTCOMES.md exists or .planning/memory/ directory can be created:
+       To record a durable outcome:
          Follow memory-manager Section 3 (Store Outcome):
          - Agent: comma-separated list of reviewer agent IDs (e.g., "testing-qa-verification-specialist, testing-test-results-analyzer")
          - Task Type: "quality-review"
@@ -600,7 +610,7 @@ If REVIEW_MODE === "security-only":
        If memory is not available: skip silently.
 
    c3. CAPTURE PREFERENCE — review verdict (optional — follows memory-manager Section 13)
-       If .planning/memory/ exists or can be created:
+       To record a durable lesson:
          Follow memory-manager Section 13 (Store Preference):
          - Decision Point: "review-verdict"
          - Context: "Phase {N} review passed in {cycles} cycle(s). Reviewers: {reviewer list}"
@@ -675,7 +685,7 @@ If REVIEW_MODE === "security-only":
    **Path B: Review Escalated** (follow review-loop Section 8)
 
    a. Generate escalation report (review-loop Section 8, Step 1):
-      Write .planning/phases/{NN}-{slug}/{NN}-REVIEW.md with:
+      Record the decision with `legion review --accept` or `legion review --reject-reason "<text>"`, which writes:
       - "# Phase {N}: {phase_name} — Review Summary"
       - "## Result: ESCALATED"
       - Cycles used: 3 (maximum reached), remaining blockers count, remaining warnings count
@@ -687,12 +697,12 @@ If REVIEW_MODE === "security-only":
    b. Update STATE.md (review-loop Section 8, Step 2):
       - Status: "Phase {N} review escalated — {count} unresolved blocker(s) after 3 cycles"
       - Last Activity: "Phase {N} review escalated ({date})"
-      - Next Action: "Review .planning/phases/{NN}-{slug}/{NN}-REVIEW.md for full details.
+      - Next Action: "Review the review decision `legion review --json` reports for full details.
         Fix manually then re-run /legion:review, or accept as-is and proceed."
       Write updated STATE.md
 
    b2. RECORD REVIEW OUTCOME (optional — follows memory-manager Section 6):
-       If .planning/memory/OUTCOMES.md exists or .planning/memory/ directory can be created:
+       To record a durable outcome:
          Follow memory-manager Section 3 (Store Outcome):
          - Agent: comma-separated list of reviewer agent IDs
          - Task Type: "quality-review"
@@ -724,7 +734,7 @@ If REVIEW_MODE === "security-only":
         "## User Override
          Accepted with {count} unresolved blocker(s) by user decision on {date}."
       - CAPTURE PREFERENCE — review override (optional — follows memory-manager Section 13)
-        If .planning/memory/ exists or can be created:
+        To record a durable lesson:
           Follow memory-manager Section 13 (Store Preference):
           - Decision Point: "review-override"
           - Context: "Phase {N} review escalated — {count} unresolved blockers. User accepted as-is."
@@ -740,7 +750,7 @@ If REVIEW_MODE === "security-only":
 
    f. If user selects "Fix manually" or "Investigate further":
       CAPTURE PREFERENCE — review rejection (optional — follows memory-manager Section 13)
-      If .planning/memory/ exists or can be created:
+      To record a durable lesson:
         Follow memory-manager Section 13 (Store Preference):
         - Decision Point: "fix-acceptance"
         - Context: "Phase {N} review escalated — user chose to fix manually or investigate"
@@ -763,11 +773,11 @@ If REVIEW_MODE === "security-only":
      "All phases complete! {project_name} is finished."
 
    - If escalated and user chose "Fix manually":
-     "Fix the issues listed in .planning/phases/{NN}-{slug}/{NN}-REVIEW.md
+     "Fix the issues listed in the review decision `legion review --json` reports
       Then re-run `/legion:review` to verify."
 
    - If escalated and user chose "Investigate further":
-     "Review .planning/phases/{NN}-{slug}/{NN}-REVIEW.md for the full escalation report.
+     "Review the review decision `legion review --json` reports for the full escalation report.
       Each unresolved finding includes the fix attempts and why they failed."
 
    - Do NOT automatically trigger /legion:plan — let the user decide when to proceed.

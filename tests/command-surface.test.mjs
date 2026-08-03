@@ -84,22 +84,22 @@ test("a new command that reads .planning/ is reported", async (t) => {
 });
 
 test("an allowlisted command that no longer reads .planning/ must be removed from the allowlist", async (t) => {
-  // `advise` is on the allowlist, so a copy that has been converted is exactly
-  // the state this ratchet exists to force a cleanup of.
+  // `retro` is still on the allowlist, so a copy that has been converted is
+  // exactly the state this ratchet exists to force a cleanup of.
   const root = await fixtureRoot(t, {
-    commands: { advise: "Render `legion advise --json` and stop.\n" }
+    commands: { retro: "Render `legion retro --json` and stop.\n" }
   });
   const report = await scanCommandSurface({ root });
 
   assert.equal(report.ok, false);
   const violation = report.violations.find((entry) => entry.kind === "stale_allowlist_entry");
   assert.ok(violation, `expected a stale_allowlist_entry violation, got ${JSON.stringify(report.violations)}`);
-  assert.equal(violation.command, "advise");
+  assert.equal(violation.command, "retro");
 });
 
 test("an owed command with no inventory entry is reported", async (t) => {
   const root = await fixtureRoot(t, {
-    commands: { advise: "Read `.planning/agents/` to pick an advisor.\n" },
+    commands: { retro: "Read `.planning/memory/RETRO.md` for prior findings.\n" },
     inventory: { schemaVersion: 1, kind: "command_capability_inventory", commands: [] }
   });
   const report = await scanCommandSurface({ root });
@@ -107,7 +107,7 @@ test("an owed command with no inventory entry is reported", async (t) => {
   assert.equal(report.ok, false);
   const violation = report.violations.find((entry) => entry.kind === "inventory_missing");
   assert.ok(violation, `expected an inventory_missing violation, got ${JSON.stringify(report.violations)}`);
-  assert.equal(violation.command, "advise");
+  assert.equal(violation.command, "retro");
 });
 
 test("a host capability whose anchor has vanished is reported", async (t) => {
