@@ -224,15 +224,15 @@
       ],
       "cliGaps": [
         {
-          "gap": "No typed lesson kind, tags, or summary on the record path. All three are prerequisites, not just the kind: --list groups by type, and --recall scores a tag match 3, a summary match 2, and a body match 1. Records carrying only id, lesson, createdAt, and artifactPath can support body matching alone, which silently drops two thirds of the ranking.",
+          "gap": "Lesson records carry a typed kind, tags, and a summary, so --list can group and --recall can score a tag match 3 and a summary match 2.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --recall. The scoring rule is deterministic, but the corpus is not only knowledge-index.json. The command searches five files, and RETRO.md among them cross-references retrospective findings; in v9 those live in run-scoped retro.md artifacts. Either the query path includes them or their exclusion is recorded as a deliberate removal, otherwise recall silently stops returning retrospective findings.",
+          "gap": "--recall implements the command's scoring rule over recorded lessons. Its corpus is declared in the payload: retrospective findings live in run-scoped retro.md artifacts nothing reads yet, so they are excluded and said to be excluded rather than passed off as searched.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --list. Pure rendering over CLI-owned state, blocked on the typed-kind gap.",
+          "gap": "--list groups recorded learning by kind and reports the unclassified count.",
           "disposition": "build-in-cli"
         },
         {

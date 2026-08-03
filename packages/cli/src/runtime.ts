@@ -69,6 +69,7 @@ const VALUELESS_OPTIONS = new Set([
   "from-planning",
   "help",
   "json",
+  "list",
   // Without this, `legion start --next --json` is fine but `legion start --next`
   // followed by any positional swallows it as the flag's value.
   "next",

@@ -24629,6 +24629,7 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "from-planning",
   "help",
   "json",
+  "list",
   // Without this, `legion start --next --json` is fine but `legion start --next`
   // followed by any positional swallows it as the flag's value.
   "next",
@@ -43791,6 +43792,7 @@ var HELP = {
   polish: "legion polish [target]\n\nCreate a typed polish taskgraph scoped to the target or current worktree.",
   learn: "legion learn <lesson>\n\nRecord project-specific operational learning and update the knowledge index."
 };
+var LESSON_KINDS = ["pattern", "pitfall", "preference"];
 async function handleAdHocWorkflow(context, command) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(HELP[command]);
@@ -43998,8 +44000,31 @@ async function runAdviceWorkflow(context) {
   return executed.result.ok ? success2(payload, human) : failure(payload, human);
 }
 async function runLearnWorkflow(context) {
+  const recall = stringOption(context, "recall")?.trim();
+  if (context.args.options.get("recall") === true || recall === "") {
+    return usageError('Missing required value for --recall. Example: legion learn --recall "taskgraph".');
+  }
+  if (recall !== void 0) return runLearnRecall(context, recall);
+  if (hasFlag(context, "list")) return runLearnList(context);
   const lesson = positionalText(context);
   if (lesson === void 0) return usageError('legion learn requires a lesson. Example: legion learn "prefer artifact-backed plans".');
+  const kindOption = stringOption(context, "type")?.trim();
+  if (context.args.options.get("type") === true || kindOption === "") {
+    return usageError(`Missing required value for --type. One of ${LESSON_KINDS.join(", ")}.`);
+  }
+  if (kindOption !== void 0 && !LESSON_KINDS.includes(kindOption)) {
+    return usageError(`Unknown lesson type: ${kindOption}. One of ${LESSON_KINDS.join(", ")}.`);
+  }
+  const kind = kindOption;
+  const tagOption = stringOption(context, "tags")?.trim();
+  if (context.args.options.get("tags") === true || tagOption === "") {
+    return usageError('Missing required value for --tags. Example: legion learn "..." --tags planning,evidence.');
+  }
+  const tags = tagOption === void 0 ? [] : [...new Set(tagOption.split(",").map((tag) => tag.trim().toLowerCase()).filter((tag) => tag.length > 0))];
+  const summaryOption = stringOption(context, "summary")?.trim();
+  if (context.args.options.get("summary") === true || summaryOption === "") {
+    return usageError('Missing required value for --summary. Example: legion learn "..." --summary "one line".');
+  }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const paths = await createGuidanceRunPaths({
@@ -44023,7 +44048,10 @@ async function runLearnWorkflow(context) {
         id: paths.runId,
         lesson,
         createdAt,
-        artifactPath: lessonArtifactPath
+        artifactPath: lessonArtifactPath,
+        ...kind === void 0 ? {} : { kind },
+        ...tags.length === 0 ? {} : { tags },
+        ...summaryOption === void 0 ? {} : { summary: summaryOption }
       }
     ]
   };
@@ -44056,6 +44084,8 @@ async function runLearnWorkflow(context) {
       lessonArtifactPath,
       indexArtifactPath,
       lessonCount: nextIndex.lessons.length,
+      ...kind === void 0 ? {} : { kind },
+      ...tags.length === 0 ? {} : { tags },
       nextAction: action,
       diagnostics: []
     },
@@ -44078,6 +44108,90 @@ async function readLessonIndex(repositoryRoot) {
     kind: "lesson_index",
     lessons: []
   };
+}
+function scoreLesson(record2, terms) {
+  const tags = (record2.tags ?? []).map((tag) => tag.toLowerCase());
+  const summary = (record2.summary ?? "").toLowerCase();
+  const body = record2.lesson.toLowerCase();
+  return terms.reduce((total, term) => {
+    let score = total;
+    if (tags.includes(term)) score += 3;
+    if (summary.includes(term)) score += 2;
+    if (body.includes(term)) score += 1;
+    return score;
+  }, 0);
+}
+function recallTerms(topic) {
+  return [...new Set(topic.toLowerCase().split(/[^a-z0-9_-]+/).filter((term) => term.length > 1))];
+}
+async function runLearnRecall(context, topic) {
+  const index = await readLessonIndex(context.repositoryRoot);
+  const terms = recallTerms(topic);
+  const matches = index.lessons.map((record2) => ({ record: record2, score: scoreLesson(record2, terms) })).filter((entry) => entry.score > 0).sort((left, right) => right.score - left.score || left.record.createdAt.localeCompare(right.record.createdAt)).map((entry) => ({
+    id: entry.record.id,
+    score: entry.score,
+    kind: entry.record.kind ?? null,
+    summary: entry.record.summary ?? entry.record.lesson,
+    artifactPath: entry.record.artifactPath
+  }));
+  const action = nextAction("legion status", "Apply the recalled learning to the next workflow action.");
+  return success2(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      mode: "recall",
+      topic,
+      matches,
+      // Recorded lessons only. The command also searched retrospective findings,
+      // which in v9 live in run-scoped retro.md artifacts that nothing reads;
+      // P16-B003 owns wiring those in, and saying so here is better than a
+      // silently narrower corpus that looks complete.
+      corpus: ["lessons"],
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Recall "${topic}": ${matches.length} match${matches.length === 1 ? "" : "es"}.`,
+      ...matches.slice(0, 10).map((match) => `- [${match.score}] ${match.kind ?? "unclassified"}: ${match.summary}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function runLearnList(context) {
+  const index = await readLessonIndex(context.repositoryRoot);
+  const grouped = LESSON_KINDS.map((kind) => ({
+    kind,
+    lessons: index.lessons.filter((record2) => record2.kind === kind)
+  }));
+  const unclassified = index.lessons.filter((record2) => record2.kind === void 0);
+  const action = nextAction("legion status", "Recorded learning is available to future context packs.");
+  return success2(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "learn",
+      mode: "list",
+      total: index.lessons.length,
+      byKind: Object.fromEntries(grouped.map((group) => [group.kind, group.lessons.length])),
+      unclassified: unclassified.length,
+      lessons: index.lessons.map((record2) => ({
+        id: record2.id,
+        kind: record2.kind ?? null,
+        summary: record2.summary ?? record2.lesson,
+        tags: record2.tags ?? [],
+        createdAt: record2.createdAt
+      })),
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Lessons: ${index.lessons.length}.`,
+      ...grouped.map((group) => `${group.kind}: ${group.lessons.length}`),
+      unclassified.length === 0 ? "" : `unclassified: ${unclassified.length}`,
+      renderNextAction(action)
+    ].filter((line) => line.length > 0).join("\n")
+  );
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
