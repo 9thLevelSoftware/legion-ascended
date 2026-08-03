@@ -26,13 +26,25 @@ skills/agent-creator/SKILL.md
 @agents/design-ui-designer.md
 </context>
 
+<authority>
+No `legion` verb creates agent personalities, and this command does not need
+one. What it authors is a personality file for the host that dispatches agents —
+not workflow state, not a typed artifact the CLI owns and validates. Giving it a
+verb would put the CLI in the business of writing prompts for a host it does not
+model.
+
+So this stays host-owned by decision rather than by omission. The only thing it
+takes from the CLI is project context, through `legion status --json`, and it
+writes nothing under `.legion/`.
+</authority>
+
 <process>
 1. PRE-FLIGHT CHECK
-   - Check if `.planning/PROJECT.md` exists by attempting to read it
+   - Run `legion status --json`; `workflowState.projectId` is present when a project exists
    - If not found:
      Display: "No Legion project found. Run `/legion:start` to initialize."
      Exit — do not proceed to step 2
-   - Read `.planning/STATE.md` for current project context
+   - `workflowState.stage` from the same payload carries the current project context
 
 2. LOAD REGISTRY CONTEXT
    - Read agent-registry.md to understand existing agents, divisions, and task type taxonomy

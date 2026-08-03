@@ -18,11 +18,19 @@ skills/execution-tracker/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
-@.planning/REQUIREMENTS.md
 </context>
+
+<authority>
+The CLI owns the milestone record. `legion milestone --status --json` reads
+without writing; `--define`, `--complete` and `--archive` mutate and are
+recorded. Completing a milestone that is already completed or archived is
+refused, so a recorded summary cannot be silently overwritten.
+
+What stays here is what no verb performs: clustering roadmap phases into
+proposed groupings, the interactive action loop, the archive confirmation, the
+completion commit, and closing the GitHub milestone. No git commit and no gh
+invocation exists anywhere in the CLI.
+</authority>
 
 <process>
 0. CONDITIONAL SKILL LOADING
@@ -30,7 +38,7 @@ skills/execution-tracker/SKILL.md
    If the condition is not met, skip silently and continue.
 
 1. CHECK PROJECT EXISTS
-   - Attempt to read .planning/PROJECT.md
+   - Attempt to read legion status --json
    - If not found:
      Display:
      "No Legion project found in this directory.
@@ -39,11 +47,11 @@ skills/execution-tracker/SKILL.md
 
 2. READ PROJECT STATE
    Read these files:
-   a. .planning/PROJECT.md — extract project name
-   b. .planning/ROADMAP.md — extract:
+   a. legion status --json — extract project name
+   b. legion validate --json — extract:
       - Phase list with status from Progress table
       - Milestones section (if it exists)
-   c. .planning/STATE.md — extract current phase and status
+   c. legion status --json — extract current phase and status
 
 3. CHECK MILESTONES DEFINED
    Look for `## Milestones` section in ROADMAP.md.
@@ -133,7 +141,7 @@ skills/execution-tracker/SKILL.md
      - Goal, phase range
      - Per-phase breakdown: plan count, key deliverables from SUMMARY.md files
      - Requirement coverage: which requirements are satisfied by this milestone's phases
-     - If milestone is Complete or Archived: show the summary from .planning/milestones/MILESTONE-{N}.md
+     - If milestone is Complete or Archived: show the summary from the milestone index legion milestone reports
    - Return to Step 5
 
    **Path B: Complete milestone**
@@ -143,17 +151,17 @@ skills/execution-tracker/SKILL.md
    c. Generate milestone summary:
       - Gather metrics (plans, requirements, files, agents)
       - Gather qualitative data (outcomes, decisions)
-      - Write .planning/milestones/MILESTONE-{N}.md
+      - Write the milestone index legion milestone reports
    d. Mark milestone complete in ROADMAP.md
    e. Update STATE.md with milestone completion
    f. Create git commit following execution-tracker Section 6 milestone completion format:
       ```
-      git add .planning/milestones/ .planning/ROADMAP.md .planning/STATE.md
+      git add the CLI's typed artifacts milestones/ legion validate --json legion status --json
       git commit -m "chore(legion): complete milestone {N} — {name}
 
       Phases {start}-{end}: {count} phases, {plans} plans
       Requirements: {req_count} satisfied
-      Summary: .planning/milestones/MILESTONE-{N}.md
+      Summary: the milestone index legion milestone reports
 
       {adapter.commit_signature}"
       ```
@@ -166,7 +174,7 @@ skills/execution-tracker/SKILL.md
 
    g. Display:
       "Milestone {N}: {name} — Complete!
-       Summary written to .planning/milestones/MILESTONE-{N}.md
+       Summary written to the milestone index legion milestone reports
        Run `/legion:milestone` to archive when ready."
    - Return to Step 5
 
@@ -176,13 +184,13 @@ skills/execution-tracker/SKILL.md
    b. If checks fail: report what's missing, return to Step 5
    c. Confirm with user:
       "Archive Milestone {N}: {name}?
-       This will move {count} phase directories from .planning/phases/ to .planning/archive/milestone-{N}/.
+       This will move {count} phase directories from the CLI's typed artifacts phases/ to the archived milestone record
        Files remain accessible in the archive location."
       Options: "Archive" / "Cancel"
    d. If Cancel: return to Step 5
    e. If Archive:
-      - Create .planning/archive/milestone-{N}/ directory
-      - Move each phase directory from .planning/phases/ to .planning/archive/milestone-{N}/
+      - Create the archived milestone record directory
+      - Move each phase directory from the CLI's typed artifacts phases/ to the archived milestone record
       - Update ROADMAP.md: milestone Status → Archived, phase rows get "(Archived)" note
       - Update STATE.md: condense archived phase results, update Milestones section
       - Update milestone summary: add archive date
@@ -191,15 +199,15 @@ skills/execution-tracker/SKILL.md
       git add -A
       git commit -m "chore(legion): archive milestone {N} — {name}
 
-      Phases moved to .planning/archive/milestone-{N}/
+      Phases moved to the archived milestone record
       STATE.md and ROADMAP.md updated
 
       {adapter.commit_signature}"
       ```
    g. Display:
       "Milestone {N}: {name} — Archived!
-       Phase directories moved to .planning/archive/milestone-{N}/
-       Summary preserved at .planning/milestones/MILESTONE-{N}.md"
+       Phase directories moved to the archived milestone record
+       Summary preserved at the milestone index legion milestone reports"
    - Return to Step 5
 
    **Path D: Redefine milestones**

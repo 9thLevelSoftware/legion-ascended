@@ -22,6 +22,20 @@ Portfolio registry: {adapter.global_config_dir}/portfolio.md
 Studio Producer: {AGENTS_DIR}/project-management-studio-producer.md (resolve AGENTS_DIR via workflow-common Agent Path Resolution Protocol)
 </context>
 
+<authority>
+No `legion` verb spans projects, and adding one would mean giving the CLI a
+notion of "the set of projects" it does not have. Every verb is scoped by
+`--repository-root` — one repository, one project, one set of artifacts — and
+`legion dev board portfolio` is unrelated: it replays a tenant-scoped projection,
+not a multi-project dashboard.
+
+So this stays host-owned by decision. The registry of projects belongs to the
+operator, and each project's state is read the same way any other command reads
+it: `legion status --json --repository-root <path>`, once per project. That
+keeps a single source of truth per project while leaving the cross-project view
+where it can actually live.
+</authority>
+
 <process>
 1. LOAD PORTFOLIO REGISTRY
    - Attempt to read `{adapter.global_config_dir}/portfolio.md`
@@ -42,8 +56,8 @@ Studio Producer: {AGENTS_DIR}/project-management-studio-producer.md (resolve AGE
    a. Extract the project path from the "**Path**:" field
    b. Check if the directory exists (use Bash: `test -d "{path}"`)
    c. If directory exists:
-      - Read `{path}/.planning/STATE.md` — extract phase, status, last activity
-      - Read `{path}/.planning/ROADMAP.md` — extract phase list, progress table
+      - Run `legion status --json --repository-root {path}` — one CLI invocation per registered project
+      - `workflowState`, `requirements` and `traceability` carry phase, status and progress
       - Calculate completion % using execution-tracker Section 5 formula:
         - Sum all "Plans" values = total_plans
         - Sum all "Completed" values = completed_plans
@@ -227,7 +241,7 @@ Studio Producer: {AGENTS_DIR}/project-management-studio-producer.md (resolve AGE
    This step is only reached if the user explicitly asks to register a project manually,
    or if Step 1 shows no registry and the user wants to register the current project.
 
-   - Confirm current directory has `.planning/PROJECT.md`
+   - Confirm the current directory is an initialized project: `legion status --json` reports a `workflowState.projectId`
    - If not: "This directory doesn't have a Legion project. Run `/legion:start` first."
    - If yes: Follow portfolio-manager Section 2 (Register Project):
      a. Create `{adapter.global_config_dir}` directory if needed
