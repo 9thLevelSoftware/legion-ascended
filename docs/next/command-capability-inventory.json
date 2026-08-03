@@ -268,7 +268,7 @@
           "disposition": "deliberate-removal"
         },
         {
-          "gap": "No validation of the root settings.json. This is NOT under .planning/: it sits at the repository root, has a published schema at docs/settings.schema.json, and nothing in packages/ reads control_mode, max_tasks_per_plan, or max_cycles. Thinning before this lands would leave the only enforcement of a schema the file itself references silently absent.",
+          "gap": "The root settings.json is validated by an executable Zod mirror in @legion/core, read through packages/cli/src/workflow/settings-check.ts and reported by both legion validate and legion doctor. A mirror rather than the published schema because there is no JSON Schema validator in the tree and docs/settings.schema.json is checksum-frozen; a parity test holds the two in agreement. Absence is a reported state, invalid values are warnings, and only unparseable JSON fails.",
           "disposition": "build-in-cli"
         },
         {
@@ -277,6 +277,10 @@
         },
         {
           "gap": "The agent-roster check compares against strings in STATE.md and .planning/config/authority-matrix.yaml. Both retire, so the check has nothing left to compare. Deliberate removal.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "The .planning/config/control-modes.yaml half of the command's step 9 does not survive: the file retires with the directory, and docs/settings.schema.json carries the control_mode description that referenced it.",
           "disposition": "deliberate-removal"
         }
       ]

@@ -12,3 +12,4 @@ export * from "./dispatch/index.js";
 export * from "./review/index.js";
 export * from "./merge/index.js";
 export * from "./release-observation/index.js";
+export * from "./settings/index.js";
