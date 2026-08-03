@@ -6,7 +6,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
 <objective>
-Create and maintain Legion's canonical codebase documentation and retrieval index. Generate `.planning/CODEBASE.md` for human-readable architecture context and `.planning/codebase/` artifacts for structured search by other Legion commands.
+Create and maintain Legion's canonical codebase documentation and retrieval index. Generate the codebase map (`legion map --json`) for human-readable architecture context and `the CLI's typed artifacts codebase/` artifacts for structured search by other Legion commands.
 </objective>
 
 <execution_context>
@@ -15,12 +15,18 @@ skills/codebase-mapper/SKILL.md
 </execution_context>
 
 <context>
-@.planning/CODEBASE.md (if exists)
-@.planning/codebase/index.jsonl (if exists)
-@.planning/codebase/symbols.json (if exists)
-@.planning/codebase/search.md (if exists)
-@.planning/config/directory-mappings.yaml (if exists)
 </context>
+
+<authority>
+The CLI owns the derivable state. `legion map --json` reports freshness —
+`fresh`, `stale`, `partial` or `absent` — and writes nothing; `--refresh`
+regenerates the artifacts; `--query` searches the stored map.
+
+What stays here is the analysis: the architecture narrative, the dependency
+graph, the API surface, the coverage map, and the ranked risk hotspots. The
+verb's artifact is a file inventory, so rendering its payload would replace an
+architecture document with a histogram.
+</authority>
 
 <process>
 1. PARSE ARGUMENTS
@@ -37,7 +43,7 @@ skills/codebase-mapper/SKILL.md
 
 2. SOURCE CODE DETECTION
    - Follow codebase-mapper Section 1 Source Code Detection Heuristic.
-   - Exclude Legion state/runtime folders: `.planning/`, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.legion/`, `.git/`, dependency/build output directories.
+   - Exclude Legion state/runtime folders: the CLI's typed artifacts, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.legion/`, `.git/`, dependency/build output directories.
    - If no source code is detected:
      - In `--query`: continue to Query Mode; query reads an existing map dataset and does not require current source detection.
      - In `--check`: report `status: absent`, `reason: no source files detected`, and exit 0.
@@ -45,12 +51,12 @@ skills/codebase-mapper/SKILL.md
 
 3. CHECK MODE
    - Inspect these required artifacts:
-     - `.planning/CODEBASE.md`
-     - `.planning/codebase/index.jsonl`
-     - `.planning/codebase/symbols.json`
-     - `.planning/codebase/search.md`
-     - `.planning/config/directory-mappings.yaml`
-   - Read `.planning/CODEBASE.md` metadata:
+     - the codebase map (`legion map --json`)
+     - the codebase map
+     - the codebase map
+     - the codebase map
+     - the installed bundle configuration
+   - Read the codebase map (`legion map --json`) metadata:
      - `map_schema_version`
      - `generated_at`
      - `analyzed_commit`
@@ -61,12 +67,12 @@ skills/codebase-mapper/SKILL.md
      - `fresh`: all required artifacts exist, schema is current, age <= 30 days, source fingerprint matches.
      - `stale`: artifacts exist but age > 30 days or fingerprint differs.
      - `partial`: one or more required artifacts are missing.
-     - `absent`: no CODEBASE.md and no `.planning/codebase/` dataset.
+     - `absent`: no CODEBASE.md and no `the CLI's typed artifacts codebase/` dataset.
    - Output a concise report with status, age, analyzed commit, missing artifacts, fingerprint match, and recommended action.
    - Do not write files in `--check`.
 
 4. QUERY MODE
-   - Require `.planning/codebase/index.jsonl` and `.planning/codebase/symbols.json`.
+   - Require the codebase map and the codebase map.
    - If missing, display: "No map index exists. Run `/legion:map` first." and exit.
    - Follow codebase-mapper Section 18 Semantic Search Protocol:
      - Normalize the query into keywords, path hints, symbol hints, and domain hints.
@@ -76,7 +82,7 @@ skills/codebase-mapper/SKILL.md
    - Never answer from the index alone when source-file evidence is required; instruct consumers to read the source paths before acting.
 
 5. FULL MAP OR REFRESH MODE
-   - Ensure `.planning/`, `.planning/codebase/`, and `.planning/config/` exist.
+   - Ensure the CLI's typed artifacts, `the CLI's typed artifacts codebase/`, and `the CLI's typed artifacts config/` exist.
    - Run the full codebase-mapper protocol:
      - Architecture narrative and module structure.
      - Functionality/feature inventory.
@@ -90,11 +96,11 @@ skills/codebase-mapper/SKILL.md
      - Pattern library and conventions.
      - Monorepo package map, if applicable.
    - Write all required outputs:
-     - `.planning/CODEBASE.md`
-     - `.planning/codebase/index.jsonl`
-     - `.planning/codebase/symbols.json`
-     - `.planning/codebase/search.md`
-     - `.planning/config/directory-mappings.yaml`
+     - the codebase map (`legion map --json`)
+     - the codebase map
+     - the codebase map
+     - the codebase map
+     - the installed bundle configuration
    - `--scope <path>` still writes the same artifact set, but metadata must include `scope: <path>` and the report must say that the dataset is scoped, not full-project.
 
 6. COMPLETION REPORT
@@ -121,10 +127,10 @@ skills/codebase-mapper/SKILL.md
 </decision_matrix>
 
 <completion_gate>
-- `.planning/CODEBASE.md` exists and includes current map metadata.
-- `.planning/codebase/index.jsonl` exists and contains one JSON object per retrievable chunk.
-- `.planning/codebase/symbols.json` exists and is valid JSON.
-- `.planning/codebase/search.md` documents the consumer search protocol.
-- `.planning/config/directory-mappings.yaml` exists and is valid YAML.
+- the codebase map (`legion map --json`) exists and includes current map metadata.
+- the codebase map exists and contains one JSON object per retrievable chunk.
+- the codebase map exists and is valid JSON.
+- the codebase map documents the consumer search protocol.
+- the installed bundle configuration exists and is valid YAML.
 - The final report names every artifact written and any degraded sections.
 </completion_gate>

@@ -9,7 +9,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
 Review completed phases/milestones, identify what worked and what didn't, surface reusable patterns, and record findings to memory for future planning.
 
 Purpose: Structured team retrospective after build/review cycles — learn from what happened.
-Output: Retrospective report with actionable findings written to .planning/memory/RETRO.md
+Output: Retrospective report with actionable findings written to recorded learning
 </objective>
 
 <execution_context>
@@ -19,10 +19,19 @@ skills/execution-tracker/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
 </context>
+
+<authority>
+The CLI owns the retrospective artifact. `legion retro --json` gathers the
+project's committed evidence, puts it in front of the executor, and records the
+result. `--dry-run` runs the analysis and writes nothing.
+
+Scoping to a phase or milestone is not implemented and is refused rather than
+ignored, so a retrospective is never labelled with a scope it did not use.
+
+What stays here is the save decision, the edit-before-saving path, and the
+cross-project mode, none of which any verb performs.
+</authority>
 
 <process>
 0. DRY-RUN MODE
@@ -32,7 +41,7 @@ skills/execution-tracker/SKILL.md
    - Display: "DRY RUN — retrospective will be displayed but not saved"
 
 1. CHECK PROJECT EXISTS
-   - Attempt to read .planning/PROJECT.md
+   - Attempt to read legion status --json
    - If not found:
      Display:
      "No Legion project found in this directory.
@@ -51,26 +60,26 @@ skills/execution-tracker/SKILL.md
 
 3. READ PROJECT STATE
    Read these files:
-   a. .planning/PROJECT.md — extract project name
-   b. .planning/ROADMAP.md — extract phase list, progress, milestones
-   c. .planning/STATE.md — extract current phase, completed phases
+   a. legion status --json — extract project name
+   b. legion validate --json — extract phase list, progress, milestones
+   c. legion status --json — extract current phase, completed phases
 
 4. CONDITIONAL SKILL LOADING
-   - `skills/memory-manager/SKILL.md` only if .planning/memory/ directory exists
+   - `skills/memory-manager/SKILL.md` only if recorded learning directory exists
    - If memory directory does not exist: memory features degrade gracefully (skip recording steps)
 
 5. GATHER DATA
    For the target scope (phase or milestone phases):
-   a. Read .planning/phases/phase-{N}/SUMMARY.md for each phase in scope
+   a. Read the taskgraph legion status --json names for each phase in scope
       - Extract: completed tasks, files modified, agent assignments, handoff context
       - Note any escalations (severity, type, resolution)
-   b. Read .planning/phases/phase-{N}/REVIEW.md for each phase in scope
+   b. Read the taskgraph legion status --json names for each phase in scope
       - Extract: review findings, pass/fail status, review cycle count
       - Note if review required multiple cycles
-   c. Read .planning/memory/OUTCOMES.md (if exists)
+   c. Read recorded learning (if exists)
       - Extract outcomes related to the target phases
       - Note task_type classifications and agent performance
-   d. Read plan frontmatter from .planning/phases/phase-{N}/PLAN-*.md files
+   d. Read plan frontmatter from the taskgraph legion status --json names files
       - Extract: agent assignments, verification commands, expected artifacts
 
 6. ANALYZE
@@ -144,7 +153,7 @@ skills/execution-tracker/SKILL.md
    Present via adapter.ask_user:
    "Save retrospective findings to memory?"
    Options:
-   - "Save to memory" — "Record findings to .planning/memory/RETRO.md for future planning context"
+   - "Save to memory" — "Record findings to recorded learning for future planning context"
    - "View only (don't save)" — "Retrospective displayed but not persisted"
    - "Edit before saving" — "Make adjustments to findings before recording"
 
@@ -153,8 +162,8 @@ skills/execution-tracker/SKILL.md
 9. HANDLE SAVE CHOICE
 
    **Path A: Save to memory**
-   - If .planning/memory/ does not exist: create the directory
-   - If .planning/memory/RETRO.md does not exist: create with header:
+   - If recorded learning does not exist: create the directory
+   - If recorded learning does not exist: create with header:
      ```
      # Retrospective Log
 
@@ -176,7 +185,7 @@ skills/execution-tracker/SKILL.md
 
      ---
      ```
-   - Display: "Retrospective saved to .planning/memory/RETRO.md"
+   - Display: "Retrospective saved to recorded learning"
    - After recording: output reminder
      "Retro findings are automatically available to `/legion:plan` during decomposition.
       Action items from this retro will appear as constraints in future phase planning."
@@ -195,13 +204,13 @@ skills/execution-tracker/SKILL.md
 10. CROSS-PROJECT MODE
     If invoked from `/legion:portfolio` context (detected via portfolio state or $ARGUMENTS containing `--portfolio`):
     - Iterate across all projects in the portfolio
-    - Gather retro data from each project's .planning/memory/RETRO.md
+    - Gather retro data from each project's recorded learning
     - Produce an aggregated retrospective:
       - Common patterns across projects
       - Shared action items
       - Cross-project agent performance trends
     - Display aggregated findings
-    - Offer to save to the portfolio-level .planning/memory/RETRO.md
+    - Offer to save to the portfolio-level recorded learning
 
 IMPORTANT:
 - Retrospectives are read-only analysis of completed work — they never modify phase files or plans

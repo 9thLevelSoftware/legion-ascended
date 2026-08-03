@@ -1,12 +1,12 @@
 ---
 name: legion:validate
-description: Validate .planning/ state file integrity, schema conformance, and cross-references
+description: Validate the CLI's typed artifacts  state file integrity, schema conformance, and cross-references
 argument-hint: "[--fix] [--ci]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
 <objective>
-Validate the integrity, schema conformance, and cross-referential consistency of all `.planning/` state files. Produce a structured report of passes, warnings, and failures. Useful for diagnosing corrupted state, CI integration, and post-update verification.
+Validate the integrity, schema conformance, and cross-referential consistency of all the CLI's typed artifacts state files. Produce a structured report of passes, warnings, and failures. Useful for diagnosing corrupted state, CI integration, and post-update verification.
 
 Purpose: Single command to verify project state health.
 Output: Validation report with actionable diagnostics.
@@ -18,10 +18,22 @@ skills/agent-registry/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/ROADMAP.md
-@.planning/STATE.md
 </context>
+
+<authority>
+The CLI performs the validation. `legion validate --json` checks committed
+project state, requirement-set hash drift, traceability, and the root
+settings.json; `legion doctor --json` is the superset. Report what they return
+and do not derive a verdict of your own.
+
+Findings carry severity: only blocking diagnostics fail. Warnings are reported
+and do not break the build, and `status` is `valid_with_warnings` when there are
+warnings but nothing blocking.
+
+What stays here is the repair loop: applying a fix and re-running validation to
+show the updated result, and the policy of declining to auto-fix references that
+need human judgement.
+</authority>
 
 <process>
 1. PARSE ARGUMENTS
@@ -37,14 +49,14 @@ skills/agent-registry/SKILL.md
    - results = [] (array of {check, status, details} objects)
 
 2. CHECK PROJECT EXISTS
-   - Attempt to read `.planning/` directory contents via Glob.
-   - If `.planning/` does not exist or is empty:
+   - Attempt to read the CLI's typed artifacts directory contents via Glob.
+   - If the CLI's typed artifacts does not exist or is empty:
      Display: "No Legion project found. Run `/legion:start` to initialize."
      If CI_MODE: exit with code 2.
      Stop — do not proceed to step 3.
 
 3. VALIDATE PROJECT.MD
-   - Check: `.planning/PROJECT.md` exists and is readable.
+   - Check: `legion status --json` exists and is readable.
    - Check: File starts with `# ` (has a title heading).
    - Check: File contains a `## Requirements` or `## Goals` section header.
    - Check: Frontmatter block (if present) is valid YAML between `---` delimiters.
@@ -57,7 +69,7 @@ skills/agent-registry/SKILL.md
    - Record result: {check: "PROJECT.md", status, details}.
 
 4. VALIDATE ROADMAP.MD
-   - Check: `.planning/ROADMAP.md` exists and is readable.
+   - Check: `legion validate --json` exists and is readable.
    - Check: File contains a markdown table (at least one line matching `|...|...|`).
    - Check: Table header row contains "Phase" and "Status" columns (case-insensitive).
    - Check: Table header row contains "Name" or "Requirements" column.
@@ -73,7 +85,7 @@ skills/agent-registry/SKILL.md
    - Record result: {check: "ROADMAP.md", status, details}.
 
 5. VALIDATE STATE.MD
-   - Check: `.planning/STATE.md` exists and is readable.
+   - Check: `legion status --json` exists and is readable.
    - Check: File contains "Current" (case-insensitive) within the first 10 lines (current position section).
    - Check: File contains a phase reference (e.g., "Phase: N of M" or "Phase N").
    - Check: If a phase number is referenced, it exists in ROADMAP.md's phase table.
@@ -87,7 +99,7 @@ skills/agent-registry/SKILL.md
    - Record result: {check: "STATE.md", status, details}.
 
 6. VALIDATE PHASE FILES
-   - List all directories in `.planning/phases/`.
+   - List all directories in the taskgraph `legion status --json` names.
    - For each phase directory:
      a. Check: CONTEXT.md exists.
      b. For each PLAN-*.md file:
@@ -117,10 +129,10 @@ skills/agent-registry/SKILL.md
      (Already checked in step 6 — aggregate failures here.)
    - Phase numbers in STATE.md must have corresponding entries in ROADMAP.md.
      (Already checked in step 5 — aggregate failures here.)
-   - If `.planning/memory/OUTCOMES.md` exists:
+   - If recorded learning (`legion learn --list --json`) exists:
      - Check: File has at least one outcome record (non-empty beyond headers).
      - Check: Agent IDs referenced in outcomes exist in the agent catalog.
-   - If `.planning/config/` directory exists:
+   - If `the CLI's typed artifacts config/` directory exists:
      - Check: Any YAML files are parseable (no syntax errors).
    - Scoring:
      - Any dangling reference → FAIL
@@ -138,14 +150,14 @@ skills/agent-registry/SKILL.md
    - Store as VALID_AGENT_IDS set.
 
    Check authority-matrix.yaml:
-   - If `.planning/config/authority-matrix.yaml` exists:
+   - If the installed bundle configuration exists:
      - Parse the YAML. Extract all top-level keys under the `agents:` mapping.
      - For each key: check if it exists in VALID_AGENT_IDS.
      - Any missing → record as FAIL with: "authority-matrix.yaml references agent '{id}' which does not exist in agents/"
    - If file does not exist: skip silently.
 
    Check intent-teams.yaml:
-   - If `.planning/config/intent-teams.yaml` exists:
+   - If the installed bundle configuration exists:
      - Parse the YAML. For each intent under the `intents:` mapping:
        - Extract agent IDs from `agents.primary` list (if present).
        - Extract agent IDs from `agents.secondary` list (if present).
@@ -155,7 +167,7 @@ skills/agent-registry/SKILL.md
    - If file does not exist: skip silently.
 
    Check roster-gap-config.yaml:
-   - If `.planning/config/roster-gap-config.yaml` exists:
+   - If the installed bundle configuration exists:
      - Parse the YAML. Search all `coverage_indicators`, `covering_agents`, and `required_agents` lists recursively.
      - For each agent ID found: check if it exists in VALID_AGENT_IDS.
      - Any missing → record as WARN with: "roster-gap-config.yaml references agent '{id}' which does not exist in agents/"
@@ -189,7 +201,7 @@ skills/agent-registry/SKILL.md
    Check division alignment:
    - For each `.md` file in `agents/`: read the YAML frontmatter and extract the `division` field.
    - Group agents by division and count per division.
-   - If `.planning/config/authority-matrix.yaml` exists:
+   - If the installed bundle configuration exists:
      - Check that each division comment header count (e.g., "# TESTING DIVISION (6 agents)") matches the actual agent count for that division.
      - Any mismatch → WARN with: "authority-matrix.yaml says {division} has {stated} agents but agents/ contains {actual}"
 
@@ -210,7 +222,7 @@ skills/agent-registry/SKILL.md
      - Check: If `planning.max_tasks_per_plan` exists, it is a positive integer.
      - Check: If `review.max_cycles` exists, it is a positive integer.
    - If `settings.json` does not exist: PASS with details "No settings.json (using defaults)".
-   - If `.planning/config/control-modes.yaml` exists:
+   - If the installed bundle configuration exists:
      - Check: File is parseable YAML.
    - Scoring:
      - Invalid JSON → FAIL
@@ -269,7 +281,7 @@ skills/agent-registry/SKILL.md
 </process>
 
 <error_handling>
-- If `.planning/` directory is missing: direct user to `/legion:start`.
+- If the CLI's typed artifacts directory is missing: direct user to `/legion:start`.
 - If agent catalog cannot be loaded: skip agent ID validation checks with WARN "Agent catalog unavailable — skipping agent ID validation".
 - If a file cannot be read (permissions, encoding): record as FAIL with the specific error message.
 - If `--ci` and `--fix` are combined: apply fixes silently, then output CI-format summary.

@@ -9,7 +9,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 Explicitly record patterns, pitfalls, and preferences to project memory. Recall relevant learnings during planning and execution.
 
 Purpose: Build project-specific institutional knowledge that persists across sessions.
-Output: Structured memory entries in .planning/memory/ files.
+Output: Structured memory entries in recorded learning files.
 </objective>
 
 <execution_context>
@@ -18,9 +18,18 @@ skills/memory-manager/SKILL.md
 </execution_context>
 
 <context>
-@.planning/PROJECT.md
-@.planning/STATE.md
 </context>
+
+<authority>
+The CLI owns the record. `legion learn "<lesson>" --type <kind> --tags <a,b>
+--summary "<one line>"` writes it and maintains the index; `--recall <topic>`
+searches with a tag match scoring 3, a summary match 2, and a body match 1;
+`--list` groups by kind.
+
+What stays here is the conversation: classifying the lesson and confirming that
+classification, deriving the tags and summary to record, and offering to
+continue with another lesson.
+</authority>
 
 <process>
 1. PARSE MODE
@@ -48,11 +57,11 @@ skills/memory-manager/SKILL.md
      Exit — do not proceed
 
 2. LOAD PROJECT CONTEXT (optional)
-   - Attempt to read .planning/PROJECT.md
+   - Attempt to read legion status --json
    - If found: extract project name, current phase from STATE.md
    - If not found: proceed without project context
      - Learn works with or without an initialized project
-   - Ensure .planning/memory/ directory exists for record/list modes
+   - Ensure recorded learning directory exists for record/list modes
      - If MODE=record and directory does not exist: create it
      - If MODE=recall or MODE=list and directory does not exist:
        Display: "No memory directory found. Record your first learning with `/legion:learn <lesson>`."
@@ -103,9 +112,9 @@ skills/memory-manager/SKILL.md
 
 6. RECORD
    Write to the appropriate memory file based on type:
-   - Pattern → .planning/memory/PATTERNS.md
-   - Pitfall → .planning/memory/ERRORS.md
-   - Preference → .planning/memory/PREFERENCES.md
+   - Pattern → recorded learning
+   - Pitfall → recorded learning
+   - Preference → recorded learning
 
    **If file does not exist**, create with header:
    ```
@@ -130,7 +139,7 @@ skills/memory-manager/SKILL.md
 
    Display:
    "{type} recorded: {ID} — {summary}
-    Saved to .planning/memory/{filename}
+    Saved to recorded learning{filename}
     This learning will inform future `/legion:plan` recommendations."
 
 7. OFFER CONTINUATION
@@ -147,11 +156,11 @@ skills/memory-manager/SKILL.md
    Search all memory files for entries matching the topic:
 
    a. Define search targets:
-      - .planning/memory/PATTERNS.md
-      - .planning/memory/ERRORS.md
-      - .planning/memory/PREFERENCES.md
-      - .planning/memory/RETRO.md (if exists — cross-reference retrospective findings)
-      - .planning/memory/OUTCOMES.md (if exists — cross-reference past outcomes)
+      - recorded learning
+      - recorded learning
+      - recorded learning
+      - recorded learning (if exists — cross-reference retrospective findings)
+      - recorded learning (if exists — cross-reference past outcomes)
 
    b. For each file that exists:
       - Search by tag match (exact tag match scores highest)
@@ -182,9 +191,9 @@ skills/memory-manager/SKILL.md
 9. LIST MODE
    Read all memory files and display entries grouped by type:
 
-   a. Read .planning/memory/PATTERNS.md — extract all entries
-   b. Read .planning/memory/ERRORS.md — extract all entries
-   c. Read .planning/memory/PREFERENCES.md — extract all entries
+   a. Read recorded learning — extract all entries
+   b. Read recorded learning — extract all entries
+   c. Read recorded learning — extract all entries
 
    d. Display:
    # Project Learnings
@@ -218,7 +227,7 @@ skills/memory-manager/SKILL.md
 10. PRUNE MODE
     Execute the Prune Operation defined in memory-manager SKILL.md Section 7.5:
 
-    a. Check if .planning/memory/OUTCOMES.md exists
+    a. Check if recorded learning exists
        - If not: Display "No outcomes to prune. OUTCOMES.md does not exist." → Exit
 
     b. Count total records in OUTCOMES.md
@@ -238,7 +247,7 @@ skills/memory-manager/SKILL.md
     Exit after displaying results.
 
 IMPORTANT:
-- Learn works with or without an initialized Legion project — it only needs .planning/memory/
+- Learn works with or without an initialized Legion project — it only needs recorded learning
 - The memory directory is created automatically on first record if it doesn't exist
 - IDs are sequential within each type file and never reused
 - Tags are lowercase and derived from the lesson text, not invented

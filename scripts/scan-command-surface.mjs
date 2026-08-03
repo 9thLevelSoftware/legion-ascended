@@ -30,20 +30,17 @@ const PLANNING_REFERENCE = /\.planning\//;
 /**
  * Commands still permitted to read `.planning/`.
  *
+ * Empty, as of phase 16. Every one of the nineteen installed commands now reads
+ * project state through a CLI payload, and the ratchet below keeps it that way:
+ * a command that reintroduces a `.planning/` read fails the build unless someone
+ * adds it back here and says why.
+ *
  * This list may only ever shorten. It is not maintained by hand in one
  * direction: `scanCommandSurface` reports an entry that no longer references
  * `.planning/` as a violation, so converting a command forces its removal in the
  * same change. A list that could grow would record the debt without bounding it.
  */
-export const PLANNING_ALLOWLIST = Object.freeze([
-  "agent",
-  "learn",
-  "map",
-  "milestone",
-  "portfolio",
-  "retro",
-  "validate"
-]);
+export const PLANNING_ALLOWLIST = Object.freeze([]);
 
 const INVENTORY_PATH = "docs/next/command-capability-inventory.json";
 
@@ -53,7 +50,7 @@ const EXECUTOR_CALL = "runGuidanceExecutor(";
 /** Who owns a capability the verb does not have. There is no fourth answer. */
 const DISPOSITIONS = new Set(["build-in-cli", "keep-in-host", "deliberate-removal"]);
 
-export async function scanCommandSurface({ root = DEFAULT_ROOT } = {}) {
+export async function scanCommandSurface({ root = DEFAULT_ROOT, allowlist = PLANNING_ALLOWLIST } = {}) {
   const violations = [];
   const commandsDir = path.join(root, "commands");
   const entries = (await readdir(commandsDir))
@@ -66,7 +63,10 @@ export async function scanCommandSurface({ root = DEFAULT_ROOT } = {}) {
     sources.set(name, await readFile(path.join(commandsDir, `${name}.md`), "utf8"));
   }
 
-  const allowed = new Set(PLANNING_ALLOWLIST);
+  // Overridable so the negative tests stay meaningful now that the real list is
+  // empty: a ratchet whose failure cases can no longer be triggered is a ratchet
+  // nobody can check.
+  const allowed = new Set(allowlist);
   for (const name of allowed) {
     if (!sources.has(name)) {
       violations.push({

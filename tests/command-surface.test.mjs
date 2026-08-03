@@ -54,7 +54,12 @@ test("the allowlist holds exactly the commands that still read .planning/", asyn
   // Stated as set equality rather than containment. Containment in one
   // direction permits a stale entry, and a stale entry is what would let the
   // list stop shrinking while still passing.
+  //
+  // Both sides are empty as of phase 16: every installed command reads project
+  // state through a CLI payload. The assertion still earns its place, because
+  // the next command to reintroduce a `.planning/` read fails here.
   assert.deepEqual([...report.allowlist].sort(), [...report.referencing].sort());
+  assert.deepEqual(report.referencing, [], "no installed command should read .planning/");
 });
 
 test("start and status stay converted", async () => {
@@ -84,12 +89,14 @@ test("a new command that reads .planning/ is reported", async (t) => {
 });
 
 test("an allowlisted command that no longer reads .planning/ must be removed from the allowlist", async (t) => {
-  // `retro` is still on the allowlist, so a copy that has been converted is
-  // exactly the state this ratchet exists to force a cleanup of.
+  // A converted command whose allowlist entry was left behind — exactly the
+  // state this ratchet exists to force a cleanup of. The allowlist is supplied
+  // because the real one is empty now, and a failure case that can no longer be
+  // triggered is one nobody can check.
   const root = await fixtureRoot(t, {
     commands: { retro: "Render `legion retro --json` and stop.\n" }
   });
-  const report = await scanCommandSurface({ root });
+  const report = await scanCommandSurface({ root, allowlist: ["retro"] });
 
   assert.equal(report.ok, false);
   const violation = report.violations.find((entry) => entry.kind === "stale_allowlist_entry");
@@ -102,7 +109,7 @@ test("an owed command with no inventory entry is reported", async (t) => {
     commands: { retro: "Read `.planning/memory/RETRO.md` for prior findings.\n" },
     inventory: { schemaVersion: 1, kind: "command_capability_inventory", commands: [] }
   });
-  const report = await scanCommandSurface({ root });
+  const report = await scanCommandSurface({ root, allowlist: ["retro"] });
 
   assert.equal(report.ok, false);
   const violation = report.violations.find((entry) => entry.kind === "inventory_missing");
