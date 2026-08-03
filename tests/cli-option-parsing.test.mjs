@@ -93,3 +93,35 @@ test("a boolean flag given a value does not vanish", async (t) => {
   assert.equal(checked.exitCode, 0, checked.stderr);
   assert.equal(parseJsonOutput(checked).mode, "check", "--check with a following argument must still check");
 });
+
+test("the equals form of a valueless flag is refused, not silently bound", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "legion-parse-eq-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  const git = (args) => execFileSync("git", ["-C", root, ...args], { stdio: ["ignore", "pipe", "ignore"] });
+  git(["init", "--initial-branch=main"]);
+  git(["config", "user.email", "test@example.com"]);
+  git(["config", "user.name", "Test"]);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+  git(["add", "-A"]);
+  git(["commit", "-m", "initial"]);
+
+  const run = (...args) => runCliCapture(["--repository-root", root, ...args]);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+
+  // The first fix covered `--check src` and not `--check=src`, because the
+  // equals branch runs before the valueless lookup. Same vanished flag, same
+  // destructive fall-through, reached by the syntax the test did not exercise —
+  // so the fix passed its own test while the bug stayed reachable.
+  const result = await run("map", "--check=src", "--json");
+  assert.notEqual(result.exitCode, 0, "a valueless flag given a value must not run any command");
+  assert.match(`${result.stdout}${result.stderr}`, /--check/);
+  assert.match(`${result.stdout}${result.stderr}`, /does not take a value/);
+});
+
+test("the equals form is refused for every valueless flag, not just map's", async () => {
+  // Refused at the parse boundary, so it cannot depend on which handler runs.
+  const result = await runCliCapture(["status", "--json=false"]);
+  assert.notEqual(result.exitCode, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /--json/);
+});

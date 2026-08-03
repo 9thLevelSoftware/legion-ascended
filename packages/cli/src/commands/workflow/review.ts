@@ -888,7 +888,9 @@ async function refreshBuildEvidenceAfterAutoFix(
       options: new Map<string, string | true>([
         ["executor", executor],
         ["allow-dirty", true]
-      ])
+      ]),
+      // Constructed rather than parsed, so nothing here can be malformed.
+      invalidOptions: []
     }
   });
   if (build.exitCode !== 0) {
