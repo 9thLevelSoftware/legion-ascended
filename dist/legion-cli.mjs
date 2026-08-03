@@ -15400,6 +15400,7 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   "auto",
   "auto-refine",
   "back",
+  "check",
   "dry-run",
   "finalize",
   "force-roadmap",
@@ -15411,10 +15412,13 @@ var VALUELESS_OPTIONS = /* @__PURE__ */ new Set([
   // followed by any positional swallows it as the flag's value.
   "next",
   "no-color",
+  "refresh",
   "review-accepted",
   "rollback",
   "session-status",
-  "skip"
+  "skip",
+  "status",
+  "verify"
 ]);
 function parseCliArgs(argv) {
   const positionals = [];
