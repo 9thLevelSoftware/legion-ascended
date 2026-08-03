@@ -295,3 +295,35 @@ test("completing a milestone twice is refused", async (t) => {
   const status = await run("milestone", "--status", "--json");
   assert.equal(parseJsonOutput(status).milestones[0].summary, "done", "the first summary must survive");
 });
+
+test("an unreadable requirement set is never reported as traceable, from any entrance", async (t) => {
+  const { root, run } = await scratchRepo(t);
+  await mkdir(path.join(root, ".legion", "project", "requirements"), { recursive: true });
+  await writeFile(path.join(root, ".legion", "project", "requirements", "index.json"), "{ not json");
+
+  // The guard existed in resolveTraceabilityStatus and only there, so status
+  // refused while validate and doctor reported "0 of 0 planned" over the same
+  // broken set. It lives in checkTraceability now, where the rule is.
+  for (const command of ["validate", "doctor"]) {
+    const result = await run(command, "--json");
+    const payload = parseJsonOutput(result);
+    assert.ok(
+      payload.diagnostics.some((entry) => entry.code === "requirement_set_unreadable"),
+      `${command} must report the unreadable set, got ${JSON.stringify(payload.diagnostics)}`
+    );
+  }
+});
+
+test("a query with no searchable terms is refused, not answered", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+
+  // An empty query was refused and `!!` was not, though neither searches for
+  // anything. Zero results reads as "nothing matches", not "nothing was asked".
+  const result = await run("map", "--query", "!!", "--json");
+  assert.notEqual(result.exitCode, 0);
+  assert.match(parseJsonOutput(result).diagnostics[0].message, /no searchable terms/);
+
+  const real = await run("map", "--query", "resolveAsset", "--json");
+  assert.equal(real.exitCode, 0, "a real query still works");
+});

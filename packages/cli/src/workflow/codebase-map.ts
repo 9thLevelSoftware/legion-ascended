@@ -373,6 +373,11 @@ function renderSearchMarkdown(map: CodebaseMapDocument): string {
   ].join("\n");
 }
 
+/** The terms a query reduces to; empty means nothing was searched for. */
+export function queryTerms(value: string): readonly string[] {
+  return tokenize(value);
+}
+
 function tokenize(value: string): readonly string[] {
   return value
     .toLowerCase()

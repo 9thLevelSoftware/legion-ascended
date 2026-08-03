@@ -39152,6 +39152,9 @@ function renderSearchMarkdown(map2) {
     ""
   ].join("\n");
 }
+function queryTerms(value) {
+  return tokenize(value);
+}
 function tokenize(value) {
   return value.toLowerCase().split(/[^a-z0-9_/-]+/u).map((entry) => entry.trim()).filter((entry) => entry.length >= 2);
 }
@@ -39318,6 +39321,18 @@ async function currentSpecRequirements(repositoryRoot) {
 async function checkTraceability(repositoryRoot) {
   const empty = { requirements: 0, planned: 0, unplanned: [] };
   const set2 = await readRequirementSet(repositoryRoot);
+  if (!set2.ok && set2.status !== "not_found") {
+    return {
+      diagnostics: [
+        {
+          code: "requirement_set_unreadable",
+          message: `The requirement set could not be read, so traceability was not checked: ${set2.reason ?? "unknown reason"}`,
+          source: { path: requirementSetIndexPath() }
+        }
+      ],
+      coverage: empty
+    };
+  }
   const diagnostics = [];
   const covered = /* @__PURE__ */ new Set();
   const specs = await currentSpecRequirements(repositoryRoot);
@@ -44675,6 +44690,11 @@ async function mapQuery(context, query) {
         nextAction: action2
       },
       ["Map query is blocked.", renderNextAction(action2)].join("\n")
+    );
+  }
+  if (queryTerms(query).length === 0) {
+    return usageError(
+      `legion map --query ${JSON.stringify(query)} has no searchable terms. Terms are at least two characters of letters, digits, underscore, hyphen or slash.`
     );
   }
   const matches = queryCodebaseMap(latest, query);
