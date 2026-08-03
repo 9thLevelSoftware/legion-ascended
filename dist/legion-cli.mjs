@@ -37467,7 +37467,13 @@ function guidancePrompt(input) {
     "",
     "The summary must cover these sections:",
     ...input.requiredSections.map((section) => `- ${section}`),
-    ""
+    "",
+    // Documented as "appended verbatim" and never appended. `legion explore` has
+    // been passing `explorationResultContract()` since it was written, and the
+    // executor never saw it — so every exploration was parsed for a typed shape
+    // nothing had asked it to produce, and `legion start --from-exploration`
+    // read whatever survived that mismatch.
+    ...input.extraContract === void 0 ? [] : [input.extraContract, ""]
   ].join("\n");
 }
 function renderGuidanceMarkdown(input) {
@@ -44195,7 +44201,7 @@ async function runLearnList(context) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile22 } from "node:fs/promises";
+import { readFile as readFile22, readdir as readdir16 } from "node:fs/promises";
 import path42 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
@@ -44697,19 +44703,41 @@ async function runRetroWorkflow(context) {
   }
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
+  const state = await resolveWorkflowState(context);
+  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
+  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns);
+  if (hasFlag(context, "dry-run")) {
+    const action2 = nextAction("legion retro", "Run without --dry-run to record the retrospective.");
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        workflow: "retro",
+        evidence,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Retrospective ready.",
+        `Evidence: ${evidence.summary}`,
+        "Nothing was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
     slugSource: "retro",
     createdAt
   });
-  const state = await resolveWorkflowState(context);
-  const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
   const topic = phase === null && milestone === null ? `workflow stage ${state.stage}` : `phase ${phase ?? ""} milestone ${milestone ?? ""}`.trim();
   const prompt = guidancePrompt({
     workflow: "retro",
     topic,
-    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"]
+    requiredSections: ["What Worked", "What Did Not", "Reusable Lessons", "Follow-Up Actions"],
+    extraContract: renderRetroEvidence(evidence)
   });
   const executed = await runGuidanceExecutor({
     context,
@@ -44824,8 +44852,12 @@ async function handleMilestoneWorkflow(context) {
     };
     slugSource = id;
   } else if (complete !== void 0 && summary !== void 0) {
-    if (!current.milestones.some((milestone) => milestone.id === complete)) {
+    const target = current.milestones.find((milestone) => milestone.id === complete);
+    if (target === void 0) {
       return usageError(`Milestone not found: ${complete}`);
+    }
+    if (target.status === "completed" || target.status === "archived") {
+      return usageError(`Milestone ${complete} is already ${target.status}. Completing it again would overwrite its recorded summary.`);
     }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
@@ -44946,6 +44978,45 @@ function renderMilestones(index) {
       milestone.summary === void 0 ? "" : `Summary: ${milestone.summary}`
     ].filter((line) => line.length > 0).join("\n")).join("\n\n"),
     ""
+  ].join("\n");
+}
+async function gatherRetroEvidence(repositoryRoot, state, recentRuns) {
+  let changeCount = 0;
+  let taskCount = 0;
+  let acceptedReviews = 0;
+  try {
+    const changesRoot = path42.join(repositoryRoot, ".legion", "project", "changes");
+    const entries = await readdir16(changesRoot, { withFileTypes: true });
+    const changeIds2 = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    changeCount = changeIds2.length;
+    for (const changeId of changeIds2) {
+      const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
+      if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
+      const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
+      if (reviews.ok) {
+        acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
+      }
+    }
+  } catch {
+  }
+  return {
+    stage: state.stage,
+    changeCount,
+    taskCount,
+    acceptedReviews,
+    recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
+    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s)`
+  };
+}
+function renderRetroEvidence(evidence) {
+  return [
+    "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:",
+    `- Workflow stage: ${evidence.stage}`,
+    `- Changes recorded: ${evidence.changeCount}`,
+    `- Tasks planned across those changes: ${evidence.taskCount}`,
+    `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
+    evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
+${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
   ].join("\n");
 }
 
