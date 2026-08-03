@@ -146,8 +146,16 @@ test("every inventory claim about a verb is checked against the code, not taken 
   // the handler body, so a clean scan is the assertion. What this adds is that
   // the inventory covers the whole surface: a command left out is a command no
   // check applies to.
+  // Every owed command is inventoried; converted ones keep their entry.
+  //
+  // Equality would force deleting a command's entry the moment it converts, and
+  // that entry is the record of what the conversion had to preserve — the
+  // anchors it lists are what the ratchet checks are still present in the
+  // converted file. Losing it would mean the conversion could be undone by a
+  // later edit with nothing to notice.
   const inventoried = new Set(inventory.commands.map((entry) => entry.command));
-  assert.deepEqual([...inventoried].sort(), [...PLANNING_ALLOWLIST].sort());
+  const missing = PLANNING_ALLOWLIST.filter((command) => !inventoried.has(command));
+  assert.deepEqual(missing, [], "every command still owed a conversion must be inventoried");
 
   for (const entry of inventory.commands) {
     assert.ok(["A", "B", "C"].includes(entry.class), `${entry.command} has an unknown class ${entry.class}`);
