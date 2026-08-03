@@ -89,13 +89,39 @@ const TEXT_EXTENSIONS = new Set([
   ".yml"
 ]);
 
+/**
+ * Refresh, or report that there was nothing to refresh.
+ *
+ * The empty-source check lives here rather than in the caller so the source set
+ * is collected once. A caller-side pre-flight walked and read every file, then
+ * this walked and read them again — double the I/O on a large repository, and
+ * worse, the decision "there is nothing to map" was made against a different
+ * snapshot from the one the artifacts were written from.
+ */
+/**
+ * The source set a refresh would map, collected once.
+ *
+ * Separate from `refreshCodebaseMap` so the caller can decide whether there is
+ * anything to map *before* claiming a run directory. Deciding afterwards left an
+ * empty run directory behind on every refusal, and deciding from a second walk
+ * meant the "nothing to map" answer came from a different snapshot than the
+ * artifacts would have been written from.
+ */
+export async function collectMapSource(input: {
+  readonly repositoryRoot: string;
+  readonly scope?: string;
+}): Promise<{ readonly scope: string; readonly files: readonly CodebaseMapFile[] }> {
+  const scope = normalizeScope(input.repositoryRoot, input.scope);
+  return { scope, files: await collectSourceFiles(input.repositoryRoot, scope) };
+}
+
 export async function refreshCodebaseMap(input: {
   readonly repositoryRoot: string;
   readonly paths: GuidanceRunPaths;
-  readonly scope?: string;
+  readonly scope: string;
+  readonly files: readonly CodebaseMapFile[];
 }): Promise<CodebaseMapArtifacts> {
-  const scope = normalizeScope(input.repositoryRoot, input.scope);
-  const files = await collectSourceFiles(input.repositoryRoot, scope);
+  const { scope, files } = input;
   const map: CodebaseMapDocument = {
     schemaVersion: 1,
     kind: "codebase_map",
@@ -376,4 +402,88 @@ function isTextLikeName(name: string): boolean {
 
 function sha256(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** How long a map stays trustworthy before it should be regenerated. */
+export const MAP_MAX_AGE_DAYS = 30;
+
+export type MapFreshness = "fresh" | "stale" | "partial" | "absent";
+
+export interface MapState {
+  readonly freshness: MapFreshness;
+  readonly reason: string;
+  readonly scope: string;
+  readonly sourceFingerprint: string;
+  readonly sourceFileCount: number;
+  readonly latestSourceFingerprint: string | null;
+  readonly generatedAt: string | null;
+  readonly ageDays: number | null;
+}
+
+/**
+ * The four states the command distinguishes and the verb collapsed into two.
+ *
+ * `mapCheck` computed one boolean and called everything that was not fresh
+ * "stale", so a project that had never run map reported the same status as one
+ * whose fingerprint had moved by a line — and a map generated against a
+ * different scope reported stale without saying that the comparison was not
+ * like for like.
+ */
+export async function resolveMapState(
+  repositoryRoot: string,
+  scope: string | undefined,
+  now: string
+): Promise<MapState | { readonly error: string }> {
+  const latest = await getLatestCodebaseMap(repositoryRoot);
+  let current: Awaited<ReturnType<typeof currentCodebaseFingerprint>>;
+  try {
+    current = await currentCodebaseFingerprint({ repositoryRoot, ...(scope === undefined ? {} : { scope }) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { error: `Unable to read the codebase map. ${message}` };
+  }
+
+  const base = {
+    scope: current.scope,
+    sourceFingerprint: current.sourceFingerprint,
+    sourceFileCount: current.sourceFileCount,
+    latestSourceFingerprint: latest?.sourceFingerprint ?? null,
+    generatedAt: latest?.generatedAt ?? null
+  };
+
+  if (latest === undefined) {
+    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
+  }
+
+  const ageDays = ageInDays(latest.generatedAt, now);
+  if (latest.scope !== current.scope) {
+    return {
+      ...base,
+      freshness: "partial",
+      reason: `The stored map covers ${latest.scope}, which is not the scope being checked (${current.scope}).`,
+      ageDays
+    };
+  }
+  if (latest.sourceFingerprint !== current.sourceFingerprint) {
+    return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
+  }
+  if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
+    // The fingerprint can match while the map is still worth regenerating: the
+    // schema moves, and a map old enough to predate it describes the repository
+    // in a vocabulary the current reader no longer uses.
+    return {
+      ...base,
+      freshness: "stale",
+      reason: `The map is ${Math.floor(ageDays)} days old, past the ${MAP_MAX_AGE_DAYS}-day limit.`,
+      ageDays
+    };
+  }
+  return { ...base, freshness: "fresh", reason: "The map matches the current source files.", ageDays };
+}
+
+function ageInDays(generatedAt: string, now: string): number | null {
+  const from = Date.parse(generatedAt);
+  const to = Date.parse(now);
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  return (to - from) / 86_400_000;
 }

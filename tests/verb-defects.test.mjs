@@ -238,3 +238,16 @@ test("refreshing a tree with no source files refuses instead of mapping nothing"
   assert.ok(payload.diagnostics.some((entry) => entry.code === "map_no_source"));
   assert.equal(await guidanceRunCount(root), 0, "a refusal must not leave a run directory behind");
 });
+
+test("legion status and legion map agree about the same map", async (t) => {
+  const { run } = await scratchRepo(t);
+  assert.equal((await run("map", "--refresh")).exitCode, 0);
+
+  // status had its own comparison — fingerprint only — so once map gained the
+  // age limit and the scope check the two commands disagreed about one map, and
+  // a user reading both was told to refresh and told not to bother.
+  const checked = parseJsonOutput(await run("map", "--check", "--json")).status;
+  const reported = parseJsonOutput(await run("status", "--json")).map.status;
+  assert.equal(reported, checked);
+  assert.equal(reported, "fresh");
+});

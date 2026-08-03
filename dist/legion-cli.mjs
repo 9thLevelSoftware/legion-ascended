@@ -38916,9 +38916,12 @@ var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
   ".yaml",
   ".yml"
 ]);
-async function refreshCodebaseMap(input) {
+async function collectMapSource(input) {
   const scope = normalizeScope(input.repositoryRoot, input.scope);
-  const files = await collectSourceFiles(input.repositoryRoot, scope);
+  return { scope, files: await collectSourceFiles(input.repositoryRoot, scope) };
+}
+async function refreshCodebaseMap(input) {
+  const { scope, files } = input;
   const map2 = {
     schemaVersion: 1,
     kind: "codebase_map",
@@ -39163,6 +39166,54 @@ function isTextLikeName(name) {
 }
 function sha256(bytes) {
   return createHash19("sha256").update(bytes).digest("hex");
+}
+var MAP_MAX_AGE_DAYS = 30;
+async function resolveMapState(repositoryRoot, scope, now) {
+  const latest = await getLatestCodebaseMap(repositoryRoot);
+  let current;
+  try {
+    current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return { error: `Unable to read the codebase map. ${message}` };
+  }
+  const base = {
+    scope: current.scope,
+    sourceFingerprint: current.sourceFingerprint,
+    sourceFileCount: current.sourceFileCount,
+    latestSourceFingerprint: latest?.sourceFingerprint ?? null,
+    generatedAt: latest?.generatedAt ?? null
+  };
+  if (latest === void 0) {
+    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
+  }
+  const ageDays = ageInDays(latest.generatedAt, now);
+  if (latest.scope !== current.scope) {
+    return {
+      ...base,
+      freshness: "partial",
+      reason: `The stored map covers ${latest.scope}, which is not the scope being checked (${current.scope}).`,
+      ageDays
+    };
+  }
+  if (latest.sourceFingerprint !== current.sourceFingerprint) {
+    return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
+  }
+  if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
+    return {
+      ...base,
+      freshness: "stale",
+      reason: `The map is ${Math.floor(ageDays)} days old, past the ${MAP_MAX_AGE_DAYS}-day limit.`,
+      ageDays
+    };
+  }
+  return { ...base, freshness: "fresh", reason: "The map matches the current source files.", ageDays };
+}
+function ageInDays(generatedAt, now) {
+  const from = Date.parse(generatedAt);
+  const to = Date.parse(now);
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  return (to - from) / 864e5;
 }
 
 // packages/cli/src/workflow/traceability-check.ts
@@ -39802,22 +39853,22 @@ function refineNextAction(input) {
 }
 async function resolveMapStatus(context) {
   const latest = await getLatestCodebaseMap(context.repositoryRoot);
-  if (latest === void 0) return { status: "missing" };
-  try {
-    const current = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, scope: latest.scope });
-    return {
-      status: current.sourceFingerprint === latest.sourceFingerprint ? "fresh" : "stale",
-      sourceFileCount: current.sourceFileCount,
-      scope: latest.scope,
-      sourceFingerprint: latest.sourceFingerprint
-    };
-  } catch {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const state = await resolveMapState(context.repositoryRoot, latest?.scope, now);
+  if ("error" in state) {
     return {
       status: "unknown",
-      scope: latest.scope,
-      sourceFingerprint: latest.sourceFingerprint
+      reason: state.error,
+      ...latest === void 0 ? {} : { scope: latest.scope, sourceFingerprint: latest.sourceFingerprint }
     };
   }
+  return {
+    status: state.freshness,
+    reason: state.reason,
+    sourceFileCount: state.sourceFileCount,
+    scope: state.scope,
+    ...state.latestSourceFingerprint === null ? {} : { sourceFingerprint: state.latestSourceFingerprint }
+  };
 }
 
 // packages/cli/src/workflow/change-input.ts
@@ -44353,27 +44404,27 @@ async function handleMapWorkflow(context) {
 async function mapRefresh(context, scope) {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
-  let detected;
+  let source;
   try {
-    detected = await currentCodebaseFingerprint({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
+    source = await collectMapSource({ repositoryRoot: context.repositoryRoot, ...scope === void 0 ? {} : { scope } });
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return usageError(`Unable to refresh codebase map. ${message}`);
   }
-  if (detected.sourceFileCount === 0) {
-    const action = nextAction("legion map --refresh --scope <path>", "Point the map at a path that contains source files.");
+  if (source.files.length === 0) {
+    const emptyAction = nextAction("legion map --refresh --scope <path>", "Point the map at a path that contains source files.");
     return failure(
       {
         ok: false,
         status: "absent",
         workflow: "map",
         mode: "refresh",
-        scope: detected.scope,
+        scope: source.scope,
         sourceFileCount: 0,
-        nextAction: action,
-        diagnostics: [{ code: "map_no_source", message: `No source files were detected under ${detected.scope}.` }]
+        nextAction: emptyAction,
+        diagnostics: [{ code: "map_no_source", message: `No source files were detected under ${source.scope}.` }]
       },
-      [`No source files were detected under ${detected.scope}. Nothing was written.`, renderNextAction(action)].join("\n")
+      [`No source files were detected under ${source.scope}. Nothing was written.`, renderNextAction(emptyAction)].join("\n")
     );
   }
   const paths = await createGuidanceRunPaths({
@@ -44386,7 +44437,8 @@ async function mapRefresh(context, scope) {
     const artifacts = await refreshCodebaseMap({
       repositoryRoot: context.repositoryRoot,
       paths,
-      ...scope === void 0 ? {} : { scope }
+      scope: source.scope,
+      files: source.files
     });
     const action = nextAction("legion plan 1", "Use refreshed map context when planning the next change.");
     await writeGuidanceRun({
@@ -44430,54 +44482,6 @@ async function mapRefresh(context, scope) {
     return usageError(`Unable to refresh codebase map. ${message}`);
   }
 }
-var MAP_MAX_AGE_DAYS = 30;
-async function resolveMapState(repositoryRoot, scope, now) {
-  const latest = await getLatestCodebaseMap(repositoryRoot);
-  let current;
-  try {
-    current = await currentCodebaseFingerprint({ repositoryRoot, ...scope === void 0 ? {} : { scope } });
-  } catch (error51) {
-    const message = error51 instanceof Error ? error51.message : String(error51);
-    return usageError(`Unable to read the codebase map. ${message}`);
-  }
-  const base = {
-    scope: current.scope,
-    sourceFingerprint: current.sourceFingerprint,
-    sourceFileCount: current.sourceFileCount,
-    latestSourceFingerprint: latest?.sourceFingerprint ?? null,
-    generatedAt: latest?.generatedAt ?? null
-  };
-  if (latest === void 0) {
-    return { ...base, freshness: "absent", reason: "No codebase map has been generated.", ageDays: null };
-  }
-  const ageDays = ageInDays(latest.generatedAt, now);
-  if (latest.scope !== current.scope) {
-    return {
-      ...base,
-      freshness: "partial",
-      reason: `The stored map covers ${latest.scope}, which is not the scope being checked (${current.scope}).`,
-      ageDays
-    };
-  }
-  if (latest.sourceFingerprint !== current.sourceFingerprint) {
-    return { ...base, freshness: "stale", reason: "Source files have changed since the map was generated.", ageDays };
-  }
-  if (ageDays !== null && ageDays > MAP_MAX_AGE_DAYS) {
-    return {
-      ...base,
-      freshness: "stale",
-      reason: `The map is ${Math.floor(ageDays)} days old, past the ${MAP_MAX_AGE_DAYS}-day limit.`,
-      ageDays
-    };
-  }
-  return { ...base, freshness: "fresh", reason: "The map matches the current source files.", ageDays };
-}
-function ageInDays(generatedAt, now) {
-  const from = Date.parse(generatedAt);
-  const to = Date.parse(now);
-  if (Number.isNaN(from) || Number.isNaN(to)) return null;
-  return (to - from) / 864e5;
-}
 function mapStatePayload(state, mode) {
   return {
     ok: true,
@@ -44499,7 +44503,7 @@ async function mapCheck(context, scope) {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
-  if ("exitCode" in state) return state;
+  if ("error" in state) return usageError(state.error);
   const action = mapStateAction(state);
   return success2(
     { ...mapStatePayload(state, "check"), nextAction: action },
@@ -44510,7 +44514,7 @@ async function mapSummary(context, scope) {
   const createdAt = guidanceCreatedAt(context);
   if (typeof createdAt !== "string") return createdAt;
   const state = await resolveMapState(context.repositoryRoot, scope, createdAt);
-  if ("exitCode" in state) return state;
+  if ("error" in state) return usageError(state.error);
   const action = mapStateAction(state);
   return success2(
     { ...mapStatePayload(state, "summary"), nextAction: action },
