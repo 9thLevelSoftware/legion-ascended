@@ -45494,6 +45494,76 @@ function doctorHuman(checks) {
   ].join("\n");
 }
 
+// packages/cli/src/commands/workflow/declared-options.ts
+var GLOBAL_OPTIONS = /* @__PURE__ */ new Set([
+  "created-at",
+  "help",
+  "json",
+  "no-color",
+  "repo",
+  "repository-root"
+]);
+var DECLARED = Object.freeze({
+  start: [
+    "abort",
+    "accept-proposal",
+    "answer",
+    "back",
+    "dry-run",
+    "finalize",
+    "force-roadmap",
+    "from-exploration",
+    "from-planning",
+    "from-roadmap",
+    "intake",
+    "name",
+    // Declared although no branch reads it: the default path IS "ask the next
+    // question", so --next names that explicitly and is the documented way to
+    // drive the interview. Refusing it would break the interface the host loop
+    // is written against.
+    "next",
+    "node",
+    "owner",
+    "session",
+    "session-status",
+    "skip",
+    "slug",
+    "summary",
+    "allow-replace-existing-project"
+  ],
+  status: [],
+  plan: ["auto-refine", "dry-run", "from-roadmap"],
+  build: ["allow-dirty", "dry-run", "executor"],
+  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "reject-reason"],
+  ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
+  validate: [],
+  doctor: [],
+  quick: [],
+  polish: [],
+  advise: ["executor"],
+  learn: ["list", "recall", "summary", "tags", "type"],
+  explore: ["entry", "executor"],
+  map: ["check", "query", "refresh", "scope"],
+  // phase and milestone are declared so the handler's own refusal is what the
+  // caller sees: it explains that a scoped retrospective is not implemented,
+  // which is more use than "this command does not read --phase".
+  retro: ["dry-run", "executor", "milestone", "phase"],
+  milestone: ["archive", "complete", "define", "phases", "status", "summary"],
+  council: ["executor"]
+});
+function undeclaredOptionError(context, command) {
+  const declared = DECLARED[command];
+  if (declared === void 0) return void 0;
+  const allowed = /* @__PURE__ */ new Set([...GLOBAL_OPTIONS, ...declared]);
+  const undeclared = [...context.args.options.keys()].filter((key) => !allowed.has(key)).sort();
+  if (undeclared.length === 0) return void 0;
+  const named = undeclared.map((key) => `--${key}`).join(", ");
+  return usageError(
+    `legion ${command} does not read ${named}. Passing an option a command ignores returns an answer to a different question, so it is refused. Accepted: ${[...declared].sort().map((key) => `--${key}`).join(", ") || "no command-specific options"}.`
+  );
+}
+var DECLARED_COMMANDS = Object.freeze(Object.keys(DECLARED));
+
 // packages/cli/src/commands/workflow/index.ts
 var WORKFLOW_HELP = `legion <workflow>
 
@@ -45527,6 +45597,8 @@ async function handleWorkflowCommand(context) {
     return helpResult(WORKFLOW_HELP);
   }
   const commandContext = stripCommand(context, 1);
+  const undeclared = undeclaredOptionError(commandContext, command);
+  if (undeclared !== void 0) return undeclared;
   switch (command) {
     case "start":
       return handleStartCommand(commandContext);

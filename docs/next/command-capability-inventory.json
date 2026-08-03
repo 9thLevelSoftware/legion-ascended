@@ -268,7 +268,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --ci. Its substance is a one-line machine-readable summary and a three-valued exit code (0 clean, 1 warnings, 2 failures); success and failure hardcode 0 and 1 and nothing returns 2. Deliberate removal, and it must be stated rather than implied by the WARN work: --json already carries the full typed payload, so the output half is redundant, and CI consumers relying on exit 2 lose that interface. Recording it is what stops the command being thinned while every criterion passes.",
+          "gap": "--ci is a recorded deliberate removal and is now refused rather than silently accepted. --json already carries the full typed payload; the three-valued exit code has no counterpart.",
           "disposition": "deliberate-removal"
         },
         {
@@ -276,7 +276,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No --fix. Every current fix target is a .planning/ file that retires, and the one remaining mechanically repairable diagnostic is a one-line .gitignore append. Record as a deliberate removal; note that parseCliArgs does not reject unknown options, so legion validate --fix parses and is silently ignored rather than erroring.",
+          "gap": "--fix is a recorded deliberate removal and is now refused rather than silently accepted: every fix target is a .planning/ file that retires, and parseCliArgs used to swallow the flag so it appeared to work.",
           "disposition": "deliberate-removal"
         },
         {
