@@ -40615,13 +40615,8 @@ var WORKER_BUNDLE_IDS = Object.freeze([
   "release-controller"
 ]);
 function selectAgents(input) {
-  const selected = [];
-  const writes = input.writeScope.length > 0;
-  if (!writes) return ["explorer"];
-  selected.push("implementer");
-  if (input.hasExecutableProof) selected.push("oracle-author");
-  if (input.adHocKind === "polish") selected.push("task-reviewer");
-  return selected;
+  if (input.writeScope.length === 0) return ["explorer"];
+  return ["implementer"];
 }
 
 // packages/cli/src/workflow/taskgraph-input.ts
@@ -42252,6 +42247,20 @@ async function executeTask(input) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
+  if (workerContext.blockedReason !== void 0 || workerContext.workerContext === void 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "worker_context_unavailable",
+          message: workerContext.blockedReason ?? "No worker context was produced.",
+          path: input.taskgraph.artifactPath
+        }
+      ]
+    };
+  }
+  const dispatchedBundle = workerContext.workerContext.workerBundle;
   const started = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
     expectedRevision: 0,
@@ -42263,6 +42272,7 @@ async function executeTask(input) {
       runId,
       attempt: input.attempt,
       executor: input.executor,
+      workerBundle: dispatchedBundle,
       createdAt,
       startedAt: createdAt,
       baseGitSha,
@@ -42270,19 +42280,6 @@ async function executeTask(input) {
     })
   });
   if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
-  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
-  if (workerContext.blockedReason !== void 0) {
-    return {
-      ok: false,
-      diagnostics: [
-        {
-          code: "worker_context_unavailable",
-          message: workerContext.blockedReason,
-          path: input.taskgraph.artifactPath
-        }
-      ]
-    };
-  }
   let verification = { passed: true };
   const adapter = adapterForKind(input.executor);
   const guarded2 = await runGuardedExecution({
@@ -42378,6 +42375,7 @@ async function executeTask(input) {
       runId,
       attempt: input.attempt,
       executor: input.executor,
+      workerBundle: dispatchedBundle,
       createdAt,
       startedAt: createdAt,
       finishedAt,
@@ -42472,22 +42470,15 @@ function taskRunDocument(input) {
       driver: "legion.executor",
       version: LEGION_PROTOCOL_VERSION
     },
-    workerBundle: {
-      // The task's own first agent, not a synthetic constant. This recorded
-      // `workflow-executor` / `implementer` for every run regardless of what the
-      // contract asked for, so the run manifest could not tell you which bundle
-      // did the work — and "agents used" read the same for every task ever run.
-      id: input.task.agents[0] ?? "implementer",
-      version: LEGION_PROTOCOL_VERSION,
-      role: input.task.agents[0] ?? "implementer",
-      domain: "codebase",
-      capabilities: ["build"],
-      promptContentContract: {
-        instructionsHash: hashContent(input.contextPack),
-        requiredSections: ["objective", "scope", "harness-rules"],
-        forbiddenSections: ["biography", "tone", "personality"]
-      }
-    },
+    // The bundle that was actually dispatched, taken from the worker context.
+    //
+    // This was a synthetic `workflow-executor` / `implementer` / `codebase`
+    // object for every run. Replacing only its id and role made it worse rather
+    // than better: the manifest then named a real bundle while still carrying
+    // the wrong version, domain, capabilities and prompt hash, so it described a
+    // bundle that does not exist and could not be integrity-verified — and it
+    // looked right, which the fully synthetic version at least did not.
+    workerBundle: input.workerBundle,
     model: {
       provider: input.executor === "codex" ? "openai" : "legion",
       id: input.executor === "codex" ? "codex-cli" : input.executor,

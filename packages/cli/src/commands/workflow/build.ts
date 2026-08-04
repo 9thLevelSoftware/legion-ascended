@@ -297,6 +297,30 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     text: prompt
   });
 
+
+  // Resolve the worker context BEFORE the executor runs. The worker-bundle
+  // prompt-hash gate only means "refuse to dispatch" if it is consulted while
+  // refusing is still possible; checking it after the adapter has already
+  // modified the repository would make it a completion gate wearing a dispatch
+  // gate's name.
+  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
+  if (workerContext.blockedReason !== undefined || workerContext.workerContext === undefined) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "worker_context_unavailable",
+          message: workerContext.blockedReason ?? "No worker context was produced.",
+          path: input.taskgraph.artifactPath
+        }
+      ]
+    };
+  }
+
+  // Narrowed once here so the manifest and the completion record share one
+  // non-optional bundle rather than re-checking at each write.
+  const dispatchedBundle = workerContext.workerContext.workerBundle;
+
   const started = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
     expectedRevision: 0,
@@ -308,6 +332,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
       runId,
       attempt: input.attempt,
       executor: input.executor,
+      workerBundle: dispatchedBundle,
       createdAt,
       startedAt: createdAt,
       baseGitSha,
@@ -316,24 +341,6 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
   });
   if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
 
-  // Resolve the worker context BEFORE the executor runs. The worker-bundle
-  // prompt-hash gate only means "refuse to dispatch" if it is consulted while
-  // refusing is still possible; checking it after the adapter has already
-  // modified the repository would make it a completion gate wearing a dispatch
-  // gate's name.
-  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
-  if (workerContext.blockedReason !== undefined) {
-    return {
-      ok: false,
-      diagnostics: [
-        {
-          code: "worker_context_unavailable",
-          message: workerContext.blockedReason,
-          path: input.taskgraph.artifactPath
-        }
-      ]
-    };
-  }
 
   // Every writable dispatch goes through the same guarded path, so the
   // guarantees it makes — one base SHA, pre-run snapshot, post-run
@@ -449,6 +456,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
       runId,
       attempt: input.attempt,
       executor: input.executor,
+      workerBundle: dispatchedBundle,
       createdAt,
       startedAt: createdAt,
       finishedAt,
@@ -559,6 +567,7 @@ function taskRunDocument(input: {
   readonly finishedAt?: UtcTimestamp;
   readonly baseGitSha: ReturnType<typeof resolveBaseGitSha>;
   readonly contextPack: string;
+  readonly workerBundle: WorkerContext["workerBundle"];
   readonly evidenceRefs?: readonly ReturnType<typeof evidenceIdForRun>[];
   readonly error?: TaskRun["error"];
 }): TaskRun {
@@ -572,22 +581,15 @@ function taskRunDocument(input: {
       driver: "legion.executor",
       version: LEGION_PROTOCOL_VERSION
     },
-    workerBundle: {
-      // The task's own first agent, not a synthetic constant. This recorded
-      // `workflow-executor` / `implementer` for every run regardless of what the
-      // contract asked for, so the run manifest could not tell you which bundle
-      // did the work — and "agents used" read the same for every task ever run.
-      id: input.task.agents[0] ?? "implementer",
-      version: LEGION_PROTOCOL_VERSION,
-      role: input.task.agents[0] ?? "implementer",
-      domain: "codebase",
-      capabilities: ["build"],
-      promptContentContract: {
-        instructionsHash: hashContent(input.contextPack),
-        requiredSections: ["objective", "scope", "harness-rules"],
-        forbiddenSections: ["biography", "tone", "personality"]
-      }
-    },
+    // The bundle that was actually dispatched, taken from the worker context.
+    //
+    // This was a synthetic `workflow-executor` / `implementer` / `codebase`
+    // object for every run. Replacing only its id and role made it worse rather
+    // than better: the manifest then named a real bundle while still carrying
+    // the wrong version, domain, capabilities and prompt hash, so it described a
+    // bundle that does not exist and could not be integrity-verified — and it
+    // looked right, which the fully synthetic version at least did not.
+    workerBundle: input.workerBundle,
     model: {
       provider: input.executor === "codex" ? "openai" : "legion",
       id: input.executor === "codex" ? "codex-cli" : input.executor,

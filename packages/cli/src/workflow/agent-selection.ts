@@ -38,27 +38,29 @@ export interface AgentSelectionInput {
 }
 
 /**
- * The bundles a task should be dispatched to, most specific first.
+ * The single bundle a task will be dispatched to.
  *
- * Always includes `implementer` when the task writes anything, because
- * something has to make the change. Specialists are added, not substituted.
+ * One, not a list. `selectWorkerBundleForTask` in
+ * `packages/core/src/dispatch/selector.ts` resolves `taskContract.agents[0]` and
+ * nothing else — multi-agent fan-out is deferred work. A first version of this
+ * function returned `["implementer", "oracle-author"]` for a task with an
+ * executable criterion, reasoning that specialists are added rather than
+ * substituted. Every entry after the first was inert: never dispatched, never
+ * consulted, and reported by anything counting "agents used" as though it had
+ * worked on the task. That is the advertised-but-never-read defect this
+ * repository keeps finding, produced while trying to remove a different one.
+ *
+ * So the choice is narrow by necessity rather than by taste, and it is honest
+ * about being narrow. A writing task gets the implementer, because something has
+ * to make the change and putting a specialist first would mean the code never
+ * gets written. The distinction that survives is real and was previously absent:
+ * a task that writes nothing is an investigation, not an implementation.
+ *
+ * Selecting on proof kind or ad-hoc kind becomes meaningful when fan-out exists.
+ * Until then a longer list would be a claim about work nobody does.
  */
-export function selectAgents(input: AgentSelectionInput): readonly WorkerBundleId[] {
-  const selected: WorkerBundleId[] = [];
-
+export function selectAgents(input: AgentSelectionInput): readonly [WorkerBundleId] {
   // A task that writes nothing is an investigation, whatever else it is.
-  const writes = input.writeScope.length > 0;
-  if (!writes) return ["explorer"];
-
-  selected.push("implementer");
-
-  // An executable criterion means a runner decides acceptance, so the fixture
-  // that runner executes is part of the work.
-  if (input.hasExecutableProof) selected.push("oracle-author");
-
-  // Polish is behaviour-preserving by definition, which is a review property
-  // rather than an implementation one.
-  if (input.adHocKind === "polish") selected.push("task-reviewer");
-
-  return selected;
+  if (input.writeScope.length === 0) return ["explorer"];
+  return ["implementer"];
 }

@@ -8,59 +8,54 @@ import { WORKER_BUNDLE_IDS, selectAgents } from "../packages/cli/dist/workflow/a
  *
  * Every planned task named `["implementer"]` and every guidance run named
  * `["explorer"]`, hardcoded — so "agents used" was a constant dressed as a
- * measurement, and a retrospective reporting it would have been reporting the
- * literal in the planner.
+ * measurement.
+ *
+ * The replacement is narrow by necessity. `selectWorkerBundleForTask` resolves
+ * `agents[0]` and nothing else, so a list is a claim about work nobody does.
  */
+
+test("exactly one agent is selected, because only the first is dispatched", () => {
+  // A first version returned ["implementer", "oracle-author"] on the reasoning
+  // that specialists are added rather than substituted. Every entry after the
+  // first was inert: never dispatched, and counted by anything reporting
+  // "agents used" as though it had worked on the task.
+  for (const input of [
+    { writeScope: [], hasExecutableProof: false },
+    { writeScope: ["."], hasExecutableProof: true },
+    { writeScope: ["src/"], hasExecutableProof: true, adHocKind: "polish" }
+  ]) {
+    assert.equal(selectAgents(input).length, 1, `${JSON.stringify(input)} selected more than one agent`);
+  }
+});
 
 test("a task that writes nothing is an investigation", () => {
   assert.deepEqual(selectAgents({ writeScope: [], hasExecutableProof: false }), ["explorer"]);
 });
 
-test("a task that writes always includes the implementer", () => {
-  // Specialists are added, not substituted: something still has to make the change.
-  assert.ok(selectAgents({ writeScope: ["."], hasExecutableProof: false }).includes("implementer"));
-  assert.ok(selectAgents({ writeScope: ["src/"], hasExecutableProof: true }).includes("implementer"));
+test("a task that writes gets the implementer, because something has to make the change", () => {
+  // Putting a specialist first would mean the code never gets written.
+  assert.deepEqual(selectAgents({ writeScope: ["."], hasExecutableProof: true }), ["implementer"]);
+  assert.deepEqual(selectAgents({ writeScope: ["src/"], hasExecutableProof: true, adHocKind: "polish" }), ["implementer"]);
 });
 
-test("an executable criterion brings the oracle author", () => {
-  // A runner decides acceptance, so the fixture it executes is part of the work.
-  const withProof = selectAgents({ writeScope: ["."], hasExecutableProof: true });
-  const without = selectAgents({ writeScope: ["."], hasExecutableProof: false });
-  assert.ok(withProof.includes("oracle-author"));
-  assert.equal(without.includes("oracle-author"), false);
-});
-
-test("polish brings a reviewer, because preserving behaviour is a review property", () => {
-  const polish = selectAgents({ writeScope: ["src/"], hasExecutableProof: true, adHocKind: "polish" });
-  const quick = selectAgents({ writeScope: ["src/"], hasExecutableProof: true, adHocKind: "quick" });
-  assert.ok(polish.includes("task-reviewer"));
-  assert.equal(quick.includes("task-reviewer"), false);
+test("the selection still distinguishes something", () => {
+  // The distinction that survives is real and was previously absent.
+  const investigating = selectAgents({ writeScope: [], hasExecutableProof: false }).join(",");
+  const implementing = selectAgents({ writeScope: ["."], hasExecutableProof: false }).join(",");
+  assert.notEqual(investigating, implementing);
 });
 
 test("every selected bundle exists", () => {
-  // An agent with no worker bundle cannot be dispatched, so a selection naming
-  // one that is not in bundles/index.json would fail at run time rather than here.
-  const cases = [
+  // An agent with no worker bundle cannot be dispatched, and that fails at run
+  // time rather than here.
+  for (const input of [
     { writeScope: [], hasExecutableProof: false },
     { writeScope: ["."], hasExecutableProof: false },
     { writeScope: ["."], hasExecutableProof: true },
-    { writeScope: ["src/"], hasExecutableProof: true, adHocKind: "polish" },
-    { writeScope: ["src/"], hasExecutableProof: true, adHocKind: "quick" }
-  ];
-  for (const input of cases) {
+    { writeScope: ["src/"], hasExecutableProof: true, adHocKind: "polish" }
+  ]) {
     for (const agent of selectAgents(input)) {
       assert.ok(WORKER_BUNDLE_IDS.includes(agent), `${agent} is not a real bundle`);
     }
   }
-});
-
-test("selection is not a constant", () => {
-  // The defect this replaces: one literal for every task regardless of shape.
-  const shapes = new Set([
-    selectAgents({ writeScope: [], hasExecutableProof: false }).join(","),
-    selectAgents({ writeScope: ["."], hasExecutableProof: false }).join(","),
-    selectAgents({ writeScope: ["."], hasExecutableProof: true }).join(","),
-    selectAgents({ writeScope: ["."], hasExecutableProof: true, adHocKind: "polish" }).join(",")
-  ]);
-  assert.ok(shapes.size >= 4, `expected distinct selections, got ${[...shapes].join(" | ")}`);
 });
