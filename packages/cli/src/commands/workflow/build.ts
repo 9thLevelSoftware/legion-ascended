@@ -19,6 +19,7 @@ import {
   FreshContextDispatcher,
   RuntimeLocalDriver,
   runDeterministicVerification,
+  type OracleAttribution,
   type VerificationReport,
   type WorkerContext
 } from "@legion/core";
@@ -432,6 +433,37 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     });
   }
 
+  // The verification report, persisted. It existed only in memory, so the
+  // `oracle-verification` evidence item had nothing to point at but
+  // `executor-result.json` — which is written before the harness runs anything,
+  // holds no command results, failing indices or attribution, and can report
+  // success while an oracle failed. An auditor following that reference could
+  // not substantiate the verdict it was cited for.
+  let verificationArtifactPath: ArtifactPath | undefined;
+  if (verification.report !== undefined) {
+    verificationArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "verification-report.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: verificationArtifactPath,
+      text: stableProtocolJson({
+        kind: "verification_report",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        report: verification.report,
+        oracleAttribution: verification.oracleAttribution ?? [],
+        // Oracles the task referenced that produced no executable command:
+        // inspection oracles, and any whose execution mode is not `command`.
+        // Named so the report says what it did not cover.
+        unevaluatedOracleRefs: verification.unevaluatedOracleRefs ?? []
+      })
+    });
+  }
+
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -445,6 +477,7 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     resultArtifactPath,
     redactedLogArtifactPath,
     taskgraphPath: input.taskgraph.artifactPath,
+    ...(verificationArtifactPath === undefined ? {} : { verificationArtifactPath }),
     verification,
     inContract,
     ...(reconciliation === undefined ? {} : { reconciliation }),
@@ -676,6 +709,7 @@ async function evidenceEntryForExecution(input: {
   readonly redactedLogArtifactPath: ArtifactPath;
   readonly taskgraphPath: ArtifactPath;
   readonly verification: ContractVerification;
+  readonly verificationArtifactPath?: ArtifactPath;
   readonly inContract: boolean;
   readonly reconciliation?: ReconciliationResult;
   readonly observationArtifactPath?: ArtifactPath;
@@ -743,6 +777,40 @@ async function evidenceEntryForExecution(input: {
       classification: "test-report",
       verdict: report.passed ? "pass" : "fail",
       artifact: resultReference,
+      traceRefs
+    });
+  }
+
+  // Oracles as their own evidence item, not folded into declared-verification.
+  // The two answer different questions: declared verification is "did the
+  // contract's own commands pass", oracle satisfaction is "did the criteria the
+  // phase was specified against hold". Reporting one verdict for both left the
+  // `approved_spec_and_oracle` and `protected_oracle` ship gates with no
+  // producer, so any R2+ change was structurally unshippable.
+  const attribution = input.verification.oracleAttribution ?? [];
+  const unevaluated = input.verification.unevaluatedOracleRefs ?? [];
+  if (input.verification.report !== undefined && (attribution.length > 0 || unevaluated.length > 0)) {
+    const report = input.verification.report;
+    const oracleIndices = new Set(attribution.map((entry) => entry.index));
+    const failing = report.failingIndices.filter((index) => oracleIndices.has(index));
+    items.push({
+      id: "oracle-verification",
+      classification: "test-report",
+      verdict:
+        failing.length > 0
+          ? "fail"
+          : // Every referenced oracle must have been evaluated. A requirement
+            // mixing executable and manual criteria emits both command and
+            // inspection oracles; passing the commands says nothing about
+            // whether the manual criteria were inspected, and recording that as
+            // a pass would satisfy the oracle gate on criteria nobody checked.
+            unevaluated.length > 0
+            ? "unknown"
+            : "pass",
+      artifact:
+        input.verificationArtifactPath === undefined
+          ? resultReference
+          : await referenceForFile(input.repositoryRoot, input.verificationArtifactPath),
       traceRefs
     });
   }
@@ -873,6 +941,17 @@ interface ContractVerification {
   readonly passed: boolean;
   /** Set when verification could not be attempted at all. */
   readonly blockedReason?: string;
+  /** Which executed commands came from which oracle, in command order. */
+  readonly oracleAttribution?: readonly OracleAttribution[];
+  /**
+   * Oracles the task referenced that produced no executable command.
+   *
+   * A requirement mixing executable and manual criteria emits both command and
+   * inspection oracles, and only command-mode ones are attributed. Without this
+   * the passing commands alone would record a passing oracle verdict while the
+   * manual criteria were never inspected.
+   */
+  readonly unevaluatedOracleRefs?: readonly string[];
 }
 
 /**
@@ -983,9 +1062,21 @@ async function runContractVerification(input: {
     }
   });
 
+  // Every referenced oracle that produced no executable command. Inspection
+  // oracles are the common case; so is an executable oracle whose execution mode
+  // is not `command`. Naming them is what keeps the verdict honest: the report
+  // says which criteria it did not cover, instead of a passing command set
+  // standing in for criteria nobody inspected.
+  const attributed = new Set(oracleAttribution.map((entry) => entry.oracleId));
+  const unevaluatedOracleRefs = oracles.loaded
+    .filter((oracle) => !attributed.has(oracle.id))
+    .map((oracle) => oracle.id);
+
   return {
     report,
     passed: report.passed,
+    oracleAttribution,
+    unevaluatedOracleRefs,
     ...(report.passed
       ? {}
       : {

@@ -88,14 +88,46 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
 test("gates with no producer are unevaluable, not silently satisfied", () => {
   const report = derive(PASSING_R2);
 
-  const oracle = report.gates.find((entry) => entry.gate === "protected_oracle");
-  assert.equal(oracle.status, "unevaluable");
-  assert.match(oracle.reason, /does not yet produce/);
+  // `whole_change_acceptance_evidence` still has no producer. `protected_oracle`
+  // did until oracle results became their own evidence item, so this asserts
+  // against a gate that is genuinely unproduced rather than one that merely was.
+  const unproduced = report.gates.find((entry) => entry.gate === "whole_change_acceptance_evidence");
+  assert.equal(unproduced.status, "unevaluable");
+  assert.match(unproduced.reason, /does not yet produce/);
 
   // They are counted so the gap is visible on every ship, never absorbed
   // into the satisfied total.
   assert.ok(report.unevaluable > 0);
   assert.equal(report.satisfied + report.unsatisfied + report.unevaluable, report.gates.length);
+});
+
+test("oracle gates read the oracle evidence item, not declared-verification", () => {
+  // Folded together, one verdict answered two different questions: "did the
+  // contract's own commands pass" and "did the criteria the phase was specified
+  // against hold". A task whose declared commands pass and whose oracle fails
+  // must not satisfy the oracle gate.
+  const passing = derive({
+    items: [item("declared-verification", "pass"), item("oracle-verification", "pass")],
+    reviews: [acceptedReview()]
+  });
+  assert.equal(passing.gates.find((entry) => entry.gate === "protected_oracle").status, "satisfied");
+
+  const failing = derive({
+    items: [item("declared-verification", "pass"), item("oracle-verification", "fail")],
+    reviews: [acceptedReview()]
+  });
+  assert.equal(failing.gates.find((entry) => entry.gate === "protected_oracle").status, "unsatisfied");
+  assert.equal(failing.ready, false);
+});
+
+test("a task naming no oracle is unevaluable, not satisfied", () => {
+  // No oracle evidence means the criteria were never expressed, which is not
+  // the same as their having held. Defaulting to satisfied would let a task
+  // clear an oracle gate by declaring nothing.
+  const report = derive(PASSING_R2);
+  const gate = report.gates.find((entry) => entry.gate === "protected_oracle");
+  assert.equal(gate.status, "unevaluable");
+  assert.match(gate.reason, /No oracle-verification evidence/);
 });
 
 test("unevaluable gates block, because a gate with no producer is unmet", () => {
@@ -134,4 +166,42 @@ test("every derived gate names the task it belongs to", () => {
   const report = derive(PASSING_R2);
   assert.ok(report.gates.length > 0);
   assert.ok(report.gates.every((entry) => entry.taskId === TASK_ID));
+});
+
+test("approved_spec_and_oracle is not satisfied by a passing oracle run", () => {
+  // That gate asks whether the spec and oracle were approved *before* gated
+  // execution. A post-execution test verdict cannot answer it: there is no
+  // approval record, approver, or ordering timestamp anywhere to check.
+  // Satisfying it from the oracle result would claim a governance gate was met
+  // when no such approval exists.
+  const report = derive({
+    tier: "R3",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      item("oracle-verification", "pass")
+    ],
+    reviews: [acceptedReview()]
+  });
+
+  const gate = report.gates.find((entry) => entry.gate === "approved_spec_and_oracle");
+  if (gate !== undefined) {
+    assert.equal(gate.status, "unevaluable");
+    assert.match(gate.reason, /does not yet produce/);
+  }
+});
+
+test("an oracle verdict of unknown does not satisfy the gate", () => {
+  // `unknown` is what build records when a task references oracles that were
+  // not all evaluated — a requirement mixing executable and manual criteria
+  // emits both command and inspection oracles, and only the commands run.
+  // Passing commands must not stand in for criteria nobody inspected.
+  const report = derive({
+    items: [item("declared-verification", "pass"), item("oracle-verification", "unknown")],
+    reviews: [acceptedReview()]
+  });
+
+  const gate = report.gates.find((entry) => entry.gate === "protected_oracle");
+  assert.notEqual(gate.status, "satisfied");
+  assert.equal(report.ready, false);
 });
