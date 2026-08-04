@@ -47,15 +47,19 @@ test("the checklist still blocks on the one thing that is genuinely open", () =>
   // This asserted `ga_task_open` and `phase_13_review_unsigned` while both were
   // the true state of this repository, with a note saying to update it when
   // either was resolved rather than delete it. Both are now resolved: P13-T04
-  // is DONE and the phase-13 review is signed. What remains is the package
-  // version, which is a release decision rather than work.
+  // is DONE and the phase-13 review is signed.
+  //
+  // The two that remain are exactly the two conditions the signed review names
+  // as outside its verdict. That correspondence is the point: a checklist that
+  // knew about only one of them would let "one finding left" be read as "one
+  // thing left to do".
   //
   // The mechanism these used to cover is exercised on fixtures in
   // tests/release-checklist.test.mjs, where it can fail on demand. Asserting
   // the mechanism against the live repository only worked while the repository
   // happened to be in the failing state.
   assert.equal(report.ok, false);
-  assert.deepEqual(codes, ["package_version_mismatch"]);
+  assert.deepEqual([...codes].sort(), ["package_version_mismatch", "whole_change_acceptance_unproven"]);
 });
 
 test("the phase-13 review is signed, and its verdict is read from its own section", () => {

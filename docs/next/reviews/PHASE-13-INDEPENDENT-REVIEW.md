@@ -128,7 +128,9 @@ checklist continues to report `blocked` until each is resolved on its own terms:
 2. **Whole-change acceptance has no transition**, so
    `whole_change_acceptance_evidence` is unevaluable and `workflow:dogfood`
    still asserts `blocked` as success. The sibling acceptance-artifact design is
-   an open decision.
+   an open decision. The release checklist reports this as
+   `whole_change_acceptance_unproven`, keyed off that dogfood assertion, so the
+   condition is enforced rather than only written down here.
 
 Signing this review does not make the release ready. It removes one of three
 blockers.
