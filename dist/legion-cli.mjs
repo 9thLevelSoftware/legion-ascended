@@ -45492,10 +45492,12 @@ async function handleMilestoneWorkflow(context) {
         `Milestone ${complete} has ${outstanding.length} incomplete phase(s): ${outstanding.map((entry) => `${entry.phase} (${entry.reason})`).join("; ")}. Completing it would record a summary over work that is not done.`
       );
     }
+    const derived = await deriveMilestoneMetrics(context.repositoryRoot, progress, createdAt);
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
       status: "completed",
       summary,
+      ...derived === void 0 ? {} : { derived },
       completedAt: createdAt
     }));
     status2 = "accepted";
@@ -45609,7 +45611,10 @@ function renderMilestones(index, progress) {
         `ID: ${milestone.id}`,
         `Phases: ${milestone.phases}`,
         `Status: ${milestone.status}`,
-        milestone.summary === void 0 ? "" : `Summary: ${milestone.summary}`
+        // The operator's words and the artifacts' numbers, side by side and
+        // separately labelled. A reader must be able to see them disagree.
+        milestone.summary === void 0 ? "" : `Summary (as recorded by the operator): ${milestone.summary}`,
+        ...renderDerivedMetrics(milestone.derived)
       ].filter((line) => line.length > 0);
       const state = progress.get(milestone.id);
       if (state === void 0) return body.join("\n");
@@ -45834,6 +45839,46 @@ async function saveStagedRetro(context, runId) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+async function deriveMilestoneMetrics(repositoryRoot, progress, generatedAt) {
+  if (!progress.ok) return void 0;
+  let tasks = 0;
+  let passingReviews = 0;
+  let firstPassPassed = 0;
+  let tasksReviewed = 0;
+  const changeIds2 = progress.phases.map((entry) => entry.changeId).filter((entry) => entry !== void 0);
+  for (const changeId of changeIds2) {
+    const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
+    if (taskgraph.ok) tasks += taskgraph.document.tasks.length;
+    const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
+    if (!reviews.ok) continue;
+    passingReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
+    const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes.length === 0);
+    tasksReviewed += firstAttempts.length;
+    firstPassPassed += firstAttempts.filter((review) => review.document.status === "accepted").length;
+  }
+  return {
+    phases: progress.phases.length,
+    phasesComplete: progress.phases.filter((entry) => entry.complete).length,
+    changes: changeIds2.length,
+    tasks,
+    passingReviews,
+    firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
+    generatedAt
+  };
+}
+function renderDerivedMetrics(metrics) {
+  if (metrics === void 0) return [];
+  return [
+    "",
+    "Derived from the artifacts:",
+    `- Phases: ${metrics.phasesComplete} of ${metrics.phases} complete`,
+    `- Changes: ${metrics.changes}`,
+    `- Tasks: ${metrics.tasks}`,
+    `- Reviews with a passing verdict: ${metrics.passingReviews}`,
+    metrics.firstPassReviews.reviewed === 0 ? "- First-pass review rate: no task has been reviewed" : `- First-pass review rate: ${metrics.firstPassReviews.passed} of ${metrics.firstPassReviews.reviewed}`,
+    `- Generated at: ${metrics.generatedAt}`
+  ];
 }
 
 // packages/cli/src/workflow/ship-gates.ts
