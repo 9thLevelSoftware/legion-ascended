@@ -209,7 +209,11 @@ test("the shipped inventory assigns every gap", async () => {
   const inventory = JSON.parse(
     await readFile(path.join(ROOT, "docs", "next", "command-capability-inventory.json"), "utf8")
   );
-  const allowed = new Set(["build-in-cli", "keep-in-host", "deliberate-removal"]);
+  // `built-in-cli` is the fourth: work that was owed and is now done. Its
+  // absence is why the field drifted — there was nowhere to move a finished
+  // entry, so the gap text was rewritten and the disposition left claiming it
+  // was still owed.
+  const allowed = new Set(["build-in-cli", "built-in-cli", "keep-in-host", "deliberate-removal"]);
 
   // Review found unassigned capabilities in one backlog item four separate
   // times. Each time the conversion would still have satisfied every written
@@ -310,4 +314,166 @@ test("a deterministic verb sharing a file with a dispatching one is still determ
   assert.equal(byName.get("map").executorBacked, false);
   assert.equal(byName.get("milestone").executorBacked, false);
   assert.equal(byName.get("explore").executorBacked, true);
+});
+
+/**
+ * A gap's disposition has to be falsifiable, or it decays into decoration.
+ *
+ * The set was {build-in-cli, keep-in-host, deliberate-removal} — three answers
+ * to "who owns this" and none to "this was owed and is now done". When work
+ * landed there was nowhere to move the entry, so the gap *text* was rewritten
+ * to describe the shipped behaviour and the disposition left alone. Twenty-one
+ * of twenty-six entries ended up claiming to be owed while describing finished
+ * work, and every count taken from the field was meaningless.
+ *
+ * A keyword scan over the prose was tried first and misclassified entries in
+ * both directions, which is the whole argument for checking it in code.
+ */
+
+function inventoryWith(gap) {
+  return {
+    schemaVersion: 1,
+    kind: "command_capability_inventory",
+    commands: [
+      {
+        command: "sample",
+        class: "C",
+        verb: null,
+        handler: null,
+        executorBacked: false,
+        retainedCapabilities: [],
+        cliGaps: [gap]
+      }
+    ]
+  };
+}
+
+const SAMPLE_COMMAND = { sample: "Render `legion sample --json` and stop.\n" };
+
+test("a gap recorded as owed whose closer already exists is reported", async (t) => {
+  // The drift that produced this check: a capability ships, nobody moves the
+  // entry, and the inventory goes on reporting it as owed forever.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    sources: { "packages/cli/src/sample.ts": "export function alreadyBuilt() {}\n" },
+    inventory: inventoryWith({
+      gap: "the thing is not built",
+      disposition: "build-in-cli",
+      closedWhen: { file: "packages/cli/src/sample.ts", pattern: "alreadyBuilt" }
+    })
+  });
+  const report = await scanCommandSurface({ root });
+
+  assert.equal(report.ok, false);
+  const violation = report.violations.find((entry) => entry.kind === "gap_closed_but_open");
+  assert.ok(violation, `expected gap_closed_but_open, got ${JSON.stringify(report.violations)}`);
+});
+
+test("a gap recorded as owed with no probe is reported", async (t) => {
+  // Without this, an entry opts out of the check by omitting the field, which
+  // is exactly what every pre-existing entry did.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    inventory: inventoryWith({ gap: "the thing is not built", disposition: "build-in-cli" })
+  });
+  const report = await scanCommandSurface({ root });
+
+  assert.equal(report.ok, false);
+  assert.ok(report.violations.some((entry) => entry.kind === "gap_open_without_probe"));
+});
+
+test("a probe pointing at a file that does not exist is reported", async (t) => {
+  // A probe that can never fire leaves the gap open forever without anyone
+  // noticing — the same silence this check exists to break.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    inventory: inventoryWith({
+      gap: "the thing is not built",
+      disposition: "build-in-cli",
+      closedWhen: { file: "packages/cli/src/gone.ts", pattern: "whatever" }
+    })
+  });
+  const report = await scanCommandSurface({ root });
+
+  assert.equal(report.ok, false);
+  assert.ok(report.violations.some((entry) => entry.kind === "gap_probe_unresolvable"));
+});
+
+test("a gap recorded as built must name a test that exists", async (t) => {
+  // "Built" cannot be claimed with nothing behind it, or the new disposition
+  // becomes a quieter version of the problem it replaced.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    inventory: inventoryWith({
+      gap: "the thing is built",
+      disposition: "built-in-cli",
+      evidence: "tests/does-not-exist.test.mjs"
+    })
+  });
+  const report = await scanCommandSurface({ root });
+
+  assert.equal(report.ok, false);
+  assert.ok(report.violations.some((entry) => entry.kind === "gap_built_evidence_missing"));
+
+  const bare = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    inventory: inventoryWith({ gap: "the thing is built", disposition: "built-in-cli" })
+  });
+  const bareReport = await scanCommandSurface({ root: bare });
+  assert.equal(bareReport.ok, false);
+  assert.ok(bareReport.violations.some((entry) => entry.kind === "gap_built_without_evidence"));
+});
+
+test("an owed gap whose probe does not yet match passes", async (t) => {
+  // The positive case. A check that only ever fails is one nobody can satisfy,
+  // and the negative cases above prove nothing without it.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    sources: { "packages/cli/src/sample.ts": "export function somethingElse() {}\n" },
+    inventory: inventoryWith({
+      gap: "the thing is not built",
+      disposition: "build-in-cli",
+      closedWhen: { file: "packages/cli/src/sample.ts", pattern: "notBuiltYet" }
+    })
+  });
+  const report = await scanCommandSurface({ root });
+
+  assert.ok(
+    !report.violations.some((entry) => entry.kind.startsWith("gap_")),
+    `unexpected gap violation: ${JSON.stringify(report.violations)}`
+  );
+});
+
+test("evidence must be a real test file, not any path that resolves", async (t) => {
+  // `existsSync` is true for directories, and `path.join(root, "")` is the
+  // repository root — so the gate meant to stop "built" being claimed without
+  // proof would have accepted "tests", or the empty string, as proof.
+  for (const evidence of ["", "tests", "docs/next", "README.md"]) {
+    const root = await fixtureRoot(t, {
+      commands: SAMPLE_COMMAND,
+      inventory: inventoryWith({ gap: "the thing is built", disposition: "built-in-cli", evidence })
+    });
+    const report = await scanCommandSurface({ root });
+    assert.equal(report.ok, false, `evidence ${JSON.stringify(evidence)} was accepted`);
+    assert.ok(
+      report.violations.some((entry) => entry.kind.startsWith("gap_built_evidence") || entry.kind === "gap_built_without_evidence"),
+      `expected an evidence violation, got ${JSON.stringify(report.violations)}`
+    );
+  }
+});
+
+test("a probe pointing at a directory is unresolvable, not a crash", async (t) => {
+  // `readFileSync` on a directory throws EISDIR, which would take the whole
+  // scan down instead of producing a finding.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    inventory: inventoryWith({
+      gap: "the thing is not built",
+      disposition: "build-in-cli",
+      closedWhen: { file: "commands", pattern: "anything" }
+    })
+  });
+  const report = await scanCommandSurface({ root });
+  assert.equal(report.ok, false);
+  assert.ok(report.violations.some((entry) => entry.kind === "gap_probe_unresolvable"));
 });
