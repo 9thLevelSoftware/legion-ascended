@@ -30,8 +30,8 @@
           "anchor": "Top risks or `_None detected_`."
         },
         {
-          "capability": "Semantic search that classifies a query into keyword, path, symbol, and domain hints and returns why each chunk matched",
-          "anchor": "Follow codebase-mapper Section 18 Semantic Search Protocol:"
+          "capability": "Semantic search over the verb's ranked matches: classify the query into keyword, path, symbol and domain hints, say why each matched, and name the source files to read next",
+          "anchor": "Follow codebase-mapper Section 18 Semantic Search Protocol over the returned matches:"
         },
         {
           "capability": "Offer a refresh rather than performing one when invoked with no flags",

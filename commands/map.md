@@ -64,7 +64,6 @@ repository root is the analysis; the run directory is the CLI's.
      - In default/full map mode: display "No source code detected, so no codebase map was generated." and exit without writing files.
 
 3. CHECK MODE
-   - Inspect these required artifacts:
    - `legion map --check --json` is the freshness answer. It reads the newest map
      run's `map.json`; the other four artifacts are outputs, not inputs to the check.
    - Report from its payload:
@@ -81,13 +80,12 @@ repository root is the analysis; the run directory is the CLI's.
    - `legion map --query <text> --json` searches the stored map. It reads the newest
      `map.json` and ranks its `files` entries; `index.jsonl` and `symbols.json` are not
      consulted by the verb.
-   - If missing, display: "No map index exists. Run `/legion:map` first." and exit.
-   - Follow codebase-mapper Section 18 Semantic Search Protocol:
+   - If it reports no map, display: "No map exists. Run `/legion:map --refresh` first." and exit.
+   - Follow codebase-mapper Section 18 Semantic Search Protocol over the returned matches:
      - Normalize the query into keywords, path hints, symbol hints, and domain hints.
-     - Search `index.jsonl` and `symbols.json` using Grep/Read.
-     - Return the top 5 matching chunks with id, path, line range, kind, summary, and why it matched.
-     - Include "Read next" source files and exact line ranges where available.
-   - Never answer from the index alone when source-file evidence is required; instruct consumers to read the source paths before acting.
+     - Rank and group the `matches` the verb returned, each carrying `path`, `score` and `summary`.
+     - Report the top 5 with why each matched, and name the source files to read next.
+   - Never answer from the ranking alone. It is a lexical score over generated summaries, so acting on it without opening the file is how a caller edits the wrong one.
 
 5. FULL MAP OR REFRESH MODE
    - `legion map --refresh --json` creates the run directory and writes the artifact set; do not create directories yourself.
@@ -103,7 +101,6 @@ repository root is the analysis; the run directory is the CLI's.
      - Setup/runbook.
      - Pattern library and conventions.
      - Monorepo package map, if applicable.
-   - `legion map --refresh --json` writes the CLI's five artifacts. Leave them alone.
    - Write the analysis to `CODEBASE.md` at the repository root — the architecture
      narrative, dependency graph, API surface, coverage map and risk hotspots. It is a
      separate document from the CLI's generated `codebase.md`, and conflating the two is

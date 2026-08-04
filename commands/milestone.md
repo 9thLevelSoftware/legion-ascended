@@ -200,17 +200,21 @@ invocation exists anywhere in the CLI.
       - Update milestone summary: add archive date
    f. Create git commit following execution-tracker Section 6 milestone archive format:
       ```
-      git add -A
+      git add .legion/project/workflow/milestone/milestones.json
+      git add {the other files the archive touched}
+      # Same rule as the completion commit: .legion/project/ is committed intent
+      # and legion milestone --archive writes the record there. Never `git add -A`,
+      # which would stage the operational .legion/var/.
       git commit -m "chore(legion): archive milestone {N} — {name}
 
-      Phases moved to the archived milestone record
+      Milestone marked archived; no artifacts relocated
       STATE.md and ROADMAP.md updated
 
       {adapter.commit_signature}"
       ```
    g. Display:
       "Milestone {N}: {name} — Archived!
-       Phase directories moved to the archived milestone record
+       Nothing was moved: phase and change artifacts remain at their current paths
        Summary preserved on the milestone record; `legion milestone --status --json` reports it"
    - Return to Step 5
 
