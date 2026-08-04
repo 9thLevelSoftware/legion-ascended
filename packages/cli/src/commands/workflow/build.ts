@@ -386,6 +386,32 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
   const reconciliation = guarded.reconciliation;
   const inContract = guarded.inContract;
 
+  // Persisted so "files modified" can be reported from what was observed. The
+  // observation was computed on every run and then discarded, leaving the
+  // executor's self-reported file list as the only one on disk — a claim the
+  // CLI records a `claim-observation-mismatch` against when it disagrees, and
+  // which was nonetheless the only thing a later reader could count.
+  let observationArtifactPath: ArtifactPath | undefined;
+  if (reconciliation?.observation !== undefined) {
+    observationArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "diff-observation.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: observationArtifactPath,
+      text: stableProtocolJson({
+        kind: "diff_observation",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: reconciliation.status,
+        ...reconciliation.observation
+      })
+    });
+  }
+
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -401,7 +427,8 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     taskgraphPath: input.taskgraph.artifactPath,
     verification,
     inContract,
-    ...(reconciliation === undefined ? {} : { reconciliation })
+    ...(reconciliation === undefined ? {} : { reconciliation }),
+    ...(observationArtifactPath === undefined ? {} : { observationArtifactPath })
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
@@ -632,6 +659,7 @@ async function evidenceEntryForExecution(input: {
   readonly verification: ContractVerification;
   readonly inContract: boolean;
   readonly reconciliation?: ReconciliationResult;
+  readonly observationArtifactPath?: ArtifactPath;
 }): Promise<EvidenceIndexEntry> {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
@@ -701,6 +729,14 @@ async function evidenceEntryForExecution(input: {
   }
 
   if (reconciliation !== undefined) {
+    // Points at the observation, not at the executor's result file. Only a
+    // verdict was persisted before, so the sole file list on disk was the
+    // executor's self-reported `filesChanged` — the very claim this item exists
+    // to check. "Files modified" could then only ever be reported from the
+    // claim, which the CLI itself treats as unreliable.
+    const observationReference = input.observationArtifactPath === undefined
+      ? resultReference
+      : await referenceForFile(input.repositoryRoot, input.observationArtifactPath);
     items.push({
       // What the working tree shows. This is the item that decides whether the
       // run stayed inside its contract.
@@ -712,7 +748,7 @@ async function evidenceEntryForExecution(input: {
           : reconciliation.status === "not_applicable"
             ? "not_applicable"
             : "fail",
-      artifact: resultReference,
+      artifact: observationReference,
       traceRefs
     });
 

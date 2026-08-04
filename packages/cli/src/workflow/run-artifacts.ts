@@ -56,7 +56,7 @@ function derivedSuffix(baseSuffix: string, tail: string): string {
 export function runArtifactPath(input: {
   readonly changeId: ChangeId;
   readonly runId: RunId;
-  readonly fileName: "context-pack.md" | "executor-prompt.md" | "executor-result.json" | "executor-raw.log" | "executor-redacted.log";
+  readonly fileName: "context-pack.md" | "executor-prompt.md" | "executor-result.json" | "executor-raw.log" | "executor-redacted.log" | "diff-observation.json";
 }): ArtifactPath {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/runs/${input.runId}/${input.fileName}`);
 }
@@ -64,7 +64,7 @@ export function runArtifactPath(input: {
 export function reviewRunArtifactPath(input: {
   readonly changeId: ChangeId;
   readonly reviewId: ReviewId;
-  readonly fileName: "context-pack.md" | "executor-prompt.md" | "executor-result.json" | "executor-raw.log" | "executor-redacted.log";
+  readonly fileName: "context-pack.md" | "executor-prompt.md" | "executor-result.json" | "executor-raw.log" | "executor-redacted.log" | "diff-observation.json";
 }): ArtifactPath {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }

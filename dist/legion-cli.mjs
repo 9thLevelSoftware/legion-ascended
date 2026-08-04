@@ -42274,6 +42274,26 @@ async function executeTask(input) {
   const finishedAt = currentUtcTimestamp();
   const reconciliation = guarded2.reconciliation;
   const inContract = guarded2.inContract;
+  let observationArtifactPath;
+  if (reconciliation?.observation !== void 0) {
+    observationArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "diff-observation.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: observationArtifactPath,
+      text: stableProtocolJson({
+        kind: "diff_observation",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: reconciliation.status,
+        ...reconciliation.observation
+      })
+    });
+  }
   const evidenceEntry = await evidenceEntryForExecution({
     repositoryRoot: input.context.repositoryRoot,
     task: input.task,
@@ -42289,7 +42309,8 @@ async function executeTask(input) {
     taskgraphPath: input.taskgraph.artifactPath,
     verification,
     inContract,
-    ...reconciliation === void 0 ? {} : { reconciliation }
+    ...reconciliation === void 0 ? {} : { reconciliation },
+    ...observationArtifactPath === void 0 ? {} : { observationArtifactPath }
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
@@ -42525,13 +42546,14 @@ async function evidenceEntryForExecution(input) {
     });
   }
   if (reconciliation !== void 0) {
+    const observationReference = input.observationArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.observationArtifactPath);
     items.push({
       // What the working tree shows. This is the item that decides whether the
       // run stayed inside its contract.
       id: "diff-reconciliation",
       classification: "runtime-log",
       verdict: reconciliation.status === "clean" ? "pass" : reconciliation.status === "not_applicable" ? "not_applicable" : "fail",
-      artifact: resultReference,
+      artifact: observationReference,
       traceRefs
     });
     const mismatch = claimObservationMismatch(input.result, reconciliation);
