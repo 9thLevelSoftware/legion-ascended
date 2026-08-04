@@ -121,35 +121,26 @@ test("legion milestone define, complete, and archive still record", async (t) =>
   assert.equal(parseJsonOutput(status).milestones[0].status, "archived", "status must read what the mutations wrote");
 });
 
-test("legion retro refuses a scope it cannot honour", async (t) => {
-  const { root, run } = await scratchRepo(t);
-  const result = await run("retro", "--phase", "3", "--executor", "fake", "--json");
+test("legion retro --phase refuses a phase that was never planned", async (t) => {
+  const { run } = await scratchRepo(t);
+  const result = await run("retro", "--phase", "7", "--executor", "fake", "--json");
 
-  // The flags reach the run slug, the run record, and the prompt topic, and
-  // gather no evidence from the named scope. Previously this exited 0 and wrote
-  // a retro.md labelled "phase 3", so a consumer had a successful run and a
-  // scoped-looking artifact describing an unscoped analysis.
-  //
-  // An intermediate revision emitted a diagnostic instead. That was the wrong
-  // call for the reason the map test above states: a scoped request the CLI
-  // cannot honour must not report success, and a diagnostic nothing is obliged
-  // to read does not retract an exit code.
-  assert.notEqual(result.exitCode, 0, "a scope the CLI cannot honour must not report success");
-  assert.match(`${result.stdout}${result.stderr}`, /--phase 3/);
-
-  // Refusing has to mean refusing. A usage error that still left an artifact
-  // behind would be the same claim in a quieter voice.
-  assert.equal(await guidanceRunCount(root), 0, "a refused retro must write nothing");
+  // Resolved to a change now rather than pasted into a prompt topic. The only
+  // phase-to-change link is the derived `chg_phase-<N>-` ID, because no phase
+  // field exists on a change.
+  assert.notEqual(result.exitCode, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /no change for that phase|legion plan 7/);
 });
 
-test("legion retro names every scope flag it refuses", async (t) => {
+test("legion retro refuses milestone scope for a stated reason", async (t) => {
   const { run } = await scratchRepo(t);
-  const result = await run("retro", "--phase", "3", "--milestone", "MVP", "--executor", "fake", "--json");
+  const result = await run("retro", "--milestone", "MVP", "--executor", "fake", "--json");
 
+  // A milestone's phases are free text nothing parses, so there is no
+  // milestone-to-phase path to follow. Refused with that reason rather than
+  // silently producing an unscoped result.
   assert.notEqual(result.exitCode, 0);
-  const output = `${result.stdout}${result.stderr}`;
-  assert.match(output, /--phase 3/);
-  assert.match(output, /--milestone MVP/, "naming one flag while refusing two misdescribes the refusal");
+  assert.match(`${result.stdout}${result.stderr}`, /free text|no set of changes/);
 });
 
 test("an unscoped retro still runs", async (t) => {

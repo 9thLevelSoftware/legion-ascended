@@ -63,11 +63,14 @@ test("global options are accepted everywhere", async (t) => {
   }
 });
 
-test("retro keeps its own refusal for the scope flags", async (t) => {
+test("retro's scope flags reach the handler rather than the option boundary", async (t) => {
   const { run } = await scratchRepo(t);
   const result = await run("retro", "--phase", "3", "--json");
   assert.notEqual(result.exitCode, 0);
-  // Declared, so the handler answers: "scoping is not implemented" is more use
-  // to a caller than "this command does not read --phase".
-  assert.match(parseJsonOutput(result).diagnostics[0].message, /cannot scope a retrospective/);
+  // Declared, so the handler answers. Which answer it gives is the handler's
+  // business — here, that no change exists for phase 3. What this pins is that
+  // the caller is told about their phase, not that `--phase` is unreadable.
+  const message = parseJsonOutput(result).diagnostics[0].message;
+  assert.match(message, /phase 3|Phase 3/);
+  assert.doesNotMatch(message, /unknown option|does not accept/i);
 });

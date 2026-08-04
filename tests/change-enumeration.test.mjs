@@ -114,3 +114,111 @@ test("phases are enumerated from the roadmap, not from its progress table", asyn
   assert.equal(phases[0].number, 1);
   assert.ok(phases[0].name.length > 0);
 });
+
+test("retro --phase selects that phase's change and refuses while it is incomplete", async (t) => {
+  const { run, planned } = await plannedProject(t);
+  // `legion plan 1` produced this change. The only phase-to-change link is the
+  // derived `chg_phase-<N>-<slug>` ID, so the selector must find it by prefix.
+  assert.match(planned.change.changeId, /^chg_phase-1-/);
+
+  const scoped = await run("retro", "--phase", "1", "--executor", "fake", "--json");
+
+  // Selection worked — the refusal is about completeness, not about a missing
+  // change. Nothing here is accepted yet, and a retrospective runs on completed
+  // work. Before this, `--phase` reached a prompt string and selected nothing.
+  assert.notEqual(scoped.exitCode, 0);
+  const text = `${scoped.stdout}${scoped.stderr}`;
+  assert.match(text, /Phase 1 is not complete/);
+  assert.doesNotMatch(text, /no change for that phase/);
+});
+
+test("retro --phase validates the whole value, not a parseInt prefix", async (t) => {
+  const { run } = await plannedProject(t);
+  // `Number.parseInt` returns 1 for all of these, which would resolve phase 1's
+  // change while the prompt and the saved run kept the caller's label — a
+  // retrospective labelled for a scope it did not resolve.
+  for (const value of ["1.5", "1foo", "1e2", "01"]) {
+    const result = await run("retro", "--phase", value, "--executor", "fake", "--json");
+    assert.notEqual(result.exitCode, 0, `--phase ${value} was accepted`);
+    assert.match(`${result.stdout}${result.stderr}`, /positive integer/);
+  }
+});
+
+test("first-pass review rate counts reviews whose supersedes array is empty", async (t) => {
+  const { root, run, planned } = await plannedProject(t);
+  const { mkdir } = await import("node:fs/promises");
+  const changeId = planned.change.changeId;
+  const reviewsDir = path.join(root, ".legion", "project", "changes", changeId, "reviews");
+  await mkdir(reviewsDir, { recursive: true });
+  // `status` reports the project id, so the fixture does not depend on any
+  // artifact's on-disk shape.
+  const projectId = parseJsonOutput(await run("status", "--json")).workflowState.projectId;
+  assert.ok(projectId, "status did not report a project id");
+  // A first review: `supersedes` is a required array and is `[]` here, never
+  // absent. A presence test therefore matches nothing, so any project with
+  // reviews reported "no task reviewed yet" and the metric read zero forever.
+  await writeFile(
+    path.join(reviewsDir, "rev_first.json"),
+    JSON.stringify({
+      schemaVersion: "1.0.0",
+      kind: "review",
+      id: "rev_first",
+      projectId,
+      changeId,
+      reviewer: { kind: "human", id: "dasbl" },
+      status: "accepted",
+      verdicts: { specification: "pass", integration: "pass", evidence: "pass" },
+      confidence: "high",
+      findings: [],
+      supersedes: [],
+      submittedAt: CREATED_AT,
+      createdAt: CREATED_AT
+    }),
+    "utf8"
+  );
+
+  const result = await run("retro", "--executor", "fake", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+  // The prompt artifact the executor was handed, which is where the metric has
+  // to appear: a number rendered only into the markdown afterwards never
+  // reached the reasoning it was gathered for. The run record names it.
+  const runRecord = JSON.parse(
+    await readFile(path.join(root, parseJsonOutput(result).artifactPath), "utf8")
+  );
+  const prompt = await readFile(path.join(root, runRecord.outputs.promptArtifactPath), "utf8");
+  assert.match(prompt, /First-pass review rate: 1 of 1/);
+});
+
+test("a scoped retrospective excludes project-wide stage and recent runs", async (t) => {
+  const { root, run, planned } = await plannedProject(t);
+  const { gatherRetroEvidence, renderRetroEvidence } = await import(
+    "../packages/cli/dist/commands/workflow/contextual.js"
+  );
+  const { resolveWorkflowState } = await import("../packages/cli/dist/workflow/state.js");
+  await run("build", "--executor", "fake", "--allow-dirty", "--json");
+
+  // Gathered at the seam rather than through a scoped run: reaching one needs a
+  // change whose evidence is accepted, and acceptance cannot override the
+  // harness observations a fake executor's build fails. That gate is correct, so
+  // the exclusion is pinned where it is decided.
+  const state = await resolveWorkflowState({ repositoryRoot: root, args: { options: new Map(), positionals: [] } });
+  const runs = [{ workflow: "build", runId: "run_x", status: "completed" }];
+
+  const unscoped = await gatherRetroEvidence(root, state, runs);
+  assert.equal(unscoped.stage, state.stage);
+  assert.deepEqual(unscoped.recentRuns, ["build/run_x: completed"]);
+
+  const scoped = await gatherRetroEvidence(root, state, runs, planned.change.changeId);
+  // A phase completed before later ones would otherwise be reflected on against
+  // the project's *current* stage and whatever ran most recently — the
+  // mislabelled-scope defect this selector exists to prevent. A guidance run
+  // records no change, so there is nothing to filter on: scoped mode omits them.
+  assert.equal(scoped.stage, undefined);
+  assert.deepEqual(scoped.recentRuns, []);
+  assert.equal(scoped.scopedChangeId, planned.change.changeId);
+
+  const rendered = renderRetroEvidence(scoped);
+  assert.doesNotMatch(rendered, /Workflow stage:/);
+  assert.doesNotMatch(rendered, /Recent workflow runs/);
+  assert.match(rendered, /Evidence from change chg_phase-1-/);
+});
