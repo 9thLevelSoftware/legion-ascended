@@ -258,8 +258,8 @@
           "anchor": "Then re-run validation on fixed files and show updated results."
         },
         {
-          "capability": "Per-check fixability policy that declines to auto-fix dangling agent references and emits human guidance instead",
-          "anchor": "Do NOT auto-fix dangling agent references."
+          "capability": "Per-check fixability policy: decline to auto-fix anything whose correct value is a decision, and never edit a requirement to make its hash match",
+          "anchor": "Do NOT auto-fix anything whose correct value is a decision."
         }
       ],
       "cliGaps": [
@@ -285,6 +285,14 @@
         },
         {
           "gap": "The .planning/config/control-modes.yaml half of the command's step 9 does not survive: the file retires with the directory, and docs/settings.schema.json carries the control_mode description that referenced it.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "The dangling-agent-reference half of the fixability policy retires with the .planning/ agent catalog it guarded. The policy itself survives, restated against the case that outlives it: requirement-set drift must never be silenced by editing the requirement.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "commands/validate.md advertised --fix and --ci in its argument-hint while the CLI refuses both. The hint is removed; the removals were already recorded and the command now says so in its authority section.",
           "disposition": "deliberate-removal"
         }
       ]
@@ -418,10 +426,10 @@
         "file": "packages/cli/src/commands/workflow/build.ts",
         "symbol": "handleBuildWorkflow"
       },
-      "executorBacked": false,
+      "executorBacked": true,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The CLI owns verification, diff reconciliation, and the task verdict. The wave executor, its disjointness proof, and its gates are host work with no verb equivalent.",
+      "rationale": "The CLI owns verification, diff reconciliation, and the task verdict. The wave executor, its disjointness proof, and its gates are host work with no verb equivalent. Recorded executorBacked: true — legion build --executor <kind> dispatches a model through adapterForKind(...).run(...) inside a helper. An earlier probe read only the top-level handler body and reported false, so the one claim the scanner calls computed-not-asserted was wrong for this command.",
       "hostOnly": [
         {
           "capability": "Wave A analysis dispatch and the architecture review gate",
@@ -445,10 +453,10 @@
         "file": "packages/cli/src/commands/workflow/review.ts",
         "symbol": "handleReviewWorkflow"
       },
-      "executorBacked": false,
+      "executorBacked": true,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The CLI owns the verification report, the gate set, and human acceptance. The multi-agent review panel and its routing are host work.",
+      "rationale": "The CLI owns the verification report, the gate set, and human acceptance. The multi-agent review panel and its routing are host work. Recorded executorBacked: true — legion review --executor <kind> dispatches a model through adapterForKind(...).run(...) inside a helper. An earlier probe read only the top-level handler body and reported false, so the one claim the scanner calls computed-not-asserted was wrong for this command.",
       "hostOnly": [
         {
           "capability": "Intent detection over natural-language invocation",

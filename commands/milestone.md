@@ -156,7 +156,7 @@ invocation exists anywhere in the CLI.
    e. Update STATE.md with milestone completion
    f. Create git commit following execution-tracker Section 6 milestone completion format:
       ```
-      git add the CLI's typed artifacts milestones/ legion validate --json legion status --json
+      git add {only the files the milestone completion touched — never .legion/ control artifacts}
       git commit -m "chore(legion): complete milestone {N} — {name}
 
       Phases {start}-{end}: {count} phases, {plans} plans
@@ -184,13 +184,14 @@ invocation exists anywhere in the CLI.
    b. If checks fail: report what's missing, return to Step 5
    c. Confirm with user:
       "Archive Milestone {N}: {name}?
-       This will move {count} phase directories from the CLI's typed artifacts phases/ to the archived milestone record
+       This will mark the milestone archived. Phase artifacts are not relocated: the CLI records
+       the archive on the milestone, and the change artifacts stay where they are.
        Files remain accessible in the archive location."
       Options: "Archive" / "Cancel"
    d. If Cancel: return to Step 5
    e. If Archive:
       - Create the archived milestone record directory
-      - Move each phase directory from the CLI's typed artifacts phases/ to the archived milestone record
+      - `legion milestone --archive <id>` records the archive; nothing is moved
       - Update ROADMAP.md: milestone Status → Archived, phase rows get "(Archived)" note
       - Update STATE.md: condense archived phase results, update Milestones section
       - Update milestone summary: add archive date

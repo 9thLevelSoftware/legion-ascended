@@ -24,13 +24,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  * inventory it now protects.
  */
 
-async function fixtureRoot(t, { commands, inventory }) {
+async function fixtureRoot(t, { commands, inventory, sources = {} }) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-surface-"));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   await mkdir(path.join(root, "commands"), { recursive: true });
   await mkdir(path.join(root, "docs", "next"), { recursive: true });
   for (const [name, body] of Object.entries(commands)) {
     await writeFile(path.join(root, "commands", `${name}.md`), body);
+  }
+  for (const [relative, body] of Object.entries(sources)) {
+    const target = path.join(root, ...relative.split("/"));
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, body);
   }
   await writeFile(
     path.join(root, "docs", "next", "command-capability-inventory.json"),
@@ -247,4 +252,62 @@ test("a verb whose implementation is shared says so, because the name proves not
       );
     }
   }
+});
+
+test("a model dispatch one helper away is detected, not missed", async (t) => {
+  const root = await fixtureRoot(t, {
+    commands: { retro: "Read `.planning/memory/RETRO.md`.\n" },
+    inventory: {
+      schemaVersion: 1,
+      kind: "command_capability_inventory",
+      commands: [
+        {
+          command: "retro",
+          verb: "retro",
+          // Points at a real handler that reaches `adapterForKind` only through
+          // `submitReview`. The earlier probe read the top-level body alone and
+          // reported false for `review` and `build` — the two commands where
+          // being wrong matters most, because both dispatch a model that writes.
+          handler: { file: "src/handler.ts", symbol: "handleThing" },
+          executorBacked: false,
+          class: "B",
+          hostOnly: [],
+          cliGaps: []
+        }
+      ]
+    },
+    sources: {
+      "src/handler.ts": [
+        "export async function handleThing(context) {",
+        "  return submitThing(context);",
+        "}",
+        "",
+        "async function submitThing(context) {",
+        "  return adapterForKind(context.executor).run({});",
+        "}",
+        ""
+      ].join("\n")
+    }
+  });
+  const report = await scanCommandSurface({ root, allowlist: ["retro"] });
+
+  assert.equal(report.ok, false);
+  const violation = report.violations.find((entry) => entry.kind === "executor_claim_mismatch");
+  assert.ok(violation, `expected an executor_claim_mismatch, got ${JSON.stringify(report.violations)}`);
+});
+
+test("a deterministic verb sharing a file with a dispatching one is still deterministic", async () => {
+  // contextual.ts holds explore and council, which dispatch, alongside map and
+  // milestone, which do not. A file-level grep would mark all four backed; the
+  // walk has to start from the named handler.
+  const report = await scanCommandSurface({ root: ROOT });
+  assert.equal(report.ok, true, report.violations.map((entry) => entry.message).join("\n"));
+
+  const inventory = JSON.parse(
+    await readFile(path.join(ROOT, "docs", "next", "command-capability-inventory.json"), "utf8")
+  );
+  const byName = new Map(inventory.commands.map((entry) => [entry.command, entry]));
+  assert.equal(byName.get("map").executorBacked, false);
+  assert.equal(byName.get("milestone").executorBacked, false);
+  assert.equal(byName.get("explore").executorBacked, true);
 });
