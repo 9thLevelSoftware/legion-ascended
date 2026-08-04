@@ -573,9 +573,13 @@ function taskRunDocument(input: {
       version: LEGION_PROTOCOL_VERSION
     },
     workerBundle: {
-      id: "workflow-executor",
+      // The task's own first agent, not a synthetic constant. This recorded
+      // `workflow-executor` / `implementer` for every run regardless of what the
+      // contract asked for, so the run manifest could not tell you which bundle
+      // did the work — and "agents used" read the same for every task ever run.
+      id: input.task.agents[0] ?? "implementer",
       version: LEGION_PROTOCOL_VERSION,
-      role: "implementer",
+      role: input.task.agents[0] ?? "implementer",
       domain: "codebase",
       capabilities: ["build"],
       promptContentContract: {

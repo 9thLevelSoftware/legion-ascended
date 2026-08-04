@@ -40602,6 +40602,28 @@ function isEnoent8(error51) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
 }
 
+// packages/cli/src/workflow/agent-selection.ts
+var WORKER_BUNDLE_IDS = Object.freeze([
+  "explorer",
+  "specifier",
+  "oracle-author",
+  "architect",
+  "planner",
+  "implementer",
+  "task-reviewer",
+  "integration-evaluator",
+  "release-controller"
+]);
+function selectAgents(input) {
+  const selected = [];
+  const writes = input.writeScope.length > 0;
+  if (!writes) return ["explorer"];
+  selected.push("implementer");
+  if (input.hasExecutableProof) selected.push("oracle-author");
+  if (input.adHocKind === "polish") selected.push("task-reviewer");
+  return selected;
+}
+
 // packages/cli/src/workflow/taskgraph-input.ts
 function phaseVerification(options, scoped = options.requirement?.executable ?? []) {
   const criteria = scoped.map((criterion) => ({
@@ -40689,9 +40711,14 @@ function buildTaskGraphInput(options) {
       // phase heading.
       requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
       wave: "A",
-      // Bundle IDs from bundles/index.json. An agent with no worker bundle
-      // cannot be dispatched, so these must name real bundles.
-      agents: ["implementer"],
+      // Derived from what the task is, not hardcoded. Every planned task named
+      // ["implementer"] regardless of its shape, so "agents used" was a
+      // constant dressed as a measurement.
+      // The write scope below is repository-wide, so every planned task writes.
+      agents: selectAgents({
+        writeScope: ["."],
+        hasExecutableProof: unit.criteria.length > 0
+      }),
       // Independent by construction: each task proves a different criterion of
       // the same requirement, and nothing in the criteria states an order.
       // Asserting a chain the operator did not describe would serialize work
@@ -42446,9 +42473,13 @@ function taskRunDocument(input) {
       version: LEGION_PROTOCOL_VERSION
     },
     workerBundle: {
-      id: "workflow-executor",
+      // The task's own first agent, not a synthetic constant. This recorded
+      // `workflow-executor` / `implementer` for every run regardless of what the
+      // contract asked for, so the run manifest could not tell you which bundle
+      // did the work — and "agents used" read the same for every task ever run.
+      id: input.task.agents[0] ?? "implementer",
       version: LEGION_PROTOCOL_VERSION,
-      role: "implementer",
+      role: input.task.agents[0] ?? "implementer",
       domain: "codebase",
       capabilities: ["build"],
       promptContentContract: {
@@ -43815,7 +43846,12 @@ async function createAdHocTaskgraph(input) {
     objective: input.objective,
     requirementIds: [requirementId],
     wave: "A",
-    agents: ["implementer"],
+    agents: selectAgents({
+      writeScope: adHocWriteScope,
+      // An ad-hoc task's verification command decides it.
+      hasExecutableProof: true,
+      adHocKind: input.kind
+    }),
     dependencies: [],
     context: {
       specRefs: [],

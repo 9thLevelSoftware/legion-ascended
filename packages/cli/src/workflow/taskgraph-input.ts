@@ -145,6 +145,8 @@ interface TaskUnit {
 }
 
 /** `slugSuffixSchema` accepts at most 64 characters. */
+import { selectAgents } from "./agent-selection.js";
+
 const MAX_ID_SUFFIX = 64;
 
 /** The protocol's ceiling for an oracle command timeout, applied here too. */
@@ -240,9 +242,14 @@ export function buildTaskGraphInput(options: BuildTaskGraphInputOptions): WriteT
       // phase heading.
       requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
       wave: "A",
-      // Bundle IDs from bundles/index.json. An agent with no worker bundle
-      // cannot be dispatched, so these must name real bundles.
-      agents: ["implementer"],
+      // Derived from what the task is, not hardcoded. Every planned task named
+      // ["implementer"] regardless of its shape, so "agents used" was a
+      // constant dressed as a measurement.
+      // The write scope below is repository-wide, so every planned task writes.
+      agents: selectAgents({
+        writeScope: ["."],
+        hasExecutableProof: unit.criteria.length > 0
+      }),
       // Independent by construction: each task proves a different criterion of
       // the same requirement, and nothing in the criteria states an order.
       // Asserting a chain the operator did not describe would serialize work

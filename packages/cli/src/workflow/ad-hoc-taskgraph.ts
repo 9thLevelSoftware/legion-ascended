@@ -21,6 +21,8 @@ import { criterionIdFor, generatedCriterion } from "./criteria.js";
 import { currentUtcTimestamp, firstDecisionOwner, resolveBaseGitSha } from "./change-input.js";
 import { slugFromName } from "./input.js";
 
+import { selectAgents } from "./agent-selection.js";
+
 export interface AdHocTaskgraphInput {
   readonly repositoryRoot: string;
   readonly project: Project;
@@ -258,7 +260,12 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
     objective: input.objective,
     requirementIds: [requirementId],
     wave: "A",
-    agents: ["implementer"],
+    agents: selectAgents({
+      writeScope: adHocWriteScope,
+      // An ad-hoc task's verification command decides it.
+      hasExecutableProof: true,
+      adHocKind: input.kind
+    }),
     dependencies: [],
     context: {
       specRefs: [],
