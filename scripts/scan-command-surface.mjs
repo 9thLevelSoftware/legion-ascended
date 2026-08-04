@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56,8 +57,109 @@ const INVENTORY_PATH = "docs/next/command-capability-inventory.json";
  */
 const EXECUTOR_CALLS = ["runGuidanceExecutor(", "adapterForKind("];
 
-/** Who owns a capability the verb does not have. There is no fourth answer. */
-const DISPOSITIONS = new Set(["build-in-cli", "keep-in-host", "deliberate-removal"]);
+/**
+ * Who owns a capability the verb does not have, and whether it has been built.
+ *
+ * `built-in-cli` exists because its absence caused a silent, repeated lie. The
+ * set was `{build-in-cli, keep-in-host, deliberate-removal}` — three answers to
+ * "who owns this", and none to "this was owed and is now done". When work
+ * landed there was nowhere to move the entry, so the gap *text* was rewritten
+ * to describe the shipped behaviour and the disposition left alone. Twenty-one
+ * of twenty-six `build-in-cli` entries ended up reading "is now", "no longer",
+ * "is closed at both ends" while still claiming to be owed, and every count
+ * taken from the field was meaningless.
+ *
+ * A schema that cannot express the truth will be filled in with something else.
+ */
+const DISPOSITIONS = new Set(["build-in-cli", "built-in-cli", "keep-in-host", "deliberate-removal"]);
+
+/**
+ * A disposition that can be checked rather than believed.
+ *
+ * - `built-in-cli` must name an `evidence` test file that exists on disk, so
+ *   "built" cannot be claimed with nothing behind it.
+ * - `build-in-cli` must carry a `closedWhen` probe — a `{file, pattern}` that
+ *   must **not** currently match. The day someone ships the capability the
+ *   pattern starts matching and this fails, forcing the disposition to move.
+ *   That is the check the previous drift had no equivalent of: prose describing
+ *   completed work sat under an "owed" label indefinitely because nothing
+ *   compared the two.
+ *
+ * A keyword scan over the gap text was tried first and misclassified entries in
+ * both directions. Prose cannot be the check.
+ */
+function auditGapDisposition({ root, name, gap, label }) {
+  const violations = [];
+
+  if (gap.disposition === "built-in-cli") {
+    const evidence = typeof gap.evidence === "string" ? gap.evidence : undefined;
+    if (evidence === undefined) {
+      violations.push({
+        kind: "gap_built_without_evidence",
+        command: name,
+        message: `a built-in-cli gap on ${name} names no evidence test. Add "evidence": "<test path>": ${label}`
+      });
+    } else if (!existsSync(path.join(root, evidence))) {
+      violations.push({
+        kind: "gap_built_evidence_missing",
+        command: name,
+        message: `a built-in-cli gap on ${name} names ${JSON.stringify(evidence)}, which does not exist: ${label}`
+      });
+    }
+    return violations;
+  }
+
+  if (gap.disposition !== "build-in-cli") return violations;
+
+  const probe = gap.closedWhen;
+  if (probe === undefined || typeof probe.file !== "string" || typeof probe.pattern !== "string") {
+    violations.push({
+      kind: "gap_open_without_probe",
+      command: name,
+      message:
+        `a build-in-cli gap on ${name} has no closedWhen probe. Add ` +
+        `"closedWhen": {"file": "<path>", "pattern": "<regex that matches once built>"}: ${label}`
+    });
+    return violations;
+  }
+
+  const probePath = path.join(root, probe.file);
+  if (!existsSync(probePath)) {
+    // A probe pointing at a file that does not exist can never fire, so the gap
+    // would stay open forever without anyone noticing — the same silence this
+    // check exists to break.
+    violations.push({
+      kind: "gap_probe_unresolvable",
+      command: name,
+      message: `a build-in-cli gap on ${name} probes ${JSON.stringify(probe.file)}, which does not exist: ${label}`
+    });
+    return violations;
+  }
+
+  let matched;
+  try {
+    matched = new RegExp(probe.pattern).test(readFileSync(probePath, "utf8"));
+  } catch (error) {
+    violations.push({
+      kind: "gap_probe_invalid",
+      command: name,
+      message: `a build-in-cli gap on ${name} has an unparseable closedWhen pattern: ${error.message}: ${label}`
+    });
+    return violations;
+  }
+
+  if (matched) {
+    violations.push({
+      kind: "gap_closed_but_open",
+      command: name,
+      message:
+        `a build-in-cli gap on ${name} is recorded as owed, but its closedWhen probe now matches ` +
+        `(${JSON.stringify(probe.pattern)} in ${probe.file}). Either the capability was built and the ` +
+        `disposition must become built-in-cli, or the probe is wrong: ${label}`
+    });
+  }
+  return violations;
+}
 
 export async function scanCommandSurface({ root = DEFAULT_ROOT, allowlist = PLANNING_ALLOWLIST } = {}) {
   const violations = [];
@@ -191,14 +293,18 @@ async function verifyInventory({ root, inventory, sources, allowed, violations }
     // nothing recorded that it was meant to go. Review found that shape four
     // separate times in one backlog item, so it is checked rather than reviewed.
     for (const gap of entry.cliGaps ?? []) {
-      if (DISPOSITIONS.has(gap?.disposition)) continue;
-      violations.push({
-        kind: "gap_unassigned",
-        command: name,
-        message:
-          `a cliGap on ${name} has no valid disposition (${JSON.stringify(gap?.disposition)}). ` +
-          `Every gap must be one of ${[...DISPOSITIONS].join(", ")}: ${JSON.stringify(String(gap?.gap ?? gap).slice(0, 80))}`
-      });
+      const label = JSON.stringify(String(gap?.gap ?? gap).slice(0, 80));
+      if (!DISPOSITIONS.has(gap?.disposition)) {
+        violations.push({
+          kind: "gap_unassigned",
+          command: name,
+          message:
+            `a cliGap on ${name} has no valid disposition (${JSON.stringify(gap?.disposition)}). ` +
+            `Every gap must be one of ${[...DISPOSITIONS].join(", ")}: ${label}`
+        });
+        continue;
+      }
+      violations.push(...auditGapDisposition({ root, name, gap, label }));
     }
 
     if (entry.class === "C") {
