@@ -1,288 +1,120 @@
 ---
 name: legion:validate
-description: Validate the CLI's typed artifacts  state file integrity, schema conformance, and cross-references
-argument-hint: "[--fix] [--ci]"
-allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
+description: Report the CLI's validation of committed project state
+argument-hint: ""
+allowed-tools: [Bash, Read, Edit, AskUserQuestion]
 ---
 
 <objective>
-Validate the integrity, schema conformance, and cross-referential consistency of all the CLI's typed artifacts state files. Produce a structured report of passes, warnings, and failures. Useful for diagnosing corrupted state, CI integration, and post-update verification.
-
-Purpose: Single command to verify project state health.
-Output: Validation report with actionable diagnostics.
+Render the validation the CLI performs, and help the operator repair what it reports. The CLI checks the artifacts and decides what is wrong. Your job is to show that, and to drive the fix-and-recheck loop.
 </objective>
 
 <execution_context>
 skills/workflow-common-core/SKILL.md
-skills/agent-registry/SKILL.md
 </execution_context>
 
 <context>
+Validation comes from the CLI, not from files read directly.
+
+    legion validate --json
+    legion doctor --json
+
+`legion doctor` is the superset: the same checks plus the shallow operational
+paths. Neither writes anything.
 </context>
 
 <authority>
-The CLI performs the validation. `legion validate --json` checks committed
-project state, requirement-set hash drift, traceability, and the root
-settings.json; `legion doctor --json` is the superset. Report what they return
-and do not derive a verdict of your own.
+You are not the validator. You are the screen its output is displayed on, and
+the hands that repair what it names.
 
-Findings carry severity: only blocking diagnostics fail. Warnings are reported
-and do not break the build, and `status` is `valid_with_warnings` when there are
-warnings but nothing blocking.
+Do not derive a verdict of your own, and do not decide a project is healthy
+because the files you happened to read looked fine. A report assembled from a
+model's reading of a repository is exactly as trustworthy as that reading, and
+its errors are invisible: a check silently skipped looks identical to a check
+that passed.
 
-What stays here is the repair loop: applying a fix and re-running validation to
-show the updated result, and the policy of declining to auto-fix references that
-need human judgement.
+Severity is the CLI's to assign. Only blocking diagnostics fail; warnings are
+reported and do not break the build. `status` is `valid_with_warnings` when
+there are warnings and nothing blocking — a healthy project with something worth
+fixing, not a failure.
+
+`--fix` and `--ci` are gone. Both are recorded deliberate removals: every target
+`--fix` had was a legacy planning file that retired with that directory, and `--ci`'s
+substance was a three-valued exit code the CLI has no severity tier to populate.
+`--json` carries the machine-readable payload.
 </authority>
 
 <process>
-1. PARSE ARGUMENTS
-   - If `$ARGUMENTS` contains `--fix`: set FIX_MODE = true. Attempt auto-fix for minor issues (missing sections, formatting).
-   - If `$ARGUMENTS` contains `--ci`: set CI_MODE = true. Machine-readable output only (summary line + exit code). No interactive prompts, no emoji, no table formatting.
-   - If neither flag is present: interactive validation with human-readable report.
-   - `--fix` and `--ci` may be combined (auto-fix in CI mode).
+1. READ THE RESULT
 
-   Initialize result accumulators:
-   - pass_count = 0
-   - warn_count = 0
-   - fail_count = 0
-   - results = [] (array of {check, status, details} objects)
+   ```
+   legion validate --json
+   ```
 
-2. CHECK PROJECT EXISTS
-   - Attempt to read the CLI's typed artifacts directory contents via Glob.
-   - If the CLI's typed artifacts does not exist or is empty:
-     Display: "No Legion project found. Run `/legion:start` to initialize."
-     If CI_MODE: exit with code 2.
-     Stop — do not proceed to step 3.
+   One call. Everything below comes out of that payload. Use `legion doctor --json`
+   instead when the operator wants the operational paths checked too.
 
-3. VALIDATE PROJECT.MD
-   - Check: `legion status --json` exists and is readable.
-   - Check: File starts with `# ` (has a title heading).
-   - Check: File contains a `## Requirements` or `## Goals` section header.
-   - Check: Frontmatter block (if present) is valid YAML between `---` delimiters.
-   - Scoring:
-     - File missing → FAIL
-     - File exists but missing title or requirements section → WARN
-     - All checks pass → PASS
-   - If FIX_MODE and title is missing: prepend `# Untitled Project\n\n` and re-validate.
-   - If FIX_MODE and requirements section is missing: append `\n## Requirements\n\n- (none defined)\n` and re-validate.
-   - Record result: {check: "PROJECT.md", status, details}.
+2. RENDER
 
-4. VALIDATE ROADMAP.MD
-   - Check: `legion validate --json` exists and is readable.
-   - Check: File contains a markdown table (at least one line matching `|...|...|`).
-   - Check: Table header row contains "Phase" and "Status" columns (case-insensitive).
-   - Check: Table header row contains "Name" or "Requirements" column.
-   - Check: Status values in all rows are one of: Pending, In Progress, Planned, Executed, Complete, Shipped (case-insensitive).
-   - Check: Phase numbers are sequential integers starting from 1, with no gaps.
-   - Scoring:
-     - File missing → FAIL
-     - Table missing or malformed headers → FAIL
-     - Invalid status values → WARN (list which rows)
-     - Non-sequential phase numbers → WARN
-     - All checks pass → PASS
-   - If FIX_MODE and status values are invalid: normalize to closest valid value (e.g., "done" → "Complete", "wip" → "In Progress").
-   - Record result: {check: "ROADMAP.md", status, details}.
+   - **Verdict** — `ok` and `status`: `valid`, `valid_with_warnings`, `invalid`,
+     `traceability_broken`, `requirement_set_drift`, or `settings_unparseable`.
+   - **Blocking diagnostics** — `diagnostics`. Each carries a `code`, a `message`
+     and a `source.path`. Show all of them; they are why the verdict is what it is.
+   - **Warnings** — `warnings`, when present. These do not fail the build. Show
+     them as findings to fix, not as errors.
+   - **Coverage** — `coverage`: `planned` of `requirements`, naming the
+     `unplanned` IDs. Unplanned requirements are the normal state of a project
+     mid-flight, so report the number without treating it as a fault.
+   - **Settings** — `settings.status`. `absent` means no `settings.json`, which is
+     not a problem. `warned` means invalid values were reported as warnings.
+     `unparseable` is the only settings state that fails.
+   - **Doctor extras** — `checks.operationalStore` and `checks.workerBundles`
+     when the payload came from `legion doctor`.
 
-5. VALIDATE STATE.MD
-   - Check: `legion status --json` exists and is readable.
-   - Check: File contains "Current" (case-insensitive) within the first 10 lines (current position section).
-   - Check: File contains a phase reference (e.g., "Phase: N of M" or "Phase N").
-   - Check: If a phase number is referenced, it exists in ROADMAP.md's phase table.
-   - Check: If progress percentages are present, they are between 0 and 100.
-   - Scoring:
-     - File missing → FAIL
-     - Missing current position section → WARN
-     - Phase reference not found in ROADMAP.md → FAIL
-     - Percentage out of range → WARN
-     - All checks pass → PASS
-   - Record result: {check: "STATE.md", status, details}.
+3. REPAIR
 
-6. VALIDATE PHASE FILES
-   - List all directories in the taskgraph `legion status --json` names.
-   - For each phase directory:
-     a. Check: CONTEXT.md exists.
-     b. For each PLAN-*.md file:
-        - Check: File has YAML frontmatter between `---` delimiters.
-        - Check: Frontmatter contains `phase`, `plan`, `wave`, and `agents` fields.
-        - Check: `agents` field is a non-empty array. `agents[0]` is the primary executor; any subsequent entries are co-executors.
-        - Check: Every entry in the `agents` array is a valid agent ID (exists in the agent catalog via agent-registry).
-        - Check: `wave` is a positive integer.
-        - Check: `expected_artifacts` field exists and is a non-empty array. Each entry has a `path` (string) and `provides` (string) property.
-        - Check: `verification_commands` field exists and is a non-empty array of strings (bash commands).
-        - Check: `must_haves` field exists and is an object containing at least a `truths` array.
-     c. For plans with "Complete" status: check that a corresponding SUMMARY-*.md exists.
-   - Scoring:
-     - Missing CONTEXT.md → WARN
-     - Plan missing frontmatter or required fields → FAIL
-     - Missing or empty `expected_artifacts` → FAIL
-     - Missing or empty `verification_commands` → FAIL
-     - Missing `must_haves` or missing `must_haves.truths` → FAIL
-     - Any agent ID in the `agents` array not found in catalog → FAIL (record which agent ID and which plan file)
-     - Missing SUMMARY for completed plan → WARN
-     - All checks pass → PASS
-   - If no phase directories exist: PASS with details "No phase files to validate".
-   - Record result: {check: "Phase files", status, details}.
+   Offer to fix what is mechanically fixable, then prove the fix.
 
-7. VALIDATE CROSS-REFERENCES
-   - Agent IDs referenced in any plan file must exist in the agent catalog.
-     (Already checked in step 6 — aggregate failures here.)
-   - Phase numbers in STATE.md must have corresponding entries in ROADMAP.md.
-     (Already checked in step 5 — aggregate failures here.)
-   - If recorded learning (`legion learn --list --json`) exists:
-     - Check: File has at least one outcome record (non-empty beyond headers).
-     - Check: Agent IDs referenced in outcomes exist in the agent catalog.
-   - If `the CLI's typed artifacts config/` directory exists:
-     - Check: Any YAML files are parseable (no syntax errors).
-   - Scoring:
-     - Any dangling reference → FAIL
-     - All cross-references resolve → PASS
-   - Record result: {check: "Cross-references", status, details}.
+   - Apply one repair at a time, so a failed attempt is attributable.
+   - **Then re-run validation on fixed files and show updated results.** A repair
+     that has not been re-validated is a claim, not a fix.
+   - If the diagnostic count did not fall, say so plainly rather than reporting
+     the repair as applied.
 
-7b. VALIDATE CONFIG AGENT REFERENCES
-   Config YAML files reference agents by ID. After agent consolidations or deletions,
-   these references can become dangling. This check catches phantom agent references
-   that step 6 misses (step 6 only validates plan frontmatter, not config files).
+4. DECLINE WHAT NEEDS JUDGEMENT
 
-   Build the ground-truth agent set:
-   - List all `.md` files in the `agents/` directory.
-   - Extract agent IDs by stripping the `.md` extension (e.g., `testing-qa-verification-specialist.md` → `testing-qa-verification-specialist`).
-   - Store as VALID_AGENT_IDS set.
+   **Do NOT auto-fix anything whose correct value is a decision.** Editing an
+   artifact to satisfy a check is a repair only when the intended content is
+   obvious; otherwise it converts a visible failure into an invisible wrong
+   answer.
 
-   Check authority-matrix.yaml:
-   - If the installed bundle configuration exists:
-     - Parse the YAML. Extract all top-level keys under the `agents:` mapping.
-     - For each key: check if it exists in VALID_AGENT_IDS.
-     - Any missing → record as FAIL with: "authority-matrix.yaml references agent '{id}' which does not exist in agents/"
-   - If file does not exist: skip silently.
-
-   Check intent-teams.yaml:
-   - If the installed bundle configuration exists:
-     - Parse the YAML. For each intent under the `intents:` mapping:
-       - Extract agent IDs from `agents.primary` list (if present).
-       - Extract agent IDs from `agents.secondary` list (if present).
-       - Extract agent IDs from `filter.exclude_agents` list (if present).
-     - For each extracted ID: check if it exists in VALID_AGENT_IDS.
-     - Any missing → record as FAIL with: "intent-teams.yaml intent '{intent_name}' references agent '{id}' which does not exist in agents/"
-   - If file does not exist: skip silently.
-
-   Check roster-gap-config.yaml:
-   - If the installed bundle configuration exists:
-     - Parse the YAML. Search all `coverage_indicators`, `covering_agents`, and `required_agents` lists recursively.
-     - For each agent ID found: check if it exists in VALID_AGENT_IDS.
-     - Any missing → record as WARN with: "roster-gap-config.yaml references agent '{id}' which does not exist in agents/"
-       (WARN not FAIL because roster-gap-config is analytical — it documents gaps, including agents that may have been removed intentionally.)
-   - If file does not exist: skip silently.
-
-   If FIX_MODE:
-     - Do NOT auto-fix dangling agent references. Agent consolidation requires human judgment
-       about which replacement agent should inherit the old agent's domains and team positions.
-     - Instead: append fix guidance to the report:
-       "To fix: check git log for the agent file deletion commit to identify which agent absorbed the removed agent's responsibilities. Update the config file to reference the consolidated agent ID."
-
-   Scoring:
-     - Any FAIL-level dangling reference → FAIL
-     - Only WARN-level references (roster-gap-config) → WARN
-     - All references resolve → PASS
-   - Record result: {check: "Config agent references", status, details}.
-
-8. VALIDATE AGENT ROSTER CONSISTENCY
-   Verify that agent counts and division breakdowns cited in documentation match reality.
-
-   Count actual agents:
-   - Count `.md` files in `agents/` directory → ACTUAL_COUNT.
-
-   Check STATE.md agent count:
-   - Search STATE.md for patterns like "{N} agents across" (regex: `(\d+)\s+agents?\s+across`).
-   - If found: extract the number as STATED_COUNT.
-     - If STATED_COUNT != ACTUAL_COUNT → FAIL with: "STATE.md claims {STATED_COUNT} agents but agents/ contains {ACTUAL_COUNT}"
-   - If no agent count pattern found: skip (not all projects track agent counts in STATE.md).
-
-   Check division alignment:
-   - For each `.md` file in `agents/`: read the YAML frontmatter and extract the `division` field.
-   - Group agents by division and count per division.
-   - If the installed bundle configuration exists:
-     - Check that each division comment header count (e.g., "# TESTING DIVISION (6 agents)") matches the actual agent count for that division.
-     - Any mismatch → WARN with: "authority-matrix.yaml says {division} has {stated} agents but agents/ contains {actual}"
-
-   If FIX_MODE and STATE.md count is wrong:
-     - Update the agent count number in STATE.md (all occurrences of the pattern).
-     - Note: only updates the numeric count, not surrounding prose.
-
-   Scoring:
-     - STATED_COUNT mismatch → FAIL
-     - Division count mismatch → WARN
-     - All counts match → PASS
-   - Record result: {check: "Agent roster consistency", status, details}.
-
-9. VALIDATE CONFIGURATION
-   - If `settings.json` exists in repo root:
-     - Check: File is valid JSON (parseable without errors).
-     - Check: If `control_mode` field exists, its value is one of: autonomous, guarded, advisory, surgical.
-     - Check: If `planning.max_tasks_per_plan` exists, it is a positive integer.
-     - Check: If `review.max_cycles` exists, it is a positive integer.
-   - If `settings.json` does not exist: PASS with details "No settings.json (using defaults)".
-   - If the installed bundle configuration exists:
-     - Check: File is parseable YAML.
-   - Scoring:
-     - Invalid JSON → FAIL
-     - Invalid control_mode → WARN
-     - Invalid field values → WARN
-     - All checks pass → PASS
-   - Record result: {check: "Configuration", status, details}.
-
-10. REPORT
-   Count results:
-   - pass_count = number of results with status PASS
-   - warn_count = number of results with status WARN
-   - fail_count = number of results with status FAIL
-
-   If CI_MODE:
-     Output only:
-     ```
-     validate: {pass_count} passed, {warn_count} warnings, {fail_count} failures
-     ```
-     Exit code: 0 if fail_count == 0 and warn_count == 0, 1 if warn_count > 0 and fail_count == 0, 2 if fail_count > 0.
-
-   If NOT CI_MODE:
-     Display the full report:
-     ```
-     ## Validation Report
-
-     | Check | Status | Details |
-     |-------|--------|---------|
-     | PROJECT.md | {status_icon} {STATUS} | {details} |
-     | ROADMAP.md | {status_icon} {STATUS} | {details} |
-     | STATE.md | {status_icon} {STATUS} | {details} |
-     | Phase files | {status_icon} {STATUS} | {details} |
-     | Cross-references | {status_icon} {STATUS} | {details} |
-     | Config agent refs | {status_icon} {STATUS} | {details} |
-     | Agent roster | {status_icon} {STATUS} | {details} |
-     | Configuration | {status_icon} {STATUS} | {details} |
-
-     **Summary**: {pass_count} passed, {warn_count} warnings, {fail_count} failures
-     ```
-
-     Status icons:
-     - PASS: checkmark
-     - WARN: warning indicator
-     - FAIL: failure indicator
-
-   If FIX_MODE was active and fixes were applied:
-     Append:
-     ```
-     ## Fixes Applied
-     - {description of each fix applied}
-     ```
-     Then re-run validation on fixed files and show updated results.
-
-11. DONE
-    Exit. Validate never modifies phase state (STATE.md, ROADMAP.md progress fields) unless --fix is used for formatting corrections only. Validate never changes phase status, plan assignments, or roadmap progression.
+   Never edit a requirement to make its hash match. Requirement-set drift means
+   the set changed after it was recorded, and the recorded hash is what makes
+   that visible. Show the drift and let the operator decide whether the
+   requirement or the record is wrong.
 </process>
 
-<error_handling>
-- If the CLI's typed artifacts directory is missing: direct user to `/legion:start`.
-- If agent catalog cannot be loaded: skip agent ID validation checks with WARN "Agent catalog unavailable — skipping agent ID validation".
-- If a file cannot be read (permissions, encoding): record as FAIL with the specific error message.
-- If `--ci` and `--fix` are combined: apply fixes silently, then output CI-format summary.
-</error_handling>
+<inspection>
+- `legion doctor --json` is the broader check; use it when a project looks healthy but something operational is wrong.
+- `legion status --json` says where the project stands. Validation says whether what it stands on is intact.
+- Nothing in this command writes to `.legion/`. If a section is missing from the payload, the artifact is missing — a finding, not a rendering problem to work around.
+</inspection>
+
+<decision_matrix>
+| Situation | Action |
+|-----------|--------|
+| `status` is `valid_with_warnings` | Report success, then list the warnings as things to fix |
+| `status` is `requirement_set_drift` | Show every drift entry; do not edit requirements to silence it |
+| `status` is `traceability_broken` | Name the unresolved IDs; a broken reference means an artifact moved or was removed |
+| `status` is `settings_unparseable` | Show the parse error; every consumer is running on defaults while believing otherwise |
+| `settings.status` is `absent` | Say so and move on; most projects never write the file |
+| A repair was applied | Re-run validation and show the new result before claiming the fix worked |
+| The payload looks wrong | Show it as returned and say what you doubt; do not substitute your own reading |
+</decision_matrix>
+
+<completion_gate>
+- The rendered verdict is the one `legion validate --json` returned.
+- Every blocking diagnostic is shown, with its path.
+- Any repair applied was followed by a re-run whose result is shown.
+- No requirement, oracle, or task artifact was edited to make a check pass.
+</completion_gate>

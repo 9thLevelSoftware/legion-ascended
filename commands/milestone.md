@@ -141,7 +141,7 @@ invocation exists anywhere in the CLI.
      - Goal, phase range
      - Per-phase breakdown: plan count, key deliverables from SUMMARY.md files
      - Requirement coverage: which requirements are satisfied by this milestone's phases
-     - If milestone is Complete or Archived: show the summary from the milestone index legion milestone reports
+     - If milestone is Complete or Archived: show the summary `legion milestone --status --json` reports
    - Return to Step 5
 
    **Path B: Complete milestone**
@@ -151,17 +151,22 @@ invocation exists anywhere in the CLI.
    c. Generate milestone summary:
       - Gather metrics (plans, requirements, files, agents)
       - Gather qualitative data (outcomes, decisions)
-      - Write the milestone index legion milestone reports
+      - `legion milestone --complete <id> --summary "<text>"` records it; the CLI owns the index
    d. Mark milestone complete in ROADMAP.md
    e. Update STATE.md with milestone completion
    f. Create git commit following execution-tracker Section 6 milestone completion format:
       ```
-      git add the CLI's typed artifacts milestones/ legion validate --json legion status --json
+      git add .legion/project/workflow/milestone/milestones.json
+      git add {the other files the milestone completion touched}
+      # .legion/project/ is committed intent and must be staged: legion milestone
+      # --complete writes the authoritative record there, and a commit that marks
+      # the milestone complete without it leaves a fresh checkout disagreeing and
+      # the working tree dirty. Never stage .legion/var/, which is operational.
       git commit -m "chore(legion): complete milestone {N} — {name}
 
       Phases {start}-{end}: {count} phases, {plans} plans
       Requirements: {req_count} satisfied
-      Summary: the milestone index legion milestone reports
+      Summary: {summary}
 
       {adapter.commit_signature}"
       ```
@@ -174,7 +179,7 @@ invocation exists anywhere in the CLI.
 
    g. Display:
       "Milestone {N}: {name} — Complete!
-       Summary written to the milestone index legion milestone reports
+       Summary recorded on the milestone; `legion milestone --status --json` reports it
        Run `/legion:milestone` to archive when ready."
    - Return to Step 5
 
@@ -184,30 +189,33 @@ invocation exists anywhere in the CLI.
    b. If checks fail: report what's missing, return to Step 5
    c. Confirm with user:
       "Archive Milestone {N}: {name}?
-       This will move {count} phase directories from the CLI's typed artifacts phases/ to the archived milestone record
-       Files remain accessible in the archive location."
+       This marks the milestone archived and moves nothing. Phase and change artifacts
+       stay exactly where they are, and remain readable at their current paths."
       Options: "Archive" / "Cancel"
    d. If Cancel: return to Step 5
    e. If Archive:
-      - Create the archived milestone record directory
-      - Move each phase directory from the CLI's typed artifacts phases/ to the archived milestone record
+      - `legion milestone --archive <id>` records the archive; no directory is created and nothing is moved
       - Update ROADMAP.md: milestone Status → Archived, phase rows get "(Archived)" note
       - Update STATE.md: condense archived phase results, update Milestones section
       - Update milestone summary: add archive date
    f. Create git commit following execution-tracker Section 6 milestone archive format:
       ```
-      git add -A
+      git add .legion/project/workflow/milestone/milestones.json
+      git add {the other files the archive touched}
+      # Same rule as the completion commit: .legion/project/ is committed intent
+      # and legion milestone --archive writes the record there. Never `git add -A`,
+      # which would stage the operational .legion/var/.
       git commit -m "chore(legion): archive milestone {N} — {name}
 
-      Phases moved to the archived milestone record
+      Milestone marked archived; no artifacts relocated
       STATE.md and ROADMAP.md updated
 
       {adapter.commit_signature}"
       ```
    g. Display:
       "Milestone {N}: {name} — Archived!
-       Phase directories moved to the archived milestone record
-       Summary preserved at the milestone index legion milestone reports"
+       Nothing was moved: phase and change artifacts remain at their current paths
+       Summary preserved on the milestone record; `legion milestone --status --json` reports it"
    - Return to Step 5
 
    **Path D: Redefine milestones**

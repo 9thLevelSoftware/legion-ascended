@@ -6,7 +6,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
 <objective>
-Create and maintain Legion's canonical codebase documentation and retrieval index. Generate the codebase map (`legion map --json`) for human-readable architecture context and `the CLI's typed artifacts codebase/` artifacts for structured search by other Legion commands.
+Create and maintain Legion's canonical codebase documentation and retrieval index. Produce the architecture document this command's analysis is for, and let the CLI own the file dataset underneath it. `legion map --refresh` writes `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and `map.json` under the run directory it reports; the analysis is written separately, because the two are different documents that have historically been confused for each other.
 </objective>
 
 <execution_context>
@@ -15,6 +15,13 @@ skills/codebase-mapper/SKILL.md
 </execution_context>
 
 <context>
+The CLI owns the artifact set and reports where it wrote them.
+
+    legion map --json
+
+`legion map --refresh --json` returns `mapArtifactPath`; the run directory beside
+it holds `codebase.md`, `index.jsonl`, `symbols.json`, `search.md` and
+`map.json`.
 </context>
 
 <authority>
@@ -26,6 +33,13 @@ What stays here is the analysis: the architecture narrative, the dependency
 graph, the API surface, the coverage map, and the ranked risk hotspots. The
 verb's artifact is a file inventory, so rendering its payload would replace an
 architecture document with a histogram.
+
+**Write the analysis to its own file — never over the CLI's artifact set.** The
+CLI's `codebase.md` is a generated file inventory and `map.json` is the document
+`legion map --check` and `--query` read. Overwriting either with the
+codebase-mapper's formats makes the stored map unreadable to the verb that owns
+it; not writing anywhere leaves the analysis unpersisted. `CODEBASE.md` at the
+repository root is the analysis; the run directory is the CLI's.
 </authority>
 
 <process>
@@ -43,46 +57,38 @@ architecture document with a histogram.
 
 2. SOURCE CODE DETECTION
    - Follow codebase-mapper Section 1 Source Code Detection Heuristic.
-   - Exclude Legion state/runtime folders: the CLI's typed artifacts, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.legion/`, `.git/`, dependency/build output directories.
+   - Exclude Legion state/runtime folders: `.legion/`, `.claude/`, `.codex/`, `.cursor/`, `.windsurf/`, `.gemini/`, `.opencode/`, `.aider/`, `.kilo/`, `.kilocode/`, `.legion/`, `.git/`, dependency/build output directories.
    - If no source code is detected:
      - In `--query`: continue to Query Mode; query reads an existing map dataset and does not require current source detection.
      - In `--check`: report `status: absent`, `reason: no source files detected`, and exit 0.
      - In default/full map mode: display "No source code detected, so no codebase map was generated." and exit without writing files.
 
 3. CHECK MODE
-   - Inspect these required artifacts:
-     - the codebase map (`legion map --json`)
-     - the codebase map
-     - the codebase map
-     - the codebase map
-     - the installed bundle configuration
-   - Read the codebase map (`legion map --json`) metadata:
-     - `map_schema_version`
-     - `generated_at`
-     - `analyzed_commit`
-     - `source_file_count`
-     - `source_fingerprint`
-   - Compute current source fingerprint using codebase-mapper Section 17.
-   - Status outcomes:
-     - `fresh`: all required artifacts exist, schema is current, age <= 30 days, source fingerprint matches.
-     - `stale`: artifacts exist but age > 30 days or fingerprint differs.
-     - `partial`: one or more required artifacts are missing.
-     - `absent`: no CODEBASE.md and no `the CLI's typed artifacts codebase/` dataset.
-   - Output a concise report with status, age, analyzed commit, missing artifacts, fingerprint match, and recommended action.
+   - `legion map --check --json` is the freshness answer. It reads the newest map
+     run's `map.json`; the other four artifacts are outputs, not inputs to the check.
+   - Report from its payload:
+     - `status`, `scope`, `sourceFileCount`, `sourceFingerprint`, `generatedAt`
+   - The CLI's four states, as it defines them:
+     - `fresh`: a map exists for this scope, its fingerprint matches the current source, and it is within the 30-day limit.
+     - `stale`: the fingerprint differs, or the map is older than 30 days.
+     - `partial`: a map exists but covers a different scope than the one being checked — the comparison is not like for like.
+     - `absent`: no map run has been generated.
+   - Output status, reason, age, scope, fingerprint match, and the recommended action.
    - Do not write files in `--check`.
 
 4. QUERY MODE
-   - Require the codebase map and the codebase map.
-   - If missing, display: "No map index exists. Run `/legion:map` first." and exit.
-   - Follow codebase-mapper Section 18 Semantic Search Protocol:
+   - `legion map --query <text> --json` searches the stored map. It reads the newest
+     `map.json` and ranks its `files` entries; `index.jsonl` and `symbols.json` are not
+     consulted by the verb.
+   - If it reports no map, display: "No map exists. Run `/legion:map --refresh` first." and exit.
+   - Follow codebase-mapper Section 18 Semantic Search Protocol over the returned matches:
      - Normalize the query into keywords, path hints, symbol hints, and domain hints.
-     - Search `index.jsonl` and `symbols.json` using Grep/Read.
-     - Return the top 5 matching chunks with id, path, line range, kind, summary, and why it matched.
-     - Include "Read next" source files and exact line ranges where available.
-   - Never answer from the index alone when source-file evidence is required; instruct consumers to read the source paths before acting.
+     - Rank and group the `matches` the verb returned, each carrying `path`, `score` and `summary`.
+     - Report the top 5 with why each matched, and name the source files to read next.
+   - Never answer from the ranking alone. It is a lexical score over generated summaries, so acting on it without opening the file is how a caller edits the wrong one.
 
 5. FULL MAP OR REFRESH MODE
-   - Ensure the CLI's typed artifacts, `the CLI's typed artifacts codebase/`, and `the CLI's typed artifacts config/` exist.
+   - `legion map --refresh --json` creates the run directory and writes the artifact set; do not create directories yourself.
    - Run the full codebase-mapper protocol:
      - Architecture narrative and module structure.
      - Functionality/feature inventory.
@@ -95,12 +101,10 @@ architecture document with a histogram.
      - Setup/runbook.
      - Pattern library and conventions.
      - Monorepo package map, if applicable.
-   - Write all required outputs:
-     - the codebase map (`legion map --json`)
-     - the codebase map
-     - the codebase map
-     - the codebase map
-     - the installed bundle configuration
+   - Write the analysis to `CODEBASE.md` at the repository root — the architecture
+     narrative, dependency graph, API surface, coverage map and risk hotspots. It is a
+     separate document from the CLI's generated `codebase.md`, and conflating the two is
+     how the analysis gets silently replaced by a file histogram.
    - `--scope <path>` still writes the same artifact set, but metadata must include `scope: <path>` and the report must say that the dataset is scoped, not full-project.
 
 6. COMPLETION REPORT
@@ -120,17 +124,15 @@ architecture document with a histogram.
 | Situation | Action |
 |-----------|--------|
 | Fresh complete dataset and no `--refresh` | Summarize freshness and ask whether to refresh or keep current |
-| Dataset missing index artifacts but CODEBASE.md exists | Treat as `partial`; rebuild unless user chooses check-only |
+| Stored map covers a different scope than the one checked | The CLI reports `partial`; say the comparison is not like for like and offer a scoped refresh |
 | Fingerprint mismatch | Treat as `stale`; recommend `/legion:map --refresh` |
 | Query requested without dataset | Do not improvise search; tell user to run `/legion:map` first |
 | Scope path outside project | Block with an escalation; never analyze outside the workspace by accident |
 </decision_matrix>
 
 <completion_gate>
-- the codebase map (`legion map --json`) exists and includes current map metadata.
-- the codebase map exists and contains one JSON object per retrievable chunk.
-- the codebase map exists and is valid JSON.
-- the codebase map documents the consumer search protocol.
-- the installed bundle configuration exists and is valid YAML.
+- `legion map --json` reports a status other than `absent`.
+- The architecture analysis was written to `CODEBASE.md`, not over the CLI's artifacts.
+- The CLI's run directory still parses: `legion map --check --json` succeeds after the run.
 - The final report names every artifact written and any degraded sections.
 </completion_gate>

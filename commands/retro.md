@@ -1,7 +1,7 @@
 ---
 name: legion:retro
 description: Run a structured retrospective on completed phases or milestones
-argument-hint: "[--phase N] [--milestone M] [--dry-run]"
+argument-hint: "[--dry-run]"
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
 ---
 
@@ -49,38 +49,43 @@ cross-project mode, none of which any verb performs.
    - Exit — do not proceed to step 2
 
 2. PARSE ARGUMENTS
-   - Read $ARGUMENTS for flags:
-     - `--phase N`: retrospective scoped to phase N
-     - `--milestone M`: retrospective scoped to milestone M (all phases in that milestone)
-     - No flag: default to most recently completed phase from ROADMAP.md Progress table
-   - If the specified phase/milestone is not yet complete:
-     Display: "Phase {N} is not yet complete (status: {status}). Retrospectives run on completed work.
-              Run `/legion:review` to finish the current review cycle, or specify a completed phase."
-     Exit — do not proceed
+   - `--dry-run`: run the analysis and write nothing. Pass it straight through.
+   - Scoping is not offered, because the CLI cannot honour it. `legion retro --phase N`
+     is refused by the verb — it would gather no evidence from that phase and produce
+     an unscoped retrospective under a scoped label. If the operator asks for one,
+     run it so they see the refusal rather than being told about it:
+
+     ```
+     legion retro --phase <N> --json
+     ```
+
+     then run the unscoped retrospective instead.
 
 3. READ PROJECT STATE
-   Read these files:
-   a. legion status --json — extract project name
-   b. legion validate --json — extract phase list, progress, milestones
-   c. legion status --json — extract current phase, completed phases
+   ```
+   legion status --json
+   ```
+   `workflowState.projectId` names the project and `workflowState.stage` says where it
+   stands. `legion validate --json` adds requirement coverage when the retrospective
+   needs it.
 
 4. CONDITIONAL SKILL LOADING
-   - `skills/memory-manager/SKILL.md` only if recorded learning directory exists
-   - If memory directory does not exist: memory features degrade gracefully (skip recording steps)
+   - `skills/memory-manager/SKILL.md` only when `legion learn --list --json` reports recorded learning
+   - With no recorded learning, the recall steps are skipped rather than failing
 
 5. GATHER DATA
    For the target scope (phase or milestone phases):
-   a. Read the taskgraph legion status --json names for each phase in scope
-      - Extract: completed tasks, files modified, agent assignments, handoff context
-      - Note any escalations (severity, type, resolution)
-   b. Read the taskgraph legion status --json names for each phase in scope
-      - Extract: review findings, pass/fail status, review cycle count
-      - Note if review required multiple cycles
-   c. Read recorded learning (if exists)
-      - Extract outcomes related to the target phases
-      - Note task_type classifications and agent performance
-   d. Read plan frontmatter from the taskgraph legion status --json names files
-      - Extract: agent assignments, verification commands, expected artifacts
+   The CLI gathers the evidence and puts it in front of the executor. Run
+   `legion retro --dry-run --json` first to see exactly what it will draw on.
+   a. `evidence` in that payload carries the counts: changes recorded, tasks
+      planned across them, reviews with a passing verdict, and recent runs.
+   b. `legion review --json` reports the recorded review decisions for the
+      current change — findings, verdicts, and whether a task needed more than
+      one cycle.
+   c. `legion learn --recall <topic> --json` returns prior lessons relevant to
+      the scope, scored by tag, summary and body match.
+   d. `legion learn --list --json` reports what learning already exists, so the
+      retrospective can add to it rather than restate it.
 
 6. ANALYZE
    For the gathered data, produce analysis across five categories:

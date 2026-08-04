@@ -44,8 +44,17 @@ export const PLANNING_ALLOWLIST = Object.freeze([]);
 
 const INVENTORY_PATH = "docs/next/command-capability-inventory.json";
 
-/** The call that makes a verb executor-backed, whoever wraps it. */
-const EXECUTOR_CALL = "runGuidanceExecutor(";
+/**
+ * The calls that hand work to a model.
+ *
+ * `runGuidanceExecutor(` alone was not enough. `legion review --executor codex`
+ * and `legion build --executor codex` both dispatch, through
+ * `adapterForKind(...).run(...)` — and both were recorded `executorBacked:
+ * false`, because the probe read only the top-level handler body and the
+ * dispatch sits one function away. The claim this check exists to compute was
+ * being computed wrongly for two of the three commands that matter most.
+ */
+const EXECUTOR_CALLS = ["runGuidanceExecutor(", "adapterForKind("];
 
 /** Who owns a capability the verb does not have. There is no fourth answer. */
 const DISPOSITIONS = new Set(["build-in-cli", "keep-in-host", "deliberate-removal"]);
@@ -244,8 +253,9 @@ async function verifyInventory({ root, inventory, sources, allowed, violations }
 
     // Computed, not asserted. Whether a verb hands the work to a model is the
     // fact that decides whether a command can be thinned onto it, so it is the
-    // one claim that must never be taken on trust.
-    const observed = body.includes(EXECUTOR_CALL);
+    // one claim that must never be taken on trust — which means following the
+    // helpers the handler calls, not stopping at its own body.
+    const observed = dispatchesToModel(handlerSource, entry.handler.symbol);
     if (observed !== Boolean(entry.executorBacked)) {
       violations.push({
         kind: "executor_claim_mismatch",
@@ -253,7 +263,7 @@ async function verifyInventory({ root, inventory, sources, allowed, violations }
         message:
           `the inventory says legion ${entry.verb} is ${entry.executorBacked ? "" : "not "}executor-backed, ` +
           `but ${entry.handler.symbol} in ${entry.handler.file} does ${observed ? "" : "not "}call ` +
-          `${EXECUTOR_CALL.slice(0, -1)}.`
+          `any of ${EXECUTOR_CALLS.map((call) => call.slice(0, -1)).join(" or ")}, directly or through a helper it calls.`
       });
     }
   }
@@ -271,6 +281,31 @@ async function verifyInventory({ root, inventory, sources, allowed, violations }
         `Inventory what it does, and what its verb does, before assigning it a class.`
     });
   }
+}
+
+/**
+ * Whether a handler reaches a model dispatch, directly or through a helper.
+ *
+ * File-level grep would be wrong in the other direction: `contextual.ts` holds
+ * `explore` and `council`, which dispatch, alongside `map` and `milestone`,
+ * which are deterministic. So this walks the local call graph from the named
+ * handler, visiting only functions declared in the same file, and stops at the
+ * first dispatch it can actually reach.
+ */
+function dispatchesToModel(source, symbol, visited = new Set()) {
+  if (visited.has(symbol)) return false;
+  visited.add(symbol);
+
+  const body = functionBody(source, symbol);
+  if (body === undefined) return false;
+  if (EXECUTOR_CALLS.some((call) => body.includes(call))) return true;
+
+  // Any locally-declared function this body names is a helper it may reach.
+  const declared = [...source.matchAll(/(?:^|\n)(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)]
+    .map((match) => match[1]);
+  return declared
+    .filter((name) => name !== symbol && new RegExp(`\\b${name}\\s*\\(`).test(body))
+    .some((name) => dispatchesToModel(source, name, visited));
 }
 
 /**
