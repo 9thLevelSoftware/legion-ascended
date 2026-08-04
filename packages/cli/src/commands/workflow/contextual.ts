@@ -41,7 +41,9 @@ import {
 import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { isChangeComplete, listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
+import { currentUtcTimestamp } from "../../workflow/change-input.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
+import { appendRetroEntry, readRetroIndex, retroIndexArtifactPath } from "../../workflow/retro-index.js";
 import { collectEscalations } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
 
@@ -660,6 +662,29 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   });
   const markdownArtifactPath = guidanceArtifactPath(paths, "retro.md");
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
+
+  // Append to the index before reporting success. Findings that live only in
+  // this run directory are findings the next planning pass will never see,
+  // which is the loop this command exists to close.
+  const retroIndexPath = retroIndexArtifactPath();
+  const nextIndex = appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
+    id: paths.runId,
+    createdAt: currentUtcTimestamp(),
+    ...(scopedChangeId === undefined ? {} : { scopedChangeId }),
+    artifactPath: markdownArtifactPath,
+    summary: executed.result.summary,
+    actions: executed.result.findings.map((finding) => ({
+      id: finding.id,
+      title: finding.title,
+      body: finding.body,
+      severity: finding.severity
+    }))
+  });
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: retroIndexPath,
+    text: stableProtocolJson(nextIndex)
+  });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status = executed.result.ok ? "completed" : "blocked";
   const diagnostics = executed.result.findings;
@@ -670,6 +695,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     runInput: { phase, milestone },
     outputs: {
       markdownArtifactPath,
+      retroIndexArtifactPath: retroIndexPath,
       promptArtifactPath: executed.promptArtifactPath,
       resultArtifactPath: executed.resultArtifactPath,
       rawLogArtifactPath: executed.rawLogArtifactPath,
@@ -686,6 +712,8 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     runId: paths.runId,
     artifactPath: paths.workflowRunArtifactPath,
     markdownArtifactPath,
+    retroIndexArtifactPath: retroIndexPath,
+    retrospectiveCount: nextIndex.retrospectives.length,
     executor: executed.executor,
     nextAction: action,
     diagnostics
