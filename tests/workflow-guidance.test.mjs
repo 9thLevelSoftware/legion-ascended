@@ -200,9 +200,15 @@ test("advise learn retro and milestone write structured guidance state", async (
     assert.equal(define.exitCode, 0, define.stderr);
     assert.equal(parseJsonOutput(define).milestones[0].status, "defined");
 
+    // `--complete` gates on the phases the milestone covers. Phases 1-3 were
+    // never planned here, so it refuses and names them — the command's stated
+    // no-partial-completions rule, which previously only checked that the id
+    // existed. Reaching a passing completion needs every covered phase's
+    // evidence accepted, and acceptance cannot override the harness
+    // observations a fake executor's build fails.
     const complete = await runCliCapture(["--repository-root", root, "milestone", "--complete", "milestone-mvp", "--summary", "MVP complete", "--json"]);
-    assert.equal(complete.exitCode, 0, complete.stderr);
-    assert.equal(parseJsonOutput(complete).milestones[0].status, "completed");
+    assert.equal(complete.exitCode, 1);
+    assert.match(parseJsonOutput(complete).diagnostics[0].message, /incomplete phase\(s\)/);
 
     const archive = await runCliCapture(["--repository-root", root, "milestone", "--archive", "milestone-mvp", "--json"]);
     assert.equal(archive.exitCode, 0, archive.stderr);
