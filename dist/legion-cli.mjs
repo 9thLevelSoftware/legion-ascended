@@ -42153,7 +42153,7 @@ async function handleBuildWorkflow(context, changeId) {
     "legion plan 1",
     "A typed task graph is required before build can run."
   );
-  const latestChange = changeId === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : { ok: true, changeId, diagnostics: [] };
+  const latestChange = changeId === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : { ok: true, changeId };
   if (!latestChange.ok) {
     return blockedBuild(latestChange.diagnostics, planAction);
   }
@@ -42964,6 +42964,9 @@ async function handleReviewWorkflow(context) {
   if (context.args.options.get("phase") === true || phaseOption === "") {
     return usageError("Missing required value for --phase. Example: legion review --phase 3.");
   }
+  if (phaseOption !== void 0 && !/^[1-9]\d*$/.test(phaseOption)) {
+    return usageError(`Invalid phase number "${phaseOption}". Use a positive integer.`);
+  }
   const latestChange = phaseOption === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : await resolvePhaseChange(context.repositoryRoot, phaseOption);
   if (!latestChange.ok) {
     return blockedReview(latestChange.diagnostics, planAction);
@@ -43365,7 +43368,10 @@ async function runAutoReview(context, input) {
       evidence: currentEvidence
     });
     if (!submitted.ok) {
-      return blockedReview(submitted.diagnostics, nextAction("legion review", "Auto review could not submit a review decision."));
+      return blockedReview(
+        submitted.diagnostics,
+        nextAction(scopedCommand("legion review", input.phase), "Auto review could not submit a review decision.")
+      );
     }
     latestReviews = submitted.reviews;
     if (submitted.reviews.every((review) => isCleanReview(review.document))) {
@@ -43406,7 +43412,14 @@ async function runAutoReview(context, input) {
           path: latestReviews.at(-1)?.artifactPath
         }
       ],
-      nextAction("legion build", "Address review findings manually and rerun review.")
+      // `legion build` is deliberately not scoped: it has no `--phase` flag, so
+      // suggesting one would advertise an option the verb refuses. The follow-up
+      // review is scoped instead, which is the step that would otherwise act on
+      // the wrong change.
+      nextAction(
+        "legion build",
+        input.phase === void 0 ? "Address review findings manually and rerun review." : `Address review findings manually, then rerun ${scopedCommand("legion review", input.phase)}.`
+      )
     ),
     { cycle: maxCycles, maxCycles, outcome: "exhausted" },
     // The findings that survived the last cycle are what a caller has to act
@@ -43781,14 +43794,11 @@ function blockedReview(diagnostics, action, extras = {}) {
   );
 }
 async function resolvePhaseChange(repositoryRoot, phase) {
-  if (!/^[1-9]\d*$/.test(phase)) {
-    return {
-      ok: false,
-      diagnostics: [{ code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }]
-    };
-  }
   const phaseNumber = Number.parseInt(phase, 10);
   const listed = await listWorkflowChanges(repositoryRoot);
+  if (!listed.ok && !listed.diagnostics.every((entry) => entry.code === "change_missing")) {
+    return { ok: false, diagnostics: listed.diagnostics };
+  }
   const prefix = phaseChangeIdPrefix(phaseNumber);
   const matched = (listed.ok ? listed.changes : []).filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
   if (matched === void 0) {

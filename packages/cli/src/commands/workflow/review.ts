@@ -64,6 +64,15 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   if (context.args.options.get("phase") === true || phaseOption === "") {
     return usageError("Missing required value for --phase. Example: legion review --phase 3.");
   }
+  // Whole value, not a parseInt prefix: `--phase 1.5` and `--phase 1foo` both
+  // parse to 1 and would review a change the caller did not name. Checked here
+  // rather than inside the resolver so it reaches the caller as a usage error —
+  // routing it through `blockedReview` would report malformed CLI input as a
+  // workflow prerequisite failure and suggest `legion plan 1`, so automation
+  // could not tell bad input from a genuinely missing phase.
+  if (phaseOption !== undefined && !/^[1-9]\d*$/.test(phaseOption)) {
+    return usageError(`Invalid phase number "${phaseOption}". Use a positive integer.`);
+  }
   const latestChange =
     phaseOption === undefined
       ? await findLatestWorkflowChangeId(context.repositoryRoot)
@@ -194,6 +203,10 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
  * --accept`. Following it resolves the newest change, so the caller would accept
  * a phase other than the one just reviewed — a next action that silently acts on
  * something else is worse than none.
+ *
+ * Only for commands that accept `--phase`. `legion build` and `legion validate`
+ * do not, so scoping their suggestions would advertise an option the verb
+ * refuses at the boundary.
  */
 export function scopedCommand(command: string, phase: string | undefined): string {
   if (phase === undefined) return command;
@@ -559,7 +572,10 @@ async function runAutoReview(
       evidence: currentEvidence
     });
     if (!submitted.ok) {
-      return blockedReview(submitted.diagnostics, nextAction("legion review", "Auto review could not submit a review decision."));
+      return blockedReview(
+        submitted.diagnostics,
+        nextAction(scopedCommand("legion review", input.phase), "Auto review could not submit a review decision.")
+      );
     }
     latestReviews = submitted.reviews;
     if (submitted.reviews.every((review) => isCleanReview(review.document))) {
@@ -606,7 +622,16 @@ async function runAutoReview(
           path: latestReviews.at(-1)?.artifactPath
         }
       ],
-      nextAction("legion build", "Address review findings manually and rerun review.")
+      // `legion build` is deliberately not scoped: it has no `--phase` flag, so
+      // suggesting one would advertise an option the verb refuses. The follow-up
+      // review is scoped instead, which is the step that would otherwise act on
+      // the wrong change.
+      nextAction(
+        "legion build",
+        input.phase === undefined
+          ? "Address review findings manually and rerun review."
+          : `Address review findings manually, then rerun ${scopedCommand("legion review", input.phase)}.`
+      )
     ),
     { cycle: maxCycles, maxCycles, outcome: "exhausted" },
     // The findings that survived the last cycle are what a caller has to act
@@ -1107,16 +1132,16 @@ async function resolvePhaseChange(
   | { readonly ok: true; readonly changeId: string; readonly diagnostics: readonly never[] }
   | { readonly ok: false; readonly diagnostics: readonly { readonly code: string; readonly message: string }[] }
 > {
-  // Whole value, not a parseInt prefix: `--phase 1.5` and `--phase 1foo` both
-  // parse to 1 and would review a change the caller did not name.
-  if (!/^[1-9]\d*$/.test(phase)) {
-    return {
-      ok: false,
-      diagnostics: [{ code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }]
-    };
-  }
   const phaseNumber = Number.parseInt(phase, 10);
   const listed = await listWorkflowChanges(repositoryRoot);
+  // `change_missing` means nothing has been planned, which genuinely makes the
+  // phase absent. Any other failure is a repository fault — an unreadable
+  // changes directory, or directories holding no valid bundle — and reporting
+  // it as "run legion plan N" sends the caller to write another plan instead of
+  // repairing the artifacts.
+  if (!listed.ok && !listed.diagnostics.every((entry) => entry.code === "change_missing")) {
+    return { ok: false, diagnostics: listed.diagnostics };
+  }
   const prefix = phaseChangeIdPrefix(phaseNumber);
   const matched = (listed.ok ? listed.changes : []).filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
   if (matched === undefined) {

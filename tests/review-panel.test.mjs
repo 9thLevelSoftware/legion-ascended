@@ -88,3 +88,25 @@ test("a recommended follow-up keeps the phase scope", async () => {
   // the same defect in the other direction.
   assert.equal(scopedCommand("legion review --accept", undefined), "legion review --accept");
 });
+
+test("a malformed --phase is a usage error, not a workflow block", async (t) => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const path = (await import("node:path")).default;
+  const { tmpdir } = await import("node:os");
+  const { parseJsonOutput, runCliCapture } = await import("./helpers/cli-runner.mjs");
+
+  const root = await mkdtemp(path.join(tmpdir(), "legion-phase-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  execFileSync("git", ["-C", root, "init", "--initial-branch=main"], { stdio: ["ignore", "pipe", "ignore"] });
+
+  for (const value of ["1.5", "1foo", "01"]) {
+    const result = await runCliCapture(["--repository-root", root, "review", "--phase", value, "--json"]);
+    const payload = parseJsonOutput(result);
+    // Routed through `blockedReview` this reported `blocked` and suggested
+    // `legion plan 1`, so automation could not tell malformed CLI input from a
+    // phase that was genuinely never planned.
+    assert.equal(payload.status, "usage_error", `--phase ${value} was not a usage error`);
+    assert.match(payload.diagnostics[0].message, /positive integer/);
+  }
+});

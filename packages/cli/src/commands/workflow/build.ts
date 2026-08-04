@@ -84,12 +84,11 @@ export async function handleBuildWorkflow(context: CliContext, changeId?: string
     "A typed task graph is required before build can run."
   );
 
+  // No cast and no synthetic `diagnostics`: the success arm carries only the
+  // change ID, which is all the code below reads. A cast here would be the same
+  // smell that was just removed from review's phase resolver.
   const latestChange =
-    changeId === undefined
-      ? await findLatestWorkflowChangeId(context.repositoryRoot)
-      : ({ ok: true as const, changeId, diagnostics: [] } as Awaited<
-          ReturnType<typeof findLatestWorkflowChangeId>
-        >);
+    changeId === undefined ? await findLatestWorkflowChangeId(context.repositoryRoot) : { ok: true as const, changeId };
   if (!latestChange.ok) {
     return blockedBuild(latestChange.diagnostics, planAction);
   }
