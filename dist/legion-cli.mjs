@@ -44929,10 +44929,10 @@ async function runRetroWorkflow(context) {
   }
   let scopedChangeId;
   if (phase !== null) {
-    const phaseNumber = Number.parseInt(phase, 10);
-    if (!Number.isInteger(phaseNumber) || phaseNumber < 1) {
-      return usageError(`legion retro --phase expects a phase number. Received: ${phase}`);
+    if (!/^[1-9]\d*$/.test(phase)) {
+      return usageError(`Invalid phase number "${phase}". Use a positive integer.`);
     }
+    const phaseNumber = Number.parseInt(phase, 10);
     const listed = await listWorkflowChanges(context.repositoryRoot);
     const prefix = phaseChangeIdPrefix(phaseNumber);
     const matches = listed.ok ? listed.changes.filter((entry) => entry.changeId.startsWith(prefix)) : [];
@@ -45015,9 +45015,17 @@ async function runRetroWorkflow(context) {
     title: "Workflow Retrospective",
     topic,
     summary: executed.result.summary,
+    // The same exclusion as the prompt. An artifact that names the project's
+    // current stage under a phase heading is a scoped retrospective reporting
+    // unscoped facts, which is what a reader would take it for.
     sections: [
-      { heading: "Workflow State", body: `Current stage: ${state.stage}` },
-      { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
+      scopedChangeId === void 0 ? { heading: "Workflow State", body: `Current stage: ${state.stage}` } : { heading: "Scope", body: `Change ${scopedChangeId}. Project-wide stage and recent runs are excluded.` },
+      ...scopedChangeId !== void 0 ? [] : [
+        {
+          heading: "Recent Guidance Runs",
+          body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`)
+        }
+      ],
       { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },
       { heading: "Follow-Up Actions", body: [state.nextAction.command] }
     ]
@@ -45267,14 +45275,20 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scopedChan
       const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
       if (reviews.ok) {
         acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
-        const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes === void 0);
+        const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes.length === 0);
         tasksReviewed += firstAttempts.length;
         firstPassPassed += firstAttempts.filter((review) => review.document.status === "accepted").length;
       }
     }
   }
   return {
-    stage: state.stage,
+    // Under a scope, the project's current stage and its recent guidance runs
+    // describe whatever is happening now — which, for a phase completed before
+    // later ones, is later project activity. Feeding those to the executor is
+    // exactly the mislabelled-scope defect this selector exists to prevent, so
+    // scoped mode omits them rather than filtering them: a guidance run records
+    // no change, so there is nothing to filter on.
+    ...scopedChangeId === void 0 ? { stage: state.stage } : { scopedChangeId },
     changeCount,
     taskCount,
     acceptedReviews,
@@ -45282,23 +45296,23 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scopedChan
     escalationReasons: [...escalationReasons].sort(),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
-    recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
+    recentRuns: scopedChangeId === void 0 ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
     summary: `${scopedChangeId === void 0 ? `stage ${state.stage}` : `change ${scopedChangeId}`}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 function renderRetroEvidence(evidence) {
   return [
-    "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:",
-    `- Workflow stage: ${evidence.stage}`,
+    evidence.scopedChangeId === void 0 ? "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:" : `Evidence from change ${evidence.scopedChangeId} alone. Ground every finding in it and say when it is insufficient. Project-wide stage and recent runs are deliberately excluded: they describe current activity, not this phase's.`,
+    evidence.stage === void 0 ? void 0 : `- Workflow stage: ${evidence.stage}`,
     `- Changes recorded: ${evidence.changeCount} (${evidence.changesComplete} complete)`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
     `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
     evidence.firstPassReviews.reviewed === 0 ? "- First-pass review rate: no task has been reviewed yet" : `- First-pass review rate: ${evidence.firstPassReviews.passed} of ${evidence.firstPassReviews.reviewed} passed on the first review`,
     `- Escalations (blocked runs and blocking findings): ${evidence.escalations}`,
     evidence.escalationReasons.length === 0 ? "- Escalation reasons: none" : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
-    evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
+    evidence.scopedChangeId !== void 0 ? void 0 : evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
 ${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
-  ].join("\n");
+  ].filter((line) => line !== void 0).join("\n");
 }
 
 // packages/cli/src/workflow/ship-gates.ts

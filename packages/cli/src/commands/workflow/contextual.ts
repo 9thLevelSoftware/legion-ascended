@@ -513,10 +513,14 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
 
   let scopedChangeId: string | undefined;
   if (phase !== null) {
-    const phaseNumber = Number.parseInt(phase, 10);
-    if (!Number.isInteger(phaseNumber) || phaseNumber < 1) {
-      return usageError(`legion retro --phase expects a phase number. Received: ${phase}`);
+    // The whole value, not a parseInt prefix. `--phase 1.5` and `--phase 1foo`
+    // both parse to 1, which would resolve phase 1's change while the prompt and
+    // the saved run kept the caller's invalid label — a retrospective labelled
+    // for a scope it did not resolve. `legion plan` validates the same way.
+    if (!/^[1-9]\d*$/.test(phase)) {
+      return usageError(`Invalid phase number "${phase}". Use a positive integer.`);
     }
+    const phaseNumber = Number.parseInt(phase, 10);
     const listed = await listWorkflowChanges(context.repositoryRoot);
     const prefix = phaseChangeIdPrefix(phaseNumber);
     // A repository with no changes at all and one with no change for this phase
@@ -632,9 +636,24 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     title: "Workflow Retrospective",
     topic,
     summary: executed.result.summary,
+    // The same exclusion as the prompt. An artifact that names the project's
+    // current stage under a phase heading is a scoped retrospective reporting
+    // unscoped facts, which is what a reader would take it for.
     sections: [
-      { heading: "Workflow State", body: `Current stage: ${state.stage}` },
-      { heading: "Recent Guidance Runs", body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) },
+      scopedChangeId === undefined
+        ? { heading: "Workflow State", body: `Current stage: ${state.stage}` }
+        : { heading: "Scope", body: `Change ${scopedChangeId}. Project-wide stage and recent runs are excluded.` },
+      ...(scopedChangeId !== undefined
+        ? []
+        : [
+            {
+              heading: "Recent Guidance Runs",
+              body:
+                recentRuns.length === 0
+                  ? "No recent guidance runs were found."
+                  : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`)
+            }
+          ]),
       { heading: "Lessons", body: executed.result.findings.length === 0 ? ["Preserve evidence before changing workflow posture."] : executed.result.findings.map((finding) => finding.body) },
       { heading: "Follow-Up Actions", body: [state.nextAction.command] }
     ]
@@ -885,8 +904,10 @@ function renderMilestones(index: MilestoneIndex): string {
   ].join("\n");
 }
 
-interface RetroEvidence {
-  readonly stage: string;
+export interface RetroEvidence {
+  /** Absent under a scope: the project's stage is not the phase's. */
+  readonly stage?: string;
+  readonly scopedChangeId?: string;
   readonly changeCount: number;
   readonly taskCount: number;
   readonly acceptedReviews: number;
@@ -907,7 +928,7 @@ interface RetroEvidence {
  * can open. `latestGuidanceRuns` returns run metadata, not build or review
  * evidence, so the change and review counts are read directly.
  */
-async function gatherRetroEvidence(
+export async function gatherRetroEvidence(
   repositoryRoot: string,
   state: Awaited<ReturnType<typeof resolveWorkflowState>>,
   recentRuns: readonly GuidanceRunDocument[],
@@ -945,7 +966,9 @@ async function gatherRetroEvidence(
         // First pass means the first review of a task carried the verdict, so
         // the revision that superseded nothing is the one to look at. A task
         // reviewed twice appears once here regardless of how the retry went.
-        const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes === undefined);
+        // `supersedes` is a required array — `[]` on a first review, never
+        // absent — so this is a length test, not a presence test.
+        const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes.length === 0);
         tasksReviewed += firstAttempts.length;
         firstPassPassed += firstAttempts.filter((review) => review.document.status === "accepted").length;
       }
@@ -953,7 +976,13 @@ async function gatherRetroEvidence(
   }
 
   return {
-    stage: state.stage,
+    // Under a scope, the project's current stage and its recent guidance runs
+    // describe whatever is happening now — which, for a phase completed before
+    // later ones, is later project activity. Feeding those to the executor is
+    // exactly the mislabelled-scope defect this selector exists to prevent, so
+    // scoped mode omits them rather than filtering them: a guidance run records
+    // no change, so there is nothing to filter on.
+    ...(scopedChangeId === undefined ? { stage: state.stage } : { scopedChangeId }),
     changeCount,
     taskCount,
     acceptedReviews,
@@ -961,15 +990,17 @@ async function gatherRetroEvidence(
     escalationReasons: [...escalationReasons].sort(),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
-    recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
+    recentRuns: scopedChangeId === undefined ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
     summary: `${scopedChangeId === undefined ? `stage ${state.stage}` : `change ${scopedChangeId}`}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 
-function renderRetroEvidence(evidence: RetroEvidence): string {
+export function renderRetroEvidence(evidence: RetroEvidence): string {
   return [
-    "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:",
-    `- Workflow stage: ${evidence.stage}`,
+    evidence.scopedChangeId === undefined
+      ? "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:"
+      : `Evidence from change ${evidence.scopedChangeId} alone. Ground every finding in it and say when it is insufficient. Project-wide stage and recent runs are deliberately excluded: they describe current activity, not this phase's.`,
+    evidence.stage === undefined ? undefined : `- Workflow stage: ${evidence.stage}`,
     `- Changes recorded: ${evidence.changeCount} (${evidence.changesComplete} complete)`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
     `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
@@ -980,8 +1011,12 @@ function renderRetroEvidence(evidence: RetroEvidence): string {
     evidence.escalationReasons.length === 0
       ? "- Escalation reasons: none"
       : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
-    evidence.recentRuns.length === 0
-      ? "- Recent workflow runs: none"
-      : `- Recent workflow runs:\n${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
-  ].join("\n");
+    evidence.scopedChangeId !== undefined
+      ? undefined
+      : evidence.recentRuns.length === 0
+        ? "- Recent workflow runs: none"
+        : `- Recent workflow runs:\n${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
+  ]
+    .filter((line) => line !== undefined)
+    .join("\n");
 }
