@@ -50,7 +50,7 @@ import {
   retroIndexArtifactPath,
   STAGED_ENTRY_FILE
 } from "../../workflow/retro-index.js";
-import { collectEscalations } from "../../workflow/escalations.js";
+import { collectEscalations, type ReviewFindingRecord } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
 
 const HELP = {
@@ -1146,8 +1146,19 @@ export interface RetroEvidence {
  */
 const RETRO_FINDING_LIMIT = 12;
 
-/** Severity order, lowest first, so a sort by index puts blocking on top. */
-const FINDING_RANK = ["minor", "major", "blocking"];
+/**
+ * Severity weight. Higher is more serious, and findings are sorted descending —
+ * blocking first.
+ *
+ * Written as a lookup rather than an array index so the direction is stated
+ * once. An "order, lowest first" array plus a descending comparator reads as a
+ * contradiction, and the obvious correction breaks the ranking.
+ */
+const FINDING_WEIGHT: Readonly<Record<"minor" | "major" | "blocking", number>> = {
+  minor: 0,
+  major: 1,
+  blocking: 2
+};
 
 /**
  * The evidence a retrospective is drawn from.
@@ -1171,10 +1182,9 @@ export async function gatherRetroEvidence(
   let changesComplete = 0;
   let firstPassPassed = 0;
   let tasksReviewed = 0;
-  let findingsSeen = 0;
   const escalationReasons = new Set<string>();
-  const findingBodies: string[] = [];
-  const retriedTasks: string[] = [];
+  const allFindings: ReviewFindingRecord[] = [];
+  const retried: { taskId: string; attempts: number }[] = [];
   // Valid bundles, not directories. Counting directories counts a docs folder
   // with no change.yaml as a change.
   const listed = await listWorkflowChanges(repositoryRoot);
@@ -1188,18 +1198,13 @@ export async function gatherRetroEvidence(
       const escalated = await collectEscalations({ repositoryRoot, changeId });
       escalations += escalated.total;
       for (const entry of escalated.escalations) escalationReasons.add(entry.reason);
-      // Blocking first, then major, then minor. A cap that dropped by discovery
-      // order would keep whichever findings happened to be written first.
-      const ranked = [...escalated.reviewFindings].sort(
-        (left, right) => FINDING_RANK.indexOf(right.severity) - FINDING_RANK.indexOf(left.severity)
-      );
-      findingsSeen += ranked.length;
-      for (const finding of ranked) {
-        if (findingBodies.length >= RETRO_FINDING_LIMIT) break;
-        findingBodies.push(`[${finding.severity}] ${finding.title} — ${finding.body}`);
-      }
+      // Collected across every change first. Ranking and capping inside this
+      // loop let the oldest change fill all twelve slots with minor findings
+      // while a later change's blocking one was dropped — changes are gathered
+      // oldest-first, so that is the common case rather than the unlucky one.
+      allFindings.push(...escalated.reviewFindings);
       for (const [taskId, attempts] of Object.entries(escalated.attemptsByTask)) {
-        if (attempts > 1) retriedTasks.push(`${taskId} x${attempts}`);
+        if (attempts > 1) retried.push({ taskId, attempts });
       }
       const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
       if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
@@ -1220,6 +1225,12 @@ export async function gatherRetroEvidence(
     }
   }
 
+  // Ranked once, over everything gathered, then capped.
+  const findingBodies = [...allFindings]
+    .sort((left, right) => FINDING_WEIGHT[right.severity] - FINDING_WEIGHT[left.severity])
+    .slice(0, RETRO_FINDING_LIMIT)
+    .map((finding) => `[${finding.severity}] ${finding.title} — ${finding.body}`);
+
   return {
     // Under a scope, the project's current stage and its recent guidance runs
     // describe whatever is happening now — which, for a phase completed before
@@ -1234,8 +1245,13 @@ export async function gatherRetroEvidence(
     escalations,
     escalationReasons: [...escalationReasons].sort(),
     retroFindingBodies: findingBodies,
-    findingsOmitted: Math.max(0, findingsSeen - findingBodies.length),
-    retriedTasks: retriedTasks.sort(),
+    findingsOmitted: Math.max(0, allFindings.length - findingBodies.length),
+    // By attempts, most first — a task that needed ten tries is the one worth
+    // reading about. Sorting the rendered strings put `x10` before `x2`,
+    // because that is dictionary order.
+    retriedTasks: [...retried]
+      .sort((left, right) => right.attempts - left.attempts || left.taskId.localeCompare(right.taskId))
+      .map((entry) => `${entry.taskId} x${entry.attempts}`),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
     recentRuns: scope === undefined ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],

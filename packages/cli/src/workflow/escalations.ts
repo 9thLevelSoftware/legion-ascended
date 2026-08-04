@@ -52,7 +52,12 @@ export interface ReviewFindingRecord {
   readonly taskId?: string;
   readonly title: string;
   readonly body: string;
-  readonly severity: string;
+  /**
+   * The three the schema defines. Typed as `string`, a fourth severity would
+   * fall out of the rank lookup as `-1` and be silently sorted below `minor` —
+   * the opposite of what a new, more serious severity would mean.
+   */
+  readonly severity: "minor" | "major" | "blocking";
 }
 
 export async function collectEscalations(input: {

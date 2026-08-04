@@ -45664,7 +45664,11 @@ async function milestoneProgressMap(repositoryRoot, index) {
   return entries;
 }
 var RETRO_FINDING_LIMIT = 12;
-var FINDING_RANK = ["minor", "major", "blocking"];
+var FINDING_WEIGHT = {
+  minor: 0,
+  major: 1,
+  blocking: 2
+};
 async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scope) {
   let changeCount = 0;
   let taskCount = 0;
@@ -45673,10 +45677,9 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scope) {
   let changesComplete = 0;
   let firstPassPassed = 0;
   let tasksReviewed = 0;
-  let findingsSeen = 0;
   const escalationReasons = /* @__PURE__ */ new Set();
-  const findingBodies = [];
-  const retriedTasks = [];
+  const allFindings = [];
+  const retried = [];
   const listed = await listWorkflowChanges(repositoryRoot);
   {
     const all = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
@@ -45686,16 +45689,9 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scope) {
       const escalated = await collectEscalations({ repositoryRoot, changeId });
       escalations += escalated.total;
       for (const entry of escalated.escalations) escalationReasons.add(entry.reason);
-      const ranked = [...escalated.reviewFindings].sort(
-        (left, right) => FINDING_RANK.indexOf(right.severity) - FINDING_RANK.indexOf(left.severity)
-      );
-      findingsSeen += ranked.length;
-      for (const finding of ranked) {
-        if (findingBodies.length >= RETRO_FINDING_LIMIT) break;
-        findingBodies.push(`[${finding.severity}] ${finding.title} \u2014 ${finding.body}`);
-      }
+      allFindings.push(...escalated.reviewFindings);
       for (const [taskId, attempts] of Object.entries(escalated.attemptsByTask)) {
-        if (attempts > 1) retriedTasks.push(`${taskId} x${attempts}`);
+        if (attempts > 1) retried.push({ taskId, attempts });
       }
       const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
       if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
@@ -45710,6 +45706,7 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scope) {
       }
     }
   }
+  const findingBodies = [...allFindings].sort((left, right) => FINDING_WEIGHT[right.severity] - FINDING_WEIGHT[left.severity]).slice(0, RETRO_FINDING_LIMIT).map((finding) => `[${finding.severity}] ${finding.title} \u2014 ${finding.body}`);
   return {
     // Under a scope, the project's current stage and its recent guidance runs
     // describe whatever is happening now — which, for a phase completed before
@@ -45724,8 +45721,11 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scope) {
     escalations,
     escalationReasons: [...escalationReasons].sort(),
     retroFindingBodies: findingBodies,
-    findingsOmitted: Math.max(0, findingsSeen - findingBodies.length),
-    retriedTasks: retriedTasks.sort(),
+    findingsOmitted: Math.max(0, allFindings.length - findingBodies.length),
+    // By attempts, most first — a task that needed ten tries is the one worth
+    // reading about. Sorting the rendered strings put `x10` before `x2`,
+    // because that is dictionary order.
+    retriedTasks: [...retried].sort((left, right) => right.attempts - left.attempts || left.taskId.localeCompare(right.taskId)).map((entry) => `${entry.taskId} x${entry.attempts}`),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
     recentRuns: scope === void 0 ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],

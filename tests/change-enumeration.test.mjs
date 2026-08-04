@@ -363,9 +363,19 @@ test("retro evidence caps review findings and says how many it dropped", async (
 
   assert.equal(evidence.retroFindingBodies.length, 12, "the cap was not applied");
   assert.equal(evidence.findingsOmitted, 8);
-  // Blocking first. A cap is only defensible if what survives it is the part
-  // worth reading.
+  // Ranked first. A cap is only defensible if what survives it is the part
+  // worth reading; dropping by discovery order would keep whichever findings
+  // happened to be written first.
   assert.match(evidence.retroFindingBodies[0], /\[major\] Contract broken/);
+  // Ranked across every change, not within each one. Capping inside the
+  // per-change loop let the oldest change fill all twelve slots with minor
+  // findings while a later change's serious one was dropped — and changes are
+  // gathered oldest-first, so that is the common case, not the unlucky one.
+  assert.ok(
+    evidence.retroFindingBodies.every((body) => !body.startsWith("[minor]")) ||
+      evidence.retroFindingBodies.some((body) => body.startsWith("[major]")),
+    "a serious finding was displaced by minor ones"
+  );
 
   // And the omission is stated. A silent truncation reads as complete coverage,
   // which is worse than no list at all.

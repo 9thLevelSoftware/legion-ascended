@@ -133,3 +133,25 @@ test("the same walk reports attempts and finding bodies, not only escalations", 
     assert.match(finding.severity, /^(minor|major|blocking)$/);
   }
 });
+
+test("retried tasks are ordered by attempts, not by their rendered text", async (t) => {
+  const { root, run } = await builtProject(t);
+  // Two more builds, so a task reaches attempt 3 and the ordering has something
+  // to order. Asserting over an empty list would pass without checking anything.
+  await run("build", "--executor", "fake", "--allow-dirty", "--json");
+  await run("build", "--executor", "fake", "--allow-dirty", "--json");
+  const { gatherRetroEvidence } = await import("../packages/cli/dist/commands/workflow/contextual.js");
+  const { resolveWorkflowState } = await import("../packages/cli/dist/workflow/state.js");
+  const state = await resolveWorkflowState({ repositoryRoot: root, args: { options: new Map(), positionals: [] } });
+
+  const evidence = await gatherRetroEvidence(root, state, []);
+  // Sorting the rendered `taskId xN` strings put `x10` before `x2`, because
+  // that is dictionary order. A task that needed ten tries is the one worth
+  // reading about, so the order has to come from the number.
+  assert.ok(evidence.retriedTasks.length > 0, "the fixture produced no retried task, so this asserts nothing");
+  const attempts = evidence.retriedTasks.map((entry) => Number.parseInt(/x(\d+)$/.exec(entry)?.[1] ?? "0", 10));
+  assert.ok(Math.max(...attempts) >= 2, "no task was actually retried");
+  for (let index = 1; index < attempts.length; index += 1) {
+    assert.ok(attempts[index - 1] >= attempts[index], `retried tasks out of order: ${evidence.retriedTasks.join(", ")}`);
+  }
+});
