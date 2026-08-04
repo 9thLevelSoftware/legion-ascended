@@ -40602,6 +40602,23 @@ function isEnoent8(error51) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
 }
 
+// packages/cli/src/workflow/agent-selection.ts
+var WORKER_BUNDLE_IDS = Object.freeze([
+  "explorer",
+  "specifier",
+  "oracle-author",
+  "architect",
+  "planner",
+  "implementer",
+  "task-reviewer",
+  "integration-evaluator",
+  "release-controller"
+]);
+function selectAgents(input) {
+  if (input.writeScope.length === 0) return ["explorer"];
+  return ["implementer"];
+}
+
 // packages/cli/src/workflow/taskgraph-input.ts
 function phaseVerification(options, scoped = options.requirement?.executable ?? []) {
   const criteria = scoped.map((criterion) => ({
@@ -40689,9 +40706,14 @@ function buildTaskGraphInput(options) {
       // phase heading.
       requirementIds: [options.requirement?.requirement.id ?? ids.requirementId],
       wave: "A",
-      // Bundle IDs from bundles/index.json. An agent with no worker bundle
-      // cannot be dispatched, so these must name real bundles.
-      agents: ["implementer"],
+      // Derived from what the task is, not hardcoded. Every planned task named
+      // ["implementer"] regardless of its shape, so "agents used" was a
+      // constant dressed as a measurement.
+      // The write scope below is repository-wide, so every planned task writes.
+      agents: selectAgents({
+        writeScope: ["."],
+        hasExecutableProof: unit.criteria.length > 0
+      }),
       // Independent by construction: each task proves a different criterion of
       // the same requirement, and nothing in the criteria states an order.
       // Asserting a chain the operator did not describe would serialize work
@@ -42225,6 +42247,20 @@ async function executeTask(input) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
+  if (workerContext.blockedReason !== void 0 || workerContext.workerContext === void 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "worker_context_unavailable",
+          message: workerContext.blockedReason ?? "No worker context was produced.",
+          path: input.taskgraph.artifactPath
+        }
+      ]
+    };
+  }
+  const dispatchedBundle = workerContext.workerContext.workerBundle;
   const started = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
     expectedRevision: 0,
@@ -42236,6 +42272,7 @@ async function executeTask(input) {
       runId,
       attempt: input.attempt,
       executor: input.executor,
+      workerBundle: dispatchedBundle,
       createdAt,
       startedAt: createdAt,
       baseGitSha,
@@ -42243,19 +42280,6 @@ async function executeTask(input) {
     })
   });
   if (!started.ok) return { ok: false, diagnostics: started.diagnostics };
-  const workerContext = prepareWorkerContext({ task: input.task, executor: input.executor });
-  if (workerContext.blockedReason !== void 0) {
-    return {
-      ok: false,
-      diagnostics: [
-        {
-          code: "worker_context_unavailable",
-          message: workerContext.blockedReason,
-          path: input.taskgraph.artifactPath
-        }
-      ]
-    };
-  }
   let verification = { passed: true };
   const adapter = adapterForKind(input.executor);
   const guarded2 = await runGuardedExecution({
@@ -42351,6 +42375,7 @@ async function executeTask(input) {
       runId,
       attempt: input.attempt,
       executor: input.executor,
+      workerBundle: dispatchedBundle,
       createdAt,
       startedAt: createdAt,
       finishedAt,
@@ -42445,18 +42470,15 @@ function taskRunDocument(input) {
       driver: "legion.executor",
       version: LEGION_PROTOCOL_VERSION
     },
-    workerBundle: {
-      id: "workflow-executor",
-      version: LEGION_PROTOCOL_VERSION,
-      role: "implementer",
-      domain: "codebase",
-      capabilities: ["build"],
-      promptContentContract: {
-        instructionsHash: hashContent(input.contextPack),
-        requiredSections: ["objective", "scope", "harness-rules"],
-        forbiddenSections: ["biography", "tone", "personality"]
-      }
-    },
+    // The bundle that was actually dispatched, taken from the worker context.
+    //
+    // This was a synthetic `workflow-executor` / `implementer` / `codebase`
+    // object for every run. Replacing only its id and role made it worse rather
+    // than better: the manifest then named a real bundle while still carrying
+    // the wrong version, domain, capabilities and prompt hash, so it described a
+    // bundle that does not exist and could not be integrity-verified — and it
+    // looked right, which the fully synthetic version at least did not.
+    workerBundle: input.workerBundle,
     model: {
       provider: input.executor === "codex" ? "openai" : "legion",
       id: input.executor === "codex" ? "codex-cli" : input.executor,
@@ -43815,7 +43837,12 @@ async function createAdHocTaskgraph(input) {
     objective: input.objective,
     requirementIds: [requirementId],
     wave: "A",
-    agents: ["implementer"],
+    agents: selectAgents({
+      writeScope: adHocWriteScope,
+      // An ad-hoc task's verification command decides it.
+      hasExecutableProof: true,
+      adHocKind: input.kind
+    }),
     dependencies: [],
     context: {
       specRefs: [],
