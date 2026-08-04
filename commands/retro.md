@@ -70,17 +70,18 @@ cross-project mode, none of which any verb performs.
 
 5. GATHER DATA
    For the target scope (phase or milestone phases):
-   a. Read the taskgraph legion status --json names for each phase in scope
-      - Extract: completed tasks, files modified, agent assignments, handoff context
-      - Note any escalations (severity, type, resolution)
-   b. Read the taskgraph legion status --json names for each phase in scope
-      - Extract: review findings, pass/fail status, review cycle count
-      - Note if review required multiple cycles
-   c. Read recorded learning (if exists)
-      - Extract outcomes related to the target phases
-      - Note task_type classifications and agent performance
-   d. Read plan frontmatter from the taskgraph legion status --json names files
-      - Extract: agent assignments, verification commands, expected artifacts
+   The CLI gathers the evidence and puts it in front of the executor. Run
+   `legion retro --dry-run --json` first to see exactly what it will draw on.
+   a. `evidence` in that payload carries the counts: changes recorded, tasks
+      planned across them, reviews with a passing verdict, and recent runs.
+   b. `legion review --json` reports the recorded review decisions for the
+      current change — findings, verdicts, and whether a task needed more than
+      one cycle.
+   c. `legion learn --recall <topic> --json` returns prior lessons relevant to
+      the scope, scored by tag, summary and body match.
+   d. Scoping a retrospective to a phase or milestone is not implemented, and
+      `legion retro --phase N` is refused rather than silently producing an
+      unscoped result. Say so plainly if the operator asks for one.
 
 6. ANALYZE
    For the gathered data, produce analysis across five categories:
