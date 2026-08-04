@@ -443,3 +443,37 @@ test("an owed gap whose probe does not yet match passes", async (t) => {
     `unexpected gap violation: ${JSON.stringify(report.violations)}`
   );
 });
+
+test("evidence must be a real test file, not any path that resolves", async (t) => {
+  // `existsSync` is true for directories, and `path.join(root, "")` is the
+  // repository root — so the gate meant to stop "built" being claimed without
+  // proof would have accepted "tests", or the empty string, as proof.
+  for (const evidence of ["", "tests", "docs/next", "README.md"]) {
+    const root = await fixtureRoot(t, {
+      commands: SAMPLE_COMMAND,
+      inventory: inventoryWith({ gap: "the thing is built", disposition: "built-in-cli", evidence })
+    });
+    const report = await scanCommandSurface({ root });
+    assert.equal(report.ok, false, `evidence ${JSON.stringify(evidence)} was accepted`);
+    assert.ok(
+      report.violations.some((entry) => entry.kind.startsWith("gap_built_evidence") || entry.kind === "gap_built_without_evidence"),
+      `expected an evidence violation, got ${JSON.stringify(report.violations)}`
+    );
+  }
+});
+
+test("a probe pointing at a directory is unresolvable, not a crash", async (t) => {
+  // `readFileSync` on a directory throws EISDIR, which would take the whole
+  // scan down instead of producing a finding.
+  const root = await fixtureRoot(t, {
+    commands: SAMPLE_COMMAND,
+    inventory: inventoryWith({
+      gap: "the thing is not built",
+      disposition: "build-in-cli",
+      closedWhen: { file: "commands", pattern: "anything" }
+    })
+  });
+  const report = await scanCommandSurface({ root });
+  assert.equal(report.ok, false);
+  assert.ok(report.violations.some((entry) => entry.kind === "gap_probe_unresolvable"));
+});

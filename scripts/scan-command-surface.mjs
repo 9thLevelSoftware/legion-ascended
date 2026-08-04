@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -88,22 +88,59 @@ const DISPOSITIONS = new Set(["build-in-cli", "built-in-cli", "keep-in-host", "d
  * A keyword scan over the gap text was tried first and misclassified entries in
  * both directions. Prose cannot be the check.
  */
+
+/** A test file, by this repository's convention. */
+const TEST_PATH = /^(tests|packages\/[\w@.-]+\/test|apps\/[\w@.-]+\/test)\/[\w./-]+\.test\.(mjs|cjs|js|ts)$/;
+
+/**
+ * A readable regular file.
+ *
+ * `existsSync` is true for directories, and `path.join(root, "")` is the
+ * repository root — so an empty or directory-valued path passed every check
+ * that only asked whether something was there.
+ */
+function isFile(candidate) {
+  try {
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Checks one gap's disposition against the files. See the note above. */
 function auditGapDisposition({ root, name, gap, label }) {
   const violations = [];
 
   if (gap.disposition === "built-in-cli") {
-    const evidence = typeof gap.evidence === "string" ? gap.evidence : undefined;
-    if (evidence === undefined) {
+    const evidence = typeof gap.evidence === "string" ? gap.evidence.trim() : undefined;
+    if (evidence === undefined || evidence.length === 0) {
       violations.push({
         kind: "gap_built_without_evidence",
         command: name,
         message: `a built-in-cli gap on ${name} names no evidence test. Add "evidence": "<test path>": ${label}`
       });
-    } else if (!existsSync(path.join(root, evidence))) {
+      return violations;
+    }
+    // A regular file matching the repository's test convention, not merely a
+    // path that resolves. `existsSync` alone blesses a directory, and
+    // `evidence: ""` resolves to the repository root — so the gate meant to stop
+    // "built" being claimed without proof would have accepted `"tests"`, or
+    // nothing at all, as proof.
+    if (!TEST_PATH.test(evidence)) {
+      violations.push({
+        kind: "gap_built_evidence_not_a_test",
+        command: name,
+        message:
+          `a built-in-cli gap on ${name} names ${JSON.stringify(evidence)}, which is not a test path ` +
+          `(expected tests/<name>.test.mjs or a package test): ${label}`
+      });
+      return violations;
+    }
+    if (!isFile(path.join(root, evidence))) {
       violations.push({
         kind: "gap_built_evidence_missing",
         command: name,
-        message: `a built-in-cli gap on ${name} names ${JSON.stringify(evidence)}, which does not exist: ${label}`
+        message: `a built-in-cli gap on ${name} names ${JSON.stringify(evidence)}, which is not a readable file: ${label}`
       });
     }
     return violations;
@@ -124,7 +161,7 @@ function auditGapDisposition({ root, name, gap, label }) {
   }
 
   const probePath = path.join(root, probe.file);
-  if (!existsSync(probePath)) {
+  if (!isFile(probePath)) {
     // A probe pointing at a file that does not exist can never fire, so the gap
     // would stay open forever without anyone noticing — the same silence this
     // check exists to break.
