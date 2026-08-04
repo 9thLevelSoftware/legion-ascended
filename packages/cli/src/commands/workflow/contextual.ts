@@ -503,8 +503,9 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
   // Scope is resolved to changes, not pasted into a prompt. `--phase N` maps to
-  // the change `legion plan N` produced — the only phase-to-change link there
-  // is, because no phase field exists on a change. `--milestone M` maps to the
+  // the change `legion plan N` produced through the derived `chg_phase-<N>-`
+  // ID, the only phase-to-change link there is, because no phase field exists
+  // on a change. `--milestone M` maps to the
   // changes behind that milestone's parsed phase range.
   if (phase !== null && milestone !== null) {
     return usageError("legion retro takes --phase or --milestone, not both. They describe different scopes.");
@@ -717,8 +718,10 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     // breaks equal scores by `createdAt`.
     createdAt,
     // Recorded so a reader of the index can tell an action drawn from one
-    // scope's retrospective from one drawn across the whole project.
-    ...(scope === undefined ? {} : { scopedChangeId: scope.changeIds.join(",") }),
+    // scope's retrospective from one drawn across the whole project. A list,
+    // because a milestone scope covers several changes — comma-joining them
+    // into a field typed and named for one would break any typed consumer.
+    ...(scope === undefined ? {} : { scopedChangeIds: scope.changeIds, scopeLabel: scope.label }),
     artifactPath: markdownArtifactPath,
     summary: executed.result.summary,
     actions: executed.result.findings.map((finding) => ({
@@ -807,19 +810,27 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
   // with entries recording nothing but that someone looked.
   if (statusMode) {
     const action = nextAction("legion status", "Review milestone state before changing release posture.");
+    const progress = await milestoneProgressMap(context.repositoryRoot, current);
     return success(
       {
         ok: true,
         status: "completed",
         workflow: "milestone",
         mode: "status",
-        milestones: current.milestones,
+        // Progress belongs in the payload, not only in the human string. The
+        // host is told to render status from `--json`; computing it solely for
+        // the text left every JSON client with the raw records and no way to
+        // reach a percentage except by recomputing the join itself.
+        milestones: current.milestones.map((milestone) => ({
+          ...milestone,
+          progress: milestoneProgressPayload(progress.get(milestone.id))
+        })),
         nextAction: action,
         diagnostics: []
       },
       [
         `Milestones: ${current.milestones.length}.`,
-        renderMilestones(current, await milestoneProgressMap(context.repositoryRoot, current)).trimEnd(),
+        renderMilestones(current, progress).trimEnd(),
         renderNextAction(action)
       ].join("\n")
     );
@@ -1199,7 +1210,17 @@ async function milestonePhaseProgress(
     return { ok: false, reason: `its recorded phases ${JSON.stringify(milestone.phases)} do not parse: ${range.reason}` };
   }
   const listed = await listWorkflowChanges(repositoryRoot);
+  // `change_missing` means nothing has been planned yet, which is the normal
+  // state of a milestone defined ahead of its work — every covered phase is
+  // genuinely `not planned`. Any other failure is a fault: an unreadable
+  // changes directory, or directories holding no valid bundle. Collapsing the
+  // second into the first reports 0% complete over a real error, in the one
+  // place a caller would act on it.
   const changes = listed.ok ? listed.changes : [];
+  if (!listed.ok && !listed.diagnostics.every((entry) => entry.code === "change_missing")) {
+    const reasons = listed.diagnostics.map((entry) => entry.message).join("; ");
+    return { ok: false, reason: `its changes could not be read: ${reasons}` };
+  }
   const phases: MilestonePhaseState[] = [];
   for (const phase of range.phases) {
     const prefix = phaseChangeIdPrefix(phase);
@@ -1217,4 +1238,28 @@ async function milestonePhaseProgress(
     });
   }
   return { ok: true, phases };
+}
+
+/**
+ * A milestone's progress, shaped for `--json`.
+ *
+ * `unresolvable` is a distinct state rather than zero progress: a milestone
+ * whose recorded range does not parse cannot be evaluated at all, and reporting
+ * it as 0% would be a wrong number where the caller needs a repairable finding.
+ */
+function milestoneProgressPayload(state: MilestoneProgress | undefined): Record<string, unknown> {
+  if (state === undefined) return { status: "unknown" };
+  if (!state.ok) return { status: "unresolvable", reason: state.reason };
+  const complete = state.phases.filter((entry) => entry.complete).length;
+  return {
+    status: "resolved",
+    complete,
+    total: state.phases.length,
+    phases: state.phases.map((entry) => ({
+      phase: entry.phase,
+      changeId: entry.changeId ?? null,
+      complete: entry.complete,
+      reason: entry.reason
+    }))
+  };
 }

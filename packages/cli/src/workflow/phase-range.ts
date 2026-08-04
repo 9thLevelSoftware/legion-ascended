@@ -24,6 +24,10 @@ export interface PhaseRangeFailure {
 
 export type PhaseRangeResult = PhaseRangeSuccess | PhaseRangeFailure;
 
+// A roadmap with more phases than this is not a roadmap. The bound is well
+// below Number.MAX_SAFE_INTEGER so no arithmetic below can lose precision.
+const MAX_PHASE = 10_000;
+
 const EXAMPLE = 'Use a range or list of phase numbers, such as "1-3", "1,2,5" or "1-3,7".';
 
 /**
@@ -54,7 +58,15 @@ export function parsePhaseRange(value: string): PhaseRangeResult {
       if (!/^[1-9]\d*$/.test(text)) {
         return { ok: false, reason: `"${text}" is not a phase number. ${EXAMPLE}` };
       }
-      parsed.push(Number.parseInt(text, 10));
+      const value = Number.parseInt(text, 10);
+      // Past 2^53 an integer no longer has a distinct successor, so `phase += 1`
+      // leaves the loop below at the same value forever and the CLI hangs.
+      // Longer digit strings parse to Infinity and do the same. The digit regex
+      // above accepts both, so the ceiling has to be checked here.
+      if (!Number.isSafeInteger(value) || value > MAX_PHASE) {
+        return { ok: false, reason: `"${text}" is larger than any real phase number. ${EXAMPLE}` };
+      }
+      parsed.push(value);
     }
     const [start, end = start] = parsed as [number, number?];
     if (end < start) {

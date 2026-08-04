@@ -40648,7 +40648,7 @@ function isRetroAction(value) {
 function isRetroIndexEntry(value) {
   if (typeof value !== "object" || value === null) return false;
   const entry = value;
-  return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeId"] === void 0 || typeof entry["scopedChangeId"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
+  return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
   const indexPath = path34.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
@@ -40676,9 +40676,9 @@ function outstandingRetroActions(index, limit = 5) {
       retroId: entry.id,
       artifactPath: entry.artifactPath,
       // Carried through so a reader can tell an action drawn from one
-      // phase's retrospective from one drawn across the whole project.
+      // scope's retrospective from one drawn across the whole project.
       // Without it the field was written and never read.
-      ...entry["scopedChangeId"] === void 0 ? {} : { scopedChangeId: entry["scopedChangeId"] }
+      ...entry.scopedChangeIds === void 0 ? {} : { scopedChangeIds: entry.scopedChangeIds, scopeLabel: entry.scopeLabel }
     }))
   ).slice(0, limit);
 }
@@ -41172,7 +41172,7 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActio
   const retro = retroActions.length === 0 ? void 0 : [
     "Outstanding retrospective actions to account for in this decomposition:",
     ...retroActions.map(
-      (entry) => `  - [${entry.severity}] ${entry.title}${entry.scopedChangeId === void 0 ? "" : ` (from ${entry.scopedChangeId})`} \u2014 ${entry.artifactPath}`
+      (entry) => `  - [${entry.severity}] ${entry.title}${entry.scopeLabel === void 0 ? "" : ` (from ${entry.scopeLabel})`} \u2014 ${entry.artifactPath}`
     )
   ].join("\n");
   return [summary, mode, retro, renderNextAction(action)].filter((part) => part !== void 0).join("\n");
@@ -44598,6 +44598,7 @@ function parseExploration(input) {
 }
 
 // packages/cli/src/workflow/phase-range.ts
+var MAX_PHASE = 1e4;
 var EXAMPLE = 'Use a range or list of phase numbers, such as "1-3", "1,2,5" or "1-3,7".';
 function parsePhaseRange(value) {
   const trimmed = value.trim();
@@ -44618,7 +44619,11 @@ function parsePhaseRange(value) {
       if (!/^[1-9]\d*$/.test(text)) {
         return { ok: false, reason: `"${text}" is not a phase number. ${EXAMPLE}` };
       }
-      parsed.push(Number.parseInt(text, 10));
+      const value2 = Number.parseInt(text, 10);
+      if (!Number.isSafeInteger(value2) || value2 > MAX_PHASE) {
+        return { ok: false, reason: `"${text}" is larger than any real phase number. ${EXAMPLE}` };
+      }
+      parsed.push(value2);
     }
     const [start, end = start] = parsed;
     if (end < start) {
@@ -45193,8 +45198,10 @@ async function runRetroWorkflow(context) {
     // breaks equal scores by `createdAt`.
     createdAt,
     // Recorded so a reader of the index can tell an action drawn from one
-    // scope's retrospective from one drawn across the whole project.
-    ...scope === void 0 ? {} : { scopedChangeId: scope.changeIds.join(",") },
+    // scope's retrospective from one drawn across the whole project. A list,
+    // because a milestone scope covers several changes — comma-joining them
+    // into a field typed and named for one would break any typed consumer.
+    ...scope === void 0 ? {} : { scopedChangeIds: scope.changeIds, scopeLabel: scope.label },
     artifactPath: markdownArtifactPath,
     summary: executed.result.summary,
     actions: executed.result.findings.map((finding) => ({
@@ -45273,19 +45280,27 @@ async function handleMilestoneWorkflow(context) {
   const current = await readMilestoneIndex(context.repositoryRoot);
   if (statusMode) {
     const action2 = nextAction("legion status", "Review milestone state before changing release posture.");
+    const progress = await milestoneProgressMap(context.repositoryRoot, current);
     return success2(
       {
         ok: true,
         status: "completed",
         workflow: "milestone",
         mode: "status",
-        milestones: current.milestones,
+        // Progress belongs in the payload, not only in the human string. The
+        // host is told to render status from `--json`; computing it solely for
+        // the text left every JSON client with the raw records and no way to
+        // reach a percentage except by recomputing the join itself.
+        milestones: current.milestones.map((milestone) => ({
+          ...milestone,
+          progress: milestoneProgressPayload(progress.get(milestone.id))
+        })),
         nextAction: action2,
         diagnostics: []
       },
       [
         `Milestones: ${current.milestones.length}.`,
-        renderMilestones(current, await milestoneProgressMap(context.repositoryRoot, current)).trimEnd(),
+        renderMilestones(current, progress).trimEnd(),
         renderNextAction(action2)
       ].join("\n")
     );
@@ -45546,6 +45561,10 @@ async function milestonePhaseProgress(repositoryRoot, milestone) {
   }
   const listed = await listWorkflowChanges(repositoryRoot);
   const changes = listed.ok ? listed.changes : [];
+  if (!listed.ok && !listed.diagnostics.every((entry) => entry.code === "change_missing")) {
+    const reasons = listed.diagnostics.map((entry) => entry.message).join("; ");
+    return { ok: false, reason: `its changes could not be read: ${reasons}` };
+  }
   const phases = [];
   for (const phase of range.phases) {
     const prefix = phaseChangeIdPrefix(phase);
@@ -45563,6 +45582,22 @@ async function milestonePhaseProgress(repositoryRoot, milestone) {
     });
   }
   return { ok: true, phases };
+}
+function milestoneProgressPayload(state) {
+  if (state === void 0) return { status: "unknown" };
+  if (!state.ok) return { status: "unresolvable", reason: state.reason };
+  const complete = state.phases.filter((entry) => entry.complete).length;
+  return {
+    status: "resolved",
+    complete,
+    total: state.phases.length,
+    phases: state.phases.map((entry) => ({
+      phase: entry.phase,
+      changeId: entry.changeId ?? null,
+      complete: entry.complete,
+      reason: entry.reason
+    }))
+  };
 }
 
 // packages/cli/src/workflow/ship-gates.ts

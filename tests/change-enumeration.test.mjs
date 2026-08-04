@@ -226,3 +226,64 @@ test("a scoped retrospective excludes project-wide stage and recent runs", async
   assert.doesNotMatch(rendered, /Recent workflow runs/);
   assert.match(rendered, /Evidence from phase 1 alone/);
 });
+
+test("milestone status reports progress in its JSON payload", async (t) => {
+  const { run } = await plannedProject(t);
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-2")).exitCode, 0);
+
+  const status = await run("milestone", "--status", "--json");
+  assert.equal(status.exitCode, 0, status.stderr);
+  const [milestone] = parseJsonOutput(status).milestones;
+
+  // Computed only for the human string, a percentage is unreachable to every
+  // JSON client — and the host is told to render status from `--json`.
+  assert.equal(milestone.progress.status, "resolved");
+  assert.equal(milestone.progress.total, 2);
+  assert.equal(milestone.progress.complete, 0);
+  // Phase 1 was planned here and phase 2 was not, so the two rows must differ.
+  const [first, second] = milestone.progress.phases;
+  assert.match(first.changeId, /^chg_phase-1-/);
+  assert.equal(second.changeId, null);
+  assert.equal(second.reason, "not planned");
+});
+
+test("a milestone whose range does not parse is unresolvable, not zero percent", async (t) => {
+  const { root, run } = await plannedProject(t);
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-2")).exitCode, 0);
+  const indexPath = path.join(root, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  // What a milestone defined before the parser existed holds.
+  await writeFile(
+    indexPath,
+    JSON.stringify({ ...index, milestones: index.milestones.map((e) => ({ ...e, phases: "the MVP ones" })) }),
+    "utf8"
+  );
+
+  const status = await run("milestone", "--status", "--json");
+  assert.equal(status.exitCode, 0, status.stderr);
+  // A milestone nobody can evaluate is a different thing from one with nothing
+  // done. Reporting it as 0% would be a wrong number where the caller needs a
+  // repairable finding.
+  const { progress } = parseJsonOutput(status).milestones[0];
+  assert.equal(progress.status, "unresolvable");
+  assert.match(progress.reason, /do not parse/);
+});
+
+test("changes that exist but none of them valid is not reported as unplanned phases", async (t) => {
+  const { root, run, planned } = await plannedProject(t);
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-2")).exitCode, 0);
+  // `listWorkflowChanges` reports `ok: false` when change directories exist and
+  // none holds a valid bundle. Corrupting the only real change reaches that
+  // state; adding a bad directory beside a good one does not, because one valid
+  // bundle is enough.
+  await writeFile(path.join(root, planned.change.artifactPath), "not: [valid", "utf8");
+
+  const status = await run("milestone", "--status", "--json");
+  assert.equal(status.exitCode, 0, status.stderr);
+  const { progress } = parseJsonOutput(status).milestones[0];
+  // Swallowing the discovery failure would report every covered phase as
+  // `not planned` and 0% complete, hiding a real fault behind a plausible
+  // answer in the one place a caller would act on it.
+  assert.equal(progress.status, "unresolvable");
+  assert.match(progress.reason, /could not be read/);
+});

@@ -53,3 +53,14 @@ test("every refusal names an example the caller can act on", () => {
     assert.match(parsePhaseRange(value).reason, /"1-3"/);
   }
 });
+
+test("an integer past 2^53 is refused rather than hanging the CLI", () => {
+  // These pass the digit regex. Past 2^53 an integer has no distinct successor,
+  // so `phase += 1` never advances and the expansion loop spins forever; longer
+  // digit strings parse to Infinity and do the same.
+  for (const value of ["9007199254740992", "9007199254740992-9007199254740993", "1".repeat(400)]) {
+    const result = parsePhaseRange(value);
+    assert.equal(result.ok, false, `${value.slice(0, 24)} was accepted`);
+    assert.match(result.reason, /larger than any real phase number|more than 512/);
+  }
+});
