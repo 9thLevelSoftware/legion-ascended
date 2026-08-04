@@ -129,20 +129,14 @@
           "evidence": "tests/change-enumeration.test.mjs"
         },
         {
-          "gap": "--summary is stored verbatim, so a completed milestone's summary is whatever the caller typed rather than derived from the artifacts the CLI owns.",
-          "disposition": "build-in-cli",
-          "closedWhen": {
-            "file": "packages/cli/src/commands/workflow/contextual.ts",
-            "pattern": "deriveMilestoneMetrics"
-          }
+          "gap": "--summary is stored verbatim as the operator narrative, and a derived block is recorded beside it at completion: phases covered and complete, changes, tasks, passing reviews, first-pass rate, and generatedAt. The two are separately labelled so a reader can see the claim and the evidence disagree.",
+          "disposition": "built-in-cli",
+          "evidence": "tests/milestone-metrics.test.mjs"
         },
         {
-          "gap": "Summary generation is unowned. The command gathers plan, requirement, file, agent, outcome and decision data to compose a completion summary; the verb stores the caller's free-text --summary verbatim. Neither the CLI requirement nor the host-retained list claimed it, so conversion could replace computed milestone evidence with an operator-typed string and satisfy every criterion.",
-          "disposition": "build-in-cli",
-          "closedWhen": {
-            "file": "packages/cli/src/commands/workflow/contextual.ts",
-            "pattern": "deriveMilestoneMetrics"
-          }
+          "gap": "Summary generation is owned by the verb for everything it can compute from .legion artifacts: phase, change, task and review counts, and the first-pass rate. The v8 command also gathered agent, outcome and decision data from SUMMARY.md and agent logs, which retired with .planning/ and has no v9 counterpart.",
+          "disposition": "built-in-cli",
+          "evidence": "tests/milestone-metrics.test.mjs"
         },
         {
           "gap": "The archive confirmation goes with the relocation. Its text reports how many phase directories will move and where, so retaining it after the relocation is removed would ask the operator to approve an operation that no longer happens. If a confirmation survives it is a new one about the status transition, not this one.",

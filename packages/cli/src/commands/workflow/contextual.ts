@@ -69,6 +69,8 @@ interface MilestoneRecord {
   readonly phases: string;
   readonly status: "defined" | "completed" | "archived";
   readonly summary?: string;
+  /** What the artifacts said when the milestone was completed. */
+  readonly derived?: MilestoneDerivedMetrics;
   readonly createdAt: string;
   readonly completedAt?: string;
   readonly archivedAt?: string;
@@ -912,10 +914,21 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
           .join("; ")}. Completing it would record a summary over work that is not done.`
       );
     }
+    // Computed once, at completion, and stored. Recomputing on every read would
+    // report today's artifacts under a summary written months ago, so a
+    // milestone completed against three finished phases would silently gain a
+    // fourth. The claim and the evidence have to be from the same moment.
+    // `progress.ok` was proven above — an unresolvable range is refused before
+    // reaching here — so the metrics take the phase list directly. Passing the
+    // union would force a guard against a state this caller has already
+    // excluded, and a milestone whose range does not parse never gets a derived
+    // block because it never gets completed.
+    const derived = await deriveMilestoneMetrics(context.repositoryRoot, progress.phases, createdAt);
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
       status: "completed",
       summary,
+      derived,
       completedAt: createdAt
     }));
     status = "accepted";
@@ -1050,7 +1063,10 @@ function renderMilestones(
         `ID: ${milestone.id}`,
         `Phases: ${milestone.phases}`,
         `Status: ${milestone.status}`,
-        milestone.summary === undefined ? "" : `Summary: ${milestone.summary}`
+        // The operator's words and the artifacts' numbers, side by side and
+        // separately labelled. A reader must be able to see them disagree.
+        milestone.summary === undefined ? "" : `Summary (as recorded by the operator): ${milestone.summary}`,
+        ...renderDerivedMetrics(milestone.derived)
       ].filter((line) => line.length > 0);
       const state = progress.get(milestone.id);
       if (state === undefined) return body.join("\n");
@@ -1228,7 +1244,7 @@ type MilestoneProgress =
  * set of phases to join, and `renderMilestones` had no percentage, bar or phase
  * table because it had nothing to compute one from.
  */
-async function milestonePhaseProgress(
+export async function milestonePhaseProgress(
   repositoryRoot: string,
   milestone: MilestoneRecord
 ): Promise<MilestoneProgress> {
@@ -1404,4 +1420,81 @@ async function saveStagedRetro(context: CliContext, runId: string): Promise<CliR
       renderNextAction(action)
     ].join("\n")
   );
+}
+
+interface MilestoneDerivedMetrics {
+  readonly phases: number;
+  readonly phasesComplete: number;
+  readonly changes: number;
+  readonly tasks: number;
+  readonly passingReviews: number;
+  readonly firstPassReviews: { readonly passed: number; readonly reviewed: number };
+  readonly generatedAt: string;
+}
+
+/**
+ * What the artifacts say about a milestone, computed rather than typed.
+ *
+ * `--summary` is stored verbatim, so a completed milestone's summary was
+ * whatever the caller wrote. That is not wrong — an operator's narrative is
+ * worth recording — but on its own it is unverifiable, and nothing beside it
+ * said whether the work it describes happened.
+ *
+ * These are recorded next to it, not instead of it. A reader has to be able to
+ * see that the operator said one thing and the artifacts say another; folding
+ * the two together would destroy exactly the comparison that makes the summary
+ * checkable.
+ */
+export async function deriveMilestoneMetrics(
+  repositoryRoot: string,
+  phases: readonly MilestonePhaseState[],
+  generatedAt: string
+): Promise<MilestoneDerivedMetrics> {
+  let tasks = 0;
+  let passingReviews = 0;
+  let firstPassPassed = 0;
+  let tasksReviewed = 0;
+  const changeIds = phases
+    .map((entry) => entry.changeId)
+    .filter((entry): entry is string => entry !== undefined);
+
+  for (const changeId of changeIds) {
+    const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
+    if (taskgraph.ok) tasks += taskgraph.document.tasks.length;
+    const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
+    if (!reviews.ok) continue;
+    passingReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
+    // `supersedes` is a required array — `[]` on a first review, never absent —
+    // so this is a length test. A presence test matched nothing and reported
+    // every project as having no reviews at all.
+    const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes.length === 0);
+    tasksReviewed += firstAttempts.length;
+    firstPassPassed += firstAttempts.filter((review) => review.document.status === "accepted").length;
+  }
+
+  return {
+    phases: phases.length,
+    phasesComplete: phases.filter((entry) => entry.complete).length,
+    changes: changeIds.length,
+    tasks,
+    passingReviews,
+    firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
+    generatedAt
+  };
+}
+
+function renderDerivedMetrics(metrics: MilestoneDerivedMetrics | undefined): readonly string[] {
+  if (metrics === undefined) return [];
+  return [
+    "",
+    "Derived from the artifacts:",
+    `- Phases: ${metrics.phasesComplete} of ${metrics.phases} complete`,
+    `- Changes: ${metrics.changes}`,
+    `- Tasks: ${metrics.tasks}`,
+    `- Reviews with a passing verdict: ${metrics.passingReviews}`,
+    metrics.firstPassReviews.reviewed === 0
+      ? "- First-pass review rate: no task has been reviewed"
+      : `- First-pass review rate: ${metrics.firstPassReviews.passed} of ${metrics.firstPassReviews.reviewed}`,
+    `- Generated at: ${metrics.generatedAt}`
+  ];
 }
