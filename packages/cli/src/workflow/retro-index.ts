@@ -33,8 +33,10 @@ export interface RetroAction {
 export interface RetroIndexEntry {
   readonly id: string;
   readonly createdAt: string;
-  /** The change a scoped retrospective covered; absent when it was unscoped. */
-  readonly scopedChangeId?: string;
+  /** The changes a scoped retrospective covered; absent when it was unscoped. */
+  readonly scopedChangeIds?: readonly string[];
+  /** How that scope was named, e.g. `phase 3` or `milestone mil-mvp`. */
+  readonly scopeLabel?: string;
   readonly artifactPath: string;
   readonly summary: string;
   readonly actions: readonly RetroAction[];
@@ -78,7 +80,10 @@ function isRetroIndexEntry(value: unknown): value is RetroIndexEntry {
     typeof entry["createdAt"] === "string" &&
     typeof entry["artifactPath"] === "string" &&
     typeof entry["summary"] === "string" &&
-    (entry["scopedChangeId"] === undefined || typeof entry["scopedChangeId"] === "string") &&
+    (entry["scopedChangeIds"] === undefined ||
+      (Array.isArray(entry["scopedChangeIds"]) &&
+        entry["scopedChangeIds"].every((id: unknown) => typeof id === "string"))) &&
+    (entry["scopeLabel"] === undefined || typeof entry["scopeLabel"] === "string") &&
     Array.isArray(entry["actions"]) &&
     entry["actions"].every(isRetroAction)
   );
@@ -133,7 +138,8 @@ export function outstandingRetroActions(
 ): readonly (RetroAction & {
   readonly retroId: string;
   readonly artifactPath: string;
-  readonly scopedChangeId?: string;
+  readonly scopedChangeIds?: readonly string[];
+  readonly scopeLabel?: string;
 })[] {
   return [...index.retrospectives]
     .reverse()
@@ -145,9 +151,11 @@ export function outstandingRetroActions(
           retroId: entry.id,
           artifactPath: entry.artifactPath,
           // Carried through so a reader can tell an action drawn from one
-          // phase's retrospective from one drawn across the whole project.
+          // scope's retrospective from one drawn across the whole project.
           // Without it the field was written and never read.
-          ...(entry["scopedChangeId"] === undefined ? {} : { scopedChangeId: entry["scopedChangeId"] })
+          ...(entry.scopedChangeIds === undefined
+            ? {}
+            : { scopedChangeIds: entry.scopedChangeIds, scopeLabel: entry.scopeLabel })
         }))
     )
     .slice(0, limit);

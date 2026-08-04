@@ -26,6 +26,19 @@ without writing; `--define`, `--complete` and `--archive` mutate and are
 recorded. Completing a milestone that is already completed or archived is
 refused, so a recorded summary cannot be silently overwritten.
 
+`--phases` is parsed, not stored verbatim. `1-3`, `1,2,5`, `1-3,7` and `4` are
+the accepted forms; an unparseable range is refused at `--define` rather than
+committed. That parse is what lets the verb join a milestone to its phases, so:
+
+- `--status` reports real progress — completed of covered phases, a bar, and a
+  per-phase table naming each phase's change and why an incomplete one is
+  incomplete. Do not compute progress yourself.
+- `--complete` refuses while any covered phase is incomplete, naming each one.
+  The command's "no partial completions" rule is now the verb's.
+- A milestone defined before the parser existed holds free text. It is reported
+  as `Progress: unresolvable` with the parse error, not as zero progress: a
+  milestone nobody can evaluate is a different thing from one with nothing done.
+
 What stays here is what no verb performs: clustering roadmap phases into
 proposed groupings, the interactive action loop, the archive confirmation, the
 completion commit, and closing the GitHub milestone. No git commit and no gh
@@ -75,44 +88,36 @@ invocation exists anywhere in the CLI.
    If found: proceed to Step 4
 
 4. DISPLAY MILESTONE STATUS
-   For each milestone in the ## Milestones section:
-   a. Extract: name, phase range (start-end), goal, status
-   b. For each phase in the range:
-      - Read its status from the ROADMAP.md Progress table
-      - Count completed vs total plans
-   c. Calculate milestone progress using milestone-tracker Section 5 formulas
-   d. Determine display status
 
-   Output:
+   ```
+   legion milestone --status --json
+   ```
+
+   One call. The verb computes progress by joining each milestone's parsed phase
+   range to the changes behind those phases and asking whether each is complete.
+   Render what it returns.
+
+   Do **not** read the ROADMAP.md Progress table for this. That table is written
+   once by `legion start --finalize` and never updated, so every row reads
+   Pending forever — a progress report built from it would be wrong on every
+   project that has done any work.
 
    # {project_name} — Milestones
 
    | # | Milestone | Phases | Progress | Status |
    |---|-----------|--------|----------|--------|
-   | 1 | {name} | {start}-{end} | [{bar}] {pct}% | {status} |
-   | 2 | {name} | {start}-{end} | [{bar}] {pct}% | {status} |
-   ...
+   | 1 | {name} | {phases} | [{bar}] {done}/{total} | {status} |
 
-   Progress bar: 10 characters wide per milestone-tracker Section 5.
-   - filled = floor(milestone_percentage / 10)
-   - empty = 10 - filled
-   - Format: [{"#" * filled}{"." * empty}]
+   Then, for the milestone the operator is acting on, show its per-phase rows as
+   the verb reported them:
 
-   Status display:
-   - Pending: "Pending"
-   - In Progress: "In Progress"
-   - Complete: "Complete ({date})"
-   - Archived: "Archived ({date})"
+   | Phase | Change | State |
+   |-------|--------|-------|
+   | {N} | {changeId} | complete \| not planned \| {reason} |
 
-   Below the table, show the current milestone (the In Progress one, or next Pending if none In Progress):
-
-   ## Current: Milestone {N} — {name}
-   **Goal**: {goal}
-   **Phases {start}-{end}**:
-   | Phase | Name | Plans | Status |
-   |-------|------|-------|--------|
-   | {N} | {name} | {completed}/{total} | {status} |
-   ...
+   A milestone whose range does not parse reports `Progress: unresolvable` with
+   the parse error. Show that verbatim; it is a repairable finding, not zero
+   progress.
 
 5. PRESENT OPTIONS
    Based on milestone state, determine available actions:

@@ -109,9 +109,13 @@ test("legion milestone define, complete, and archive still record", async (t) =>
   const afterDefine = await guidanceRunCount(root);
   assert.ok(afterDefine > 0, "define must still write a run record");
 
+  // `--complete` now gates on the phases the milestone covers. Phases 1-3 were
+  // never planned here, so it refuses and names them — the command's stated
+  // "no partial completions" invariant, which previously only checked that the
+  // id existed.
   const completed = await run("milestone", "--complete", "milestone-mvp", "--summary", "done", "--json");
-  assert.equal(completed.exitCode, 0, completed.stderr);
-  assert.equal(parseJsonOutput(completed).status, "accepted");
+  assert.notEqual(completed.exitCode, 0);
+  assert.match(parseJsonOutput(completed).diagnostics[0].message, /incomplete phase\(s\).*not planned/s);
 
   const archived = await run("milestone", "--archive", "milestone-mvp", "--json");
   assert.equal(archived.exitCode, 0, archived.stderr);
@@ -132,15 +136,21 @@ test("legion retro --phase refuses a phase that was never planned", async (t) =>
   assert.match(`${result.stdout}${result.stderr}`, /no change for that phase|legion plan 7/);
 });
 
-test("legion retro refuses milestone scope for a stated reason", async (t) => {
+test("legion retro --milestone resolves through the phase range, then gates", async (t) => {
   const { run } = await scratchRepo(t);
+  const missing = await run("retro", "--milestone", "MVP", "--executor", "fake", "--json");
+  assert.notEqual(missing.exitCode, 0);
+  assert.match(`${missing.stdout}${missing.stderr}`, /found no such milestone/);
+
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-3")).exitCode, 0);
   const result = await run("retro", "--milestone", "MVP", "--executor", "fake", "--json");
 
-  // A milestone's phases are free text nothing parses, so there is no
-  // milestone-to-phase path to follow. Refused with that reason rather than
-  // silently producing an unscoped result.
+  // Resolved now: the milestone is found, its range parses to phases 1-3, and
+  // each is looked up. The refusal is about those phases being incomplete, not
+  // about there being no milestone-to-phase path — which is what it was before
+  // the range parser existed.
   assert.notEqual(result.exitCode, 0);
-  assert.match(`${result.stdout}${result.stderr}`, /free text|no set of changes/);
+  assert.match(`${result.stdout}${result.stderr}`, /incomplete phase\(s\)/);
 });
 
 test("an unscoped retro still runs", async (t) => {
@@ -273,9 +283,23 @@ test("a retrospective is given the evidence it is drawn from", async (t) => {
 });
 
 test("completing a milestone twice is refused", async (t) => {
-  const { run } = await scratchRepo(t);
+  const { root, run } = await scratchRepo(t);
   assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-3")).exitCode, 0);
-  assert.equal((await run("milestone", "--complete", "milestone-mvp", "--summary", "done")).exitCode, 0);
+  // Recorded as already completed directly. Reaching this state through the CLI
+  // now needs every covered phase complete, and a fake executor's build fails
+  // the harness observations acceptance cannot override — so the first
+  // completion is unreachable in a fixture. The invariant under test is the
+  // second one, which must refuse before the phase gate is consulted.
+  const indexPath = path.join(root, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  await writeFile(
+    indexPath,
+    JSON.stringify({
+      ...index,
+      milestones: index.milestones.map((entry) => ({ ...entry, status: "completed", summary: "done" }))
+    }),
+    "utf8"
+  );
 
   // The only check was that the id existed, so a second completion silently
   // overwrote the recorded summary of the first.

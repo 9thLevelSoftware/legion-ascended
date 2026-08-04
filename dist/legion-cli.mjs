@@ -40648,7 +40648,7 @@ function isRetroAction(value) {
 function isRetroIndexEntry(value) {
   if (typeof value !== "object" || value === null) return false;
   const entry = value;
-  return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeId"] === void 0 || typeof entry["scopedChangeId"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
+  return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
   const indexPath = path34.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
@@ -40676,9 +40676,9 @@ function outstandingRetroActions(index, limit = 5) {
       retroId: entry.id,
       artifactPath: entry.artifactPath,
       // Carried through so a reader can tell an action drawn from one
-      // phase's retrospective from one drawn across the whole project.
+      // scope's retrospective from one drawn across the whole project.
       // Without it the field was written and never read.
-      ...entry["scopedChangeId"] === void 0 ? {} : { scopedChangeId: entry["scopedChangeId"] }
+      ...entry.scopedChangeIds === void 0 ? {} : { scopedChangeIds: entry.scopedChangeIds, scopeLabel: entry.scopeLabel }
     }))
   ).slice(0, limit);
 }
@@ -41172,7 +41172,7 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActio
   const retro = retroActions.length === 0 ? void 0 : [
     "Outstanding retrospective actions to account for in this decomposition:",
     ...retroActions.map(
-      (entry) => `  - [${entry.severity}] ${entry.title}${entry.scopedChangeId === void 0 ? "" : ` (from ${entry.scopedChangeId})`} \u2014 ${entry.artifactPath}`
+      (entry) => `  - [${entry.severity}] ${entry.title}${entry.scopeLabel === void 0 ? "" : ` (from ${entry.scopeLabel})`} \u2014 ${entry.artifactPath}`
     )
   ].join("\n");
   return [summary, mode, retro, renderNextAction(action)].filter((part) => part !== void 0).join("\n");
@@ -44597,6 +44597,46 @@ function parseExploration(input) {
   return { exploration: parsed.data, diagnostics };
 }
 
+// packages/cli/src/workflow/phase-range.ts
+var MAX_PHASE = 1e4;
+var EXAMPLE = 'Use a range or list of phase numbers, such as "1-3", "1,2,5" or "1-3,7".';
+function parsePhaseRange(value) {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return { ok: false, reason: `A phase range cannot be empty. ${EXAMPLE}` };
+  const phases = /* @__PURE__ */ new Set();
+  for (const rawPart of trimmed.split(",")) {
+    const part = rawPart.trim();
+    if (part.length === 0) {
+      return { ok: false, reason: `"${trimmed}" has an empty entry. ${EXAMPLE}` };
+    }
+    const bounds = part.split("-");
+    if (bounds.length > 2) {
+      return { ok: false, reason: `"${part}" is not a phase or a range. ${EXAMPLE}` };
+    }
+    const parsed = [];
+    for (const bound of bounds) {
+      const text = bound.trim();
+      if (!/^[1-9]\d*$/.test(text)) {
+        return { ok: false, reason: `"${text}" is not a phase number. ${EXAMPLE}` };
+      }
+      const value2 = Number.parseInt(text, 10);
+      if (!Number.isSafeInteger(value2) || value2 > MAX_PHASE) {
+        return { ok: false, reason: `"${text}" is larger than any real phase number. ${EXAMPLE}` };
+      }
+      parsed.push(value2);
+    }
+    const [start, end = start] = parsed;
+    if (end < start) {
+      return { ok: false, reason: `"${part}" runs backwards. ${EXAMPLE}` };
+    }
+    if (end - start > 512) {
+      return { ok: false, reason: `"${part}" spans more than 512 phases. ${EXAMPLE}` };
+    }
+    for (let phase = start; phase <= end; phase += 1) phases.add(phase);
+  }
+  return { ok: true, phases: [...phases].sort((left, right) => left - right) };
+}
+
 // packages/cli/src/workflow/escalations.ts
 async function collectEscalations(input) {
   const escalations = [];
@@ -45010,10 +45050,31 @@ async function runRetroWorkflow(context) {
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
+  if (phase !== null && milestone !== null) {
+    return usageError("legion retro takes --phase or --milestone, not both. They describe different scopes.");
+  }
+  let scopeLabel;
+  let scopedChangeIds;
   if (milestone !== null) {
-    return usageError(
-      "legion retro cannot scope a retrospective to a milestone: a milestone's phases are recorded as free text that nothing parses, so there is no set of changes to gather evidence from. Use --phase <N>, or run without a scope."
-    );
+    const index = await readMilestoneIndex(context.repositoryRoot);
+    const record2 = index.milestones.find((entry) => entry.id === milestone || entry.name === milestone);
+    if (record2 === void 0) {
+      return usageError(
+        `legion retro --milestone ${milestone} found no such milestone. Run legion milestone --status to list them.`
+      );
+    }
+    const progress = await milestonePhaseProgress(context.repositoryRoot, record2);
+    if (!progress.ok) {
+      return usageError(`legion retro --milestone ${milestone}: ${progress.reason}`);
+    }
+    const outstanding = progress.phases.filter((entry) => !entry.complete);
+    if (outstanding.length > 0) {
+      return usageError(
+        `Milestone ${record2.id} has ${outstanding.length} incomplete phase(s): ${outstanding.map((entry) => `${entry.phase} (${entry.reason})`).join("; ")}. Retrospectives run on completed work.`
+      );
+    }
+    scopeLabel = `milestone ${record2.id}`;
+    scopedChangeIds = progress.phases.map((entry) => entry.changeId).filter((entry) => entry !== void 0);
   }
   let scopedChangeId;
   if (phase !== null) {
@@ -45030,6 +45091,8 @@ async function runRetroWorkflow(context) {
       );
     }
     scopedChangeId = matches.at(-1)?.changeId;
+    scopeLabel = `phase ${phaseNumber}`;
+    scopedChangeIds = scopedChangeId === void 0 ? [] : [scopedChangeId];
     const completeness = await isChangeComplete({
       repositoryRoot: context.repositoryRoot,
       changeId: scopedChangeId ?? ""
@@ -45045,7 +45108,8 @@ async function runRetroWorkflow(context) {
   const dryRun = hasFlag(context, "dry-run");
   const state = await resolveWorkflowState(context);
   const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
-  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns, scopedChangeId);
+  const scope = scopeLabel === void 0 || scopedChangeIds === void 0 ? void 0 : { label: scopeLabel, changeIds: scopedChangeIds };
+  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns, scope);
   const paths = await createGuidanceRunPaths({
     repositoryRoot: context.repositoryRoot,
     workflow: "retro",
@@ -45107,8 +45171,11 @@ async function runRetroWorkflow(context) {
     // current stage under a phase heading is a scoped retrospective reporting
     // unscoped facts, which is what a reader would take it for.
     sections: [
-      scopedChangeId === void 0 ? { heading: "Workflow State", body: `Current stage: ${state.stage}` } : { heading: "Scope", body: `Change ${scopedChangeId}. Project-wide stage and recent runs are excluded.` },
-      ...scopedChangeId !== void 0 ? [] : [
+      scope === void 0 ? { heading: "Workflow State", body: `Current stage: ${state.stage}` } : {
+        heading: "Scope",
+        body: `${scope.label} (${scope.changeIds.length} change(s)). Project-wide stage and recent runs are excluded.`
+      },
+      ...scope !== void 0 ? [] : [
         {
           heading: "Recent Guidance Runs",
           body: recentRuns.length === 0 ? "No recent guidance runs were found." : recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`)
@@ -45130,7 +45197,11 @@ async function runRetroWorkflow(context) {
     // backfilled retrospectives in the wrong order, since `learn --recall`
     // breaks equal scores by `createdAt`.
     createdAt,
-    ...scopedChangeId === void 0 ? {} : { scopedChangeId },
+    // Recorded so a reader of the index can tell an action drawn from one
+    // scope's retrospective from one drawn across the whole project. A list,
+    // because a milestone scope covers several changes — comma-joining them
+    // into a field typed and named for one would break any typed consumer.
+    ...scope === void 0 ? {} : { scopedChangeIds: scope.changeIds, scopeLabel: scope.label },
     artifactPath: markdownArtifactPath,
     summary: executed.result.summary,
     actions: executed.result.findings.map((finding) => ({
@@ -45209,19 +45280,27 @@ async function handleMilestoneWorkflow(context) {
   const current = await readMilestoneIndex(context.repositoryRoot);
   if (statusMode) {
     const action2 = nextAction("legion status", "Review milestone state before changing release posture.");
+    const progress = await milestoneProgressMap(context.repositoryRoot, current);
     return success2(
       {
         ok: true,
         status: "completed",
         workflow: "milestone",
         mode: "status",
-        milestones: current.milestones,
+        // Progress belongs in the payload, not only in the human string. The
+        // host is told to render status from `--json`; computing it solely for
+        // the text left every JSON client with the raw records and no way to
+        // reach a percentage except by recomputing the join itself.
+        milestones: current.milestones.map((milestone) => ({
+          ...milestone,
+          progress: milestoneProgressPayload(progress.get(milestone.id))
+        })),
         nextAction: action2,
         diagnostics: []
       },
       [
         `Milestones: ${current.milestones.length}.`,
-        renderMilestones(current).trimEnd(),
+        renderMilestones(current, progress).trimEnd(),
         renderNextAction(action2)
       ].join("\n")
     );
@@ -45230,6 +45309,8 @@ async function handleMilestoneWorkflow(context) {
   let status2 = "completed";
   let slugSource = "status";
   if (define !== void 0 && phases !== void 0) {
+    const range = parsePhaseRange(phases);
+    if (!range.ok) return usageError(`legion milestone --phases: ${range.reason}`);
     const id = milestoneId(define);
     if (current.milestones.some((entry) => entry.id === id)) return usageError(`Milestone already exists: ${id}`);
     next = {
@@ -45247,6 +45328,16 @@ async function handleMilestoneWorkflow(context) {
     }
     if (target.status === "completed" || target.status === "archived") {
       return usageError(`Milestone ${complete} is already ${target.status}. Completing it again would overwrite its recorded summary.`);
+    }
+    const progress = await milestonePhaseProgress(context.repositoryRoot, target);
+    if (!progress.ok) {
+      return usageError(`legion milestone --complete ${complete}: ${progress.reason}`);
+    }
+    const outstanding = progress.phases.filter((entry) => !entry.complete);
+    if (outstanding.length > 0) {
+      return usageError(
+        `Milestone ${complete} has ${outstanding.length} incomplete phase(s): ${outstanding.map((entry) => `${entry.phase} (${entry.reason})`).join("; ")}. Completing it would record a summary over work that is not done.`
+      );
     }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
@@ -45283,7 +45374,7 @@ async function handleMilestoneWorkflow(context) {
   await writeProjectTextFile({
     repositoryRoot: context.repositoryRoot,
     artifactPath: markdownArtifactPath,
-    text: renderMilestones(next)
+    text: renderMilestones(next, await milestoneProgressMap(context.repositoryRoot, next))
   });
   const action = nextAction("legion status", "Review milestone state before changing release posture.");
   await writeGuidanceRun({
@@ -45354,22 +45445,52 @@ function updateMilestone(index, id, update) {
 function milestoneId(name) {
   return `milestone-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed"}`;
 }
-function renderMilestones(index) {
+function renderMilestones(index, progress) {
   return [
     "# Milestones",
     "",
-    index.milestones.length === 0 ? "No milestones defined." : index.milestones.map((milestone) => [
-      `## ${milestone.name}`,
-      "",
-      `ID: ${milestone.id}`,
-      `Phases: ${milestone.phases}`,
-      `Status: ${milestone.status}`,
-      milestone.summary === void 0 ? "" : `Summary: ${milestone.summary}`
-    ].filter((line) => line.length > 0).join("\n")).join("\n\n"),
+    index.milestones.length === 0 ? "No milestones defined." : index.milestones.map((milestone) => {
+      const body = [
+        `## ${milestone.name}`,
+        "",
+        `ID: ${milestone.id}`,
+        `Phases: ${milestone.phases}`,
+        `Status: ${milestone.status}`,
+        milestone.summary === void 0 ? "" : `Summary: ${milestone.summary}`
+      ].filter((line) => line.length > 0);
+      const state = progress.get(milestone.id);
+      if (state === void 0) return body.join("\n");
+      if (!state.ok) {
+        return [...body, "", `Progress: unresolvable \u2014 ${state.reason}`].join("\n");
+      }
+      const done = state.phases.filter((entry) => entry.complete).length;
+      const total = state.phases.length;
+      const filled = total === 0 ? 0 : Math.round(done / total * 20);
+      const percent = total === 0 ? 0 : Math.round(done / total * 100);
+      return [
+        ...body,
+        "",
+        `Progress: ${done}/${total} phases (${percent}%)`,
+        `[${"#".repeat(filled)}${".".repeat(20 - filled)}]`,
+        "",
+        "| Phase | Change | State |",
+        "|-------|--------|-------|",
+        ...state.phases.map(
+          (entry) => `| ${entry.phase} | ${entry.changeId ?? "\u2014"} | ${entry.complete ? "complete" : entry.reason} |`
+        )
+      ].join("\n");
+    }).join("\n\n"),
     ""
   ].join("\n");
 }
-async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scopedChangeId) {
+async function milestoneProgressMap(repositoryRoot, index) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const milestone of index.milestones) {
+    entries.set(milestone.id, await milestonePhaseProgress(repositoryRoot, milestone));
+  }
+  return entries;
+}
+async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scope) {
   let changeCount = 0;
   let taskCount = 0;
   let acceptedReviews = 0;
@@ -45381,7 +45502,7 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scopedChan
   const listed = await listWorkflowChanges(repositoryRoot);
   {
     const all = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
-    const changeIds2 = scopedChangeId === void 0 ? all : all.filter((entry) => entry === scopedChangeId);
+    const changeIds2 = scope === void 0 ? all : all.filter((entry) => scope.changeIds.includes(entry));
     changeCount = changeIds2.length;
     for (const changeId of changeIds2) {
       const escalated = await collectEscalations({ repositoryRoot, changeId });
@@ -45407,7 +45528,7 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scopedChan
     // exactly the mislabelled-scope defect this selector exists to prevent, so
     // scoped mode omits them rather than filtering them: a guidance run records
     // no change, so there is nothing to filter on.
-    ...scopedChangeId === void 0 ? { stage: state.stage } : { scopedChangeId },
+    ...scope === void 0 ? { stage: state.stage } : { scopeLabel: scope.label },
     changeCount,
     taskCount,
     acceptedReviews,
@@ -45415,13 +45536,13 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns, scopedChan
     escalationReasons: [...escalationReasons].sort(),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
-    recentRuns: scopedChangeId === void 0 ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
-    summary: `${scopedChangeId === void 0 ? `stage ${state.stage}` : `change ${scopedChangeId}`}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
+    recentRuns: scope === void 0 ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
+    summary: `${scope === void 0 ? `stage ${state.stage}` : scope.label}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 function renderRetroEvidence(evidence) {
   return [
-    evidence.scopedChangeId === void 0 ? "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:" : `Evidence from change ${evidence.scopedChangeId} alone. Ground every finding in it and say when it is insufficient. Project-wide stage and recent runs are deliberately excluded: they describe current activity, not this phase's.`,
+    evidence.scopeLabel === void 0 ? "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:" : `Evidence from ${evidence.scopeLabel} alone. Ground every finding in it and say when it is insufficient. Project-wide stage and recent runs are deliberately excluded: they describe current activity, not this scope's.`,
     evidence.stage === void 0 ? void 0 : `- Workflow stage: ${evidence.stage}`,
     `- Changes recorded: ${evidence.changeCount} (${evidence.changesComplete} complete)`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
@@ -45429,9 +45550,54 @@ function renderRetroEvidence(evidence) {
     evidence.firstPassReviews.reviewed === 0 ? "- First-pass review rate: no task has been reviewed yet" : `- First-pass review rate: ${evidence.firstPassReviews.passed} of ${evidence.firstPassReviews.reviewed} passed on the first review`,
     `- Escalations (blocked runs and blocking findings): ${evidence.escalations}`,
     evidence.escalationReasons.length === 0 ? "- Escalation reasons: none" : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
-    evidence.scopedChangeId !== void 0 ? void 0 : evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
+    evidence.scopeLabel !== void 0 ? void 0 : evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
 ${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
   ].filter((line) => line !== void 0).join("\n");
+}
+async function milestonePhaseProgress(repositoryRoot, milestone) {
+  const range = parsePhaseRange(milestone.phases);
+  if (!range.ok) {
+    return { ok: false, reason: `its recorded phases ${JSON.stringify(milestone.phases)} do not parse: ${range.reason}` };
+  }
+  const listed = await listWorkflowChanges(repositoryRoot);
+  const changes = listed.ok ? listed.changes : [];
+  if (!listed.ok && !listed.diagnostics.every((entry) => entry.code === "change_missing")) {
+    const reasons = listed.diagnostics.map((entry) => entry.message).join("; ");
+    return { ok: false, reason: `its changes could not be read: ${reasons}` };
+  }
+  const phases = [];
+  for (const phase of range.phases) {
+    const prefix = phaseChangeIdPrefix(phase);
+    const matched = changes.filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
+    if (matched === void 0) {
+      phases.push({ phase, complete: false, reason: "not planned" });
+      continue;
+    }
+    const completeness = await isChangeComplete({ repositoryRoot, changeId: matched.changeId });
+    phases.push({
+      phase,
+      changeId: matched.changeId,
+      complete: completeness.complete,
+      reason: completeness.complete ? "complete" : completeness.reason
+    });
+  }
+  return { ok: true, phases };
+}
+function milestoneProgressPayload(state) {
+  if (state === void 0) return { status: "unknown" };
+  if (!state.ok) return { status: "unresolvable", reason: state.reason };
+  const complete = state.phases.filter((entry) => entry.complete).length;
+  return {
+    status: "resolved",
+    complete,
+    total: state.phases.length,
+    phases: state.phases.map((entry) => ({
+      phase: entry.phase,
+      changeId: entry.changeId ?? null,
+      complete: entry.complete,
+      reason: entry.reason
+    }))
+  };
 }
 
 // packages/cli/src/workflow/ship-gates.ts
