@@ -139,7 +139,7 @@ export function outstandingRetroActions(
     .reverse()
     .flatMap((entry) =>
       entry.actions
-        .filter((action) => action["severity"] !== "minor")
+        .filter((action) => action.severity !== "minor")
         .map((action) => ({
           ...action,
           retroId: entry.id,

@@ -41,7 +41,6 @@ import {
 import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { isChangeComplete, listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
-import { currentUtcTimestamp } from "../../workflow/change-input.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { appendRetroEntry, readRetroIndex, retroIndexArtifactPath } from "../../workflow/retro-index.js";
 import { collectEscalations } from "../../workflow/escalations.js";
@@ -675,7 +674,12 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     ? await readRetroIndex(context.repositoryRoot)
     : appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
     id: paths.runId,
-    createdAt: currentUtcTimestamp(),
+    // The run's own timestamp, not wall clock. `--created-at` makes a run
+    // deterministic and is what the run ID and workflow-run.json already use;
+    // stamping the index separately gave one run two creation times and put
+    // backfilled retrospectives in the wrong order, since `learn --recall`
+    // breaks equal scores by `createdAt`.
+    createdAt,
     ...(scopedChangeId === undefined ? {} : { scopedChangeId }),
     artifactPath: markdownArtifactPath,
     summary: executed.result.summary,

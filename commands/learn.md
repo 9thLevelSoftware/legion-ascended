@@ -39,7 +39,8 @@ continue with another lesson.
    - If $ARGUMENTS contains `--list`: set MODE=list
    - If $ARGUMENTS contains `--prune`: display the removal note below and exit.
      The verb has no prune mode, so routing to one would leave the host with
-     nothing to execute.
+     nothing to execute. memory-manager Section 7.5 is marked legacy for the
+     same reason and no longer routes anyone here.
    - If $ARGUMENTS is non-empty (and no flags): set MODE=record, store full text as lesson
    - If $ARGUMENTS is empty or missing:
      Display:

@@ -25,7 +25,7 @@ Core rules governing all memory operations:
 1. **Passive and opt-in** — memory operations are called explicitly by workflows. No hooks, no background processes, no automatic triggers. A workflow must choose to store or recall.
 2. **Human-readable markdown** — all memory is stored as structured markdown tables, consistent with PROJECT.md, STATE.md, and all other Legion state files. No JSON, no binary, no databases.
 3. **Graceful degradation** — every caller checks for memory availability before using it. If memory files don't exist, the workflow proceeds identically to how it worked before Phase 9. Memory is an enhancement, never a requirement.
-4. **Append-only with opt-in pruning** — outcome records are added, never modified or deleted automatically. Decay happens at recall time through scoring, not through deletion. When `memory.auto_prune` is enabled, records exceeding the threshold are archived (moved to ARCHIVE.md), never deleted.
+4. **Append-only** — outcome records are added, never modified or deleted. Decay happens at recall time through scoring, not through deletion. Pruning is documented in Section 7.5 but has no working trigger in v9, so in practice nothing is ever archived.
 5. **Supplement, not override** — memory boosts agent recommendations but cannot override mandatory roles, division alignment, or the core recommendation algorithm in agent-registry.md.
 6. **Minimal footprint** — one directory (`.planning/memory/`), four files (`OUTCOMES.md`, `PATTERNS.md`, `ERRORS.md`, `PREFERENCES.md`). Each file has a distinct schema and purpose — no duplication across files.
 7. **Strict project scope** — memory recall and scoring are project-local by default. Agent outcomes from one project MUST NOT be used to boost or penalize recommendations in another project unless an explicit future opt-in feature is added.
@@ -213,11 +213,9 @@ Step 6: Sort and limit
   - Return top {limit} records
 
 Step 7: Pruning suggestion (informational only)
-  - If total record count exceeds 200:
-    Output note: "OUTCOMES.md has {count} records. Run `/legion:learn --prune`
-    to archive old entries, or enable `memory.auto_prune` in settings.json."
-  - If `memory.auto_prune` is true in settings.json, pruning runs automatically
-    after store operations when the threshold is exceeded (see Section 7.5).
+  - Do not suggest pruning. Neither trigger exists in v9 — see Section 7.5.
+    Naming a record count without an operation that acts on it tells the reader
+    something is wrong and gives them nowhere to go.
 ```
 
 **Recall for Agent Recommendation**:
@@ -386,22 +384,36 @@ To verify a workflow degrades gracefully:
 - **Missing OUTCOMES.md**: Store creates it with the header template. Recall returns empty results.
 - **Malformed OUTCOMES.md**: If the table cannot be parsed (missing columns, corrupted rows), log a one-line warning: "Warning: OUTCOMES.md could not be parsed. Proceeding without memory." Return empty results. Do NOT attempt to repair — the user should inspect manually.
 - **Write failure during store**: Output the intended record as text to the user. Include all fields so the user can manually add it. Continue the workflow — memory loss is not a blocking error.
-- **Excessive records (200+)**: On recall, output an informational note: "OUTCOMES.md has {count} records. Run `/legion:learn --prune` to archive old entries, or enable `memory.auto_prune` in settings.json." The note appears once per recall, not per record.
+- **Excessive records (200+)**: Say nothing. The note used to name `/legion:learn --prune` and `memory.auto_prune`; neither does anything in v9 (Section 7.5), so the note would report a problem and offer two dead remedies.
 - **Prune failure**: If archive write fails during pruning, abort the operation and restore OUTCOMES.md to its pre-prune state. Output the records that would have been archived as text for manual handling. Continue the calling workflow — prune failure is not a blocking error.
 - **Concurrent writes**: Not a concern in Legion workflows — only one build/review runs at a time per project. If somehow two writes conflict, the second write wins (last-write-wins, consistent with all other Legion state files).
 - **Date parsing failure**: If a record's date cannot be parsed, treat its recency_weight as 0.4 (middle of the range). Do not exclude records with unparseable dates.
 
 ---
 
-## Section 7.5: Prune Operation
+## Section 7.5: Prune Operation (legacy — no trigger in v9)
 
-How to archive old, low-importance records to keep OUTCOMES.md within context budgets. Called by `/legion:learn --prune` (manual) or automatically after store operations when `memory.auto_prune` is true.
+How to archive old, low-importance records to keep OUTCOMES.md within context
+budgets.
+
+**Neither of this operation's triggers exists.** `/legion:learn --prune` is a
+recorded deliberate removal: the verb has no prune mode, so the route led to a
+step nothing could execute. `memory.auto_prune` is defined in `settings.json`
+and `docs/settings.schema.json` but has no consumer anywhere in `packages/`, so
+setting it changes nothing.
+
+The operation itself is also written against `.planning/memory/OUTCOMES.md`,
+which retired with that directory. The v9 lesson index is one committed JSON
+artifact and no verb removes entries from it.
+
+This section is retained as the record of what pruning did, for whoever
+implements an equivalent over `.legion` artifacts. Do not route a user here.
 
 ```
 Prune Outcomes:
 
-Trigger conditions:
-  - Manual: user runs /legion:learn --prune
+Trigger conditions (historical — none of these fire in v9):
+  - Manual: user ran /legion:learn --prune
   - Automatic: after every Store operation (Section 3, Step 6) when ALL of:
     a. settings.json memory.auto_prune is true
     b. Total record count exceeds memory.prune_threshold (default: 200)

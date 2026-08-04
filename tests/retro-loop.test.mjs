@@ -151,7 +151,7 @@ test("a blocked retrospective is not indexed", async (t) => {
   assert.notEqual(result.exitCode, 0);
 
   const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
-  assert.equal(index.retrospectives.length, 1, "a blocked run appended to the index");
+  assert.equal(index.retrospectives.length, 1, "a blocked run must not append to the index");
   assert.equal(parseJsonOutput(result).retroIndexArtifactPath, undefined);
 });
 
@@ -166,4 +166,18 @@ test("retro appends to the index it writes", async (t) => {
   assert.equal(index.retrospectives.length, 2);
   assert.equal(index.retrospectives[0].id, ENTRY.id);
   assert.equal(parseJsonOutput(result).retrospectiveCount, 2);
+});
+
+test("the index entry carries the run's requested timestamp", async (t) => {
+  const { root, run } = await repoWithRetroIndex(t, []);
+  const requested = "2026-01-15T08:30:00.000Z";
+  const result = await run("retro", "--executor", "fake", "--created-at", requested, "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+
+  // `--created-at` is what makes a run deterministic, and the run ID and
+  // workflow-run.json already use it. Stamping the index with wall clock gave
+  // one run two creation times and put a backfilled retrospective in the wrong
+  // place, since `learn --recall` breaks equal scores by `createdAt`.
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives[0].createdAt, requested);
 });

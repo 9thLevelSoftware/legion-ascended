@@ -40671,7 +40671,7 @@ function appendRetroEntry(index, entry) {
 }
 function outstandingRetroActions(index, limit = 5) {
   return [...index.retrospectives].reverse().flatMap(
-    (entry) => entry.actions.filter((action) => action["severity"] !== "minor").map((action) => ({
+    (entry) => entry.actions.filter((action) => action.severity !== "minor").map((action) => ({
       ...action,
       retroId: entry.id,
       artifactPath: entry.artifactPath,
@@ -45124,7 +45124,12 @@ async function runRetroWorkflow(context) {
   const indexed = executed.result.ok;
   const nextIndex = !indexed ? await readRetroIndex(context.repositoryRoot) : appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
     id: paths.runId,
-    createdAt: currentUtcTimestamp(),
+    // The run's own timestamp, not wall clock. `--created-at` makes a run
+    // deterministic and is what the run ID and workflow-run.json already use;
+    // stamping the index separately gave one run two creation times and put
+    // backfilled retrospectives in the wrong order, since `learn --recall`
+    // breaks equal scores by `createdAt`.
+    createdAt,
     ...scopedChangeId === void 0 ? {} : { scopedChangeId },
     artifactPath: markdownArtifactPath,
     summary: executed.result.summary,
