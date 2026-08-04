@@ -25,7 +25,9 @@ const REVIEW = {
     id: "rev_first",
     taskId: "tsk_x-c1",
     status: "submitted",
-    reviewer: { kind: "agent", id: "task-reviewer" },
+    // `worker` is a real actor kind; `agent` is not one the schema accepts, and a
+    // fixture in a shape that could never exist on disk tests less than it looks.
+    reviewer: { kind: "worker", id: "task-reviewer" },
     confidence: "high",
     verdicts: { specification: "pass", integration: "fail", evidence: "pass" },
     supersedes: [],
@@ -68,7 +70,7 @@ test("the panel can tell who reviewed and whether this was a first attempt", () 
   // Without the reviewer, a panel cannot distinguish a human verdict from an
   // executor's. Without `supersedes`, it cannot tell a first attempt from a
   // retry — the same distinction `legion retro`'s first-pass rate counts.
-  assert.deepEqual(summary.reviewer, { kind: "agent", id: "task-reviewer" });
+  assert.deepEqual(summary.reviewer, { kind: "worker", id: "task-reviewer" });
   assert.deepEqual(summary.supersedes, []);
   assert.equal(summary.confidence, "high");
   assert.equal(summary.status, "submitted");

@@ -106,3 +106,52 @@ test("a retrospective is given the escalation count it reports", async (t) => {
   assert.ok(Array.isArray(evidence.escalationReasons));
   assert.match(evidence.summary, /escalation/);
 });
+
+test("the same walk reports attempts and finding bodies, not only escalations", async (t) => {
+  const { root, changeId } = await builtProject(t);
+  const { collectEscalations } = await import("../packages/cli/dist/workflow/escalations.js");
+
+  const summary = await collectEscalations({ repositoryRoot: root, changeId });
+
+  // Attempts come from every run, not only the blocked ones: the highest a task
+  // reached is what says how many cycles it took. A retrospective asking whether
+  // a phase went smoothly needs the retries as much as the refusals — three
+  // tasks that each passed on their fourth attempt is a different phase from
+  // three that passed first time, and escalations alone cannot tell them apart.
+  assert.equal(typeof summary.attemptsByTask, "object");
+  for (const attempts of Object.values(summary.attemptsByTask)) {
+    assert.ok(Number.isInteger(attempts) && attempts >= 1, "an attempt count must be a positive integer");
+  }
+
+  // Findings are recorded at every severity. A major finding is a reviewer
+  // saying something is wrong and passing anyway, which is exactly what a
+  // retrospective is for and what a count of escalations cannot show.
+  assert.ok(Array.isArray(summary.reviewFindings));
+  for (const finding of summary.reviewFindings) {
+    assert.equal(typeof finding.title, "string");
+    assert.equal(typeof finding.body, "string");
+    assert.match(finding.severity, /^(minor|major|blocking)$/);
+  }
+});
+
+test("retried tasks are ordered by attempts, not by their rendered text", async (t) => {
+  const { root, run } = await builtProject(t);
+  // Two more builds, so a task reaches attempt 3 and the ordering has something
+  // to order. Asserting over an empty list would pass without checking anything.
+  await run("build", "--executor", "fake", "--allow-dirty", "--json");
+  await run("build", "--executor", "fake", "--allow-dirty", "--json");
+  const { gatherRetroEvidence } = await import("../packages/cli/dist/commands/workflow/contextual.js");
+  const { resolveWorkflowState } = await import("../packages/cli/dist/workflow/state.js");
+  const state = await resolveWorkflowState({ repositoryRoot: root, args: { options: new Map(), positionals: [] } });
+
+  const evidence = await gatherRetroEvidence(root, state, []);
+  // Sorting the rendered `taskId xN` strings put `x10` before `x2`, because
+  // that is dictionary order. A task that needed ten tries is the one worth
+  // reading about, so the order has to come from the number.
+  assert.ok(evidence.retriedTasks.length > 0, "the fixture produced no retried task, so this asserts nothing");
+  const attempts = evidence.retriedTasks.map((entry) => Number.parseInt(/x(\d+)$/.exec(entry)?.[1] ?? "0", 10));
+  assert.ok(Math.max(...attempts) >= 2, "no task was actually retried");
+  for (let index = 1; index < attempts.length; index += 1) {
+    assert.ok(attempts[index - 1] >= attempts[index], `retried tasks out of order: ${evidence.retriedTasks.join(", ")}`);
+  }
+});
