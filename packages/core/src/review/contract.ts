@@ -59,7 +59,14 @@ export type ReviewPipelineIssueCode =
   | "review_verdict_inconsistent"
   | "review_evidence_missing"
   | "gate_not_satisfied"
-  | "gate_evaluator_failure";
+  | "gate_evaluator_failure"
+  /**
+   * An oracle declared an execution mode no runner can execute.
+   *
+   * Reported rather than skipped: an oracle decides an acceptance criterion, so
+   * "nothing tried to run it" must never be indistinguishable from "it passed".
+   */
+  | "oracle_not_evaluable";
 
 export interface ReviewPipelineIssue {
   readonly code: ReviewPipelineIssueCode;

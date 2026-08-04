@@ -6,6 +6,7 @@ import {
   artifactReferenceForContent,
   hashContent,
   readEvidenceIndex,
+  readOracleArtifact,
   readTaskGraph,
   stableProtocolJson,
   listTaskRunsForChange,
@@ -31,6 +32,7 @@ import {
   type EvidenceCommandResult,
   type EvidenceItem,
   type ModelManifest,
+  type Oracle,
   type TaskContract,
   type TaskRun,
   type UtcTimestamp
@@ -897,12 +899,32 @@ async function runContractVerification(input: {
     return { passed: false, blockedReason: "No worker context was available for verification." };
   }
 
-  const { report, issues } = await runDeterministicVerification({
+  // The task's oracles, loaded so their commands actually run. Until this, an
+  // oracle's command executed only when the planner happened to copy the same
+  // string into `task.verification` — so an oracle whose command drifted, or
+  // that was never planned in, was never run while the task reported verified.
+  const oracles = await oraclesForTask({ repositoryRoot: input.repositoryRoot, task: input.task });
+
+  // An oracle the task names and the CLI cannot read is a criterion that will
+  // not be evaluated, so the task cannot pass. Loading a shortened list instead
+  // would let the remaining commands succeed and record a verified task whose
+  // acceptance criterion nothing checked.
+  if (oracles.unreadable.length > 0) {
+    return {
+      passed: false,
+      blockedReason: `The task names ${oracles.unreadable.length} oracle(s) that could not be read, so their criteria were not evaluated: ${oracles.unreadable
+        .map((entry) => `${entry.oracleId} (${entry.reason})`)
+        .join("; ")}`
+    };
+  }
+
+  const { report, issues, oracleAttribution } = await runDeterministicVerification({
     taskContract: input.task,
     workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
-      now: currentUtcTimestamp
+      now: currentUtcTimestamp,
+      ...(oracles.loaded.length === 0 ? {} : { oracles: oracles.loaded })
     }
   });
 
@@ -912,11 +934,60 @@ async function runContractVerification(input: {
     ...(report.passed
       ? {}
       : {
-          blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s). ${issues
+          blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s).${describeFailingOracles(report.failingIndices, oracleAttribution)} ${issues
             .map((issue) => issue.message)
             .join(" ")}`.trim()
         })
   };
+}
+
+/**
+ * The oracles a task names, in `oracleRefs` order, and the ones that would not load.
+ *
+ * An unreadable oracle is returned rather than dropped. An earlier revision of
+ * this function carried that sentence as a docblock and then wrote
+ * `if (read.ok) loaded.push(...)`, silently shortening the list — which is the
+ * failure the whole oracle-execution change exists to prevent, committed inside
+ * the change that prevents it. A missing or malformed oracle must reach the
+ * caller as a refusal, because a criterion nobody evaluated is not a criterion
+ * that held.
+ */
+async function oraclesForTask(input: {
+  readonly repositoryRoot: string;
+  readonly task: TaskContract;
+}): Promise<{
+  readonly loaded: readonly Oracle[];
+  readonly unreadable: readonly { readonly oracleId: string; readonly reason: string }[];
+}> {
+  const loaded: Oracle[] = [];
+  const unreadable: { readonly oracleId: string; readonly reason: string }[] = [];
+  for (const oracleId of input.task.oracleRefs ?? []) {
+    const read = await readOracleArtifact({
+      repositoryRoot: input.repositoryRoot,
+      changeId: input.task.changeId,
+      oracleId
+    });
+    if (read.ok) {
+      loaded.push(read.document);
+      continue;
+    }
+    unreadable.push({
+      oracleId,
+      reason: read.diagnostics.map((diagnostic) => diagnostic.message).join("; ") || "unreadable"
+    });
+  }
+  return { loaded, unreadable };
+}
+
+/** Name the oracles behind failing command indices, when any are. */
+function describeFailingOracles(
+  failingIndices: readonly number[],
+  attribution: readonly { readonly index: number; readonly oracleId: string }[]
+): string {
+  const named = attribution
+    .filter((entry) => failingIndices.includes(entry.index))
+    .map((entry) => entry.oracleId);
+  return named.length === 0 ? "" : ` Failing oracle(s): ${named.join(", ")}.`;
 }
 
 function modelManifestForExecutor(executor: ExecutionAdapterKind): ModelManifest {

@@ -230,10 +230,16 @@ export async function createAdHocTaskgraph(input: AdHocTaskgraphInput) {
           entity: { kind: "requirement", id: requirementId }
         }
       ],
-      type: "inspectable",
+      // Executable, because this function already holds the command that decides
+      // it — the same one it writes into `verification` below. Emitting an
+      // inspectable oracle here asked a human to confirm what a runner can.
+      type: "executable",
       execution: {
-        mode: "manual-inspection",
-        instructions: `Review implementation and evidence for: ${input.objective}`
+        mode: "command",
+        command: verification.command,
+        args: [...verification.args],
+        expectedExitCode: 0,
+        timeoutMs: 120_000
       }
     })
   });

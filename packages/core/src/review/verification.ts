@@ -19,7 +19,7 @@
  *  - Tests inject a stub runner that returns canned results.
  */
 
-import type { ContentHash, TaskContract, UtcTimestamp } from "@legion/protocol";
+import type { ContentHash, Oracle, TaskContract, UtcTimestamp } from "@legion/protocol";
 
 import type { WorkerContext } from "../dispatch/contract.js";
 
@@ -46,6 +46,29 @@ export interface DeterministicVerificationOptions {
    * `runner` promise race; tests inject deterministic completion.
    */
   readonly timeout?: (ms: number) => Promise<never>;
+  /**
+   * Oracles to execute alongside the contract's own verification.
+   *
+   * An executable oracle carries the command that decides an acceptance
+   * criterion. Until this existed, that command ran only by coincidence — the
+   * planner puts the same string into `task.verification`, so it executed as a
+   * verification command and nothing tied the result back to the `orc_…` that
+   * declared it. An oracle that was never planned into `verification`, or whose
+   * command drifted from it, was simply never run while the task reported
+   * verified.
+   *
+   * They join the same report deliberately: `evaluateAcceptanceGate` already
+   * fails a task whose `VerificationReport` did not pass, so an oracle failure
+   * blocks acceptance without a second gate to keep in step.
+   */
+  readonly oracles?: readonly Oracle[];
+}
+
+/** Which oracle a result at a given command index came from. */
+export interface OracleAttribution {
+  readonly index: number;
+  readonly oracleId: string;
+  readonly title: string;
 }
 
 interface RunnerOutcome {
@@ -157,6 +180,14 @@ export async function runDeterministicVerification(input: {
 }): Promise<{
   readonly report: VerificationReport;
   readonly issues: readonly ReviewPipelineIssue[];
+  /**
+   * Index → oracle, for the commands this run took from an oracle.
+   *
+   * Carried beside the report rather than on `VerificationCommandResult`,
+   * because that shape feeds `deriveVerificationReportSha256` and adding a field
+   * would change every recorded hash for a fact the caller can hold instead.
+   */
+  readonly oracleAttribution: readonly OracleAttribution[];
 }> {
   const now = input.options?.now ?? fixedClock;
   const runner = input.options?.runner;
@@ -173,6 +204,7 @@ export async function runDeterministicVerification(input: {
     });
     return {
       report,
+      oracleAttribution: [],
       issues: [
         {
           code: "verification_runner_unavailable",
@@ -187,7 +219,47 @@ export async function runDeterministicVerification(input: {
   const results: VerificationCommandResult[] = [];
   const issues: ReviewPipelineIssue[] = [];
 
-  for (const [index, verification] of contract.verification.entries()) {
+  // The contract's own commands first, then the oracles', so an existing
+  // report's indices keep meaning what they meant.
+  const oracleAttribution: OracleAttribution[] = [];
+  const commands: { readonly command: string; readonly args: readonly string[]; readonly expectedExitCode: number; readonly timeoutMs?: number; readonly label: string }[] = [
+    ...contract.verification.map((entry) => ({
+      command: entry.command,
+      args: entry.args,
+      expectedExitCode: entry.expectedExitCode,
+      ...(entry.timeoutMs === undefined ? {} : { timeoutMs: entry.timeoutMs }),
+      label: entry.command
+    }))
+  ];
+
+  for (const oracle of input.options?.oracles ?? []) {
+    // Narrowed on execution mode, not on `type`. A `hybrid` oracle may carry a
+    // command, and gating on `type === "executable"` skipped every one of them —
+    // producing neither a result nor an issue, which is the silent pass this
+    // whole function exists to make impossible.
+    if (oracle.type === "inspectable") continue;
+    if (oracle.execution.mode !== "command") {
+      // `runtime-driver` has no emitter and no executor. Saying so is the point:
+      // silently skipping it would let an oracle that decides a criterion count
+      // as satisfied because nothing tried to run it.
+      issues.push({
+        code: "oracle_not_evaluable",
+        message: `Oracle ${oracle.id} declares execution mode "${oracle.execution.mode}", which no runner can execute. It was not evaluated.`,
+        path: ["oracles", oracle.id]
+      });
+      continue;
+    }
+    oracleAttribution.push({ index: commands.length, oracleId: oracle.id, title: oracle.title });
+    commands.push({
+      command: oracle.execution.command,
+      args: oracle.execution.args,
+      expectedExitCode: oracle.execution.expectedExitCode,
+      timeoutMs: oracle.execution.timeoutMs,
+      label: `oracle ${oracle.id}`
+    });
+  }
+
+  for (const [index, verification] of commands.entries()) {
     const request: VerificationCommandRequest = {
       index,
       command: verification.command,
@@ -207,8 +279,8 @@ export async function runDeterministicVerification(input: {
       issues.push({
         code: "verification_command_failed",
         message: timedOut
-          ? `Verification command ${index} (${verification.command}) timed out after ${timeoutMs}ms.`
-          : `Verification command ${index} (${verification.command}) threw: ${message}`,
+          ? `Verification command ${index} (${verification.label}) timed out after ${timeoutMs}ms.`
+          : `Verification command ${index} (${verification.label}) threw: ${message}`,
         path: ["verification", index]
       });
       results.push(emptyResultFor(request, startedAt, finishedAt, message, timedOut));
@@ -219,7 +291,7 @@ export async function runDeterministicVerification(input: {
     if (result === undefined) {
       issues.push({
         code: "verification_command_failed",
-        message: `Verification command ${index} (${verification.command}) returned no result.`,
+        message: `Verification command ${index} (${verification.label}) returned no result.`,
         path: ["verification", index]
       });
       results.push(emptyResultFor(request, startedAt, finishedAt, "runner returned no result"));
@@ -229,7 +301,7 @@ export async function runDeterministicVerification(input: {
     if (result.timedOut || result.exitCode !== result.expectedExitCode) {
       issues.push({
         code: "verification_command_failed",
-        message: `Verification command ${index} (${verification.command}) exited ${result.exitCode}, expected ${result.expectedExitCode}.`,
+        message: `Verification command ${index} (${verification.label}) exited ${result.exitCode}, expected ${result.expectedExitCode}.`,
         path: ["verification", index]
       });
     }
@@ -254,7 +326,7 @@ export async function runDeterministicVerification(input: {
     now
   });
 
-  return { report, issues };
+  return { report, issues, oracleAttribution };
 }
 
 async function synthesizeReport(input: {
