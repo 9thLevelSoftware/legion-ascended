@@ -65,7 +65,16 @@ Examples:
   legion build --executor fake --allow-dirty
   legion build --executor codex --allow-dirty`;
 
-export async function handleBuildWorkflow(context: CliContext): Promise<CliResult> {
+/**
+ * @param changeId When given, build this change instead of the newest one.
+ *
+ * `legion review --phase N --auto` fixes the selected phase and then rebuilds.
+ * Without this the rebuild resolved the newest change, so the fix cycle would
+ * execute an unrelated task graph and modify its files, then re-read the
+ * selected phase's now-stale evidence. There is no `build --phase` flag yet;
+ * this is the internal seam review needs to keep its own scope.
+ */
+export async function handleBuildWorkflow(context: CliContext, changeId?: string): Promise<CliResult> {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(BUILD_HELP);
   }
@@ -75,7 +84,12 @@ export async function handleBuildWorkflow(context: CliContext): Promise<CliResul
     "A typed task graph is required before build can run."
   );
 
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  const latestChange =
+    changeId === undefined
+      ? await findLatestWorkflowChangeId(context.repositoryRoot)
+      : ({ ok: true as const, changeId, diagnostics: [] } as Awaited<
+          ReturnType<typeof findLatestWorkflowChangeId>
+        >);
   if (!latestChange.ok) {
     return blockedBuild(latestChange.diagnostics, planAction);
   }

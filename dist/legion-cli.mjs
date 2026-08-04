@@ -42145,7 +42145,7 @@ Examples:
   legion build --dry-run --json
   legion build --executor fake --allow-dirty
   legion build --executor codex --allow-dirty`;
-async function handleBuildWorkflow(context) {
+async function handleBuildWorkflow(context, changeId) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(BUILD_HELP);
   }
@@ -42153,7 +42153,7 @@ async function handleBuildWorkflow(context) {
     "legion plan 1",
     "A typed task graph is required before build can run."
   );
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  const latestChange = changeId === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : { ok: true, changeId, diagnostics: [] };
   if (!latestChange.ok) {
     return blockedBuild(latestChange.diagnostics, planAction);
   }
@@ -42964,7 +42964,7 @@ async function handleReviewWorkflow(context) {
   if (context.args.options.get("phase") === true || phaseOption === "") {
     return usageError("Missing required value for --phase. Example: legion review --phase 3.");
   }
-  const latestChange = await resolveReviewChange(context.repositoryRoot, phaseOption);
+  const latestChange = phaseOption === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : await resolvePhaseChange(context.repositoryRoot, phaseOption);
   if (!latestChange.ok) {
     return blockedReview(latestChange.diagnostics, planAction);
   }
@@ -43031,7 +43031,8 @@ async function handleReviewWorkflow(context) {
     return runAutoReview(context, {
       executor: selectedExecutor,
       taskgraph,
-      evidence
+      evidence,
+      ...phaseOption === void 0 ? {} : { phase: phaseOption }
     });
   }
   const submitted = await submitReview(context, {
@@ -43045,7 +43046,10 @@ async function handleReviewWorkflow(context) {
   const clean = submitted.reviews.every((review) => isCleanReview(review.document));
   const findingCount = submitted.reviews.reduce((total, review) => total + review.document.findings.length, 0);
   const firstReview = submitted.reviews[0];
-  const action = clean ? nextAction("legion review --accept", "A passing review was submitted and needs human acceptance.") : nextAction("legion build", "Address review findings and collect new evidence.");
+  const action = clean ? nextAction(
+    scopedCommand("legion review --accept", phaseOption),
+    "A passing review was submitted and needs human acceptance."
+  ) : nextAction("legion build", "Address review findings and collect new evidence.");
   return success2(
     {
       ok: true,
@@ -43065,6 +43069,10 @@ async function handleReviewWorkflow(context) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+function scopedCommand(command, phase) {
+  if (phase === void 0) return command;
+  return `${command} --phase ${phase}`;
 }
 async function submitReview(context, input) {
   if (input.taskgraph.document.tasks.length === 0) {
@@ -43675,18 +43683,24 @@ function taskByTaskId(tasks) {
   return map2;
 }
 async function refreshBuildEvidenceAfterAutoFix(context, executor, changeId) {
-  const build = await handleBuildWorkflow({
-    ...context,
-    args: {
-      positionals: ["build"],
-      options: /* @__PURE__ */ new Map([
-        ["executor", executor],
-        ["allow-dirty", true]
-      ]),
-      // Constructed rather than parsed, so nothing here can be malformed.
-      invalidOptions: []
-    }
-  });
+  const build = await handleBuildWorkflow(
+    {
+      ...context,
+      args: {
+        positionals: ["build"],
+        options: /* @__PURE__ */ new Map([
+          ["executor", executor],
+          ["allow-dirty", true]
+        ]),
+        // Constructed rather than parsed, so nothing here can be malformed.
+        invalidOptions: []
+      }
+    },
+    // The change under review, not the newest. Without it, `--phase N --auto`
+    // fixed the selected phase and then executed an unrelated task graph,
+    // modifying its files, before re-reading the selected phase's stale evidence.
+    changeId
+  );
   if (build.exitCode !== 0) {
     return {
       ok: false,
@@ -43766,14 +43780,11 @@ function blockedReview(diagnostics, action, extras = {}) {
     ].join("\n")
   );
 }
-async function resolveReviewChange(repositoryRoot, phase) {
-  if (phase === void 0) return findLatestWorkflowChangeId(repositoryRoot);
+async function resolvePhaseChange(repositoryRoot, phase) {
   if (!/^[1-9]\d*$/.test(phase)) {
     return {
       ok: false,
-      diagnostics: [
-        { code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }
-      ]
+      diagnostics: [{ code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }]
     };
   }
   const phaseNumber = Number.parseInt(phase, 10);

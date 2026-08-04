@@ -75,3 +75,16 @@ test("the panel can tell who reviewed and whether this was a first attempt", () 
   // Per-dimension verdicts, so "failed" says which dimension failed.
   assert.equal(summary.verdicts.integration, "fail");
 });
+
+test("a recommended follow-up keeps the phase scope", async () => {
+  const { scopedCommand } = await import("../packages/cli/dist/commands/workflow/review.js");
+
+  // The clean-review path advertises `legion review --accept`. Following that
+  // without the scope resolves the newest change, so a caller reviewing an
+  // older phase would accept a different one. A next action that silently acts
+  // on something else is worse than no next action.
+  assert.equal(scopedCommand("legion review --accept", "3"), "legion review --accept --phase 3");
+  // Unscoped stays unscoped: appending a flag the caller did not give would be
+  // the same defect in the other direction.
+  assert.equal(scopedCommand("legion review --accept", undefined), "legion review --accept");
+});

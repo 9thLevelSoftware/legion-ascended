@@ -64,7 +64,10 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   if (context.args.options.get("phase") === true || phaseOption === "") {
     return usageError("Missing required value for --phase. Example: legion review --phase 3.");
   }
-  const latestChange = await resolveReviewChange(context.repositoryRoot, phaseOption);
+  const latestChange =
+    phaseOption === undefined
+      ? await findLatestWorkflowChangeId(context.repositoryRoot)
+      : await resolvePhaseChange(context.repositoryRoot, phaseOption);
   if (!latestChange.ok) {
     return blockedReview(latestChange.diagnostics, planAction);
   }
@@ -138,7 +141,8 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
     return runAutoReview(context, {
       executor: selectedExecutor,
       taskgraph,
-      evidence
+      evidence,
+      ...(phaseOption === undefined ? {} : { phase: phaseOption })
     });
   }
 
@@ -155,7 +159,10 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   const findingCount = submitted.reviews.reduce((total, review) => total + review.document.findings.length, 0);
   const firstReview = submitted.reviews[0];
   const action = clean
-    ? nextAction("legion review --accept", "A passing review was submitted and needs human acceptance.")
+    ? nextAction(
+        scopedCommand("legion review --accept", phaseOption),
+        "A passing review was submitted and needs human acceptance."
+      )
     : nextAction("legion build", "Address review findings and collect new evidence.");
   return success(
     {
@@ -180,10 +187,25 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   );
 }
 
+/**
+ * Keep `--phase N` on a suggested follow-up.
+ *
+ * A clean review of a non-latest phase advertised a bare `legion review
+ * --accept`. Following it resolves the newest change, so the caller would accept
+ * a phase other than the one just reviewed — a next action that silently acts on
+ * something else is worse than none.
+ */
+export function scopedCommand(command: string, phase: string | undefined): string {
+  if (phase === undefined) return command;
+  return `${command} --phase ${phase}`;
+}
+
 interface SubmitReviewInput {
   readonly executor: ExecutionAdapterKind;
   readonly taskgraph: Awaited<ReturnType<typeof readTaskGraph>> & { readonly ok: true };
   readonly evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true };
+  /** The `--phase N` the caller gave, so follow-up actions keep the scope. */
+  readonly phase?: string;
 }
 
 async function submitReview(context: CliContext, input: SubmitReviewInput): Promise<{
@@ -970,7 +992,11 @@ async function refreshBuildEvidenceAfterAutoFix(
       // Constructed rather than parsed, so nothing here can be malformed.
       invalidOptions: []
     }
-  });
+  },
+  // The change under review, not the newest. Without it, `--phase N --auto`
+  // fixed the selected phase and then executed an unrelated task graph,
+  // modifying its files, before re-reading the selected phase's stale evidence.
+  changeId);
   if (build.exitCode !== 0) {
     return {
       ok: false,
@@ -1067,25 +1093,27 @@ function blockedReview(
 }
 
 /**
- * The change under review: the newest, or the one `--phase N` names.
+ * The change `--phase N` names.
  *
  * The phase-to-change link is the derived `chg_phase-<N>-` ID, the same one
  * `legion retro --phase` uses, because no phase field is recorded on a change.
+ * Only called when a phase was given; the unscoped path calls
+ * `findLatestWorkflowChangeId` directly.
  */
-async function resolveReviewChange(
+async function resolvePhaseChange(
   repositoryRoot: string,
-  phase: string | undefined
-): Promise<Awaited<ReturnType<typeof findLatestWorkflowChangeId>>> {
-  if (phase === undefined) return findLatestWorkflowChangeId(repositoryRoot);
+  phase: string
+): Promise<
+  | { readonly ok: true; readonly changeId: string; readonly diagnostics: readonly never[] }
+  | { readonly ok: false; readonly diagnostics: readonly { readonly code: string; readonly message: string }[] }
+> {
   // Whole value, not a parseInt prefix: `--phase 1.5` and `--phase 1foo` both
   // parse to 1 and would review a change the caller did not name.
   if (!/^[1-9]\d*$/.test(phase)) {
     return {
       ok: false,
-      diagnostics: [
-        { code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }
-      ]
-    } as Awaited<ReturnType<typeof findLatestWorkflowChangeId>>;
+      diagnostics: [{ code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }]
+    };
   }
   const phaseNumber = Number.parseInt(phase, 10);
   const listed = await listWorkflowChanges(repositoryRoot);
@@ -1100,9 +1128,7 @@ async function resolveReviewChange(
           message: `No change exists for phase ${phaseNumber}. Phase changes are named ${prefix}<slug>; run legion plan ${phaseNumber} first.`
         }
       ]
-    } as Awaited<ReturnType<typeof findLatestWorkflowChangeId>>;
+    };
   }
-  return { ok: true, changeId: matched.changeId, diagnostics: [] } as Awaited<
-    ReturnType<typeof findLatestWorkflowChangeId>
-  >;
+  return { ok: true, changeId: matched.changeId, diagnostics: [] };
 }
