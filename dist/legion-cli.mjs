@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path45 from "node:path";
+import path46 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path46) {
-  if (!path46)
+function getElementAtPath(obj, path47) {
+  if (!path47)
     return obj;
-  return path46.reduce((acc, key) => acc?.[key], obj);
+  return path47.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path46, issues) {
+function prefixIssues(path47, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path46);
+    iss.path.unshift(path47);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path46 = []) => {
+  const processError = (error52, path47 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path46, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path47, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path46, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path46, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
       } else {
-        const fullpath = [...path46, ...issue2.path];
+        const fullpath = [...path47, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path46 = []) => {
+  const processError = (error52, path47 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path46, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path47, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path46, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path46, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
       } else {
-        const fullpath = [...path46, ...issue2.path];
+        const fullpath = [...path47, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path46 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path46) {
+  const path47 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path47) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path46 = ref.slice(1).split("/").filter(Boolean);
-  if (path46.length === 0) {
+  const path47 = ref.slice(1).split("/").filter(Boolean);
+  if (path47.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path46[0] === defsKey) {
-    const key = path46[1];
+  if (path47[0] === defsKey) {
+    const key = path47[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -15076,11 +15076,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path46 = [...next.path, migration];
+      const path47 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path46;
+        return path47;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path46 });
+      queue.push({ version: migration.toVersion, path: path47 });
     }
     next = queue.shift();
   }
@@ -17765,17 +17765,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path46 = findProtocolMigrationPath({
+  const path47 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path46 === null) {
+  if (path47 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path46) {
+  for (const descriptor of path47) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -18838,10 +18838,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path46) {
-  if (path46.length === 0)
+function renderPath(path47) {
+  if (path47.length === 0)
     return "<root>";
-  return path46.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path47.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -19566,15 +19566,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path46 = issue2.path.join(".");
+    const path47 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path46.length === 0 ? key : `${path46}.${key}`);
+      const keys = issue2.keys.map((key) => path47.length === 0 ? key : `${path47}.${key}`);
       return {
-        path: path46,
+        path: path47,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path46, message: path46.length === 0 ? issue2.message : `${path46}: ${issue2.message}` };
+    return { path: path47, message: path47.length === 0 ? issue2.message : `${path47}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -26364,14 +26364,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path46) {
-  if (path46.endsWith(".json"))
+function mediaTypeForArtifactPath(path47) {
+  if (path47.endsWith(".json"))
     return "application/json";
-  if (path46.endsWith(".yaml") || path46.endsWith(".yml"))
+  if (path47.endsWith(".yaml") || path47.endsWith(".yml"))
     return "application/yaml";
-  if (path46.endsWith(".md"))
+  if (path47.endsWith(".md"))
     return "text/markdown";
-  if (path46.endsWith(".txt"))
+  if (path47.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -26414,16 +26414,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path46, issues) {
+function schemaDiagnostics(path47, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path46 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path47 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path46
+      path: path47
     });
   });
 }
@@ -27487,7 +27487,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path46 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path47 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -27501,7 +27501,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path46
+        path: path47
       }))
     };
   }
@@ -28526,13 +28526,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path46) {
+function parseRequirementId2(input, path47) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
@@ -28548,24 +28548,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path46) {
+function parseBaseGitSha(input, path47) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path46) {
+function parseOwners(input, path47) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path46
+        path: path47
       })
     ]);
   }
@@ -28577,7 +28577,7 @@ function parseOwners(input, path46) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path46
+        path: path47
       })));
       continue;
     }
@@ -28865,7 +28865,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path46) {
+function conflictDiagnostics(deltas, path47) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -28874,7 +28874,7 @@ function conflictDiagnostics(deltas, path46) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path46
+        path: path47
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -29651,18 +29651,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path46) {
+function parseOracleId2(input, path47) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path46) {
+function parseBaseGitSha2(input, path47) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29670,7 +29670,7 @@ function parseBaseGitSha2(input, path46) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
@@ -30014,7 +30014,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path46) {
+function parseBaseGitSha3(input, path47) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -30022,18 +30022,18 @@ function parseBaseGitSha3(input, path46) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path46) {
+function assertExpectedRevision(value, path47) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path46
+        path: path47
       })
     ]);
   }
@@ -30351,7 +30351,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path46) {
+function parseBaseGitSha4(input, path47) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -30359,18 +30359,18 @@ function parseBaseGitSha4(input, path46) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path46) {
+function assertExpectedRevision2(value, path47) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path46
+        path: path47
       })
     ]);
   }
@@ -30769,13 +30769,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path46) {
+function assertExpectedRevision3(value, path47) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path46
+        path: path47
       })
     ]);
   }
@@ -31047,13 +31047,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path46) {
+function assertExpectedRevision4(value, path47) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path46
+        path: path47
       })
     ]);
   }
@@ -31294,8 +31294,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path46) {
-  return nodeId("artifact", path46);
+function artifactNodeId(path47) {
+  return nodeId("artifact", path47);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -31331,8 +31331,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path46) {
-  const fileName = path46.split("/").at(-1);
+function oracleIdFromPath(path47) {
+  const fileName = path47.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -31447,13 +31447,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path46 = [];
+  const path47 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path46.indexOf(node);
+      const cycleStartIndex = path47.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path46.length; index++) {
-          const cyclicNode = path46[index];
+        for (let index = cycleStartIndex; index < path47.length; index++) {
+          const cyclicNode = path47[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -31463,11 +31463,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path46.push(node);
+    path47.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path46.pop();
+    path47.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -31495,10 +31495,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path46 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path47 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path46,
+        path: path47,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -32155,13 +32155,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path46) {
+function parseArchivedAt(input, path47) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path46
+      path: path47
     })));
   }
   return parsed.data;
@@ -32190,7 +32190,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path46) {
+function archiveHashDiagnostics(record2, path47) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -32198,11 +32198,11 @@ function archiveHashDiagnostics(record2, path46) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path46
+      path: path47
     })
   ];
 }
-async function assertWorktreeTarget(input, path46) {
+async function assertWorktreeTarget(input, path47) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -32216,7 +32216,7 @@ async function assertWorktreeTarget(input, path46) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path46
+        path: path47
       })
     ]);
   } catch (error51) {
@@ -32224,7 +32224,7 @@ async function assertWorktreeTarget(input, path46) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path46
+        path: path47
       })
     ]);
   }
@@ -32303,11 +32303,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path46 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path46 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path46)) : remaining;
+    const path47 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path47 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path47)) : remaining;
     return {
-      path: path46,
+      path: path47,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -32370,9 +32370,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path46, document) {
+function validatePlannedDocument(path47, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path46,
+    artifactPath: path47,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -32383,7 +32383,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path46, document]) => [path46, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path47, document]) => [path47, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -32407,17 +32407,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path46 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path46)) {
+      const path47 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path47)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path46}.`,
-            path: path46
+            message: `Archive add target already exists: ${path47}.`,
+            path: path47
           })
         ]);
       }
-      plannedDocs.set(path46, {
+      plannedDocs.set(path47, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -32430,7 +32430,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path46);
+      touchedPaths.add(path47);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -32615,8 +32615,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path46 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path46);
+  const path47 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path47);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -32860,10 +32860,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path46 = archivePath(changeId);
+  const path47 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path46,
+    artifactPath: path47,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -32875,22 +32875,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path46
+        path: path47
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path46);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path47);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path46,
+    artifactPath: path47,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path46,
+      path: path47,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -40627,6 +40627,36 @@ function phaseChangeIdPrefix(phaseNumber) {
   return `chg_phase-${phaseNumber}-`;
 }
 
+// packages/cli/src/workflow/retro-index.ts
+import { readFile as readFile19 } from "node:fs/promises";
+import path34 from "node:path";
+var RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
+var EMPTY_INDEX = Object.freeze({
+  schemaVersion: 1,
+  kind: "retro_index",
+  retrospectives: []
+});
+function retroIndexArtifactPath() {
+  return artifactPathSchema.parse(RETRO_INDEX_ARTIFACT_PATH);
+}
+async function readRetroIndex(repositoryRoot) {
+  const indexPath = path34.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
+  try {
+    const parsed = JSON.parse(await readFile19(indexPath, "utf8"));
+    if (parsed.kind === "retro_index" && Array.isArray(parsed.retrospectives)) return parsed;
+  } catch {
+  }
+  return EMPTY_INDEX;
+}
+function appendRetroEntry(index, entry) {
+  return { ...index, retrospectives: [...index.retrospectives, entry] };
+}
+function outstandingRetroActions(index, limit = 5) {
+  return [...index.retrospectives].reverse().flatMap(
+    (entry) => entry.actions.filter((action) => action.severity !== "minor").map((action) => ({ ...action, retroId: entry.id, artifactPath: entry.artifactPath }))
+  ).slice(0, limit);
+}
+
 // packages/cli/src/workflow/agent-selection.ts
 var WORKER_BUNDLE_IDS = Object.freeze([
   "explorer",
@@ -40876,6 +40906,7 @@ async function handlePlanWorkflow(context) {
     "legion build",
     "The phase source is resolved; build is the next workflow step after task artifacts exist."
   );
+  const retroActions = outstandingRetroActions(await readRetroIndex(context.repositoryRoot));
   const dryRun = hasFlag(context, "dry-run");
   if (dryRun) {
     return success2(
@@ -40885,10 +40916,11 @@ async function handlePlanWorkflow(context) {
         dryRun,
         phase: resolved.phase,
         autoRefine: hasFlag(context, "auto-refine"),
+        retrospectiveActions: retroActions,
         nextAction: action,
         diagnostics: []
       },
-      planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action)
+      planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
     );
   }
   const loadedProject = await loadWorkflowProject(context);
@@ -41044,10 +41076,11 @@ async function handlePlanWorkflow(context) {
         taskIds: taskgraph.document.tasks.map((task) => task.id)
       },
       autoRefine: hasFlag(context, "auto-refine"),
+      retrospectiveActions: retroActions,
       nextAction: action,
       diagnostics: []
     },
-    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action)
+    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
   );
 }
 function parsePhaseNumber(value) {
@@ -41107,19 +41140,23 @@ async function ensurePhaseCurrentSpec(input) {
   if (existing.status !== "not_found") return existing;
   return createCurrentSpec(specInput);
 }
-function planningSuccessHuman(phaseNumber, phaseName, dryRun, action) {
+function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActions) {
   const summary = dryRun ? `Planning preview for phase ${phaseNumber}: ${phaseName}.` : `Created typed planning artifacts for phase ${phaseNumber}: ${phaseName}.`;
   const mode = dryRun ? "Dry run: no task graph was written." : "Change, oracle, and taskgraph artifacts were written.";
-  return [summary, mode, renderNextAction(action)].join("\n");
+  const retro = retroActions.length === 0 ? void 0 : [
+    "Outstanding retrospective actions to account for in this decomposition:",
+    ...retroActions.map((entry) => `  - [${entry.severity}] ${entry.title} (${entry.artifactPath})`)
+  ].join("\n");
+  return [summary, mode, retro, renderNextAction(action)].filter((part) => part !== void 0).join("\n");
 }
 
 // packages/cli/src/commands/workflow/build.ts
 import { execFileSync as execFileSync6 } from "node:child_process";
-import { readFile as readFile20 } from "node:fs/promises";
+import { readFile as readFile21 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir15, readFile as readFile19 } from "node:fs/promises";
-import path34 from "node:path";
+import { readdir as readdir15, readFile as readFile20 } from "node:fs/promises";
+import path35 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -41283,7 +41320,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path34.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path35.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir15(workflowRoot, { withFileTypes: true });
@@ -41292,10 +41329,10 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path34.join(workflowRoot, entry.name, "workflow-run.json") : path34.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path35.join(workflowRoot, entry.name, "workflow-run.json") : path35.join(workflowRoot, entry.name);
       let text = "";
       try {
-        text = await readFile19(absolutePath, "utf8");
+        text = await readFile20(absolutePath, "utf8");
       } catch {
         continue;
       }
@@ -41311,9 +41348,9 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path34.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path35.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const text = await readFile19(indexPath, "utf8");
+    const text = await readFile20(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
   } catch {
     return "No learned project guidance found.";
@@ -41329,7 +41366,7 @@ function truncate4(text, maxLength) {
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash21 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path35 from "node:path";
+import path36 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -41338,7 +41375,7 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path35.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path36.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
@@ -41456,7 +41493,7 @@ function createVerificationRunner(options) {
 // packages/cli/src/workflow/executor/worker-bundles.ts
 import { createHash as createHash22 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path36 from "node:path";
+import path37 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -41472,7 +41509,7 @@ function sha256Hex5(value) {
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path36.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path37.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -41499,7 +41536,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path36.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path37.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -41536,13 +41573,13 @@ function createWorkerBundleRegistry(options) {
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash24 } from "node:crypto";
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path39 from "node:path";
+import path40 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
 import { createHash as createHash23 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path37 from "node:path";
+import path38 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -41619,7 +41656,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path37.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path38.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -41635,7 +41672,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path37.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path38.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -41750,11 +41787,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path38 from "node:path";
+import path39 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path38.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path39.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -41767,7 +41804,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path38.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path39.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -41784,7 +41821,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path38.join(repositoryRoot, child)).size;
+        size = lstatSync(path39.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -41832,7 +41869,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path39.join(input.repositoryRoot, entry.path);
+    const absolute = path40.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -41860,7 +41897,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path39.join(input.repositoryRoot, relative);
+    const absolute = path40.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -41943,7 +41980,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path39.join(input.repositoryRoot, relative);
+    const absolute = path40.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -41957,14 +41994,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path39.dirname(absolute), { recursive: true });
+        mkdirSync3(path40.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path39.dirname(absolute), { recursive: true });
+        mkdirSync3(path40.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -42564,7 +42601,7 @@ function taskRunDocument(input) {
 async function evidenceEntryForExecution(input) {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
-  const logBytes = await readFile20(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
+  const logBytes = await readFile21(absoluteArtifactPath(input.repositoryRoot, input.redactedLogArtifactPath));
   const command = commandForEvidence(input.result, logBytes, input.startedAt, input.finishedAt);
   const traceRefs = [
     {
@@ -42678,7 +42715,7 @@ function commandForEvidence(result, logBytes, startedAt, endedAt) {
   };
 }
 async function referenceForFile(repositoryRoot, artifactPath) {
-  const bytes = await readFile20(absoluteArtifactPath(repositoryRoot, artifactPath));
+  const bytes = await readFile21(absoluteArtifactPath(repositoryRoot, artifactPath));
   return artifactReferenceForContent({
     path: artifactPath,
     content: bytes
@@ -43661,8 +43698,8 @@ function blockedReview(diagnostics, action, extras = {}) {
 }
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
-import { readFile as readFile21 } from "node:fs/promises";
-import path41 from "node:path";
+import { readFile as readFile22 } from "node:fs/promises";
+import path42 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -43949,7 +43986,7 @@ function commandParts(parts) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
-import path40 from "node:path";
+import path41 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -44267,9 +44304,9 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path41.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path42.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
-    const parsed = JSON.parse(await readFile21(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
   } catch {
   }
@@ -44296,16 +44333,41 @@ function recallTerms(topic) {
   const parts = normalized.split(/[\s,;:!?()[\]{}"'`]+/).map((part) => part.trim()).filter((part) => part.length > 0);
   return [.../* @__PURE__ */ new Set([normalized, ...parts])].filter((term) => term.length > 0);
 }
+function scoreRetroAction(action, terms) {
+  const title = action.title.toLowerCase();
+  const body = action.body.toLowerCase();
+  return terms.reduce((total, term) => {
+    let score = total;
+    if (title.includes(term)) score += 2;
+    if (body.includes(term)) score += 1;
+    return score;
+  }, 0);
+}
 async function runLearnRecall(context, topic) {
   const index = await readLessonIndex(context.repositoryRoot);
   const terms = recallTerms(topic);
-  const matches = index.lessons.map((record2) => ({ record: record2, score: scoreLesson(record2, terms) })).filter((entry) => entry.score > 0).sort((left, right) => right.score - left.score || left.record.createdAt.localeCompare(right.record.createdAt)).map((entry) => ({
+  const lessonMatches = index.lessons.map((record2) => ({ record: record2, score: scoreLesson(record2, terms) })).filter((entry) => entry.score > 0).map((entry) => ({
     id: entry.record.id,
+    createdAt: entry.record.createdAt,
+    source: "lesson",
     score: entry.score,
     kind: entry.record.kind ?? null,
     summary: entry.record.summary ?? entry.record.lesson,
     artifactPath: entry.record.artifactPath
   }));
+  const retroIndex = await readRetroIndex(context.repositoryRoot);
+  const retroMatches = retroIndex.retrospectives.flatMap(
+    (entry) => entry.actions.map((action2) => ({ action: action2, score: scoreRetroAction(action2, terms) })).filter((scored) => scored.score > 0).map((scored) => ({
+      id: `${entry.id}/${scored.action.id}`,
+      createdAt: entry.createdAt,
+      source: "retrospective",
+      score: scored.score,
+      kind: scored.action.severity,
+      summary: scored.action.title,
+      artifactPath: entry.artifactPath
+    }))
+  );
+  const matches = [...lessonMatches, ...retroMatches].sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt)).map(({ createdAt: _createdAt, ...match }) => match);
   const action = nextAction("legion status", "Apply the recalled learning to the next workflow action.");
   return success2(
     {
@@ -44315,17 +44377,15 @@ async function runLearnRecall(context, topic) {
       mode: "recall",
       topic,
       matches,
-      // Recorded lessons only. The command also searched retrospective findings,
-      // which in v9 live in run-scoped retro.md artifacts that nothing reads;
-      // P16-B003 owns wiring those in, and saying so here is better than a
-      // silently narrower corpus that looks complete.
-      corpus: ["lessons"],
+      // Both corpora are searched. Naming them keeps a future narrowing
+      // visible rather than making recall quietly answer from less.
+      corpus: ["lessons", "retrospectives"],
       nextAction: action,
       diagnostics: []
     },
     [
       `Recall "${topic}": ${matches.length} match${matches.length === 1 ? "" : "es"}.`,
-      ...matches.slice(0, 10).map((match) => `- [${match.score}] ${match.kind ?? "unclassified"}: ${match.summary}`),
+      ...matches.slice(0, 10).map((match) => `- [${match.score}] ${match.source}/${match.kind ?? "unclassified"}: ${match.summary}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -44374,8 +44434,8 @@ function renderLessonLine(record2) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile22, rm as rm7 } from "node:fs/promises";
-import path42 from "node:path";
+import { readFile as readFile23, rm as rm7 } from "node:fs/promises";
+import path43 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -44982,7 +45042,7 @@ async function runRetroWorkflow(context) {
   });
   if ("exitCode" in executed) return executed;
   if (dryRun) {
-    await rm7(path42.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+    await rm7(path43.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
       recursive: true,
       force: true,
       maxRetries: 10,
@@ -45032,6 +45092,25 @@ async function runRetroWorkflow(context) {
   });
   const markdownArtifactPath = guidanceArtifactPath(paths, "retro.md");
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
+  const retroIndexPath = retroIndexArtifactPath();
+  const nextIndex = appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
+    id: paths.runId,
+    createdAt: currentUtcTimestamp(),
+    ...scopedChangeId === void 0 ? {} : { scopedChangeId },
+    artifactPath: markdownArtifactPath,
+    summary: executed.result.summary,
+    actions: executed.result.findings.map((finding) => ({
+      id: finding.id,
+      title: finding.title,
+      body: finding.body,
+      severity: finding.severity
+    }))
+  });
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: retroIndexPath,
+    text: stableProtocolJson(nextIndex)
+  });
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status2 = executed.result.ok ? "completed" : "blocked";
   const diagnostics = executed.result.findings;
@@ -45042,6 +45121,7 @@ async function runRetroWorkflow(context) {
     runInput: { phase, milestone },
     outputs: {
       markdownArtifactPath,
+      retroIndexArtifactPath: retroIndexPath,
       promptArtifactPath: executed.promptArtifactPath,
       resultArtifactPath: executed.resultArtifactPath,
       rawLogArtifactPath: executed.rawLogArtifactPath,
@@ -45058,6 +45138,8 @@ async function runRetroWorkflow(context) {
     runId: paths.runId,
     artifactPath: paths.workflowRunArtifactPath,
     markdownArtifactPath,
+    retroIndexArtifactPath: retroIndexPath,
+    retrospectiveCount: nextIndex.retrospectives.length,
     executor: executed.executor,
     nextAction: action,
     diagnostics
@@ -45208,9 +45290,9 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path42.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path43.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
-    const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
+    const parsed = JSON.parse(await readFile23(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
   } catch {
   }
@@ -45565,16 +45647,16 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
-import path44 from "node:path";
+import path45 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
-import { readFile as readFile23 } from "node:fs/promises";
-import path43 from "node:path";
+import { readFile as readFile24 } from "node:fs/promises";
+import path44 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile23(path43.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile24(path44.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -45739,7 +45821,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat9(path44.join(root, relativePath));
+    await stat9(path45.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -45923,7 +46005,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path45.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path46.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -45975,8 +46057,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path45.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path45.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path46.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path46.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

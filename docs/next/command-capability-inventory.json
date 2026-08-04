@@ -184,7 +184,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "Findings are written only inside the run directory. The command promises retro findings reach later planning, and nothing reads retro.md.",
+          "gap": "Findings reach a read surface: retro appends every finding to .legion/project/workflow/retro/retro-index.json, following the knowledge-index.json convention. Staged writing remains open separately.",
           "disposition": "build-in-cli"
         },
         {
@@ -192,7 +192,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "The retro-to-plan loop has no v9 reader. commands/plan.md reads the latest retrospective and injects its high-priority actions and agent adjustments into decomposition; nothing in the repository reads retro.md. Converting both commands would break the loop silently, so either the planning path consumes the retained artifacts or the loop is recorded as removed.",
+          "gap": "The retro-to-plan loop is closed at both ends. legion plan reads the retro index and reports outstanding major and blocking actions in its payload and human output, including on --dry-run. Plan runs no executor, so it surfaces the actions to the caller decomposing the phase rather than acting on them.",
           "disposition": "build-in-cli"
         }
       ]
@@ -228,7 +228,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "--recall implements the command's scoring rule over recorded lessons. Its corpus is declared in the payload: retrospective findings live in run-scoped retro.md artifacts nothing reads yet, so they are excluded and said to be excluded rather than passed off as searched.",
+          "gap": "--recall searches lessons and retrospective findings, and reports corpus: [\"lessons\", \"retrospectives\"]. Findings score on title and body only; they carry no tags, and a synthetic tag would rank them above lessons for a reason the caller cannot see.",
           "disposition": "build-in-cli"
         },
         {
@@ -237,6 +237,10 @@
         },
         {
           "gap": "--prune targets .planning/memory/OUTCOMES.md, which does not survive. No outcome record store exists in the CLI; record as a deliberate removal.",
+          "disposition": "deliberate-removal"
+        },
+        {
+          "gap": "Prune mode is removed rather than built. It pruned OUTCOMES.md records older than memory.prune_threshold into an archive file; v9 has no OUTCOMES.md, no such setting, and a lesson index that is one committed JSON artifact with no archive path. An equivalent over .legion artifacts would be new work, not preservation.",
           "disposition": "deliberate-removal"
         }
       ]
