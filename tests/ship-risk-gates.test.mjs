@@ -167,3 +167,41 @@ test("every derived gate names the task it belongs to", () => {
   assert.ok(report.gates.length > 0);
   assert.ok(report.gates.every((entry) => entry.taskId === TASK_ID));
 });
+
+test("approved_spec_and_oracle is not satisfied by a passing oracle run", () => {
+  // That gate asks whether the spec and oracle were approved *before* gated
+  // execution. A post-execution test verdict cannot answer it: there is no
+  // approval record, approver, or ordering timestamp anywhere to check.
+  // Satisfying it from the oracle result would claim a governance gate was met
+  // when no such approval exists.
+  const report = derive({
+    tier: "R3",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      item("oracle-verification", "pass")
+    ],
+    reviews: [acceptedReview()]
+  });
+
+  const gate = report.gates.find((entry) => entry.gate === "approved_spec_and_oracle");
+  if (gate !== undefined) {
+    assert.equal(gate.status, "unevaluable");
+    assert.match(gate.reason, /does not yet produce/);
+  }
+});
+
+test("an oracle verdict of unknown does not satisfy the gate", () => {
+  // `unknown` is what build records when a task references oracles that were
+  // not all evaluated — a requirement mixing executable and manual criteria
+  // emits both command and inspection oracles, and only the commands run.
+  // Passing commands must not stand in for criteria nobody inspected.
+  const report = derive({
+    items: [item("declared-verification", "pass"), item("oracle-verification", "unknown")],
+    reviews: [acceptedReview()]
+  });
+
+  const gate = report.gates.find((entry) => entry.gate === "protected_oracle");
+  assert.notEqual(gate.status, "satisfied");
+  assert.equal(report.ready, false);
+});

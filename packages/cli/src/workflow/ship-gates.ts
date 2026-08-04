@@ -131,20 +131,28 @@ function evaluateGate(input: {
         ? { status: "satisfied", reason: "An accepted review decision exists for this task." }
         : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
 
-    case "approved_spec_and_oracle":
     case "protected_oracle":
-      // Oracle satisfaction is now its own evidence item. It was folded into
+      // Oracle satisfaction is its own evidence item. It was folded into
       // `declared-verification`, whose verdict answers a different question —
       // "did the contract's own commands pass", not "did the criteria the phase
-      // was specified against hold" — so these two gates had no producer and
-      // any R2+ change was structurally unshippable.
+      // was specified against hold" — so this gate had no producer and any R2+
+      // change was structurally unshippable.
       //
-      // `unevaluable` remains the answer for a task that names no oracle: the
-      // criteria were never expressed, which is not the same as their having
-      // held.
+      // The oracle artifact is content-hash pinned through `artifactInputs`, so
+      // a passing run is a run against the recorded oracle, which is what
+      // "protected" asks. `unevaluable` remains the answer for a task that names
+      // no oracle, and for one whose referenced oracles were not all evaluated:
+      // criteria that were never expressed, or never inspected, are not criteria
+      // that held.
       return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
 
     default:
+      // `approved_spec_and_oracle` asks whether the spec and oracle were
+      // approved *before* gated execution. A passing post-execution verdict does
+      // not answer that: there is no approval record, approver, or ordering
+      // timestamp to check, so satisfying it from the oracle result would claim
+      // a governance gate was met when no such approval exists.
+      //
       // Delta specs, integration checks, whole-change acceptance, independent
       // baselines, security/e2e evaluation, release observation and rollback
       // evidence have no producer in the workflow yet.
