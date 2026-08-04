@@ -160,7 +160,7 @@
       ],
       "cliGaps": [
         {
-          "gap": "--phase and --milestone are decorative: they select no evidence. Making them real scope selectors is the load-bearing gap and the reason retro cannot be thinned.",
+          "gap": "--phase N is a real selector: it resolves the phase's change through the derived chg_phase-<N>- ID, gates on completeness, and narrows evidence gathering to that one change. --milestone M stays refused because a milestone's phases are free text nothing parses, so no milestone-to-phase path exists to follow.",
           "disposition": "build-in-cli"
         },
         {
@@ -172,11 +172,11 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "No completeness gate. The command refuses to run on incomplete work; the verb's only validation is that the flags are non-empty strings.",
+          "gap": "A scoped retro refuses a phase whose change is not complete, using isChangeComplete (taskgraph non-empty, every task's latest evidence accepted, an accepted review present). An unscoped retro reports over current state and is not gated.",
           "disposition": "build-in-cli"
         },
         {
-          "gap": "Counts over typed artifacts (changes, tasks, passing reviews) are gathered and put in front of the executor. Per-phase metrics remain open with the scope selectors.",
+          "gap": "Counts over typed artifacts are gathered and put in front of the executor: changes and how many are complete, tasks, passing reviews, escalations with their reasons, and the first-pass review rate. Under --phase they cover that change alone.",
           "disposition": "build-in-cli"
         },
         {

@@ -26,8 +26,14 @@ The CLI owns the retrospective artifact. `legion retro --json` gathers the
 project's committed evidence, puts it in front of the executor, and records the
 result. `--dry-run` runs the analysis and writes nothing.
 
-Scoping to a phase or milestone is not implemented and is refused rather than
-ignored, so a retrospective is never labelled with a scope it did not use.
+`--phase N` scopes the evidence to that phase's change, resolved by the derived
+`chg_phase-<N>-` ID — the only phase-to-change link that exists. It refuses on a
+phase that was never planned, and on one that is not complete, because a
+retrospective runs on completed work.
+
+`--milestone M` stays refused: a milestone's phases are recorded as free text
+that nothing parses, so there is no set of changes to gather evidence from. A
+retrospective is never labelled with a scope it did not use.
 
 What stays here is the save decision, the edit-before-saving path, and the
 cross-project mode, none of which any verb performs.
@@ -50,16 +56,17 @@ cross-project mode, none of which any verb performs.
 
 2. PARSE ARGUMENTS
    - `--dry-run`: run the analysis and write nothing. Pass it straight through.
-   - Scoping is not offered, because the CLI cannot honour it. `legion retro --phase N`
-     is refused by the verb — it would gather no evidence from that phase and produce
-     an unscoped retrospective under a scoped label. If the operator asks for one,
-     run it so they see the refusal rather than being told about it:
+   - `--phase <N>`: scope the evidence to that phase's change. Pass it through.
 
      ```
      legion retro --phase <N> --json
      ```
 
-     then run the unscoped retrospective instead.
+     The verb refuses if the phase was never planned, or if it is not yet
+     complete — evidence, counts and summary all narrow to that one change, so a
+     scoped label always means scoped evidence.
+   - `--milestone <M>`: refused by the verb, for the reason in `<authority>`.
+     Run it so the operator sees the refusal, then offer `--phase` instead.
 
 3. READ PROJECT STATE
    ```

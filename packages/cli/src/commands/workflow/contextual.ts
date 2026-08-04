@@ -40,7 +40,8 @@ import {
 } from "../../workflow/guidance-run.js";
 import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
-import { listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
+import { isChangeComplete, listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
+import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { collectEscalations } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
 
@@ -499,31 +500,51 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
-  // `--phase` and `--milestone` reach the run slug, the run record, and the
-  // prompt topic, and nothing else. No evidence from the named scope is gathered:
-  // the stage and recent runs read below are handed to `renderGuidanceMarkdown`
-  // after the executor has already produced its findings, so the model never sees
-  // them. What comes back is an unscoped retrospective wearing a scoped label.
-  //
-  // An earlier revision emitted a diagnostic instead of refusing, on the grounds
-  // that the topic does steer the prompt and refusing removes something that
-  // works. That was the wrong call, and the argument against it is the `--query
-  // --scope` fix in this same change: a scoped query the CLI cannot honour must
-  // not report success. Exit 0 plus a persisted retro.md labelled with the
-  // requested scope is a claim, and a diagnostic nothing is obliged to read does
-  // not retract it. The steering was never worth much either — it produced an
-  // unscoped analysis under a scoped heading.
-  //
-  // P16-B003 makes the scope real by putting the selected evidence in front of
-  // the executor. Until then the mode does not exist and says so.
-  if (phase !== null || milestone !== null) {
-    const requested = [
-      phase === null ? undefined : `--phase ${phase}`,
-      milestone === null ? undefined : `--milestone ${milestone}`
-    ].filter((part) => part !== undefined).join(" ");
+  // Scope is resolved to a change, not pasted into a prompt. `--phase N` maps to
+  // the change `legion plan N` produced — the only phase-to-change link there is
+  // is the derived `chg_phase-<N>-` ID, because no phase field exists on a
+  // change. Milestone scoping stays refused: a milestone's `--phases` is free
+  // text nothing parses, so there is no milestone-to-phase path to follow yet.
+  if (milestone !== null) {
     return usageError(
-      `legion retro cannot scope a retrospective yet, so ${requested} is refused rather than ignored. The scope would reach the prompt topic only and gather no evidence from it, producing an unscoped retrospective under a scoped label. Run legion retro with no scope for a retrospective over current workflow state.`
+      "legion retro cannot scope a retrospective to a milestone: a milestone's phases are recorded as free text that nothing parses, so there is no set of changes to gather evidence from. Use --phase <N>, or run without a scope."
     );
+  }
+
+  let scopedChangeId: string | undefined;
+  if (phase !== null) {
+    const phaseNumber = Number.parseInt(phase, 10);
+    if (!Number.isInteger(phaseNumber) || phaseNumber < 1) {
+      return usageError(`legion retro --phase expects a phase number. Received: ${phase}`);
+    }
+    const listed = await listWorkflowChanges(context.repositoryRoot);
+    const prefix = phaseChangeIdPrefix(phaseNumber);
+    // A repository with no changes at all and one with no change for this phase
+    // are the same answer to the caller: there is nothing to reflect on.
+    const matches = listed.ok
+      ? listed.changes.filter((entry) => entry.changeId.startsWith(prefix))
+      : [];
+    if (matches.length === 0) {
+      return usageError(
+        `legion retro --phase ${phaseNumber} found no change for that phase. Phase changes are named ${prefix}<slug>; run legion plan ${phaseNumber} first.`
+      );
+    }
+    // Newest wins when a phase was re-planned under a renamed heading, which
+    // produces a second change with the same prefix and a different slug.
+    scopedChangeId = matches.at(-1)?.changeId;
+
+    // A retrospective runs on completed work. Without this the command would
+    // happily reflect on a phase still being built, which is the case its own
+    // documentation refuses.
+    const completeness = await isChangeComplete({
+      repositoryRoot: context.repositoryRoot,
+      changeId: scopedChangeId ?? ""
+    });
+    if (!completeness.complete) {
+      return usageError(
+        `Phase ${phaseNumber} is not complete, and retrospectives run on completed work. ${completeness.reason} Run legion review to finish the cycle, or retro without a scope.`
+      );
+    }
   }
 
   const createdAt = guidanceCreatedAt(context);
@@ -532,7 +553,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   const dryRun = hasFlag(context, "dry-run");
   const state = await resolveWorkflowState(context);
   const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
-  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns);
+  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns, scopedChangeId);
 
 
   const paths = await createGuidanceRunPaths({
@@ -871,6 +892,9 @@ interface RetroEvidence {
   readonly acceptedReviews: number;
   readonly escalations: number;
   readonly escalationReasons: readonly string[];
+  readonly changesComplete: number;
+  /** Tasks whose first review attempt passed, over tasks reviewed at all. */
+  readonly firstPassReviews: { readonly passed: number; readonly reviewed: number };
   readonly recentRuns: readonly string[];
   readonly summary: string;
 }
@@ -886,18 +910,26 @@ interface RetroEvidence {
 async function gatherRetroEvidence(
   repositoryRoot: string,
   state: Awaited<ReturnType<typeof resolveWorkflowState>>,
-  recentRuns: readonly GuidanceRunDocument[]
+  recentRuns: readonly GuidanceRunDocument[],
+  /** When set, evidence covers only this change rather than the whole project. */
+  scopedChangeId?: string
 ): Promise<RetroEvidence> {
   let changeCount = 0;
   let taskCount = 0;
   let acceptedReviews = 0;
   let escalations = 0;
+  let changesComplete = 0;
+  let firstPassPassed = 0;
+  let tasksReviewed = 0;
   const escalationReasons = new Set<string>();
   // Valid bundles, not directories. Counting directories counts a docs folder
   // with no change.yaml as a change.
   const listed = await listWorkflowChanges(repositoryRoot);
   {
-    const changeIds = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
+    const all = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
+    // Scoping narrows what is gathered, which is the difference between a
+    // scoped retrospective and an unscoped one wearing a scoped label.
+    const changeIds = scopedChangeId === undefined ? all : all.filter((entry) => entry === scopedChangeId);
     changeCount = changeIds.length;
     for (const changeId of changeIds) {
       const escalated = await collectEscalations({ repositoryRoot, changeId });
@@ -905,9 +937,17 @@ async function gatherRetroEvidence(
       for (const entry of escalated.escalations) escalationReasons.add(entry.reason);
       const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
       if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
+      const complete = await isChangeComplete({ repositoryRoot, changeId });
+      if (complete.complete) changesComplete += 1;
       const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
       if (reviews.ok) {
         acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
+        // First pass means the first review of a task carried the verdict, so
+        // the revision that superseded nothing is the one to look at. A task
+        // reviewed twice appears once here regardless of how the retry went.
+        const firstAttempts = reviews.reviews.filter((review) => review.document.supersedes === undefined);
+        tasksReviewed += firstAttempts.length;
+        firstPassPassed += firstAttempts.filter((review) => review.document.status === "accepted").length;
       }
     }
   }
@@ -919,8 +959,10 @@ async function gatherRetroEvidence(
     acceptedReviews,
     escalations,
     escalationReasons: [...escalationReasons].sort(),
+    changesComplete,
+    firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
     recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
-    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
+    summary: `${scopedChangeId === undefined ? `stage ${state.stage}` : `change ${scopedChangeId}`}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 
@@ -928,9 +970,12 @@ function renderRetroEvidence(evidence: RetroEvidence): string {
   return [
     "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:",
     `- Workflow stage: ${evidence.stage}`,
-    `- Changes recorded: ${evidence.changeCount}`,
+    `- Changes recorded: ${evidence.changeCount} (${evidence.changesComplete} complete)`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
     `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
+    evidence.firstPassReviews.reviewed === 0
+      ? "- First-pass review rate: no task has been reviewed yet"
+      : `- First-pass review rate: ${evidence.firstPassReviews.passed} of ${evidence.firstPassReviews.reviewed} passed on the first review`,
     `- Escalations (blocked runs and blocking findings): ${evidence.escalations}`,
     evidence.escalationReasons.length === 0
       ? "- Escalation reasons: none"

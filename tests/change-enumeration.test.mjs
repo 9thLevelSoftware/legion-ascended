@@ -114,3 +114,20 @@ test("phases are enumerated from the roadmap, not from its progress table", asyn
   assert.equal(phases[0].number, 1);
   assert.ok(phases[0].name.length > 0);
 });
+
+test("retro --phase selects that phase's change and refuses while it is incomplete", async (t) => {
+  const { run, planned } = await plannedProject(t);
+  // `legion plan 1` produced this change. The only phase-to-change link is the
+  // derived `chg_phase-<N>-<slug>` ID, so the selector must find it by prefix.
+  assert.match(planned.change.changeId, /^chg_phase-1-/);
+
+  const scoped = await run("retro", "--phase", "1", "--executor", "fake", "--json");
+
+  // Selection worked — the refusal is about completeness, not about a missing
+  // change. Nothing here is accepted yet, and a retrospective runs on completed
+  // work. Before this, `--phase` reached a prompt string and selected nothing.
+  assert.notEqual(scoped.exitCode, 0);
+  const text = `${scoped.stdout}${scoped.stderr}`;
+  assert.match(text, /Phase 1 is not complete/);
+  assert.doesNotMatch(text, /no change for that phase/);
+});
