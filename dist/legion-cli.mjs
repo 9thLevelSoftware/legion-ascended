@@ -42145,7 +42145,7 @@ Examples:
   legion build --dry-run --json
   legion build --executor fake --allow-dirty
   legion build --executor codex --allow-dirty`;
-async function handleBuildWorkflow(context) {
+async function handleBuildWorkflow(context, changeId) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(BUILD_HELP);
   }
@@ -42153,7 +42153,7 @@ async function handleBuildWorkflow(context) {
     "legion plan 1",
     "A typed task graph is required before build can run."
   );
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  const latestChange = changeId === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : { ok: true, changeId };
   if (!latestChange.ok) {
     return blockedBuild(latestChange.diagnostics, planAction);
   }
@@ -42960,7 +42960,14 @@ async function handleReviewWorkflow(context) {
     "legion plan 1",
     "A typed task graph is required before review readiness can be checked."
   );
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  const phaseOption = stringOption(context, "phase")?.trim();
+  if (context.args.options.get("phase") === true || phaseOption === "") {
+    return usageError("Missing required value for --phase. Example: legion review --phase 3.");
+  }
+  if (phaseOption !== void 0 && !/^[1-9]\d*$/.test(phaseOption)) {
+    return usageError(`Invalid phase number "${phaseOption}". Use a positive integer.`);
+  }
+  const latestChange = phaseOption === void 0 ? await findLatestWorkflowChangeId(context.repositoryRoot) : await resolvePhaseChange(context.repositoryRoot, phaseOption);
   if (!latestChange.ok) {
     return blockedReview(latestChange.diagnostics, planAction);
   }
@@ -43027,7 +43034,8 @@ async function handleReviewWorkflow(context) {
     return runAutoReview(context, {
       executor: selectedExecutor,
       taskgraph,
-      evidence
+      evidence,
+      ...phaseOption === void 0 ? {} : { phase: phaseOption }
     });
   }
   const submitted = await submitReview(context, {
@@ -43041,7 +43049,10 @@ async function handleReviewWorkflow(context) {
   const clean = submitted.reviews.every((review) => isCleanReview(review.document));
   const findingCount = submitted.reviews.reduce((total, review) => total + review.document.findings.length, 0);
   const firstReview = submitted.reviews[0];
-  const action = clean ? nextAction("legion review --accept", "A passing review was submitted and needs human acceptance.") : nextAction("legion build", "Address review findings and collect new evidence.");
+  const action = clean ? nextAction(
+    scopedCommand("legion review --accept", phaseOption),
+    "A passing review was submitted and needs human acceptance."
+  ) : nextAction("legion build", "Address review findings and collect new evidence.");
   return success2(
     {
       ok: true,
@@ -43061,6 +43072,10 @@ async function handleReviewWorkflow(context) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+function scopedCommand(command, phase) {
+  if (phase === void 0) return command;
+  return `${command} --phase ${phase}`;
 }
 async function submitReview(context, input) {
   if (input.taskgraph.document.tasks.length === 0) {
@@ -43353,7 +43368,10 @@ async function runAutoReview(context, input) {
       evidence: currentEvidence
     });
     if (!submitted.ok) {
-      return blockedReview(submitted.diagnostics, nextAction("legion review", "Auto review could not submit a review decision."));
+      return blockedReview(
+        submitted.diagnostics,
+        nextAction(scopedCommand("legion review", input.phase), "Auto review could not submit a review decision.")
+      );
     }
     latestReviews = submitted.reviews;
     if (submitted.reviews.every((review) => isCleanReview(review.document))) {
@@ -43364,7 +43382,11 @@ async function runAutoReview(context, input) {
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
       }
-      return acceptLatestReview(context, refreshedEvidence);
+      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
+        cycle,
+        maxCycles,
+        outcome: "clean"
+      });
     }
     if (cycle < maxCycles) {
       const tasksByTaskId = taskByTaskId(input.taskgraph.document.tasks);
@@ -43381,16 +43403,39 @@ async function runAutoReview(context, input) {
       currentEvidence = refreshedEvidence.evidence;
     }
   }
-  return blockedReview(
-    [
-      {
-        code: "auto_review_not_clean",
-        message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
-        path: latestReviews.at(-1)?.artifactPath
-      }
-    ],
-    nextAction("legion build", "Address review findings manually and rerun review.")
+  return withCycleState(
+    blockedReview(
+      [
+        {
+          code: "auto_review_not_clean",
+          message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
+          path: latestReviews.at(-1)?.artifactPath
+        }
+      ],
+      // `legion build` is deliberately not scoped: it has no `--phase` flag, so
+      // suggesting one would advertise an option the verb refuses. The follow-up
+      // review is scoped instead, which is the step that would otherwise act on
+      // the wrong change.
+      nextAction(
+        "legion build",
+        input.phase === void 0 ? "Address review findings manually and rerun review." : `Address review findings manually, then rerun ${scopedCommand("legion review", input.phase)}.`
+      )
+    ),
+    { cycle: maxCycles, maxCycles, outcome: "exhausted" },
+    // The findings that survived the last cycle are what a caller has to act
+    // on, and the blocked payload otherwise names only the artifact path.
+    latestReviews.map(reviewSummary)
   );
+}
+function withCycleState(result, cycles, reviews) {
+  return {
+    ...result,
+    payload: {
+      ...result.payload,
+      cycles,
+      ...reviews === void 0 ? {} : { reviews }
+    }
+  };
 }
 async function runAutoFixCycle(context, executor, changeId, task, cycle) {
   const taskId = taskIdForContractId(task.id);
@@ -43621,8 +43666,26 @@ function reviewSummary(review) {
     reviewId: review.document.id,
     taskId: review.document.taskId,
     artifactPath: review.artifactPath,
+    status: review.document.status,
     verdicts: review.document.verdicts,
-    findings: review.document.findings.length
+    confidence: review.document.confidence,
+    // Who reviewed, so a panel can distinguish a human verdict from an
+    // executor's without opening the artifact.
+    reviewer: review.document.reviewer,
+    // The revision chain. A review that supersedes nothing is a first attempt,
+    // which is what the first-pass rate in `legion retro` counts.
+    supersedes: review.document.supersedes,
+    findingCount: review.document.findings.length,
+    findings: review.document.findings.map((finding) => ({
+      id: finding.id,
+      title: finding.title,
+      body: finding.body,
+      severity: finding.severity,
+      // Blocking findings are required to carry evidence; minor and major ones
+      // may not. Reported as an empty list rather than omitted so a caller does
+      // not have to distinguish absent from empty.
+      evidenceRefs: finding.evidenceRefs ?? []
+    }))
   };
 }
 function taskByTaskId(tasks) {
@@ -43633,18 +43696,24 @@ function taskByTaskId(tasks) {
   return map2;
 }
 async function refreshBuildEvidenceAfterAutoFix(context, executor, changeId) {
-  const build = await handleBuildWorkflow({
-    ...context,
-    args: {
-      positionals: ["build"],
-      options: /* @__PURE__ */ new Map([
-        ["executor", executor],
-        ["allow-dirty", true]
-      ]),
-      // Constructed rather than parsed, so nothing here can be malformed.
-      invalidOptions: []
-    }
-  });
+  const build = await handleBuildWorkflow(
+    {
+      ...context,
+      args: {
+        positionals: ["build"],
+        options: /* @__PURE__ */ new Map([
+          ["executor", executor],
+          ["allow-dirty", true]
+        ]),
+        // Constructed rather than parsed, so nothing here can be malformed.
+        invalidOptions: []
+      }
+    },
+    // The change under review, not the newest. Without it, `--phase N --auto`
+    // fixed the selected phase and then executed an unrelated task graph,
+    // modifying its files, before re-reading the selected phase's stale evidence.
+    changeId
+  );
   if (build.exitCode !== 0) {
     return {
       ok: false,
@@ -43723,6 +43792,27 @@ function blockedReview(diagnostics, action, extras = {}) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+async function resolvePhaseChange(repositoryRoot, phase) {
+  const phaseNumber = Number.parseInt(phase, 10);
+  const listed = await listWorkflowChanges(repositoryRoot);
+  if (!listed.ok && !listed.diagnostics.every((entry) => entry.code === "change_missing")) {
+    return { ok: false, diagnostics: listed.diagnostics };
+  }
+  const prefix = phaseChangeIdPrefix(phaseNumber);
+  const matched = (listed.ok ? listed.changes : []).filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
+  if (matched === void 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "phase_change_not_found",
+          message: `No change exists for phase ${phaseNumber}. Phase changes are named ${prefix}<slug>; run legion plan ${phaseNumber} first.`
+        }
+      ]
+    };
+  }
+  return { ok: true, changeId: matched.changeId, diagnostics: [] };
 }
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
@@ -46090,7 +46180,7 @@ var DECLARED = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "reject-reason"],
+  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

@@ -42,7 +42,7 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "reject-reason"],
+  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

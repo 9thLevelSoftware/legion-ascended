@@ -287,3 +287,26 @@ test("changes that exist but none of them valid is not reported as unplanned pha
   assert.equal(progress.status, "unresolvable");
   assert.match(progress.reason, /could not be read/);
 });
+
+test("build can be scoped to a change rather than always the newest", async (t) => {
+  const { root, planned } = await plannedProject(t);
+  const { handleBuildWorkflow } = await import("../packages/cli/dist/commands/workflow/build.js");
+
+  // `legion review --phase N --auto` fixes the selected phase and then rebuilds.
+  // Without this seam the rebuild resolved the newest change, so the fix cycle
+  // would execute an unrelated task graph and modify its files, then re-read the
+  // selected phase's stale evidence.
+  const context = {
+    repositoryRoot: root,
+    args: {
+      positionals: ["build"],
+      options: new Map([
+        ["executor", "fake"],
+        ["allow-dirty", true]
+      ]),
+      invalidOptions: []
+    }
+  };
+  const result = await handleBuildWorkflow(context, planned.change.changeId);
+  assert.equal(result.payload.changeId, planned.change.changeId);
+});

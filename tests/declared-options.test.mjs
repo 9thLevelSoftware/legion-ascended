@@ -27,7 +27,6 @@ async function scratchRepo(t) {
 }
 
 const IGNORED = [
-  { command: "review", args: ["review", "--phase", "3"], flag: "--phase" },
   { command: "build", args: ["build", "--phase", "3"], flag: "--phase" },
   { command: "ship", args: ["ship", "--canary"], flag: "--canary" },
   { command: "plan", args: ["plan", "1", "--auto"], flag: "--auto" },
@@ -46,6 +45,30 @@ for (const entry of IGNORED) {
     assert.match(payload.diagnostics[0].message, new RegExp(entry.flag.replace(/^--/, "--")));
   });
 }
+
+test("legion review --phase resolves a change rather than being refused", async (t) => {
+  const { run } = await scratchRepo(t);
+  const result = await run("review", "--phase", "3", "--json");
+
+  // `commands/review.md` advertised `--phase N` and the boundary refused it as
+  // an unknown option. Declaring it without resolving it would only have moved
+  // the failure from "unknown option" to "silently reviewed a different
+  // change", so it selects the phase's change through the same derived
+  // `chg_phase-<N>-` ID `legion retro --phase` uses.
+  assert.notEqual(result.exitCode, 0);
+  const message = parseJsonOutput(result).diagnostics[0].message;
+  assert.match(message, /phase 3|No change exists/i);
+  assert.doesNotMatch(message, /unknown option|does not accept/i);
+});
+
+test("legion review --phase validates the whole value", async (t) => {
+  const { run } = await scratchRepo(t);
+  for (const value of ["1.5", "1foo", "01"]) {
+    const result = await run("review", "--phase", value, "--json");
+    assert.notEqual(result.exitCode, 0, `--phase ${value} was accepted`);
+    assert.match(parseJsonOutput(result).diagnostics[0].message, /positive integer/);
+  }
+});
 
 test("declared options are still accepted", async (t) => {
   const { run } = await scratchRepo(t);
