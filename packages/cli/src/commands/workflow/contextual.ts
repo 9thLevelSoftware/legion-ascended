@@ -42,6 +42,7 @@ import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { isChangeComplete, listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
+import { parsePhaseRange } from "../../workflow/phase-range.js";
 import { appendRetroEntry, readRetroIndex, retroIndexArtifactPath } from "../../workflow/retro-index.js";
 import { collectEscalations } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
@@ -501,15 +502,41 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
   if (milestone !== null && typeof milestone !== "string") return milestone;
-  // Scope is resolved to a change, not pasted into a prompt. `--phase N` maps to
-  // the change `legion plan N` produced — the only phase-to-change link there is
-  // is the derived `chg_phase-<N>-` ID, because no phase field exists on a
-  // change. Milestone scoping stays refused: a milestone's `--phases` is free
-  // text nothing parses, so there is no milestone-to-phase path to follow yet.
+  // Scope is resolved to changes, not pasted into a prompt. `--phase N` maps to
+  // the change `legion plan N` produced — the only phase-to-change link there
+  // is, because no phase field exists on a change. `--milestone M` maps to the
+  // changes behind that milestone's parsed phase range.
+  if (phase !== null && milestone !== null) {
+    return usageError("legion retro takes --phase or --milestone, not both. They describe different scopes.");
+  }
+
+  let scopeLabel: string | undefined;
+  let scopedChangeIds: readonly string[] | undefined;
+
   if (milestone !== null) {
-    return usageError(
-      "legion retro cannot scope a retrospective to a milestone: a milestone's phases are recorded as free text that nothing parses, so there is no set of changes to gather evidence from. Use --phase <N>, or run without a scope."
-    );
+    const index = await readMilestoneIndex(context.repositoryRoot);
+    const record = index.milestones.find((entry) => entry.id === milestone || entry.name === milestone);
+    if (record === undefined) {
+      return usageError(
+        `legion retro --milestone ${milestone} found no such milestone. Run legion milestone --status to list them.`
+      );
+    }
+    const progress = await milestonePhaseProgress(context.repositoryRoot, record);
+    if (!progress.ok) {
+      return usageError(`legion retro --milestone ${milestone}: ${progress.reason}`);
+    }
+    const outstanding = progress.phases.filter((entry) => !entry.complete);
+    if (outstanding.length > 0) {
+      return usageError(
+        `Milestone ${record.id} has ${outstanding.length} incomplete phase(s): ${outstanding
+          .map((entry) => `${entry.phase} (${entry.reason})`)
+          .join("; ")}. Retrospectives run on completed work.`
+      );
+    }
+    scopeLabel = `milestone ${record.id}`;
+    scopedChangeIds = progress.phases
+      .map((entry) => entry.changeId)
+      .filter((entry): entry is string => entry !== undefined);
   }
 
   let scopedChangeId: string | undefined;
@@ -537,6 +564,8 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     // Newest wins when a phase was re-planned under a renamed heading, which
     // produces a second change with the same prefix and a different slug.
     scopedChangeId = matches.at(-1)?.changeId;
+    scopeLabel = `phase ${phaseNumber}`;
+    scopedChangeIds = scopedChangeId === undefined ? [] : [scopedChangeId];
 
     // A retrospective runs on completed work. Without this the command would
     // happily reflect on a phase still being built, which is the case its own
@@ -558,7 +587,11 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   const dryRun = hasFlag(context, "dry-run");
   const state = await resolveWorkflowState(context);
   const recentRuns = await latestGuidanceRuns({ repositoryRoot: context.repositoryRoot, limitPerWorkflow: 2 });
-  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns, scopedChangeId);
+  const scope =
+    scopeLabel === undefined || scopedChangeIds === undefined
+      ? undefined
+      : { label: scopeLabel, changeIds: scopedChangeIds };
+  const evidence = await gatherRetroEvidence(context.repositoryRoot, state, recentRuns, scope);
 
 
   const paths = await createGuidanceRunPaths({
@@ -641,10 +674,13 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     // current stage under a phase heading is a scoped retrospective reporting
     // unscoped facts, which is what a reader would take it for.
     sections: [
-      scopedChangeId === undefined
+      scope === undefined
         ? { heading: "Workflow State", body: `Current stage: ${state.stage}` }
-        : { heading: "Scope", body: `Change ${scopedChangeId}. Project-wide stage and recent runs are excluded.` },
-      ...(scopedChangeId !== undefined
+        : {
+            heading: "Scope",
+            body: `${scope.label} (${scope.changeIds.length} change(s)). Project-wide stage and recent runs are excluded.`
+          },
+      ...(scope !== undefined
         ? []
         : [
             {
@@ -680,7 +716,9 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     // backfilled retrospectives in the wrong order, since `learn --recall`
     // breaks equal scores by `createdAt`.
     createdAt,
-    ...(scopedChangeId === undefined ? {} : { scopedChangeId }),
+    // Recorded so a reader of the index can tell an action drawn from one
+    // scope's retrospective from one drawn across the whole project.
+    ...(scope === undefined ? {} : { scopedChangeId: scope.changeIds.join(",") }),
     artifactPath: markdownArtifactPath,
     summary: executed.result.summary,
     actions: executed.result.findings.map((finding) => ({
@@ -781,7 +819,7 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
       },
       [
         `Milestones: ${current.milestones.length}.`,
-        renderMilestones(current).trimEnd(),
+        renderMilestones(current, await milestoneProgressMap(context.repositoryRoot, current)).trimEnd(),
         renderNextAction(action)
       ].join("\n")
     );
@@ -791,6 +829,11 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
   let status: "completed" | "accepted" = "completed";
   let slugSource = "status";
   if (define !== undefined && phases !== undefined) {
+    // Parsed at the boundary, so an unparseable range is refused before it is
+    // committed. It was stored verbatim, which is why nothing downstream could
+    // join a milestone to its phases.
+    const range = parsePhaseRange(phases);
+    if (!range.ok) return usageError(`legion milestone --phases: ${range.reason}`);
     const id = milestoneId(define);
     if (current.milestones.some((entry) => entry.id === id)) return usageError(`Milestone already exists: ${id}`);
     next = {
@@ -812,6 +855,21 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
     // difference between finished and declared finished.
     if (target.status === "completed" || target.status === "archived") {
       return usageError(`Milestone ${complete} is already ${target.status}. Completing it again would overwrite its recorded summary.`);
+    }
+    // The phase-level gate the invariant needed. Until the range parsed, "no
+    // partial completions" could only be checked against the id existing, so a
+    // milestone could be marked complete over phases that were never planned.
+    const progress = await milestonePhaseProgress(context.repositoryRoot, target);
+    if (!progress.ok) {
+      return usageError(`legion milestone --complete ${complete}: ${progress.reason}`);
+    }
+    const outstanding = progress.phases.filter((entry) => !entry.complete);
+    if (outstanding.length > 0) {
+      return usageError(
+        `Milestone ${complete} has ${outstanding.length} incomplete phase(s): ${outstanding
+          .map((entry) => `${entry.phase} (${entry.reason})`)
+          .join("; ")}. Completing it would record a summary over work that is not done.`
+      );
     }
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
@@ -849,7 +907,7 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
   await writeProjectTextFile({
     repositoryRoot: context.repositoryRoot,
     artifactPath: markdownArtifactPath,
-    text: renderMilestones(next)
+    text: renderMilestones(next, await milestoneProgressMap(context.repositoryRoot, next))
   });
   const action = nextAction("legion status", "Review milestone state before changing release posture.");
   await writeGuidanceRun({
@@ -929,26 +987,74 @@ function milestoneId(name: string): string {
   return `milestone-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed"}`;
 }
 
-function renderMilestones(index: MilestoneIndex): string {
+/**
+ * Progress is rendered from the phases a milestone covers, not from its label.
+ *
+ * `renderMilestones` had no percentage, bar or phase table because it had
+ * nothing to compute one from: the range was free text. With it parsed and
+ * joined to changes, "completed" becomes a claim the reader can check against
+ * the rows beneath it.
+ */
+function renderMilestones(
+  index: MilestoneIndex,
+  progress: ReadonlyMap<string, MilestoneProgress>
+): string {
   return [
     "# Milestones",
     "",
-    index.milestones.length === 0 ? "No milestones defined." : index.milestones.map((milestone) => [
-      `## ${milestone.name}`,
-      "",
-      `ID: ${milestone.id}`,
-      `Phases: ${milestone.phases}`,
-      `Status: ${milestone.status}`,
-      milestone.summary === undefined ? "" : `Summary: ${milestone.summary}`
-    ].filter((line) => line.length > 0).join("\n")).join("\n\n"),
+    index.milestones.length === 0 ? "No milestones defined." : index.milestones.map((milestone) => {
+      const body = [
+        `## ${milestone.name}`,
+        "",
+        `ID: ${milestone.id}`,
+        `Phases: ${milestone.phases}`,
+        `Status: ${milestone.status}`,
+        milestone.summary === undefined ? "" : `Summary: ${milestone.summary}`
+      ].filter((line) => line.length > 0);
+      const state = progress.get(milestone.id);
+      if (state === undefined) return body.join("\n");
+      if (!state.ok) {
+        // Named rather than rendered as zero progress: a milestone nobody can
+        // evaluate is a different thing from one with nothing done.
+        return [...body, "", `Progress: unresolvable — ${state.reason}`].join("\n");
+      }
+      const done = state.phases.filter((entry) => entry.complete).length;
+      const total = state.phases.length;
+      const filled = total === 0 ? 0 : Math.round((done / total) * 20);
+      const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+      return [
+        ...body,
+        "",
+        `Progress: ${done}/${total} phases (${percent}%)`,
+        `[${"#".repeat(filled)}${".".repeat(20 - filled)}]`,
+        "",
+        "| Phase | Change | State |",
+        "|-------|--------|-------|",
+        ...state.phases.map(
+          (entry) => `| ${entry.phase} | ${entry.changeId ?? "—"} | ${entry.complete ? "complete" : entry.reason} |`
+        )
+      ].join("\n");
+    }).join("\n\n"),
     ""
   ].join("\n");
+}
+
+async function milestoneProgressMap(
+  repositoryRoot: string,
+  index: MilestoneIndex
+): Promise<ReadonlyMap<string, MilestoneProgress>> {
+  const entries = new Map<string, MilestoneProgress>();
+  for (const milestone of index.milestones) {
+    entries.set(milestone.id, await milestonePhaseProgress(repositoryRoot, milestone));
+  }
+  return entries;
 }
 
 export interface RetroEvidence {
   /** Absent under a scope: the project's stage is not the phase's. */
   readonly stage?: string;
-  readonly scopedChangeId?: string;
+  /** Set under a scope, e.g. `phase 3` or `milestone mil-mvp`. */
+  readonly scopeLabel?: string;
   readonly changeCount: number;
   readonly taskCount: number;
   readonly acceptedReviews: number;
@@ -973,8 +1079,8 @@ export async function gatherRetroEvidence(
   repositoryRoot: string,
   state: Awaited<ReturnType<typeof resolveWorkflowState>>,
   recentRuns: readonly GuidanceRunDocument[],
-  /** When set, evidence covers only this change rather than the whole project. */
-  scopedChangeId?: string
+  /** When set, evidence covers only these changes rather than the whole project. */
+  scope?: { readonly label: string; readonly changeIds: readonly string[] }
 ): Promise<RetroEvidence> {
   let changeCount = 0;
   let taskCount = 0;
@@ -991,7 +1097,7 @@ export async function gatherRetroEvidence(
     const all = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
     // Scoping narrows what is gathered, which is the difference between a
     // scoped retrospective and an unscoped one wearing a scoped label.
-    const changeIds = scopedChangeId === undefined ? all : all.filter((entry) => entry === scopedChangeId);
+    const changeIds = scope === undefined ? all : all.filter((entry) => scope.changeIds.includes(entry));
     changeCount = changeIds.length;
     for (const changeId of changeIds) {
       const escalated = await collectEscalations({ repositoryRoot, changeId });
@@ -1023,7 +1129,7 @@ export async function gatherRetroEvidence(
     // exactly the mislabelled-scope defect this selector exists to prevent, so
     // scoped mode omits them rather than filtering them: a guidance run records
     // no change, so there is nothing to filter on.
-    ...(scopedChangeId === undefined ? { stage: state.stage } : { scopedChangeId }),
+    ...(scope === undefined ? { stage: state.stage } : { scopeLabel: scope.label }),
     changeCount,
     taskCount,
     acceptedReviews,
@@ -1031,16 +1137,16 @@ export async function gatherRetroEvidence(
     escalationReasons: [...escalationReasons].sort(),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
-    recentRuns: scopedChangeId === undefined ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
-    summary: `${scopedChangeId === undefined ? `stage ${state.stage}` : `change ${scopedChangeId}`}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
+    recentRuns: scope === undefined ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
+    summary: `${scope === undefined ? `stage ${state.stage}` : scope.label}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 
 export function renderRetroEvidence(evidence: RetroEvidence): string {
   return [
-    evidence.scopedChangeId === undefined
+    evidence.scopeLabel === undefined
       ? "Evidence from the project's committed artifacts. Ground every finding in it and say when it is insufficient:"
-      : `Evidence from change ${evidence.scopedChangeId} alone. Ground every finding in it and say when it is insufficient. Project-wide stage and recent runs are deliberately excluded: they describe current activity, not this phase's.`,
+      : `Evidence from ${evidence.scopeLabel} alone. Ground every finding in it and say when it is insufficient. Project-wide stage and recent runs are deliberately excluded: they describe current activity, not this scope's.`,
     evidence.stage === undefined ? undefined : `- Workflow stage: ${evidence.stage}`,
     `- Changes recorded: ${evidence.changeCount} (${evidence.changesComplete} complete)`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
@@ -1052,7 +1158,7 @@ export function renderRetroEvidence(evidence: RetroEvidence): string {
     evidence.escalationReasons.length === 0
       ? "- Escalation reasons: none"
       : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
-    evidence.scopedChangeId !== undefined
+    evidence.scopeLabel !== undefined
       ? undefined
       : evidence.recentRuns.length === 0
         ? "- Recent workflow runs: none"
@@ -1060,4 +1166,55 @@ export function renderRetroEvidence(evidence: RetroEvidence): string {
   ]
     .filter((line) => line !== undefined)
     .join("\n");
+}
+
+interface MilestonePhaseState {
+  readonly phase: number;
+  readonly changeId?: string;
+  readonly complete: boolean;
+  readonly reason: string;
+}
+
+type MilestoneProgress =
+  | { readonly ok: true; readonly phases: readonly MilestonePhaseState[] }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * A milestone's phases joined to their changes and asked whether each is done.
+ *
+ * This is the link `--status` progress rendering and the `--complete` gate both
+ * needed and neither had: the range was stored as free text, so there was no
+ * set of phases to join, and `renderMilestones` had no percentage, bar or phase
+ * table because it had nothing to compute one from.
+ */
+async function milestonePhaseProgress(
+  repositoryRoot: string,
+  milestone: MilestoneRecord
+): Promise<MilestoneProgress> {
+  const range = parsePhaseRange(milestone.phases);
+  if (!range.ok) {
+    // Milestones defined before the parser existed hold whatever was typed.
+    // Reported as unresolvable rather than treated as zero phases, which would
+    // let `--complete` pass on a milestone nobody can evaluate.
+    return { ok: false, reason: `its recorded phases ${JSON.stringify(milestone.phases)} do not parse: ${range.reason}` };
+  }
+  const listed = await listWorkflowChanges(repositoryRoot);
+  const changes = listed.ok ? listed.changes : [];
+  const phases: MilestonePhaseState[] = [];
+  for (const phase of range.phases) {
+    const prefix = phaseChangeIdPrefix(phase);
+    const matched = changes.filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
+    if (matched === undefined) {
+      phases.push({ phase, complete: false, reason: "not planned" });
+      continue;
+    }
+    const completeness = await isChangeComplete({ repositoryRoot, changeId: matched.changeId });
+    phases.push({
+      phase,
+      changeId: matched.changeId,
+      complete: completeness.complete,
+      reason: completeness.complete ? "complete" : completeness.reason
+    });
+  }
+  return { ok: true, phases };
 }

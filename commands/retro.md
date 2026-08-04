@@ -31,9 +31,14 @@ result. `--dry-run` runs the analysis and writes nothing.
 phase that was never planned, and on one that is not complete, because a
 retrospective runs on completed work.
 
-`--milestone M` stays refused: a milestone's phases are recorded as free text
-that nothing parses, so there is no set of changes to gather evidence from. A
-retrospective is never labelled with a scope it did not use.
+`--milestone M` scopes to every change behind that milestone's parsed phase
+range, and gates the same way. A retrospective is never labelled with a scope it
+did not use.
+
+Under any scope, project-wide stage and recent guidance runs are excluded from
+both the prompt and the artifact. A guidance run records no change, so there is
+nothing to filter on — reflecting on a completed phase against current project
+activity is the mislabelled-scope defect the selectors exist to prevent.
 
 What stays here is the save decision, the edit-before-saving path, and the
 cross-project mode, none of which any verb performs.
@@ -65,8 +70,10 @@ cross-project mode, none of which any verb performs.
      The verb refuses if the phase was never planned, or if it is not yet
      complete — evidence, counts and summary all narrow to that one change, so a
      scoped label always means scoped evidence.
-   - `--milestone <M>`: refused by the verb, for the reason in `<authority>`.
-     Run it so the operator sees the refusal, then offer `--phase` instead.
+   - `--milestone <M>`: scope to every change behind that milestone's phases.
+     Accepts the milestone id or its name. Pass it through; the verb refuses if
+     the milestone is unknown, its range does not parse, or any phase it covers
+     is incomplete.
 
 3. READ PROJECT STATE
    ```

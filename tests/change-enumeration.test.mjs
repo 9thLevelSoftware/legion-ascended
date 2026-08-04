@@ -208,17 +208,21 @@ test("a scoped retrospective excludes project-wide stage and recent runs", async
   assert.equal(unscoped.stage, state.stage);
   assert.deepEqual(unscoped.recentRuns, ["build/run_x: completed"]);
 
-  const scoped = await gatherRetroEvidence(root, state, runs, planned.change.changeId);
+  const scoped = await gatherRetroEvidence(root, state, runs, {
+    label: `phase 1`,
+    changeIds: [planned.change.changeId]
+  });
   // A phase completed before later ones would otherwise be reflected on against
   // the project's *current* stage and whatever ran most recently — the
   // mislabelled-scope defect this selector exists to prevent. A guidance run
   // records no change, so there is nothing to filter on: scoped mode omits them.
   assert.equal(scoped.stage, undefined);
   assert.deepEqual(scoped.recentRuns, []);
-  assert.equal(scoped.scopedChangeId, planned.change.changeId);
+  assert.equal(scoped.scopeLabel, "phase 1");
+  assert.equal(scoped.changeCount, 1, "the scope narrowed to its one change");
 
   const rendered = renderRetroEvidence(scoped);
   assert.doesNotMatch(rendered, /Workflow stage:/);
   assert.doesNotMatch(rendered, /Recent workflow runs/);
-  assert.match(rendered, /Evidence from change chg_phase-1-/);
+  assert.match(rendered, /Evidence from phase 1 alone/);
 });

@@ -104,7 +104,7 @@
       ],
       "cliGaps": [
         {
-          "gap": "--complete refuses a milestone that is already completed or archived, so a second completion cannot overwrite a recorded summary. A phase-level completeness gate remains open until the CLI can join milestones to phase state.",
+          "gap": "--complete refuses a milestone that is already completed or archived, and refuses while any phase in its parsed range is incomplete, naming each one. The command's stated no-partial-completions rule is the verb's.",
           "disposition": "build-in-cli"
         },
         {
@@ -116,7 +116,7 @@
           "disposition": "build-in-cli"
         },
         {
-          "gap": "Progress rendering requires joining milestone records to phase status, which is exactly the link the handler lacks. renderMilestones has no percentage, bar, or phase table.",
+          "gap": "Progress is rendered by joining a milestone's parsed phase range to the changes behind those phases: completed of covered, a bar, and a per-phase table naming each change and why an incomplete phase is incomplete. A range that does not parse reports unresolvable with the parse error rather than zero progress.",
           "disposition": "build-in-cli"
         },
         {
@@ -160,7 +160,7 @@
       ],
       "cliGaps": [
         {
-          "gap": "--phase N is a real selector: it resolves the phase's change through the derived chg_phase-<N>- ID, gates on completeness, and narrows evidence gathering to that one change. --milestone M stays refused because a milestone's phases are free text nothing parses, so no milestone-to-phase path exists to follow.",
+          "gap": "--phase N and --milestone M are both real selectors. --phase resolves through the derived chg_phase-<N>- ID; --milestone resolves its parsed phase range to that set of changes. Both gate on completeness and narrow evidence gathering to their changes, and project-wide stage and recent runs are excluded under any scope.",
           "disposition": "build-in-cli"
         },
         {
