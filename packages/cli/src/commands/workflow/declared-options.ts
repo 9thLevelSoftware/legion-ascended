@@ -55,7 +55,7 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   // phase and milestone are declared so the handler's own refusal is what the
   // caller sees: it explains that a scoped retrospective is not implemented,
   // which is more use than "this command does not read --phase".
-  retro: ["dry-run", "executor", "milestone", "phase"],
+  retro: ["dry-run", "executor", "milestone", "phase", "save"],
   milestone: ["archive", "complete", "define", "phases", "status", "summary"],
   council: ["executor"]
 });

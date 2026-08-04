@@ -226,11 +226,19 @@ test("advise learn retro and milestone write structured guidance state", async (
     assert.equal(missingArchivePayload.status, "usage_error");
     assert.equal(missingArchivePayload.diagnostics[0].message, "Milestone not found: milestone-missing");
 
+    // Retro stages; recording is the second step. The run's artifacts exist
+    // either way, which is what this assertion was always about.
     const retro = await runCliCapture(["--repository-root", root, "retro", "--executor", "fake", "--json"]);
     assert.equal(retro.exitCode, 0, retro.stderr);
     const retroPayload = parseJsonOutput(retro);
-    assert.equal(retroPayload.status, "completed");
+    assert.equal(retroPayload.status, "staged");
     await assertFile(root, retroPayload.markdownArtifactPath);
+
+    const saved = await runCliCapture([
+      "--repository-root", root, "retro", "--save", retroPayload.runId, "--json"
+    ]);
+    assert.equal(saved.exitCode, 0, saved.stderr);
+    assert.equal(parseJsonOutput(saved).status, "completed");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

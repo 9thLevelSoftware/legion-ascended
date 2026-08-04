@@ -9,7 +9,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
 Review completed phases/milestones, identify what worked and what didn't, surface reusable patterns, and record findings to memory for future planning.
 
 Purpose: Structured team retrospective after build/review cycles — learn from what happened.
-Output: Retrospective report with actionable findings written to recorded learning
+Output: A staged retrospective report; recorded to the retro index only when saved
 </objective>
 
 <execution_context>
@@ -169,49 +169,58 @@ cross-project mode, none of which any verb performs.
    - Files modified: {count}
 
 8. ASK USER
+
+   The run is staged, not recorded. Nothing has entered `plan`'s or
+   `learn --recall`'s view yet, so all three choices below are real.
+
    Present via adapter.ask_user:
-   "Save retrospective findings to memory?"
+   "Save this retrospective?"
    Options:
-   - "Save to memory" — "Record findings to recorded learning for future planning context"
-   - "View only (don't save)" — "Retrospective displayed but not persisted"
-   - "Edit before saving" — "Make adjustments to findings before recording"
+   - "Save" — "Record it so future planning reads it"
+   - "View only" — "Leave it staged; nothing is recorded"
+   - "Edit before saving" — "Adjust the findings, then record"
 
-   If DRY_RUN=true: skip this step, display "DRY RUN — skipping save" and exit
+   If DRY_RUN=true: skip this step. A dry run wrote nothing at all, so there is
+   nothing to save or edit.
 
-9. HANDLE SAVE CHOICE
+9. HANDLE THE CHOICE
 
-   **Path A: Save to memory**
-   - If recorded learning does not exist: create the directory
-   - If recorded learning does not exist: create with header:
-     ```
-     # Retrospective Log
+   **Save**
 
-     Retrospective findings from completed phases and milestones.
-     Referenced by `/legion:plan` for continuous improvement.
-     ```
-   - Append the retrospective entry:
-     ```
-     ## {scope_description} — {current_date}
+   ```
+   legion retro --save <runId> --json
+   ```
 
-     ### Key Findings
-     {condensed what went well / what didn't}
+   The verb appends the staged entry to
+   `.legion/project/workflow/retro/retro-index.json` and marks the run
+   completed. Report `retrospectiveCount` from the payload.
 
-     ### Action Items
-     {action items table}
+   A second save is refused, and so is saving a blocked run — its findings are
+   the adapter's, not the retrospective's.
 
-     ### Metrics
-     {metrics summary}
+   **View only**
 
-     ---
-     ```
-   - Display: "Retrospective saved to recorded learning"
-   - After recording: output reminder
-     "Retro findings are automatically available to `/legion:plan` during decomposition.
-      Action items from this retro will appear as constraints in future phase planning."
+   Do nothing. The run stays `staged` and its artifacts remain on disk for
+   inspection. Display: "Left staged. Run `legion retro --save {runId}` to
+   record it."
 
-   **Path B: View only**
-   - Display: "Retrospective not saved. Run `/legion:retro` again to revisit."
-   - Exit
+   Do not delete the run directory to simulate discarding. The run happened, and
+   an artifact set that disappears because the operator did not like it is a
+   record that lies by omission.
+
+   **Edit before saving**
+
+   Edit the staged entry the verb reported as `stagedEntryArtifactPath`, then
+   save. That file — not `retro.md` — is what `plan` and `learn --recall` read,
+   so editing the prose alone would change what a human sees and nothing about
+   what the loop consumes.
+
+   `retro.md` is the human-readable artifact and may be edited too; the verb
+   does not read it back.
+
+   The verb validates the entry on save: every action needs an `id`, `title`,
+   `body`, and a `severity` of `minor`, `major` or `blocking`. A malformed edit
+   is refused rather than silently dropped by the index reader later.
 
    **Path C: Edit before saving**
    - Present the condensed findings via adapter.ask_user:
