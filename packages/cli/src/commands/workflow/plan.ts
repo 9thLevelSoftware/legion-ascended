@@ -32,6 +32,7 @@ import { buildOracleArtifactInputs } from "../../workflow/oracle-input.js";
 import { resolvePhaseSource, type PhaseSource } from "../../workflow/phase-compat.js";
 import { resolvePhaseRequirement } from "../../workflow/phase-requirement.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
+import { outstandingRetroActions, readRetroIndex } from "../../workflow/retro-index.js";
 import { resolveWorkflowState } from "../../workflow/state.js";
 import { buildTaskGraphInput } from "../../workflow/taskgraph-input.js";
 
@@ -90,6 +91,13 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     "legion build",
     "The phase source is resolved; build is the next workflow step after task artifacts exist."
   );
+  // The read end of the retrospective loop. `legion retro` recorded findings and
+  // nothing consumed them, so a retrospective changed nothing about the next
+  // phase. Plan is deterministic and runs no executor, so it reports the
+  // outstanding actions rather than acting on them: the caller decomposing this
+  // phase is who they are for.
+  const retroActions = outstandingRetroActions(await readRetroIndex(context.repositoryRoot));
+
   const dryRun = hasFlag(context, "dry-run");
   if (dryRun) {
     return success(
@@ -99,10 +107,11 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
         dryRun,
         phase: resolved.phase,
         autoRefine: hasFlag(context, "auto-refine"),
+        retrospectiveActions: retroActions,
         nextAction: action,
         diagnostics: []
       },
-      planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action)
+      planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
     );
   }
 
@@ -303,10 +312,11 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
         taskIds: taskgraph.document.tasks.map((task) => task.id)
       },
       autoRefine: hasFlag(context, "auto-refine"),
+      retrospectiveActions: retroActions,
       nextAction: action,
       diagnostics: []
     },
-    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action)
+    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
   );
 }
 
@@ -400,7 +410,8 @@ function planningSuccessHuman(
   phaseNumber: number,
   phaseName: string,
   dryRun: boolean,
-  action: ReturnType<typeof nextAction>
+  action: ReturnType<typeof nextAction>,
+  retroActions: ReturnType<typeof outstandingRetroActions>
 ): string {
   const summary = dryRun
     ? `Planning preview for phase ${phaseNumber}: ${phaseName}.`
@@ -408,5 +419,19 @@ function planningSuccessHuman(
   const mode = dryRun
     ? "Dry run: no task graph was written."
     : "Change, oracle, and taskgraph artifacts were written.";
-  return [summary, mode, renderNextAction(action)].join("\n");
+  // Shown on a dry run too: the point of a preview is to decide how to
+  // decompose, which is exactly when these matter.
+  const retro =
+    retroActions.length === 0
+      ? undefined
+      : [
+          "Outstanding retrospective actions to account for in this decomposition:",
+          ...retroActions.map(
+            (entry) =>
+              `  - [${entry.severity}] ${entry.title}${entry.scopedChangeId === undefined ? "" : ` (from ${entry.scopedChangeId})`} — ${entry.artifactPath}`
+          )
+        ].join("\n");
+  return [summary, mode, retro, renderNextAction(action)]
+    .filter((part) => part !== undefined)
+    .join("\n");
 }

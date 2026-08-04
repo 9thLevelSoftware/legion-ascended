@@ -1,7 +1,7 @@
 ---
 name: legion:learn
 description: Record, recall, and manage project-specific patterns, pitfalls, and preferences
-argument-hint: <lesson> [--recall <topic>] [--list] [--prune]
+argument-hint: <lesson> [--recall <topic>] [--list]
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
@@ -9,7 +9,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 Explicitly record patterns, pitfalls, and preferences to project memory. Recall relevant learnings during planning and execution.
 
 Purpose: Build project-specific institutional knowledge that persists across sessions.
-Output: Structured memory entries in recorded learning files.
+Output: A lesson artifact and an appended entry in the CLI's lesson index.
 </objective>
 
 <execution_context>
@@ -37,7 +37,10 @@ continue with another lesson.
 
    - If $ARGUMENTS contains `--recall <topic>`: set MODE=recall, extract topic text
    - If $ARGUMENTS contains `--list`: set MODE=list
-   - If $ARGUMENTS contains `--prune`: set MODE=prune
+   - If $ARGUMENTS contains `--prune`: display the removal note below and exit.
+     The verb has no prune mode, so routing to one would leave the host with
+     nothing to execute. memory-manager Section 7.5 is marked legacy for the
+     same reason and no longer routes anyone here.
    - If $ARGUMENTS is non-empty (and no flags): set MODE=record, store full text as lesson
    - If $ARGUMENTS is empty or missing:
      Display:
@@ -52,8 +55,7 @@ continue with another lesson.
       Modes:
         `<lesson>`         — Record a new learning
         `--recall <topic>` — Search memory for relevant learnings
-        `--list`           — Show all recorded learnings by type
-        `--prune`          — Archive old, low-importance outcome records"
+        `--list`           — Show all recorded learnings by type"
      Exit — do not proceed
 
 2. LOAD PROJECT CONTEXT (optional)
@@ -61,17 +63,15 @@ continue with another lesson.
    - If found: extract project name, current phase from STATE.md
    - If not found: proceed without project context
      - Learn works with or without an initialized project
-   - Ensure recorded learning directory exists for record/list modes
-     - If MODE=record and directory does not exist: create it
-     - If MODE=recall or MODE=list and directory does not exist:
-       Display: "No memory directory found. Record your first learning with `/legion:learn <lesson>`."
-       Exit
+   - Do not create or check any directory. The verb owns the lesson index and
+     creates it on first record; recall and list over an absent index return an
+     empty result rather than an error, which is the correct answer to "what
+     have we learned" before anything has been.
 
 3. ROUTE BY MODE
    - MODE=record → go to Step 4
    - MODE=recall → go to Step 8
    - MODE=list → go to Step 9
-   - MODE=prune → go to Step 10
 
 4. CLASSIFY LESSON
    Analyze the lesson text to determine its type:
@@ -106,41 +106,31 @@ continue with another lesson.
       - Generate 2-5 tags
    b. **Phase context**: Note current phase/milestone from STATE.md (if available)
    c. **Summary**: Generate a one-line summary (max 80 characters)
-   d. **ID**: Generate a unique ID: `{type[0:3].upper()}-{sequential_number}`
-      - PAT-001, PIT-001, PRF-001
-      - Read existing file to determine next sequential number
+   d. **ID**: do not generate one. The verb uses the recording run's ID, which is
+      unique without reading any existing file. Sequential per-type IDs were a
+      v8 artifact of three separate markdown files and cannot be assigned
+      without a read-then-write race.
 
 6. RECORD
-   Write to the appropriate memory file based on type:
-   - Pattern → recorded learning
-   - Pitfall → recorded learning
-   - Preference → recorded learning
 
-   **If file does not exist**, create with header:
+   One call. The verb writes the lesson artifact and appends to the index; do
+   not write either yourself.
+
    ```
-   # {Type}s
-
-   Project-specific {type}s recorded via `/legion:learn`.
-   Referenced by `/legion:plan` and `/legion:build` for context-aware execution.
+   legion learn "<lesson text>" --type <pattern|pitfall|preference>      --tags "<comma-separated>" --summary "<one line>" --json
    ```
 
-   **Append entry**:
-   ```
-   ## {ID}: {summary}
-   - **Date**: {current_date}
-   - **Type**: {type}
-   - **Tags**: {comma-separated tags}
-   - **Phase**: {current phase or "N/A"}
+   Pass the enrichment from step 5 through the flags. `--type` is optional; an
+   unclassified lesson is still recorded and still counted.
 
-   {full lesson text}
+   Display from the payload:
+   "{kind} recorded: {runId} — {summary}
+    Artifact: {lessonArtifactPath}
+    Index: {indexArtifactPath} ({lessonCount} recorded)"
 
-   ---
-   ```
-
-   Display:
-   "{type} recorded: {ID} — {summary}
-    Saved to recorded learning{filename}
-    This learning will inform future `/legion:plan` recommendations."
+   `legion plan` reports outstanding retrospective actions, and `legion learn
+   --recall` searches both lessons and retrospective findings, so a recorded
+   lesson is reachable from the next planning pass.
 
 7. OFFER CONTINUATION
    Present via adapter.ask_user:
@@ -153,106 +143,70 @@ continue with another lesson.
    If "Done": Display "Run `/legion:learn --recall <topic>` to search your learnings." → Exit
 
 8. RECALL MODE
-   Search all memory files for entries matching the topic:
 
-   a. Define search targets:
-      - recorded learning
-      - recorded learning
-      - recorded learning
-      - recorded learning (if exists — cross-reference retrospective findings)
-      - recorded learning (if exists — cross-reference past outcomes)
+   `legion learn --recall "<topic>" --json` is the search. It owns the corpus and
+   the scoring; render what it returns.
 
-   b. For each file that exists:
-      - Search by tag match (exact tag match scores highest)
-      - Search by summary text (substring match)
-      - Search by full lesson text (substring match)
-      - Score: tag match = 3 points, summary match = 2 points, body match = 1 point
+   - `corpus` names what was searched: `lessons` and `retrospectives`. Show it.
+     A recall that answered from a narrower corpus than the caller assumed is
+     indistinguishable from one that found nothing, which is why the verb
+     reports it.
+   - `matches` are pre-ranked. Each carries `source` (`lesson` or
+     `retrospective`), `score`, `kind`, `summary` and `artifactPath`.
+   - Scoring is the verb's: for a lesson, a tag match counts 3, a summary match
+     2, a body match 1. A retrospective finding has no tags, so it scores on
+     title (2) and body (1).
 
-   c. Rank results by score, deduplicate
+   Display:
 
-   d. Display results:
-      If matches found:
-      # Learnings: "{topic}"
+   # Learnings: "{topic}"
 
-      {count} entries found:
+   {count} entries found across {corpus}:
 
-      **{ID}** ({type}) — {summary}
-      Tags: {tags}
-      > {first 2 lines of lesson text}
+   **{id}** ({source}/{kind}) — {summary}
+   > {artifactPath}
 
-      ...
+   If `matches` is empty:
+   "No learnings found for '{topic}'.
+    Try `/legion:learn --list` to see all entries, or `/legion:learn <lesson>` to record a new one."
 
-      If no matches:
-      "No learnings found for '{topic}'.
-       Try `/legion:learn --list` to see all entries, or `/legion:learn <lesson>` to record a new one."
-
-   Exit after displaying results.
+   Do not search files yourself to supplement the result. A model's reading of
+   the repository added to a scored search produces a ranking whose entries came
+   from two different rules, and nothing downstream can tell which.
 
 9. LIST MODE
-   Read all memory files and display entries grouped by type:
 
-   a. Read recorded learning — extract all entries
-   b. Read recorded learning — extract all entries
-   c. Read recorded learning — extract all entries
+   `legion learn --list --json` returns every recorded lesson grouped by kind —
+   `pattern`, `pitfall`, `preference`, and the unclassified ones. Render its
+   grouping; do not regroup.
 
-   d. Display:
    # Project Learnings
 
-   ## Patterns ({count})
+   ## {Kind} ({count})
    | ID | Summary | Tags | Date |
    |----|---------|------|------|
-   | {ID} | {summary} | {tags} | {date} |
-   ...
+   | {id} | {summary} | {tags} | {date} |
 
-   ## Pitfalls ({count})
-   | ID | Summary | Tags | Date |
-   |----|---------|------|------|
-   | {ID} | {summary} | {tags} | {date} |
-   ...
+   **Total**: {total} learnings recorded
 
-   ## Preferences ({count})
-   | ID | Summary | Tags | Date |
-   |----|---------|------|------|
-   | {ID} | {summary} | {tags} | {date} |
-   ...
-
-   **Total**: {total_count} learnings recorded
-
-   If no files exist or all are empty:
+   If every group is empty:
    "No learnings recorded yet.
     Start with `/legion:learn <lesson>` to record your first pattern, pitfall, or preference."
 
-   Exit after displaying results.
-
-10. PRUNE MODE
-    Execute the Prune Operation defined in memory-manager SKILL.md Section 7.5:
-
-    a. Check if recorded learning exists
-       - If not: Display "No outcomes to prune. OUTCOMES.md does not exist." → Exit
-
-    b. Count total records in OUTCOMES.md
-       - If count <= memory.prune_threshold (default 200) from settings.json:
-         Present via adapter.ask_user:
-         "OUTCOMES.md has {count} records (threshold: {threshold}). Prune anyway?"
-         Options:
-         - "Yes" — "Prune records older than {prune_age_days} days with importance <= 3"
-         - "No" — "Keep all records"
-         If "No": Exit
-
-    c. Run the Prune Operation from memory-manager Section 7.5
-       - This handles: candidate identification, archive file creation, record movement, verification, and reporting
-
-    d. Display the prune report from Step 8 of the Prune Operation
-
-    Exit after displaying results.
-
 IMPORTANT:
-- Learn works with or without an initialized Legion project — it only needs recorded learning
-- The memory directory is created automatically on first record if it doesn't exist
-- IDs are sequential within each type file and never reused
-- Tags are lowercase and derived from the lesson text, not invented
-- Recall mode searches across ALL memory files, not just the three learn-specific ones
+- Learn works with or without an initialized Legion project; the verb creates the index on first record
+- IDs are the recording run's ID, so they are unique and never reused
+- Tags are taken from `--tags`, not invented; the verb stores what it was given
+- Recall searches lessons and retrospective findings, and says so in `corpus`
 - All user-facing questions use adapter.ask_user (AskUserQuestion tool)
-- Memory files are human-readable markdown — no binary state
-- The command never modifies phase files, STATE.md, or ROADMAP.md
+- The command never modifies phase artifacts, the roadmap, or any change bundle
+- Prune mode is a recorded deliberate removal, and is removed from the argument
+  hint, the usage text, and mode routing along with its step. It archived
+  `OUTCOMES.md` records older than `memory.prune_threshold` into a separate
+  archive file. `memory.prune_threshold` does still exist in `settings.json` and
+  `docs/settings.schema.json` — what does not exist is `OUTCOMES.md`, any
+  archive path, or a verb that prunes anything. The lesson index is one
+  committed JSON artifact, and no verb removes entries from it, so the mode had
+  nothing to operate on. If pruning returns it is new work against `.legion`
+  artifacts, not preservation of this.
 </process>

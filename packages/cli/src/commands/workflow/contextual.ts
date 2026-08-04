@@ -42,6 +42,7 @@ import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { isChangeComplete, listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
+import { appendRetroEntry, readRetroIndex, retroIndexArtifactPath } from "../../workflow/retro-index.js";
 import { collectEscalations } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
 
@@ -660,6 +661,42 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   });
   const markdownArtifactPath = guidanceArtifactPath(paths, "retro.md");
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
+
+  // Append only what a completed retrospective produced. A blocked run's
+  // findings are the adapter's, not the retrospective's: the manual adapter
+  // emits `manual-execution-required` and a timed-out executor emits its own
+  // failure. Indexing those would have every later `plan` report an adapter
+  // failure as planning guidance, and `learn --recall` return it as
+  // institutional knowledge.
+  const retroIndexPath = retroIndexArtifactPath();
+  const indexed = executed.result.ok;
+  const nextIndex = !indexed
+    ? await readRetroIndex(context.repositoryRoot)
+    : appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
+    id: paths.runId,
+    // The run's own timestamp, not wall clock. `--created-at` makes a run
+    // deterministic and is what the run ID and workflow-run.json already use;
+    // stamping the index separately gave one run two creation times and put
+    // backfilled retrospectives in the wrong order, since `learn --recall`
+    // breaks equal scores by `createdAt`.
+    createdAt,
+    ...(scopedChangeId === undefined ? {} : { scopedChangeId }),
+    artifactPath: markdownArtifactPath,
+    summary: executed.result.summary,
+    actions: executed.result.findings.map((finding) => ({
+      id: finding.id,
+      title: finding.title,
+      body: finding.body,
+      severity: finding.severity
+    }))
+  });
+  if (indexed) {
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: retroIndexPath,
+      text: stableProtocolJson(nextIndex)
+    });
+  }
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status = executed.result.ok ? "completed" : "blocked";
   const diagnostics = executed.result.findings;
@@ -670,6 +707,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     runInput: { phase, milestone },
     outputs: {
       markdownArtifactPath,
+      ...(indexed ? { retroIndexArtifactPath: retroIndexPath } : {}),
       promptArtifactPath: executed.promptArtifactPath,
       resultArtifactPath: executed.resultArtifactPath,
       rawLogArtifactPath: executed.rawLogArtifactPath,
@@ -686,6 +724,9 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     runId: paths.runId,
     artifactPath: paths.workflowRunArtifactPath,
     markdownArtifactPath,
+    // Absent when the run was blocked, so a caller can tell "nothing was
+    // indexed" from "indexed and the count happens to be unchanged".
+    ...(indexed ? { retroIndexArtifactPath: retroIndexPath, retrospectiveCount: nextIndex.retrospectives.length } : {}),
     executor: executed.executor,
     nextAction: action,
     diagnostics

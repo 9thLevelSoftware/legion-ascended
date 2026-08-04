@@ -59,10 +59,12 @@ test("recall reports which corpus it searched", async (t) => {
   await run("learn", "something", "--json");
   const recalled = parseJsonOutput(await run("learn", "--recall", "something", "--json"));
 
-  // The command searched retrospective findings too. Those live in run-scoped
-  // retro.md artifacts nothing reads yet, so the narrower corpus is declared
-  // rather than passed off as complete.
-  assert.deepEqual(recalled.corpus, ["lessons"]);
+  // Both corpora, since the retro index gave retrospective findings a read
+  // surface. This was `["lessons"]` while those findings lived only in
+  // run-scoped retro.md artifacts nothing read. Naming the corpus keeps a
+  // future narrowing visible instead of letting recall quietly answer from
+  // less than the caller assumes.
+  assert.deepEqual(recalled.corpus, ["lessons", "retrospectives"]);
 });
 
 test("an unclassified lesson is still recorded and still counted", async (t) => {

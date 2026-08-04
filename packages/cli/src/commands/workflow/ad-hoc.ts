@@ -28,6 +28,7 @@ import {
   writeGuidanceRun
 } from "../../workflow/guidance-run.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
+import { readRetroIndex } from "../../workflow/retro-index.js";
 import { positionalText } from "./record.js";
 
 const HELP = {
@@ -450,20 +451,66 @@ function recallTerms(topic: string): readonly string[] {
   return [...new Set([normalized, ...parts])].filter((term) => term.length > 0);
 }
 
+/**
+ * Retrospective findings scored on the same rule as lessons, minus tags.
+ *
+ * A finding has a title and a body, and no tags, so only two tiers apply:
+ * title 2, body 1. Giving it a synthetic tag to reach `scoreLesson`'s 3-point
+ * tier would rank retrospectives above lessons for a reason the caller cannot
+ * see in either record.
+ */
+function scoreRetroAction(
+  action: { readonly title: string; readonly body: string },
+  terms: readonly string[]
+): number {
+  const title = action.title.toLowerCase();
+  const body = action.body.toLowerCase();
+  return terms.reduce((total, term) => {
+    let score = total;
+    if (title.includes(term)) score += 2;
+    if (body.includes(term)) score += 1;
+    return score;
+  }, 0);
+}
+
 async function runLearnRecall(context: CliContext, topic: string): Promise<CliResult> {
   const index = await readLessonIndex(context.repositoryRoot);
   const terms = recallTerms(topic);
-  const matches = index.lessons
+  const lessonMatches = index.lessons
     .map((record) => ({ record, score: scoreLesson(record, terms) }))
     .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.record.createdAt.localeCompare(right.record.createdAt))
     .map((entry) => ({
       id: entry.record.id,
+      createdAt: entry.record.createdAt,
+      source: "lesson" as const,
       score: entry.score,
       kind: entry.record.kind ?? null,
       summary: entry.record.summary ?? entry.record.lesson,
       artifactPath: entry.record.artifactPath
     }));
+
+  // Retrospective findings are now part of the corpus. They lived in run-scoped
+  // retro.md artifacts nothing read, so recall over "what have we learned"
+  // silently excluded every lesson a retrospective drew.
+  const retroIndex = await readRetroIndex(context.repositoryRoot);
+  const retroMatches = retroIndex.retrospectives.flatMap((entry) =>
+    entry.actions
+      .map((action) => ({ action, score: scoreRetroAction(action, terms) }))
+      .filter((scored) => scored.score > 0)
+      .map((scored) => ({
+        id: `${entry.id}/${scored.action.id}`,
+        createdAt: entry.createdAt,
+        source: "retrospective" as const,
+        score: scored.score,
+        kind: scored.action.severity,
+        summary: scored.action.title,
+        artifactPath: entry.artifactPath
+      }))
+  );
+
+  const matches = [...lessonMatches, ...retroMatches]
+    .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
+    .map(({ createdAt: _createdAt, ...match }) => match);
 
   const action = nextAction("legion status", "Apply the recalled learning to the next workflow action.");
   return success(
@@ -474,17 +521,17 @@ async function runLearnRecall(context: CliContext, topic: string): Promise<CliRe
       mode: "recall",
       topic,
       matches,
-      // Recorded lessons only. The command also searched retrospective findings,
-      // which in v9 live in run-scoped retro.md artifacts that nothing reads;
-      // P16-B003 owns wiring those in, and saying so here is better than a
-      // silently narrower corpus that looks complete.
-      corpus: ["lessons"],
+      // Both corpora are searched. Naming them keeps a future narrowing
+      // visible rather than making recall quietly answer from less.
+      corpus: ["lessons", "retrospectives"],
       nextAction: action,
       diagnostics: []
     },
     [
       `Recall "${topic}": ${matches.length} match${matches.length === 1 ? "" : "es"}.`,
-      ...matches.slice(0, 10).map((match) => `- [${match.score}] ${match.kind ?? "unclassified"}: ${match.summary}`),
+      ...matches
+        .slice(0, 10)
+        .map((match) => `- [${match.score}] ${match.source}/${match.kind ?? "unclassified"}: ${match.summary}`),
       renderNextAction(action)
     ].join("\n")
   );
