@@ -39555,7 +39555,7 @@ function renderTraceabilityLine(traceability) {
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir14 } from "node:fs/promises";
-import path30 from "node:path";
+import path31 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir13, stat as stat8 } from "node:fs/promises";
@@ -39625,6 +39625,71 @@ function migrationDiagnostic(message) {
     message,
     source: { path: ".legion/project/project.json" }
   };
+}
+
+// packages/cli/src/workflow/evidence-selection.ts
+function attemptFromEvidence(entry) {
+  const candidates = [entry.evidence.runId, entry.evidence.id];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const match = /-attempt-(\d+)$/u.exec(candidate);
+    if (match?.[1] !== void 0) return Number.parseInt(match[1], 10);
+  }
+  return 0;
+}
+function latestEvidencePerTask(entries) {
+  const latest = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    const taskId = entry.evidence.taskId;
+    if (taskId === void 0) continue;
+    const current = latest.get(taskId);
+    if (current === void 0 || attemptFromEvidence(entry) >= attemptFromEvidence(current)) {
+      latest.set(taskId, entry);
+    }
+  }
+  return latest;
+}
+function latestEvidenceEntries(entries) {
+  return [...latestEvidencePerTask(entries).entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, entry]) => entry);
+}
+
+// packages/cli/src/workflow/run-artifacts.ts
+import { createHash as createHash20 } from "node:crypto";
+import path30 from "node:path";
+var ENTITY_SUFFIX_MAX_LENGTH = 64;
+var DERIVED_ID_HASH_LENGTH = 12;
+function taskIdForContractId(contractId) {
+  return formatEntityId("task", contractId.slice("ctr_".length));
+}
+function runIdForTask(input) {
+  return formatEntityId("run", derivedSuffix(input.taskId.slice("tsk_".length), `-attempt-${input.attempt}`));
+}
+function evidenceIdForRun(runId) {
+  return formatEntityId("evidence", runId.slice("run_".length));
+}
+function reviewIdForChange(input) {
+  return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
+}
+function derivedSuffix(baseSuffix, tail) {
+  const full = `${baseSuffix}${tail}`;
+  if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
+  const digest = createHash20("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  const reservedLength = tail.length + digest.length + 1;
+  const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
+  if (prefixLength < 1) {
+    throw new RangeError(`Derived entity ID suffix tail is too long: ${tail}`);
+  }
+  const prefix = baseSuffix.slice(0, prefixLength).replace(/-+$/u, "") || (baseSuffix[0] ?? "x");
+  return `${prefix}-${digest}${tail}`;
+}
+function runArtifactPath(input) {
+  return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/runs/${input.runId}/${input.fileName}`);
+}
+function reviewRunArtifactPath(input) {
+  return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
+}
+function absoluteArtifactPath(repositoryRoot, artifactPath) {
+  return path30.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/workflow/state.ts
@@ -39749,8 +39814,8 @@ function hasAcceptedReview(reviews) {
 function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
-async function findLatestWorkflowChangeId(repositoryRoot) {
-  const changesRoot = path30.join(repositoryRoot, ".legion", "project", "changes");
+async function listWorkflowChanges(repositoryRoot) {
+  const changesRoot = path31.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir14(changesRoot, { withFileTypes: true });
@@ -39777,21 +39842,12 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   for (const changeId of changeIds2) {
     const bundle = await loadChangeBundle({ repositoryRoot, changeId });
     if (bundle.ok) {
-      validChanges.push({
-        changeId,
-        createdAt: bundle.bundle.change.createdAt
-      });
+      validChanges.push({ changeId, createdAt: bundle.bundle.change.createdAt });
       continue;
     }
     diagnostics.push(...bundle.diagnostics);
   }
-  validChanges.sort((left, right) => {
-    const byCreatedAt = left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0;
-    if (byCreatedAt !== 0) return byCreatedAt;
-    return left.changeId < right.changeId ? -1 : left.changeId > right.changeId ? 1 : 0;
-  });
-  const latest = validChanges.at(-1);
-  if (latest === void 0) {
+  if (validChanges.length === 0) {
     return {
       ok: false,
       diagnostics: [
@@ -39804,10 +39860,19 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
       ]
     };
   }
-  return {
-    ok: true,
-    changeId: latest.changeId
-  };
+  validChanges.sort((left, right) => {
+    const byCreatedAt = left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0;
+    if (byCreatedAt !== 0) return byCreatedAt;
+    return left.changeId < right.changeId ? -1 : left.changeId > right.changeId ? 1 : 0;
+  });
+  return { ok: true, changes: validChanges };
+}
+async function findLatestWorkflowChangeId(repositoryRoot) {
+  const listed = await listWorkflowChanges(repositoryRoot);
+  if (!listed.ok) return listed;
+  const latest = listed.changes.at(-1);
+  if (latest === void 0) return noWorkflowChange(path31.join(repositoryRoot, ".legion", "project", "changes"));
+  return { ok: true, changeId: latest.changeId };
 }
 function noWorkflowChange(changesRoot) {
   return {
@@ -39927,7 +39992,7 @@ async function resolveMapStatus(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
-import path31 from "node:path";
+import path32 from "node:path";
 
 // packages/cli/src/workflow/phase-requirement.ts
 var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
@@ -40150,8 +40215,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path31.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path31.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path32.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path32.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function withSpecAnchor(requirement) {
@@ -40469,7 +40534,7 @@ function buildOracleArtifactInputs(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile18 } from "node:fs/promises";
-import path32 from "node:path";
+import path33 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -40517,13 +40582,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path32.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path32.join(context.repositoryRoot, "ROADMAP.md")
+    path33.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path33.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path32.isAbsolute(roadmapPath) ? roadmapPath : path32.resolve(repositoryRoot, roadmapPath);
+  return path33.isAbsolute(roadmapPath) ? roadmapPath : path33.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -41007,7 +41072,7 @@ import { readFile as readFile20 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
 import { readdir as readdir15, readFile as readFile19 } from "node:fs/promises";
-import path33 from "node:path";
+import path34 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -41171,7 +41236,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path33.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path34.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir15(workflowRoot, { withFileTypes: true });
@@ -41180,7 +41245,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path33.join(workflowRoot, entry.name, "workflow-run.json") : path33.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path34.join(workflowRoot, entry.name, "workflow-run.json") : path34.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile19(absolutePath, "utf8");
@@ -41199,7 +41264,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path33.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path34.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile19(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
@@ -41215,9 +41280,9 @@ function truncate4(text, maxLength) {
 
 // packages/cli/src/workflow/executor/verification-runner.ts
 import { spawn as spawn2 } from "node:child_process";
-import { createHash as createHash20 } from "node:crypto";
+import { createHash as createHash21 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path34 from "node:path";
+import path35 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -41226,12 +41291,12 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path34.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path35.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
 function sha2562(value) {
-  return `sha256:${createHash20("sha256").update(value, "utf8").digest("hex")}`;
+  return `sha256:${createHash21("sha256").update(value, "utf8").digest("hex")}`;
 }
 function terminateProcessTree2(pid) {
   if (pid === void 0) return;
@@ -41342,9 +41407,9 @@ function createVerificationRunner(options) {
 }
 
 // packages/cli/src/workflow/executor/worker-bundles.ts
-import { createHash as createHash21 } from "node:crypto";
+import { createHash as createHash22 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path35 from "node:path";
+import path36 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -41356,11 +41421,11 @@ var WorkerBundleIntegrityError = class extends Error {
   }
 };
 function sha256Hex5(value) {
-  return createHash21("sha256").update(value, "utf8").digest("hex");
+  return createHash22("sha256").update(value, "utf8").digest("hex");
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path35.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path36.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -41387,7 +41452,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path35.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path36.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -41422,15 +41487,15 @@ function createWorkerBundleRegistry(options) {
 
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
-import { createHash as createHash23 } from "node:crypto";
+import { createHash as createHash24 } from "node:crypto";
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path38 from "node:path";
+import path39 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
-import { createHash as createHash22 } from "node:crypto";
+import { createHash as createHash23 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path36 from "node:path";
+import path37 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -41459,7 +41524,7 @@ function splitLines(value) {
 function hashFileContent(absolutePath) {
   try {
     if (statSync(absolutePath).size > MAX_HASHED_BYTES) return void 0;
-    return createHash22("sha256").update(readFileSync2(absolutePath)).digest("hex");
+    return createHash23("sha256").update(readFileSync2(absolutePath)).digest("hex");
   } catch {
     return void 0;
   }
@@ -41507,7 +41572,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path36.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path37.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -41523,7 +41588,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path36.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path37.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -41638,11 +41703,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path37 from "node:path";
+import path38 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path37.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path38.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -41655,7 +41720,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path37.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path38.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -41672,7 +41737,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path37.join(repositoryRoot, child)).size;
+        size = lstatSync(path38.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -41690,7 +41755,7 @@ function isHarnessPath(relative, harnessPaths) {
 }
 function digestOf(absolute) {
   try {
-    return createHash23("sha256").update(readFileSync3(absolute)).digest("hex");
+    return createHash24("sha256").update(readFileSync3(absolute)).digest("hex");
   } catch {
     return void 0;
   }
@@ -41720,7 +41785,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path38.join(input.repositoryRoot, entry.path);
+    const absolute = path39.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -41748,7 +41813,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path38.join(input.repositoryRoot, relative);
+    const absolute = path39.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -41831,7 +41896,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path38.join(input.repositoryRoot, relative);
+    const absolute = path39.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -41845,14 +41910,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path38.dirname(absolute), { recursive: true });
+        mkdirSync3(path39.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path38.dirname(absolute), { recursive: true });
+        mkdirSync3(path39.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -41957,45 +42022,6 @@ async function runGuardedExecution(input) {
     unrestored: containment.unrestored,
     ...inContract ? {} : { blockedReason: reasons.join(" ") }
   };
-}
-
-// packages/cli/src/workflow/run-artifacts.ts
-import { createHash as createHash24 } from "node:crypto";
-import path39 from "node:path";
-var ENTITY_SUFFIX_MAX_LENGTH = 64;
-var DERIVED_ID_HASH_LENGTH = 12;
-function taskIdForContractId(contractId) {
-  return formatEntityId("task", contractId.slice("ctr_".length));
-}
-function runIdForTask(input) {
-  return formatEntityId("run", derivedSuffix(input.taskId.slice("tsk_".length), `-attempt-${input.attempt}`));
-}
-function evidenceIdForRun(runId) {
-  return formatEntityId("evidence", runId.slice("run_".length));
-}
-function reviewIdForChange(input) {
-  return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
-}
-function derivedSuffix(baseSuffix, tail) {
-  const full = `${baseSuffix}${tail}`;
-  if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
-  const digest = createHash24("sha256").update(baseSuffix).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
-  const reservedLength = tail.length + digest.length + 1;
-  const prefixLength = ENTITY_SUFFIX_MAX_LENGTH - reservedLength;
-  if (prefixLength < 1) {
-    throw new RangeError(`Derived entity ID suffix tail is too long: ${tail}`);
-  }
-  const prefix = baseSuffix.slice(0, prefixLength).replace(/-+$/u, "") || (baseSuffix[0] ?? "x");
-  return `${prefix}-${digest}${tail}`;
-}
-function runArtifactPath(input) {
-  return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/runs/${input.runId}/${input.fileName}`);
-}
-function reviewRunArtifactPath(input) {
-  return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
-}
-function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path39.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/commands/workflow/build.ts
@@ -42803,32 +42829,6 @@ function blockedBuild(diagnostics, action, extras = {}) {
       renderNextAction(action)
     ].join("\n")
   );
-}
-
-// packages/cli/src/workflow/evidence-selection.ts
-function attemptFromEvidence(entry) {
-  const candidates = [entry.evidence.runId, entry.evidence.id];
-  for (const candidate of candidates) {
-    if (typeof candidate !== "string") continue;
-    const match = /-attempt-(\d+)$/u.exec(candidate);
-    if (match?.[1] !== void 0) return Number.parseInt(match[1], 10);
-  }
-  return 0;
-}
-function latestEvidencePerTask(entries) {
-  const latest = /* @__PURE__ */ new Map();
-  for (const entry of entries) {
-    const taskId = entry.evidence.taskId;
-    if (taskId === void 0) continue;
-    const current = latest.get(taskId);
-    if (current === void 0 || attemptFromEvidence(entry) >= attemptFromEvidence(current)) {
-      latest.set(taskId, entry);
-    }
-  }
-  return latest;
-}
-function latestEvidenceEntries(entries) {
-  return [...latestEvidencePerTask(entries).entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, entry]) => entry);
 }
 
 // packages/cli/src/commands/workflow/review.ts
