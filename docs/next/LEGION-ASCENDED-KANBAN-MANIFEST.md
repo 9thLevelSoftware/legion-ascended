@@ -169,7 +169,7 @@ When implementing, compare against original Legion (v8) at:
 | P13-T01 | t_12f977b4 | legionworker | **DONE** | P12-T03 |
 | P13-T02 | t_6712c51d | legionworker | **DONE** | T01 |
 | P13-T03 | t_21e41997 | legionworker | **DONE** | T02 |
-| P13-T04 | t_50860be4 | **otrlead** | todo | T03 |
+| P13-T04 | t_50860be4 | **dasbl** | **DONE** | T03 |
 
 ## Summary
 - **Total tracked tasks:** 47 (P03-T01 plus 46 board-created tasks)

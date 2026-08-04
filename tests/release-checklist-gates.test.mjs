@@ -40,23 +40,35 @@ test("the migration policy check accepts the surface the CLI actually routes", (
   assert.ok(!codes.includes("migration_policy_cli_surface_drift"), "the help text still names it too");
 });
 
-test("the checklist cannot report ready while GA-critical work is open", () => {
+test("the checklist still blocks on the one thing that is genuinely open", () => {
   const report = runChecklist();
   const codes = report.findings.map((finding) => finding.code);
 
-  // P13-T04 is the GA sign-off, and the independent review is unsigned. Both
-  // are the true state of this repository; if either is ever resolved, this
-  // assertion should be updated rather than deleted.
+  // This asserted `ga_task_open` and `phase_13_review_unsigned` while both were
+  // the true state of this repository, with a note saying to update it when
+  // either was resolved rather than delete it. Both are now resolved: P13-T04
+  // is DONE and the phase-13 review is signed. What remains is the package
+  // version, which is a release decision rather than work.
+  //
+  // The mechanism these used to cover is exercised on fixtures in
+  // tests/release-checklist.test.mjs, where it can fail on demand. Asserting
+  // the mechanism against the live repository only worked while the repository
+  // happened to be in the failing state.
   assert.equal(report.ok, false);
-  assert.ok(codes.includes("ga_task_open"), "an open GA task must block");
-  assert.ok(codes.includes("phase_13_review_unsigned"), "an unsigned review must block");
+  assert.deepEqual(codes, ["package_version_mismatch"]);
 });
 
-test("a prepared-but-unsigned review is distinguished from a missing one", () => {
+test("the phase-13 review is signed, and its verdict is read from its own section", () => {
   const report = runChecklist();
   const codes = report.findings.map((finding) => finding.code);
-  // Writing the document must not be mistakable for signing it. Preparing the
-  // artifact is mechanical; the verdict is a human's.
+
+  // Neither missing nor unsigned. Writing the document must not be mistakable
+  // for signing it, and the verdict is read from the `## Status` heading rather
+  // than grepped for a keyword anywhere in the file — a FAIL verdict elsewhere
+  // in the prose must not read as a pass, and explanatory text mentioning
+  // PENDING must not read as unsigned.
   assert.ok(!codes.includes("phase_13_review_missing"));
-  assert.ok(codes.includes("phase_13_review_unsigned"));
+  assert.ok(!codes.includes("phase_13_review_unsigned"));
+  assert.ok(!codes.includes("phase_13_review_failed"));
+  assert.ok(!codes.includes("phase_13_review_verdict_unreadable"));
 });
