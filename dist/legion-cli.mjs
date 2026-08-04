@@ -19334,7 +19334,7 @@ async function runDeterministicVerification(input) {
     }))
   ];
   for (const oracle of input.options?.oracles ?? []) {
-    if (oracle.type !== "executable")
+    if (oracle.type === "inspectable")
       continue;
     if (oracle.execution.mode !== "command") {
       issues.push({
@@ -42649,13 +42649,19 @@ async function runContractVerification(input) {
     return { passed: false, blockedReason: "No worker context was available for verification." };
   }
   const oracles = await oraclesForTask({ repositoryRoot: input.repositoryRoot, task: input.task });
+  if (oracles.unreadable.length > 0) {
+    return {
+      passed: false,
+      blockedReason: `The task names ${oracles.unreadable.length} oracle(s) that could not be read, so their criteria were not evaluated: ${oracles.unreadable.map((entry) => `${entry.oracleId} (${entry.reason})`).join("; ")}`
+    };
+  }
   const { report, issues, oracleAttribution } = await runDeterministicVerification({
     taskContract: input.task,
     workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
       now: currentUtcTimestamp,
-      ...oracles.length === 0 ? {} : { oracles }
+      ...oracles.loaded.length === 0 ? {} : { oracles: oracles.loaded }
     }
   });
   return {
@@ -42668,15 +42674,23 @@ async function runContractVerification(input) {
 }
 async function oraclesForTask(input) {
   const loaded = [];
+  const unreadable = [];
   for (const oracleId of input.task.oracleRefs ?? []) {
     const read = await readOracleArtifact({
       repositoryRoot: input.repositoryRoot,
       changeId: input.task.changeId,
       oracleId
     });
-    if (read.ok) loaded.push(read.document);
+    if (read.ok) {
+      loaded.push(read.document);
+      continue;
+    }
+    unreadable.push({
+      oracleId,
+      reason: read.diagnostics.map((diagnostic3) => diagnostic3.message).join("; ") || "unreadable"
+    });
   }
-  return loaded;
+  return { loaded, unreadable };
 }
 function describeFailingOracles(failingIndices, attribution) {
   const named = attribution.filter((entry) => failingIndices.includes(entry.index)).map((entry) => entry.oracleId);

@@ -905,13 +905,26 @@ async function runContractVerification(input: {
   // that was never planned in, was never run while the task reported verified.
   const oracles = await oraclesForTask({ repositoryRoot: input.repositoryRoot, task: input.task });
 
+  // An oracle the task names and the CLI cannot read is a criterion that will
+  // not be evaluated, so the task cannot pass. Loading a shortened list instead
+  // would let the remaining commands succeed and record a verified task whose
+  // acceptance criterion nothing checked.
+  if (oracles.unreadable.length > 0) {
+    return {
+      passed: false,
+      blockedReason: `The task names ${oracles.unreadable.length} oracle(s) that could not be read, so their criteria were not evaluated: ${oracles.unreadable
+        .map((entry) => `${entry.oracleId} (${entry.reason})`)
+        .join("; ")}`
+    };
+  }
+
   const { report, issues, oracleAttribution } = await runDeterministicVerification({
     taskContract: input.task,
     workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
       now: currentUtcTimestamp,
-      ...(oracles.length === 0 ? {} : { oracles })
+      ...(oracles.loaded.length === 0 ? {} : { oracles: oracles.loaded })
     }
   });
 
@@ -929,26 +942,41 @@ async function runContractVerification(input: {
 }
 
 /**
- * The executable oracles a task names, in `oracleRefs` order.
+ * The oracles a task names, in `oracleRefs` order, and the ones that would not load.
  *
- * An unreadable oracle is not skipped. An oracle decides an acceptance
- * criterion, so a missing one has to surface as a refusal rather than as one
- * fewer command silently executed.
+ * An unreadable oracle is returned rather than dropped. An earlier revision of
+ * this function carried that sentence as a docblock and then wrote
+ * `if (read.ok) loaded.push(...)`, silently shortening the list — which is the
+ * failure the whole oracle-execution change exists to prevent, committed inside
+ * the change that prevents it. A missing or malformed oracle must reach the
+ * caller as a refusal, because a criterion nobody evaluated is not a criterion
+ * that held.
  */
 async function oraclesForTask(input: {
   readonly repositoryRoot: string;
   readonly task: TaskContract;
-}): Promise<readonly Oracle[]> {
+}): Promise<{
+  readonly loaded: readonly Oracle[];
+  readonly unreadable: readonly { readonly oracleId: string; readonly reason: string }[];
+}> {
   const loaded: Oracle[] = [];
+  const unreadable: { readonly oracleId: string; readonly reason: string }[] = [];
   for (const oracleId of input.task.oracleRefs ?? []) {
     const read = await readOracleArtifact({
       repositoryRoot: input.repositoryRoot,
       changeId: input.task.changeId,
       oracleId
     });
-    if (read.ok) loaded.push(read.document);
+    if (read.ok) {
+      loaded.push(read.document);
+      continue;
+    }
+    unreadable.push({
+      oracleId,
+      reason: read.diagnostics.map((diagnostic) => diagnostic.message).join("; ") || "unreadable"
+    });
   }
-  return loaded;
+  return { loaded, unreadable };
 }
 
 /** Name the oracles behind failing command indices, when any are. */

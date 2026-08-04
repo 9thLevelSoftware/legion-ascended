@@ -953,3 +953,29 @@ test("a requirement decided entirely by judgement plans one task", async (t) => 
 
   assert.equal(taskgraph.tasks.length, 1, JSON.stringify(taskgraph.tasks.map((task) => task.id)));
 });
+
+test("a task naming an unreadable oracle is blocked, not verified without it", async (t) => {
+  const { root, run, taskgraph } = await plannedProject(t);
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "planned"]);
+
+  // Corrupt the oracle THIS task names, not merely the first one written — the
+  // point is the reference the contract carries.
+  const document = typeof taskgraph === "string" ? JSON.parse(taskgraph).taskgraph : taskgraph.taskgraph ?? taskgraph;
+  const referenced = document.tasks[0].oracleRefs[0];
+  const changeId = document.changeId;
+  await writeFile(
+    path.join(root, ".legion", "project", "changes", changeId, "oracle", `${referenced}.yaml`),
+    "{ not json",
+    "utf8"
+  );
+
+  // An earlier revision loaded a shortened list, so the remaining contract
+  // commands ran and the build recorded a verified task whose acceptance
+  // criterion nothing had evaluated — the silent pass executing oracles exists
+  // to prevent.
+  const built = await run("build", "--executor", "fake", "--allow-dirty", "--json");
+  const rendered = JSON.stringify(parseJsonOutput(built));
+  assert.match(rendered, /could not be read/, `expected an unreadable-oracle refusal: ${rendered.slice(0, 500)}`);
+  assert.match(rendered, new RegExp(referenced), "the refusal must name the oracle");
+});

@@ -114,3 +114,38 @@ test("contract command indices are unchanged by the presence of oracles", async 
     assert.equal(withOracles.report.commands[index].command, command.command);
   }
 });
+
+test("a hybrid oracle carrying a command is executed like an executable one", async () => {
+  const contract = makeFixtureContract();
+  const oracleIndex = contract.verification.length;
+  const outcome = await runDeterministicVerification({
+    taskContract: contract,
+    workerContext: await makeFixtureWorkerContext({ contract }),
+    options: {
+      runner: makePassingRunner({ perCommand: { [oracleIndex]: { exitCode: 1 } } }),
+      // The protocol permits `hybrid` with `mode: "command"`. Gating on
+      // `type === "executable"` skipped every one of them, producing neither a
+      // result nor an issue — the silent pass this function exists to prevent.
+      oracles: [executableOracle({ type: "hybrid" })]
+    }
+  });
+
+  assert.equal(outcome.report.passed, false, "a failing hybrid command must block the task");
+  assert.deepEqual([...outcome.report.failingIndices], [oracleIndex]);
+  assert.equal(outcome.oracleAttribution[0]?.oracleId, "orc_criterion-one");
+});
+
+test("a hybrid oracle with inspection execution is reported, not silently skipped", async () => {
+  const contract = makeFixtureContract();
+  const outcome = await runDeterministicVerification({
+    taskContract: contract,
+    workerContext: await makeFixtureWorkerContext({ contract }),
+    options: {
+      runner: makePassingRunner(),
+      oracles: [executableOracle({ type: "hybrid", execution: { mode: "manual-inspection", instructions: "look at it" } })]
+    }
+  });
+
+  const issue = outcome.issues.find((entry) => entry.code === "oracle_not_evaluable");
+  assert.ok(issue, `expected an oracle_not_evaluable issue, got ${JSON.stringify(outcome.issues)}`);
+});

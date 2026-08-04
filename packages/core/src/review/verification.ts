@@ -233,7 +233,11 @@ export async function runDeterministicVerification(input: {
   ];
 
   for (const oracle of input.options?.oracles ?? []) {
-    if (oracle.type !== "executable") continue;
+    // Narrowed on execution mode, not on `type`. A `hybrid` oracle may carry a
+    // command, and gating on `type === "executable"` skipped every one of them —
+    // producing neither a result nor an issue, which is the silent pass this
+    // whole function exists to make impossible.
+    if (oracle.type === "inspectable") continue;
     if (oracle.execution.mode !== "command") {
       // `runtime-driver` has no emitter and no executor. Saying so is the point:
       // silently skipping it would let an oracle that decides a criterion count
