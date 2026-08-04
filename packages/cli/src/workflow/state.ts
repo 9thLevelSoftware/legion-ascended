@@ -6,6 +6,8 @@ import { listCurrentSpecs, listReviewDecisionsForChange, loadChangeBundle, readE
 
 import type { CliContext } from "../runtime.js";
 import { loadWorkflowProject, validateWorkflowProject } from "./context.js";
+import { latestEvidenceEntries } from "./evidence-selection.js";
+import { taskIdForContractId } from "./run-artifacts.js";
 import { nextAction, type NextAction } from "./render.js";
 
 export type WorkflowStage =
@@ -176,7 +178,29 @@ function hasAcceptedEvidence(entries: readonly { readonly acceptance: { readonly
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 
-export async function findLatestWorkflowChangeId(repositoryRoot: string): Promise<LatestWorkflowChangeResult> {
+export interface WorkflowChangeSummary {
+  readonly changeId: string;
+  readonly createdAt: string;
+}
+
+export type ListWorkflowChangesResult =
+  | { readonly ok: true; readonly changes: readonly WorkflowChangeSummary[] }
+  | LatestWorkflowChangeFailure;
+
+/**
+ * Every change that loads as a valid typed bundle, oldest first.
+ *
+ * This walk already existed inside `findLatestWorkflowChangeId`, which built the
+ * whole list and then returned only its last element. Anything else wanting to
+ * reason across changes — a retrospective scoped to a phase, a milestone's
+ * progress — had nowhere to get one, and a first attempt at retro evidence
+ * counted raw directories instead, which counts `LEGION-NEXT/` (a docs folder
+ * with no change.yaml) as a change.
+ *
+ * Validity is load-bearing: a directory is not a change, and a bundle that does
+ * not parse is reported rather than counted.
+ */
+export async function listWorkflowChanges(repositoryRoot: string): Promise<ListWorkflowChangesResult> {
   const changesRoot = path.join(repositoryRoot, ".legion", "project", "changes");
   let entries: Dirent[];
   try {
@@ -198,34 +222,21 @@ export async function findLatestWorkflowChangeId(repositoryRoot: string): Promis
     };
   }
 
-  const changeIds = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
+  const changeIds = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   if (changeIds.length === 0) return noWorkflowChange(changesRoot);
 
-  const validChanges: { readonly changeId: string; readonly createdAt: string }[] = [];
+  const validChanges: WorkflowChangeSummary[] = [];
   const diagnostics: LatestWorkflowChangeDiagnostic[] = [];
   for (const changeId of changeIds) {
     const bundle = await loadChangeBundle({ repositoryRoot, changeId });
     if (bundle.ok) {
-      validChanges.push({
-        changeId,
-        createdAt: bundle.bundle.change.createdAt
-      });
+      validChanges.push({ changeId, createdAt: bundle.bundle.change.createdAt });
       continue;
     }
-
     diagnostics.push(...bundle.diagnostics);
   }
 
-  validChanges.sort((left, right) => {
-    const byCreatedAt = left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0;
-    if (byCreatedAt !== 0) return byCreatedAt;
-    return left.changeId < right.changeId ? -1 : left.changeId > right.changeId ? 1 : 0;
-  });
-
-  const latest = validChanges.at(-1);
-  if (latest === undefined) {
+  if (validChanges.length === 0) {
     return {
       ok: false,
       diagnostics: [
@@ -239,10 +250,64 @@ export async function findLatestWorkflowChangeId(repositoryRoot: string): Promis
     };
   }
 
-  return {
-    ok: true,
-    changeId: latest.changeId
-  };
+  validChanges.sort((left, right) => {
+    const byCreatedAt = left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0;
+    if (byCreatedAt !== 0) return byCreatedAt;
+    return left.changeId < right.changeId ? -1 : left.changeId > right.changeId ? 1 : 0;
+  });
+
+  return { ok: true, changes: validChanges };
+}
+
+export async function findLatestWorkflowChangeId(repositoryRoot: string): Promise<LatestWorkflowChangeResult> {
+  const listed = await listWorkflowChanges(repositoryRoot);
+  if (!listed.ok) return listed;
+  const latest = listed.changes.at(-1);
+  if (latest === undefined) return noWorkflowChange(path.join(repositoryRoot, ".legion", "project", "changes"));
+  return { ok: true, changeId: latest.changeId };
+}
+
+/**
+ * Whether one named change is finished, rather than whether the latest one is.
+ *
+ * `resolveWorkflowState` answers only for the newest change, so nothing could
+ * ask "is change X complete" — which a scoped retrospective and a milestone gate
+ * both need. The rule is the one `ship_ready` already uses, stated per change:
+ * the taskgraph has at least one task, every task's latest evidence is accepted,
+ * and an accepted review exists.
+ *
+ * Note what this deliberately does not consult: `change.acceptance`. Nothing
+ * promotes a change out of `draft`, so keying completeness to it would report
+ * every change incomplete forever.
+ */
+export async function isChangeComplete(input: {
+  readonly repositoryRoot: string;
+  readonly changeId: string;
+}): Promise<{ readonly complete: boolean; readonly reason: string }> {
+  const taskgraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (!taskgraph.ok) return { complete: false, reason: "The taskgraph could not be read." };
+  if (taskgraph.document.tasks.length === 0) return { complete: false, reason: "The taskgraph has no tasks." };
+
+  const evidence = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (!evidence.ok) return { complete: false, reason: "No evidence has been collected." };
+
+  const latest = latestEvidenceEntries(evidence.document.entries);
+  const taskIds = new Set(taskgraph.document.tasks.map((task) => taskIdForContractId(task.id)));
+  for (const taskId of taskIds) {
+    const entry = latest.find((candidate) => candidate.evidence.taskId === taskId);
+    if (entry === undefined) return { complete: false, reason: `Task ${taskId} has no evidence.` };
+    if (entry.acceptance.status !== "accepted") {
+      return { complete: false, reason: `Task ${taskId} evidence is ${entry.acceptance.status}, not accepted.` };
+    }
+  }
+
+  const reviews = await listReviewDecisionsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (!reviews.ok) return { complete: false, reason: "Review decisions could not be read." };
+  if (!reviews.reviews.some((review) => review.document.status === "accepted")) {
+    return { complete: false, reason: "No accepted review covers this change." };
+  }
+
+  return { complete: true, reason: "Every task's evidence is accepted and an accepted review covers the change." };
 }
 
 function noWorkflowChange(changesRoot: string): LatestWorkflowChangeFailure {

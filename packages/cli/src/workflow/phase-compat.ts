@@ -102,3 +102,36 @@ async function readOptionalRoadmap(sourcePath: string): Promise<string | undefin
 function isEnoent(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }
+
+/**
+ * Every phase the roadmap declares, in order.
+ *
+ * `parseRoadmapPhase` answers for one phase at a time, and nothing enumerated —
+ * so a milestone could name a range of phases and no code could turn that into
+ * a list. Callers walk upward until a phase is missing rather than parsing the
+ * progress table, because that table is written once by `legion start
+ * --finalize` and never updated, so every row reads `Pending` forever.
+ */
+export function enumerateRoadmapPhases(text: string, sourcePath: string): readonly PhaseSource[] {
+  const phases: PhaseSource[] = [];
+  for (let number = 1; number <= 512; number += 1) {
+    const phase = parseRoadmapPhase(text, number, sourcePath);
+    if (phase === undefined) break;
+    phases.push(phase);
+  }
+  return phases;
+}
+
+/**
+ * The change ID `legion plan <N>` would have produced for a phase.
+ *
+ * There is no phase field on a change: the link is the derived ID,
+ * `chg_phase-<N>-<name-slug>` (see `phaseIdSuffix` in change-input.ts). Deriving
+ * it from the current roadmap breaks if the heading text was edited after
+ * planning, so callers should treat a miss here as "look for a
+ * `chg_phase-<N>-` prefix instead" rather than as "this phase was never
+ * planned".
+ */
+export function phaseChangeIdPrefix(phaseNumber: number): string {
+  return `chg_phase-${phaseNumber}-`;
+}
