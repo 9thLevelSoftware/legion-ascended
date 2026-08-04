@@ -179,6 +179,65 @@ function auditReleaseRecord({ gaDir }) {
   return findings;
 }
 
+/**
+ * GA-critical work that is still open in the manifest.
+ *
+ * The checklist could report `ready` while the kanban listed GA tasks as `todo`,
+ * because nothing connected the two. P13-T04 is the GA sign-off task itself, so
+ * a release declared ready over an open P13-T04 is a release declared ready by
+ * the thing it was supposed to be waiting for.
+ *
+ * The independent review is checked by existence, not content: it is a human's
+ * verdict, and the checklist's job is to notice it is missing rather than to
+ * judge what it says.
+ */
+function auditOpenGaWork({ repositoryRoot, releaseVersion }) {
+  const findings = [];
+  const manifestPath = path.join(repositoryRoot, "docs", "next", "LEGION-ASCENDED-KANBAN-MANIFEST.md");
+  if (existsSync(manifestPath)) {
+    for (const line of readFileSync(manifestPath, "utf8").split("\n")) {
+      const match = /^\|\s*(P1[36]-T\d+)\s*\|[^|]*\|[^|]*\|\s*([^|]*?)\s*\|/.exec(line);
+      if (match === null) continue;
+      const [, task, status] = match;
+      if (!/DONE/i.test(status)) {
+        findings.push({
+          code: "ga_task_open",
+          message: `${task} is ${status.trim() || "unset"} in LEGION-ASCENDED-KANBAN-MANIFEST.md; a GA-critical task is not complete.`
+        });
+      }
+    }
+  }
+  // The published version against the release identity. Not corrected
+  // automatically: bumping a package version is a release decision, and a
+  // checklist that silently rewrote it would remove the very disagreement it
+  // exists to surface. `9.0.0-alpha.0` is arguably right while GA is unsigned;
+  // what is wrong is that nothing said the two disagreed.
+  const packagePath = path.join(repositoryRoot, "package.json");
+  if (existsSync(packagePath)) {
+    const version = JSON.parse(readFileSync(packagePath, "utf8")).version;
+    if (version !== releaseVersion) {
+      findings.push({
+        code: "package_version_mismatch",
+        message: `package.json is ${version} but the release is ${releaseVersion}. Reconcile before GA, or state why the prerelease tag stands.`
+      });
+    }
+  }
+
+  const reviewPath = path.join(repositoryRoot, "docs", "next", "reviews", "PHASE-13-INDEPENDENT-REVIEW.md");
+  if (!existsSync(reviewPath)) {
+    findings.push({
+      code: "phase_13_review_missing",
+      message: "docs/next/reviews/PHASE-13-INDEPENDENT-REVIEW.md does not exist, and the GA documents cite it."
+    });
+  } else if (/\bPENDING\b/.test(readFileSync(reviewPath, "utf8"))) {
+    findings.push({
+      code: "phase_13_review_unsigned",
+      message: "PHASE-13-INDEPENDENT-REVIEW.md is prepared but its verdict is still PENDING; it needs a reviewer's sign-off."
+    });
+  }
+  return findings;
+}
+
 function auditMigrationPolicy({ gaDir }) {
   const findings = [];
   const policyPath = path.join(gaDir, "MIGRATION-POLICY.md");
@@ -190,10 +249,26 @@ function auditMigrationPolicy({ gaDir }) {
     return findings;
   }
   const text = readFileSync(policyPath, "utf8");
-  if (!text.includes("legion next migrate")) {
+  // The canonical spelling is the one the CLI presents. `legion dev migrate` is
+  // what its own help text prints, what ADR-009 records, and what
+  // docs/next/cli/README.md documents; `legion next migrate` is the P12
+  // compatibility alias. This check demanded the alias, so the policy — correct
+  // on all six of its references — failed the release checklist, and the
+  // checklist had not been run recently enough for anyone to notice.
+  if (!text.includes("legion dev migrate")) {
     findings.push({
       code: "migration_policy_missing_cli_reference",
-      message: `MIGRATION-POLICY.md does not reference the canonical \`legion next migrate\` CLI surface.`
+      message: `MIGRATION-POLICY.md does not reference the canonical \`legion dev migrate\` CLI surface.`
+    });
+  }
+  // A doc naming a surface the CLI does not route is the failure this check
+  // exists to catch, and a hardcoded string alone cannot see it. Reading the
+  // router's own help keeps the two from drifting apart again.
+  const helpPath = path.join(process.cwd(), "packages", "cli", "src", "commands", "migrate", "index.ts");
+  if (existsSync(helpPath) && !readFileSync(helpPath, "utf8").includes("legion dev migrate")) {
+    findings.push({
+      code: "migration_policy_cli_surface_drift",
+      message: "MIGRATION-POLICY.md names `legion dev migrate`, but the migrate command's help text no longer does."
     });
   }
   return findings;
@@ -395,6 +470,7 @@ async function audit({ releaseVersion, repositoryRoot, validateNextLog }) {
   const threatModel = await auditThreatModelVerdict({ evidenceRoot });
   const abComparison = await auditAbComparison({ evidenceRoot });
   const validateNext = await auditValidateNextLog({ validateNextLog });
+  const openWork = auditOpenGaWork({ repositoryRoot, releaseVersion });
 
   const findings = [
     ...changelog,
@@ -406,7 +482,8 @@ async function audit({ releaseVersion, repositoryRoot, validateNextLog }) {
     ...ledger,
     ...threatModel,
     ...abComparison,
-    ...validateNext
+    ...validateNext,
+    ...openWork
   ];
 
   const ok = findings.length === 0;
@@ -426,7 +503,8 @@ async function audit({ releaseVersion, repositoryRoot, validateNextLog }) {
       ledger: summarise(ledger, "ledger"),
       threat_model_verdict: summarise(threatModel, "threat_model_verdict"),
       ab_comparison: summarise(abComparison, "ab_comparison"),
-      validate_next_log: summarise(validateNext, "validate_next_log")
+      validate_next_log: summarise(validateNext, "validate_next_log"),
+      open_ga_work: summarise(openWork, "open_ga_work")
     }
   };
 }

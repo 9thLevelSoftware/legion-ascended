@@ -65,8 +65,12 @@ function writeFileSync2(p, content) {
 
 const REQUIRED_GA_DOCS = [
   ["RELEASE-RECORD.md", "# Release Record\n\nSee MIGRATION-POLICY.md, ROLLBACK-POLICY.md, V8-HANDOFF.md, and STABLE-CHANNEL-APPROVAL.md.\n"],
-  ["MIGRATION-POLICY.md", "# Migration Policy\n\nUse `legion next migrate --from-codex-legion|--from-planning --verify|--dry-run|--apply|--rollback`.\n"],
-  ["ROLLBACK-POLICY.md", "# Rollback Policy\n\nRestoration consumes the backup-manifest.json produced by `legion next migrate --apply`.\n"],
+  // `legion dev migrate` is the surface the CLI presents — its own help text,
+  // ADR-009 and docs/next/cli/README.md all use it. `legion next migrate` is
+  // the P12 compatibility alias, which the checklist used to demand: the real
+  // policy failed while this fixture passed.
+  ["MIGRATION-POLICY.md", "# Migration Policy\n\nUse `legion dev migrate --from-codex-legion|--from-planning --verify|--dry-run|--apply|--rollback`.\n"],
+  ["ROLLBACK-POLICY.md", "# Rollback Policy\n\nRestoration consumes the backup-manifest.json produced by `legion dev migrate --apply`.\n"],
   ["V8-HANDOFF.md", "# V8 Handoff\n\nv8 maintenance happens on the v8-maintenance branch. v8 line stays frozen for defects, security fixes, and packaging.\n"],
   ["STABLE-CHANNEL-APPROVAL.md", "# Stable Channel Approval\n\nDecision owner: dasbl. The decision-owner sign-off block gates the promotion.\n"]
 ];
@@ -85,6 +89,20 @@ function writeGaWorkspace(workspace, overrides = {}) {
   const evidenceRoot = path.join(repoRoot, "docs", "next", "evidence");
 
   writeFileSync2(changelogPath, `${overrides.changelog ?? ""}\n${CHANGELOG_GA_ENTRY}`);
+  // A well-formed GA workspace now also has a signed phase-13 review, a
+  // manifest with no open GA task, and a package version matching the release.
+  // The checklist could not see any of the three, so a workspace could be
+  // "well-formed" while the GA sign-off it was gating on was still open.
+  writeFileSync2(
+    path.join(repoRoot, "docs", "next", "reviews", "PHASE-13-INDEPENDENT-REVIEW.md"),
+    overrides.phase13Review ?? "# Phase 13 Independent Review\n\n## Status\n\nPASS\n"
+  );
+  writeFileSync2(
+    path.join(repoRoot, "docs", "next", "LEGION-ASCENDED-KANBAN-MANIFEST.md"),
+    overrides.manifest ??
+      "| Task | ID | Assignee | Status | Dependencies |\n| --- | --- | --- | --- | --- |\n| P13-T04 | t_1 | otrlead | **DONE** | T03 |\n"
+  );
+  writeFileSync2(path.join(repoRoot, "package.json"), JSON.stringify({ name: "legion", version: "9.0.0" }));
   for (const [name, body] of overrides.gaDocs ?? REQUIRED_GA_DOCS) {
     writeFileSync2(path.join(gaDir, name), body);
   }
@@ -118,8 +136,8 @@ test("P13-T03 release-checklist passes a well-formed GA evidence workspace", asy
   await withWorkspace(async (workspace) => {
     const repoRoot = writeGaWorkspace(workspace);
     const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
-    assert.equal(result.status, 0, `unexpected stderr: ${result.stderr}`);
     const payload = JSON.parse(result.stdout.trim());
+    assert.equal(result.status, 0, `blocked by: ${JSON.stringify(payload.findings)}`);
     assert.equal(payload.ok, true);
     assert.equal(payload.status, "ready");
     assert.equal(payload.release_version, "9.0.0");
