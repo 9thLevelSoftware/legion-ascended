@@ -9,7 +9,10 @@
 //   * fails closed when RELEASE-RECORD.md is missing one of the
 //     four companion-document references
 //   * fails closed when MIGRATION-POLICY.md is missing or does not
-//     reference `legion next migrate`
+//     reference `legion dev migrate` — the surface the CLI presents. The
+//     verifier used to demand `legion next migrate`, the P12 compatibility
+//     alias, and this fixture used the alias too, so the fixture passed while
+//     the real policy failed.
 //   * fails closed when ROLLBACK-POLICY.md is missing or does not
 //     reference the backup-manifest contract
 //   * fails closed when V8-HANDOFF.md is missing or does not
@@ -23,6 +26,9 @@
 //   * fails closed when P13-T01 ab-comparison.json is missing
 //   * fails closed when --validate-next-log does not contain a PASS
 //     line
+//   * fails closed when a GA-critical task is open in the kanban manifest,
+//     when the phase-13 independent review is missing or unsigned, or when
+//     package.json disagrees with the release version
 //
 // The verifier is the operator-facing safety net for the GA cut-over;
 // every fail-closed path is pinned here so the CLI's `--checklist`
