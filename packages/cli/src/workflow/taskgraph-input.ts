@@ -90,7 +90,11 @@ export function phaseVerification(
     command: criterion.proof.command,
     args: [...criterion.proof.args],
     expectedExitCode: criterion.proof.expectedExitCode,
-    timeoutMs: criterion.proof.timeoutMs ?? 600_000
+    // Clamped to the same ceiling `oracle-input.ts` applies. Without it, one
+    // criterion could produce an oracle and a task contract that disagree about
+    // the timeout for the identical command — invisible only because intake
+    // never sets timeoutMs, and observable the moment both are executed.
+    timeoutMs: Math.min(criterion.proof.timeoutMs ?? 600_000, MAX_VERIFICATION_TIMEOUT_MS)
   }));
 
   const project =
@@ -142,6 +146,9 @@ interface TaskUnit {
 
 /** `slugSuffixSchema` accepts at most 64 characters. */
 const MAX_ID_SUFFIX = 64;
+
+/** The protocol's ceiling for an oracle command timeout, applied here too. */
+const MAX_VERIFICATION_TIMEOUT_MS = 3_600_000;
 
 function contractIdWithRoom(suffix: string, tail: string): ContractId {
   const base =

@@ -6,6 +6,7 @@ import {
   artifactReferenceForContent,
   hashContent,
   readEvidenceIndex,
+  readOracleArtifact,
   readTaskGraph,
   stableProtocolJson,
   listTaskRunsForChange,
@@ -31,6 +32,7 @@ import {
   type EvidenceCommandResult,
   type EvidenceItem,
   type ModelManifest,
+  type Oracle,
   type TaskContract,
   type TaskRun,
   type UtcTimestamp
@@ -897,12 +899,19 @@ async function runContractVerification(input: {
     return { passed: false, blockedReason: "No worker context was available for verification." };
   }
 
-  const { report, issues } = await runDeterministicVerification({
+  // The task's oracles, loaded so their commands actually run. Until this, an
+  // oracle's command executed only when the planner happened to copy the same
+  // string into `task.verification` — so an oracle whose command drifted, or
+  // that was never planned in, was never run while the task reported verified.
+  const oracles = await oraclesForTask({ repositoryRoot: input.repositoryRoot, task: input.task });
+
+  const { report, issues, oracleAttribution } = await runDeterministicVerification({
     taskContract: input.task,
     workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
-      now: currentUtcTimestamp
+      now: currentUtcTimestamp,
+      ...(oracles.length === 0 ? {} : { oracles })
     }
   });
 
@@ -912,11 +921,45 @@ async function runContractVerification(input: {
     ...(report.passed
       ? {}
       : {
-          blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s). ${issues
+          blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s).${describeFailingOracles(report.failingIndices, oracleAttribution)} ${issues
             .map((issue) => issue.message)
             .join(" ")}`.trim()
         })
   };
+}
+
+/**
+ * The executable oracles a task names, in `oracleRefs` order.
+ *
+ * An unreadable oracle is not skipped. An oracle decides an acceptance
+ * criterion, so a missing one has to surface as a refusal rather than as one
+ * fewer command silently executed.
+ */
+async function oraclesForTask(input: {
+  readonly repositoryRoot: string;
+  readonly task: TaskContract;
+}): Promise<readonly Oracle[]> {
+  const loaded: Oracle[] = [];
+  for (const oracleId of input.task.oracleRefs ?? []) {
+    const read = await readOracleArtifact({
+      repositoryRoot: input.repositoryRoot,
+      changeId: input.task.changeId,
+      oracleId
+    });
+    if (read.ok) loaded.push(read.document);
+  }
+  return loaded;
+}
+
+/** Name the oracles behind failing command indices, when any are. */
+function describeFailingOracles(
+  failingIndices: readonly number[],
+  attribution: readonly { readonly index: number; readonly oracleId: string }[]
+): string {
+  const named = attribution
+    .filter((entry) => failingIndices.includes(entry.index))
+    .map((entry) => entry.oracleId);
+  return named.length === 0 ? "" : ` Failing oracle(s): ${named.join(", ")}.`;
 }
 
 function modelManifestForExecutor(executor: ExecutionAdapterKind): ModelManifest {

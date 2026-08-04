@@ -19311,6 +19311,7 @@ async function runDeterministicVerification(input) {
     });
     return {
       report: report2,
+      oracleAttribution: [],
       issues: [
         {
           code: "verification_runner_unavailable",
@@ -19322,7 +19323,37 @@ async function runDeterministicVerification(input) {
   }
   const results = [];
   const issues = [];
-  for (const [index, verification] of contract.verification.entries()) {
+  const oracleAttribution = [];
+  const commands = [
+    ...contract.verification.map((entry) => ({
+      command: entry.command,
+      args: entry.args,
+      expectedExitCode: entry.expectedExitCode,
+      ...entry.timeoutMs === void 0 ? {} : { timeoutMs: entry.timeoutMs },
+      label: entry.command
+    }))
+  ];
+  for (const oracle of input.options?.oracles ?? []) {
+    if (oracle.type !== "executable")
+      continue;
+    if (oracle.execution.mode !== "command") {
+      issues.push({
+        code: "oracle_not_evaluable",
+        message: `Oracle ${oracle.id} declares execution mode "${oracle.execution.mode}", which no runner can execute. It was not evaluated.`,
+        path: ["oracles", oracle.id]
+      });
+      continue;
+    }
+    oracleAttribution.push({ index: commands.length, oracleId: oracle.id, title: oracle.title });
+    commands.push({
+      command: oracle.execution.command,
+      args: oracle.execution.args,
+      expectedExitCode: oracle.execution.expectedExitCode,
+      timeoutMs: oracle.execution.timeoutMs,
+      label: `oracle ${oracle.id}`
+    });
+  }
+  for (const [index, verification] of commands.entries()) {
     const request = {
       index,
       command: verification.command,
@@ -19340,7 +19371,7 @@ async function runDeterministicVerification(input) {
       const message = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
       issues.push({
         code: "verification_command_failed",
-        message: timedOut ? `Verification command ${index} (${verification.command}) timed out after ${timeoutMs}ms.` : `Verification command ${index} (${verification.command}) threw: ${message}`,
+        message: timedOut ? `Verification command ${index} (${verification.label}) timed out after ${timeoutMs}ms.` : `Verification command ${index} (${verification.label}) threw: ${message}`,
         path: ["verification", index]
       });
       results.push(emptyResultFor(request, startedAt, finishedAt, message, timedOut));
@@ -19350,7 +19381,7 @@ async function runDeterministicVerification(input) {
     if (result === void 0) {
       issues.push({
         code: "verification_command_failed",
-        message: `Verification command ${index} (${verification.command}) returned no result.`,
+        message: `Verification command ${index} (${verification.label}) returned no result.`,
         path: ["verification", index]
       });
       results.push(emptyResultFor(request, startedAt, finishedAt, "runner returned no result"));
@@ -19359,7 +19390,7 @@ async function runDeterministicVerification(input) {
     if (result.timedOut || result.exitCode !== result.expectedExitCode) {
       issues.push({
         code: "verification_command_failed",
-        message: `Verification command ${index} (${verification.command}) exited ${result.exitCode}, expected ${result.expectedExitCode}.`,
+        message: `Verification command ${index} (${verification.label}) exited ${result.exitCode}, expected ${result.expectedExitCode}.`,
         path: ["verification", index]
       });
     }
@@ -19378,7 +19409,7 @@ async function runDeterministicVerification(input) {
     results,
     now
   });
-  return { report, issues };
+  return { report, issues, oracleAttribution };
 }
 async function synthesizeReport(input) {
   const failing = recordFailingIndices(input.results);
@@ -40512,7 +40543,11 @@ function phaseVerification(options, scoped = options.requirement?.executable ?? 
     command: criterion.proof.command,
     args: [...criterion.proof.args],
     expectedExitCode: criterion.proof.expectedExitCode,
-    timeoutMs: criterion.proof.timeoutMs ?? 6e5
+    // Clamped to the same ceiling `oracle-input.ts` applies. Without it, one
+    // criterion could produce an oracle and a task contract that disagree about
+    // the timeout for the identical command — invisible only because intake
+    // never sets timeoutMs, and observable the moment both are executed.
+    timeoutMs: Math.min(criterion.proof.timeoutMs ?? 6e5, MAX_VERIFICATION_TIMEOUT_MS)
   }));
   const project = options.enforcement === void 0 ? { command: "legion", args: ["validate"], expectedExitCode: 0, timeoutMs: 12e4 } : {
     command: options.enforcement.verification.command,
@@ -40525,6 +40560,7 @@ function phaseVerification(options, scoped = options.requirement?.executable ?? 
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }
 var MAX_ID_SUFFIX2 = 64;
+var MAX_VERIFICATION_TIMEOUT_MS = 36e5;
 function contractIdWithRoom(suffix, tail) {
   const base = suffix.length + tail.length <= MAX_ID_SUFFIX2 ? suffix : suffix.slice(0, MAX_ID_SUFFIX2 - tail.length).replace(/-+$/, "");
   return formatEntityId("contract", `${base}${tail}`);
@@ -42612,21 +42648,39 @@ async function runContractVerification(input) {
   if (input.workerContext === void 0) {
     return { passed: false, blockedReason: "No worker context was available for verification." };
   }
-  const { report, issues } = await runDeterministicVerification({
+  const oracles = await oraclesForTask({ repositoryRoot: input.repositoryRoot, task: input.task });
+  const { report, issues, oracleAttribution } = await runDeterministicVerification({
     taskContract: input.task,
     workerContext: input.workerContext,
     options: {
       runner: createVerificationRunner({ repositoryRoot: input.repositoryRoot }),
-      now: currentUtcTimestamp
+      now: currentUtcTimestamp,
+      ...oracles.length === 0 ? {} : { oracles }
     }
   });
   return {
     report,
     passed: report.passed,
     ...report.passed ? {} : {
-      blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s). ${issues.map((issue2) => issue2.message).join(" ")}`.trim()
+      blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s).${describeFailingOracles(report.failingIndices, oracleAttribution)} ${issues.map((issue2) => issue2.message).join(" ")}`.trim()
     }
   };
+}
+async function oraclesForTask(input) {
+  const loaded = [];
+  for (const oracleId of input.task.oracleRefs ?? []) {
+    const read = await readOracleArtifact({
+      repositoryRoot: input.repositoryRoot,
+      changeId: input.task.changeId,
+      oracleId
+    });
+    if (read.ok) loaded.push(read.document);
+  }
+  return loaded;
+}
+function describeFailingOracles(failingIndices, attribution) {
+  const named = attribution.filter((entry) => failingIndices.includes(entry.index)).map((entry) => entry.oracleId);
+  return named.length === 0 ? "" : ` Failing oracle(s): ${named.join(", ")}.`;
 }
 function modelManifestForExecutor(executor) {
   return {
@@ -43698,10 +43752,16 @@ async function createAdHocTaskgraph(input) {
           entity: { kind: "requirement", id: requirementId }
         }
       ],
-      type: "inspectable",
+      // Executable, because this function already holds the command that decides
+      // it — the same one it writes into `verification` below. Emitting an
+      // inspectable oracle here asked a human to confirm what a runner can.
+      type: "executable",
       execution: {
-        mode: "manual-inspection",
-        instructions: `Review implementation and evidence for: ${input.objective}`
+        mode: "command",
+        command: verification.command,
+        args: [...verification.args],
+        expectedExitCode: 0,
+        timeoutMs: 12e4
       }
     })
   });
