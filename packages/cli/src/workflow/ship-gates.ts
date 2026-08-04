@@ -131,10 +131,23 @@ function evaluateGate(input: {
         ? { status: "satisfied", reason: "An accepted review decision exists for this task." }
         : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
 
+    case "approved_spec_and_oracle":
+    case "protected_oracle":
+      // Oracle satisfaction is now its own evidence item. It was folded into
+      // `declared-verification`, whose verdict answers a different question —
+      // "did the contract's own commands pass", not "did the criteria the phase
+      // was specified against hold" — so these two gates had no producer and
+      // any R2+ change was structurally unshippable.
+      //
+      // `unevaluable` remains the answer for a task that names no oracle: the
+      // criteria were never expressed, which is not the same as their having
+      // held.
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
+
     default:
-      // Oracles, delta specs, integration checks, whole-change acceptance,
-      // independent baselines, security/e2e evaluation, release observation and
-      // rollback evidence have no producer in the workflow yet.
+      // Delta specs, integration checks, whole-change acceptance, independent
+      // baselines, security/e2e evaluation, release observation and rollback
+      // evidence have no producer in the workflow yet.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."

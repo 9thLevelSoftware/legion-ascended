@@ -42683,6 +42683,19 @@ async function evidenceEntryForExecution(input) {
       traceRefs
     });
   }
+  const attribution = input.verification.oracleAttribution ?? [];
+  if (input.verification.report !== void 0 && attribution.length > 0) {
+    const report = input.verification.report;
+    const oracleIndices = new Set(attribution.map((entry) => entry.index));
+    const failing = report.failingIndices.filter((index) => oracleIndices.has(index));
+    items.push({
+      id: "oracle-verification",
+      classification: "test-report",
+      verdict: failing.length === 0 ? "pass" : "fail",
+      artifact: resultReference,
+      traceRefs
+    });
+  }
   if (reconciliation !== void 0) {
     const observationReference = input.observationArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.observationArtifactPath);
     items.push({
@@ -42827,6 +42840,7 @@ async function runContractVerification(input) {
   return {
     report,
     passed: report.passed,
+    oracleAttribution,
     ...report.passed ? {} : {
       blockedReason: `Verification failed for ${report.failingIndices.length} of ${report.commands.length} declared command(s).${describeFailingOracles(report.failingIndices, oracleAttribution)} ${issues.map((issue2) => issue2.message).join(" ")}`.trim()
     }
@@ -45732,6 +45746,9 @@ function evaluateGate(input) {
     case "task_level_independent_review":
     case "explicit_human_approval":
       return hasAcceptedReview2(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
+    case "approved_spec_and_oracle":
+    case "protected_oracle":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
     default:
       return {
         status: "unevaluable",

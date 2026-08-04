@@ -19,6 +19,7 @@ import {
   FreshContextDispatcher,
   RuntimeLocalDriver,
   runDeterministicVerification,
+  type OracleAttribution,
   type VerificationReport,
   type WorkerContext
 } from "@legion/core";
@@ -747,6 +748,26 @@ async function evidenceEntryForExecution(input: {
     });
   }
 
+  // Oracles as their own evidence item, not folded into declared-verification.
+  // The two answer different questions: declared verification is "did the
+  // contract's own commands pass", oracle satisfaction is "did the criteria the
+  // phase was specified against hold". Reporting one verdict for both left the
+  // `approved_spec_and_oracle` and `protected_oracle` ship gates with no
+  // producer, so any R2+ change was structurally unshippable.
+  const attribution = input.verification.oracleAttribution ?? [];
+  if (input.verification.report !== undefined && attribution.length > 0) {
+    const report = input.verification.report;
+    const oracleIndices = new Set(attribution.map((entry) => entry.index));
+    const failing = report.failingIndices.filter((index) => oracleIndices.has(index));
+    items.push({
+      id: "oracle-verification",
+      classification: "test-report",
+      verdict: failing.length === 0 ? "pass" : "fail",
+      artifact: resultReference,
+      traceRefs
+    });
+  }
+
   if (reconciliation !== undefined) {
     // Points at the observation, not at the executor's result file. Only a
     // verdict was persisted before, so the sole file list on disk was the
@@ -873,6 +894,8 @@ interface ContractVerification {
   readonly passed: boolean;
   /** Set when verification could not be attempted at all. */
   readonly blockedReason?: string;
+  /** Which executed commands came from which oracle, in command order. */
+  readonly oracleAttribution?: readonly OracleAttribution[];
 }
 
 /**
@@ -986,6 +1009,7 @@ async function runContractVerification(input: {
   return {
     report,
     passed: report.passed,
+    oracleAttribution,
     ...(report.passed
       ? {}
       : {

@@ -88,14 +88,46 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
 test("gates with no producer are unevaluable, not silently satisfied", () => {
   const report = derive(PASSING_R2);
 
-  const oracle = report.gates.find((entry) => entry.gate === "protected_oracle");
-  assert.equal(oracle.status, "unevaluable");
-  assert.match(oracle.reason, /does not yet produce/);
+  // `whole_change_acceptance_evidence` still has no producer. `protected_oracle`
+  // did until oracle results became their own evidence item, so this asserts
+  // against a gate that is genuinely unproduced rather than one that merely was.
+  const unproduced = report.gates.find((entry) => entry.gate === "whole_change_acceptance_evidence");
+  assert.equal(unproduced.status, "unevaluable");
+  assert.match(unproduced.reason, /does not yet produce/);
 
   // They are counted so the gap is visible on every ship, never absorbed
   // into the satisfied total.
   assert.ok(report.unevaluable > 0);
   assert.equal(report.satisfied + report.unsatisfied + report.unevaluable, report.gates.length);
+});
+
+test("oracle gates read the oracle evidence item, not declared-verification", () => {
+  // Folded together, one verdict answered two different questions: "did the
+  // contract's own commands pass" and "did the criteria the phase was specified
+  // against hold". A task whose declared commands pass and whose oracle fails
+  // must not satisfy the oracle gate.
+  const passing = derive({
+    items: [item("declared-verification", "pass"), item("oracle-verification", "pass")],
+    reviews: [acceptedReview()]
+  });
+  assert.equal(passing.gates.find((entry) => entry.gate === "protected_oracle").status, "satisfied");
+
+  const failing = derive({
+    items: [item("declared-verification", "pass"), item("oracle-verification", "fail")],
+    reviews: [acceptedReview()]
+  });
+  assert.equal(failing.gates.find((entry) => entry.gate === "protected_oracle").status, "unsatisfied");
+  assert.equal(failing.ready, false);
+});
+
+test("a task naming no oracle is unevaluable, not satisfied", () => {
+  // No oracle evidence means the criteria were never expressed, which is not
+  // the same as their having held. Defaulting to satisfied would let a task
+  // clear an oracle gate by declaring nothing.
+  const report = derive(PASSING_R2);
+  const gate = report.gates.find((entry) => entry.gate === "protected_oracle");
+  assert.equal(gate.status, "unevaluable");
+  assert.match(gate.reason, /No oracle-verification evidence/);
 });
 
 test("unevaluable gates block, because a gate with no producer is unmet", () => {
