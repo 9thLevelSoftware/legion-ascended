@@ -40,7 +40,8 @@ import {
 } from "../../workflow/guidance-run.js";
 import { slugFromName } from "../../workflow/input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
-import { resolveWorkflowState } from "../../workflow/state.js";
+import { listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
+import { collectEscalations } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
 
 const HELP = {
@@ -868,6 +869,8 @@ interface RetroEvidence {
   readonly changeCount: number;
   readonly taskCount: number;
   readonly acceptedReviews: number;
+  readonly escalations: number;
+  readonly escalationReasons: readonly string[];
   readonly recentRuns: readonly string[];
   readonly summary: string;
 }
@@ -888,12 +891,18 @@ async function gatherRetroEvidence(
   let changeCount = 0;
   let taskCount = 0;
   let acceptedReviews = 0;
-  try {
-    const changesRoot = path.join(repositoryRoot, ".legion", "project", "changes");
-    const entries = await readdir(changesRoot, { withFileTypes: true });
-    const changeIds = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  let escalations = 0;
+  const escalationReasons = new Set<string>();
+  // Valid bundles, not directories. Counting directories counts a docs folder
+  // with no change.yaml as a change.
+  const listed = await listWorkflowChanges(repositoryRoot);
+  {
+    const changeIds = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
     changeCount = changeIds.length;
     for (const changeId of changeIds) {
+      const escalated = await collectEscalations({ repositoryRoot, changeId });
+      escalations += escalated.total;
+      for (const entry of escalated.escalations) escalationReasons.add(entry.reason);
       const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
       if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
       const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
@@ -901,9 +910,6 @@ async function gatherRetroEvidence(
         acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
       }
     }
-  } catch {
-    // No changes directory yet. A project with nothing built has an honest
-    // retrospective to give, so this is not an error.
   }
 
   return {
@@ -911,8 +917,10 @@ async function gatherRetroEvidence(
     changeCount,
     taskCount,
     acceptedReviews,
+    escalations,
+    escalationReasons: [...escalationReasons].sort(),
     recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
-    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s)`
+    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 
@@ -923,6 +931,10 @@ function renderRetroEvidence(evidence: RetroEvidence): string {
     `- Changes recorded: ${evidence.changeCount}`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
     `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
+    `- Escalations (blocked runs and blocking findings): ${evidence.escalations}`,
+    evidence.escalationReasons.length === 0
+      ? "- Escalation reasons: none"
+      : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
     evidence.recentRuns.length === 0
       ? "- Recent workflow runs: none"
       : `- Recent workflow runs:\n${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`

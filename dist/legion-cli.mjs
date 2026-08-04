@@ -44349,7 +44349,7 @@ function renderLessonLine(record2) {
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
-import { readFile as readFile22, readdir as readdir16, rm as rm7 } from "node:fs/promises";
+import { readFile as readFile22, rm as rm7 } from "node:fs/promises";
 import path42 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
@@ -44482,6 +44482,55 @@ function parseExploration(input) {
     };
   }
   return { exploration: parsed.data, diagnostics };
+}
+
+// packages/cli/src/workflow/escalations.ts
+async function collectEscalations(input) {
+  const escalations = [];
+  const runs = await listTaskRunsForChange({
+    repositoryRoot: input.repositoryRoot,
+    changeId: input.changeId
+  });
+  if (runs.ok) {
+    for (const run of runs.taskRuns) {
+      if (run.document.status !== "blocked") continue;
+      escalations.push({
+        kind: "task_blocked",
+        id: run.document.id,
+        // The error code names what stopped it — diff reconciliation, a failed
+        // verification, an executor refusal — which is the distinction that
+        // makes a count of these worth reading.
+        reason: run.document.error?.code ?? "blocked",
+        at: run.document.createdAt
+      });
+    }
+  }
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: input.repositoryRoot,
+    changeId: input.changeId
+  });
+  if (reviews.ok) {
+    for (const review of reviews.reviews) {
+      for (const finding of review.document.findings) {
+        if (finding.severity !== "blocking") continue;
+        escalations.push({
+          kind: "review_blocking_finding",
+          id: `${review.document.id}:${finding.id}`,
+          reason: finding.title,
+          at: review.document.createdAt
+        });
+      }
+    }
+  }
+  escalations.sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : 0);
+  return {
+    total: escalations.length,
+    byKind: {
+      task_blocked: escalations.filter((entry) => entry.kind === "task_blocked").length,
+      review_blocking_finding: escalations.filter((entry) => entry.kind === "review_blocking_finding").length
+    },
+    escalations
+  };
 }
 
 // packages/cli/src/commands/workflow/contextual.ts
@@ -45151,12 +45200,16 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns) {
   let changeCount = 0;
   let taskCount = 0;
   let acceptedReviews = 0;
-  try {
-    const changesRoot = path42.join(repositoryRoot, ".legion", "project", "changes");
-    const entries = await readdir16(changesRoot, { withFileTypes: true });
-    const changeIds2 = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  let escalations = 0;
+  const escalationReasons = /* @__PURE__ */ new Set();
+  const listed = await listWorkflowChanges(repositoryRoot);
+  {
+    const changeIds2 = listed.ok ? listed.changes.map((entry) => entry.changeId) : [];
     changeCount = changeIds2.length;
     for (const changeId of changeIds2) {
+      const escalated = await collectEscalations({ repositoryRoot, changeId });
+      escalations += escalated.total;
+      for (const entry of escalated.escalations) escalationReasons.add(entry.reason);
       const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
       if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
       const reviews = await listReviewDecisionsForChange({ repositoryRoot, changeId });
@@ -45164,15 +45217,16 @@ async function gatherRetroEvidence(repositoryRoot, state, recentRuns) {
         acceptedReviews += reviews.reviews.filter((review) => review.document.status === "accepted").length;
       }
     }
-  } catch {
   }
   return {
     stage: state.stage,
     changeCount,
     taskCount,
     acceptedReviews,
+    escalations,
+    escalationReasons: [...escalationReasons].sort(),
     recentRuns: recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`),
-    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s)`
+    summary: `stage ${state.stage}, ${changeCount} change(s), ${taskCount} task(s), ${acceptedReviews} passing review(s), ${escalations} escalation(s)`
   };
 }
 function renderRetroEvidence(evidence) {
@@ -45182,6 +45236,8 @@ function renderRetroEvidence(evidence) {
     `- Changes recorded: ${evidence.changeCount}`,
     `- Tasks planned across those changes: ${evidence.taskCount}`,
     `- Reviews with a passing verdict: ${evidence.acceptedReviews}`,
+    `- Escalations (blocked runs and blocking findings): ${evidence.escalations}`,
+    evidence.escalationReasons.length === 0 ? "- Escalation reasons: none" : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
     evidence.recentRuns.length === 0 ? "- Recent workflow runs: none" : `- Recent workflow runs:
 ${evidence.recentRuns.map((run) => `  - ${run}`).join("\n")}`
   ].join("\n");
