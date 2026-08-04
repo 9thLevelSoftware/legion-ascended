@@ -18,7 +18,7 @@ import {
   type TaskContract
 } from "@legion/protocol";
 
-import { failure, hasFlag, helpResult, stringOption, success, type CliContext, type CliResult } from "../../runtime.js";
+import { failure, hasFlag, helpResult, stringOption, success, usageError, type CliContext, type CliResult } from "../../runtime.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
@@ -33,7 +33,8 @@ import {
 } from "../../workflow/run-artifacts.js";
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
 import { runGuardedExecution } from "../../workflow/guarded-execution.js";
-import { findLatestWorkflowChangeId } from "../../workflow/state.js";
+import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
+import { findLatestWorkflowChangeId, listWorkflowChanges } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
 const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
@@ -55,7 +56,15 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
     "A typed task graph is required before review readiness can be checked."
   );
 
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  // `--phase N` selects that phase's change instead of the newest one. It was
+  // advertised in `commands/review.md` and was a usage error at the boundary;
+  // declaring the option without resolving it would only have moved the failure
+  // from "unknown option" to "silently reviewed a different change".
+  const phaseOption = stringOption(context, "phase")?.trim();
+  if (context.args.options.get("phase") === true || phaseOption === "") {
+    return usageError("Missing required value for --phase. Example: legion review --phase 3.");
+  }
+  const latestChange = await resolveReviewChange(context.repositoryRoot, phaseOption);
   if (!latestChange.ok) {
     return blockedReview(latestChange.diagnostics, planAction);
   }
@@ -539,7 +548,15 @@ async function runAutoReview(
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
       }
-      return acceptLatestReview(context, refreshedEvidence);
+      // How many cycles it took, not just that it ended clean. A panel showing
+      // "accepted" without this cannot distinguish a first-pass review from one
+      // that needed two fix rounds, and the difference is the whole point of
+      // running with --auto.
+      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
+        cycle,
+        maxCycles,
+        outcome: "clean"
+      });
     }
 
     if (cycle < maxCycles) {
@@ -558,16 +575,50 @@ async function runAutoReview(
     }
   }
 
-  return blockedReview(
-    [
-      {
-        code: "auto_review_not_clean",
-        message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
-        path: latestReviews.at(-1)?.artifactPath
-      }
-    ],
-    nextAction("legion build", "Address review findings manually and rerun review.")
+  return withCycleState(
+    blockedReview(
+      [
+        {
+          code: "auto_review_not_clean",
+          message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
+          path: latestReviews.at(-1)?.artifactPath
+        }
+      ],
+      nextAction("legion build", "Address review findings manually and rerun review.")
+    ),
+    { cycle: maxCycles, maxCycles, outcome: "exhausted" },
+    // The findings that survived the last cycle are what a caller has to act
+    // on, and the blocked payload otherwise names only the artifact path.
+    latestReviews.map(reviewSummary)
   );
+}
+
+interface ReviewCycleState {
+  readonly cycle: number;
+  readonly maxCycles: number;
+  readonly outcome: "clean" | "exhausted";
+}
+
+/**
+ * Attach the auto-review cycle state to a result payload.
+ *
+ * `--auto --max-cycles n` ran a fix loop whose progress reached the caller only
+ * as prose in a diagnostic message. A host driving the loop could not tell
+ * which cycle produced the verdict, or how much budget was left.
+ */
+function withCycleState(
+  result: CliResult,
+  cycles: ReviewCycleState,
+  reviews?: readonly Record<string, unknown>[]
+): CliResult {
+  return {
+    ...result,
+    payload: {
+      ...result.payload,
+      cycles,
+      ...(reviews === undefined ? {} : { reviews })
+    }
+  };
 }
 
 async function runAutoFixCycle(
@@ -855,13 +906,40 @@ function latestSubmittedReviewIdForTask(reviews: readonly ReviewDecisionSuccess[
   return latest === undefined ? [] : [latest.document.id];
 }
 
-function reviewSummary(review: ReviewDecisionSuccess): Record<string, unknown> {
+/**
+ * The review panel's payload.
+ *
+ * `findings` was a count. A host rendering a review panel from it could say
+ * "3 findings" and nothing else — not what they were, not how bad, not what
+ * evidence backed them — so the panel either showed a number or the host went
+ * and read the artifact itself, which is the coupling the payload exists to
+ * avoid.
+ */
+export function reviewSummary(review: ReviewDecisionSuccess): Record<string, unknown> {
   return {
     reviewId: review.document.id,
     taskId: review.document.taskId,
     artifactPath: review.artifactPath,
+    status: review.document.status,
     verdicts: review.document.verdicts,
-    findings: review.document.findings.length
+    confidence: review.document.confidence,
+    // Who reviewed, so a panel can distinguish a human verdict from an
+    // executor's without opening the artifact.
+    reviewer: review.document.reviewer,
+    // The revision chain. A review that supersedes nothing is a first attempt,
+    // which is what the first-pass rate in `legion retro` counts.
+    supersedes: review.document.supersedes,
+    findingCount: review.document.findings.length,
+    findings: review.document.findings.map((finding) => ({
+      id: finding.id,
+      title: finding.title,
+      body: finding.body,
+      severity: finding.severity,
+      // Blocking findings are required to carry evidence; minor and major ones
+      // may not. Reported as an empty list rather than omitted so a caller does
+      // not have to distinguish absent from empty.
+      evidenceRefs: finding.evidenceRefs ?? []
+    }))
   };
 }
 
@@ -986,4 +1064,45 @@ function blockedReview(
       renderNextAction(action)
     ].join("\n")
   );
+}
+
+/**
+ * The change under review: the newest, or the one `--phase N` names.
+ *
+ * The phase-to-change link is the derived `chg_phase-<N>-` ID, the same one
+ * `legion retro --phase` uses, because no phase field is recorded on a change.
+ */
+async function resolveReviewChange(
+  repositoryRoot: string,
+  phase: string | undefined
+): Promise<Awaited<ReturnType<typeof findLatestWorkflowChangeId>>> {
+  if (phase === undefined) return findLatestWorkflowChangeId(repositoryRoot);
+  // Whole value, not a parseInt prefix: `--phase 1.5` and `--phase 1foo` both
+  // parse to 1 and would review a change the caller did not name.
+  if (!/^[1-9]\d*$/.test(phase)) {
+    return {
+      ok: false,
+      diagnostics: [
+        { code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }
+      ]
+    } as Awaited<ReturnType<typeof findLatestWorkflowChangeId>>;
+  }
+  const phaseNumber = Number.parseInt(phase, 10);
+  const listed = await listWorkflowChanges(repositoryRoot);
+  const prefix = phaseChangeIdPrefix(phaseNumber);
+  const matched = (listed.ok ? listed.changes : []).filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
+  if (matched === undefined) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "phase_change_not_found",
+          message: `No change exists for phase ${phaseNumber}. Phase changes are named ${prefix}<slug>; run legion plan ${phaseNumber} first.`
+        }
+      ]
+    } as Awaited<ReturnType<typeof findLatestWorkflowChangeId>>;
+  }
+  return { ok: true, changeId: matched.changeId, diagnostics: [] } as Awaited<
+    ReturnType<typeof findLatestWorkflowChangeId>
+  >;
 }

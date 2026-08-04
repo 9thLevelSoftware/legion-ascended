@@ -133,16 +133,20 @@ b. **Route based on confidence**:
 c. **No match**: If NL parsing returns confidence 0 or no candidates, proceed with standard review (no intent flags).
 
 1. DETERMINE TARGET PHASE
-   - Check $ARGUMENTS for --phase N flag (e.g., `/legion:review --phase 4`)
-   - If no flag: read STATE.md to determine current phase
-     - Use the phase number from "Phase: N of M" in Current Position
-     - Valid states for review: "executed, pending review" or "partial"
-     - If status says "planned" or "pending": error — "Phase {N} hasn't been executed yet. Run /legion:build first."
-     - If status says "complete": error — "Phase {N} already passed review. Run /legion:plan {N+1} for the next phase."
-   - Validate: phase must exist in ROADMAP.md
-   - Check that phase directory has SUMMARY.md files (proof of execution):
-     - Look for recorded task evidence in `legion review --json`
-     - If no SUMMARY.md files found: error — "Phase {N} has no execution summaries. Run /legion:build first."
+
+   Pass `--phase N` straight through. The verb resolves it to that phase's
+   change through the derived `chg_phase-<N>-` ID, which is the only
+   phase-to-change link there is; with no flag it reviews the newest change.
+
+   ```
+   legion review --phase <N> --json
+   ```
+
+   Do not determine the phase yourself, and do not read a status file to do it.
+   The verb refuses a phase with no change and a phase number that is not a
+   whole positive integer, and reports when a change has no collected build
+   evidence — all three with the repair named. A phase eligibility decision made
+   here instead would be a second opinion the verb cannot see.
    - Display: "Reviewing Phase {N}: {phase_name}"
 
 2. RESOLVE AGENT PATH (must run before any agent references)

@@ -42960,7 +42960,11 @@ async function handleReviewWorkflow(context) {
     "legion plan 1",
     "A typed task graph is required before review readiness can be checked."
   );
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  const phaseOption = stringOption(context, "phase")?.trim();
+  if (context.args.options.get("phase") === true || phaseOption === "") {
+    return usageError("Missing required value for --phase. Example: legion review --phase 3.");
+  }
+  const latestChange = await resolveReviewChange(context.repositoryRoot, phaseOption);
   if (!latestChange.ok) {
     return blockedReview(latestChange.diagnostics, planAction);
   }
@@ -43364,7 +43368,11 @@ async function runAutoReview(context, input) {
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
       }
-      return acceptLatestReview(context, refreshedEvidence);
+      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
+        cycle,
+        maxCycles,
+        outcome: "clean"
+      });
     }
     if (cycle < maxCycles) {
       const tasksByTaskId = taskByTaskId(input.taskgraph.document.tasks);
@@ -43381,16 +43389,32 @@ async function runAutoReview(context, input) {
       currentEvidence = refreshedEvidence.evidence;
     }
   }
-  return blockedReview(
-    [
-      {
-        code: "auto_review_not_clean",
-        message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
-        path: latestReviews.at(-1)?.artifactPath
-      }
-    ],
-    nextAction("legion build", "Address review findings manually and rerun review.")
+  return withCycleState(
+    blockedReview(
+      [
+        {
+          code: "auto_review_not_clean",
+          message: `Auto review reached ${maxCycles} cycle${maxCycles === 1 ? "" : "s"} without a clean review.`,
+          path: latestReviews.at(-1)?.artifactPath
+        }
+      ],
+      nextAction("legion build", "Address review findings manually and rerun review.")
+    ),
+    { cycle: maxCycles, maxCycles, outcome: "exhausted" },
+    // The findings that survived the last cycle are what a caller has to act
+    // on, and the blocked payload otherwise names only the artifact path.
+    latestReviews.map(reviewSummary)
   );
+}
+function withCycleState(result, cycles, reviews) {
+  return {
+    ...result,
+    payload: {
+      ...result.payload,
+      cycles,
+      ...reviews === void 0 ? {} : { reviews }
+    }
+  };
 }
 async function runAutoFixCycle(context, executor, changeId, task, cycle) {
   const taskId = taskIdForContractId(task.id);
@@ -43621,8 +43645,26 @@ function reviewSummary(review) {
     reviewId: review.document.id,
     taskId: review.document.taskId,
     artifactPath: review.artifactPath,
+    status: review.document.status,
     verdicts: review.document.verdicts,
-    findings: review.document.findings.length
+    confidence: review.document.confidence,
+    // Who reviewed, so a panel can distinguish a human verdict from an
+    // executor's without opening the artifact.
+    reviewer: review.document.reviewer,
+    // The revision chain. A review that supersedes nothing is a first attempt,
+    // which is what the first-pass rate in `legion retro` counts.
+    supersedes: review.document.supersedes,
+    findingCount: review.document.findings.length,
+    findings: review.document.findings.map((finding) => ({
+      id: finding.id,
+      title: finding.title,
+      body: finding.body,
+      severity: finding.severity,
+      // Blocking findings are required to carry evidence; minor and major ones
+      // may not. Reported as an empty list rather than omitted so a caller does
+      // not have to distinguish absent from empty.
+      evidenceRefs: finding.evidenceRefs ?? []
+    }))
   };
 }
 function taskByTaskId(tasks) {
@@ -43723,6 +43765,33 @@ function blockedReview(diagnostics, action, extras = {}) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+async function resolveReviewChange(repositoryRoot, phase) {
+  if (phase === void 0) return findLatestWorkflowChangeId(repositoryRoot);
+  if (!/^[1-9]\d*$/.test(phase)) {
+    return {
+      ok: false,
+      diagnostics: [
+        { code: "invalid_phase", message: `Invalid phase number "${phase}". Use a positive integer.` }
+      ]
+    };
+  }
+  const phaseNumber = Number.parseInt(phase, 10);
+  const listed = await listWorkflowChanges(repositoryRoot);
+  const prefix = phaseChangeIdPrefix(phaseNumber);
+  const matched = (listed.ok ? listed.changes : []).filter((entry) => entry.changeId.startsWith(prefix)).at(-1);
+  if (matched === void 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "phase_change_not_found",
+          message: `No change exists for phase ${phaseNumber}. Phase changes are named ${prefix}<slug>; run legion plan ${phaseNumber} first.`
+        }
+      ]
+    };
+  }
+  return { ok: true, changeId: matched.changeId, diagnostics: [] };
 }
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
@@ -46090,7 +46159,7 @@ var DECLARED = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "reject-reason"],
+  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
