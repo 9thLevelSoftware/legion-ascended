@@ -1793,8 +1793,10 @@ const guidanceCommandCases = [
     name: "retro",
     args: ["retro", "--executor", "fake", "--json"],
     workflow: "retro",
-    status: "completed",
-    nextAction: "legion plan 1",
+    // Staged, not completed: recording is the second step, and the next action
+    // names the run to save, so it varies per invocation.
+    status: "staged",
+    nextAction: /^legion retro --save .+-retro$/,
     outputKey: "markdownArtifactPath",
     slug: "retro"
   },
@@ -1833,7 +1835,11 @@ for (const recordCase of guidanceCommandCases) {
       assert.equal(payload.ok, true);
       assert.equal(payload.status, recordCase.status);
       assert.equal(payload.workflow, recordCase.workflow);
-      assert.equal(payload.nextAction.command, recordCase.nextAction);
+      if (recordCase.nextAction instanceof RegExp) {
+        assert.match(payload.nextAction.command, recordCase.nextAction);
+      } else {
+        assert.equal(payload.nextAction.command, recordCase.nextAction);
+      }
       assert.match(
         payload.artifactPath,
         new RegExp(`^\\.legion/project/workflow/${recordCase.workflow}/.+-${recordCase.slug}/workflow-run\\.json$`)

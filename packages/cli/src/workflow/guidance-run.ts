@@ -31,7 +31,14 @@ export type GuidanceWorkflow =
   | "quick"
   | "polish";
 
-export type GuidanceRunStatus = "completed" | "planned" | "blocked" | "stale" | "accepted";
+/**
+ * `staged` is a run that produced its artifacts and has not entered the read
+ * surface. `legion retro` stages; `legion retro --save <runId>` promotes. The
+ * distinction matters because the run genuinely happened — pretending it did
+ * not would lose the executor's prompt and logs — while nothing downstream
+ * should consume it until a human has looked.
+ */
+export type GuidanceRunStatus = "completed" | "planned" | "blocked" | "stale" | "accepted" | "staged";
 
 export interface GuidanceRunPaths {
   readonly workflow: GuidanceWorkflow;

@@ -157,8 +157,14 @@ async function main() {
       expectExitCode: 0,
       timeoutMs: options.executor === "codex" ? LIVE_CODEX_COMMAND_TIMEOUT_MS : 120_000
     });
-    assertEqual(retro.status, "completed", "retro should complete");
+    // Staged, then saved. The dogfood exercises the loop a real operator walks,
+    // and that loop is now two steps: nothing reaches `plan` or `learn --recall`
+    // until a human promotes it.
+    assertEqual(retro.status, "staged", "retro should stage");
     assertArtifact(workspace, retro.markdownArtifactPath, "retro artifact");
+
+    const savedRetro = runLegion(workspace, ["retro", "--save", retro.runId], { expectExitCode: 0 });
+    assertEqual(savedRetro.status, "completed", "retro --save should record the staged run");
 
     const summary = {
       ok: true,

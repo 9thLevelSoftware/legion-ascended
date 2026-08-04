@@ -157,7 +157,9 @@ test("a blocked retrospective is not indexed", async (t) => {
 
 test("retro appends to the index it writes", async (t) => {
   const { root, run } = await repoWithRetroIndex(t, [ENTRY]);
-  const result = await run("retro", "--executor", "fake", "--json");
+  const staged = parseJsonOutput(await run("retro", "--executor", "fake", "--json"));
+  // Recording is the second step now; the first only stages.
+  const result = await run("retro", "--save", staged.runId, "--json");
   assert.equal(result.exitCode, 0, result.stderr);
 
   const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
@@ -171,7 +173,8 @@ test("retro appends to the index it writes", async (t) => {
 test("the index entry carries the run's requested timestamp", async (t) => {
   const { root, run } = await repoWithRetroIndex(t, []);
   const requested = "2026-01-15T08:30:00.000Z";
-  const result = await run("retro", "--executor", "fake", "--created-at", requested, "--json");
+  const staged = parseJsonOutput(await run("retro", "--executor", "fake", "--created-at", requested, "--json"));
+  const result = await run("retro", "--save", staged.runId, "--json");
   assert.equal(result.exitCode, 0, result.stderr);
 
   // `--created-at` is what makes a run deterministic, and the run ID and
@@ -180,4 +183,149 @@ test("the index entry carries the run's requested timestamp", async (t) => {
   // place, since `learn --recall` breaks equal scores by `createdAt`.
   const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
   assert.equal(index.retrospectives[0].createdAt, requested);
+});
+
+/**
+ * The staged write.
+ *
+ * `commands/retro.md` offers "Edit before saving", and the verb wrote
+ * `retro.md`, the guidance run and the index entry before returning — so the
+ * host's choice edited findings that were already recorded. `legion retro` now
+ * stages; `legion retro --save <runId>` promotes. Following
+ * `start --intake` -> `start --finalize`.
+ */
+
+async function stagedRun(t) {
+  const { root, run } = await repoWithRetroIndex(t, []);
+  const staged = parseJsonOutput(await run("retro", "--executor", "fake", "--json"));
+  return { root, run, staged };
+}
+
+test("legion retro stages and records nothing until --save", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+  assert.equal(staged.status, "staged");
+  assert.ok(staged.stagedEntryArtifactPath, "no staged entry was written");
+
+  // The read surface is untouched. `plan` and `learn --recall` must not see an
+  // unreviewed retrospective, which is the whole point of the split.
+  const before = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(before.retrospectives.length, 0, "staging entered the index");
+
+  const saved = parseJsonOutput(await run("retro", "--save", staged.runId, "--json"));
+  assert.equal(saved.status, "completed");
+  const after = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(after.retrospectives.length, 1);
+});
+
+test("--save reads the entry back from disk, so edits before saving take effect", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+  const entryPath = path.join(root, ...staged.stagedEntryArtifactPath.split("/"));
+  const entry = JSON.parse(await readFile(entryPath, "utf8"));
+  entry.actions = [
+    { id: "edited", title: "Operator rewrote this action", body: "Edited before saving.", severity: "major" }
+  ];
+  await writeFile(entryPath, JSON.stringify(entry), "utf8");
+
+  await run("retro", "--save", staged.runId, "--json");
+
+  // Editing only the markdown would leave the recorded findings untouched, which
+  // is the version of "edit before saving" that looks like it works.
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives[0].actions[0].title, "Operator rewrote this action");
+});
+
+test("--save refuses an unknown run, a second save, and a malformed edit", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+
+  const unknown = await run("retro", "--save", "no-such-run", "--json");
+  assert.notEqual(unknown.exitCode, 0);
+  assert.match(parseJsonOutput(unknown).diagnostics[0].message, /found no such run/);
+
+  assert.equal((await run("retro", "--save", staged.runId, "--json")).exitCode, 0);
+  const again = await run("retro", "--save", staged.runId, "--json");
+  assert.notEqual(again.exitCode, 0);
+  assert.match(parseJsonOutput(again).diagnostics[0].message, /already saved/);
+
+  // A human may have edited the entry, so an unparseable edit has to be refused
+  // here rather than silently dropped by the index reader later.
+  const second = parseJsonOutput(await run("retro", "--executor", "fake", "--json"));
+  await writeFile(
+    path.join(root, ...second.stagedEntryArtifactPath.split("/")),
+    JSON.stringify({ id: "x", createdAt: "now", artifactPath: "a", summary: "s", actions: [{}] }),
+    "utf8"
+  );
+  const malformed = await run("retro", "--save", second.runId, "--json");
+  assert.notEqual(malformed.exitCode, 0);
+  assert.match(parseJsonOutput(malformed).diagnostics[0].message, /malformed entry/);
+});
+
+test("a blocked run is not stageable and cannot be saved", async (t) => {
+  const { root, run } = await repoWithRetroIndex(t, []);
+  // The manual adapter blocks with `manual-execution-required`. That is the
+  // adapter's finding, not the retrospective's; recorded, every later `plan`
+  // reports an adapter failure as planning guidance. The rule predates staging
+  // and has to survive it.
+  const blocked = await run("retro", "--executor", "manual", "--json");
+  assert.notEqual(blocked.exitCode, 0);
+  const payload = parseJsonOutput(blocked);
+  assert.equal(payload.status, "blocked");
+  assert.equal(payload.stagedEntryArtifactPath, undefined, "a blocked run staged an entry");
+
+  const attempted = await run("retro", "--save", payload.runId, "--json");
+  assert.notEqual(attempted.exitCode, 0);
+  assert.match(parseJsonOutput(attempted).diagnostics[0].message, /Only a staged run can be saved/);
+
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives.length, 0);
+});
+
+test("--dry-run still writes nothing at all", async (t) => {
+  const { root, run } = await repoWithRetroIndex(t, []);
+  const result = await run("retro", "--dry-run", "--executor", "fake", "--json");
+  assert.equal(result.exitCode, 0, result.stderr);
+  assert.equal(parseJsonOutput(result).dryRun, true);
+
+  // Staging deliberately leaves artifacts behind; a dry run must not. The two
+  // modes would otherwise be indistinguishable on disk.
+  const { readdir } = await import("node:fs/promises");
+  const runs = await readdir(path.join(root, ".legion", "project", "workflow", "retro")).catch(() => []);
+  assert.deepEqual(
+    runs.filter((entry) => entry.endsWith("-retro")),
+    [],
+    "a dry run left a run directory behind"
+  );
+});
+
+test("--dry-run and --save cannot be combined", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+  // Reaching the save path first let `--dry-run --save` append to the index and
+  // mark the run completed — the one thing the flag promises cannot happen.
+  const result = await run("retro", "--dry-run", "--save", staged.runId, "--json");
+  assert.notEqual(result.exitCode, 0);
+  assert.match(parseJsonOutput(result).diagnostics[0].message, /cannot be combined/);
+
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives.length, 0, "a dry run saved");
+});
+
+test("a staged entry must belong to the run being saved", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+  const entryPath = path.join(root, ...staged.stagedEntryArtifactPath.split("/"));
+  const entry = JSON.parse(await readFile(entryPath, "utf8"));
+
+  // Editing before saving is the documented path, so an operator who copies a
+  // previous entry would file this run's lessons under another retrospective's
+  // id — and plan and learn --recall would attribute them there forever.
+  await writeFile(entryPath, JSON.stringify({ ...entry, id: "some-other-run" }), "utf8");
+  const wrongId = await run("retro", "--save", staged.runId, "--json");
+  assert.notEqual(wrongId.exitCode, 0);
+  assert.match(parseJsonOutput(wrongId).diagnostics[0].message, /must match the run being saved/);
+
+  await writeFile(entryPath, JSON.stringify({ ...entry, artifactPath: "somewhere/else.md" }), "utf8");
+  const wrongArtifact = await run("retro", "--save", staged.runId, "--json");
+  assert.notEqual(wrongArtifact.exitCode, 0);
+  assert.match(parseJsonOutput(wrongArtifact).diagnostics[0].message, /but this run wrote/);
+
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives.length, 0);
 });

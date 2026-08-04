@@ -163,8 +163,8 @@
       "rationale": "The verb is executor-backed and purpose-built, and an earlier revision stopped there. Follow --phase through the handler: it reaches slugSource, runInput, and an interpolated topic string handed to guidancePrompt, and nothing else. It is never parsed as a phase number and never selects any evidence. Worse than scope being ignored: guidancePrompt receives only the workflow, the topic, and four section names, so the executor producing the findings sees no project evidence at all. resolveWorkflowState().stage and the last two guidance runs are read before the run but consumed only by renderGuidanceMarkdown after it. A scoped retrospective over completed work is not a mode this verb has, it is a word pasted into a prompt.",
       "hostOnly": [
         {
-          "capability": "Save-or-discard decision, including a view-only path that persists nothing",
-          "anchor": "9. HANDLE SAVE CHOICE"
+          "capability": "Save-or-leave-staged decision, including the edit-before-saving path",
+          "anchor": "9. HANDLE THE CHOICE"
         },
         {
           "capability": "Section-by-section correction of the findings before they are recorded",
@@ -215,12 +215,9 @@
           "evidence": "tests/retro-loop.test.mjs"
         },
         {
-          "gap": "No staged-write path. runRetroWorkflow writes retro.md and the guidance run before it returns, so the host's view-only choice still persists and edit-before-saving edits findings already recorded. The retained save/discard and edit choices are impossible at this boundary until the CLI gains a non-persisting run followed by an explicit save.",
-          "disposition": "build-in-cli",
-          "closedWhen": {
-            "file": "packages/cli/src/commands/workflow/contextual.ts",
-            "pattern": "stageRetroRun"
-          }
+          "gap": "legion retro stages: it runs the analysis, writes retro.md and a retro-entry.json beside it, and records status: staged without entering the read surface. legion retro --save <runId> promotes it, reading the entry back from disk so an operator editing before saving changes what plan and learn --recall will consume. A blocked run is not stageable and cannot be saved; a second save is refused.",
+          "disposition": "built-in-cli",
+          "evidence": "tests/retro-loop.test.mjs"
         },
         {
           "gap": "The retro-to-plan loop is closed at both ends. legion plan reads the retro index and reports outstanding major and blocking actions in its payload and human output, including on --dry-run. Plan runs no executor, so it surfaces the actions to the caller decomposing the phase rather than acting on them.",

@@ -21,6 +21,17 @@ import { artifactPathSchema, type ArtifactPath } from "@legion/protocol";
  * honest version of "planning consumes retrospectives".
  */
 
+/**
+ * The file a staged retrospective's index entry waits in.
+ *
+ * Staging writes it beside `retro.md` so an operator editing before saving can
+ * change what `plan` and `learn --recall` will actually consume, not only the
+ * human-readable artifact. Editing only the markdown would leave the recorded
+ * findings untouched, which is the version of "edit before saving" that looks
+ * like it works.
+ */
+export const STAGED_ENTRY_FILE = "retro-entry.json";
+
 export const RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
 
 export interface RetroAction {
@@ -72,7 +83,7 @@ function isRetroAction(value: unknown): value is RetroAction {
   );
 }
 
-function isRetroIndexEntry(value: unknown): value is RetroIndexEntry {
+export function isRetroIndexEntry(value: unknown): value is RetroIndexEntry {
   if (typeof value !== "object" || value === null) return false;
   const entry = value as Record<string, unknown>;
   return (

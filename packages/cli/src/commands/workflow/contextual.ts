@@ -43,7 +43,13 @@ import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { isChangeComplete, listWorkflowChanges, resolveWorkflowState } from "../../workflow/state.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { parsePhaseRange } from "../../workflow/phase-range.js";
-import { appendRetroEntry, readRetroIndex, retroIndexArtifactPath } from "../../workflow/retro-index.js";
+import {
+  appendRetroEntry,
+  isRetroIndexEntry,
+  readRetroIndex,
+  retroIndexArtifactPath,
+  STAGED_ENTRY_FILE
+} from "../../workflow/retro-index.js";
 import { collectEscalations } from "../../workflow/escalations.js";
 import { positionalText } from "./record.js";
 
@@ -498,6 +504,20 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
 }
 
 async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
+  const save = optionalStringInput(context, "save");
+  if (save !== null && typeof save !== "string") return save;
+  if (save !== null) {
+    // `--dry-run` writes nothing. Reaching the save path first would have let
+    // `legion retro --dry-run --save <id>` append to the index and mark the run
+    // completed, which is the one thing the flag promises cannot happen.
+    if (hasFlag(context, "dry-run")) {
+      return usageError(
+        "legion retro --dry-run --save cannot be combined: --dry-run writes nothing, and --save exists to write. Drop one."
+      );
+    }
+    return saveStagedRetro(context, save);
+  }
+
   const phase = optionalStringInput(context, "phase");
   if (phase !== null && typeof phase !== "string") return phase;
   const milestone = optionalStringInput(context, "milestone");
@@ -706,10 +726,8 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
   // failure as planning guidance, and `learn --recall` return it as
   // institutional knowledge.
   const retroIndexPath = retroIndexArtifactPath();
-  const indexed = executed.result.ok;
-  const nextIndex = !indexed
-    ? await readRetroIndex(context.repositoryRoot)
-    : appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
+  const stageable = executed.result.ok;
+  const stagedEntry = {
     id: paths.runId,
     // The run's own timestamp, not wall clock. `--created-at` makes a run
     // deterministic and is what the run ID and workflow-run.json already use;
@@ -730,16 +748,25 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
       body: finding.body,
       severity: finding.severity
     }))
-  });
-  if (indexed) {
+  };
+
+  // Staged, not recorded. The run happened and its artifacts exist — pretending
+  // otherwise would lose the executor's prompt and logs — but nothing enters the
+  // read surface `plan` and `learn --recall` consume until a human promotes it.
+  // The entry is written beside retro.md so editing before saving can change
+  // what those two will actually read, rather than only the prose.
+  const stagedEntryPath = stageable ? guidanceArtifactPath(paths, STAGED_ENTRY_FILE) : undefined;
+  if (stagedEntryPath !== undefined) {
     await writeProjectTextFile({
       repositoryRoot: context.repositoryRoot,
-      artifactPath: retroIndexPath,
-      text: stableProtocolJson(nextIndex)
+      artifactPath: stagedEntryPath,
+      text: stableProtocolJson(stagedEntry)
     });
   }
-  const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
-  const status = executed.result.ok ? "completed" : "blocked";
+  const action = stageable
+    ? nextAction(`legion retro --save ${paths.runId}`, "Review the staged retrospective, then save it.")
+    : nextAction("legion retro", "The run was blocked, so there is nothing to save.");
+  const status = stageable ? "staged" : "blocked";
   const diagnostics = executed.result.findings;
   await writeGuidanceRun({
     repositoryRoot: context.repositoryRoot,
@@ -748,7 +775,7 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     runInput: { phase, milestone },
     outputs: {
       markdownArtifactPath,
-      ...(indexed ? { retroIndexArtifactPath: retroIndexPath } : {}),
+      ...(stagedEntryPath === undefined ? {} : { stagedEntryArtifactPath: stagedEntryPath }),
       promptArtifactPath: executed.promptArtifactPath,
       resultArtifactPath: executed.resultArtifactPath,
       rawLogArtifactPath: executed.rawLogArtifactPath,
@@ -765,16 +792,19 @@ async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
     runId: paths.runId,
     artifactPath: paths.workflowRunArtifactPath,
     markdownArtifactPath,
-    // Absent when the run was blocked, so a caller can tell "nothing was
-    // indexed" from "indexed and the count happens to be unchanged".
-    ...(indexed ? { retroIndexArtifactPath: retroIndexPath, retrospectiveCount: nextIndex.retrospectives.length } : {}),
+    // Absent when the run was blocked, so a caller can tell "nothing was staged"
+    // from "staged and awaiting a save".
+    ...(stagedEntryPath === undefined ? {} : { stagedEntryArtifactPath: stagedEntryPath }),
     executor: executed.executor,
     nextAction: action,
     diagnostics
   };
   const human = [
-    `Retrospective: ${status}.`,
+    stageable
+      ? `Retrospective staged — nothing has been recorded yet.`
+      : `Retrospective: ${status}.`,
     `Artifact: ${markdownArtifactPath}`,
+    ...(stagedEntryPath === undefined ? [] : [`Entry to be recorded: ${stagedEntryPath}`]),
     renderNextAction(action)
   ].join("\n");
   return executed.result.ok ? success(payload, human) : failure(payload, human);
@@ -1262,4 +1292,116 @@ function milestoneProgressPayload(state: MilestoneProgress | undefined): Record<
       reason: entry.reason
     }))
   };
+}
+
+/**
+ * Promote a staged retrospective into the read surface.
+ *
+ * `legion retro` runs the analysis and writes its artifacts; nothing reaches
+ * `plan` or `learn --recall` until this runs. That split is what makes the
+ * host's "edit before saving" possible: between the two commands, an operator
+ * can change `retro.md` and the staged entry, and this reads the entry back
+ * from disk rather than from anything held in memory.
+ */
+async function saveStagedRetro(context: CliContext, runId: string): Promise<CliResult> {
+  const runArtifactPath = artifactPathSchema.parse(`.legion/project/workflow/retro/${runId}/workflow-run.json`);
+  const runPath = path.join(context.repositoryRoot, ...runArtifactPath.split("/"));
+  let run: Record<string, unknown> & { readonly status?: string; readonly outputs?: Record<string, unknown> };
+  try {
+    run = JSON.parse(await readFile(runPath, "utf8"));
+  } catch {
+    return usageError(
+      `legion retro --save ${runId} found no such run. Run legion retro first; it reports the id to save.`
+    );
+  }
+
+  // A run that already went in must not go in twice, and a blocked run must not
+  // go in at all. The second is the rule that keeps the manual adapter's
+  // `manual-execution-required` finding out of the index: it is the adapter's
+  // finding, not the retrospective's, and once recorded every later `plan`
+  // reports an adapter failure as planning guidance.
+  if (run.status === "completed") {
+    return usageError(`legion retro --save ${runId} is already saved. Saving again would record it twice.`);
+  }
+  if (run.status !== "staged") {
+    return usageError(
+      `legion retro --save ${runId} cannot save a run whose status is ${JSON.stringify(run.status ?? "unknown")}. Only a staged run can be saved.`
+    );
+  }
+
+  const entryPath = run.outputs?.["stagedEntryArtifactPath"];
+  if (typeof entryPath !== "string") {
+    return usageError(`legion retro --save ${runId} has no staged entry to record.`);
+  }
+  let entry: unknown;
+  try {
+    entry = JSON.parse(await readFile(path.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
+  } catch (error) {
+    return usageError(
+      `legion retro --save ${runId} could not read ${entryPath}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  // Validated on the way in, because the whole point of staging is that a human
+  // may have edited this file. An unparseable edit must be refused here rather
+  // than silently dropped by the index reader later.
+  if (!isRetroIndexEntry(entry)) {
+    return usageError(
+      `legion retro --save ${runId} found a malformed entry in ${entryPath}. Every action needs id, title, body and a severity of minor, major or blocking.`
+    );
+  }
+  // The entry has to belong to the run being saved. Editing before saving is
+  // the documented path, and an operator who copies a previous entry or edits
+  // the top-level metadata would otherwise file this run's lessons under
+  // another retrospective's id, pointing at another retrospective's artifact —
+  // and `plan` and `learn --recall` would then attribute them there forever.
+  if (entry.id !== runId) {
+    return usageError(
+      `legion retro --save ${runId} found an entry belonging to ${JSON.stringify(entry.id)}. The staged entry's id must match the run being saved.`
+    );
+  }
+  const expectedArtifact = run.outputs?.["markdownArtifactPath"];
+  if (typeof expectedArtifact === "string" && entry.artifactPath !== expectedArtifact) {
+    return usageError(
+      `legion retro --save ${runId} found an entry pointing at ${JSON.stringify(entry.artifactPath)}, but this run wrote ${JSON.stringify(expectedArtifact)}.`
+    );
+  }
+
+  const retroIndexPath = retroIndexArtifactPath();
+  const nextIndex = appendRetroEntry(await readRetroIndex(context.repositoryRoot), entry);
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: retroIndexPath,
+    text: stableProtocolJson(nextIndex)
+  });
+  // The run record moves with it, so a second `--save` is refused by the same
+  // check that let this one through.
+  await writeProjectTextFile({
+    repositoryRoot: context.repositoryRoot,
+    artifactPath: runArtifactPath,
+    text: stableProtocolJson({
+      ...run,
+      status: "completed",
+      outputs: { ...(run.outputs ?? {}), retroIndexArtifactPath: retroIndexPath }
+    })
+  });
+
+  const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
+  return success(
+    {
+      ok: true,
+      status: "completed",
+      workflow: "retro",
+      runId,
+      artifactPath: runArtifactPath,
+      retroIndexArtifactPath: retroIndexPath,
+      retrospectiveCount: nextIndex.retrospectives.length,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      `Retrospective saved: ${runId}.`,
+      `Index: ${retroIndexPath} (${nextIndex.retrospectives.length} recorded)`,
+      renderNextAction(action)
+    ].join("\n")
+  );
 }
