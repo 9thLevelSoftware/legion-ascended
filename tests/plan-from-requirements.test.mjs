@@ -979,3 +979,29 @@ test("a task naming an unreadable oracle is blocked, not verified without it", a
   assert.match(rendered, /could not be read/, `expected an unreadable-oracle refusal: ${rendered.slice(0, 500)}`);
   assert.match(rendered, new RegExp(referenced), "the refusal must name the oracle");
 });
+
+test("files modified is recorded from the observation, not the executor's claim", async (t) => {
+  const { root, run } = await plannedProject(t);
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "planned"]);
+
+  const built = await run("build", "--executor", "fake", "--allow-dirty", "--json");
+  const payload = parseJsonOutput(built);
+  const runId = payload.taskRuns[0].runId;
+  const changeId = payload.changeId;
+
+  // The observation was computed on every run and discarded, leaving the
+  // executor's self-reported filesChanged as the only file list on disk — the
+  // very claim the CLI records a claim-observation-mismatch against.
+  const observation = JSON.parse(
+    await readFile(
+      path.join(root, ".legion", "project", "changes", changeId, "runs", runId, "diff-observation.json"),
+      "utf8"
+    )
+  );
+  assert.equal(observation.kind, "diff_observation");
+  assert.ok(Array.isArray(observation.changedFiles), "the observed file list is persisted");
+  assert.ok(Array.isArray(observation.newFiles));
+  assert.equal(typeof observation.linesChanged, "number");
+  assert.ok(observation.baseGitSha, "the revision the observation was taken against");
+});
