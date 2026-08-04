@@ -27,9 +27,10 @@ tasks:
     depends_on: ["P13-T02"]
     assignee: legionworker
   P13-T04:
-    status: todo
+    status: DONE
+    evidence: docs/next/reviews/PHASE-13-INDEPENDENT-REVIEW.md
     depends_on: ["P13-T03"]
-    assignee: otrlead
+    assignee: dasbl
 decisions:
   - task: P13-T01
     decision: "Phase 0 PowerShell capture/grade/redact scaffolds were ported to Node (scripts/baseline/*.mjs) rather than requiring PowerShell on macOS."
@@ -155,14 +156,22 @@ evidence:
   - docs/next/evidence/P13-T03/artifacts-test.log
   - docs/next/evidence/P13-T03/gitleaks-p13-t03-diff.log
 phase_13_handoff:
-  next_task: P13-T04
-  next_task_id: t_50860be4
+  next_task: null
+  next_task_id: null
+  completed_task: P13-T04
+  completed_task_id: t_50860be4
   summary: |
-    Begin Phase 13 task 4 (closeout) on top of the P13-T01 behavioral
-    eval surface, the P13-T02 security hardening, and the P13-T03 GA
-    decision package. The release checklist and rollback-policy
-    verifier are the highest-level fail-closed gates for Phase 13
-    acceptance.
+    Phase 13 is closed. P13-T04 was completed by the decision owner's
+    sign-off on docs/next/reviews/PHASE-13-INDEPENDENT-REVIEW.md, which
+    records a PASS over the P13-T01 behavioral eval surface, the
+    P13-T02 security hardening, and the P13-T03 GA decision package.
+
+    The verdict names two conditions it does not cover: package.json at
+    9.0.0-alpha.0 against a 9.0.0 release identity, and whole-change
+    acceptance, which leaves whole_change_acceptance_evidence
+    unevaluable and workflow:dogfood asserting blocked as success.
+    Signing removed one of three release blockers; it did not make the
+    release ready.
   contract_inputs_for_p13_t04:
     - "`legion next release checklist` composes ten preconditions into a single JSON verdict; treat non-zero exit as a hard fail in CI."
     - "`legion next release rollback-verify` confirms the most recent apply step is restorable; treat non-zero exit as a hard fail."
