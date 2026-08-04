@@ -109,6 +109,10 @@ function writeGaWorkspace(workspace, overrides = {}) {
       "| Task | ID | Assignee | Status | Dependencies |\n| --- | --- | --- | --- | --- |\n| P13-T04 | t_1 | otrlead | **DONE** | T03 |\n"
   );
   writeFileSync2(path.join(repoRoot, "package.json"), JSON.stringify({ name: "legion", version: "9.0.0" }));
+  // The shipped bundle the migration cross-check reads. A well-formed GA
+  // workspace has one; without it the check reports unverifiable, which is the
+  // fail-closed answer.
+  writeFileSync2(path.join(repoRoot, "dist", "legion-cli.mjs"), "// legion dev migrate");
   for (const [name, body] of overrides.gaDocs ?? REQUIRED_GA_DOCS) {
     writeFileSync2(path.join(gaDir, name), body);
   }
@@ -387,5 +391,63 @@ test("P13-T03 release-checklist scopes GA keyword to the requested CHANGELOG ent
     assert.notEqual(result.status, 0);
     const payload = JSON.parse(result.stdout.trim());
     assert.ok(payload.findings.some((f) => f.code === "changelog_missing_ga_keyword"));
+  });
+});
+
+test("a FAIL verdict blocks the release", async () => {
+  await withWorkspace(async (workspace) => {
+    // A document-wide keyword grep let this through: once the template's
+    // explanatory PENDING prose was deleted, a FAIL review emitted no finding
+    // at all. The verdict is read from its own `## Status` section now.
+    const repoRoot = writeGaWorkspace(workspace, {
+      phase13Review: "# Phase 13 Independent Review\n\n## Status\n\nFAIL\n\n## Notes\n\nBlocked on evidence.\n"
+    });
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, false);
+    assert.ok(payload.findings.some((f) => f.code === "phase_13_review_failed"));
+  });
+});
+
+test("a PASS verdict is not blocked by explanatory prose elsewhere in the document", async () => {
+  await withWorkspace(async (workspace) => {
+    // The mirror of the above: the keyword grep also blocked a signed PASS
+    // review that merely mentioned PENDING in its preamble. Wrong both ways.
+    const repoRoot = writeGaWorkspace(workspace, {
+      phase13Review:
+        "# Phase 13 Independent Review\n\n## Status\n\nPASS\n\n## Notes\n\nThe template shipped with a PENDING placeholder.\n"
+    });
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, true, JSON.stringify(payload.findings));
+  });
+});
+
+test("a missing sign-off row fails closed", async () => {
+  await withWorkspace(async (workspace) => {
+    // A deleted or reformatted P13-T04 row previously produced no finding, so
+    // the gate would report ready without ever establishing that the GA
+    // sign-off task exists.
+    const repoRoot = writeGaWorkspace(workspace, {
+      manifest:
+        "| Task | ID | Assignee | Status | Dependencies |\n| --- | --- | --- | --- | --- |\n| P13-T01 | t_0 | legionworker | **DONE** | - |\n"
+    });
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, false);
+    assert.ok(payload.findings.some((f) => f.code === "ga_sign_off_row_missing"));
+  });
+});
+
+test("an unparseable package.json is a finding, not a crash", async () => {
+  await withWorkspace(async (workspace) => {
+    const repoRoot = writeGaWorkspace(workspace);
+    await writeFile(path.join(repoRoot, "package.json"), '{ "version": "9.0.0", }', "utf8");
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    // A fail-closed gate that crashes on the one file every repository has is
+    // worse than one that reports the problem.
+    assert.notEqual(result.status, 2, `crashed: ${result.stderr}`);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.ok(payload.findings.some((f) => f.code === "package_json_invalid"));
   });
 });

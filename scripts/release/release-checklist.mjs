@@ -75,6 +75,9 @@ import { parse as parseYaml } from "yaml";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const DEFAULT_REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..", "..");
 
+/** The GA sign-off task. Its absence from the manifest is itself a finding. */
+const GA_SIGN_OFF_TASK = "P13-T04";
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -193,12 +196,23 @@ function auditReleaseRecord({ gaDir }) {
  */
 function auditOpenGaWork({ repositoryRoot, releaseVersion }) {
   const findings = [];
+
+  // Required, not optional. An absent manifest previously produced no finding
+  // at all, so the fail-closed gate would report `ready` without ever
+  // establishing that the GA sign-off task exists.
   const manifestPath = path.join(repositoryRoot, "docs", "next", "LEGION-ASCENDED-KANBAN-MANIFEST.md");
-  if (existsSync(manifestPath)) {
+  if (!existsSync(manifestPath)) {
+    findings.push({
+      code: "ga_manifest_missing",
+      message: `LEGION-ASCENDED-KANBAN-MANIFEST.md not found at ${manifestPath}; GA task state cannot be established.`
+    });
+  } else {
+    let signOffSeen = false;
     for (const line of readFileSync(manifestPath, "utf8").split("\n")) {
-      const match = /^\|\s*(P1[36]-T\d+)\s*\|[^|]*\|[^|]*\|\s*([^|]*?)\s*\|/.exec(line);
+      const match = /^\|\s*(P13-T\d+)\s*\|[^|]*\|[^|]*\|\s*([^|]*?)\s*\|/.exec(line);
       if (match === null) continue;
       const [, task, status] = match;
+      if (task === GA_SIGN_OFF_TASK) signOffSeen = true;
       if (!/DONE/i.test(status)) {
         findings.push({
           code: "ga_task_open",
@@ -206,16 +220,37 @@ function auditOpenGaWork({ repositoryRoot, releaseVersion }) {
         });
       }
     }
+    // A row that was deleted or reformatted past the regex is indistinguishable
+    // from one that is DONE, unless its absence is itself a finding.
+    if (!signOffSeen) {
+      findings.push({
+        code: "ga_sign_off_row_missing",
+        message: `${GA_SIGN_OFF_TASK} has no row in LEGION-ASCENDED-KANBAN-MANIFEST.md; the GA sign-off task must be present and DONE.`
+      });
+    }
   }
+
   // The published version against the release identity. Not corrected
   // automatically: bumping a package version is a release decision, and a
-  // checklist that silently rewrote it would remove the very disagreement it
-  // exists to surface. `9.0.0-alpha.0` is arguably right while GA is unsigned;
-  // what is wrong is that nothing said the two disagreed.
+  // checklist that silently rewrote it would remove the disagreement it exists
+  // to surface.
   const packagePath = path.join(repositoryRoot, "package.json");
   if (existsSync(packagePath)) {
-    const version = JSON.parse(readFileSync(packagePath, "utf8")).version;
-    if (version !== releaseVersion) {
+    // Guarded like every other JSON read here. Unguarded, a stray trailing
+    // comma in the one file every repository has would crash the gate instead
+    // of producing a finding — the harshest failure mode for the likeliest
+    // input to drift.
+    let version;
+    try {
+      version = JSON.parse(readFileSync(packagePath, "utf8")).version;
+    } catch (error) {
+      findings.push({
+        code: "package_json_invalid",
+        message: `package.json could not be parsed: ${error instanceof Error ? error.message : String(error)}`
+      });
+      version = undefined;
+    }
+    if (version !== undefined && version !== releaseVersion) {
       findings.push({
         code: "package_version_mismatch",
         message: `package.json is ${version} but the release is ${releaseVersion}. Reconcile before GA, or state why the prerelease tag stands.`
@@ -229,16 +264,39 @@ function auditOpenGaWork({ repositoryRoot, releaseVersion }) {
       code: "phase_13_review_missing",
       message: "docs/next/reviews/PHASE-13-INDEPENDENT-REVIEW.md does not exist, and the GA documents cite it."
     });
-  } else if (/\bPENDING\b/.test(readFileSync(reviewPath, "utf8"))) {
-    findings.push({
-      code: "phase_13_review_unsigned",
-      message: "PHASE-13-INDEPENDENT-REVIEW.md is prepared but its verdict is still PENDING; it needs a reviewer's sign-off."
-    });
+  } else {
+    // The verdict is read from its own `## Status` section, not grepped for a
+    // keyword anywhere in the file. A document-wide search let a FAIL verdict
+    // pass once the template's explanatory prose was deleted, and blocked a
+    // PASS verdict that still carried that prose — wrong in both directions.
+    const text = readFileSync(reviewPath, "utf8");
+    // Split on headings rather than one regex: `\Z` is not JavaScript, and a
+    // lookahead that has to express "next heading or end of input" is harder to
+    // read than taking the section directly.
+    const statusAt = text.search(/^##\s+Status\s*$/m);
+    let section;
+    if (statusAt !== -1) {
+      const rest = text.slice(statusAt).replace(/^##\s+Status\s*$/m, "");
+      const nextHeading = rest.search(/^##\s/m);
+      section = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+    }
+    const verdict = section === undefined ? undefined : (section.match(/\b(PASS|FAIL|PENDING)\b/) ?? [])[1];
+    if (verdict === undefined) {
+      findings.push({
+        code: "phase_13_review_verdict_unreadable",
+        message: "PHASE-13-INDEPENDENT-REVIEW.md has no PASS, FAIL, or PENDING verdict under its `## Status` heading."
+      });
+    } else if (verdict !== "PASS") {
+      findings.push({
+        code: verdict === "FAIL" ? "phase_13_review_failed" : "phase_13_review_unsigned",
+        message: `PHASE-13-INDEPENDENT-REVIEW.md records ${verdict}; GA requires a PASS verdict from its independent reviewer.`
+      });
+    }
   }
   return findings;
 }
 
-function auditMigrationPolicy({ gaDir }) {
+function auditMigrationPolicy({ gaDir, repositoryRoot }) {
   const findings = [];
   const policyPath = path.join(gaDir, "MIGRATION-POLICY.md");
   if (!existsSync(policyPath)) {
@@ -264,11 +322,21 @@ function auditMigrationPolicy({ gaDir }) {
   // A doc naming a surface the CLI does not route is the failure this check
   // exists to catch, and a hardcoded string alone cannot see it. Reading the
   // router's own help keeps the two from drifting apart again.
-  const helpPath = path.join(process.cwd(), "packages", "cli", "src", "commands", "migrate", "index.ts");
-  if (existsSync(helpPath) && !readFileSync(helpPath, "utf8").includes("legion dev migrate")) {
+  // Checked against the shipped bundle, resolved from `--repository-root`.
+  // Anchoring to `process.cwd()` made the cross-check a tautology the moment
+  // anyone ran the checklist against another checkout, which is the case it
+  // exists for; and reading `packages/cli/src/**` skipped the check entirely
+  // under the installed CLI, because `files` does not ship the sources.
+  const bundlePath = path.join(repositoryRoot, "dist", "legion-cli.mjs");
+  if (!existsSync(bundlePath)) {
+    findings.push({
+      code: "migration_policy_cli_surface_unverifiable",
+      message: `dist/legion-cli.mjs not found at ${bundlePath}; the policy's CLI surface could not be cross-checked against the shipped bundle.`
+    });
+  } else if (!readFileSync(bundlePath, "utf8").includes("legion dev migrate")) {
     findings.push({
       code: "migration_policy_cli_surface_drift",
-      message: "MIGRATION-POLICY.md names `legion dev migrate`, but the migrate command's help text no longer does."
+      message: "MIGRATION-POLICY.md names `legion dev migrate`, but the shipped CLI bundle no longer does."
     });
   }
   return findings;
@@ -462,7 +530,7 @@ async function audit({ releaseVersion, repositoryRoot, validateNextLog }) {
 
   const changelog = auditChangelog({ changelogPath, releaseVersion });
   const releaseRecord = auditReleaseRecord({ gaDir });
-  const migrationPolicy = auditMigrationPolicy({ gaDir });
+  const migrationPolicy = auditMigrationPolicy({ gaDir, repositoryRoot });
   const rollbackPolicy = auditRollbackPolicy({ gaDir });
   const v8Handoff = auditV8Handoff({ gaDir });
   const stableChannelApproval = auditStableChannelApproval({ gaDir });
