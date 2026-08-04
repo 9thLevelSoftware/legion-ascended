@@ -56,16 +56,60 @@ export function retroIndexArtifactPath(): ArtifactPath {
   return artifactPathSchema.parse(RETRO_INDEX_ARTIFACT_PATH);
 }
 
+const SEVERITIES = new Set(["minor", "major", "blocking"]);
+
+function isRetroAction(value: unknown): value is RetroAction {
+  if (typeof value !== "object" || value === null) return false;
+  const action = value as Record<string, unknown>;
+  return (
+    typeof action["id"] === "string" &&
+    typeof action["title"] === "string" &&
+    typeof action["body"] === "string" &&
+    typeof action["severity"] === "string" &&
+    SEVERITIES.has(action["severity"] as string)
+  );
+}
+
+function isRetroIndexEntry(value: unknown): value is RetroIndexEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry["id"] === "string" &&
+    typeof entry["createdAt"] === "string" &&
+    typeof entry["artifactPath"] === "string" &&
+    typeof entry["summary"] === "string" &&
+    (entry["scopedChangeId"] === undefined || typeof entry["scopedChangeId"] === "string") &&
+    Array.isArray(entry["actions"]) &&
+    entry["actions"].every(isRetroAction)
+  );
+}
+
 /**
  * A missing or malformed index reads as empty, matching `readLessonIndex`.
  * Planning must not fail because a retrospective file was hand-edited; broader
  * project corruption is `legion validate`'s report to make.
+ *
+ * Every entry is shape-checked, not just the envelope. `{"kind":"retro_index",
+ * "retrospectives":[{}]}` is valid JSON with the right two keys, and a
+ * top-level-only check accepted it — then planning and recall both dereferenced
+ * `entry.actions` and threw, which is the crash the empty fallback promises not
+ * to be.
+ *
+ * Malformed entries are dropped individually rather than voiding the file. One
+ * hand-mangled entry should not erase every retrospective recorded beside it.
  */
 export async function readRetroIndex(repositoryRoot: string): Promise<RetroIndex> {
   const indexPath = path.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
-    const parsed = JSON.parse(await readFile(indexPath, "utf8")) as RetroIndex;
-    if (parsed.kind === "retro_index" && Array.isArray(parsed.retrospectives)) return parsed;
+    const parsed: unknown = JSON.parse(await readFile(indexPath, "utf8"));
+    if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
+    const candidate = parsed as Record<string, unknown>;
+    if (candidate["kind"] !== "retro_index" || !Array.isArray(candidate["retrospectives"])) return EMPTY_INDEX;
+    return {
+      schemaVersion: 1,
+      kind: "retro_index",
+      retrospectives: candidate["retrospectives"].filter(isRetroIndexEntry)
+    };
   } catch {
     // Fall through to the empty index.
   }
@@ -86,13 +130,25 @@ export function appendRetroEntry(index: RetroIndex, entry: RetroIndexEntry): Ret
 export function outstandingRetroActions(
   index: RetroIndex,
   limit = 5
-): readonly (RetroAction & { readonly retroId: string; readonly artifactPath: string })[] {
+): readonly (RetroAction & {
+  readonly retroId: string;
+  readonly artifactPath: string;
+  readonly scopedChangeId?: string;
+})[] {
   return [...index.retrospectives]
     .reverse()
     .flatMap((entry) =>
       entry.actions
-        .filter((action) => action.severity !== "minor")
-        .map((action) => ({ ...action, retroId: entry.id, artifactPath: entry.artifactPath }))
+        .filter((action) => action["severity"] !== "minor")
+        .map((action) => ({
+          ...action,
+          retroId: entry.id,
+          artifactPath: entry.artifactPath,
+          // Carried through so a reader can tell an action drawn from one
+          // phase's retrospective from one drawn across the whole project.
+          // Without it the field was written and never read.
+          ...(entry["scopedChangeId"] === undefined ? {} : { scopedChangeId: entry["scopedChangeId"] })
+        }))
     )
     .slice(0, limit);
 }

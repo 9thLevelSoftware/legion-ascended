@@ -452,12 +452,12 @@ function recallTerms(topic: string): readonly string[] {
 }
 
 /**
- * Retrospective findings scored on the same rule as lessons.
+ * Retrospective findings scored on the same rule as lessons, minus tags.
  *
- * A finding has no tags, so only the summary and body tiers can score. Giving
- * it a synthetic tag to reach the 3-tier would rank retrospectives above
- * lessons for reasons the caller cannot see; a finding that matches in its
- * title and body scores 3 honestly.
+ * A finding has a title and a body, and no tags, so only two tiers apply:
+ * title 2, body 1. Giving it a synthetic tag to reach `scoreLesson`'s 3-point
+ * tier would rank retrospectives above lessons for a reason the caller cannot
+ * see in either record.
  */
 function scoreRetroAction(
   action: { readonly title: string; readonly body: string },

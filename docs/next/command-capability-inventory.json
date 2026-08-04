@@ -240,7 +240,7 @@
           "disposition": "deliberate-removal"
         },
         {
-          "gap": "Prune mode is removed rather than built. It pruned OUTCOMES.md records older than memory.prune_threshold into an archive file; v9 has no OUTCOMES.md, no such setting, and a lesson index that is one committed JSON artifact with no archive path. An equivalent over .legion artifacts would be new work, not preservation.",
+          "gap": "Prune mode is removed rather than built, and is removed from the argument hint, usage text and mode routing along with its step so nothing advertises a route the host cannot execute. It archived OUTCOMES.md records older than memory.prune_threshold. That setting does still exist in settings.json and docs/settings.schema.json; what does not exist is OUTCOMES.md, any archive path, or a verb that removes entries from the lesson index.",
           "disposition": "deliberate-removal"
         }
       ]

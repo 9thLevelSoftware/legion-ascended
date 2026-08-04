@@ -1,7 +1,7 @@
 ---
 name: legion:learn
 description: Record, recall, and manage project-specific patterns, pitfalls, and preferences
-argument-hint: <lesson> [--recall <topic>] [--list] [--prune]
+argument-hint: <lesson> [--recall <topic>] [--list]
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion]
 ---
 
@@ -37,7 +37,9 @@ continue with another lesson.
 
    - If $ARGUMENTS contains `--recall <topic>`: set MODE=recall, extract topic text
    - If $ARGUMENTS contains `--list`: set MODE=list
-   - If $ARGUMENTS contains `--prune`: set MODE=prune
+   - If $ARGUMENTS contains `--prune`: display the removal note below and exit.
+     The verb has no prune mode, so routing to one would leave the host with
+     nothing to execute.
    - If $ARGUMENTS is non-empty (and no flags): set MODE=record, store full text as lesson
    - If $ARGUMENTS is empty or missing:
      Display:
@@ -52,8 +54,7 @@ continue with another lesson.
       Modes:
         `<lesson>`         — Record a new learning
         `--recall <topic>` — Search memory for relevant learnings
-        `--list`           — Show all recorded learnings by type
-        `--prune`          — Archive old, low-importance outcome records"
+        `--list`           — Show all recorded learnings by type"
      Exit — do not proceed
 
 2. LOAD PROJECT CONTEXT (optional)
@@ -70,7 +71,6 @@ continue with another lesson.
    - MODE=record → go to Step 4
    - MODE=recall → go to Step 8
    - MODE=list → go to Step 9
-   - MODE=prune → go to Step 10
 
 4. CLASSIFY LESSON
    Analyze the lesson text to determine its type:
@@ -199,9 +199,13 @@ IMPORTANT:
 - Recall searches lessons and retrospective findings, and says so in `corpus`
 - All user-facing questions use adapter.ask_user (AskUserQuestion tool)
 - The command never modifies phase artifacts, the roadmap, or any change bundle
-- Prune mode is a recorded deliberate removal. It operated on `OUTCOMES.md` under
-  a `memory.prune_threshold` setting, and neither the file nor the setting exists
-  in v9 — the lesson index is a single committed JSON artifact with no archive
-  path. Retaining the prompt would offer an operation with nothing to perform it
-  on.
+- Prune mode is a recorded deliberate removal, and is removed from the argument
+  hint, the usage text, and mode routing along with its step. It archived
+  `OUTCOMES.md` records older than `memory.prune_threshold` into a separate
+  archive file. `memory.prune_threshold` does still exist in `settings.json` and
+  `docs/settings.schema.json` — what does not exist is `OUTCOMES.md`, any
+  archive path, or a verb that prunes anything. The lesson index is one
+  committed JSON artifact, and no verb removes entries from it, so the mode had
+  nothing to operate on. If pruning returns it is new work against `.legion`
+  artifacts, not preservation of this.
 </process>

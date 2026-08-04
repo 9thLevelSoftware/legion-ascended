@@ -110,13 +110,49 @@ test("learn --recall searches retrospective findings, not only lessons", async (
 
 test("a malformed retro index does not fail planning or recall", async (t) => {
   const { root, run } = await repoWithRetroIndex(t, []);
-  await writeFile(path.join(root, ...INDEX_PATH), "{ not json", "utf8");
 
   // Matching readLessonIndex: planning must not fail because a retrospective
   // file was hand-edited. Reporting broader corruption is validate's job.
+  // The second case is the one an envelope-only check let through: valid JSON
+  // with the right two keys and a structurally empty entry. Both planning and
+  // recall then dereferenced `entry.actions` and threw — the exact crash the
+  // empty fallback promises not to be.
+  for (const contents of ['{ not json', '{"kind":"retro_index","retrospectives":[{}]}', "[]", "null"]) {
+    await writeFile(path.join(root, ...INDEX_PATH), contents, "utf8");
+    const recall = await run("learn", "--recall", "tasks", "--json");
+    assert.equal(recall.exitCode, 0, `${contents}: ${recall.stderr}`);
+    assert.deepEqual(parseJsonOutput(recall).matches, []);
+  }
+});
+
+test("a malformed entry is dropped without voiding the entries beside it", async (t) => {
+  const { root, run } = await repoWithRetroIndex(t, []);
+  await writeFile(
+    path.join(root, ...INDEX_PATH),
+    JSON.stringify({ schemaVersion: 1, kind: "retro_index", retrospectives: [{}, ENTRY, { actions: "no" }] }),
+    "utf8"
+  );
+
+  // One hand-mangled entry should not erase every retrospective recorded
+  // beside it, which is what voiding the whole file on any bad entry would do.
   const recall = await run("learn", "--recall", "tasks", "--json");
   assert.equal(recall.exitCode, 0, recall.stderr);
-  assert.deepEqual(parseJsonOutput(recall).matches, []);
+  assert.ok(recall.stdout.includes("Split tasks"), "the valid entry survived");
+});
+
+test("a blocked retrospective is not indexed", async (t) => {
+  const { root, run } = await repoWithRetroIndex(t, [ENTRY]);
+  // The manual adapter blocks with a `manual-execution-required` finding, and a
+  // timed-out executor behaves the same way. Those are the adapter's findings,
+  // not the retrospective's. Indexing them would have every later plan report an
+  // adapter failure as planning guidance and recall return it as institutional
+  // knowledge.
+  const result = await run("retro", "--executor", "manual", "--json");
+  assert.notEqual(result.exitCode, 0);
+
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives.length, 1, "a blocked run appended to the index");
+  assert.equal(parseJsonOutput(result).retroIndexArtifactPath, undefined);
 });
 
 test("retro appends to the index it writes", async (t) => {

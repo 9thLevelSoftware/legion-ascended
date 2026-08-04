@@ -40639,11 +40639,29 @@ var EMPTY_INDEX = Object.freeze({
 function retroIndexArtifactPath() {
   return artifactPathSchema.parse(RETRO_INDEX_ARTIFACT_PATH);
 }
+var SEVERITIES = /* @__PURE__ */ new Set(["minor", "major", "blocking"]);
+function isRetroAction(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const action = value;
+  return typeof action["id"] === "string" && typeof action["title"] === "string" && typeof action["body"] === "string" && typeof action["severity"] === "string" && SEVERITIES.has(action["severity"]);
+}
+function isRetroIndexEntry(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value;
+  return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeId"] === void 0 || typeof entry["scopedChangeId"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
+}
 async function readRetroIndex(repositoryRoot) {
   const indexPath = path34.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
     const parsed = JSON.parse(await readFile19(indexPath, "utf8"));
-    if (parsed.kind === "retro_index" && Array.isArray(parsed.retrospectives)) return parsed;
+    if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
+    const candidate = parsed;
+    if (candidate["kind"] !== "retro_index" || !Array.isArray(candidate["retrospectives"])) return EMPTY_INDEX;
+    return {
+      schemaVersion: 1,
+      kind: "retro_index",
+      retrospectives: candidate["retrospectives"].filter(isRetroIndexEntry)
+    };
   } catch {
   }
   return EMPTY_INDEX;
@@ -40653,7 +40671,15 @@ function appendRetroEntry(index, entry) {
 }
 function outstandingRetroActions(index, limit = 5) {
   return [...index.retrospectives].reverse().flatMap(
-    (entry) => entry.actions.filter((action) => action.severity !== "minor").map((action) => ({ ...action, retroId: entry.id, artifactPath: entry.artifactPath }))
+    (entry) => entry.actions.filter((action) => action["severity"] !== "minor").map((action) => ({
+      ...action,
+      retroId: entry.id,
+      artifactPath: entry.artifactPath,
+      // Carried through so a reader can tell an action drawn from one
+      // phase's retrospective from one drawn across the whole project.
+      // Without it the field was written and never read.
+      ...entry["scopedChangeId"] === void 0 ? {} : { scopedChangeId: entry["scopedChangeId"] }
+    }))
   ).slice(0, limit);
 }
 
@@ -41145,7 +41171,9 @@ function planningSuccessHuman(phaseNumber, phaseName, dryRun, action, retroActio
   const mode = dryRun ? "Dry run: no task graph was written." : "Change, oracle, and taskgraph artifacts were written.";
   const retro = retroActions.length === 0 ? void 0 : [
     "Outstanding retrospective actions to account for in this decomposition:",
-    ...retroActions.map((entry) => `  - [${entry.severity}] ${entry.title} (${entry.artifactPath})`)
+    ...retroActions.map(
+      (entry) => `  - [${entry.severity}] ${entry.title}${entry.scopedChangeId === void 0 ? "" : ` (from ${entry.scopedChangeId})`} \u2014 ${entry.artifactPath}`
+    )
   ].join("\n");
   return [summary, mode, retro, renderNextAction(action)].filter((part) => part !== void 0).join("\n");
 }
@@ -45093,7 +45121,8 @@ async function runRetroWorkflow(context) {
   const markdownArtifactPath = guidanceArtifactPath(paths, "retro.md");
   await writeProjectTextFile({ repositoryRoot: context.repositoryRoot, artifactPath: markdownArtifactPath, text: markdown });
   const retroIndexPath = retroIndexArtifactPath();
-  const nextIndex = appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
+  const indexed = executed.result.ok;
+  const nextIndex = !indexed ? await readRetroIndex(context.repositoryRoot) : appendRetroEntry(await readRetroIndex(context.repositoryRoot), {
     id: paths.runId,
     createdAt: currentUtcTimestamp(),
     ...scopedChangeId === void 0 ? {} : { scopedChangeId },
@@ -45106,11 +45135,13 @@ async function runRetroWorkflow(context) {
       severity: finding.severity
     }))
   });
-  await writeProjectTextFile({
-    repositoryRoot: context.repositoryRoot,
-    artifactPath: retroIndexPath,
-    text: stableProtocolJson(nextIndex)
-  });
+  if (indexed) {
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: retroIndexPath,
+      text: stableProtocolJson(nextIndex)
+    });
+  }
   const action = nextAction("legion plan 1", "Use retrospective lessons when planning the next phase.");
   const status2 = executed.result.ok ? "completed" : "blocked";
   const diagnostics = executed.result.findings;
@@ -45121,7 +45152,7 @@ async function runRetroWorkflow(context) {
     runInput: { phase, milestone },
     outputs: {
       markdownArtifactPath,
-      retroIndexArtifactPath: retroIndexPath,
+      ...indexed ? { retroIndexArtifactPath: retroIndexPath } : {},
       promptArtifactPath: executed.promptArtifactPath,
       resultArtifactPath: executed.resultArtifactPath,
       rawLogArtifactPath: executed.rawLogArtifactPath,
@@ -45138,8 +45169,9 @@ async function runRetroWorkflow(context) {
     runId: paths.runId,
     artifactPath: paths.workflowRunArtifactPath,
     markdownArtifactPath,
-    retroIndexArtifactPath: retroIndexPath,
-    retrospectiveCount: nextIndex.retrospectives.length,
+    // Absent when the run was blocked, so a caller can tell "nothing was
+    // indexed" from "indexed and the count happens to be unchanged".
+    ...indexed ? { retroIndexArtifactPath: retroIndexPath, retrospectiveCount: nextIndex.retrospectives.length } : {},
     executor: executed.executor,
     nextAction: action,
     diagnostics
