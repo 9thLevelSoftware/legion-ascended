@@ -426,7 +426,10 @@ function planningSuccessHuman(
       ? undefined
       : [
           "Outstanding retrospective actions to account for in this decomposition:",
-          ...retroActions.map((entry) => `  - [${entry.severity}] ${entry.title} (${entry.artifactPath})`)
+          ...retroActions.map(
+            (entry) =>
+              `  - [${entry.severity}] ${entry.title}${entry.scopedChangeId === undefined ? "" : ` (from ${entry.scopedChangeId})`} — ${entry.artifactPath}`
+          )
         ].join("\n");
   return [summary, mode, retro, renderNextAction(action)]
     .filter((part) => part !== undefined)
