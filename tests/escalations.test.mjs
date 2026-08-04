@@ -106,3 +106,30 @@ test("a retrospective is given the escalation count it reports", async (t) => {
   assert.ok(Array.isArray(evidence.escalationReasons));
   assert.match(evidence.summary, /escalation/);
 });
+
+test("the same walk reports attempts and finding bodies, not only escalations", async (t) => {
+  const { root, changeId } = await builtProject(t);
+  const { collectEscalations } = await import("../packages/cli/dist/workflow/escalations.js");
+
+  const summary = await collectEscalations({ repositoryRoot: root, changeId });
+
+  // Attempts come from every run, not only the blocked ones: the highest a task
+  // reached is what says how many cycles it took. A retrospective asking whether
+  // a phase went smoothly needs the retries as much as the refusals — three
+  // tasks that each passed on their fourth attempt is a different phase from
+  // three that passed first time, and escalations alone cannot tell them apart.
+  assert.equal(typeof summary.attemptsByTask, "object");
+  for (const attempts of Object.values(summary.attemptsByTask)) {
+    assert.ok(Number.isInteger(attempts) && attempts >= 1, "an attempt count must be a positive integer");
+  }
+
+  // Findings are recorded at every severity. A major finding is a reviewer
+  // saying something is wrong and passing anyway, which is exactly what a
+  // retrospective is for and what a count of escalations cannot show.
+  assert.ok(Array.isArray(summary.reviewFindings));
+  for (const finding of summary.reviewFindings) {
+    assert.equal(typeof finding.title, "string");
+    assert.equal(typeof finding.body, "string");
+    assert.match(finding.severity, /^(minor|major|blocking)$/);
+  }
+});

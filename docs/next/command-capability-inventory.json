@@ -181,12 +181,9 @@
           "evidence": "tests/verb-defects.test.mjs"
         },
         {
-          "gap": "Evidence gathering from completed-work artifacts (phase summaries, review findings and cycle counts, plan frontmatter) does not exist. latestGuidanceRuns returns run metadata, not build or review evidence.",
-          "disposition": "build-in-cli",
-          "closedWhen": {
-            "file": "packages/cli/src/commands/workflow/contextual.ts",
-            "pattern": "retroFindingBodies"
-          }
+          "gap": "Evidence gathering reaches the reviewers own words and the retry history: review finding bodies at every severity, ranked blocking first and capped at twelve with the number omitted reported, and per-task attempt counts from the task-run walk collectEscalations already performs. Phase summaries and plan frontmatter are not gathered: SUMMARY.md retired with .planning/ and has no v9 counterpart.",
+          "disposition": "built-in-cli",
+          "evidence": "tests/escalations.test.mjs"
         },
         {
           "gap": "A scoped retro refuses a phase whose change is not complete, using isChangeComplete (taskgraph non-empty, every task's latest evidence accepted, an accepted review present). An unscoped retro reports over current state and is not gated.",

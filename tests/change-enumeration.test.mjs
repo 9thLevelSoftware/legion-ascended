@@ -310,3 +310,64 @@ test("build can be scoped to a change rather than always the newest", async (t) 
   const result = await handleBuildWorkflow(context, planned.change.changeId);
   assert.equal(result.payload.changeId, planned.change.changeId);
 });
+
+test("retro evidence caps review findings and says how many it dropped", async (t) => {
+  const { root, run, planned } = await plannedProject(t);
+  const { gatherRetroEvidence, renderRetroEvidence } = await import(
+    "../packages/cli/dist/commands/workflow/contextual.js"
+  );
+  const { resolveWorkflowState } = await import("../packages/cli/dist/workflow/state.js");
+  const { mkdir } = await import("node:fs/promises");
+
+  const changeId = planned.change.changeId;
+  const reviewsDir = path.join(root, ".legion", "project", "changes", changeId, "reviews");
+  await mkdir(reviewsDir, { recursive: true });
+  const projectId = parseJsonOutput(await run("status", "--json")).workflowState.projectId;
+  // Twenty findings: one blocking, the rest minor. An unbounded list would bury
+  // the one that matters, and a cap that dropped by discovery order would keep
+  // whichever happened to be written first.
+  const findings = [
+    // `major`, not `blocking`: a blocking finding is schema-required to carry
+    // evidenceRefs, and referencing evidence this fixture never produced makes
+    // the whole review unreadable. The ranking assertion works the same.
+    { id: "f-major", title: "Contract broken", body: "The serious one.", severity: "major" },
+    ...Array.from({ length: 19 }, (_, index) => ({
+      id: `f-minor-${index}`,
+      title: `Nitpick ${index}`,
+      body: "Cosmetic.",
+      severity: "minor"
+    }))
+  ];
+  await writeFile(
+    path.join(reviewsDir, "rev_many.json"),
+    JSON.stringify({
+      schemaVersion: "1.0.0",
+      kind: "review",
+      id: "rev_many",
+      projectId,
+      changeId,
+      reviewer: { kind: "worker", id: "task-reviewer" },
+      status: "accepted",
+      verdicts: { specification: "pass", integration: "pass", evidence: "pass" },
+      confidence: "high",
+      findings,
+      supersedes: [],
+      submittedAt: CREATED_AT,
+      createdAt: CREATED_AT
+    }),
+    "utf8"
+  );
+
+  const state = await resolveWorkflowState({ repositoryRoot: root, args: { options: new Map(), positionals: [] } });
+  const evidence = await gatherRetroEvidence(root, state, []);
+
+  assert.equal(evidence.retroFindingBodies.length, 12, "the cap was not applied");
+  assert.equal(evidence.findingsOmitted, 8);
+  // Blocking first. A cap is only defensible if what survives it is the part
+  // worth reading.
+  assert.match(evidence.retroFindingBodies[0], /\[major\] Contract broken/);
+
+  // And the omission is stated. A silent truncation reads as complete coverage,
+  // which is worse than no list at all.
+  assert.match(renderRetroEvidence(evidence), /showing 12, 8 omitted/);
+});

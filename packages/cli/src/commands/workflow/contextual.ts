@@ -1121,8 +1121,33 @@ export interface RetroEvidence {
   /** Tasks whose first review attempt passed, over tasks reviewed at all. */
   readonly firstPassReviews: { readonly passed: number; readonly reviewed: number };
   readonly recentRuns: readonly string[];
+  /**
+   * What reviewers actually wrote, capped.
+   *
+   * A count of passing reviews says a phase was reviewed; it does not say what
+   * the reviewers found. `retroFindingBodies` carries the text so the executor
+   * reasons about the findings rather than about their number.
+   */
+  readonly retroFindingBodies: readonly string[];
+  /** Findings gathered but not shown, so a cap never reads as full coverage. */
+  readonly findingsOmitted: number;
+  /** Tasks that needed more than one attempt, as `taskId x N`. */
+  readonly retriedTasks: readonly string[];
   readonly summary: string;
 }
+
+/**
+ * How many review findings reach the prompt.
+ *
+ * Unbounded, a phase with sixty minor findings buries the two that matter. The
+ * count of what was dropped travels with them, because a silent truncation
+ * reads as complete coverage — which is the failure that makes a capped list
+ * worse than no list.
+ */
+const RETRO_FINDING_LIMIT = 12;
+
+/** Severity order, lowest first, so a sort by index puts blocking on top. */
+const FINDING_RANK = ["minor", "major", "blocking"];
 
 /**
  * The evidence a retrospective is drawn from.
@@ -1146,7 +1171,10 @@ export async function gatherRetroEvidence(
   let changesComplete = 0;
   let firstPassPassed = 0;
   let tasksReviewed = 0;
+  let findingsSeen = 0;
   const escalationReasons = new Set<string>();
+  const findingBodies: string[] = [];
+  const retriedTasks: string[] = [];
   // Valid bundles, not directories. Counting directories counts a docs folder
   // with no change.yaml as a change.
   const listed = await listWorkflowChanges(repositoryRoot);
@@ -1160,6 +1188,19 @@ export async function gatherRetroEvidence(
       const escalated = await collectEscalations({ repositoryRoot, changeId });
       escalations += escalated.total;
       for (const entry of escalated.escalations) escalationReasons.add(entry.reason);
+      // Blocking first, then major, then minor. A cap that dropped by discovery
+      // order would keep whichever findings happened to be written first.
+      const ranked = [...escalated.reviewFindings].sort(
+        (left, right) => FINDING_RANK.indexOf(right.severity) - FINDING_RANK.indexOf(left.severity)
+      );
+      findingsSeen += ranked.length;
+      for (const finding of ranked) {
+        if (findingBodies.length >= RETRO_FINDING_LIMIT) break;
+        findingBodies.push(`[${finding.severity}] ${finding.title} — ${finding.body}`);
+      }
+      for (const [taskId, attempts] of Object.entries(escalated.attemptsByTask)) {
+        if (attempts > 1) retriedTasks.push(`${taskId} x${attempts}`);
+      }
       const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
       if (taskgraph.ok) taskCount += taskgraph.document.tasks.length;
       const complete = await isChangeComplete({ repositoryRoot, changeId });
@@ -1192,6 +1233,9 @@ export async function gatherRetroEvidence(
     acceptedReviews,
     escalations,
     escalationReasons: [...escalationReasons].sort(),
+    retroFindingBodies: findingBodies,
+    findingsOmitted: Math.max(0, findingsSeen - findingBodies.length),
+    retriedTasks: retriedTasks.sort(),
     changesComplete,
     firstPassReviews: { passed: firstPassPassed, reviewed: tasksReviewed },
     recentRuns: scope === undefined ? recentRuns.map((run) => `${run.workflow}/${run.runId}: ${run.status}`) : [],
@@ -1215,6 +1259,15 @@ export function renderRetroEvidence(evidence: RetroEvidence): string {
     evidence.escalationReasons.length === 0
       ? "- Escalation reasons: none"
       : `- Escalation reasons: ${evidence.escalationReasons.join(", ")}`,
+    evidence.retriedTasks.length === 0
+      ? "- Tasks needing more than one attempt: none"
+      : `- Tasks needing more than one attempt: ${evidence.retriedTasks.join(", ")}`,
+    evidence.retroFindingBodies.length === 0
+      ? "- Review findings: none recorded"
+      : [
+          `- Review findings${evidence.findingsOmitted === 0 ? "" : ` (showing ${evidence.retroFindingBodies.length}, ${evidence.findingsOmitted} omitted)`}:`,
+          ...evidence.retroFindingBodies.map((body) => `  - ${body}`)
+        ].join("\n"),
     evidence.scopeLabel !== undefined
       ? undefined
       : evidence.recentRuns.length === 0
