@@ -295,3 +295,37 @@ test("--dry-run still writes nothing at all", async (t) => {
     "a dry run left a run directory behind"
   );
 });
+
+test("--dry-run and --save cannot be combined", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+  // Reaching the save path first let `--dry-run --save` append to the index and
+  // mark the run completed — the one thing the flag promises cannot happen.
+  const result = await run("retro", "--dry-run", "--save", staged.runId, "--json");
+  assert.notEqual(result.exitCode, 0);
+  assert.match(parseJsonOutput(result).diagnostics[0].message, /cannot be combined/);
+
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives.length, 0, "a dry run saved");
+});
+
+test("a staged entry must belong to the run being saved", async (t) => {
+  const { root, run, staged } = await stagedRun(t);
+  const entryPath = path.join(root, ...staged.stagedEntryArtifactPath.split("/"));
+  const entry = JSON.parse(await readFile(entryPath, "utf8"));
+
+  // Editing before saving is the documented path, so an operator who copies a
+  // previous entry would file this run's lessons under another retrospective's
+  // id — and plan and learn --recall would attribute them there forever.
+  await writeFile(entryPath, JSON.stringify({ ...entry, id: "some-other-run" }), "utf8");
+  const wrongId = await run("retro", "--save", staged.runId, "--json");
+  assert.notEqual(wrongId.exitCode, 0);
+  assert.match(parseJsonOutput(wrongId).diagnostics[0].message, /must match the run being saved/);
+
+  await writeFile(entryPath, JSON.stringify({ ...entry, artifactPath: "somewhere/else.md" }), "utf8");
+  const wrongArtifact = await run("retro", "--save", staged.runId, "--json");
+  assert.notEqual(wrongArtifact.exitCode, 0);
+  assert.match(parseJsonOutput(wrongArtifact).diagnostics[0].message, /but this run wrote/);
+
+  const index = JSON.parse(await readFile(path.join(root, ...INDEX_PATH), "utf8"));
+  assert.equal(index.retrospectives.length, 0);
+});

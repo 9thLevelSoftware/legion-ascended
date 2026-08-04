@@ -504,11 +504,19 @@ async function mapQuery(context: CliContext, query: string): Promise<CliResult> 
 }
 
 async function runRetroWorkflow(context: CliContext): Promise<CliResult> {
-  const save = stringOption(context, "save")?.trim();
-  if (context.args.options.get("save") === true || save === "") {
-    return usageError('Missing required value for --save. Example: legion retro --save 2026-08-04t12-00-00-000z-retro.');
+  const save = optionalStringInput(context, "save");
+  if (save !== null && typeof save !== "string") return save;
+  if (save !== null) {
+    // `--dry-run` writes nothing. Reaching the save path first would have let
+    // `legion retro --dry-run --save <id>` append to the index and mark the run
+    // completed, which is the one thing the flag promises cannot happen.
+    if (hasFlag(context, "dry-run")) {
+      return usageError(
+        "legion retro --dry-run --save cannot be combined: --dry-run writes nothing, and --save exists to write. Drop one."
+      );
+    }
+    return saveStagedRetro(context, save);
   }
-  if (save !== undefined) return saveStagedRetro(context, save);
 
   const phase = optionalStringInput(context, "phase");
   if (phase !== null && typeof phase !== "string") return phase;
@@ -1298,7 +1306,7 @@ function milestoneProgressPayload(state: MilestoneProgress | undefined): Record<
 async function saveStagedRetro(context: CliContext, runId: string): Promise<CliResult> {
   const runArtifactPath = artifactPathSchema.parse(`.legion/project/workflow/retro/${runId}/workflow-run.json`);
   const runPath = path.join(context.repositoryRoot, ...runArtifactPath.split("/"));
-  let run: { readonly status?: string; readonly outputs?: Record<string, unknown> };
+  let run: Record<string, unknown> & { readonly status?: string; readonly outputs?: Record<string, unknown> };
   try {
     run = JSON.parse(await readFile(runPath, "utf8"));
   } catch {
@@ -1341,6 +1349,22 @@ async function saveStagedRetro(context: CliContext, runId: string): Promise<CliR
       `legion retro --save ${runId} found a malformed entry in ${entryPath}. Every action needs id, title, body and a severity of minor, major or blocking.`
     );
   }
+  // The entry has to belong to the run being saved. Editing before saving is
+  // the documented path, and an operator who copies a previous entry or edits
+  // the top-level metadata would otherwise file this run's lessons under
+  // another retrospective's id, pointing at another retrospective's artifact —
+  // and `plan` and `learn --recall` would then attribute them there forever.
+  if (entry.id !== runId) {
+    return usageError(
+      `legion retro --save ${runId} found an entry belonging to ${JSON.stringify(entry.id)}. The staged entry's id must match the run being saved.`
+    );
+  }
+  const expectedArtifact = run.outputs?.["markdownArtifactPath"];
+  if (typeof expectedArtifact === "string" && entry.artifactPath !== expectedArtifact) {
+    return usageError(
+      `legion retro --save ${runId} found an entry pointing at ${JSON.stringify(entry.artifactPath)}, but this run wrote ${JSON.stringify(expectedArtifact)}.`
+    );
+  }
 
   const retroIndexPath = retroIndexArtifactPath();
   const nextIndex = appendRetroEntry(await readRetroIndex(context.repositoryRoot), entry);
@@ -1355,7 +1379,7 @@ async function saveStagedRetro(context: CliContext, runId: string): Promise<CliR
     repositoryRoot: context.repositoryRoot,
     artifactPath: runArtifactPath,
     text: stableProtocolJson({
-      ...(JSON.parse(await readFile(runPath, "utf8")) as Record<string, unknown>),
+      ...run,
       status: "completed",
       outputs: { ...(run.outputs ?? {}), retroIndexArtifactPath: retroIndexPath }
     })
