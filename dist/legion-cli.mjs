@@ -45492,12 +45492,12 @@ async function handleMilestoneWorkflow(context) {
         `Milestone ${complete} has ${outstanding.length} incomplete phase(s): ${outstanding.map((entry) => `${entry.phase} (${entry.reason})`).join("; ")}. Completing it would record a summary over work that is not done.`
       );
     }
-    const derived = await deriveMilestoneMetrics(context.repositoryRoot, progress, createdAt);
+    const derived = await deriveMilestoneMetrics(context.repositoryRoot, progress.phases, createdAt);
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
       status: "completed",
       summary,
-      ...derived === void 0 ? {} : { derived },
+      derived,
       completedAt: createdAt
     }));
     status2 = "accepted";
@@ -45840,13 +45840,12 @@ async function saveStagedRetro(context, runId) {
     ].join("\n")
   );
 }
-async function deriveMilestoneMetrics(repositoryRoot, progress, generatedAt) {
-  if (!progress.ok) return void 0;
+async function deriveMilestoneMetrics(repositoryRoot, phases, generatedAt) {
   let tasks = 0;
   let passingReviews = 0;
   let firstPassPassed = 0;
   let tasksReviewed = 0;
-  const changeIds2 = progress.phases.map((entry) => entry.changeId).filter((entry) => entry !== void 0);
+  const changeIds2 = phases.map((entry) => entry.changeId).filter((entry) => entry !== void 0);
   for (const changeId of changeIds2) {
     const taskgraph = await readTaskGraph({ repositoryRoot, changeId });
     if (taskgraph.ok) tasks += taskgraph.document.tasks.length;
@@ -45858,8 +45857,8 @@ async function deriveMilestoneMetrics(repositoryRoot, progress, generatedAt) {
     firstPassPassed += firstAttempts.filter((review) => review.document.status === "accepted").length;
   }
   return {
-    phases: progress.phases.length,
-    phasesComplete: progress.phases.filter((entry) => entry.complete).length,
+    phases: phases.length,
+    phasesComplete: phases.filter((entry) => entry.complete).length,
     changes: changeIds2.length,
     tasks,
     passingReviews,

@@ -918,12 +918,17 @@ async function handleMilestoneWorkflow(context: CliContext): Promise<CliResult> 
     // report today's artifacts under a summary written months ago, so a
     // milestone completed against three finished phases would silently gain a
     // fourth. The claim and the evidence have to be from the same moment.
-    const derived = await deriveMilestoneMetrics(context.repositoryRoot, progress, createdAt);
+    // `progress.ok` was proven above — an unresolvable range is refused before
+    // reaching here — so the metrics take the phase list directly. Passing the
+    // union would force a guard against a state this caller has already
+    // excluded, and a milestone whose range does not parse never gets a derived
+    // block because it never gets completed.
+    const derived = await deriveMilestoneMetrics(context.repositoryRoot, progress.phases, createdAt);
     next = updateMilestone(current, complete, (milestone) => ({
       ...milestone,
       status: "completed",
       summary,
-      ...(derived === undefined ? {} : { derived }),
+      derived,
       completedAt: createdAt
     }));
     status = "accepted";
@@ -1442,20 +1447,14 @@ interface MilestoneDerivedMetrics {
  */
 export async function deriveMilestoneMetrics(
   repositoryRoot: string,
-  progress: MilestoneProgress,
+  phases: readonly MilestonePhaseState[],
   generatedAt: string
-): Promise<MilestoneDerivedMetrics | undefined> {
-  // A milestone whose range does not parse has no phases to measure. Reporting
-  // zeroes would read as "nothing was done" rather than "this cannot be
-  // evaluated", which is the distinction `milestoneProgressPayload` already
-  // draws for progress.
-  if (!progress.ok) return undefined;
-
+): Promise<MilestoneDerivedMetrics> {
   let tasks = 0;
   let passingReviews = 0;
   let firstPassPassed = 0;
   let tasksReviewed = 0;
-  const changeIds = progress.phases
+  const changeIds = phases
     .map((entry) => entry.changeId)
     .filter((entry): entry is string => entry !== undefined);
 
@@ -1474,8 +1473,8 @@ export async function deriveMilestoneMetrics(
   }
 
   return {
-    phases: progress.phases.length,
-    phasesComplete: progress.phases.filter((entry) => entry.complete).length,
+    phases: phases.length,
+    phasesComplete: phases.filter((entry) => entry.complete).length,
     changes: changeIds.length,
     tasks,
     passingReviews,

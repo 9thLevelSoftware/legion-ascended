@@ -71,7 +71,8 @@ test("derived metrics count the artifacts behind a milestone's phases", async (t
   );
 
   const progress = await milestonePhaseProgress(root, { id: "m", name: "MVP", phases: "1-2", status: "defined", createdAt: "x" });
-  const metrics = await deriveMilestoneMetrics(root, progress, "2026-08-04T00:00:00.000Z");
+  assert.equal(progress.ok, true);
+  const metrics = await deriveMilestoneMetrics(root, progress.phases, "2026-08-04T00:00:00.000Z");
 
   // Phase 1 was planned and phase 2 was not, so the counts must differ from the
   // range's width. A derivation that just echoed the range would be arithmetic,
@@ -83,16 +84,29 @@ test("derived metrics count the artifacts behind a milestone's phases", async (t
   assert.equal(metrics.generatedAt, "2026-08-04T00:00:00.000Z");
 });
 
-test("a milestone whose range does not parse derives nothing rather than zeroes", async (t) => {
-  const { root } = await plannedProject(t);
-  const { deriveMilestoneMetrics, milestonePhaseProgress } = await import(
-    "../packages/cli/dist/commands/workflow/contextual.js"
-  );
+test("a milestone whose range does not parse is never completed, so never derived", async (t) => {
+  const { root, run } = await plannedProject(t);
+  const { milestonePhaseProgress } = await import("../packages/cli/dist/commands/workflow/contextual.js");
 
+  // Metrics take a resolved phase list, so "derives nothing" is enforced by the
+  // caller rather than by a guard inside the derivation: `--complete` refuses an
+  // unresolvable range before any metric is computed. Zeroes would read as
+  // "nothing was done" rather than "this cannot be evaluated".
   const progress = await milestonePhaseProgress(root, { id: "m", name: "MVP", phases: "the MVP ones", status: "defined", createdAt: "x" });
-  // Zeroes would read as "nothing was done" rather than "this cannot be
-  // evaluated", which is the distinction progress already draws.
-  assert.equal(await deriveMilestoneMetrics(root, progress, "2026-08-04T00:00:00.000Z"), undefined);
+  assert.equal(progress.ok, false);
+  assert.match(progress.reason, /do not parse/);
+
+  assert.equal((await run("milestone", "--define", "MVP", "--phases", "1-2")).exitCode, 0);
+  const indexPath = path.join(root, ...MILESTONES);
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  await writeFile(
+    indexPath,
+    JSON.stringify({ ...index, milestones: index.milestones.map((e) => ({ ...e, phases: "the MVP ones" })) }),
+    "utf8"
+  );
+  const completed = await run("milestone", "--complete", "milestone-mvp", "--summary", "Done", "--json");
+  assert.notEqual(completed.exitCode, 0);
+  assert.match(parseJsonOutput(completed).diagnostics[0].message, /do not parse/);
 });
 
 test("the operator's summary and the derived metrics are rendered separately", async (t) => {
