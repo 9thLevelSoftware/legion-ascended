@@ -9,7 +9,10 @@
 //   * fails closed when RELEASE-RECORD.md is missing one of the
 //     four companion-document references
 //   * fails closed when MIGRATION-POLICY.md is missing or does not
-//     reference `legion next migrate`
+//     reference `legion dev migrate` — the surface the CLI presents. The
+//     verifier used to demand `legion next migrate`, the P12 compatibility
+//     alias, and this fixture used the alias too, so the fixture passed while
+//     the real policy failed.
 //   * fails closed when ROLLBACK-POLICY.md is missing or does not
 //     reference the backup-manifest contract
 //   * fails closed when V8-HANDOFF.md is missing or does not
@@ -23,6 +26,9 @@
 //   * fails closed when P13-T01 ab-comparison.json is missing
 //   * fails closed when --validate-next-log does not contain a PASS
 //     line
+//   * fails closed when a GA-critical task is open in the kanban manifest,
+//     when the phase-13 independent review is missing or unsigned, or when
+//     package.json disagrees with the release version
 //
 // The verifier is the operator-facing safety net for the GA cut-over;
 // every fail-closed path is pinned here so the CLI's `--checklist`
@@ -65,8 +71,12 @@ function writeFileSync2(p, content) {
 
 const REQUIRED_GA_DOCS = [
   ["RELEASE-RECORD.md", "# Release Record\n\nSee MIGRATION-POLICY.md, ROLLBACK-POLICY.md, V8-HANDOFF.md, and STABLE-CHANNEL-APPROVAL.md.\n"],
-  ["MIGRATION-POLICY.md", "# Migration Policy\n\nUse `legion next migrate --from-codex-legion|--from-planning --verify|--dry-run|--apply|--rollback`.\n"],
-  ["ROLLBACK-POLICY.md", "# Rollback Policy\n\nRestoration consumes the backup-manifest.json produced by `legion next migrate --apply`.\n"],
+  // `legion dev migrate` is the surface the CLI presents — its own help text,
+  // ADR-009 and docs/next/cli/README.md all use it. `legion next migrate` is
+  // the P12 compatibility alias, which the checklist used to demand: the real
+  // policy failed while this fixture passed.
+  ["MIGRATION-POLICY.md", "# Migration Policy\n\nUse `legion dev migrate --from-codex-legion|--from-planning --verify|--dry-run|--apply|--rollback`.\n"],
+  ["ROLLBACK-POLICY.md", "# Rollback Policy\n\nRestoration consumes the backup-manifest.json produced by `legion dev migrate --apply`.\n"],
   ["V8-HANDOFF.md", "# V8 Handoff\n\nv8 maintenance happens on the v8-maintenance branch. v8 line stays frozen for defects, security fixes, and packaging.\n"],
   ["STABLE-CHANNEL-APPROVAL.md", "# Stable Channel Approval\n\nDecision owner: dasbl. The decision-owner sign-off block gates the promotion.\n"]
 ];
@@ -85,6 +95,24 @@ function writeGaWorkspace(workspace, overrides = {}) {
   const evidenceRoot = path.join(repoRoot, "docs", "next", "evidence");
 
   writeFileSync2(changelogPath, `${overrides.changelog ?? ""}\n${CHANGELOG_GA_ENTRY}`);
+  // A well-formed GA workspace now also has a signed phase-13 review, a
+  // manifest with no open GA task, and a package version matching the release.
+  // The checklist could not see any of the three, so a workspace could be
+  // "well-formed" while the GA sign-off it was gating on was still open.
+  writeFileSync2(
+    path.join(repoRoot, "docs", "next", "reviews", "PHASE-13-INDEPENDENT-REVIEW.md"),
+    overrides.phase13Review ?? "# Phase 13 Independent Review\n\n## Status\n\nPASS\n"
+  );
+  writeFileSync2(
+    path.join(repoRoot, "docs", "next", "LEGION-ASCENDED-KANBAN-MANIFEST.md"),
+    overrides.manifest ??
+      "| Task | ID | Assignee | Status | Dependencies |\n| --- | --- | --- | --- | --- |\n| P13-T04 | t_1 | otrlead | **DONE** | T03 |\n"
+  );
+  writeFileSync2(path.join(repoRoot, "package.json"), JSON.stringify({ name: "legion", version: "9.0.0" }));
+  // The shipped bundle the migration cross-check reads. A well-formed GA
+  // workspace has one; without it the check reports unverifiable, which is the
+  // fail-closed answer.
+  writeFileSync2(path.join(repoRoot, "dist", "legion-cli.mjs"), "// legion dev migrate");
   for (const [name, body] of overrides.gaDocs ?? REQUIRED_GA_DOCS) {
     writeFileSync2(path.join(gaDir, name), body);
   }
@@ -118,8 +146,8 @@ test("P13-T03 release-checklist passes a well-formed GA evidence workspace", asy
   await withWorkspace(async (workspace) => {
     const repoRoot = writeGaWorkspace(workspace);
     const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
-    assert.equal(result.status, 0, `unexpected stderr: ${result.stderr}`);
     const payload = JSON.parse(result.stdout.trim());
+    assert.equal(result.status, 0, `blocked by: ${JSON.stringify(payload.findings)}`);
     assert.equal(payload.ok, true);
     assert.equal(payload.status, "ready");
     assert.equal(payload.release_version, "9.0.0");
@@ -363,5 +391,63 @@ test("P13-T03 release-checklist scopes GA keyword to the requested CHANGELOG ent
     assert.notEqual(result.status, 0);
     const payload = JSON.parse(result.stdout.trim());
     assert.ok(payload.findings.some((f) => f.code === "changelog_missing_ga_keyword"));
+  });
+});
+
+test("a FAIL verdict blocks the release", async () => {
+  await withWorkspace(async (workspace) => {
+    // A document-wide keyword grep let this through: once the template's
+    // explanatory PENDING prose was deleted, a FAIL review emitted no finding
+    // at all. The verdict is read from its own `## Status` section now.
+    const repoRoot = writeGaWorkspace(workspace, {
+      phase13Review: "# Phase 13 Independent Review\n\n## Status\n\nFAIL\n\n## Notes\n\nBlocked on evidence.\n"
+    });
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, false);
+    assert.ok(payload.findings.some((f) => f.code === "phase_13_review_failed"));
+  });
+});
+
+test("a PASS verdict is not blocked by explanatory prose elsewhere in the document", async () => {
+  await withWorkspace(async (workspace) => {
+    // The mirror of the above: the keyword grep also blocked a signed PASS
+    // review that merely mentioned PENDING in its preamble. Wrong both ways.
+    const repoRoot = writeGaWorkspace(workspace, {
+      phase13Review:
+        "# Phase 13 Independent Review\n\n## Status\n\nPASS\n\n## Notes\n\nThe template shipped with a PENDING placeholder.\n"
+    });
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, true, JSON.stringify(payload.findings));
+  });
+});
+
+test("a missing sign-off row fails closed", async () => {
+  await withWorkspace(async (workspace) => {
+    // A deleted or reformatted P13-T04 row previously produced no finding, so
+    // the gate would report ready without ever establishing that the GA
+    // sign-off task exists.
+    const repoRoot = writeGaWorkspace(workspace, {
+      manifest:
+        "| Task | ID | Assignee | Status | Dependencies |\n| --- | --- | --- | --- | --- |\n| P13-T01 | t_0 | legionworker | **DONE** | - |\n"
+    });
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.ok, false);
+    assert.ok(payload.findings.some((f) => f.code === "ga_sign_off_row_missing"));
+  });
+});
+
+test("an unparseable package.json is a finding, not a crash", async () => {
+  await withWorkspace(async (workspace) => {
+    const repoRoot = writeGaWorkspace(workspace);
+    await writeFile(path.join(repoRoot, "package.json"), '{ "version": "9.0.0", }', "utf8");
+    const result = run(["--release-version", "9.0.0", "--repository-root", repoRoot]);
+    // A fail-closed gate that crashes on the one file every repository has is
+    // worse than one that reports the problem.
+    assert.notEqual(result.status, 2, `crashed: ${result.stderr}`);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.ok(payload.findings.some((f) => f.code === "package_json_invalid"));
   });
 });

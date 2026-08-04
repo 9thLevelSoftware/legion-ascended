@@ -167,8 +167,8 @@ When implementing, compare against original Legion (v8) at:
 | Task | ID | Assignee | Status | Dependencies |
 | --- | --- | --- | --- | --- |
 | P13-T01 | t_12f977b4 | legionworker | **DONE** | P12-T03 |
-| P13-T02 | t_6712c51d | legionworker | todo | T01 |
-| P13-T03 | t_21e41997 | legionworker | todo | T02 |
+| P13-T02 | t_6712c51d | legionworker | **DONE** | T01 |
+| P13-T03 | t_21e41997 | legionworker | **DONE** | T02 |
 | P13-T04 | t_50860be4 | **otrlead** | todo | T03 |
 
 ## Summary
