@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path46 from "node:path";
+import path47 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path47) {
-  if (!path47)
+function getElementAtPath(obj, path48) {
+  if (!path48)
     return obj;
-  return path47.reduce((acc, key) => acc?.[key], obj);
+  return path48.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path47, issues) {
+function prefixIssues(path48, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path47);
+    iss.path.unshift(path48);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path47 = []) => {
+  const processError = (error52, path48 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path47, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path48, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
       } else {
-        const fullpath = [...path47, ...issue2.path];
+        const fullpath = [...path48, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path47 = []) => {
+  const processError = (error52, path48 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path47, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path48, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path47, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
       } else {
-        const fullpath = [...path47, ...issue2.path];
+        const fullpath = [...path48, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path47 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path47) {
+  const path48 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path48) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path47 = ref.slice(1).split("/").filter(Boolean);
-  if (path47.length === 0) {
+  const path48 = ref.slice(1).split("/").filter(Boolean);
+  if (path48.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path47[0] === defsKey) {
-    const key = path47[1];
+  if (path48[0] === defsKey) {
+    const key = path48[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -15076,11 +15076,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path47 = [...next.path, migration];
+      const path48 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path47;
+        return path48;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path47 });
+      queue.push({ version: migration.toVersion, path: path48 });
     }
     next = queue.shift();
   }
@@ -17765,17 +17765,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path47 = findProtocolMigrationPath({
+  const path48 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path47 === null) {
+  if (path48 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path47) {
+  for (const descriptor of path48) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -18838,10 +18838,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path47) {
-  if (path47.length === 0)
+function renderPath(path48) {
+  if (path48.length === 0)
     return "<root>";
-  return path47.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path48.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -19566,15 +19566,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path47 = issue2.path.join(".");
+    const path48 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path47.length === 0 ? key : `${path47}.${key}`);
+      const keys = issue2.keys.map((key) => path48.length === 0 ? key : `${path48}.${key}`);
       return {
-        path: path47,
+        path: path48,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path47, message: path47.length === 0 ? issue2.message : `${path47}: ${issue2.message}` };
+    return { path: path48, message: path48.length === 0 ? issue2.message : `${path48}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -26364,14 +26364,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path47) {
-  if (path47.endsWith(".json"))
+function mediaTypeForArtifactPath(path48) {
+  if (path48.endsWith(".json"))
     return "application/json";
-  if (path47.endsWith(".yaml") || path47.endsWith(".yml"))
+  if (path48.endsWith(".yaml") || path48.endsWith(".yml"))
     return "application/yaml";
-  if (path47.endsWith(".md"))
+  if (path48.endsWith(".md"))
     return "text/markdown";
-  if (path47.endsWith(".txt"))
+  if (path48.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -26414,16 +26414,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path47, issues) {
+function schemaDiagnostics(path48, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path47 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path48 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path47
+      path: path48
     });
   });
 }
@@ -27487,7 +27487,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path47 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path48 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -27501,7 +27501,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path47
+        path: path48
       }))
     };
   }
@@ -28526,13 +28526,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path47) {
+function parseRequirementId2(input, path48) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
@@ -28548,24 +28548,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path47) {
+function parseBaseGitSha(input, path48) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path47) {
+function parseOwners(input, path48) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path47
+        path: path48
       })
     ]);
   }
@@ -28577,7 +28577,7 @@ function parseOwners(input, path47) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path47
+        path: path48
       })));
       continue;
     }
@@ -28865,7 +28865,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path47) {
+function conflictDiagnostics(deltas, path48) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -28874,7 +28874,7 @@ function conflictDiagnostics(deltas, path47) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path47
+        path: path48
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -29651,18 +29651,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path47) {
+function parseOracleId2(input, path48) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path47) {
+function parseBaseGitSha2(input, path48) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29670,7 +29670,7 @@ function parseBaseGitSha2(input, path47) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
@@ -30014,7 +30014,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path47) {
+function parseBaseGitSha3(input, path48) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -30022,18 +30022,18 @@ function parseBaseGitSha3(input, path47) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path47) {
+function assertExpectedRevision(value, path48) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path48
       })
     ]);
   }
@@ -30351,7 +30351,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path47) {
+function parseBaseGitSha4(input, path48) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -30359,18 +30359,18 @@ function parseBaseGitSha4(input, path47) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path47) {
+function assertExpectedRevision2(value, path48) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path48
       })
     ]);
   }
@@ -30769,13 +30769,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path47) {
+function assertExpectedRevision3(value, path48) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path48
       })
     ]);
   }
@@ -30955,7 +30955,7 @@ async function listTaskRunsForChange(input) {
     entries = await readdir5(runsRoot, { withFileTypes: true });
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return { ok: true, status: "read", taskRuns: [], diagnostics: [] };
+      return { ok: true, status: "read", taskRuns: [], skipped: [], diagnostics: [] };
     }
     const message = error51 instanceof Error ? error51.message : String(error51);
     return failure8("invalid", [
@@ -30967,17 +30967,22 @@ async function listTaskRunsForChange(input) {
     ]);
   }
   const taskRuns = [];
+  const skipped = [];
   for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
     const runId = runIdSchema.safeParse(entry.name);
-    if (!runId.success)
+    if (!runId.success) {
+      skipped.push(entry.name);
       continue;
+    }
     const read = await readTaskRun({
       repositoryRoot: input.repositoryRoot,
       changeId,
       runId: runId.data
     });
-    if (!read.ok)
+    if (!read.ok) {
+      skipped.push(entry.name);
       continue;
+    }
     taskRuns.push(read);
   }
   taskRuns.sort((left, right) => {
@@ -30986,7 +30991,7 @@ async function listTaskRunsForChange(input) {
       return byCreatedAt;
     return left.document.id.localeCompare(right.document.id);
   });
-  return { ok: true, status: "read", taskRuns, diagnostics: [] };
+  return { ok: true, status: "read", taskRuns, skipped, diagnostics: [] };
 }
 
 // packages/artifacts/dist/reviews/service.js
@@ -31047,13 +31052,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path47) {
+function assertExpectedRevision4(value, path48) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path47
+        path: path48
       })
     ]);
   }
@@ -31294,8 +31299,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path47) {
-  return nodeId("artifact", path47);
+function artifactNodeId(path48) {
+  return nodeId("artifact", path48);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -31331,8 +31336,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path47) {
-  const fileName = path47.split("/").at(-1);
+function oracleIdFromPath(path48) {
+  const fileName = path48.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -31447,13 +31452,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path47 = [];
+  const path48 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path47.indexOf(node);
+      const cycleStartIndex = path48.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path47.length; index++) {
-          const cyclicNode = path47[index];
+        for (let index = cycleStartIndex; index < path48.length; index++) {
+          const cyclicNode = path48[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -31463,11 +31468,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path47.push(node);
+    path48.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path47.pop();
+    path48.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -31495,10 +31500,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path47 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path48 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path47,
+        path: path48,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -32155,13 +32160,13 @@ function parseChangeId9(input) {
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path47) {
+function parseArchivedAt(input, path48) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
     return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path47
+      path: path48
     })));
   }
   return parsed.data;
@@ -32190,7 +32195,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path47) {
+function archiveHashDiagnostics(record2, path48) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -32198,11 +32203,11 @@ function archiveHashDiagnostics(record2, path47) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path47
+      path: path48
     })
   ];
 }
-async function assertWorktreeTarget(input, path47) {
+async function assertWorktreeTarget(input, path48) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -32216,7 +32221,7 @@ async function assertWorktreeTarget(input, path47) {
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path47
+        path: path48
       })
     ]);
   } catch (error51) {
@@ -32224,7 +32229,7 @@ async function assertWorktreeTarget(input, path47) {
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path47
+        path: path48
       })
     ]);
   }
@@ -32303,11 +32308,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path47 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path47 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path47)) : remaining;
+    const path48 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path48 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path48)) : remaining;
     return {
-      path: path47,
+      path: path48,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -32370,9 +32375,9 @@ function plannedIndex(entries) {
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path47, document) {
+function validatePlannedDocument(path48, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path47,
+    artifactPath: path48,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
@@ -32383,7 +32388,7 @@ function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path47, document]) => [path47, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path48, document]) => [path48, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
@@ -32407,17 +32412,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path47 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path47)) {
+      const path48 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path48)) {
         return failure11("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path47}.`,
-            path: path47
+            message: `Archive add target already exists: ${path48}.`,
+            path: path48
           })
         ]);
       }
-      plannedDocs.set(path47, {
+      plannedDocs.set(path48, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -32430,7 +32435,7 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path47);
+      touchedPaths.add(path48);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
@@ -32615,8 +32620,8 @@ async function buildArchivePlan(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path47 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path47);
+  const path48 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path48);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
@@ -32860,10 +32865,10 @@ async function readArchiveRecord(input) {
   const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path47 = archivePath(changeId);
+  const path48 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path47,
+    artifactPath: path48,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
@@ -32875,22 +32880,22 @@ async function readArchiveRecord(input) {
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path47
+        path: path48
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path47);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path48);
   if (hashDiagnostics.length > 0)
     return failure11("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path47,
+    artifactPath: path48,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path47,
+      path: path48,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -45919,7 +45924,77 @@ function renderDerivedMetrics(metrics) {
   ];
 }
 
+// packages/cli/src/workflow/pinned-references.ts
+import { readFile as readFile24, realpath as realpath3 } from "node:fs/promises";
+import path44 from "node:path";
+function isErrorCode(error51, ...codes) {
+  return error51 !== null && typeof error51 === "object" && "code" in error51 && typeof error51.code === "string" && codes.includes(error51.code);
+}
+function contains(root, candidate) {
+  const relative = path44.relative(root, candidate);
+  return relative === "" || !relative.startsWith("..") && !path44.isAbsolute(relative);
+}
+function isWindowsStreamPath(artifactPath) {
+  return artifactPath.includes(":");
+}
+function isCaseFoldedAlias(declaredPath, resolvedRelative) {
+  return resolvedRelative !== declaredPath && resolvedRelative.toLowerCase() === declaredPath.toLowerCase();
+}
+async function resolveOne(repositoryRoot, artifactPath) {
+  if (isWindowsStreamPath(artifactPath)) return { kind: "unverified" };
+  const segments = artifactPath.split("/");
+  const target = path44.resolve(repositoryRoot, ...segments);
+  if (!contains(path44.resolve(repositoryRoot), target)) return { kind: "unverified" };
+  try {
+    const [realRoot, realTarget] = await Promise.all([realpath3(repositoryRoot), realpath3(target)]);
+    if (!contains(realRoot, realTarget)) return { kind: "unverified" };
+    if (isCaseFoldedAlias(artifactPath, path44.relative(realRoot, realTarget).split(path44.sep).join("/"))) {
+      return { kind: "unverified" };
+    }
+    return { kind: "hashed", sha256: hashContent(await readFile24(realTarget)) };
+  } catch (error51) {
+    if (isErrorCode(error51, "ENOENT", "ENOTDIR")) return { kind: "missing" };
+    return { kind: "unverified" };
+  }
+}
+async function resolvePinnedReferences(input) {
+  const resolved = /* @__PURE__ */ new Map();
+  for (const reference of input.references) {
+    if (resolved.has(reference.path)) continue;
+    resolved.set(reference.path, await resolveOne(input.repositoryRoot, reference.path));
+  }
+  return (reference) => {
+    const entry = resolved.get(reference.path);
+    if (entry === void 0) return "unverified";
+    if (entry.kind === "missing") return "missing";
+    if (entry.kind === "unverified") return "unverified";
+    return entry.sha256 === reference.sha256 ? "match" : "drift";
+  };
+}
+
 // packages/cli/src/workflow/ship-gates.ts
+var GATE_SCOPE = {
+  current_task_contract_or_small_change_record: "task",
+  deterministic_verification: "task",
+  evidence_note: "task",
+  task_contract: "task",
+  scoped_implementer_run: "task",
+  evidence_bundle_or_log: "task",
+  lightweight_independent_review: "task",
+  approved_delta_spec: "task",
+  protected_oracle: "task",
+  task_level_independent_review: "task",
+  integration_or_real_interface_checks: "task",
+  whole_change_acceptance_evidence: "task",
+  independent_baseline: "task",
+  approved_spec_and_oracle: "task",
+  architecture_or_security_review: "task",
+  protected_acceptance_tests: "task",
+  security_or_e2e_evaluator: "task",
+  explicit_human_approval: "task",
+  release_observation_plan: "task",
+  rollback_or_forward_fix_evidence: "task"
+};
 function evidenceItemVerdict(entries, taskId, itemId) {
   const entry = latestEvidencePerTask(entries).get(taskId);
   if (entry === void 0) return void 0;
@@ -45970,7 +46045,15 @@ function evaluateGate(input) {
       };
   }
 }
+var UNRESOLVED_PINS = () => "unverified";
+function normalizeChangeFacts(change) {
+  if (change === null || typeof change !== "object") return void 0;
+  const facts = change;
+  if (typeof facts.verifyPin === "function") return facts;
+  return { ...facts, verifyPin: UNRESOLVED_PINS };
+}
 function deriveShipGates(input) {
+  const change = normalizeChangeFacts(input.change);
   const gates = [];
   for (const task of input.tasks) {
     const taskId = input.taskIdFor(task);
@@ -45979,14 +46062,46 @@ function deriveShipGates(input) {
       gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
     });
     for (const gate of derived) {
-      const outcome = evaluateGate({ gate, task, taskId, entries: input.entries, reviews: input.reviews });
-      gates.push({ gate: gate.id, label: gate.label, taskId, ...outcome });
+      const outcome = evaluateGate({
+        gate,
+        task,
+        taskId,
+        entries: input.entries,
+        reviews: input.reviews,
+        change
+      });
+      const scope = GATE_SCOPE[gate.id];
+      gates.push({
+        ...outcome,
+        gate: gate.id,
+        label: gate.label,
+        taskId,
+        scope,
+        subjectId: scope === "change" && change !== void 0 ? change.changeId : taskId
+      });
     }
   }
   const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
   const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
   const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
   return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
+}
+function shipGateDiagnostics(input) {
+  const reported = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  for (const gate of input.gates) {
+    if (gate.status === "satisfied") continue;
+    if (gate.scope === "change") {
+      if (reported.has(gate.gate)) continue;
+      reported.add(gate.gate);
+    }
+    diagnostics.push({
+      code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
+      message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
+      path: input.path
+    });
+  }
+  return diagnostics;
 }
 
 // packages/cli/src/commands/workflow/ship.ts
@@ -46024,6 +46139,68 @@ function recoveryFor(diagnostics) {
 }
 function isPath(value) {
   return value !== void 0 && value.length > 0;
+}
+async function absentOnFailure(read) {
+  try {
+    return await read();
+  } catch {
+    return void 0;
+  }
+}
+async function loadOracleFacts(input) {
+  const manifest = await absentOnFailure(
+    () => deriveOracleManifest({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  if (manifest === void 0 || !manifest.ok) return void 0;
+  const oracles = [];
+  for (const revision of manifest.manifest.oracles) {
+    const fileName = revision.artifact.path.split("/").at(-1);
+    if (fileName === void 0 || !fileName.endsWith(".yaml")) return void 0;
+    const oracle = await absentOnFailure(
+      () => readOracleArtifact({
+        repositoryRoot: input.repositoryRoot,
+        changeId: input.changeId,
+        oracleId: fileName.slice(0, -".yaml".length)
+      })
+    );
+    if (oracle === void 0 || !oracle.ok) return void 0;
+    oracles.push({ document: oracle.document, reference: oracle.reference });
+  }
+  return oracles;
+}
+function completeTaskRuns(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.taskRuns.map((run) => run.document);
+}
+async function loadShipGateChangeFacts(input) {
+  const bundleResult = await absentOnFailure(
+    () => loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const bundle = bundleResult !== void 0 && bundleResult.ok ? bundleResult.bundle : void 0;
+  const oracles = await loadOracleFacts(input);
+  const runsResult = await absentOnFailure(
+    () => listTaskRunsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const taskRuns = completeTaskRuns(runsResult);
+  const pinned = [
+    ...bundle?.deltas.map((delta) => delta.delta) ?? [],
+    ...oracles?.map((oracle) => oracle.reference) ?? []
+  ];
+  const verifyPin = await resolvePinnedReferences({
+    repositoryRoot: input.repositoryRoot,
+    references: pinned
+  });
+  return {
+    changeId: input.changeId,
+    acceptance: bundle?.change.acceptance,
+    approvals: void 0,
+    deltas: bundle?.deltas,
+    oracles,
+    taskRuns,
+    release: void 0,
+    verifyPin
+  };
 }
 async function handleShipWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -46093,19 +46270,20 @@ async function handleShipWorkflow(context) {
       message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
     }));
   }
+  const changeFacts = await loadShipGateChangeFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
     taskIdFor: (task) => taskIdForContractId(task.id),
     entries: evidence.document.entries,
-    reviews: reviews.reviews
+    reviews: reviews.reviews,
+    change: changeFacts
   });
   if (!gateReport.ready) {
     return blockedShip(
-      gateReport.gates.filter((gate) => gate.status !== "satisfied").map((gate) => ({
-        code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
-        message: `${gate.label} is not satisfied for ${gate.taskId}: ${gate.reason}`,
-        path: evidence.artifactPath
-      })),
+      shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath }),
       nextAction(
         "legion build",
         `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
@@ -46171,16 +46349,16 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
-import path45 from "node:path";
+import path46 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
-import { readFile as readFile24 } from "node:fs/promises";
-import path44 from "node:path";
+import { readFile as readFile25 } from "node:fs/promises";
+import path45 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile24(path44.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile25(path45.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -46345,7 +46523,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat9(path45.join(root, relativePath));
+    await stat9(path46.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -46529,7 +46707,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path46.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path47.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -46581,8 +46759,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path46.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path46.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path47.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path47.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

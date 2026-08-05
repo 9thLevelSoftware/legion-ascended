@@ -1,9 +1,33 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { deriveShipGates } from "../packages/cli/dist/workflow/ship-gates.js";
+import {
+  deriveShipGates,
+  earliestExecutionStart,
+  normalizeChangeFacts
+} from "../packages/cli/dist/workflow/ship-gates.js";
 
 const TASK_ID = "tsk_phase-1";
+
+// The fixtures below are deliberately structurally minimal: the smallest shapes
+// `deriveShipGates` actually reads, not schema-valid protocol documents. That is
+// the point of this suite — it exercises gate logic with no filesystem and no
+// artifact service, and end-to-end shape is covered by tests/ship-traceability.
+// Do not "fix" them into real documents; the cost would be a slow suite that
+// asserts the same things.
+//
+// `derive()` also passes no `change` facts at all, even though `deriveShipGates`
+// now requires them in TypeScript. That is deliberate too. These tests import
+// compiled JavaScript, where required-ness is not enforced, and they stand in
+// for the runtime cases the type cannot cover: a caller that degraded to absent
+// facts because a change artifact would not read.
+//
+// What that does *not* do is protect the guard. No gate reads a change fact in
+// this release, so deleting `normalizeChangeFacts` and reading `input.change`
+// directly leaves every assertion below passing — an earlier draft of this
+// comment claimed the opposite, which is the more dangerous kind of wrong: a
+// note telling the next reader that an edit is covered when it is not. The guard
+// is held by the tests at the end of this file, which call it directly.
 
 function task(tier) {
   return { id: "ctr_phase-1", risk: { tier, reasons: ["test"] } };
@@ -189,6 +213,371 @@ test("approved_spec_and_oracle is not satisfied by a passing oracle run", () => 
     assert.equal(gate.status, "unevaluable");
     assert.match(gate.reason, /does not yet produce/);
   }
+});
+
+// --- the seam that carries change-scoped facts ------------------------------
+
+const SCENARIOS = [
+  {
+    name: "passing verification and an accepted review",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()]
+  },
+  { name: "no evidence and no review", items: [], reviews: [] },
+  {
+    name: "failed declared-verification",
+    items: [item("declared-verification", "fail"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()]
+  },
+  {
+    name: "passing oracle verification",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      item("oracle-verification", "pass")
+    ],
+    reviews: [acceptedReview()]
+  },
+  {
+    name: "failed oracle verification",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      item("oracle-verification", "fail")
+    ],
+    reviews: [acceptedReview()]
+  }
+];
+
+/**
+ * Every gate's verdict, at every tier, in five input scenarios — transcribed
+ * from a build made before the change-facts seam was added.
+ *
+ * Nothing in this file could previously falsify "no gate verdict moved". Each
+ * existing test reads one gate, so a change that flipped a gate nobody asserts
+ * on would ship green — and the seam being added here threads a new argument
+ * through the one function every gate flows through, which is precisely the
+ * shape of change that moves a verdict by accident.
+ *
+ * Later work that gives one of the unevaluable gates a real producer is
+ * expected to edit exactly the cells for its own gate. That edit is the
+ * behaviour change, stated in one place, and reviewing it is reviewing the
+ * central claim of the change that makes it.
+ */
+const BASELINE_GATE_STATUSES = {
+  "passing verification and an accepted review": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "satisfied",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "no evidence and no review": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "unevaluable",
+      evidence_note: "unsatisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "unevaluable",
+      deterministic_verification: "unevaluable",
+      evidence_bundle_or_log: "unsatisfied",
+      lightweight_independent_review: "unsatisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "unevaluable",
+      task_level_independent_review: "unsatisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "unevaluable",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unsatisfied",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "failed declared-verification": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "unsatisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "unsatisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "unsatisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "unsatisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "satisfied",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "passing oracle verification": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "satisfied",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "satisfied",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "satisfied",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "failed oracle verification": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unsatisfied",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unsatisfied",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "satisfied",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  }
+};
+
+test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
+  for (const scenario of SCENARIOS) {
+    for (const tier of ["R0", "R1", "R2", "R3"]) {
+      const report = derive({ tier, items: scenario.items, reviews: scenario.reviews });
+      const actual = Object.fromEntries(report.gates.map((gate) => [gate.gate, gate.status]));
+
+      // One row per (task, gate) — the arithmetic the report's counts and its
+      // `ready` flag rest on. Collapsing a gate to one row per change would
+      // pass the status comparison below and still change every count.
+      assert.equal(Object.keys(actual).length, report.gates.length);
+      assert.deepEqual(actual, BASELINE_GATE_STATUSES[scenario.name][tier], `${scenario.name} @ ${tier}`);
+    }
+  }
+});
+
+test("no gate reads a change fact in a release that produces none", () => {
+  // Comparing a report built with facts against one built without them is
+  // weaker than it looks: a gate could read a fact and happen to return the
+  // same verdict for this fixture, and the comparison would pass while the
+  // claim was false. This fails on the read itself, which is the actual claim —
+  // every gate in this release is task-scoped and answers from evidence and
+  // reviews alone.
+  //
+  // When a gate does start reading change facts, the honest edit is to replace
+  // this with an assertion naming the fields that gate reads. Narrowing the
+  // proxy, or deleting the test, throws away the only statement anywhere that
+  // the boundary is where it is documented to be.
+  const tripwire = new Proxy(
+    // `verifyPin` is exempt because the guard inside `deriveShipGates`
+    // legitimately inspects it, to substitute a verifier when a caller supplied
+    // something that is not one.
+    { verifyPin: () => "unverified" },
+    {
+      get(target, property) {
+        if (property === "verifyPin") return target.verifyPin;
+        throw new Error(`a ship gate read the change fact "${String(property)}"`);
+      }
+    }
+  );
+
+  for (const tier of ["R0", "R1", "R2", "R3"]) {
+    const withFacts = deriveShipGates({
+      tasks: [task(tier)],
+      taskIdFor: () => TASK_ID,
+      entries: [entry(PASSING_R2.items)],
+      reviews: PASSING_R2.reviews,
+      change: tripwire
+    });
+
+    assert.deepEqual(withFacts, derive({ tier, ...PASSING_R2 }));
+  }
+});
+
+test("every gate names its scope and the subject that scope refers to", () => {
+  // The ship command's blocked diagnostic interpolates `subjectId` where it
+  // interpolated `taskId`. That text is byte-identical only because every gate
+  // this release emits is task-scoped with `subjectId === taskId`; nothing else
+  // in the tree checks the message text, so without this the equivalence would
+  // be an assumption rather than a fact.
+  for (const tier of ["R0", "R1", "R2", "R3"]) {
+    const report = derive({ tier, ...PASSING_R2 });
+    assert.ok(report.gates.length > 0);
+    for (const gate of report.gates) {
+      assert.equal(gate.scope, "task", gate.gate);
+      assert.equal(gate.subjectId, gate.taskId, gate.gate);
+      assert.equal(gate.taskId, TASK_ID);
+    }
+  }
+});
+
+test("the earliest execution start skips runs that never recorded one", () => {
+  // `startedAt` is optional on a created-but-unstarted run, and the run listing
+  // returns an empty list when a change has no runs directory at all. An
+  // ordering check that coerced either into a timestamp would compare an
+  // approval against a start that never happened and call it early — the
+  // fail-open this whole seam exists to make impossible. Absence has to stay
+  // absent so the gate reading it can say so.
+  assert.equal(earliestExecutionStart(undefined), undefined);
+  assert.equal(earliestExecutionStart([]), undefined);
+  assert.equal(earliestExecutionStart([{ status: "created" }]), undefined);
+  assert.equal(
+    earliestExecutionStart([
+      { startedAt: "2026-01-02T00:00:00.000Z" },
+      { status: "created" },
+      { startedAt: "2026-01-01T00:00:00.000Z" }
+    ]),
+    "2026-01-01T00:00:00.000Z"
+  );
+});
+
+// --- the runtime guard, tested where it is actually observable --------------
+
+// `normalizeChangeFacts` is the only thing between an absent or malformed
+// `change` and a `TypeError` out of `legion ship`, and in this release it is
+// structurally invisible: nothing reads a fact, so replacing the call with
+// `input.change` keeps every gate assertion in the tree green. Tested through
+// `deriveShipGates` it would therefore be tested by nothing at all, which is how
+// a guard gets deleted as dead code and rediscovered by the first gate that
+// needs it. These call it directly.
+
+test("absent, null and non-object change facts normalize to absence, not to a crash", () => {
+  // `legion ship` degrades to absent facts whenever the change artifact will not
+  // read. Throwing there would kill the command whose entire job is reporting
+  // what is broken, at exactly the moment something is.
+  assert.equal(normalizeChangeFacts(undefined), undefined);
+  assert.equal(normalizeChangeFacts(null), undefined);
+  assert.equal(normalizeChangeFacts("chg_x"), undefined);
+  assert.equal(normalizeChangeFacts(7), undefined);
+});
+
+test("facts without a callable verifier get one that answers unverified", () => {
+  // A hand-written fixture — `{ changeId: "chg_x", acceptance: undefined, ... }`
+  // with no verifier — is the shape a future gate would call `verifyPin` on. The
+  // substitute must answer "not checked", because "match" would pass a pin
+  // nobody hashed and "missing" would report a present file as gone. Absence of
+  // a verifier is absence of an answer.
+  const facts = normalizeChangeFacts({ changeId: "chg_x", acceptance: undefined });
+
+  assert.equal(facts.changeId, "chg_x");
+  assert.equal(typeof facts.verifyPin, "function");
+  assert.equal(facts.verifyPin({ path: "docs/x.md", sha256: "sha256:0" }), "unverified");
+
+  // A verifier that is present but not callable is the same defect wearing a
+  // key, so it is repaired too rather than trusted for having the right name.
+  assert.equal(normalizeChangeFacts({ verifyPin: "yes" }).verifyPin(), "unverified");
+});
+
+test("a real verifier is passed through untouched", () => {
+  // The repair must not replace a working verifier: a guard that overwrote the
+  // caller's pin check would turn every pin in production into "unverified" and
+  // every gate built on one into unevaluable, with no test disagreeing because
+  // unevaluable is also what an unproduced gate reports.
+  const verifyPin = () => "match";
+  const facts = normalizeChangeFacts({ changeId: "chg_x", verifyPin });
+
+  assert.equal(facts.verifyPin, verifyPin);
 });
 
 test("an oracle verdict of unknown does not satisfy the gate", () => {

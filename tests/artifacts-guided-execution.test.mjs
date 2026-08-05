@@ -171,6 +171,16 @@ test("task-run and review artifacts round trip with revision conflicts", async (
     assert.equal(listedRuns.ok, true, stableProtocolJson(listedRuns));
     assert.equal(listedRuns.taskRuns.length, 1);
     assert.equal(listedRuns.taskRuns[0].document.id, runId);
+    // The listing reports `ok: true` while dropping the run it could not read,
+    // so what comes back is a subset presenting itself as the change's runs.
+    // Consumers that only count are fine; the ordering gates are not — they take
+    // `min(startedAt)` over the list, and every dropped run can only push that
+    // minimum later, which is the direction that makes an approval recorded after
+    // execution began look as though it came first. `skipped` is how the listing
+    // says it dropped something, and `legion ship` turns any skip into an absent
+    // fact rather than answering from a subset. Without this assertion the field
+    // could be emptied and nothing in the tree would notice.
+    assert.deepEqual(listedRuns.skipped, [malformedRunId]);
 
     const malformedReviewId = formatEntityId("review", "guided-test-change-review-bad");
     const malformedReviewPath = path.join(root, ".legion", "project", "changes", changeId, "reviews", `${malformedReviewId}.json`);
