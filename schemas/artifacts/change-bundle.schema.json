@@ -1187,6 +1187,7 @@
                   "evidence-index",
                   "task-run",
                   "review",
+                  "approval",
                   "archive"
                 ]
               },
@@ -1698,6 +1699,7 @@
               "evidence-index",
               "task-run",
               "review",
+              "approval",
               "archive"
             ]
           },

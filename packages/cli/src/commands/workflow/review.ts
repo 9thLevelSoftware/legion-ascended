@@ -1,30 +1,45 @@
 import {
   LEGION_PROJECT_ROOT,
+  readApproval,
   readEvidenceIndex,
   readTaskGraph,
+  writeApproval,
   writeEvidenceIndex,
   writeReviewDecision,
   listReviewDecisionsForChange,
+  type ApprovalSuccess,
   type EvidenceIndexEntry,
   type ReviewDecisionSuccess
 } from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
+  buildIdempotencyKey,
+  type Actor,
+  type Approval,
   type ArtifactPath,
   type EvidenceId,
   type ReviewDecision,
   type ReviewFinding,
   type ReviewId,
-  type TaskContract
+  type TaskContract,
+  type UtcTimestamp
 } from "@legion/protocol";
 
 import { failure, hasFlag, helpResult, stringOption, success, usageError, type CliContext, type CliResult } from "../../runtime.js";
+import {
+  describeDecisionOwners,
+  requiresHumanApproval,
+  resolveApprover,
+  PROJECT_MANIFEST_PATH
+} from "../../workflow/approver.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
+import { loadWorkflowProject } from "../../workflow/context.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionFinding, type ExecutionResult, type ExecutionReviewVerdicts } from "../../workflow/executor/index.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import {
   absoluteArtifactPath,
+  approvalIdForSubject,
   reviewIdForChange,
   reviewRunArtifactPath,
   runArtifactPath,
@@ -37,14 +52,44 @@ import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { findLatestWorkflowChangeId, listWorkflowChanges } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
-const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
+
+--approver names a human decision owner recorded in .legion/project/project.json. It is
+required when a task in the change derives the explicit_human_approval risk gate.
 
 Examples:
   legion review --executor fake
   legion review --accept
+  legion review --accept --approver dasbl
   legion review --auto --max-cycles 3 --executor codex`;
+
+/**
+ * The action an approval carries when it records a review acceptance.
+ *
+ * The same literal `ship-gates.ts` matches on. Written out in both places rather
+ * than shared through a constant because the gate and the writer are two sides
+ * of a contract: a shared symbol would let a rename move both at once and leave
+ * every approval already on disk unreadable by the gate that reads them.
+ */
+const REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+
+/**
+ * Who asks for the approval, as distinct from who grants it.
+ *
+ * `requestedBy` records what created the record; `decidedBy` records whose
+ * authority the decision carries. Collapsing them onto the human would make
+ * `requestedBy.kind === "human"` true of every approval Legion writes, which is
+ * a second humanity signal a later gate could read by mistake — and it would be
+ * false: the review gate produced the review and is asking a person to accept
+ * it.
+ */
+const REVIEW_GATE_ACTOR = {
+  kind: "tool",
+  id: "legion-review",
+  displayName: "Legion Review Gate"
+} as const;
 
 export async function handleReviewWorkflow(context: CliContext): Promise<CliResult> {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
@@ -88,6 +133,27 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   if (!taskgraph.ok) {
     return blockedReview(taskgraph.diagnostics, planAction);
   }
+
+  // Resolved before the dry run returns, and before the evidence index is read.
+  // `--auto` reaches `acceptLatestReview` on a clean cycle with no operator step
+  // at all, so a check that lived only on the explicit accept would leave the
+  // whole fail-open intact behind a different flag — and nothing in the tree
+  // runs `--auto` against an R3 change, so it would have shipped green.
+  //
+  // Ahead of the dry run because a dry run exists to answer "will this command
+  // line work", and one that resolved nothing answered yes to
+  // `--approver dasbi`, leaving the typo to surface on the accept — after a
+  // build and a review had already run. The rule the accept path applies is
+  // that an approver on a run that accepts nothing is refused rather than
+  // ignored; a dry run is such a run, and it was the one place the rule was not
+  // applied.
+  const approver = await resolveReviewApprover(context, {
+    tasks: taskgraph.document.tasks,
+    accepting: hasFlag(context, "accept") || hasFlag(context, "auto"),
+    taskgraphPath: taskgraph.artifactPath,
+    phase: phaseOption
+  });
+  if (!approver.ok) return approver.result;
 
   const taskCount = taskgraph.document.tasks.length;
   if (hasFlag(context, "dry-run")) {
@@ -133,7 +199,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   }
 
   if (hasFlag(context, "accept")) {
-    return acceptLatestReview(context, evidence);
+    return acceptLatestReview(context, evidence, approver.approver);
   }
 
   const rejectReason = stringOption(context, "reject-reason");
@@ -151,6 +217,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
       executor: selectedExecutor,
       taskgraph,
       evidence,
+      ...(approver.approver === undefined ? {} : { approver: approver.approver }),
       ...(phaseOption === undefined ? {} : { phase: phaseOption })
     });
   }
@@ -217,8 +284,124 @@ interface SubmitReviewInput {
   readonly executor: ExecutionAdapterKind;
   readonly taskgraph: Awaited<ReturnType<typeof readTaskGraph>> & { readonly ok: true };
   readonly evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true };
+  /** Resolved once by the caller, because `--auto` also accepts. */
+  readonly approver?: Actor;
   /** The `--phase N` the caller gave, so follow-up actions keep the scope. */
   readonly phase?: string;
+}
+
+type ReviewApproverDecision =
+  | { readonly ok: true; readonly approver: Actor | undefined }
+  | { readonly ok: false; readonly result: CliResult };
+
+/**
+ * Turn `--approver <id>` into an actor, and refuse when one is required and
+ * absent.
+ *
+ * Three refusals, deliberately of two different kinds:
+ *
+ *  - `--approver` with no value, or `--approver` on a run that accepts nothing,
+ *    is a `usageError`. The argv is malformed or asks a question this invocation
+ *    does not answer, and automation has to be able to tell that from a policy
+ *    refusal.
+ *  - `--approver` naming somebody the project does not record, or recording as
+ *    something other than a human, is `blockedReview`. The argv is well formed;
+ *    what failed is the project's own register.
+ *  - An R3 change accepted with no `--approver` at all is `blockedReview` too,
+ *    for the same reason: the same command line is correct for an R0 change, so
+ *    the refusal comes from the risk tier and not from the shape of the input.
+ *
+ * It refuses *before* anything is written, and that ordering is the whole point
+ * rather than tidiness. `acceptLatestReview` writes an accepted revision of
+ * every covering review and then rewrites the evidence index, and there is no
+ * way back: `cleanSubmittedReviewCoverage` selects only reviews still in
+ * `submitted`, so a retry with the right approver fails with `review_not_clean`,
+ * and nothing in this release can attach an approval to an already-accepted
+ * change. Accepting first and refusing later would strand the change.
+ *
+ * The manifest is read only when it is going to be used. An R0 accept that
+ * names no approver must not acquire a new failure mode from a manifest it never
+ * consulted.
+ */
+async function resolveReviewApprover(
+  context: CliContext,
+  input: {
+    readonly tasks: readonly TaskContract[];
+    readonly accepting: boolean;
+    readonly taskgraphPath: ArtifactPath;
+    readonly phase: string | undefined;
+  }
+): Promise<ReviewApproverDecision> {
+  const raw = stringOption(context, "approver")?.trim();
+  if (context.args.options.get("approver") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError("Missing required value for --approver. Example: legion review --accept --approver dasbl.")
+    };
+  }
+
+  if (raw !== undefined && !input.accepting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --approver only with --accept or --auto. An approver on a run that accepts nothing records nobody, so it is refused rather than ignored."
+      )
+    };
+  }
+
+  const required = input.accepting && requiresHumanApproval(input.tasks);
+
+  if (raw === undefined) {
+    if (!required) return { ok: true, approver: undefined };
+    return {
+      ok: false,
+      result: blockedReview(
+        [
+          {
+            code: "approver_required",
+            message:
+              "A task in this change derives the explicit_human_approval risk gate, so accepting its review requires " +
+              "--approver <id> naming a human decision owner recorded in .legion/project/project.json. " +
+              "No approver is inferred from the environment, from git config, or from a project having only one owner — " +
+              "an acceptance recorded against a defaulted identity is not a human approval.",
+            path: input.taskgraphPath
+          }
+        ],
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          "This change's risk tier requires a named human approver."
+        )
+      )
+    };
+  }
+
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may approve, and it could not be read.")
+      )
+    };
+  }
+
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        resolved.diagnostics,
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+
+  return { ok: true, approver: resolved.approver };
 }
 
 async function submitReview(context: CliContext, input: SubmitReviewInput): Promise<{
@@ -395,7 +578,8 @@ function failedObservations(
 
 async function acceptLatestReview(
   context: CliContext,
-  evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true }
+  evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true },
+  approver: Actor | undefined
 ): Promise<CliResult> {
   const failed = failedObservations(evidence);
   if (failed.length > 0) {
@@ -423,7 +607,18 @@ async function acceptLatestReview(
         ...review.document,
         status: "accepted",
         updatedAt: acceptedAt,
-        submittedAt
+        submittedAt,
+        // The accept transition's own actor, in the same revisioned write as the
+        // transition, so the two cannot end up in different revisions of the
+        // artifact. `reviewer` is untouched: the tool did produce this review,
+        // and overwriting it with the approver would replace one true statement
+        // with another and lose the first.
+        //
+        // Both fields or neither — the schema refuses a half-written transition,
+        // because a reader of `acceptedAt` alone has to guess whether the actor
+        // was never recorded or was recorded and lost, and those guesses lead to
+        // opposite verdicts.
+        ...(approver === undefined ? {} : { acceptedBy: approver, acceptedAt })
       }
     });
     if (!accepted.ok) {
@@ -458,6 +653,27 @@ async function acceptLatestReview(
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence acceptance could not be written."));
   }
 
+  // Written last, after the reviews and the evidence index. A crash before this
+  // point leaves reviews accepted with no approval, which the human-approval
+  // gate reads as `unevaluable` and ship blocks on — the partial state is always
+  // less approved, never more. The reverse order would leave a granted approval
+  // standing for an acceptance that never happened.
+  const approvals = await recordReviewAcceptApprovals(context, {
+    reviews: acceptedReviews,
+    approver,
+    decidedAt: acceptedAt
+  });
+  if (!approvals.ok) {
+    return blockedReview(
+      approvals.diagnostics,
+      nextAction(
+        "legion ship",
+        "The reviews and evidence were accepted, but no approval was recorded. Nothing was rolled back: legion ship " +
+          "will report explicit_human_approval unevaluable for this change until an approval exists."
+      )
+    );
+  }
+
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
   return success(
     {
@@ -465,6 +681,9 @@ async function acceptLatestReview(
       status: "accepted",
       ...(acceptedReviews[0] === undefined ? {} : { review: reviewSummary(acceptedReviews[0]) }),
       reviews: acceptedReviews.map(reviewSummary),
+      // Spread conditionally so a run that recorded no approver produces the
+      // payload it produced before this release, key for key.
+      ...(approvals.approvals.length === 0 ? {} : { approvals: approvals.approvals.map(approvalSummary) }),
       evidenceIndex: {
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
@@ -478,6 +697,159 @@ async function acceptLatestReview(
       renderNextAction(action)
     ].join("\n")
   );
+}
+
+/**
+ * Record one granted approval per task whose review was just accepted.
+ *
+ * **One approval per task, not per review and not per change.** The three
+ * cardinalities are not interchangeable and each rules out a specific defect:
+ *
+ *  - Per *review* mints a new document every cycle, so a grant from cycle 1
+ *    outlives cycle 2 and a gate asking "is a review-acceptance approval granted
+ *    here" answers yes from a record about work that has since been replaced.
+ *  - Per *change* would need an idempotency key naming a task and a run —
+ *    `idempotencyKeySchema` requires both, structurally — and a change-wide
+ *    decision has neither, so the key would have to borrow one task's ids and
+ *    assert a pairing that is not a fact.
+ *  - Per *task* has an honest key (the task and run the accepted review already
+ *    names), matches the granularity of the gate that reads it, which is derived
+ *    per task, and rewrites the same document on every later accept of the same
+ *    task. Re-deciding is a new revision of one artifact rather than a second
+ *    artifact, so a revocation cannot be lost while its grant survives.
+ *
+ * The existing document is read before writing so the write is an update at the
+ * revision found rather than a create at revision 0. That is not an
+ * optimisation: creating over an unread existing approval is the one way to
+ * silently replace a revocation with a fresh grant, so an approval that is
+ * present and unreadable blocks instead.
+ *
+ * `artifacts` is deliberately left unset. The field exists for pinning the bytes
+ * a decision was made against, and the honest candidate here — the accepted
+ * review file — is rewritten by a later `--reject`, so pinning it would turn
+ * legitimate supersession into pin drift. The accepted review's content hash is
+ * still recorded, as the idempotency key's target hash, where it identifies the
+ * operation rather than claiming an invariant.
+ */
+async function recordReviewAcceptApprovals(
+  context: CliContext,
+  input: {
+    readonly reviews: readonly ReviewDecisionSuccess[];
+    readonly approver: Actor | undefined;
+    readonly decidedAt: ReturnType<typeof currentUtcTimestamp>;
+  }
+): Promise<
+  | { readonly ok: true; readonly approvals: readonly ApprovalSuccess[] }
+  | { readonly ok: false; readonly diagnostics: readonly unknown[] }
+> {
+  if (input.approver === undefined) return { ok: true, approvals: [] };
+
+  const written: ApprovalSuccess[] = [];
+  for (const review of input.reviews) {
+    const taskId = review.document.taskId;
+    const runId = review.document.runId;
+    if (taskId === undefined || runId === undefined) {
+      // Refused rather than skipped. A skip would leave the change one approval
+      // short and report success, and the gate would read the shortfall as "no
+      // approval names this task" — absence, when what actually happened is
+      // that Legion could not name what it was approving.
+      return {
+        ok: false,
+        diagnostics: [
+          {
+            code: "approval_subject_missing",
+            message: `Review ${review.document.id} names no ${taskId === undefined ? "task" : "run"}, so an approval recording its acceptance cannot say what was approved.`,
+            path: review.artifactPath
+          }
+        ]
+      };
+    }
+
+    const approvalId = approvalIdForSubject({
+      changeId: review.document.changeId,
+      action: REVIEW_ACCEPT_ACTION,
+      subject: { kind: "task", id: taskId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: review.document.changeId,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      return { ok: false, diagnostics: existing.diagnostics };
+    }
+
+    // `createdAt` and `requestedAt` are the request instant and survive every
+    // re-decision, so the listing's sort order does not move when an approval is
+    // re-granted. `decidedAt` is the instant of *this* decision, which is what
+    // an ordering gate compares against a run's start.
+    const requestedAt = existing.ok ? existing.document.requestedAt : input.decidedAt;
+    const document: Approval = {
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt: existing.ok ? existing.document.createdAt : input.decidedAt,
+      updatedAt: input.decidedAt,
+      kind: "approval",
+      id: approvalId,
+      projectId: review.document.projectId,
+      changeId: review.document.changeId,
+      taskId,
+      runId,
+      requestedBy: REVIEW_GATE_ACTOR,
+      requestedAt,
+      scope: {
+        // S1: a local idempotent write of Legion's own acceptance artifacts.
+        // Not S4 — nothing here deploys, deletes or rotates anything, and
+        // stamping the highest class on a review acceptance would make the
+        // classification meaningless the first time something really does.
+        effectClass: "S1",
+        action: REVIEW_ACCEPT_ACTION,
+        targets: [
+          { kind: "task", id: taskId },
+          { kind: "review", id: review.document.id },
+          { kind: "change", id: review.document.changeId }
+        ]
+      },
+      idempotencyKey: buildIdempotencyKey({
+        projectId: review.document.projectId,
+        changeId: review.document.changeId,
+        taskId,
+        runId,
+        effectKind: REVIEW_ACCEPT_ACTION,
+        // The accepted review's own content hash, so the key names the exact
+        // bytes accepted: re-running the same accept is the same operation, and
+        // accepting a new review cycle is a different one.
+        targetHash: review.reference.sha256
+      }),
+      status: "granted",
+      decidedBy: input.approver,
+      decidedAt: input.decidedAt,
+      decisionReason: `${input.approver.id} accepted review ${review.document.id} for task ${taskId} via legion review --accept.`
+    };
+
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
+    written.push(write);
+  }
+
+  return { ok: true, approvals: written };
+}
+
+/** What a host needs to show that an acceptance was approved, and by whom. */
+function approvalSummary(approval: ApprovalSuccess): Record<string, unknown> {
+  return {
+    approvalId: approval.document.id,
+    artifactPath: approval.artifactPath,
+    status: approval.document.status,
+    action: approval.document.scope.action,
+    taskId: approval.document.taskId,
+    decidedBy: approval.document.decidedBy,
+    decidedAt: approval.document.decidedAt
+  };
 }
 
 async function rejectLatestReview(
@@ -590,7 +962,7 @@ async function runAutoReview(
       // "accepted" without this cannot distinguish a first-pass review from one
       // that needed two fix rounds, and the difference is the whole point of
       // running with --auto.
-      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
+      return withCycleState(await acceptLatestReview(context, refreshedEvidence, input.approver), {
         cycle,
         maxCycles,
         outcome: "clean"
@@ -973,6 +1345,13 @@ export function reviewSummary(review: ReviewDecisionSuccess): Record<string, unk
     // Who reviewed, so a panel can distinguish a human verdict from an
     // executor's without opening the artifact.
     reviewer: review.document.reviewer,
+    // Who accepted it, which is a different act by a different actor. Spread
+    // conditionally so a review with no recorded acceptor produces the payload
+    // it produced before this release; without that, every R0 caller's payload
+    // would gain two keys holding nothing.
+    ...(review.document.acceptedBy === undefined
+      ? {}
+      : { acceptedBy: review.document.acceptedBy, acceptedAt: review.document.acceptedAt }),
     // The revision chain. A review that supersedes nothing is a first attempt,
     // which is what the first-pass rate in `legion retro` counts.
     supersedes: review.document.supersedes,

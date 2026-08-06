@@ -146,14 +146,24 @@ export interface ShipGateChangeFacts {
   /** `bundle.change.acceptance`. Undefined when the bundle did not load. */
   readonly acceptance: AcceptanceState | undefined;
   /**
-   * Approvals recorded for this change.
+   * Every approval recorded for this change, or `undefined` when the set could
+   * not be established.
    *
-   * `undefined` in this release, not `[]`. `approvalSchema` is complete but
-   * there is no path role, no service and no verb, so nothing consulted the
-   * approval plane. `[]` would assert that it was consulted and is empty, and a
-   * gate reading "every delta has a granted approval" is vacuously true over an
-   * empty list — a fail-open produced by a placeholder value rather than by a
-   * mistake.
+   * Three values, three different meanings, and collapsing any two of them is a
+   * fail-open:
+   *
+   *  - `undefined` — the directory would not read, or the listing dropped an
+   *    entry. An approval file holds a decision and, once it is re-decided, the
+   *    revocation that replaced it, so a dropped file drops a negative fact.
+   *    Nothing may be concluded from what was kept.
+   *  - `[]` — the plane was read and this change has no approvals. That is what
+   *    a change accepted by an older Legion looks like, and it is `unevaluable`
+   *    rather than negative.
+   *  - a non-empty list — real records, whose statuses are the answer.
+   *
+   * All-or-nothing, on the same rule as `oracles` and `taskRuns`: a function
+   * taking a list cannot tell a short list from a whole one, and the caller that
+   * read the directory can.
    */
   readonly approvals: readonly Approval[] | undefined;
   /** `bundle.deltas`. Undefined when the bundle did not load. */
@@ -186,6 +196,24 @@ export interface ShipGateChangeFacts {
   readonly taskRuns: readonly TaskRun[] | undefined;
   /** At most one release plan per change, so singular. No reader yet. */
   readonly release: Release | undefined;
+  /**
+   * The instant this report is being derived, or `undefined` when the caller
+   * has no clock.
+   *
+   * Injected for the same reason `verifyPin` is: reading the wall clock is
+   * ambient state, this module is synchronous and pure, and a report should be
+   * a snapshot of one moment rather than a mix of the moments each gate
+   * happened to ask. `legion ship` passes `currentUtcTimestamp()`.
+   *
+   * It exists because `expiresAt` exists. A granted approval that has lapsed is
+   * no longer a live decision, and a gate with no clock cannot tell the two
+   * apart — so without this the only honest answers were "always live", which is
+   * a fail-open, or "never checkable", which permanently disables a field the
+   * schema offers. `undefined` keeps the second answer available for a caller
+   * that genuinely has no clock: an approval carrying an expiry is then
+   * `unevaluable`, never `satisfied`.
+   */
+  readonly evaluatedAt: UtcTimestamp | undefined;
   /**
    * Re-verify a pinned reference against the working tree.
    *
@@ -292,6 +320,335 @@ function hasAcceptedReview(reviews: readonly ReviewDecisionSuccess[], taskId: st
   );
 }
 
+/**
+ * The action an approval carries when it records a review acceptance.
+ *
+ * Matched exactly. An approval of anything else about this change — a delta
+ * spec, an oracle — is a decision about a different thing, and reading it here
+ * would let one approval satisfy a gate it was never granted for.
+ */
+const REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+
+/** An approval narrowed to the member whose `decidedBy` and `decidedAt` exist. */
+type GrantedApproval = Extract<Approval, { readonly status: "granted" }>;
+
+/**
+ * Whether a grant is still live at the moment the report is being derived.
+ *
+ * Three answers, because there are three situations. `"unknown"` is the one
+ * that matters: an approval that says it expires, evaluated by a caller with no
+ * clock, is a decision whose current validity is unestablished — and this
+ * module's invariant is that an unestablished fact never reads as `satisfied`.
+ *
+ * Compared as strings. Every `utcTimestampSchema` value is a fixed-width UTC
+ * instant, so lexicographic order is chronological order; `earliestExecutionStart`
+ * above relies on the same property. `<=` rather than `<` so an approval expiring
+ * exactly now is spent: expiry bounds validity, and the boundary belongs to the
+ * side that blocks.
+ */
+function grantExpiry(
+  approval: GrantedApproval,
+  evaluatedAt: UtcTimestamp | undefined
+): "live" | "lapsed" | "unknown" {
+  if (approval.expiresAt === undefined) return "live";
+  if (evaluatedAt === undefined) return "unknown";
+  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
+}
+
+/** The `sha256:<hex>` an idempotency key ends with, or `undefined`. */
+function idempotencyTargetHash(key: string): string | undefined {
+  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
+}
+
+type ApprovedReviewLink =
+  | { readonly kind: "current" }
+  | { readonly kind: "stale"; readonly reason: string }
+  | { readonly kind: "unknown"; readonly reason: string };
+
+/**
+ * Is the grant still about the review that is accepted now?
+ *
+ * Without this, a granted approval is unfalsifiable by any later state of the
+ * tree: `legion review --reject-reason` rewrites the review and leaves the
+ * approval untouched, and re-reviewing writes a superseding review that the
+ * approval has never seen. The gate would keep reporting that a named human
+ * accepted this task's review, using a record about a review that has since been
+ * rejected or replaced. An approval is a claim about an act; it is only worth
+ * reading if it stays tied to the bytes the act was about.
+ *
+ * Three links are checked, each closing a different way for the two to drift
+ * apart, and none of them is inferred:
+ *
+ *  - **Identity.** `legion review --accept` writes `{kind: "review", id}` into
+ *    `scope.targets`, so the approval names what it approved. An approval that
+ *    names no review cannot be checked at all, and is `unknown` rather than
+ *    trusted — that is the shape a host or a hand-written file would take, and
+ *    the honest answer to "was this approval about the current review" is that
+ *    nothing says.
+ *  - **Standing.** The named review must still be accepted, and nothing may have
+ *    superseded it. `supersedes` is written by the review gate itself and is a
+ *    recorded link rather than a timestamp comparison, so re-reviewing a task
+ *    invalidates the old grant without either writer knowing about the other.
+ *  - **Bytes.** The idempotency key's target hash *is* the accepted review's
+ *    content hash at the instant of the decision, and the reference the artifact
+ *    service returns is its content hash now. Equality is the only thing that
+ *    makes "approved" survive a mutable working tree.
+ *
+ * Deliberately not checked here: whether the task was rebuilt after acceptance.
+ * That is a fact about evidence, not about the approval, and it is the same
+ * staleness the two independent-review gates carry — `whole_change_acceptance_evidence`
+ * is the gate that owns it and it has no producer yet. Answering it from this
+ * gate would put one plane's verdict in another plane's reader and leave the
+ * real gate looking produced.
+ */
+function approvedReviewLink(input: {
+  readonly approval: GrantedApproval;
+  readonly reviews: readonly ReviewDecisionSuccess[];
+  readonly taskId: string;
+}): ApprovedReviewLink {
+  const approvedIds = input.approval.scope.targets
+    .filter((target) => target.kind === "review")
+    .map((target) => target.id);
+  if (approvedIds.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
+    };
+  }
+
+  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
+  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
+  if (named.length !== approvedIds.length) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
+    };
+  }
+
+  for (const review of named) {
+    if (review.document.status !== "accepted") {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
+      };
+    }
+
+    const superseding = taskReviews.find(
+      (candidate) =>
+        candidate.document.id !== review.document.id &&
+        (candidate.document.supersedes ?? []).includes(review.document.id)
+    );
+    if (superseding !== undefined) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
+      };
+    }
+
+    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
+    const currentHash = review.reference?.sha256;
+    if (approvedHash === undefined || currentHash === undefined) {
+      return {
+        kind: "unknown",
+        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
+      };
+    }
+    if (approvedHash !== currentHash) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
+      };
+    }
+  }
+
+  return { kind: "current" };
+}
+
+/** Newest decision last; the id breaks ties so the order never depends on input order. */
+function byDecisionInstant(
+  left: { readonly decidedAt?: UtcTimestamp | undefined; readonly id: string },
+  right: { readonly decidedAt?: UtcTimestamp | undefined; readonly id: string }
+): number {
+  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
+  if (byInstant !== 0) return byInstant;
+  return left.id.localeCompare(right.id);
+}
+
+/**
+ * Did a human approve accepting this task's review?
+ *
+ * Until this release the answer came from `hasAcceptedReview`, sharing an arm
+ * with the two independent-review gates. Every review Legion writes records
+ * `reviewer: {kind: "tool", id: "legion-<executor>-reviewer"}`, so the gate
+ * reported that a human had approved a change on which no human identity had
+ * ever been recorded anywhere. It could not fail: the same accepted row that
+ * satisfied "an independent review exists" satisfied "a human approved".
+ *
+ * The answer now comes from the approval plane, in a fixed order. Every step is
+ * there because skipping it is a fail-open:
+ *
+ *  - A review whose *accept* transition names a non-human actor is a recorded
+ *    negative about this task — the human step was performed by something that
+ *    is not a human, which is a different statement from "no human step is
+ *    recorded". It beats a live grant, because a grant elsewhere on the change
+ *    does not unsay it. Unreachable through `legion review`, which refuses a
+ *    non-human approver before writing anything; it defends against artifacts
+ *    written by a host, by hand, or by a later verb.
+ *  - An approval answers about *this* change and *this* task or it is not read
+ *    at all. `writeApproval` cross-checks neither the top-level `taskId` against
+ *    `scope.targets` nor the change against anything but the path, and the
+ *    caller assembling the plane could one day list more than one directory, so
+ *    the gate carries its own scoping rather than borrowing the loader's.
+ *  - A negative decision beats a grant unless a *strictly later* grant
+ *    supersedes it. Legion stores one document per (change, action, task) and
+ *    re-decides it in place, so a grant and its revocation cannot separate — but
+ *    that is a property of one writer, and this function's threat model is
+ *    artifacts written by a host, by hand, or by a later verb. Given two
+ *    documents, taking the first granted one it happens to see would let a
+ *    revocation dated a day later be outranked by list order.
+ *  - A lapsed expiry is a spent decision, and an expiry with no clock to check
+ *    it against is an unestablished one. Neither may read as `satisfied`.
+ *  - A live grant still has to be about the review that is accepted now; see
+ *    `approvedReviewLink`.
+ *  - An absent plane, or a plane with no approval naming this task, is absence:
+ *    `unevaluable`. That is what every change accepted by an older Legion looks
+ *    like, and reading it as a negative would report a verdict about a human
+ *    who was never asked.
+ *  - `requested` is a decision not yet made, which is also absence.
+ */
+function humanApprovalStatus(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly reviews: readonly ReviewDecisionSuccess[];
+  readonly taskId: string;
+}): { readonly status: ShipGateStatus; readonly reason: string } {
+  for (const review of input.reviews) {
+    if (review.document.status !== "accepted") continue;
+    if (review.document.taskId !== input.taskId) continue;
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === undefined || acceptedBy.kind === "human") continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
+    };
+  }
+
+  const approvals = input.change?.approvals;
+  if (approvals === undefined) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no human approval is established."
+    };
+  }
+
+  const relevant = approvals.filter(
+    (approval) =>
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than matching
+      // everything. Absence must never widen the set an approval can answer for.
+      approval.changeId === input.change?.changeId &&
+      // An approval whose two task claims disagree says two things; the gate
+      // reads neither. The service will persist such a document, so refusing it
+      // here is the only place it is refused.
+      (approval.taskId === undefined || approval.taskId === input.taskId) &&
+      approval.scope.action === REVIEW_ACCEPT_ACTION &&
+      approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No approval records anyone accepting this task's review."
+    };
+  }
+
+  // Sorted into buckets by loop rather than by `filter`, so that
+  // `status === "granted"` narrows the discriminated union and `decidedBy` and
+  // `decidedAt` are read as the required fields they are on that member. Behind
+  // a `filter`, the element type widens back and the only available spelling is
+  // `decidedBy?.kind`, which renders "undefined" into an operator's diagnostic
+  // on the one member where the field cannot be absent.
+  const live: GrantedApproval[] = [];
+  const lapsed: GrantedApproval[] = [];
+  const unknownExpiry: GrantedApproval[] = [];
+  const nonHumanGrants: GrantedApproval[] = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+
+  // A negative stands unless a live grant is strictly later than it. Equal
+  // instants leave the negative standing: the two decisions cannot be ordered,
+  // and an unorderable pair is not evidence that the grant came second. A
+  // negative with no decision instant at all — the shape `expired` allows —
+  // can never be shown to be superseded, so it always stands.
+  const standing = relevant
+    .filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired")
+    .filter((approval) => {
+      if (newestGrant === undefined) return true;
+      const decidedAt = approval.decidedAt;
+      if (decidedAt === undefined) return true;
+      return decidedAt >= newestGrant.decidedAt;
+    })
+    .sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason:
+        newestGrant === undefined
+          ? `Approval ${blocking.id} for this task's review is ${blocking.status}.`
+          : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+
+  if (newestGrant !== undefined) {
+    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
+    };
+  }
+
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== undefined) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+
+  return {
+    status: "unevaluable",
+    reason: "An approval for this task's review is recorded as requested and has not been decided."
+  };
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -342,10 +699,18 @@ function evaluateGate(input: {
 
     case "lightweight_independent_review":
     case "task_level_independent_review":
-    case "explicit_human_approval":
+      // These two keep reading the accepted review, and that is not an
+      // oversight left over from the arm `explicit_human_approval` was split
+      // out of. They ask whether something other than the implementer looked at
+      // the work; a review produced by the review gate and accepted by the
+      // workflow answers that. Humanity is a different question, and it now has
+      // a different reader.
       return hasAcceptedReview(reviews, taskId)
         ? { status: "satisfied", reason: "An accepted review decision exists for this task." }
         : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
+
+    case "explicit_human_approval":
+      return humanApprovalStatus({ change: input.change, reviews, taskId });
 
     case "protected_oracle":
       // Oracle satisfaction is its own evidence item. It was folded into

@@ -1,5 +1,6 @@
 import {
   deriveOracleManifest,
+  listApprovalsForChange,
   listReviewDecisionsForChange,
   listTaskRunsForChange,
   loadChangeBundle,
@@ -8,11 +9,13 @@ import {
   partitionTraceabilityDiagnostics,
   readTaskGraph,
   validateChangeTraceability,
+  type ApprovalListResult,
   type TaskRunListResult
 } from "@legion/artifacts";
-import type { ArtifactReference, TaskRun } from "@legion/protocol";
+import type { Approval, ArtifactReference, TaskRun } from "@legion/protocol";
 
 import { failure, hasFlag, helpResult, type CliContext, type CliResult } from "../../runtime.js";
+import { currentUtcTimestamp } from "../../workflow/change-input.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { resolvePinnedReferences } from "../../workflow/pinned-references.js";
 import { taskIdForContractId } from "../../workflow/run-artifacts.js";
@@ -191,17 +194,37 @@ export function completeTaskRuns(listing: TaskRunListResult | undefined): readon
 }
 
 /**
- * The change-scoped planes `legion ship` can read today.
+ * Every approval recorded for this change, or `undefined` when the listing
+ * dropped any of them.
  *
- * No gate consumes any of this yet — every gate in the derived set is
- * task-scoped and reads evidence and reviews, exactly as before. This exists so
- * that the change adding the first change-scoped gate is a diff about that
- * gate: the loading, the plumbing and the shape of absence are settled here,
- * where they can be reviewed against a tree whose behaviour has not moved.
+ * The same all-or-nothing rule as `completeTaskRuns`, for the sharpest reason
+ * of the three planes it applies to. An approval file carries the current state
+ * of one decision, so once a grant has been revoked the revocation *is* that
+ * file. Dropping it does not shorten a list of positives — it deletes a
+ * negative, and `explicit_human_approval` would read the remaining records and
+ * report satisfied on a decision that had been withdrawn.
  *
- * The approval and release planes are passed as `undefined` rather than as
- * empty values. Their schemas exist but nothing reads or writes them, so
- * "consulted and empty" would be a claim this command cannot make.
+ * `[]` is deliberately not absence. A change with no approvals at all is one
+ * accepted by a Legion that had no approval plane, which the gate reports as
+ * `unevaluable` for its own reason and in its own words. A read that failed is
+ * a different thing and must not be spelled the same way.
+ */
+export function completeApprovals(listing: ApprovalListResult | undefined): readonly Approval[] | undefined {
+  if (listing === undefined || !listing.ok) return undefined;
+  if (listing.skipped.length > 0) return undefined;
+  return listing.approvals.map((approval) => approval.document);
+}
+
+/**
+ * The change-scoped planes `legion ship` can read.
+ *
+ * One gate consumes one of them: `explicit_human_approval` reads `approvals`.
+ * Everything else here is still loaded ahead of its reader, so that the change
+ * adding each gate is a diff about that gate rather than about the plumbing.
+ *
+ * The release plane is still passed as `undefined` rather than as an empty
+ * value. Its schema exists but nothing reads or writes it, so "consulted and
+ * empty" would be a claim this command cannot make.
  */
 async function loadShipGateChangeFacts(input: {
   readonly repositoryRoot: string;
@@ -219,6 +242,11 @@ async function loadShipGateChangeFacts(input: {
   );
   const taskRuns = completeTaskRuns(runsResult);
 
+  const approvalsResult = await absentOnFailure(() =>
+    listApprovalsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const approvals = completeApprovals(approvalsResult);
+
   // The pins a gate can ask about are hashed here, once, because the evaluator
   // is synchronous. A reference nobody collects answers `unverified`, which
   // reads as "not checked" rather than as "clean" — so a gate whose collector
@@ -235,11 +263,16 @@ async function loadShipGateChangeFacts(input: {
   return {
     changeId: input.changeId,
     acceptance: bundle?.change.acceptance,
-    approvals: undefined,
+    approvals,
     deltas: bundle?.deltas,
     oracles,
     taskRuns,
     release: undefined,
+    // Read once, here, for the same reason the pins are hashed once here: a
+    // report is a snapshot of a moment. Gates that ask "is this still valid"
+    // must all ask about the same instant, or a change could be reported
+    // approved and expired in one payload.
+    evaluatedAt: currentUtcTimestamp(),
     verifyPin
   };
 }

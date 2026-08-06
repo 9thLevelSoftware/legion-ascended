@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { completeTaskRuns } from "../packages/cli/dist/commands/workflow/ship.js";
+import { completeApprovals, completeTaskRuns } from "../packages/cli/dist/commands/workflow/ship.js";
 import { shipGateDiagnostics } from "../packages/cli/dist/workflow/ship-gates.js";
 
 /**
@@ -170,6 +170,50 @@ test("a failed or absent listing is absence too", () => {
   // that lost some: it stays an empty list so a gate can say "no run exists"
   // rather than "the runs could not be established".
   assert.deepEqual(completeTaskRuns(listing()), []);
+});
+
+const approvalListing = (overrides = {}) => ({
+  ok: true,
+  status: "read",
+  approvals: [],
+  skipped: [],
+  diagnostics: [],
+  ...overrides
+});
+
+const approvalResult = (id, status) => ({ document: { id, status } });
+
+test("a complete approvals listing is carried through as documents", () => {
+  assert.deepEqual(
+    completeApprovals(approvalListing({ approvals: [approvalResult("apv_a", "granted")] })).map((approval) => approval.id),
+    ["apv_a"]
+  );
+});
+
+test("an approvals listing that skipped an entry is absence, because the entry may be the revocation", () => {
+  // Sharper than the run listing's version of the same rule. An approval file
+  // carries the current state of one decision, so once a grant has been revoked
+  // the revocation *is* that file. Dropping it does not shorten a list of
+  // positives — it deletes a negative, and `explicit_human_approval` would read
+  // what remained and report satisfied on a decision that had been withdrawn.
+  assert.equal(
+    completeApprovals(
+      approvalListing({ approvals: [approvalResult("apv_a", "granted")], skipped: ["apv_b.json"] })
+    ),
+    undefined
+  );
+});
+
+test("a failed approvals listing is absence, but an empty one is an empty list", () => {
+  // The distinction the gate depends on. `undefined` means the plane could not
+  // be established; `[]` means it was read and this change has no approvals,
+  // which is what every change accepted by an earlier Legion looks like. Both
+  // report unevaluable today, for different stated reasons — and the first must
+  // never be spelled as the second, because the day a gate treats an empty list
+  // as "nothing to check" it would treat an unreadable directory the same way.
+  assert.equal(completeApprovals(undefined), undefined);
+  assert.equal(completeApprovals({ ok: false, status: "invalid", diagnostics: [] }), undefined);
+  assert.deepEqual(completeApprovals(approvalListing()), []);
 });
 
 test("a repeated change-scoped gate id collapses even across different subjects", () => {

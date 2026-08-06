@@ -263,6 +263,26 @@ const SCENARIOS = [
  * expected to edit exactly the cells for its own gate. That edit is the
  * behaviour change, stated in one place, and reviewing it is reviewing the
  * central claim of the change that makes it.
+ *
+ * **One gate id has moved since that transcript was taken, and exactly one:
+ * `explicit_human_approval`.** It appears once per scenario, all five times at
+ * R3, and all five cells are now `unevaluable`. No other gate id moved in any
+ * scenario at any tier, and the arithmetic guard below still holds because the
+ * gate stayed task-scoped.
+ *
+ * Four of the five moved from `satisfied`, which is the point of the change:
+ * the gate shared an arm with the two independent-review gates and answered
+ * from any accepted review, so it reported a human approval on a change whose
+ * every review records `reviewer: {kind: "tool"}` and where no human identity
+ * existed anywhere. `derive()` passes no `change` facts, so the approvals plane
+ * is absent, and absent is `unevaluable`.
+ *
+ * The fifth — "no evidence and no review" at R3 — moved from `unsatisfied` to
+ * `unevaluable`, which is a loosening and is deliberate. That scenario has no
+ * review at all, so the old arm reported a negative human-approval verdict it
+ * had no basis for: nobody had been asked. It now reports that the plane was
+ * never consulted. `ready` is false either way, in all five, so no readiness
+ * assertion moved with them.
  */
 const BASELINE_GATE_STATUSES = {
   "passing verification and an accepted review": {
@@ -295,7 +315,7 @@ const BASELINE_GATE_STATUSES = {
       architecture_or_security_review: "unevaluable",
       protected_acceptance_tests: "unevaluable",
       security_or_e2e_evaluator: "unevaluable",
-      explicit_human_approval: "satisfied",
+      explicit_human_approval: "unevaluable",
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
@@ -330,7 +350,7 @@ const BASELINE_GATE_STATUSES = {
       architecture_or_security_review: "unevaluable",
       protected_acceptance_tests: "unevaluable",
       security_or_e2e_evaluator: "unevaluable",
-      explicit_human_approval: "unsatisfied",
+      explicit_human_approval: "unevaluable",
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
@@ -365,7 +385,7 @@ const BASELINE_GATE_STATUSES = {
       architecture_or_security_review: "unevaluable",
       protected_acceptance_tests: "unevaluable",
       security_or_e2e_evaluator: "unevaluable",
-      explicit_human_approval: "satisfied",
+      explicit_human_approval: "unevaluable",
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
@@ -400,7 +420,7 @@ const BASELINE_GATE_STATUSES = {
       architecture_or_security_review: "unevaluable",
       protected_acceptance_tests: "unevaluable",
       security_or_e2e_evaluator: "unevaluable",
-      explicit_human_approval: "satisfied",
+      explicit_human_approval: "unevaluable",
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
@@ -435,7 +455,7 @@ const BASELINE_GATE_STATUSES = {
       architecture_or_security_review: "unevaluable",
       protected_acceptance_tests: "unevaluable",
       security_or_e2e_evaluator: "unevaluable",
-      explicit_human_approval: "satisfied",
+      explicit_human_approval: "unevaluable",
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
@@ -457,42 +477,95 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
   }
 });
 
-test("no gate reads a change fact in a release that produces none", () => {
-  // Comparing a report built with facts against one built without them is
-  // weaker than it looks: a gate could read a fact and happen to return the
-  // same verdict for this fixture, and the comparison would pass while the
-  // claim was false. This fails on the read itself, which is the actual claim —
-  // every gate in this release is task-scoped and answers from evidence and
-  // reviews alone.
+test("the only change facts any gate reads are approvals, changeId and the clock", () => {
+  // The predecessor of this test asserted that no gate read any change fact,
+  // by throwing on every property access. Its comment named the honest edit for
+  // the day a gate started reading one: replace it with an assertion naming the
+  // fields that gate reads, rather than narrowing the proxy into a no-op or
+  // deleting it. This is that edit.
   //
-  // When a gate does start reading change facts, the honest edit is to replace
-  // this with an assertion naming the fields that gate reads. Narrowing the
-  // proxy, or deleting the test, throws away the only statement anywhere that
-  // the boundary is where it is documented to be.
-  const tripwire = new Proxy(
-    // `verifyPin` is exempt because the guard inside `deriveShipGates`
-    // legitimately inspects it, to substitute a verifier when a caller supplied
-    // something that is not one.
-    { verifyPin: () => "unverified" },
-    {
-      get(target, property) {
-        if (property === "verifyPin") return target.verifyPin;
-        throw new Error(`a ship gate read the change fact "${String(property)}"`);
+  // It is stronger than the version it replaces, in both directions. The trap
+  // still throws on the other nine planes, so the boundary claim stays
+  // falsifiable for `acceptance`, `deltas`, `oracles`, `taskRuns` and `release`
+  // — none of which has a reader yet, and each of which is a fail-open waiting
+  // for one. And it now records what *was* read, so the test also fails if
+  // `explicit_human_approval` stops consulting the approvals plane and quietly
+  // goes back to answering from the accepted review.
+  //
+  // The equality below is the second half of the claim: reading an absent
+  // `approvals` produces the same report as passing no facts at all. An absent
+  // fact must never be worth more than no facts.
+  // An earlier version of this test exempted `changeId` on the claim that
+  // `deriveShipGates` reads it to name a change-scoped gate's subject. That was
+  // false — `GATE_SCOPE` maps all twenty ids to "task", so the read
+  // short-circuits — and an exemption granted for a reason that does not hold
+  // only widens the boundary the test exists to pin. `changeId` is recorded like
+  // any other read now, and it is genuinely read: the approval gate scopes the
+  // plane to this change itself rather than trusting the loader to have listed
+  // one directory.
+  function tripwire(reads, approvals) {
+    return new Proxy(
+      // `verifyPin` is the one true exemption: the guard inside
+      // `deriveShipGates` inspects it on every call, to substitute a verifier
+      // when a caller supplied something that is not one, so recording it would
+      // say nothing about which gate read what.
+      { verifyPin: () => "unverified", changeId: "chg_tripwire", approvals, evaluatedAt: undefined },
+      {
+        get(target, property) {
+          if (property === "verifyPin") return target.verifyPin;
+          if (property === "changeId" || property === "approvals" || property === "evaluatedAt") {
+            reads.push(property);
+            return target[property];
+          }
+          throw new Error(`a ship gate read the change fact "${String(property)}"`);
+        }
       }
-    }
-  );
+    );
+  }
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
+    const reads = [];
     const withFacts = deriveShipGates({
       tasks: [task(tier)],
       taskIdFor: () => TASK_ID,
       entries: [entry(PASSING_R2.items)],
       reviews: PASSING_R2.reviews,
-      change: tripwire
+      change: tripwire(reads, undefined)
     });
 
     assert.deepEqual(withFacts, derive({ tier, ...PASSING_R2 }));
+    // Only R3 derives explicit_human_approval, so only R3 should have touched
+    // the plane. A lower tier reading it would mean the gate set and the fact
+    // set had drifted apart. An unreadable plane is answered without consulting
+    // anything else, which is why `changeId` is not in this list.
+    assert.deepEqual(
+      [...new Set(reads)],
+      tier === "R3" ? ["approvals"] : [],
+      `${tier} read ${JSON.stringify([...new Set(reads)])}`
+    );
   }
+
+  // The same wire against a plane that holds a record, because the loop above
+  // answers an unreadable plane without consulting anything else and an empty
+  // one without running the scoping predicate at all. Without this pass, a gate
+  // could start reading `deltas` or `taskRuns` on the populated path and no
+  // assertion anywhere would notice.
+  //
+  // The stand-in approval is structurally minimal, like every other fixture in
+  // this file: enough fields for the scoping predicate to run to a decision, no
+  // more. Real `approvalSchema` documents are what tests/ship-human-approval-gate
+  // asserts the verdicts against.
+  const populatedReads = [];
+  deriveShipGates({
+    tasks: [task("R3")],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedReads, [
+      { changeId: "chg_tripwire", taskId: TASK_ID, scope: { action: "workflow.review.accept", targets: [] } }
+    ])
+  });
+  assert.deepEqual([...new Set(populatedReads)].sort(), ["approvals", "changeId"]);
 });
 
 test("every gate names its scope and the subject that scope refers to", () => {

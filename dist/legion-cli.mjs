@@ -6,7 +6,7 @@ var __export = (target, all) => {
 };
 
 // packages/cli/src/index.ts
-import path47 from "node:path";
+import path48 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/cli/src/commands/board/index.ts
@@ -1071,10 +1071,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path48) {
-  if (!path48)
+function getElementAtPath(obj, path49) {
+  if (!path49)
     return obj;
-  return path48.reduce((acc, key) => acc?.[key], obj);
+  return path49.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1483,11 +1483,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path48, issues) {
+function prefixIssues(path49, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path48);
+    iss.path.unshift(path49);
     return iss;
   });
 }
@@ -1634,16 +1634,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path48 = []) => {
+  const processError = (error52, path49 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path48, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path49, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path49, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path49, ...issue2.path]);
       } else {
-        const fullpath = [...path48, ...issue2.path];
+        const fullpath = [...path49, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1670,17 +1670,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path48 = []) => {
+  const processError = (error52, path49 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path48, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path49, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path49, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path48, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path49, ...issue2.path]);
       } else {
-        const fullpath = [...path48, ...issue2.path];
+        const fullpath = [...path49, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1712,8 +1712,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path48 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path48) {
+  const path49 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path49) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14405,13 +14405,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path48 = ref.slice(1).split("/").filter(Boolean);
-  if (path48.length === 0) {
+  const path49 = ref.slice(1).split("/").filter(Boolean);
+  if (path49.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path48[0] === defsKey) {
-    const key = path48[1];
+  if (path49[0] === defsKey) {
+    const key = path49[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -15076,11 +15076,11 @@ function findProtocolMigrationPath(input) {
         continue;
       if (visited.has(migration.toVersion))
         continue;
-      const path48 = [...next.path, migration];
+      const path49 = [...next.path, migration];
       if (migration.toVersion === toVersion)
-        return path48;
+        return path49;
       visited.add(migration.toVersion);
-      queue.push({ version: migration.toVersion, path: path48 });
+      queue.push({ version: migration.toVersion, path: path49 });
     }
     next = queue.shift();
   }
@@ -15195,6 +15195,7 @@ var artifactRoleSchema = _enum2([
   "evidence-index",
   "task-run",
   "review",
+  "approval",
   "archive"
 ]);
 var artifactRevisionSchema = strictObject({
@@ -15353,7 +15354,28 @@ var reviewDecisionBaseSchema = schemaMetadataSchema.extend({
   findings: array(reviewFindingSchema),
   supersedes: array(reviewIdSchema),
   evidenceRefs: array(evidenceIdSchema).optional(),
-  traceRefs: array(traceReferenceSchema).optional()
+  traceRefs: array(traceReferenceSchema).optional(),
+  /**
+   * Who performed the *accept* transition, and when.
+   *
+   * `reviewer` records who produced the review, which for every review Legion
+   * writes is a tool. Accepting one is a second act, by a second actor, and it
+   * had nowhere to live — so a gate asking "did a human approve this" could only
+   * consult `reviewer` or the existence of an accepted row, and both answer a
+   * different question. These two fields are where the accept transition's actor
+   * goes.
+   *
+   * On the base schema rather than on the `accepted` member because
+   * `z.strictObject` would reject them everywhere else, and a review that is
+   * later superseded must keep the record of who accepted it.
+   *
+   * Optional because every review artifact already on disk lacks them. A
+   * required field would make `readReviewDecision` fail to parse an older
+   * review, and `legion ship` would report a broken change rather than an older
+   * one — the worst failure mode for a command whose job is honest reporting.
+   */
+  acceptedBy: actorSchema.optional(),
+  acceptedAt: utcTimestampSchema.optional()
 });
 var openReviewDecisionFields = {
   submittedAt: utcTimestampSchema.optional()
@@ -15392,6 +15414,20 @@ var reviewDecisionSchema = discriminatedUnion("status", [
       code: "custom",
       message: "submittedAt cannot be before createdAt.",
       path: ["submittedAt"]
+    });
+  }
+  if (reviewDecision.acceptedBy === void 0 !== (reviewDecision.acceptedAt === void 0)) {
+    context.addIssue({
+      code: "custom",
+      message: "acceptedBy and acceptedAt must be recorded together.",
+      path: ["acceptedBy"]
+    });
+  }
+  if (reviewDecision.acceptedAt && reviewDecision.submittedAt && new Date(reviewDecision.acceptedAt).getTime() < new Date(reviewDecision.submittedAt).getTime()) {
+    context.addIssue({
+      code: "custom",
+      message: "acceptedAt cannot be before submittedAt.",
+      path: ["acceptedAt"]
     });
   }
 });
@@ -15456,6 +15492,20 @@ var approvalBaseSchema = schemaMetadataSchema.extend({
   requestedAt: utcTimestampSchema,
   scope: approvalScopeSchema,
   idempotencyKey: idempotencyKeySchema,
+  /**
+   * The exact bytes the decision was made against.
+   *
+   * `scope.targets` names *what* was approved by id; this names the content that
+   * was in front of the approver when they said yes. A gate can then ask whether
+   * the thing approved has since been edited, which is the only way "approved"
+   * survives contact with a mutable working tree.
+   *
+   * Optional because no approval on disk has it, and `.min(1)` when present
+   * because an empty array is not "pinned nothing" to a reader — it is a list
+   * every pin check passes vacuously, which is a fail-open produced by a shape
+   * rather than by a mistake. Present therefore means at least one pin.
+   */
+  artifacts: array(artifactReferenceSchema).min(1).optional(),
   expiresAt: utcTimestampSchema.optional()
 });
 var undecidedApprovalFields = {
@@ -17765,17 +17815,17 @@ function applyMigrations(input, options) {
   const initial = assertVersionedRecord(input);
   const targetVersion = parseSchemaVersion(options.targetVersion ?? options.registry.currentVersion, "targetVersion");
   assertSupportedVersion(targetVersion, options.registry, "targetVersion");
-  const path48 = findProtocolMigrationPath({
+  const path49 = findProtocolMigrationPath({
     fromVersion: initial.schemaVersion,
     toVersion: targetVersion,
     migrations: options.registry.migrations
   });
-  if (path48 === null) {
+  if (path49 === null) {
     throw new Error(`No registered migration path from ${initial.schemaVersion} to ${targetVersion}.`);
   }
   let record2 = cloneVersionedRecord(initial);
   const appliedMigrations = [];
-  for (const descriptor of path48) {
+  for (const descriptor of path49) {
     const migration = options.registry.migrations.find((entry) => entry.id === descriptor.id);
     if (!migration) {
       throw new Error(`Migration descriptor ${descriptor.id} is not registered.`);
@@ -18838,10 +18888,10 @@ function collectScope(taskContract) {
 
 // packages/core/dist/dispatch/blocker.js
 var DISPATCH_BLOCKER_REPORTER = "fresh-context-dispatcher";
-function renderPath(path48) {
-  if (path48.length === 0)
+function renderPath(path49) {
+  if (path49.length === 0)
     return "<root>";
-  return path48.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
+  return path49.map((segment) => typeof segment === "number" ? `[${segment}]` : `.${segment}`).join("").replace(/^\./, "");
 }
 function renderIssueReason(issue2) {
   return `code=${issue2.code} path=${renderPath(issue2.path)} :: ${issue2.message}`;
@@ -19566,15 +19616,15 @@ function parseSettings(value) {
   if (result.success)
     return { ok: true, findings: [] };
   const findings = result.error.issues.map((issue2) => {
-    const path48 = issue2.path.join(".");
+    const path49 = issue2.path.join(".");
     if (issue2.code === "unrecognized_keys") {
-      const keys = issue2.keys.map((key) => path48.length === 0 ? key : `${path48}.${key}`);
+      const keys = issue2.keys.map((key) => path49.length === 0 ? key : `${path49}.${key}`);
       return {
-        path: path48,
+        path: path49,
         message: `Unknown setting${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}.`
       };
     }
-    return { path: path48, message: path48.length === 0 ? issue2.message : `${path48}: ${issue2.message}` };
+    return { path: path49, message: path49.length === 0 ? issue2.message : `${path49}: ${issue2.message}` };
   });
   return { ok: false, findings };
 }
@@ -19750,14 +19800,14 @@ var ReleaseObservationBoardAggregator = class {
   aggregate(input) {
     const validated = validateInput(input);
     if (!validated.ok) {
-      const failure14 = deepFreeze4({
+      const failure15 = deepFreeze4({
         ok: false,
         schemaVersion: RELEASE_OBSERVATION_ADAPTER_SCHEMA_VERSION,
         kind: RELEASE_OBSERVATION_ADAPTER_KIND,
         changeId: input.changeId,
         issues: validated.issues
       });
-      return failure14;
+      return failure15;
     }
     const report = input.report;
     const eventType = validated.eventType;
@@ -26219,6 +26269,9 @@ function parseRunId(input) {
 function parseReviewId(input) {
   return reviewIdSchema.parse(input);
 }
+function parseApprovalId(input) {
+  return approvalIdSchema.parse(input);
+}
 function artifactPathForRole(input) {
   switch (input.role) {
     case "project-manifest":
@@ -26268,6 +26321,11 @@ function artifactPathForRole(input) {
       const changeId = parseChangeId(input.changeId);
       const reviewId = parseReviewId(input.reviewId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/reviews/${reviewId}.json`);
+    }
+    case "approval": {
+      const changeId = parseChangeId(input.changeId);
+      const approvalId = parseApprovalId(input.approvalId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/approvals/${approvalId}.json`);
     }
     case "archive": {
       const changeId = parseChangeId(input.changeId);
@@ -26364,14 +26422,14 @@ function hashContent(content) {
   const hash2 = createHash14("sha256").update(contentBytes(content)).digest("hex");
   return contentHashSchema.parse(`sha256:${hash2}`);
 }
-function mediaTypeForArtifactPath(path48) {
-  if (path48.endsWith(".json"))
+function mediaTypeForArtifactPath(path49) {
+  if (path49.endsWith(".json"))
     return "application/json";
-  if (path48.endsWith(".yaml") || path48.endsWith(".yml"))
+  if (path49.endsWith(".yaml") || path49.endsWith(".yml"))
     return "application/yaml";
-  if (path48.endsWith(".md"))
+  if (path49.endsWith(".md"))
     return "text/markdown";
-  if (path48.endsWith(".txt"))
+  if (path49.endsWith(".txt"))
     return "text/plain";
   return void 0;
 }
@@ -26414,16 +26472,16 @@ function jsonParseLocation(error51, text) {
     return {};
   return offsetLocation(text, offset);
 }
-function schemaDiagnostics(path48, issues) {
+function schemaDiagnostics(path49, issues) {
   if (!issues || issues.length === 0) {
-    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path48 })];
+    return [diagnosticForPath({ code: "invalid_schema", message: "Artifact failed protocol schema validation.", path: path49 })];
   }
   return issues.map((issue2) => {
     const suffix = issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : "";
     return diagnosticForPath({
       code: "invalid_schema",
       message: `${issue2.message}${suffix}`,
-      path: path48
+      path: path49
     });
   });
 }
@@ -27487,7 +27545,7 @@ function specPathForRequirement(requirementId) {
 }
 function normalizeDocument(input, revision) {
   const pathResult = specPathForRequirementResult(input.primaryRequirementId);
-  const path48 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
+  const path49 = pathResult.ok ? pathResult.artifactPath : INVALID_CURRENT_SPEC_PATH;
   const parsed = currentSpecDocumentSchema.safeParse({
     ...input,
     schemaVersion: input.schemaVersion ?? CURRENT_SPEC_SCHEMA_VERSION,
@@ -27501,7 +27559,7 @@ function normalizeDocument(input, revision) {
       diagnostics: parsed.error.issues.map((issue2) => specDiagnostic({
         code: "invalid_schema",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path48
+        path: path49
       }))
     };
   }
@@ -28526,13 +28584,13 @@ function parseChangeId2(input) {
   }
   return parsed.data;
 }
-function parseRequirementId2(input, path48) {
+function parseRequirementId2(input, path49) {
   const parsed = requirementIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_requirement_id",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
@@ -28548,24 +28606,24 @@ function parseTimestamp2(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha(input, path48) {
+function parseBaseGitSha(input, path49) {
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
     return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
 }
-function parseOwners(input, path48) {
+function parseOwners(input, path49) {
   if (input.length === 0) {
     return failure4("invalid", [
       changeDiagnostic({
         code: "invalid_owners",
         message: "At least one owner is required for a change bundle.",
-        path: path48
+        path: path49
       })
     ]);
   }
@@ -28577,7 +28635,7 @@ function parseOwners(input, path48) {
       diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
         code: "invalid_owner",
         message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path48
+        path: path49
       })));
       continue;
     }
@@ -28865,7 +28923,7 @@ function referencesEqual(left, right) {
 function findRevision(input) {
   return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
 }
-function conflictDiagnostics(deltas, path48) {
+function conflictDiagnostics(deltas, path49) {
   const byRequirement = /* @__PURE__ */ new Map();
   const diagnostics = [];
   for (const delta of deltas) {
@@ -28874,7 +28932,7 @@ function conflictDiagnostics(deltas, path48) {
       diagnostics.push(changeDiagnostic({
         code: "conflicting_delta_operations",
         message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path48
+        path: path49
       }));
     }
     byRequirement.set(delta.requirementId, delta.operation);
@@ -29651,18 +29709,18 @@ function parseChangeId3(input) {
   }
   return parsed.data;
 }
-function parseOracleId2(input, path48) {
+function parseOracleId2(input, path49) {
   const parsed = oracleIdSchema.safeParse(input);
   if (!parsed.success) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_oracle_id",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha2(input, path48) {
+function parseBaseGitSha2(input, path49) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -29670,7 +29728,7 @@ function parseBaseGitSha2(input, path48) {
     return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
@@ -30014,7 +30072,7 @@ function parseChangeId4(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path48) {
+function parseBaseGitSha3(input, path49) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -30022,18 +30080,18 @@ function parseBaseGitSha3(input, path48) {
     return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision(value, path48) {
+function assertExpectedRevision(value, path49) {
   if (!Number.isInteger(value) || value < 0) {
     return failure6("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path48
+        path: path49
       })
     ]);
   }
@@ -30351,7 +30409,7 @@ function parseChangeId5(input) {
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path48) {
+function parseBaseGitSha4(input, path49) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
@@ -30359,18 +30417,18 @@ function parseBaseGitSha4(input, path48) {
     return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
 }
-function assertExpectedRevision2(value, path48) {
+function assertExpectedRevision2(value, path49) {
   if (!Number.isInteger(value) || value < 0) {
     return failure7("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path48
+        path: path49
       })
     ]);
   }
@@ -30769,13 +30827,13 @@ function parseBaseGitSha5(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision3(value, path48) {
+function assertExpectedRevision3(value, path49) {
   if (!Number.isInteger(value) || value < 0) {
     return failure8("invalid", [
       taskRunDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path48
+        path: path49
       })
     ]);
   }
@@ -31052,13 +31110,13 @@ function parseBaseGitSha6(input, artifactPath) {
   }
   return parsed.data;
 }
-function assertExpectedRevision4(value, path48) {
+function assertExpectedRevision4(value, path49) {
   if (!Number.isInteger(value) || value < 0) {
     return failure9("invalid", [
       reviewDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
-        path: path48
+        path: path49
       })
     ]);
   }
@@ -31274,6 +31332,293 @@ async function listReviewDecisionsForChange(input) {
   return { ok: true, status: "read", reviews, diagnostics: [] };
 }
 
+// packages/artifacts/dist/approvals/service.js
+import { readdir as readdir7 } from "node:fs/promises";
+import path15 from "node:path";
+var INVALID_APPROVAL_PATH = ".legion/project/changes/invalid-change/approvals/invalid-approval.json";
+var ARTIFACT_REVISION_METADATA_KEY3 = "artifact_revision";
+function failure10(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function approvalDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_APPROVAL_PATH
+  });
+}
+function schemaDiagnostics7(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [approvalDiagnostic({ code: input.code, message: "Approval failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => approvalDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId8(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure10("invalid", parsed.error.issues.map((issue2) => approvalDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseApprovalId2(input) {
+  const parsed = approvalIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure10("invalid", parsed.error.issues.map((issue2) => approvalDiagnostic({
+      code: "invalid_approval_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha7(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure10("invalid", parsed.error.issues.map((issue2) => approvalDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: artifactPath
+    })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision5(value, path49) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure10("invalid", [
+      approvalDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: path49
+      })
+    ]);
+  }
+  return void 0;
+}
+function approvalPath(changeId, approvalId) {
+  return artifactPathForRole({ role: "approval", changeId, approvalId });
+}
+function storeArtifactRevision3(document, revision) {
+  const parsed = approvalSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY3]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure10("invalid", schemaDiagnostics7({
+      code: "invalid_approval",
+      path: approvalPath(document.changeId, document.id),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision3(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY3];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+function identityDiagnostics3(input) {
+  const diagnostics = [];
+  if (input.document.changeId !== input.changeId) {
+    diagnostics.push(approvalDiagnostic({
+      code: "approval_change_mismatch",
+      message: `Approval change ID ${input.document.changeId} does not match requested change ${input.changeId}.`,
+      path: input.artifactPath
+    }));
+  }
+  if (input.document.id !== input.approvalId) {
+    diagnostics.push(approvalDiagnostic({
+      code: "approval_id_mismatch",
+      message: `Approval ID ${input.document.id} does not match requested approval ${input.approvalId}.`,
+      path: input.artifactPath
+    }));
+  }
+  return diagnostics;
+}
+async function writeApproval(input) {
+  const parsed = approvalSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure10("invalid", schemaDiagnostics7({
+      code: "invalid_approval",
+      path: INVALID_APPROVAL_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = approvalPath(parsed.data.changeId, parsed.data.id);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision5(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha7(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readApproval({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId,
+      approvalId: parsed.data.id
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure10("conflict", [
+        approvalDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision3(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "approval",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure10("conflict", [
+        approvalDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: artifactPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function readApproval(input) {
+  const changeId = parseChangeId8(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const approvalId = parseApprovalId2(input.approvalId);
+  if (typeof approvalId !== "string")
+    return approvalId;
+  const artifactPath = approvalPath(changeId, approvalId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: approvalSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure10(status2, read.diagnostics);
+  }
+  const diagnostics = identityDiagnostics3({
+    document: read.value,
+    changeId,
+    approvalId,
+    artifactPath
+  });
+  if (diagnostics.length > 0)
+    return failure10("invalid", diagnostics);
+  const storedRevision = storedArtifactRevision3(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "approval",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function listApprovalsForChange(input) {
+  const changeId = parseChangeId8(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const approvalsRoot = path15.join(input.repositoryRoot, ".legion", "project", "changes", changeId, "approvals");
+  let entries;
+  try {
+    entries = await readdir7(approvalsRoot, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      return { ok: true, status: "read", approvals: [], skipped: [], diagnostics: [] };
+    }
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    return failure10("invalid", [
+      approvalDiagnostic({
+        code: "approval_discovery_failed",
+        message,
+        path: ".legion/project/changes/invalid-change/approvals"
+      })
+    ]);
+  }
+  const approvals = [];
+  const skipped = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) {
+      skipped.push(entry.name);
+      continue;
+    }
+    const approvalId = approvalIdSchema.safeParse(entry.name.slice(0, -".json".length));
+    if (!approvalId.success) {
+      skipped.push(entry.name);
+      continue;
+    }
+    const read = await readApproval({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      approvalId: approvalId.data
+    });
+    if (!read.ok) {
+      skipped.push(entry.name);
+      continue;
+    }
+    approvals.push(read);
+  }
+  approvals.sort((left, right) => {
+    const byCreatedAt = left.document.createdAt.localeCompare(right.document.createdAt);
+    if (byCreatedAt !== 0)
+      return byCreatedAt;
+    return left.document.id.localeCompare(right.document.id);
+  });
+  return { ok: true, status: "read", approvals, skipped, diagnostics: [] };
+}
+
 // packages/artifacts/dist/traceability/service.js
 var INVALID_TRACEABILITY_PATH = ".legion/project/changes/invalid-change/traceability.json";
 var HIGH_RISK_TIERS = /* @__PURE__ */ new Set(["R2", "R3"]);
@@ -31299,8 +31644,8 @@ function evidenceNodeId(id) {
 function reviewNodeId(id) {
   return nodeId("review", id);
 }
-function artifactNodeId(path48) {
-  return nodeId("artifact", path48);
+function artifactNodeId(path49) {
+  return nodeId("artifact", path49);
 }
 function traceabilityDiagnostic(input) {
   return diagnosticForPath({
@@ -31309,7 +31654,7 @@ function traceabilityDiagnostic(input) {
     path: input.path ?? INVALID_TRACEABILITY_PATH
   });
 }
-function failure10(status2, diagnostics, report) {
+function failure11(status2, diagnostics, report) {
   return {
     ok: false,
     status: status2,
@@ -31317,10 +31662,10 @@ function failure10(status2, diagnostics, report) {
     ...report === void 0 ? {} : { report }
   };
 }
-function parseChangeId8(input) {
+function parseChangeId9(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure10("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
+    return failure11("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
@@ -31336,8 +31681,8 @@ function isHighRisk(tier) {
 function artifactPathForTraceability(changeId) {
   return `${artifactPathForRole({ role: "proposal", changeId })}#traceability`;
 }
-function oracleIdFromPath(path48) {
-  const fileName = path48.split("/").at(-1);
+function oracleIdFromPath(path49) {
+  const fileName = path49.split("/").at(-1);
   if (fileName === void 0 || !fileName.endsWith(".yaml"))
     return void 0;
   const parsed = oracleIdSchema.safeParse(fileName.slice(0, -".yaml".length));
@@ -31452,13 +31797,13 @@ function detectTraceCycles(state) {
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const cyclic = /* @__PURE__ */ new Set();
-  const path48 = [];
+  const path49 = [];
   function visit(node) {
     if (visiting.has(node)) {
-      const cycleStartIndex = path48.indexOf(node);
+      const cycleStartIndex = path49.indexOf(node);
       if (cycleStartIndex !== -1) {
-        for (let index = cycleStartIndex; index < path48.length; index++) {
-          const cyclicNode = path48[index];
+        for (let index = cycleStartIndex; index < path49.length; index++) {
+          const cyclicNode = path49[index];
           if (cyclicNode !== void 0)
             cyclic.add(cyclicNode);
         }
@@ -31468,11 +31813,11 @@ function detectTraceCycles(state) {
     if (visited.has(node))
       return;
     visiting.add(node);
-    path48.push(node);
+    path49.push(node);
     for (const next of adjacency.get(node) ?? []) {
       visit(next);
     }
-    path48.pop();
+    path49.pop();
     visiting.delete(node);
     visited.add(node);
   }
@@ -31500,10 +31845,10 @@ function addCurrentRequirements(state, currentSpecs) {
   for (const document of currentSpecs.documents) {
     for (const requirement of document.requirements) {
       const location = currentEntriesByRequirement.get(requirement.id);
-      const path48 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
+      const path49 = location?.path ?? `${artifactPathForTraceability(state.changeId)}#${requirement.id}`;
       state.requirements.set(requirement.id, {
         requirement,
-        path: path48,
+        path: path49,
         ...location?.artifact === void 0 ? {} : { artifact: location.artifact },
         riskTier: "R0"
       });
@@ -31971,12 +32316,12 @@ function validateEvidenceTraceTargets(input) {
 async function loadOracles(input) {
   const manifest = await deriveOracleManifest(input);
   if (!manifest.ok)
-    return failure10(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
+    return failure11(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
   const oracles = [];
   for (const revision of manifest.manifest.oracles) {
     const oracleId = oracleIdFromPath(revision.artifact.path);
     if (oracleId === void 0) {
-      return failure10("invalid", [
+      return failure11("invalid", [
         traceabilityDiagnostic({
           code: "invalid_oracle_manifest_path",
           message: `Oracle manifest contains a path that does not end in an oracle ID: ${revision.artifact.path}.`,
@@ -31990,7 +32335,7 @@ async function loadOracles(input) {
       oracleId
     });
     if (!oracle.ok)
-      return failure10(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
+      return failure11(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
     oracles.push(oracle);
   }
   return oracles.sort((left, right) => compareStrings5(left.document.id, right.document.id));
@@ -31998,17 +32343,17 @@ async function loadOracles(input) {
 async function loadTraceabilityArtifacts(input) {
   const change = await loadChangeBundle(input);
   if (!change.ok)
-    return failure10(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
+    return failure11(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok)
-    return failure10(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
+    return failure11(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
   const oracles = await loadOracles(input);
   if ("diagnostics" in oracles)
     return oracles;
   const taskGraph = await readTaskGraph(input);
   if (!taskGraph.ok) {
     if (taskGraph.status === "not_found") {
-      return failure10("invalid", [
+      return failure11("invalid", [
         traceabilityDiagnostic({
           code: "missing_taskgraph",
           message: `Change ${input.changeId} has no taskgraph artifact.`,
@@ -32016,12 +32361,12 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure10("invalid", taskGraph.diagnostics);
+    return failure11("invalid", taskGraph.diagnostics);
   }
   const evidenceIndex = await readEvidenceIndex(input);
   if (!evidenceIndex.ok) {
     if (evidenceIndex.status === "not_found") {
-      return failure10("invalid", [
+      return failure11("invalid", [
         traceabilityDiagnostic({
           code: "missing_evidence_index",
           message: `Change ${input.changeId} has no evidence-index artifact.`,
@@ -32029,7 +32374,7 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure10("invalid", evidenceIndex.diagnostics);
+    return failure11("invalid", evidenceIndex.diagnostics);
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
@@ -32045,7 +32390,7 @@ function partitionTraceabilityDiagnostics(diagnostics, options = {}) {
   };
 }
 async function validateChangeTraceability(input) {
-  const changeId = parseChangeId8(input.changeId);
+  const changeId = parseChangeId9(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const loaded = await loadTraceabilityArtifacts({
@@ -32056,7 +32401,7 @@ async function validateChangeTraceability(input) {
     return loaded;
   const report = buildGraph(loaded);
   if (report.diagnostics.length > 0)
-    return failure10("invalid", report.diagnostics, report);
+    return failure11("invalid", report.diagnostics, report);
   return {
     ok: true,
     status: "validated",
@@ -32140,7 +32485,7 @@ var INVALID_ARCHIVE_PATH = ".legion/project/changes/invalid-change/archive.json"
 function compareStrings6(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
-function failure11(status2, diagnostics) {
+function failure12(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function archiveDiagnostic(input) {
@@ -32150,23 +32495,23 @@ function archiveDiagnostic(input) {
     path: input.path ?? INVALID_ARCHIVE_PATH
   });
 }
-function parseChangeId9(input) {
+function parseChangeId10(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure12("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseArchivedAt(input, path48) {
+function parseArchivedAt(input, path49) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
-    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure12("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
-      path: path48
+      path: path49
     })));
   }
   return parsed.data;
@@ -32187,7 +32532,7 @@ function archiveRecordWithHash(input) {
     archiveHash: expectedArchiveHash(input)
   });
   if (!parsed.success) {
-    return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure12("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archive_record",
       message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
       path: archivePath(input.changeId)
@@ -32195,7 +32540,7 @@ function archiveRecordWithHash(input) {
   }
   return parsed.data;
 }
-function archiveHashDiagnostics(record2, path48) {
+function archiveHashDiagnostics(record2, path49) {
   const expected = expectedArchiveHash(archiveHashInput(record2));
   if (record2.archiveHash === expected)
     return [];
@@ -32203,11 +32548,11 @@ function archiveHashDiagnostics(record2, path48) {
     archiveDiagnostic({
       code: "archive_hash_mismatch",
       message: `Archive hash ${record2.archiveHash} does not match expected ${expected}.`,
-      path: path48
+      path: path49
     })
   ];
 }
-async function assertWorktreeTarget(input, path48) {
+async function assertWorktreeTarget(input, path49) {
   if (input.outputBranch !== void 0 && input.outputBranch.length > 0)
     return void 0;
   try {
@@ -32217,31 +32562,31 @@ async function assertWorktreeTarget(input, path48) {
     });
     if (result.stdout.trim().length === 0)
       return void 0;
-    return failure11("conflict", [
+    return failure12("conflict", [
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
-        path: path48
+        path: path49
       })
     ]);
   } catch (error51) {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
-        path: path48
+        path: path49
       })
     ]);
   }
 }
 function asArchiveFailure(status2, diagnostics) {
-  return failure11(status2, diagnostics);
+  return failure12(status2, diagnostics);
 }
 function findRevision2(input) {
   const revision = input.change.bundle.artifactRevisions.find((entry) => entry.role === input.role && entry.artifact.path === input.path);
   if (revision !== void 0)
     return revision;
-  return failure11("invalid", [
+  return failure12("invalid", [
     archiveDiagnostic({
       code: "missing_change_artifact_revision",
       message: `Change bundle is missing ${input.role} revision for ${input.path}.`,
@@ -32308,11 +32653,11 @@ function archiveRemovedRequirement(input) {
     if (firstRemaining === void 0)
       throw new Error("remaining requirement set cannot be empty");
     const primaryRequirementId = input.document.primaryRequirementId === input.requirementId ? firstRemaining.id : input.document.primaryRequirementId;
-    const path48 = currentSpecPathForRequirement(primaryRequirementId);
-    const moved = path48 !== input.path;
-    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path48)) : remaining;
+    const path49 = currentSpecPathForRequirement(primaryRequirementId);
+    const moved = path49 !== input.path;
+    const requirements = moved ? remaining.map((requirement) => retargetRequirementTraceRefs(requirement, path49)) : remaining;
     return {
-      path: path48,
+      path: path49,
       ...moved ? { deletePath: input.path } : {},
       document: {
         ...input.document,
@@ -32370,30 +32715,30 @@ function plannedIndex(entries) {
   });
   if (parsed.success)
     return parsed.data;
-  return failure11("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+  return failure12("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_current_spec_index",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
 }
-function validatePlannedDocument(path48, document) {
+function validatePlannedDocument(path49, document) {
   const parsed = parseCurrentSpecMarkdown({
-    artifactPath: path48,
+    artifactPath: path49,
     content: renderCurrentSpecMarkdown(document)
   });
   if (parsed.ok)
     return void 0;
-  return failure11(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
+  return failure12(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
 }
 function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
   const entriesByRequirement = entryForRequirement(input.currentSpecs);
   const deltaPaths = new Map(input.change.bundle.deltas.map((delta) => [delta.requirementId, delta.path]));
-  const plannedDocs = new Map([...docsByPath.entries()].map(([path48, document]) => [path48, cloneDocument(document)]));
+  const plannedDocs = new Map([...docsByPath.entries()].map(([path49, document]) => [path49, cloneDocument(document)]));
   const touchedPaths = /* @__PURE__ */ new Set();
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
   if (acceptedAt === void 0) {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Change must carry accepted acceptance state before archive.",
@@ -32404,7 +32749,7 @@ function buildPlannedSpecs(input) {
   for (const delta of input.change.deltaSpecs) {
     if (delta.operation === "add") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure11("invalid", [
+        return failure12("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Add delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -32412,17 +32757,17 @@ function buildPlannedSpecs(input) {
           })
         ]);
       }
-      const path48 = currentSpecPathForRequirement(delta.requirementId);
-      if (plannedDocs.has(path48)) {
-        return failure11("conflict", [
+      const path49 = currentSpecPathForRequirement(delta.requirementId);
+      if (plannedDocs.has(path49)) {
+        return failure12("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
-            message: `Archive add target already exists: ${path48}.`,
-            path: path48
+            message: `Archive add target already exists: ${path49}.`,
+            path: path49
           })
         ]);
       }
-      plannedDocs.set(path48, {
+      plannedDocs.set(path49, {
         schemaVersion: CURRENT_SPEC_SCHEMA_VERSION,
         kind: "current-spec",
         revision: 1,
@@ -32435,12 +32780,12 @@ function buildPlannedSpecs(input) {
         requirements: [delta.proposedRequirement],
         sections: delta.sections
       });
-      touchedPaths.add(path48);
+      touchedPaths.add(path49);
       continue;
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
     if (basePath === void 0) {
-      return failure11("invalid", [
+      return failure12("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base for ${delta.requirementId} is missing from the archive plan.`,
@@ -32450,7 +32795,7 @@ function buildPlannedSpecs(input) {
     }
     const currentDocument = plannedDocs.get(basePath);
     if (currentDocument === void 0) {
-      return failure11("invalid", [
+      return failure12("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base ${basePath} for ${delta.requirementId} is not loaded.`,
@@ -32462,7 +32807,7 @@ function buildPlannedSpecs(input) {
     let targetPath = basePath;
     if (delta.operation === "modify") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure11("invalid", [
+        return failure12("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Modify delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -32501,7 +32846,7 @@ function buildPlannedSpecs(input) {
   for (const deletePath of [...deletedPaths].sort(compareStrings6)) {
     const beforeEntry = input.currentSpecs.index.entries.find((entry) => entry.path === deletePath);
     if (beforeEntry === void 0) {
-      return failure11("invalid", [
+      return failure12("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Deleted current spec base ${deletePath} is not present in the current spec index.`,
@@ -32610,25 +32955,25 @@ function previewFromPlan(input) {
   });
   if (preview.success)
     return preview.data;
-  return failure11("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
+  return failure12("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_archive_preview",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
     path: archivePath(input.changeId)
   })));
 }
 async function buildArchivePlan(input) {
-  const changeId = parseChangeId9(input.changeId);
+  const changeId = parseChangeId10(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path48 = archivePath(changeId);
-  const worktree = await assertWorktreeTarget(input, path48);
+  const path49 = archivePath(changeId);
+  const worktree = await assertWorktreeTarget(input, path49);
   if (worktree !== void 0)
     return worktree;
   const change = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
   if (!change.ok)
     return asArchiveFailure(change.status === "not_found" ? "not_found" : change.status, change.diagnostics);
   if (change.bundle.change.status !== "accepted" || change.bundle.change.acceptance?.status !== "accepted") {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Only accepted changes can be archived into current truth.",
@@ -32700,7 +33045,7 @@ async function backupFiles(input) {
         artifactPath
       });
     } catch (error51) {
-      return failure11("invalid", [
+      return failure12("invalid", [
         archiveDiagnostic({
           code: "invalid_path",
           message: error51 instanceof Error ? error51.message : String(error51),
@@ -32762,7 +33107,7 @@ async function deletePlannedSpec(input) {
     bytes = await readFile8(resolved.absolutePath);
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return failure11("invalid", [
+      return failure12("invalid", [
         archiveDiagnostic({
           code: "stale_spec_revision",
           message: `Expected current spec ${input.spec.path} to exist before archive removal.`,
@@ -32773,7 +33118,7 @@ async function deletePlannedSpec(input) {
     throw error51;
   }
   if (hashContent(bytes) !== input.spec.before.sha256) {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Current spec ${input.spec.path} no longer matches the archived base content.`,
@@ -32788,7 +33133,7 @@ async function deletePlannedSpec(input) {
   if (!parsed.ok)
     return asArchiveFailure(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
   if (parsed.document.revision !== input.spec.expectedRevision) {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Expected current spec revision ${input.spec.expectedRevision}, but current revision is ${parsed.document.revision}.`,
@@ -32850,7 +33195,7 @@ async function writeArchiveRecord(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError || error51 instanceof Error) {
-      return failure11("conflict", [
+      return failure12("conflict", [
         archiveDiagnostic({
           code: "archive_write_failed",
           message: error51.message,
@@ -32862,40 +33207,40 @@ async function writeArchiveRecord(input) {
   }
 }
 async function readArchiveRecord(input) {
-  const changeId = parseChangeId9(input.changeId);
+  const changeId = parseChangeId10(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
-  const path48 = archivePath(changeId);
+  const path49 = archivePath(changeId);
   const read = await readJsonArtifact({
     repositoryRoot: input.repositoryRoot,
-    artifactPath: path48,
+    artifactPath: path49,
     schema: archiveRecordSchema
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure11(status2, read.diagnostics);
+    return failure12(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
-        path: path48
+        path: path49
       })
     ]);
   }
-  const hashDiagnostics = archiveHashDiagnostics(read.value, path48);
+  const hashDiagnostics = archiveHashDiagnostics(read.value, path49);
   if (hashDiagnostics.length > 0)
-    return failure11("invalid", hashDiagnostics);
+    return failure12("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
     record: read.value,
-    artifactPath: path48,
+    artifactPath: path49,
     reference: read.reference,
     revision: artifactRevisionForContent({
       role: "archive",
-      path: path48,
+      path: path49,
       content: read.bytes,
       revision: read.value.revision,
       mediaType: "application/json"
@@ -32904,7 +33249,7 @@ async function readArchiveRecord(input) {
   };
 }
 async function archiveAcceptedChange(input) {
-  const changeId = parseChangeId9(input.changeId);
+  const changeId = parseChangeId10(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const existing = await readArchiveRecord({
@@ -32916,7 +33261,7 @@ async function archiveAcceptedChange(input) {
     if (!current.ok)
       return asArchiveFailure(current.status, current.diagnostics);
     if (current.indexHash !== existing.record.preview.afterSpecHash) {
-      return failure11("conflict", [
+      return failure12("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Current truth hash ${current.indexHash} does not match archived target hash ${existing.record.preview.afterSpecHash}.`,
@@ -32940,7 +33285,7 @@ async function archiveAcceptedChange(input) {
   if (typeof archivedAt !== "string")
     return archivedAt;
   if (input.archivedBy.length === 0) {
-    return failure11("invalid", [
+    return failure12("invalid", [
       archiveDiagnostic({
         code: "invalid_archived_by",
         message: "Archive requires a non-empty archivedBy actor ID.",
@@ -32975,7 +33320,7 @@ async function archiveAcceptedChange(input) {
     }
     if (currentAfterWrites.indexHash !== plan.preview.afterSpecHash) {
       await rollbackFiles(backups, rollbackGuards);
-      return failure11("conflict", [
+      return failure12("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Applied current truth hash ${currentAfterWrites.indexHash} does not match planned hash ${plan.preview.afterSpecHash}.`,
@@ -33020,7 +33365,7 @@ async function archiveAcceptedChange(input) {
     return write;
   } catch (error51) {
     await rollbackFiles(backups, rollbackGuards);
-    return failure11("conflict", [
+    return failure12("conflict", [
       archiveDiagnostic({
         code: "archive_write_failed",
         message: error51 instanceof Error ? error51.message : String(error51),
@@ -33148,23 +33493,23 @@ async function archive(context) {
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as existsSync3 } from "node:fs";
 import { readFile as readFile9 } from "node:fs/promises";
-import path16 from "node:path";
+import path17 from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // packages/cli/src/source-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import path15 from "node:path";
+import path16 from "node:path";
 import { fileURLToPath } from "node:url";
 function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
-  const moduleDirectory = path15.dirname(fileURLToPath(importMetaUrl));
+  const moduleDirectory = path16.dirname(fileURLToPath(importMetaUrl));
   const candidates = [
     // Bundled root CLI: dist/legion-cli.mjs -> package root.
-    path15.resolve(moduleDirectory, ".."),
+    path16.resolve(moduleDirectory, ".."),
     // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
-    path15.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+    path16.resolve(moduleDirectory, "..", "..", "..", "..", "..")
   ];
   for (const candidate of candidates) {
-    if (existsSync2(path15.join(candidate, requiredRelativePath))) return candidate;
+    if (existsSync2(path16.join(candidate, requiredRelativePath))) return candidate;
   }
   return candidates[0] ?? process.cwd();
 }
@@ -33288,23 +33633,23 @@ async function capture(context) {
       "capture script did not return a run directory."
     );
   }
-  const resolvedRunDir = path16.isAbsolute(runDir) ? runDir : path16.join(context.repositoryRoot, runDir);
+  const resolvedRunDir = path17.isAbsolute(runDir) ? runDir : path17.join(context.repositoryRoot, runDir);
   if (!existsSync3(resolvedRunDir)) {
     return failure(
       { ok: false, status: "error", diagnostics: [{ code: "capture_failed", message: `captured run directory not found: ${resolvedRunDir}` }] },
       `captured run directory not found: ${resolvedRunDir}`
     );
   }
-  const manifestPath = path16.join(resolvedRunDir, "run-manifest.json");
-  const scorePath = path16.join(resolvedRunDir, "score.json");
+  const manifestPath = path17.join(resolvedRunDir, "run-manifest.json");
+  const scorePath = path17.join(resolvedRunDir, "score.json");
   const manifest = JSON.parse(await readFile9(manifestPath, "utf8"));
   return success2(
     {
       ok: true,
       status: "captured",
-      runDirectory: path16.relative(context.repositoryRoot, resolvedRunDir),
-      runManifest: path16.relative(context.repositoryRoot, manifestPath),
-      score: existsSync3(scorePath) ? path16.relative(context.repositoryRoot, scorePath) : null,
+      runDirectory: path17.relative(context.repositoryRoot, resolvedRunDir),
+      runManifest: path17.relative(context.repositoryRoot, manifestPath),
+      score: existsSync3(scorePath) ? path17.relative(context.repositoryRoot, scorePath) : null,
       manifest
     },
     `Captured run to ${resolvedRunDir}.`
@@ -33314,7 +33659,7 @@ async function grade(context) {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const resolvedRunDirectory = path16.resolve(context.repositoryRoot, runDirectory);
+  const resolvedRunDirectory = path17.resolve(context.repositoryRoot, runDirectory);
   const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
@@ -33322,7 +33667,7 @@ async function grade(context) {
     {
       ok: true,
       status: "graded",
-      score: scorePath ? path16.relative(context.repositoryRoot, scorePath) : scorePath
+      score: scorePath ? path17.relative(context.repositoryRoot, scorePath) : scorePath
     },
     `Graded ${runDirectory} -> ${scorePath}.`
   );
@@ -33338,11 +33683,11 @@ async function compare(context) {
     "--repository-root",
     context.repositoryRoot,
     "--v8-dir",
-    path16.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
+    path17.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
     "--v9-dir",
-    path16.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
+    path17.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
     "--output",
-    path16.resolve(context.repositoryRoot, context.args.options.get("output"))
+    path17.resolve(context.repositoryRoot, context.args.options.get("output"))
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -33353,8 +33698,8 @@ async function compare(context) {
     {
       ok: true,
       status: "compared",
-      abComparisonJson: jsonPath ? path16.relative(context.repositoryRoot, jsonPath) : jsonPath,
-      abComparisonMarkdown: mdPath ? path16.relative(context.repositoryRoot, mdPath) : mdPath
+      abComparisonJson: jsonPath ? path17.relative(context.repositoryRoot, jsonPath) : jsonPath,
+      abComparisonMarkdown: mdPath ? path17.relative(context.repositoryRoot, mdPath) : mdPath
     },
     `Compared v8/v9 sealed runs -> ${jsonPath}.`
   );
@@ -33368,13 +33713,13 @@ async function threatModel(context) {
   const args = [
     "scripts/baseline/threat-model.mjs",
     "--run-dir",
-    path16.resolve(context.repositoryRoot, runDir),
+    path17.resolve(context.repositoryRoot, runDir),
     "--output-root",
-    path16.resolve(context.repositoryRoot, outputRoot)
+    path17.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path16.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path17.resolve(context.repositoryRoot, report));
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -33425,7 +33770,7 @@ function parseJsonVerdict(stdout) {
 }
 async function runScript(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path16.join(V9_SOURCE_ROOT, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path17.join(V9_SOURCE_ROOT, arg) : arg
   );
   try {
     const result = await execFile2(process.execPath, resolvedArgs, {
@@ -33470,12 +33815,12 @@ async function runScript(context, scriptArgs) {
 }
 
 // packages/cli/src/commands/migrate/index.ts
-import path19 from "node:path";
+import path20 from "node:path";
 
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash16 } from "node:crypto";
-import { cp, mkdir as mkdir9, readFile as readFile10, readdir as readdir7, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
-import path17 from "node:path";
+import { cp, mkdir as mkdir9, readFile as readFile10, readdir as readdir8, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
+import path18 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
 var LEGION_ROOT = ".legion";
@@ -33484,7 +33829,7 @@ function compareStrings7(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath(value) {
-  return value.split(path17.sep).join("/");
+  return value.split(path18.sep).join("/");
 }
 function isEnoent5(error51) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
@@ -33499,7 +33844,7 @@ async function pathExists3(absolutePath) {
     throw error51;
   }
 }
-function failure12(status2, diagnostics) {
+function failure13(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic(input) {
@@ -33517,20 +33862,20 @@ async function listFiles(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir7(directory, { withFileTypes: true });
+      entries = await readdir8(directory, { withFileTypes: true });
     } catch (error51) {
       if (isEnoent5(error51))
         return;
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path17.join(directory, entry.name);
+      const absolutePath = path18.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath(path17.relative(root, absolutePath)));
+        files.push(toPosixPath(path18.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -33541,15 +33886,15 @@ async function listSymbolicLinks(root, displayedRoot) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir7(directory, { withFileTypes: true });
+      entries = await readdir8(directory, { withFileTypes: true });
     } catch (error51) {
       if (isEnoent5(error51))
         return;
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path17.join(directory, entry.name);
-      const displayedPath = `${displayedRoot}/${toPosixPath(path17.relative(root, absolutePath))}`;
+      const absolutePath = path18.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path18.relative(root, absolutePath))}`;
       if (entry.isSymbolicLink()) {
         links.push(displayedPath);
         continue;
@@ -33565,7 +33910,7 @@ async function validateNoSymbolicLinks(input) {
   const links = await listSymbolicLinks(input.root, input.displayedRoot);
   if (links.length === 0)
     return void 0;
-  return failure12("conflict", links.map((link) => diagnostic({
+  return failure13("conflict", links.map((link) => diagnostic({
     code: "unsupported_symbolic_link",
     message: "Codex .legion migration cannot preserve symbolic links safely; replace the link with a regular file or migrate it manually.",
     sourcePath: link
@@ -33578,7 +33923,7 @@ async function hashFiles(root, files) {
   for (const file2 of files) {
     hash2.update(file2);
     hash2.update("\0");
-    hash2.update(await readFile10(path17.join(root, ...file2.split("/"))));
+    hash2.update(await readFile10(path18.join(root, ...file2.split("/"))));
     hash2.update("\0");
   }
   return `sha256:${hash2.digest("hex")}`;
@@ -33587,25 +33932,25 @@ async function hashTree(root) {
   return hashFiles(root, await listFiles(root));
 }
 function containsPath(parent, child) {
-  const relative = path17.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative);
+  const relative = path18.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative);
 }
 function pathsOverlap2(left, right) {
   return containsPath(left, right) || containsPath(right, left);
 }
 function sameResolvedPath(left, right) {
-  const resolvedLeft = path17.resolve(left);
-  const resolvedRight = path17.resolve(right);
+  const resolvedLeft = path18.resolve(left);
+  const resolvedRight = path18.resolve(right);
   if (process.platform === "win32")
     return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot(input) {
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const stagingRoot = path17.resolve(input.stagingRoot);
-  const legacyRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const stagingRoot = path18.resolve(input.stagingRoot);
+  const legacyRoot = path18.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .legion source.",
@@ -33616,11 +33961,11 @@ function safeResolvedStagingRoot(input) {
   return stagingRoot;
 }
 function safeResolvedBackupRoot(input) {
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const backupRoot = path17.resolve(input.backupRoot);
-  const legacyRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const backupRoot = path18.resolve(input.backupRoot);
+  const legacyRoot = path18.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root or .legion source.",
@@ -33635,7 +33980,7 @@ function parseUtcTimestamp(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error51) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: input.code,
         message: error51 instanceof Error ? error51.message : "Value is not a valid UTC timestamp.",
@@ -33652,9 +33997,9 @@ function readString(value) {
 }
 function normalizeReportedPath(repositoryRoot, value) {
   const normalized = value.replace(/\\/g, "/");
-  if (path17.isAbsolute(value)) {
-    const relative = path17.relative(repositoryRoot, value);
-    if (relative.length > 0 && !relative.startsWith("..") && !path17.isAbsolute(relative)) {
+  if (path18.isAbsolute(value)) {
+    const relative = path18.relative(repositoryRoot, value);
+    if (relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative)) {
       return toPosixPath(relative);
     }
   }
@@ -33679,7 +34024,7 @@ function nativeSurface(input) {
   return { path: normalized, source: input.source };
 }
 async function parseCodexManifest(repositoryRoot, legionRoot) {
-  const manifestPath = path17.join(legionRoot, "manifest.json");
+  const manifestPath = path18.join(legionRoot, "manifest.json");
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(manifestPath, "utf8"));
@@ -33840,7 +34185,7 @@ function classifySourceFile(relativePath, generatedPaths) {
 async function sourceInventory(input) {
   const files = [];
   for (const file2 of await listFiles(input.legionRoot)) {
-    const bytes = await readFile10(path17.join(input.legionRoot, ...file2.split("/")));
+    const bytes = await readFile10(path18.join(input.legionRoot, ...file2.split("/")));
     const relativePath = `.legion/${file2}`;
     files.push({
       path: relativePath,
@@ -33881,7 +34226,7 @@ function validateReportMoves(report) {
   }
   if (matchesExpectedMoves)
     return void 0;
-  return failure12("invalid", [
+  return failure13("invalid", [
     diagnostic({
       code: "invalid_migration_moves",
       message: "Dry-run report moves no longer match the reviewed source inventory.",
@@ -33890,18 +34235,18 @@ function validateReportMoves(report) {
   ]);
 }
 async function stageLegacyProtocol(input) {
-  const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path18.join(input.stagingRoot, ".legion", "legacy-protocol");
   await rm4(input.stagingRoot, { recursive: true, force: true });
   await mkdir9(targetRoot, { recursive: true });
   for (const move of input.moves) {
-    const sourcePath = path17.join(input.repositoryRoot, ...move.sourcePath.split("/"));
-    const targetPath = path17.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir9(path17.dirname(targetPath), { recursive: true });
+    const sourcePath = path18.join(input.repositoryRoot, ...move.sourcePath.split("/"));
+    const targetPath = path18.join(input.stagingRoot, ...move.targetPath.split("/"));
+    await mkdir9(path18.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
   for (const file2 of await listFiles(targetRoot)) {
-    const bytes = await readFile10(path17.join(targetRoot, ...file2.split("/")));
+    const bytes = await readFile10(path18.join(targetRoot, ...file2.split("/")));
     files.push({
       path: `${LEGACY_PROTOCOL_ROOT}/${file2}`,
       sha256: bytesHash(bytes),
@@ -33916,8 +34261,8 @@ async function stageLegacyProtocol(input) {
   };
 }
 async function writeReport(stagingRoot, report) {
-  const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir9(path17.dirname(reportPath), { recursive: true });
+  const reportPath = path18.join(stagingRoot, ...REPORT_PATH.split("/"));
+  await mkdir9(path18.dirname(reportPath), { recursive: true });
   await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
@@ -33944,10 +34289,10 @@ async function createCodexLegionMigrationDryRun(input) {
   });
   if (typeof createdAt !== "string")
     return createdAt;
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const legionRoot = path18.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "legacy_legion_root_missing",
         message: "Legacy .legion root does not exist.",
@@ -33998,12 +34343,12 @@ async function createCodexLegionMigrationDryRun(input) {
   };
 }
 async function readReport(stagingRoot) {
-  const reportPath = path17.join(stagingRoot, ...REPORT_PATH.split("/"));
+  const reportPath = path18.join(stagingRoot, ...REPORT_PATH.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(reportPath, "utf8"));
   } catch (error51) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "missing_dry_run_report",
         message: error51 instanceof Error ? error51.message : "Dry-run report could not be read.",
@@ -34012,7 +34357,7 @@ async function readReport(stagingRoot) {
     ]);
   }
   if (!isCodexLegionMigrationReport(parsed)) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required Codex Legion migration fields.",
@@ -34035,11 +34380,11 @@ function isBackupManifest(value) {
   return isRecord9(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
-  const targetRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path18.join(input.stagingRoot, ".legion", "legacy-protocol");
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure12("invalid", [
+  return failure13("invalid", [
     diagnostic({
       code: "staged_legacy_protocol_hash_mismatch",
       message: "Staged legacy protocol bytes no longer match the reviewed dry-run report.",
@@ -34048,10 +34393,10 @@ async function validateStagedTargetHash(input) {
   ]);
 }
 async function validateCurrentSourceHash(input) {
-  const currentHash = await hashTree(path17.join(input.repositoryRoot, ".legion"));
+  const currentHash = await hashTree(path18.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
-  return failure12("invalid", [
+  return failure13("invalid", [
     diagnostic({
       code: "source_hash_mismatch",
       message: "Current .legion bytes differ from the reviewed dry-run report.",
@@ -34064,11 +34409,11 @@ function backupId(appliedAt, sourceHash) {
   return `codex-legion-migration-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash2}`;
 }
 async function backupLegionRoot(input) {
-  const legionRoot = path17.join(input.repositoryRoot, ".legion");
+  const legionRoot = path18.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path17.resolve(input.backupRoot, id);
-  const backupPath = path17.resolve(backupDirectory, "legion");
+  const backupDirectory = path18.resolve(input.backupRoot, id);
+  const backupPath = path18.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
   await rm4(backupDirectory, { recursive: true, force: true });
   await mkdir9(backupDirectory, { recursive: true });
@@ -34085,7 +34430,7 @@ async function backupLegionRoot(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path17.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path18.resolve(backupDirectory, "backup-manifest.json");
   await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -34095,9 +34440,9 @@ async function backupLegionRoot(input) {
   };
 }
 async function installStagedLegacyProtocol(input) {
-  const legionRoot = path17.join(input.repositoryRoot, ".legion");
-  const destination = path17.join(legionRoot, "legacy-protocol");
-  const stagedLegacyProtocolRoot = path17.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const legionRoot = path18.join(input.repositoryRoot, ".legion");
+  const destination = path18.join(legionRoot, "legacy-protocol");
+  const stagedLegacyProtocolRoot = path18.join(input.stagingRoot, ".legion", "legacy-protocol");
   if (input.report.moves.length > 0) {
     if (await pathExists3(destination)) {
       await mergeStagedLegacyProtocol({
@@ -34105,7 +34450,7 @@ async function installStagedLegacyProtocol(input) {
         destinationRoot: destination
       });
     } else {
-      const temporary = path17.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      const temporary = path18.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
       await rm4(temporary, { recursive: true, force: true });
       await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
       await rename3(temporary, destination);
@@ -34116,13 +34461,13 @@ async function installStagedLegacyProtocol(input) {
     report: input.report
   });
   for (const root of roots) {
-    await rm4(path17.join(legionRoot, root), { recursive: true, force: true });
+    await rm4(path18.join(legionRoot, root), { recursive: true, force: true });
   }
 }
 async function mergeStagedLegacyProtocol(input) {
   for (const file2 of await listFiles(input.stagedRoot)) {
-    const stagedPath = path17.join(input.stagedRoot, ...file2.split("/"));
-    const destinationPath = path17.join(input.destinationRoot, ...file2.split("/"));
+    const stagedPath = path18.join(input.stagedRoot, ...file2.split("/"));
+    const destinationPath = path18.join(input.destinationRoot, ...file2.split("/"));
     const stagedBytes = await readFile10(stagedPath);
     let destinationStat;
     try {
@@ -34133,29 +34478,29 @@ async function mergeStagedLegacyProtocol(input) {
     }
     if (destinationStat !== void 0) {
       if (!destinationStat.isFile()) {
-        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path17.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path18.relative(input.destinationRoot, destinationPath))}.`);
       }
       const destinationBytes = await readFile10(destinationPath);
       if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
-        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path17.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path18.relative(input.destinationRoot, destinationPath))}.`);
       }
       continue;
     }
-    await mkdir9(path17.dirname(destinationPath), { recursive: true });
+    await mkdir9(path18.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
 async function cleanupRoots(input) {
-  const legionRoot = path17.join(input.repositoryRoot, ".legion");
+  const legionRoot = path18.join(input.repositoryRoot, ".legion");
   const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
-  for (const entry of await readdir7(legionRoot, { withFileTypes: true })) {
+  for (const entry of await readdir8(legionRoot, { withFileTypes: true })) {
     if (!isReservedLegionRootEntry(entry.name))
       roots.add(entry.name);
   }
   return [...roots].filter((entry) => entry.length > 0).sort(compareStrings7);
 }
 async function installedLegacyProtocolFiles(repositoryRoot) {
-  const targetRoot = path17.join(repositoryRoot, ".legion", "legacy-protocol");
+  const targetRoot = path18.join(repositoryRoot, ".legion", "legacy-protocol");
   return (await listFiles(targetRoot)).map((file2) => `${LEGACY_PROTOCOL_ROOT}/${file2}`);
 }
 async function applyCodexLegionMigration(input) {
@@ -34163,7 +34508,7 @@ async function applyCodexLegionMigration(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure12("blocked", [
+    return failure13("blocked", [
       diagnostic({
         code: "dry_run_review_required",
         message: "Codex .legion migrations require explicit reviewed apply after the dry-run report is inspected.",
@@ -34184,12 +34529,12 @@ async function applyCodexLegionMigration(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string")
     return backupRoot;
   const symlinkFailure = await validateNoSymbolicLinks({
-    root: path17.join(repositoryRoot, ".legion"),
+    root: path18.join(repositoryRoot, ".legion"),
     displayedRoot: LEGION_ROOT
   });
   if (symlinkFailure !== void 0)
@@ -34223,7 +34568,7 @@ async function applyCodexLegionMigration(input) {
       });
     } catch {
     }
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "apply_failed",
         message: error51 instanceof Error ? error51.message : "Codex .legion migration apply failed.",
@@ -34241,7 +34586,7 @@ async function applyCodexLegionMigration(input) {
 }
 async function rollbackCodexLegionMigration(input) {
   let manifest;
-  const backupManifestPath = path17.resolve(input.backupManifestPath);
+  const backupManifestPath = path18.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
@@ -34249,7 +34594,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     manifest = parsed;
   } catch (error51) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "invalid_backup_manifest",
         message: error51 instanceof Error ? error51.message : "Backup manifest could not be read.",
@@ -34257,10 +34602,10 @@ async function rollbackCodexLegionMigration(input) {
       })
     ]);
   }
-  const repositoryRoot = path17.resolve(input.repositoryRoot);
-  const legionRoot = path17.join(repositoryRoot, ".legion");
+  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const legionRoot = path18.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure12("invalid", [
+    return failure13("invalid", [
       diagnostic({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -34269,8 +34614,8 @@ async function rollbackCodexLegionMigration(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path17.isAbsolute(manifest.backupPath)) {
-      return failure12("invalid", [
+    if (!path18.isAbsolute(manifest.backupPath)) {
+      return failure13("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -34279,7 +34624,7 @@ async function rollbackCodexLegionMigration(input) {
       ]);
     }
     if (!await pathExists3(manifest.backupPath)) {
-      return failure12("invalid", [
+      return failure13("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -34289,7 +34634,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     const backupHash = await hashTree(manifest.backupPath);
     if (backupHash !== manifest.preMigrationHash) {
-      return failure12("invalid", [
+      return failure13("invalid", [
         diagnostic({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-migration hash.",
@@ -34311,8 +34656,8 @@ async function rollbackCodexLegionMigration(input) {
 
 // packages/legacy-bridge/dist/import-planning/index.js
 import { createHash as createHash17 } from "node:crypto";
-import { cp as cp2, mkdir as mkdir10, readFile as readFile11, readdir as readdir8, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
-import path18 from "node:path";
+import { cp as cp2, mkdir as mkdir10, readFile as readFile11, readdir as readdir9, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
+import path19 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
 var EMPTY_TREE_HASH2 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -34320,9 +34665,9 @@ function compareStrings8(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath2(value) {
-  return value.split(path18.sep).join("/");
+  return value.split(path19.sep).join("/");
 }
-function failure13(status2, diagnostics) {
+function failure14(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic2(input) {
@@ -34343,7 +34688,7 @@ function hashFiles2(root, files) {
     for (const file2 of files) {
       hash2.update(file2);
       hash2.update("\0");
-      hash2.update(await readFile11(path18.join(root, ...file2.split("/"))));
+      hash2.update(await readFile11(path19.join(root, ...file2.split("/"))));
       hash2.update("\0");
     }
     return `sha256:${hash2.digest("hex")}`;
@@ -34364,20 +34709,20 @@ async function listFiles2(root) {
   async function visit(directory) {
     let entries;
     try {
-      entries = await readdir8(directory, { withFileTypes: true });
+      entries = await readdir9(directory, { withFileTypes: true });
     } catch (error51) {
       if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT")
         return;
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings8(left.name, right.name))) {
-      const absolutePath = path18.join(directory, entry.name);
+      const absolutePath = path19.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath2(path18.relative(root, absolutePath)));
+        files.push(toPosixPath2(path19.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -34417,7 +34762,7 @@ function classifyPlanningFile(relativePath) {
 }
 async function sourceInventory2(planningRoot) {
   if (!await pathExists4(planningRoot)) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "planning_root_missing",
         message: "Legacy .planning root does not exist.",
@@ -34427,9 +34772,9 @@ async function sourceInventory2(planningRoot) {
   }
   const files = [];
   for (const file2 of await listFiles2(planningRoot)) {
-    const absolutePath = path18.join(planningRoot, ...file2.split("/"));
+    const absolutePath = path19.join(planningRoot, ...file2.split("/"));
     const bytes = await readFile11(absolutePath);
-    const relativePath = toPosixPath2(path18.join(".planning", file2));
+    const relativePath = toPosixPath2(path19.join(".planning", file2));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -34464,7 +34809,7 @@ function extractRequirements(projectMarkdown) {
     const suffix = requirementSuffix(code);
     const id = requirementIdSchema.safeParse(`req_${suffix}`);
     if (!id.success) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         diagnostic2({
           code: "invalid_requirement_id",
           message: `Legacy requirement code ${code} cannot be converted to a v9 requirement ID.`,
@@ -34531,7 +34876,7 @@ async function parsePlans(planningRoot, inventory) {
     if (file2.classification !== "phase-plan")
       continue;
     const relativeToPlanning = file2.path.slice(".planning/".length);
-    const content = await readFile11(path18.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
+    const content = await readFile11(path19.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
     const frontmatter = parsePlanFrontmatter(content);
     plans.push({
       sourcePath: file2.path,
@@ -34544,7 +34889,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   const conflicts = [];
   for (const plan of plans) {
     const summaryPath = plan.sourcePath.replace(/-PLAN\.md$/, "-SUMMARY.md");
-    const summaryContent = await readUtf8IfExists(path18.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
+    const summaryContent = await readUtf8IfExists(path19.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
     if (summaryContent === void 0)
       continue;
     const summaryFiles = summaryFilesModified(summaryContent);
@@ -34581,7 +34926,7 @@ function unprovenRequirementUncertainties(requirements) {
   ];
 }
 async function stateUncertainties(planningRoot) {
-  const state = await readUtf8IfExists(path18.join(planningRoot, "STATE.md"));
+  const state = await readUtf8IfExists(path19.join(planningRoot, "STATE.md"));
   if (state === void 0)
     return [];
   const uncertainties = [
@@ -34676,18 +35021,18 @@ function sectionsForRequirement(requirement) {
   };
 }
 async function writeReport2(stagingRoot, report) {
-  const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir10(path18.dirname(reportPath), { recursive: true });
+  const reportPath = path19.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  await mkdir10(path19.dirname(reportPath), { recursive: true });
   await writeFile5(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
-  const projectRoot = path18.join(stagingRoot, ".legion", "project");
+  const projectRoot = path19.join(stagingRoot, ".legion", "project");
   const files = [];
   for (const file2 of await listFiles2(projectRoot)) {
     if (file2 === "migration/planning-import-report.json")
       continue;
-    const bytes = await readFile11(path18.join(projectRoot, ...file2.split("/")));
-    const relativePath = toPosixPath2(path18.join(".legion/project", file2));
+    const bytes = await readFile11(path19.join(projectRoot, ...file2.split("/")));
+    const relativePath = toPosixPath2(path19.join(".legion/project", file2));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -34702,24 +35047,24 @@ async function targetInventory(stagingRoot) {
   };
 }
 function containsPath2(parent, child) {
-  const relative = path18.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative);
+  const relative = path19.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path19.isAbsolute(relative);
 }
 function pathsOverlap3(left, right) {
   return containsPath2(left, right) || containsPath2(right, left);
 }
 async function resolveExistingPathComponents(inputPath) {
-  const resolved = path18.resolve(inputPath);
+  const resolved = path19.resolve(inputPath);
   const suffix = [];
   let candidate = resolved;
   while (!await pathExists4(candidate)) {
-    const parent = path18.dirname(candidate);
+    const parent = path19.dirname(candidate);
     if (parent === candidate)
-      return path18.resolve(candidate, ...suffix);
-    suffix.unshift(path18.basename(candidate));
+      return path19.resolve(candidate, ...suffix);
+    suffix.unshift(path19.basename(candidate));
     candidate = parent;
   }
-  return path18.resolve(await realpath2(candidate), ...suffix);
+  return path19.resolve(await realpath2(candidate), ...suffix);
 }
 async function sameCanonicalPath(left, right) {
   const resolvedLeft = await resolveExistingPathComponents(left);
@@ -34729,11 +35074,11 @@ async function sameCanonicalPath(left, right) {
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot2(input) {
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const planningRoot = path18.resolve(input.planningRoot);
-  const stagingRoot = path18.resolve(input.stagingRoot);
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const planningRoot = path19.resolve(input.planningRoot);
+  const stagingRoot = path19.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .planning source."
@@ -34743,18 +35088,18 @@ function safeResolvedStagingRoot2(input) {
   return stagingRoot;
 }
 async function safeResolvedBackupRoot2(input) {
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const backupRoot = path18.resolve(input.backupRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
-  const planningRoot = path18.resolve(input.planningRoot);
-  const stagingRoot = path18.resolve(input.stagingRoot);
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const backupRoot = path19.resolve(input.backupRoot);
+  const legionRoot = path19.join(repositoryRoot, ".legion");
+  const planningRoot = path19.resolve(input.planningRoot);
+  const stagingRoot = path19.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
   const realPlanningRoot = await resolveExistingPathComponents(planningRoot);
   const realStagingRoot = await resolveExistingPathComponents(stagingRoot);
   if (pathsOverlap3(backupRoot, repositoryRoot) || pathsOverlap3(backupRoot, legionRoot) || pathsOverlap3(backupRoot, planningRoot) || pathsOverlap3(backupRoot, stagingRoot) || pathsOverlap3(realBackupRoot, realRepositoryRoot) || pathsOverlap3(realBackupRoot, realLegionRoot) || pathsOverlap3(realBackupRoot, realPlanningRoot) || pathsOverlap3(realBackupRoot, realStagingRoot)) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root, .legion source, planning source, or staging root.",
@@ -34769,7 +35114,7 @@ function parseUtcTimestamp2(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error51) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: input.code,
         message: error51 instanceof Error ? error51.message : "Value is not a valid UTC timestamp.",
@@ -34793,9 +35138,9 @@ async function createPlanningImportDryRun(input) {
   const inventory = await sourceInventory2(planningRoot);
   if ("diagnostics" in inventory)
     return inventory;
-  const projectMarkdown = await readUtf8IfExists(path18.join(planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path19.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "missing_project",
         message: "Legacy .planning/PROJECT.md is required for planning import.",
@@ -34807,7 +35152,7 @@ async function createPlanningImportDryRun(input) {
   if ("diagnostics" in requirements)
     return requirements;
   if (requirements.length === 0) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "missing_requirements",
         message: "Legacy .planning/PROJECT.md does not contain importable requirement bullets.",
@@ -34826,7 +35171,7 @@ async function createPlanningImportDryRun(input) {
     createdAt
   });
   if (!initialized.ok) {
-    return failure13("invalid", initialized.diagnostics.map((entry) => diagnostic2({
+    return failure14("invalid", initialized.diagnostics.map((entry) => diagnostic2({
       code: entry.code,
       message: entry.message,
       sourcePath: entry.source.path
@@ -34857,7 +35202,7 @@ async function createPlanningImportDryRun(input) {
       document
     });
     if (!created.ok) {
-      return failure13("invalid", created.diagnostics.map((entry) => diagnostic2({
+      return failure14("invalid", created.diagnostics.map((entry) => diagnostic2({
         code: entry.code,
         message: entry.message,
         sourcePath: entry.source.path
@@ -34912,12 +35257,12 @@ async function createPlanningImportDryRun(input) {
   };
 }
 async function readReport2(stagingRoot) {
-  const reportPath = path18.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  const reportPath = path19.join(stagingRoot, ...REPORT_PATH2.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile11(reportPath, "utf8"));
   } catch (error51) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "missing_dry_run_report",
         message: error51 instanceof Error ? error51.message : "Dry-run report could not be read.",
@@ -34926,7 +35271,7 @@ async function readReport2(stagingRoot) {
     ]);
   }
   if (!isPlanningImportReport(parsed)) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required planning import fields.",
@@ -34942,11 +35287,11 @@ function backupId2(appliedAt, sourceHash) {
 }
 async function backupLegionRoot2(input) {
   const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
+  const legionRoot = path19.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree2(legionRoot);
   const id = backupId2(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path18.resolve(input.backupRoot, id);
-  const backupPath = path18.resolve(backupDirectory, "legion");
+  const backupDirectory = path19.resolve(input.backupRoot, id);
+  const backupPath = path19.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
   await rm5(backupDirectory, { recursive: true, force: true });
   await mkdir10(backupDirectory, { recursive: true });
@@ -34963,7 +35308,7 @@ async function backupLegionRoot2(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path18.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path19.resolve(backupDirectory, "backup-manifest.json");
   await writeFile5(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -34973,9 +35318,9 @@ async function backupLegionRoot2(input) {
   };
 }
 async function installStagedProject(input) {
-  const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
-  const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
-  await mkdir10(path18.dirname(destinationProject), { recursive: true });
+  const stagedProject = path19.join(input.stagingRoot, ".legion", "project");
+  const destinationProject = path19.join(input.repositoryRoot, ".legion", "project");
+  await mkdir10(path19.dirname(destinationProject), { recursive: true });
   await rm5(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
@@ -34996,11 +35341,11 @@ function isBackupManifest2(value) {
   return isRecord10(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
-  const stagedProject = path18.join(input.stagingRoot, ".legion", "project");
+  const stagedProject = path19.join(input.stagingRoot, ".legion", "project");
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure13("invalid", [
+  return failure14("invalid", [
     diagnostic2({
       code: "staged_project_hash_mismatch",
       message: "Staged project bytes no longer match the reviewed dry-run report.",
@@ -35013,7 +35358,7 @@ async function applyPlanningImport(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure13("blocked", [
+    return failure14("blocked", [
       diagnostic2({
         code: "dry_run_review_required",
         message: "Planning imports require explicit reviewed apply after the dry-run report is inspected.",
@@ -35027,9 +35372,9 @@ async function applyPlanningImport(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const destinationProject = path18.join(input.repositoryRoot, ".legion", "project");
+  const destinationProject = path19.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
-    return failure13("conflict", [
+    return failure14("conflict", [
       diagnostic2({
         code: "destination_contains_v9_project",
         message: "Destination already contains .legion/project; pass allowReplaceExistingProject only after review.",
@@ -35071,7 +35416,7 @@ async function applyPlanningImport(input) {
       });
     } catch {
     }
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "apply_failed",
         message: error51 instanceof Error ? error51.message : "Staged project installation failed.",
@@ -35083,13 +35428,13 @@ async function applyPlanningImport(input) {
     ok: true,
     status: "applied",
     backup,
-    installedFiles: (await listFiles2(path18.join(input.repositoryRoot, ".legion", "project"))).map((file2) => toPosixPath2(path18.join(".legion/project", file2))),
+    installedFiles: (await listFiles2(path19.join(input.repositoryRoot, ".legion", "project"))).map((file2) => toPosixPath2(path19.join(".legion/project", file2))),
     policy: report.policy
   };
 }
 async function rollbackPlanningImport(input) {
   let manifest;
-  const backupManifestPath = path18.resolve(input.backupManifestPath);
+  const backupManifestPath = path19.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile11(backupManifestPath, "utf8"));
     if (!isBackupManifest2(parsed)) {
@@ -35097,7 +35442,7 @@ async function rollbackPlanningImport(input) {
     }
     manifest = parsed;
   } catch (error51) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: error51 instanceof Error ? error51.message : "Backup manifest could not be read.",
@@ -35105,10 +35450,10 @@ async function rollbackPlanningImport(input) {
       })
     ]);
   }
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
-  if (!path18.isAbsolute(manifest.repositoryRoot)) {
-    return failure13("invalid", [
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const legionRoot = path19.join(repositoryRoot, ".legion");
+  if (!path19.isAbsolute(manifest.repositoryRoot)) {
+    return failure14("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: "Backup manifest repositoryRoot must be absolute.",
@@ -35117,7 +35462,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (!await sameCanonicalPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       diagnostic2({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -35126,8 +35471,8 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path18.isAbsolute(manifest.backupPath)) {
-      return failure13("invalid", [
+    if (!path19.isAbsolute(manifest.backupPath)) {
+      return failure14("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -35138,7 +35483,7 @@ async function rollbackPlanningImport(input) {
     const realBackupPath = await resolveExistingPathComponents(manifest.backupPath);
     const realLegionRoot = await resolveExistingPathComponents(legionRoot);
     if (pathsOverlap3(manifest.backupPath, legionRoot) || pathsOverlap3(realBackupPath, realLegionRoot)) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must not overlap the requested .legion directory.",
@@ -35147,7 +35492,7 @@ async function rollbackPlanningImport(input) {
       ]);
     }
     if (!await pathExists4(manifest.backupPath)) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -35157,7 +35502,7 @@ async function rollbackPlanningImport(input) {
     }
     const backupHash = await hashTree2(manifest.backupPath);
     if (backupHash !== manifest.preImportHash) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         diagnostic2({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-import hash.",
@@ -35246,14 +35591,14 @@ async function handlePlanning(context, action) {
   if (action === "dry-run") {
     const planningRootOption = requiredStringOption(context, "planning-root");
     if (typeof planningRootOption !== "string") return planningRootOption;
-    const planningRoot = path19.resolve(context.repositoryRoot, planningRootOption);
+    const planningRoot = path20.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
     if (typeof runId !== "string") return runId;
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
-    const projectFile = await readJsonInput(path19.resolve(context.repositoryRoot, projectPath));
+    const projectFile = await readJsonInput(path20.resolve(context.repositoryRoot, projectPath));
     if (isCliResult(projectFile)) return projectFile;
     const project = coercePlanningProjectInput(projectFile, projectPath);
     if ("exitCode" in project) return project;
@@ -35434,7 +35779,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path20 from "node:path";
+import path21 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -35492,10 +35837,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path20.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path21.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path20.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path21.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -35522,13 +35867,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path20.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path21.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path20.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path21.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -35579,7 +35924,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path20.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path21.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -35694,7 +36039,7 @@ async function handleDevCommand(context) {
 
 // packages/cli/src/workflow/input.ts
 import { execFileSync } from "node:child_process";
-import path21 from "node:path";
+import path22 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -35756,7 +36101,7 @@ function isStableDefaultBranch(branch) {
 
 // packages/cli/src/workflow/intake/driver.ts
 import { lstat as lstat3, readFile as readFile16, writeFile as writeFile8 } from "node:fs/promises";
-import path26 from "node:path";
+import path27 from "node:path";
 
 // packages/cli/src/workflow/render.ts
 function nextAction(command, reason) {
@@ -36742,11 +37087,11 @@ function resolvedOpenQuestions(session) {
 // packages/cli/src/workflow/intake/exploration-source.ts
 import { createHash as createHash18 } from "node:crypto";
 import { readFile as readFile14 } from "node:fs/promises";
-import path24 from "node:path";
+import path25 from "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
-import { mkdir as mkdir11, readdir as readdir9, readFile as readFile13 } from "node:fs/promises";
-import path23 from "node:path";
+import { mkdir as mkdir11, readdir as readdir10, readFile as readFile13 } from "node:fs/promises";
+import path24 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -36783,7 +37128,7 @@ import { promisify as promisify4 } from "node:util";
 // packages/cli/src/workflow/executor/fake-plan.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import path22 from "node:path";
+import path23 from "node:path";
 var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
 function readFakeExecutorPlan() {
   const raw = process.env[FAKE_PLAN_ENV];
@@ -36796,9 +37141,9 @@ function readFakeExecutorPlan() {
   }
 }
 function resolveInsideRepository(repositoryRoot, relative) {
-  const root = path22.resolve(repositoryRoot);
-  const absolute = path22.resolve(root, relative);
-  const prefix = root.endsWith(path22.sep) ? root : `${root}${path22.sep}`;
+  const root = path23.resolve(repositoryRoot);
+  const absolute = path23.resolve(root, relative);
+  const prefix = root.endsWith(path23.sep) ? root : `${root}${path23.sep}`;
   return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
 }
 function applyFakeExecutorPlan(input) {
@@ -36808,7 +37153,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writes ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path22.dirname(absolute), { recursive: true });
+    mkdirSync2(path23.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     written.push(entry.path);
     staged.push(entry.path);
@@ -36824,7 +37169,7 @@ function applyFakeExecutorPlan(input) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
     try {
-      mkdirSync2(path22.dirname(absolute), { recursive: true });
+      mkdirSync2(path23.dirname(absolute), { recursive: true });
       rmSync(absolute, { force: true });
       symlinkSync(entry.target, absolute);
       written.push(entry.path);
@@ -36846,7 +37191,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writesAfterCommit ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path22.dirname(absolute), { recursive: true });
+    mkdirSync2(path23.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     if (!written.includes(entry.path)) written.push(entry.path);
   }
@@ -37268,7 +37613,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path23.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path24.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -37276,7 +37621,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path23.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path24.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -37456,10 +37801,10 @@ async function latestGuidanceRuns(input) {
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
   for (const workflow of workflows) {
-    const workflowRoot = path23.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path24.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir9(workflowRoot, { withFileTypes: true });
+      entries = await readdir10(workflowRoot, { withFileTypes: true });
     } catch (error51) {
       if (isNodeErrorCode(error51, "ENOENT")) continue;
       throw error51;
@@ -37467,7 +37812,7 @@ async function latestGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const runPath = path23.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path24.join(workflowRoot, entry.name, "workflow-run.json");
       try {
         const parsed = JSON.parse(await readFile13(runPath, "utf8"));
         if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
@@ -37537,7 +37882,7 @@ function explorationArtifactPathOf(run) {
 }
 async function readExplorationRunId(repositoryRoot, artifactPath) {
   try {
-    const raw = await readFile14(path24.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const raw = await readFile14(path25.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
     const parsed = JSON.parse(raw);
     const runId = parsed.runId;
     return typeof runId === "string" ? runId : void 0;
@@ -37588,7 +37933,7 @@ async function loadExploration(repositoryRoot, runId) {
   }
   let raw;
   try {
-    raw = await readFile14(path24.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+    raw = await readFile14(path25.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };
@@ -37680,12 +38025,12 @@ function renderSessionStatus(input) {
 }
 
 // packages/cli/src/workflow/intake/session.ts
-import { mkdir as mkdir12, readFile as readFile15, readdir as readdir10, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
-import path25 from "node:path";
+import { mkdir as mkdir12, readFile as readFile15, readdir as readdir11, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
+import path26 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path25.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+  return path26.join(repositoryRoot, ".legion", "project", "intake", sessionId);
 }
 function intakeSessionArtifactPath(sessionId) {
   return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
@@ -37694,7 +38039,7 @@ function isNodeErrorCode2(error51, code) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
-  return path25.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+  return path26.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
 }
 function nowTimestamp2() {
   return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
@@ -37880,8 +38225,8 @@ async function claimSessionDirectory(repositoryRoot, sessionId) {
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(sessionId)
   });
-  const sessionDirectory = path25.dirname(resolved.absolutePath);
-  await mkdir12(path25.dirname(sessionDirectory), { recursive: true });
+  const sessionDirectory = path26.dirname(resolved.absolutePath);
+  await mkdir12(path26.dirname(sessionDirectory), { recursive: true });
   try {
     await mkdir12(sessionDirectory, { recursive: false });
     return true;
@@ -37897,10 +38242,10 @@ async function releaseSessionId(repositoryRoot, sessionId) {
   }
 }
 async function listSessions(repositoryRoot) {
-  const root = path25.join(repositoryRoot, ".legion", "project", "intake");
+  const root = path26.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
-    entries = await readdir10(root, { withFileTypes: true });
+    entries = await readdir11(root, { withFileTypes: true });
   } catch (error51) {
     if (isEnoent6(error51)) return [];
     throw error51;
@@ -38424,7 +38769,7 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path26.isAbsolute(filePath) ? filePath : path26.resolve(context.repositoryRoot, filePath);
+    const absolute = path27.isAbsolute(filePath) ? filePath : path27.resolve(context.repositoryRoot, filePath);
     parsed = JSON.parse(await readFile16(absolute, "utf8"));
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
@@ -38699,7 +39044,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path26.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path27.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name,
     answers: session.answers,
@@ -38915,8 +39260,8 @@ ${rendered}` : "Project initialization failed.";
 
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash19 } from "node:crypto";
-import { readdir as readdir11, readFile as readFile17, stat as stat7 } from "node:fs/promises";
-import path27 from "node:path";
+import { readdir as readdir12, readFile as readFile17, stat as stat7 } from "node:fs/promises";
+import path28 from "node:path";
 var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
   ".git",
   ".hg",
@@ -39026,7 +39371,7 @@ async function getLatestCodebaseMap(repositoryRoot) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
     if (artifactPath === void 0) continue;
     try {
-      return JSON.parse(await readFile17(path27.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+      return JSON.parse(await readFile17(path28.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
     } catch {
       continue;
     }
@@ -39063,23 +39408,23 @@ function queryCodebaseMap(map2, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path27.resolve(repositoryRoot, scope);
-  const relative = path27.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path28.resolve(repositoryRoot, scope);
+  const relative = path28.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path27.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path28.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path27.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path28.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat7(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path27.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path27.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path27.basename(relative))) continue;
+    const relative = path28.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path28.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path28.basename(relative))) continue;
     const fileStat = await stat7(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
     const bytes = await readFile17(absolutePath);
@@ -39102,10 +39447,10 @@ async function collectSourceFiles(repositoryRoot, scope) {
 }
 async function walk(root) {
   const files = [];
-  const entries = await readdir11(root, { withFileTypes: true });
+  const entries = await readdir12(root, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path27.join(root, entry.name);
+    const absolute = path28.join(root, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -39150,7 +39495,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map2) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file2 of map2.files) {
-    const extension = path27.extname(file2.path).toLowerCase() || "(none)";
+    const extension = path28.extname(file2.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -39264,8 +39609,8 @@ function ageInDays(generatedAt, now) {
 }
 
 // packages/cli/src/workflow/traceability-check.ts
-import { readdir as readdir12 } from "node:fs/promises";
-import path28 from "node:path";
+import { readdir as readdir13 } from "node:fs/promises";
+import path29 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -39290,7 +39635,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir12(path28.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir13(path29.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -39559,12 +39904,12 @@ function renderTraceabilityLine(traceability) {
 }
 
 // packages/cli/src/workflow/state.ts
-import { readdir as readdir14 } from "node:fs/promises";
-import path31 from "node:path";
+import { readdir as readdir15 } from "node:fs/promises";
+import path32 from "node:path";
 
 // packages/cli/src/workflow/context.ts
-import { readdir as readdir13, stat as stat8 } from "node:fs/promises";
-import path29 from "node:path";
+import { readdir as readdir14, stat as stat8 } from "node:fs/promises";
+import path30 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -39590,17 +39935,17 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path29.join(repositoryRoot, ".legion");
+  const legionRoot = path30.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
-  const entries = await readdir13(legionRoot, { withFileTypes: true });
+  const entries = await readdir14(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
   if (unknownEntries.length > 0) {
     return [
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path29.join(legionRoot, "project");
-  const manifestPath = path29.join(projectRoot, "project.json");
+  const projectRoot = path30.join(legionRoot, "project");
+  const manifestPath = path30.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -39660,7 +40005,7 @@ function latestEvidenceEntries(entries) {
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash20 } from "node:crypto";
-import path30 from "node:path";
+import path31 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -39674,6 +40019,15 @@ function evidenceIdForRun(runId) {
 }
 function reviewIdForChange(input) {
   return formatEntityId("review", derivedSuffix(input.changeId.slice("chg_".length), `-review-${input.sequence}`));
+}
+function approvalIdForSubject(input) {
+  const digest = createHash20("sha256").update(`${input.action}
+${input.subject.kind}
+${input.subject.id}`).digest("hex").slice(0, DERIVED_ID_HASH_LENGTH);
+  return formatEntityId(
+    "approval",
+    derivedSuffix(input.changeId.slice("chg_".length), `-approval-${digest}`)
+  );
 }
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
@@ -39694,7 +40048,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path30.join(repositoryRoot, ...artifactPath.split("/"));
+  return path31.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/workflow/state.ts
@@ -39820,10 +40174,10 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function listWorkflowChanges(repositoryRoot) {
-  const changesRoot = path31.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path32.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
-    entries = await readdir14(changesRoot, { withFileTypes: true });
+    entries = await readdir15(changesRoot, { withFileTypes: true });
   } catch (error51) {
     if (isNodeErrorCode3(error51, "ENOENT")) {
       return noWorkflowChange(changesRoot);
@@ -39876,7 +40230,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   const listed = await listWorkflowChanges(repositoryRoot);
   if (!listed.ok) return listed;
   const latest = listed.changes.at(-1);
-  if (latest === void 0) return noWorkflowChange(path31.join(repositoryRoot, ".legion", "project", "changes"));
+  if (latest === void 0) return noWorkflowChange(path32.join(repositoryRoot, ".legion", "project", "changes"));
   return { ok: true, changeId: latest.changeId };
 }
 async function isChangeComplete(input) {
@@ -40019,7 +40373,7 @@ async function resolveMapStatus(context) {
 
 // packages/cli/src/workflow/change-input.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
-import path32 from "node:path";
+import path33 from "node:path";
 
 // packages/cli/src/workflow/phase-requirement.ts
 var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
@@ -40242,8 +40596,8 @@ function resolveBaseGitSha(repositoryRoot) {
   }
 }
 function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path32.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path32.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  const relative = path33.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path33.isAbsolute(relative) ? relative : ".legion/project/project.json";
   return artifactPathSchema.parse(candidate);
 }
 function withSpecAnchor(requirement) {
@@ -40561,7 +40915,7 @@ function buildOracleArtifactInputs(options) {
 
 // packages/cli/src/workflow/phase-compat.ts
 import { readFile as readFile18 } from "node:fs/promises";
-import path33 from "node:path";
+import path34 from "node:path";
 async function resolvePhaseSource(context, phaseNumber) {
   for (const sourcePath of roadmapCandidates(context)) {
     const text = await readOptionalRoadmap(sourcePath);
@@ -40609,13 +40963,13 @@ function roadmapCandidates(context) {
     return [resolveRoadmapPath(context.repositoryRoot, fromRoadmap)];
   }
   const candidates = [
-    path33.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
-    path33.join(context.repositoryRoot, "ROADMAP.md")
+    path34.join(context.repositoryRoot, ".planning", "ROADMAP.md"),
+    path34.join(context.repositoryRoot, "ROADMAP.md")
   ];
   return candidates.filter((candidate) => candidate !== void 0);
 }
 function resolveRoadmapPath(repositoryRoot, roadmapPath) {
-  return path33.isAbsolute(roadmapPath) ? roadmapPath : path33.resolve(repositoryRoot, roadmapPath);
+  return path34.isAbsolute(roadmapPath) ? roadmapPath : path34.resolve(repositoryRoot, roadmapPath);
 }
 async function readOptionalRoadmap(sourcePath) {
   try {
@@ -40634,7 +40988,7 @@ function phaseChangeIdPrefix(phaseNumber) {
 
 // packages/cli/src/workflow/retro-index.ts
 import { readFile as readFile19 } from "node:fs/promises";
-import path34 from "node:path";
+import path35 from "node:path";
 var STAGED_ENTRY_FILE = "retro-entry.json";
 var RETRO_INDEX_ARTIFACT_PATH = ".legion/project/workflow/retro/retro-index.json";
 var EMPTY_INDEX = Object.freeze({
@@ -40657,7 +41011,7 @@ function isRetroIndexEntry(value) {
   return typeof entry["id"] === "string" && typeof entry["createdAt"] === "string" && typeof entry["artifactPath"] === "string" && typeof entry["summary"] === "string" && (entry["scopedChangeIds"] === void 0 || Array.isArray(entry["scopedChangeIds"]) && entry["scopedChangeIds"].every((id) => typeof id === "string")) && (entry["scopeLabel"] === void 0 || typeof entry["scopeLabel"] === "string") && Array.isArray(entry["actions"]) && entry["actions"].every(isRetroAction);
 }
 async function readRetroIndex(repositoryRoot) {
-  const indexPath = path34.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
+  const indexPath = path35.join(repositoryRoot, ...RETRO_INDEX_ARTIFACT_PATH.split("/"));
   try {
     const parsed = JSON.parse(await readFile19(indexPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null) return EMPTY_INDEX;
@@ -41189,8 +41543,8 @@ import { execFileSync as execFileSync6 } from "node:child_process";
 import { readFile as readFile21 } from "node:fs/promises";
 
 // packages/cli/src/workflow/context-pack.ts
-import { readdir as readdir15, readFile as readFile20 } from "node:fs/promises";
-import path35 from "node:path";
+import { readdir as readdir16, readFile as readFile20 } from "node:fs/promises";
+import path36 from "node:path";
 async function writeContextPack(input) {
   const content = await renderContextPack(input);
   await writeProjectTextFile({
@@ -41354,16 +41708,16 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   const workflows = ["learn", "map", "explore", "advise", "retro", "council", "quick", "polish", "milestone"];
   const records = [];
   for (const workflow of workflows) {
-    const workflowRoot = path35.join(repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path36.join(repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
-      entries = await readdir15(workflowRoot, { withFileTypes: true });
+      entries = await readdir16(workflowRoot, { withFileTypes: true });
     } catch (error51) {
       if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") continue;
       throw error51;
     }
     for (const entry of entries.filter((candidate) => candidate.isFile() || candidate.isDirectory()).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 3)) {
-      const absolutePath = entry.isDirectory() ? path35.join(workflowRoot, entry.name, "workflow-run.json") : path35.join(workflowRoot, entry.name);
+      const absolutePath = entry.isDirectory() ? path36.join(workflowRoot, entry.name, "workflow-run.json") : path36.join(workflowRoot, entry.name);
       let text = "";
       try {
         text = await readFile20(absolutePath, "utf8");
@@ -41382,7 +41736,7 @@ async function readRecentWorkflowRecords(repositoryRoot) {
   return records;
 }
 async function readKnowledgeIndex(repositoryRoot) {
-  const indexPath = path35.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path36.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const text = await readFile20(indexPath, "utf8");
     return ["```json", truncate4(text.trim(), 4e3), "```"].join("\n");
@@ -41400,7 +41754,7 @@ function truncate4(text, maxLength) {
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash21 } from "node:crypto";
 import { existsSync as existsSync4 } from "node:fs";
-import path36 from "node:path";
+import path37 from "node:path";
 var DEFAULT_TIMEOUT_MS2 = 12e4;
 var TIMEOUT_EXIT_CODE = 124;
 var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
@@ -41409,7 +41763,7 @@ var GROUP_KILL_GRACE_MS = 500;
 function resolveCommand(command, args) {
   if (command !== "legion") return { command, args };
   const sourceRoot = resolveCliSourceRoot(import.meta.url, LEGION_BIN);
-  const binPath = path36.join(sourceRoot, ...LEGION_BIN.split("/"));
+  const binPath = path37.join(sourceRoot, ...LEGION_BIN.split("/"));
   if (!existsSync4(binPath)) return { command, args };
   return { command: process.execPath, args: [binPath, ...args] };
 }
@@ -41527,7 +41881,7 @@ function createVerificationRunner(options) {
 // packages/cli/src/workflow/executor/worker-bundles.ts
 import { createHash as createHash22 } from "node:crypto";
 import { readFileSync } from "node:fs";
-import path37 from "node:path";
+import path38 from "node:path";
 var BUNDLE_DIRECTORY = "bundles";
 var BUNDLE_INDEX = "bundles/index.json";
 var WorkerBundleIntegrityError = class extends Error {
@@ -41543,7 +41897,7 @@ function sha256Hex5(value) {
 }
 function loadWorkerBundles(sourceRoot) {
   const root = sourceRoot ?? resolveCliSourceRoot(import.meta.url, BUNDLE_INDEX);
-  const indexPath = path37.join(root, ...BUNDLE_INDEX.split("/"));
+  const indexPath = path38.join(root, ...BUNDLE_INDEX.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(indexPath, "utf8"));
@@ -41570,7 +41924,7 @@ function loadWorkerBundles(sourceRoot) {
       );
     }
     {
-      const promptPath = path37.join(root, BUNDLE_DIRECTORY, entry.promptFile);
+      const promptPath = path38.join(root, BUNDLE_DIRECTORY, entry.promptFile);
       let promptBody;
       try {
         promptBody = readFileSync(promptPath, "utf8");
@@ -41607,13 +41961,13 @@ function createWorkerBundleRegistry(options) {
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash24 } from "node:crypto";
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import path40 from "node:path";
+import path41 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
 import { execFileSync as execFileSync4 } from "node:child_process";
 import { createHash as createHash23 } from "node:crypto";
 import { readFileSync as readFileSync2, rmSync as rmSync2, statSync } from "node:fs";
-import path38 from "node:path";
+import path39 from "node:path";
 function summarizeObservation(files, baseGitSha) {
   const ordered = [...files].sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -41690,7 +42044,7 @@ function observeWorkingTreeDiff(input) {
       if (filePath.length === 0) continue;
       if (code === "??") {
         created.add(filePath);
-        lines.set(filePath, countUntrackedLines(path38.join(input.repositoryRoot, filePath)));
+        lines.set(filePath, countUntrackedLines(path39.join(input.repositoryRoot, filePath)));
       } else if (!lines.has(filePath)) {
         lines.set(filePath, 0);
       }
@@ -41706,7 +42060,7 @@ function observeWorkingTreeDiff(input) {
     path: filePath,
     linesChanged,
     isNew: created.has(filePath),
-    contentSha256: hashFileContent(path38.join(input.repositoryRoot, filePath))
+    contentSha256: hashFileContent(path39.join(input.repositoryRoot, filePath))
   }));
   return {
     status: "clean",
@@ -41821,11 +42175,11 @@ function reconcileTaskDiff(input) {
 
 // packages/cli/src/workflow/project-files.ts
 import { lstatSync, readdirSync } from "node:fs";
-import path39 from "node:path";
+import path40 from "node:path";
 function listProjectFiles(repositoryRoot, relativeRoot) {
   const results = [];
   try {
-    const rootStat = lstatSync(path39.join(repositoryRoot, relativeRoot));
+    const rootStat = lstatSync(path40.join(repositoryRoot, relativeRoot));
     if (rootStat.isSymbolicLink()) {
       return [{ path: relativeRoot, kind: "symlink", size: void 0 }];
     }
@@ -41838,7 +42192,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
   const walk2 = (relative) => {
     let entries;
     try {
-      entries = readdirSync(path39.join(repositoryRoot, relative), { withFileTypes: true });
+      entries = readdirSync(path40.join(repositoryRoot, relative), { withFileTypes: true });
     } catch {
       return;
     }
@@ -41855,7 +42209,7 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
       if (!entry.isFile()) continue;
       let size;
       try {
-        size = lstatSync(path39.join(repositoryRoot, child)).size;
+        size = lstatSync(path40.join(repositoryRoot, child)).size;
       } catch {
         size = void 0;
       }
@@ -41903,7 +42257,7 @@ function snapshotProtectedState(input) {
   const entries = /* @__PURE__ */ new Map();
   for (const entry of listProjectFiles(input.repositoryRoot, LEGION_PROJECT_ROOT)) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
-    const absolute = path40.join(input.repositoryRoot, entry.path);
+    const absolute = path41.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
       entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
       continue;
@@ -41931,7 +42285,7 @@ function protectedPathsTouched(input) {
       touched.add(relative);
       continue;
     }
-    const absolute = path40.join(input.repositoryRoot, relative);
+    const absolute = path41.join(input.repositoryRoot, relative);
     const nowIsSymlink = now.kind === "symlink";
     if (before.kind === "symlink" || nowIsSymlink) {
       if (before.kind !== "symlink" || !nowIsSymlink) {
@@ -42014,7 +42368,7 @@ function restoreProtectedFiles(input) {
   const ordered = rootTouched ? [LEGION_PROJECT_ROOT, ...input.paths.filter((entry) => entry !== LEGION_PROJECT_ROOT)] : input.paths;
   const rootWasProtectedEntry = input.state.entries.has(LEGION_PROJECT_ROOT);
   for (const relative of ordered) {
-    const absolute = path40.join(input.repositoryRoot, relative);
+    const absolute = path41.join(input.repositoryRoot, relative);
     const before = input.state.entries.get(relative);
     if (rootWasProtectedEntry && relative !== LEGION_PROJECT_ROOT) {
       restored.push(relative);
@@ -42028,14 +42382,14 @@ function restoreProtectedFiles(input) {
       }
       if (before.kind === "file") {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path40.dirname(absolute), { recursive: true });
+        mkdirSync3(path41.dirname(absolute), { recursive: true });
         writeFileSync2(absolute, before.bytes);
         restored.push(relative);
         continue;
       }
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
-        mkdirSync3(path40.dirname(absolute), { recursive: true });
+        mkdirSync3(path41.dirname(absolute), { recursive: true });
         symlinkSync2(before.target, absolute);
         restored.push(relative);
         continue;
@@ -42999,15 +43353,82 @@ function blockedBuild(diagnostics, action, extras = {}) {
   );
 }
 
+// packages/cli/src/workflow/approver.ts
+var PROJECT_MANIFEST_PATH2 = ".legion/project/project.json";
+function requiresHumanApproval(tasks) {
+  return tasks.some(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "explicit_human_approval"
+    )
+  );
+}
+function describeDecisionOwners(owners) {
+  if (owners.length === 0) return "none";
+  return owners.map((owner) => `${owner.displayName ?? owner.id} (${owner.kind})`).join(", ");
+}
+function resolveApprover(input) {
+  const matches = input.decisionOwners.filter(
+    (owner) => owner.id === input.raw || owner.displayName === input.raw
+  );
+  if (matches.length === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "approver_unknown",
+          message: `--approver "${input.raw}" is not a decision owner of this project. Recorded decision owners: ${describeDecisionOwners(input.decisionOwners)}. Add the approver to project.policy.decisionOwners, or accept as a recorded owner. Legion does not create an approver from the value given.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ]
+    };
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "approver_ambiguous",
+          message: `--approver "${input.raw}" matches more than one decision owner (${matches.map((owner) => owner.id).join(", ")}). Name the approver by its exact actor id.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ]
+    };
+  }
+  const approver = matches[0];
+  if (approver.kind !== "human") {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "approver_not_human",
+          message: `--approver "${input.raw}" resolves to a decision owner whose kind is "${approver.kind}". The explicit_human_approval gate asks whether a human approved this change; a non-human owner cannot answer it.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ]
+    };
+  }
+  return { ok: true, approver };
+}
+
 // packages/cli/src/commands/workflow/review.ts
-var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
+
+--approver names a human decision owner recorded in .legion/project/project.json. It is
+required when a task in the change derives the explicit_human_approval risk gate.
 
 Examples:
   legion review --executor fake
   legion review --accept
+  legion review --accept --approver dasbl
   legion review --auto --max-cycles 3 --executor codex`;
+var REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+var REVIEW_GATE_ACTOR = {
+  kind: "tool",
+  id: "legion-review",
+  displayName: "Legion Review Gate"
+};
 async function handleReviewWorkflow(context) {
   if (context.args.options.has("help") || context.args.positionals[0] === "help") {
     return helpResult(REVIEW_HELP);
@@ -43034,6 +43455,13 @@ async function handleReviewWorkflow(context) {
   if (!taskgraph.ok) {
     return blockedReview(taskgraph.diagnostics, planAction);
   }
+  const approver = await resolveReviewApprover(context, {
+    tasks: taskgraph.document.tasks,
+    accepting: hasFlag(context, "accept") || hasFlag(context, "auto"),
+    taskgraphPath: taskgraph.artifactPath,
+    phase: phaseOption
+  });
+  if (!approver.ok) return approver.result;
   const taskCount = taskgraph.document.tasks.length;
   if (hasFlag(context, "dry-run")) {
     const action2 = nextAction(
@@ -43076,7 +43504,7 @@ async function handleReviewWorkflow(context) {
     );
   }
   if (hasFlag(context, "accept")) {
-    return acceptLatestReview(context, evidence);
+    return acceptLatestReview(context, evidence, approver.approver);
   }
   const rejectReason = stringOption(context, "reject-reason");
   if (rejectReason !== void 0) {
@@ -43091,6 +43519,7 @@ async function handleReviewWorkflow(context) {
       executor: selectedExecutor,
       taskgraph,
       evidence,
+      ...approver.approver === void 0 ? {} : { approver: approver.approver },
       ...phaseOption === void 0 ? {} : { phase: phaseOption }
     });
   }
@@ -43132,6 +43561,68 @@ async function handleReviewWorkflow(context) {
 function scopedCommand(command, phase) {
   if (phase === void 0) return command;
   return `${command} --phase ${phase}`;
+}
+async function resolveReviewApprover(context, input) {
+  const raw = stringOption(context, "approver")?.trim();
+  if (context.args.options.get("approver") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError("Missing required value for --approver. Example: legion review --accept --approver dasbl.")
+    };
+  }
+  if (raw !== void 0 && !input.accepting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --approver only with --accept or --auto. An approver on a run that accepts nothing records nobody, so it is refused rather than ignored."
+      )
+    };
+  }
+  const required2 = input.accepting && requiresHumanApproval(input.tasks);
+  if (raw === void 0) {
+    if (!required2) return { ok: true, approver: void 0 };
+    return {
+      ok: false,
+      result: blockedReview(
+        [
+          {
+            code: "approver_required",
+            message: "A task in this change derives the explicit_human_approval risk gate, so accepting its review requires --approver <id> naming a human decision owner recorded in .legion/project/project.json. No approver is inferred from the environment, from git config, or from a project having only one owner \u2014 an acceptance recorded against a defaulted identity is not a human approval.",
+            path: input.taskgraphPath
+          }
+        ],
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          "This change's risk tier requires a named human approver."
+        )
+      )
+    };
+  }
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may approve, and it could not be read.")
+      )
+    };
+  }
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedReview(
+        resolved.diagnostics,
+        nextAction(
+          scopedCommand("legion review --accept --approver <id>", input.phase),
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+  return { ok: true, approver: resolved.approver };
 }
 async function submitReview(context, input) {
   if (input.taskgraph.document.tasks.length === 0) {
@@ -43266,7 +43757,7 @@ function failedObservations(evidence) {
   }
   return diagnostics;
 }
-async function acceptLatestReview(context, evidence) {
+async function acceptLatestReview(context, evidence, approver) {
   const failed = failedObservations(evidence);
   if (failed.length > 0) {
     return blockedReview(
@@ -43291,7 +43782,18 @@ async function acceptLatestReview(context, evidence) {
         ...review.document,
         status: "accepted",
         updatedAt: acceptedAt,
-        submittedAt
+        submittedAt,
+        // The accept transition's own actor, in the same revisioned write as the
+        // transition, so the two cannot end up in different revisions of the
+        // artifact. `reviewer` is untouched: the tool did produce this review,
+        // and overwriting it with the approver would replace one true statement
+        // with another and lose the first.
+        //
+        // Both fields or neither — the schema refuses a half-written transition,
+        // because a reader of `acceptedAt` alone has to guess whether the actor
+        // was never recorded or was recorded and lost, and those guesses lead to
+        // opposite verdicts.
+        ...approver === void 0 ? {} : { acceptedBy: approver, acceptedAt }
       }
     });
     if (!accepted.ok) {
@@ -43324,6 +43826,20 @@ async function acceptLatestReview(context, evidence) {
   if (!evidenceWrite.ok) {
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence acceptance could not be written."));
   }
+  const approvals = await recordReviewAcceptApprovals(context, {
+    reviews: acceptedReviews,
+    approver,
+    decidedAt: acceptedAt
+  });
+  if (!approvals.ok) {
+    return blockedReview(
+      approvals.diagnostics,
+      nextAction(
+        "legion ship",
+        "The reviews and evidence were accepted, but no approval was recorded. Nothing was rolled back: legion ship will report explicit_human_approval unevaluable for this change until an approval exists."
+      )
+    );
+  }
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
   return success2(
     {
@@ -43331,6 +43847,9 @@ async function acceptLatestReview(context, evidence) {
       status: "accepted",
       ...acceptedReviews[0] === void 0 ? {} : { review: reviewSummary(acceptedReviews[0]) },
       reviews: acceptedReviews.map(reviewSummary),
+      // Spread conditionally so a run that recorded no approver produces the
+      // payload it produced before this release, key for key.
+      ...approvals.approvals.length === 0 ? {} : { approvals: approvals.approvals.map(approvalSummary) },
       evidenceIndex: {
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
@@ -43344,6 +43863,101 @@ async function acceptLatestReview(context, evidence) {
       renderNextAction(action)
     ].join("\n")
   );
+}
+async function recordReviewAcceptApprovals(context, input) {
+  if (input.approver === void 0) return { ok: true, approvals: [] };
+  const written = [];
+  for (const review of input.reviews) {
+    const taskId = review.document.taskId;
+    const runId = review.document.runId;
+    if (taskId === void 0 || runId === void 0) {
+      return {
+        ok: false,
+        diagnostics: [
+          {
+            code: "approval_subject_missing",
+            message: `Review ${review.document.id} names no ${taskId === void 0 ? "task" : "run"}, so an approval recording its acceptance cannot say what was approved.`,
+            path: review.artifactPath
+          }
+        ]
+      };
+    }
+    const approvalId = approvalIdForSubject({
+      changeId: review.document.changeId,
+      action: REVIEW_ACCEPT_ACTION,
+      subject: { kind: "task", id: taskId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: review.document.changeId,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      return { ok: false, diagnostics: existing.diagnostics };
+    }
+    const requestedAt = existing.ok ? existing.document.requestedAt : input.decidedAt;
+    const document = {
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt: existing.ok ? existing.document.createdAt : input.decidedAt,
+      updatedAt: input.decidedAt,
+      kind: "approval",
+      id: approvalId,
+      projectId: review.document.projectId,
+      changeId: review.document.changeId,
+      taskId,
+      runId,
+      requestedBy: REVIEW_GATE_ACTOR,
+      requestedAt,
+      scope: {
+        // S1: a local idempotent write of Legion's own acceptance artifacts.
+        // Not S4 — nothing here deploys, deletes or rotates anything, and
+        // stamping the highest class on a review acceptance would make the
+        // classification meaningless the first time something really does.
+        effectClass: "S1",
+        action: REVIEW_ACCEPT_ACTION,
+        targets: [
+          { kind: "task", id: taskId },
+          { kind: "review", id: review.document.id },
+          { kind: "change", id: review.document.changeId }
+        ]
+      },
+      idempotencyKey: buildIdempotencyKey({
+        projectId: review.document.projectId,
+        changeId: review.document.changeId,
+        taskId,
+        runId,
+        effectKind: REVIEW_ACCEPT_ACTION,
+        // The accepted review's own content hash, so the key names the exact
+        // bytes accepted: re-running the same accept is the same operation, and
+        // accepting a new review cycle is a different one.
+        targetHash: review.reference.sha256
+      }),
+      status: "granted",
+      decidedBy: input.approver,
+      decidedAt: input.decidedAt,
+      decisionReason: `${input.approver.id} accepted review ${review.document.id} for task ${taskId} via legion review --accept.`
+    };
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) return { ok: false, diagnostics: write.diagnostics };
+    written.push(write);
+  }
+  return { ok: true, approvals: written };
+}
+function approvalSummary(approval) {
+  return {
+    approvalId: approval.document.id,
+    artifactPath: approval.artifactPath,
+    status: approval.document.status,
+    action: approval.document.scope.action,
+    taskId: approval.document.taskId,
+    decidedBy: approval.document.decidedBy,
+    decidedAt: approval.document.decidedAt
+  };
 }
 async function rejectLatestReview(context, evidence, reason) {
   const latest = await latestSubmittedReviews(context.repositoryRoot, evidence.document.changeId);
@@ -43438,7 +44052,7 @@ async function runAutoReview(context, input) {
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
       }
-      return withCycleState(await acceptLatestReview(context, refreshedEvidence), {
+      return withCycleState(await acceptLatestReview(context, refreshedEvidence, input.approver), {
         cycle,
         maxCycles,
         outcome: "clean"
@@ -43728,6 +44342,11 @@ function reviewSummary(review) {
     // Who reviewed, so a panel can distinguish a human verdict from an
     // executor's without opening the artifact.
     reviewer: review.document.reviewer,
+    // Who accepted it, which is a different act by a different actor. Spread
+    // conditionally so a review with no recorded acceptor produces the payload
+    // it produced before this release; without that, every R0 caller's payload
+    // would gain two keys holding nothing.
+    ...review.document.acceptedBy === void 0 ? {} : { acceptedBy: review.document.acceptedBy, acceptedAt: review.document.acceptedAt },
     // The revision chain. A review that supersedes nothing is a first attempt,
     // which is what the first-pass rate in `legion retro` counts.
     supersedes: review.document.supersedes,
@@ -43873,7 +44492,7 @@ async function resolvePhaseChange(repositoryRoot, phase) {
 
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile22 } from "node:fs/promises";
-import path42 from "node:path";
+import path43 from "node:path";
 
 // packages/cli/src/workflow/ad-hoc-taskgraph.ts
 function narrowedToPolicy(derived, policy) {
@@ -44160,7 +44779,7 @@ function commandParts(parts) {
 
 // packages/cli/src/commands/workflow/record.ts
 import { mkdir as mkdir13, writeFile as writeFile9 } from "node:fs/promises";
-import path41 from "node:path";
+import path42 from "node:path";
 function positionalText(context) {
   const text = context.args.positionals.join(" ").trim();
   return text.length > 0 ? text : void 0;
@@ -44478,7 +45097,7 @@ async function runLearnWorkflow(context) {
   );
 }
 async function readLessonIndex(repositoryRoot) {
-  const indexPath = path42.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
+  const indexPath = path43.join(repositoryRoot, ".legion", "project", "workflow", "learn", "knowledge-index.json");
   try {
     const parsed = JSON.parse(await readFile22(indexPath, "utf8"));
     if (parsed.kind === "lesson_index" && Array.isArray(parsed.lessons)) return parsed;
@@ -44609,7 +45228,7 @@ function renderLessonLine(record2) {
 
 // packages/cli/src/commands/workflow/contextual.ts
 import { readFile as readFile23, rm as rm7 } from "node:fs/promises";
-import path43 from "node:path";
+import path44 from "node:path";
 
 // packages/cli/src/workflow/exploration.ts
 var CONFIDENCE_VALUES = /* @__PURE__ */ new Set(["researched", "inferred", "assumed"]);
@@ -45305,7 +45924,7 @@ async function runRetroWorkflow(context) {
   });
   if ("exitCode" in executed) return executed;
   if (dryRun) {
-    await rm7(path43.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
+    await rm7(path44.join(context.repositoryRoot, ...paths.workflowRunArtifactPath.split("/").slice(0, -1)), {
       recursive: true,
       force: true,
       maxRetries: 10,
@@ -45593,7 +46212,7 @@ function optionalStringInput(context, key) {
   return value.trim();
 }
 async function readMilestoneIndex(repositoryRoot) {
-  const indexPath = path43.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
+  const indexPath = path44.join(repositoryRoot, ".legion", "project", "workflow", "milestone", "milestones.json");
   try {
     const parsed = JSON.parse(await readFile23(indexPath, "utf8"));
     if (parsed.kind === "milestone_index" && Array.isArray(parsed.milestones)) return parsed;
@@ -45803,7 +46422,7 @@ function milestoneProgressPayload(state) {
 }
 async function saveStagedRetro(context, runId) {
   const runArtifactPath2 = artifactPathSchema.parse(`.legion/project/workflow/retro/${runId}/workflow-run.json`);
-  const runPath = path43.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
+  const runPath = path44.join(context.repositoryRoot, ...runArtifactPath2.split("/"));
   let run;
   try {
     run = JSON.parse(await readFile23(runPath, "utf8"));
@@ -45826,7 +46445,7 @@ async function saveStagedRetro(context, runId) {
   }
   let entry;
   try {
-    entry = JSON.parse(await readFile23(path43.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
+    entry = JSON.parse(await readFile23(path44.join(context.repositoryRoot, ...entryPath.split("/")), "utf8"));
   } catch (error51) {
     return usageError(
       `legion retro --save ${runId} could not read ${entryPath}: ${error51 instanceof Error ? error51.message : String(error51)}`
@@ -45926,13 +46545,13 @@ function renderDerivedMetrics(metrics) {
 
 // packages/cli/src/workflow/pinned-references.ts
 import { readFile as readFile24, realpath as realpath3 } from "node:fs/promises";
-import path44 from "node:path";
+import path45 from "node:path";
 function isErrorCode(error51, ...codes) {
   return error51 !== null && typeof error51 === "object" && "code" in error51 && typeof error51.code === "string" && codes.includes(error51.code);
 }
 function contains(root, candidate) {
-  const relative = path44.relative(root, candidate);
-  return relative === "" || !relative.startsWith("..") && !path44.isAbsolute(relative);
+  const relative = path45.relative(root, candidate);
+  return relative === "" || !relative.startsWith("..") && !path45.isAbsolute(relative);
 }
 function isWindowsStreamPath(artifactPath) {
   return artifactPath.includes(":");
@@ -45943,12 +46562,12 @@ function isCaseFoldedAlias(declaredPath, resolvedRelative) {
 async function resolveOne(repositoryRoot, artifactPath) {
   if (isWindowsStreamPath(artifactPath)) return { kind: "unverified" };
   const segments = artifactPath.split("/");
-  const target = path44.resolve(repositoryRoot, ...segments);
-  if (!contains(path44.resolve(repositoryRoot), target)) return { kind: "unverified" };
+  const target = path45.resolve(repositoryRoot, ...segments);
+  if (!contains(path45.resolve(repositoryRoot), target)) return { kind: "unverified" };
   try {
     const [realRoot, realTarget] = await Promise.all([realpath3(repositoryRoot), realpath3(target)]);
     if (!contains(realRoot, realTarget)) return { kind: "unverified" };
-    if (isCaseFoldedAlias(artifactPath, path44.relative(realRoot, realTarget).split(path44.sep).join("/"))) {
+    if (isCaseFoldedAlias(artifactPath, path45.relative(realRoot, realTarget).split(path45.sep).join("/"))) {
       return { kind: "unverified" };
     }
     return { kind: "hashed", sha256: hashContent(await readFile24(realTarget)) };
@@ -46014,6 +46633,169 @@ function hasAcceptedReview2(reviews, taskId) {
     (review) => review.document.status === "accepted" && review.document.taskId === taskId
   );
 }
+var REVIEW_ACCEPT_ACTION2 = "workflow.review.accept";
+function grantExpiry(approval, evaluatedAt) {
+  if (approval.expiresAt === void 0) return "live";
+  if (evaluatedAt === void 0) return "unknown";
+  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
+}
+function idempotencyTargetHash(key) {
+  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
+}
+function approvedReviewLink(input) {
+  const approvedIds = input.approval.scope.targets.filter((target) => target.kind === "review").map((target) => target.id);
+  if (approvedIds.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
+    };
+  }
+  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
+  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
+  if (named.length !== approvedIds.length) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
+    };
+  }
+  for (const review of named) {
+    if (review.document.status !== "accepted") {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
+      };
+    }
+    const superseding = taskReviews.find(
+      (candidate) => candidate.document.id !== review.document.id && (candidate.document.supersedes ?? []).includes(review.document.id)
+    );
+    if (superseding !== void 0) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
+      };
+    }
+    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
+    const currentHash = review.reference?.sha256;
+    if (approvedHash === void 0 || currentHash === void 0) {
+      return {
+        kind: "unknown",
+        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
+      };
+    }
+    if (approvedHash !== currentHash) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
+      };
+    }
+  }
+  return { kind: "current" };
+}
+function byDecisionInstant(left, right) {
+  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
+  if (byInstant !== 0) return byInstant;
+  return left.id.localeCompare(right.id);
+}
+function humanApprovalStatus(input) {
+  for (const review of input.reviews) {
+    if (review.document.status !== "accepted") continue;
+    if (review.document.taskId !== input.taskId) continue;
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === void 0 || acceptedBy.kind === "human") continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no human approval is established."
+    };
+  }
+  const relevant = approvals.filter(
+    (approval) => (
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than matching
+      // everything. Absence must never widen the set an approval can answer for.
+      approval.changeId === input.change?.changeId && // An approval whose two task claims disagree says two things; the gate
+      // reads neither. The service will persist such a document, so refusing it
+      // here is the only place it is refused.
+      (approval.taskId === void 0 || approval.taskId === input.taskId) && approval.scope.action === REVIEW_ACCEPT_ACTION2 && approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No approval records anyone accepting this task's review."
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for this task's review is ${blocking.status}.` : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: "An approval for this task's review is recorded as requested and has not been decided."
+  };
+}
 function fromVerdict(verdict, itemId) {
   if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
   if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
@@ -46034,8 +46816,9 @@ function evaluateGate(input) {
       return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
     case "lightweight_independent_review":
     case "task_level_independent_review":
-    case "explicit_human_approval":
       return hasAcceptedReview2(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
+    case "explicit_human_approval":
+      return humanApprovalStatus({ change: input.change, reviews, taskId });
     case "protected_oracle":
       return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
     default:
@@ -46173,6 +46956,11 @@ function completeTaskRuns(listing) {
   if (listing.skipped.length > 0) return void 0;
   return listing.taskRuns.map((run) => run.document);
 }
+function completeApprovals(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.approvals.map((approval) => approval.document);
+}
 async function loadShipGateChangeFacts(input) {
   const bundleResult = await absentOnFailure(
     () => loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
@@ -46183,6 +46971,10 @@ async function loadShipGateChangeFacts(input) {
     () => listTaskRunsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
   const taskRuns = completeTaskRuns(runsResult);
+  const approvalsResult = await absentOnFailure(
+    () => listApprovalsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const approvals = completeApprovals(approvalsResult);
   const pinned = [
     ...bundle?.deltas.map((delta) => delta.delta) ?? [],
     ...oracles?.map((oracle) => oracle.reference) ?? []
@@ -46194,11 +46986,16 @@ async function loadShipGateChangeFacts(input) {
   return {
     changeId: input.changeId,
     acceptance: bundle?.change.acceptance,
-    approvals: void 0,
+    approvals,
     deltas: bundle?.deltas,
     oracles,
     taskRuns,
     release: void 0,
+    // Read once, here, for the same reason the pins are hashed once here: a
+    // report is a snapshot of a moment. Gates that ask "is this still valid"
+    // must all ask about the same instant, or a change could be reported
+    // approved and expired in one payload.
+    evaluatedAt: currentUtcTimestamp(),
     verifyPin
   };
 }
@@ -46349,16 +47146,16 @@ function blockedShip(diagnostics, action) {
 
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
-import path46 from "node:path";
+import path47 from "node:path";
 
 // packages/cli/src/workflow/settings-check.ts
 import { readFile as readFile25 } from "node:fs/promises";
-import path45 from "node:path";
+import path46 from "node:path";
 var SETTINGS_FILE = "settings.json";
 async function checkSettings(repositoryRoot) {
   let text;
   try {
-    text = await readFile25(path45.join(repositoryRoot, SETTINGS_FILE), "utf8");
+    text = await readFile25(path46.join(repositoryRoot, SETTINGS_FILE), "utf8");
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
       return { status: "absent", path: SETTINGS_FILE, diagnostics: [], warnings: [] };
@@ -46523,7 +47320,7 @@ ${rendered}` : "Project validation failed.";
 }
 async function pathCheck(root, relativePath) {
   try {
-    await stat9(path46.join(root, relativePath));
+    await stat9(path47.join(root, relativePath));
     return {
       ok: true,
       status: "present",
@@ -46589,7 +47386,11 @@ var DECLARED = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // `approver` takes a value, so it must NOT also go in VALUELESS_OPTIONS: a
+  // valueless declaration would make `--approver dasbl` bind nothing and read as
+  // absent, which for this flag means an R3 accept refusing an approver the
+  // operator did name.
+  review: ["accept", "approver", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
@@ -46707,7 +47508,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   stderr: process.stderr
 }) {
   const parsed = parseCliArgs(argv);
-  const repositoryRoot = path47.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
+  const repositoryRoot = path48.resolve(stringMapValue(parsed.options, "repository-root") ?? stringMapValue(parsed.options, "repo") ?? io.cwd);
   const context = {
     args: parsed,
     repositoryRoot,
@@ -46759,8 +47560,8 @@ function stringMapValue(map2, key) {
   const value = map2.get(key);
   return typeof value === "string" ? value : void 0;
 }
-var invokedPath = process.argv[1] === void 0 ? void 0 : path47.resolve(process.argv[1]);
-if (invokedPath !== void 0 && path47.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
+var invokedPath = process.argv[1] === void 0 ? void 0 : path48.resolve(process.argv[1]);
+if (invokedPath !== void 0 && path48.resolve(fileURLToPath2(import.meta.url)) === invokedPath) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

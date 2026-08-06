@@ -32,6 +32,18 @@ The CLI owns the verification report, the gate set, and human acceptance.
 `legion review --json` reports what it verified; `legion review --accept` records
 acceptance, and a passing review still requires it.
 
+When a task in the change derives the `explicit_human_approval` risk gate — R3
+under the shipped policy — `--accept` and `--auto` also require
+`--approver <id>`, naming a human recorded in `project.policy.decisionOwners`.
+The CLI refuses any other value and infers no approver from the environment, from
+git config, or from a project having a single owner. Do not supply a value the
+operator did not give you: an acceptance recorded against a defaulted identity is
+not a human approval, and the ship gate reads it as one.
+
+`--dry-run` resolves `--approver` as well, so probing a command line before
+running it reports the same refusal rather than a green answer the accept will
+later reject.
+
 What stays here is the panel: intent detection over natural-language invocation,
 review agent selection, the review cycle with its glob-routed fix agents, and the
 security-only output mode. Never record an acceptance the operator did not give,

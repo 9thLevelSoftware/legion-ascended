@@ -61,7 +61,28 @@ const reviewDecisionBaseSchema = schemaMetadataSchema.extend({
   findings: z.array(reviewFindingSchema),
   supersedes: z.array(reviewIdSchema),
   evidenceRefs: z.array(evidenceIdSchema).optional(),
-  traceRefs: z.array(traceReferenceSchema).optional()
+  traceRefs: z.array(traceReferenceSchema).optional(),
+  /**
+   * Who performed the *accept* transition, and when.
+   *
+   * `reviewer` records who produced the review, which for every review Legion
+   * writes is a tool. Accepting one is a second act, by a second actor, and it
+   * had nowhere to live — so a gate asking "did a human approve this" could only
+   * consult `reviewer` or the existence of an accepted row, and both answer a
+   * different question. These two fields are where the accept transition's actor
+   * goes.
+   *
+   * On the base schema rather than on the `accepted` member because
+   * `z.strictObject` would reject them everywhere else, and a review that is
+   * later superseded must keep the record of who accepted it.
+   *
+   * Optional because every review artifact already on disk lacks them. A
+   * required field would make `readReviewDecision` fail to parse an older
+   * review, and `legion ship` would report a broken change rather than an older
+   * one — the worst failure mode for a command whose job is honest reporting.
+   */
+  acceptedBy: actorSchema.optional(),
+  acceptedAt: utcTimestampSchema.optional()
 });
 
 const openReviewDecisionFields = {
@@ -105,6 +126,31 @@ export const reviewDecisionSchema = z
         code: "custom",
         message: "submittedAt cannot be before createdAt.",
         path: ["submittedAt"]
+      });
+    }
+
+    // Both or neither. A gate reads `acceptedBy` to decide whether the accept
+    // transition was performed by a human, so a document carrying only
+    // `acceptedAt` would be an acceptance with no actor — a shape a reader has
+    // to guess about, and the guesses are "nobody accepted it" and "somebody
+    // did and we lost who", which lead to opposite verdicts.
+    if ((reviewDecision.acceptedBy === undefined) !== (reviewDecision.acceptedAt === undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "acceptedBy and acceptedAt must be recorded together.",
+        path: ["acceptedBy"]
+      });
+    }
+
+    if (
+      reviewDecision.acceptedAt &&
+      reviewDecision.submittedAt &&
+      new Date(reviewDecision.acceptedAt).getTime() < new Date(reviewDecision.submittedAt).getTime()
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "acceptedAt cannot be before submittedAt.",
+        path: ["acceptedAt"]
       });
     }
   });

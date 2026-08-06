@@ -16,7 +16,7 @@ import {
   runIdSchema,
   taskIdSchema
 } from "../primitives/ids.js";
-import { idempotencyKeySchema, utcTimestampSchema } from "../primitives/values.js";
+import { artifactReferenceSchema, idempotencyKeySchema, utcTimestampSchema } from "../primitives/values.js";
 import { schemaMetadataSchema } from "./common.js";
 
 export const approvalStatusSchema = z.enum(["requested", "granted", "denied", "expired", "revoked"]);
@@ -60,6 +60,20 @@ const approvalBaseSchema = schemaMetadataSchema.extend({
   requestedAt: utcTimestampSchema,
   scope: approvalScopeSchema,
   idempotencyKey: idempotencyKeySchema,
+  /**
+   * The exact bytes the decision was made against.
+   *
+   * `scope.targets` names *what* was approved by id; this names the content that
+   * was in front of the approver when they said yes. A gate can then ask whether
+   * the thing approved has since been edited, which is the only way "approved"
+   * survives contact with a mutable working tree.
+   *
+   * Optional because no approval on disk has it, and `.min(1)` when present
+   * because an empty array is not "pinned nothing" to a reader — it is a list
+   * every pin check passes vacuously, which is a fail-open produced by a shape
+   * rather than by a mistake. Present therefore means at least one pin.
+   */
+  artifacts: z.array(artifactReferenceSchema).min(1).optional(),
   expiresAt: utcTimestampSchema.optional()
 });
 

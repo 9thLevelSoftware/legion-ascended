@@ -42,7 +42,11 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   status: [],
   plan: ["auto-refine", "dry-run", "from-roadmap"],
   build: ["allow-dirty", "dry-run", "executor"],
-  review: ["accept", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // `approver` takes a value, so it must NOT also go in VALUELESS_OPTIONS: a
+  // valueless declaration would make `--approver dasbl` bind nothing and read as
+  // absent, which for this flag means an R3 accept refusing an approver the
+  // operator did name.
+  review: ["accept", "approver", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
