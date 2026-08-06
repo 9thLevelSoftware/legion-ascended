@@ -153,15 +153,22 @@ test("a block whose only unmet gate has a recovery advises that command", () => 
 });
 
 test("a block with several unmet gates keeps the fallback and names the ones with a route", () => {
-  // The arm every R2 change reaches today, and the one that matters. Advising
-  // `legion approve spec` here would claim one command unblocks a ship that four
-  // gates are holding — the failure `recoveryFor` in the ship command already
-  // guards against with its own `.every()`. Saying nothing would leave the
-  // operator with `legion build` and no thread at all.
+  // Advising `legion approve spec` here would claim one command unblocks a ship
+  // that two gates are holding — the failure `recoveryFor` in the ship command
+  // already guards against with its own `.every()`. Saying nothing would leave
+  // the operator with `legion build` and no thread at all.
+  //
+  // Re-pointed at `independent_baseline`. This fixture's whole shape is "one gate
+  // with a route, one without", and it used `whole_change_acceptance_evidence`
+  // for the second slot precisely *because* that gate had no `GATE_RECOVERY`
+  // entry. This release gives it one, so leaving it here would have kept the
+  // assertions green while the fixture no longer built the case they describe —
+  // the "two have a command" arm rather than the "one has" one. Green for the
+  // wrong reason is the failure this file exists to catch elsewhere.
   const recovery = shipGateRecovery({
     gates: [
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
-      gateResult({ gate: "whole_change_acceptance_evidence" })
+      gateResult({ gate: "independent_baseline" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
@@ -169,6 +176,9 @@ test("a block with several unmet gates keeps the fallback and names the ones wit
   assert.equal(recovery.command, "legion build");
   assert.match(recovery.reason, /^Required risk gates are not satisfied\./);
   assert.match(recovery.reason, /legion approve spec --approver <id>/);
+  // "one has", not "2 have" — which is what pins that the second gate really is
+  // one without a route, rather than a second route being summarised away.
+  assert.match(recovery.reason, /one has a command/);
 });
 
 test("a block whose unmet gates have no recovery keeps the fallback unchanged", () => {

@@ -40,17 +40,21 @@ import type { VerifyPinnedReference } from "./pinned-references.js";
  *                    Also blocks.
  *
  * An unevaluable gate blocks because the alternative is a self-contradicting
- * verdict: an R2 or R3 change would report `status: "ready"` while the same
- * payload lists its security, acceptance, release-observation and rollback
- * gates as unproven. "Ready" has to mean the risk tier's gates were met, not
- * that nothing actively failed — a gate with no producer is unmet, and the
- * absence of evidence is not evidence of satisfaction.
+ * verdict: a change would report `status: "ready"` while the same payload lists
+ * its security, release-observation and rollback gates as unproven. "Ready" has
+ * to mean the risk tier's gates were met, not that nothing actively failed — a
+ * gate with no producer is unmet, and the absence of evidence is not evidence of
+ * satisfaction.
  *
- * The consequence is that high-tier changes cannot be called ship-ready until
- * Phase D produces oracles, specs and integration checks. That is the honest
- * state of the product, and the report names exactly which gates are missing.
- * Lowering the tier through an audited `risk.override` is the supported way to
- * ship work whose gates genuinely do not apply.
+ * **As of this release every R2 gate has a producer**, so an R2 change carrying
+ * approved delta specs, a passing oracle result, a verified non-unit
+ * verification surface and a whole-change sign-off reports `ready` end to end —
+ * the first tier above R0 for which that is true. R3 still cannot: independent
+ * baselines, architecture and security review, protected acceptance tests,
+ * spec-and-oracle ordering, release observation and rollback evidence remain
+ * producerless, and the report names exactly which. Lowering the tier through an
+ * audited `risk.override` is the supported way to ship work whose gates
+ * genuinely do not apply.
  */
 
 export type ShipGateStatus = "satisfied" | "unsatisfied" | "unevaluable";
@@ -93,9 +97,12 @@ export interface ShipGateResult {
    * The command that repairs *this* verdict, when the gate can say it more
    * precisely than `GATE_RECOVERY` can.
    *
-   * Set by one gate today. `integration_or_real_interface_checks` has four unmet
-   * states with four different repairs — re-affirm a drifted pin, run a build,
-   * declare a surface at intake, fix a failing command — and a table holding one
+   * Set by two gates today. `integration_or_real_interface_checks` has four
+   * unmet states with four different repairs — re-affirm a drifted pin, run a
+   * build, declare a surface at intake, fix a failing command — and
+   * `whole_change_acceptance_evidence` has five of its own — accept, review then
+   * accept, review then accept *again* over a verdict already recorded, build
+   * then review then accept, and a bundle no command repairs. A table holding one
    * command per gate id would have to name one of them and misroute the rest.
    * `shipGateRecovery` prefers this over the table, so the gate that knows which
    * state it is in is the one that answers.
@@ -246,9 +253,15 @@ export interface ShipGateChangeFacts {
  * gate default silently to task scope, which silently disables both the
  * diagnostic collapse below and, once gates read facts, the absence guard.
  *
- * `approved_delta_spec` and `integration_or_real_interface_checks` are the
- * `"change"` entries. Each later gate flips exactly its own line, next to the
- * gate it implements.
+ * `approved_delta_spec`, `integration_or_real_interface_checks` and
+ * `whole_change_acceptance_evidence` are the `"change"` entries. Each later gate
+ * flips exactly its own line, next to the gate it implements.
+ *
+ * `whole_change_acceptance_evidence` is change-scoped for the plainest reason of
+ * the three: `change.acceptance` is one field on one bundle with exactly one
+ * answer for the whole change, and the verdict quantifies over *every* task — so
+ * a `subjectId` naming one task would be false about the sentence beside it, and
+ * `shipGateDiagnostics` would repeat that sentence once per task.
  *
  * `integration_or_real_interface_checks` is change-scoped because ADR-006's
  * wording is "verification reaches the relevant integration or real interface
@@ -283,7 +296,7 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   protected_oracle: "task",
   task_level_independent_review: "task",
   integration_or_real_interface_checks: "change",
-  whole_change_acceptance_evidence: "task",
+  whole_change_acceptance_evidence: "change",
   independent_baseline: "task",
   approved_spec_and_oracle: "task",
   architecture_or_security_review: "task",
@@ -1643,6 +1656,441 @@ function integrationSurfaceGateStatus(input: {
   return { ...chosen, reason: `${chosen.reason}${remainder}` };
 }
 
+/**
+ * The five cures whole-change acceptance can name, and why it names them itself.
+ *
+ * Same argument as `SURFACE_REAFFIRM_RECOVERY`'s: `GATE_RECOVERY` holds one
+ * command per gate id, and this gate has unmet states with genuinely different
+ * repairs. A change nobody signed off needs an accept; a change that *has* been
+ * accepted needs a review before a second accept; a change whose latest evidence
+ * was never accepted needs a review first too; a change with no evidence for a
+ * task needs a build; and a bundle that would not read is not repaired by any of
+ * the four.
+ *
+ * **The accept/re-accept split is the correction of a defect this gate shipped
+ * with, and it is the defect PR 3's lesson names by title.** One constant used
+ * to answer every unmet state with `legion review --accept --approver <id>`,
+ * whose reason claimed the verdict "is re-derived from scratch on every accept —
+ * so a recorded block or a sign-off that has gone stale is replaced rather than
+ * argued with". That sentence is true of the *promotion*, and false of the
+ * command, and the difference is the whole recovery. Every state it was offered
+ * for — `ready`, `blocked`, `superseded`, a stale sign-off, a future-dated one —
+ * is reachable only *after* an accept has run, and an accept flips every covering
+ * review from `submitted` to `accepted`. `cleanSubmittedReviewCoverage` selects
+ * only `submitted` reviews, so the second accept exits 1 with `review_not_clean`
+ * before it reaches any promotion at all. Measured on the highest-frequency
+ * mistake this release introduces: an operator who runs `legion review --accept`
+ * and forgets `--approver` records `ready`, and was then handed a command that
+ * could not move it.
+ */
+const ACCEPT_RECOVERY: ShipGateRecovery = {
+  command: "legion review --accept --approver <id>",
+  reason:
+    "No whole-change sign-off has been recorded for this change, and a clean submitted review already covers its " +
+    "evidence. Accepting it records one, naming a human decision owner from the project manifest."
+};
+
+/**
+ * The route out of every state a *previous* accept put the change in.
+ *
+ * Two commands, in this order, and the first is the one the gate used to omit.
+ * `command` names only `legion review` because that is the step that is missing;
+ * naming the accept alone is what made five verdicts unreachable, and naming a
+ * shell conjunction would put something no runner can dispatch into a field
+ * hosts execute.
+ */
+const RE_ACCEPT_RECOVERY: ShipGateRecovery = {
+  command: "legion review",
+  reason:
+    "A whole-change verdict is already recorded, and `legion review --accept` will not replace it directly: the accept " +
+    "that recorded it flipped every covering review from submitted to accepted, and an accept refuses evidence no " +
+    "clean *submitted* review covers. Submit a fresh review first, then rerun `legion review --accept --approver <id>` " +
+    "— the promotion re-derives the verdict from scratch, so a recorded block or a sign-off that has gone stale is " +
+    "replaced rather than argued with."
+};
+
+const REBUILD_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "The whole-change sign-off does not cover every task being shipped, because some task has no evidence in this " +
+    "change's index. Build it, review it, then accept: a sign-off cannot cover evidence that does not exist."
+};
+
+const REVIEW_RECOVERY: ShipGateRecovery = {
+  command: "legion review",
+  reason:
+    "This change was re-run after it was signed off, and the newest evidence has not been accepted. Submit a review " +
+    "over it first — legion review --accept refuses to accept evidence no clean submitted review covers — and then " +
+    "accept, which re-dates the whole-change sign-off over what is there now."
+};
+
+const BUNDLE_RECOVERY: ShipGateRecovery = {
+  command: "legion dev change validate <changeId>",
+  reason:
+    "This change's bundle could not be read, so nothing is known about whether it was accepted. That command reports " +
+    "what is wrong with it; it does not repair it — a drifted design, decision log or delta spec is corrected by hand."
+};
+
+/**
+ * The newest instant at which any of this change's evidence was accepted.
+ *
+ * Deliberately a maximum over **every** accepted entry in the index, not over
+ * the latest entry per task. In an honest history the two are equal — a
+ * superseded attempt was always accepted earlier than the attempt that replaced
+ * it — and where they differ, the wider one is strictly higher, which is the
+ * direction a bar this gate compares a sign-off against should err.
+ *
+ * Compared as strings everywhere, never through `Date`. `utcTimestampSchema` is
+ * a fixed-width `YYYY-MM-DDTHH:mm:ss.SSSZ` with a `toISOString()` round-trip
+ * refinement, so byte order is chronological order — the property `grantExpiry`
+ * and `earliestExecutionStart` already rely on. `new Date(x).getTime()` on a
+ * malformed literal yields `NaN`, and a `NaN` in a comparison is `false` in both
+ * directions: safe in one and fail-open in the other, both by accident.
+ */
+function newestEvidenceAcceptance(entries: readonly EvidenceIndexEntry[]): UtcTimestamp | undefined {
+  let newest: UtcTimestamp | undefined;
+  for (const entry of entries) {
+    if (entry.acceptance.status !== "accepted") continue;
+    const acceptedAt = entry.acceptance.acceptedAt as UtcTimestamp | undefined;
+    if (acceptedAt === undefined) continue;
+    if (newest === undefined || acceptedAt > newest) newest = acceptedAt;
+  }
+  return newest;
+}
+
+/**
+ * Is there a record on disk that the actor named in `acceptance.acceptedBy` was
+ * a **human** when the sign-off was taken — or is the name the only evidence?
+ *
+ * Returns the verdict that must replace `satisfied`, or `undefined` when the
+ * acceptor is corroborated and the gate may go on to its coverage checks.
+ *
+ * **The hole this closes.** `acceptanceActorSchema` is a bare
+ * `z.string().min(1)` — no `kind`, no link to anything. So `accepted` versus
+ * `ready`, the distinction this gate reports and the only thing separating "a
+ * named human signed off" from "every task's evidence was accepted", rested on a
+ * string that nothing in the facts could check. A future writer, a host, a
+ * migration or a hand edit that put `accepted` into a bundle would be read as a
+ * human sign-off by a gate holding no evidence of one. `legion ship`'s contract
+ * is that it re-reads every plane rather than trusting a recorded conclusion, and
+ * this was the one conclusion it took on trust.
+ *
+ * **The corroborating record already exists and is already in the facts.** The
+ * same `legion review --accept --approver` that writes `accepted` writes a
+ * granted `workflow.review.accept` approval per task, carrying
+ * `decidedBy: {id, kind: "human"}` — a typed actor, in a revisioned artifact,
+ * which `ship.ts` loads into `change.approvals` for `explicit_human_approval`.
+ * Reading it here to confirm the recorded id is a human actor is **not** the same
+ * as requiring `explicit_human_approval`: that gate asks whether a live,
+ * unexpired, unrevoked grant covers the review being shipped, and it is an R3
+ * gate. This asks only whether anything on disk says the acceptor was a person.
+ * Expiry and revocation are deliberately not read — a decision that has since
+ * lapsed was still taken by a human, and re-deriving the R3 verdict inside an R2
+ * gate is how two gates become one.
+ *
+ * **What this deliberately does not do**, so the next reader does not add it: it
+ * does not re-resolve `acceptedBy` against `.legion/project/project.json`'s
+ * decision owners. `legion review --accept` resolves the approver there at write
+ * time and refuses a non-human; re-resolving at ship time would mean that
+ * removing someone from the manifest — the ordinary act of a person leaving a
+ * team — retroactively unmakes every sign-off they ever gave and makes every
+ * change they accepted unshippable until re-accepted. A decision taken under the
+ * policy in force at the time is not unmade by a later policy edit. What ship
+ * owes the operator is the record of the decision, and that is what it now reads.
+ */
+function acceptorCorroboration(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly acceptedBy: string;
+}): GateOutcome | undefined {
+  const approvals = input.change?.approvals;
+  if (approvals === undefined) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but the approvals recorded for it could not be read, so nothing establishes that the acceptor was a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+
+  // A loop rather than a `filter`, on this module's standing rule: behind a
+  // predicate the element type widens back off the `granted` member and
+  // `decidedBy` reads as possibly-absent, whose only spelling is `decidedBy?.kind`
+  // — which renders "undefined" into an operator's diagnostic on the one member
+  // where the field cannot be absent.
+  const named: GrantedApproval[] = [];
+  for (const approval of approvals) {
+    // Same strict equality as `humanApprovalStatus`: facts too degraded to name
+    // their own change match nothing rather than everything.
+    if (approval.changeId !== input.change?.changeId) continue;
+    if (approval.scope.action !== REVIEW_ACCEPT_ACTION) continue;
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.id !== input.acceptedBy) continue;
+    named.push(approval);
+  }
+  if (named.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but no granted ${REVIEW_ACCEPT_ACTION} approval for this change names that actor, so nothing establishes that the sign-off was taken by a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (!named.some((approval) => approval.decidedBy.kind === "human")) {
+    // A positive statement, so a negative verdict. Every approval naming this
+    // acceptor records a non-human decider, which is a fact about the sign-off
+    // rather than the absence of one.
+    const kinds = [...new Set(named.map((approval) => approval.decidedBy.kind))].sort().join(", ");
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${input.acceptedBy}, and every granted ${REVIEW_ACCEPT_ACTION} approval naming that actor records it as ${kinds}, not as a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * Does a whole-change sign-off exist, and does it cover the evidence being
+ * shipped?
+ *
+ * ADR-006 asks whether acceptance evidence covers the *complete change* rather
+ * than only an isolated task, and this is the gate that owns the staleness
+ * `approvedReviewLink` deliberately declines: whether the work was rebuilt after
+ * it was signed off.
+ *
+ * **Two quantifiers, and each closes a different hole.**
+ *
+ *  - *Coverage* runs over `tasks` — what is being shipped — resolved through
+ *    `latestEvidencePerTask`. Quantifying over entries instead would make a task
+ *    added to the graph after the sign-off invisible: it contributes no entry, so
+ *    no timestamp comparison can reach it.
+ *  - *The bar* runs over every accepted entry; see `newestEvidenceAcceptance`.
+ *
+ * A timestamp comparison alone is not enough and that is worth stating, because
+ * the comparison is what the gate's name suggests. A task rebuilt after sign-off
+ * whose new evidence is still `pending` carries **no `acceptedAt` at all**, so
+ * nothing about instants can see it, and `[].every()` over an empty coverage set
+ * is `true`. Both are vacuous-quantifier fail-opens, and both are closed by the
+ * coverage rows below rather than by defaulting a missing bar to `""`.
+ *
+ * Deliberately out of scope, so the next reader does not add a second copy:
+ * whether the evidence *passed* (`deterministic_verification`, `protected_oracle`
+ * and `integration_or_real_interface_checks` own those verdicts), whether the
+ * review was independent (`task_level_independent_review`), and whether a live,
+ * unexpired, unrevoked grant covers the review being shipped
+ * (`explicit_human_approval`, which R2 does not derive).
+ *
+ * What *is* in scope, and was not until review found it missing, is whether the
+ * acceptor was a human at all. `acceptedBy` is a bare `z.string().min(1)` with no
+ * `kind`, so the `accepted`-versus-`ready` distinction this gate reports rested
+ * on a name nothing could check. `acceptorCorroboration` reads the durable record
+ * the same accept writes; its docblock states exactly how far that goes and where
+ * it stops.
+ */
+function wholeChangeAcceptanceStatus(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  readonly entries: readonly EvidenceIndexEntry[];
+}): GateOutcome {
+  const acceptance = input.change?.acceptance;
+  // `== null`, not `=== undefined`, and the two characters are the difference
+  // between degrading and dying. `changeSchema.acceptance` is required and
+  // non-nullable, so `null` cannot reach here from `ship.ts` — but both unit
+  // suites call the *compiled* module with hand-built literals, and `legion ship`
+  // is the one command that must not throw at an artifact that is already broken.
+  // Every other defensive arm in this function is justified on exactly that
+  // ground, and `null` was the one literal shape that took the whole report down
+  // with a TypeError instead of reporting a gate it could not evaluate.
+  if (acceptance == null) {
+    // One sentence for both "no facts at all" and "the bundle would not load",
+    // on `deltaSpecApprovalGateStatus`'s rule that an absent plane is worth no
+    // more than no facts. It must not say "nobody decided": `changeSchema.acceptance`
+    // is required, so a bundle that parses always carries one, and `undefined`
+    // here means only that nothing could be read.
+    return {
+      status: "unevaluable",
+      reason:
+        "The change bundle for this change could not be read, so whether the change as a whole was accepted is unestablished.",
+      recovery: BUNDLE_RECOVERY
+    };
+  }
+
+  if (acceptance.status === "not_ready") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as not_ready${
+        acceptance.reason === undefined ? "" : ` (${acceptance.reason})`
+      }: no accept decision has been made about the change as a whole.`,
+      recovery: ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "ready") {
+    return {
+      status: "unevaluable",
+      reason:
+        "This change's acceptance is recorded as ready: every task's evidence was accepted, and no named approver " +
+        "signed off on the change as a whole.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "rejected") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as rejected: ${acceptance.reason}`,
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  if (acceptance.status === "blocked") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as blocked: ${acceptance.reason}`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "superseded") {
+    return {
+      status: "unsatisfied",
+      reason:
+        "This change's acceptance is recorded as superseded, so the recorded sign-off is no longer the current decision.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+
+  // **Positive, not residual, and that inversion is the point.** The five arms
+  // above return for the five non-`accepted` members of `acceptanceStateSchema`,
+  // so falling through used to *mean* `accepted` — which made `satisfied` this
+  // gate's default answer for any status it did not recognize, the exact inverse
+  // of the invariant the series is built on. `acceptanceStateSchema` is a
+  // lifecycle union that PR 10 versions to protocol 0.3.0, and every one of its
+  // five non-accepted members permits `acceptedAt`/`acceptedBy` — so a member
+  // added later (`withdrawn`, `expired`, `revoked`) would compile cleanly here
+  // and ship as satisfied. `humanApprovalStatus` forty lines up is written the
+  // right way round (`if (approval.status !== "granted") continue`); this now
+  // matches it, and an unrecognized status falls out to `unevaluable`.
+  if (acceptance.status !== "accepted") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as ${String(
+        (acceptance as { readonly status?: unknown }).status
+      )}, which this Legion does not recognize as a whole-change verdict; it was written by a newer protocol or by hand.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+
+  // `acceptanceStateSchema` makes both required on the `accepted` member, so
+  // TypeScript narrows them non-optional. Read through possibly-absent locals
+  // anyway, for the reason the `== null` guard at the top of this function
+  // states.
+  const acceptedAt = acceptance.acceptedAt as UtcTimestamp | undefined;
+  const acceptedBy = acceptance.acceptedBy as string | undefined;
+  // **Absent acceptor and absent instant answer the same way, and they did not
+  // used to.** `acceptedBy` was read through a `?? "an unnamed actor"` display
+  // fallback with no guard behind it, so an `accepted` naming nobody reported
+  // `satisfied` with a reason that said so out loud. A gate whose entire verdict
+  // is "who signed this off" must not report satisfied when the answer is
+  // nobody; the same defensive reasoning that justifies the `acceptedAt` arm
+  // below justifies this one, in the same direction.
+  if (acceptedBy === undefined || acceptedBy.length === 0) {
+    return {
+      status: "unevaluable",
+      reason:
+        "This change records an acceptance with no acceptor, so who signed off on the change as a whole is unestablished.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptedAt === undefined) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${acceptedBy} with no instant, so it cannot be compared against the evidence it claims to cover.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+
+  const evaluatedAt = input.change?.evaluatedAt;
+  if (evaluatedAt !== undefined && acceptedAt > evaluatedAt) {
+    // Strict, so an acceptance stamped in the same millisecond this report was
+    // derived — which is what a ship run immediately after an accept looks like
+    // on a fast clock — passes. A sign-off dated after the moment it is read
+    // cannot be a record of something that happened.
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${acceptedBy} at ${acceptedAt}, later than the instant this report was derived (${evaluatedAt}); a sign-off cannot be dated after the moment it is read.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+
+  // After the future-dated check and before the coverage quantifier. Order
+  // matters in one direction only: a sign-off dated after the moment it is read
+  // is a positive negative, and a positive negative outranks the absence this can
+  // report, so the clock check must not be reachable only through a corroborated
+  // acceptor.
+  const corroborated = acceptorCorroboration({ change: input.change, acceptedBy });
+  if (corroborated !== undefined) return corroborated;
+
+  if (input.tasks.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no tasks, so there is no evidence for a whole-change sign-off to cover.",
+      recovery: REBUILD_RECOVERY
+    };
+  }
+
+  const latest = latestEvidencePerTask(input.entries);
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const entry = latest.get(taskId);
+    if (entry === undefined) {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId} has no evidence in this change's index, so the sign-off does not cover it.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status === "rejected") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} has since been rejected.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status !== "accepted") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} is not accepted, so this change was re-run after the sign-off and the sign-off does not cover what is there now.`,
+        recovery: REVIEW_RECOVERY
+      };
+    }
+    if ((entry.acceptance.acceptedAt as UtcTimestamp | undefined) === undefined) {
+      return {
+        status: "unevaluable",
+        reason: `${taskId}'s latest evidence ${entry.evidence.id} is accepted with no acceptedAt, so the instant the whole-change sign-off must cover is unestablished.`,
+        recovery: RE_ACCEPT_RECOVERY
+      };
+    }
+  }
+
+  // `>=`, not `>`, and that is not a tolerance being granted. `legion review
+  // --accept` computes ONE `acceptedAt` and stamps it on the reviews, on every
+  // promoted evidence entry, on the approvals and on this acceptance, so on the
+  // happy path the two instants are byte-identical. With `>` no honest R2 change
+  // would ever ship.
+  const newest = newestEvidenceAcceptance(input.entries) as UtcTimestamp;
+  if (acceptedAt >= newest) {
+    return {
+      status: "satisfied",
+      reason: `${acceptedBy} accepted this change at ${acceptedAt}, covering all ${input.tasks.length} task${
+        input.tasks.length === 1 ? "" : "s"
+      } and every accepted evidence bundle in it (newest accepted at ${newest}).`
+    };
+  }
+
+  return {
+    status: "unsatisfied",
+    reason: `${acceptedBy} accepted this change at ${acceptedAt}, which is older than the ${newest} at which this change's task evidence was last accepted: the change was rebuilt and re-accepted per task after the whole-change sign-off, so the sign-off is about work that has since been replaced.`,
+    recovery: RE_ACCEPT_RECOVERY
+  };
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -1666,10 +2114,11 @@ function evaluateGate(input: {
    * function with plain literals and no facts at all. Making absence a type
    * makes the guard structural instead of a thing to remember once per gate.
    *
-   * Three arms read it now — `explicit_human_approval` the approvals plane,
-   * `approved_delta_spec` the deltas, and `integration_or_real_interface_checks`
-   * the oracles and the pin verifier — so the signature is doing the job it was
-   * landed for: each gate's diff touches its own `case` rather than this one.
+   * Four arms read it now — `explicit_human_approval` the approvals plane,
+   * `approved_delta_spec` the deltas, `integration_or_real_interface_checks` the
+   * oracles and the pin verifier, and `whole_change_acceptance_evidence` the
+   * acceptance and the clock — so the signature is doing the job it was landed
+   * for: each gate's diff touches its own `case` rather than this one.
    */
   readonly change: ShipGateChangeFacts | undefined;
   /**
@@ -1754,6 +2203,21 @@ function evaluateGate(input: {
         change: input.change
       });
 
+    case "whole_change_acceptance_evidence":
+      // No `taskId` and no `reviews`, on `approved_delta_spec`'s rule: a
+      // change-scoped gate must not be able to answer per task even by accident,
+      // so it is not handed anything per task to answer with. `tasks` and
+      // `taskIdFor` are the *denominator* — the set the coverage quantifier runs
+      // over — rather than a per-task input, and passing one task would make the
+      // gate certify a sign-off over the only task it happened to be derived
+      // from.
+      return wholeChangeAcceptanceStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries
+      });
+
     default:
       // `approved_spec_and_oracle` asks whether the spec and oracle were
       // approved *before* gated execution. A passing post-execution verdict does
@@ -1761,9 +2225,8 @@ function evaluateGate(input: {
       // timestamp to check, so satisfying it from the oracle result would claim
       // a governance gate was met when no such approval exists.
       //
-      // Whole-change acceptance, independent baselines, security/e2e evaluation,
-      // release observation and rollback evidence have no producer in the
-      // workflow yet.
+      // Independent baselines, security/e2e evaluation, release observation and
+      // rollback evidence have no producer in the workflow yet.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -2041,7 +2504,12 @@ const GATE_RECOVERY: Readonly<
   // a gate id — a payload renderer, a future summary — had no route out of the
   // one state where a route out is the whole point of this release's fix.
   integration_or_real_interface_checks: SURFACE_REAFFIRM_RECOVERY,
-  whole_change_acceptance_evidence: undefined,
+  // Four unmet states with four repairs here too, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays in the table is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // bundle written before this release is in: `acceptance: {status: "not_ready"}`,
+  // which nothing had ever moved.
+  whole_change_acceptance_evidence: ACCEPT_RECOVERY,
   independent_baseline: undefined,
   approved_spec_and_oracle: undefined,
   architecture_or_security_review: undefined,

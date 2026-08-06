@@ -46,8 +46,17 @@ function task(tier, contract = {}) {
   return { id: "ctr_phase-1", risk: { tier, reasons: ["test"] }, ...contract };
 }
 
-function entry(items) {
-  return { evidence: { id: "evd_1", taskId: TASK_ID, items }, acceptance: { status: "accepted" } };
+// `acceptedAt` is carried because `evidenceAcceptanceSchema`'s `accepted` member
+// *requires* it and `writeEvidenceIndex` raises `Accepted evidence bundle …
+// requires acceptedAt.` on the shape this used to build. Every fixture in this
+// file, in tests/ship-delta-spec-approval and in tests/ship-human-approval-gate
+// was in a shape the schema would reject, on the one field
+// `whole_change_acceptance_evidence` reads — and a fixture in a shape that could
+// never exist on disk tests less than it appears to.
+const EVIDENCE_ACCEPTED_AT = "2026-08-05T09:00:00.000Z";
+
+function entry(items, acceptance = { status: "accepted", reviewId: "rev_1", acceptedAt: EVIDENCE_ACCEPTED_AT }) {
+  return { evidence: { id: "evd_1", taskId: TASK_ID, items }, acceptance };
 }
 
 function item(id, verdict) {
@@ -58,11 +67,28 @@ function acceptedReview() {
   return { document: { id: "rev_1", status: "accepted", taskId: TASK_ID } };
 }
 
-function derive({ tier = "R2", items = [], reviews = [], change, contract } = {}) {
+// The approval `legion review --accept --approver` writes beside a whole-change
+// acceptance, one per accepted review. `whole_change_acceptance_evidence`
+// corroborates `acceptance.acceptedBy` against it, because that field is a bare
+// id string with no `kind` and the accepted-versus-ready distinction the gate
+// reports would otherwise rest on a name nothing could check.
+function reviewAcceptApproval({ id = "dasbl", kind = "human" } = {}) {
+  return {
+    id: "apv_transcript-review-accept",
+    changeId: CHANGE_ID,
+    taskId: TASK_ID,
+    status: "granted",
+    scope: { action: "workflow.review.accept", targets: [{ kind: "task", id: TASK_ID }] },
+    decidedBy: { kind, id },
+    decidedAt: EVIDENCE_ACCEPTED_AT
+  };
+}
+
+function derive({ tier = "R2", items = [], reviews = [], change, contract, acceptance } = {}) {
   return deriveShipGates({
     tasks: [task(tier, contract)],
     taskIdFor: () => TASK_ID,
-    entries: [entry(items)],
+    entries: [acceptance === undefined ? entry(items) : entry(items, acceptance)],
     reviews,
     // Spread conditionally rather than passed as `undefined`, so the default
     // stays "no `change` key at all" — the shape a caller that never loaded the
@@ -128,12 +154,17 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
 });
 
 test("gates with no producer are unevaluable, not silently satisfied", () => {
-  const report = derive(PASSING_R2);
+  const report = derive({ tier: "R3", ...PASSING_R2 });
 
-  // `whole_change_acceptance_evidence` still has no producer. `protected_oracle`
-  // did until oracle results became their own evidence item, so this asserts
-  // against a gate that is genuinely unproduced rather than one that merely was.
-  const unproduced = report.gates.find((entry) => entry.gate === "whole_change_acceptance_evidence");
+  // Re-pointed at `independent_baseline`, which is R3-only and genuinely has no
+  // producer. It has now been re-pointed twice: `protected_oracle` lost the job
+  // when oracle results became their own evidence item, and
+  // `whole_change_acceptance_evidence` lost it in this release, which is why the
+  // tier moved to R3 with it. The point of this test is the `default:` arm of
+  // `evaluateGate` — a gate Legion cannot answer at all must say so rather than
+  // pass — so it has to name a gate that still falls through that arm, not one
+  // that merely used to.
+  const unproduced = report.gates.find((entry) => entry.gate === "independent_baseline");
   assert.equal(unproduced.status, "unevaluable");
   assert.match(unproduced.reason, /does not yet produce/);
 
@@ -368,6 +399,57 @@ const SCENARIOS = [
     },
     items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
     reviews: [acceptedReview()]
+  },
+  {
+    // The ninth, added with `whole_change_acceptance_evidence`'s producer, and
+    // the first row this transcript has ever produced from `change.acceptance`.
+    //
+    // The sign-off's instant is byte-equal to the evidence's, which is not a
+    // convenience: `legion review --accept` computes one `acceptedAt` and stamps
+    // it on the reviews, on every promoted evidence entry, on the approvals and
+    // on the change acceptance, so equality is what the happy path actually
+    // produces. This cell is therefore also the test that fails if anyone ever
+    // writes `>` instead of `>=`.
+    //
+    // The approvals plane carries the record that *corroborates* the acceptor.
+    // `acceptance.acceptedBy` is a bare id string with no `kind`, so without a
+    // granted `workflow.review.accept` approval naming a human this cell is
+    // `unevaluable` — the same accept writes both, and a fixture with one and not
+    // the other is a state no command produces.
+    name: "an accepted change covering its evidence",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: {
+      changeId: CHANGE_ID,
+      acceptance: { status: "accepted", acceptedAt: EVIDENCE_ACCEPTED_AT, acceptedBy: "dasbl" },
+      approvals: [reviewAcceptApproval()],
+      evaluatedAt: "2026-08-10T00:00:00.000Z",
+      verifyPin: () => "match"
+    }
+  },
+  {
+    // The tenth, and the branch nobody writes unless it is specified up front:
+    // a change signed off, then rebuilt, then re-accepted *per task* while the
+    // whole-change sign-off kept its older instant. Everything else about this
+    // scenario is identical to the one above — same items, same reviews, same
+    // acceptor — and the only difference is one hour on one timestamp.
+    //
+    // It is unreachable through the happy CLI path, and deliberately so:
+    // `ship.ts` refuses before any gate runs unless every evidence entry is
+    // accepted, so "rebuilt but not re-accepted" never reaches the gate. That is
+    // exactly why it needs a fixture. A gate that is correct only because an
+    // earlier check ran is not correct, and the earlier check does not run in
+    // this file.
+    name: "a change rebuilt after its sign-off",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: {
+      changeId: CHANGE_ID,
+      acceptance: { status: "accepted", acceptedAt: "2026-08-05T08:00:00.000Z", acceptedBy: "dasbl" },
+      approvals: [reviewAcceptApproval()],
+      evaluatedAt: "2026-08-10T00:00:00.000Z",
+      verifyPin: () => "match"
+    }
   }
 ];
 
@@ -387,63 +469,71 @@ const SCENARIOS = [
  * central claim of the change that makes it.
  *
  * **One gate id has changed behaviour since the last release, and exactly one:
- * `integration_or_real_interface_checks`.** It gained a producer — it reads the
- * verification surfaces the change's task contracts and their oracles declare,
- * re-checks every non-unit surface's pins against the working tree, and reads the
- * `integration-surface-check` item `legion build` now writes. It is
- * **change-scoped**, the second entry in `GATE_SCOPE` that is not `"task"`.
+ * `whole_change_acceptance_evidence`.** It gained a producer — it reads
+ * `bundle.change.acceptance`, which `legion review --accept` now promotes from
+ * the `{status: "not_ready"}` that `createChangeBundle` writes and nothing had
+ * ever moved, and compares its instant against the newest instant at which any of
+ * this change's evidence was accepted. It is **change-scoped**, the third entry
+ * in `GATE_SCOPE` that is not `"task"`: `change.acceptance` is one field on one
+ * bundle with exactly one answer, and the verdict quantifies over every task, so
+ * a `subjectId` naming one task would be false about the sentence beside it.
  *
  * The three statuses, stated once here because the release's whole verdict move
  * is in them:
  *
- *  - `satisfied` — at least one declared non-unit surface ran, passed, and still
- *    pins bytes that match the working tree.
- *  - `unsatisfied` — the change declares surfaces and **every** one of them is
- *    `unit`; or no surface reached a boundary cleanly and one of them failed or
- *    drifted.
- *  - `unevaluable` — nothing in the change declares a surface at all.
+ *  - `satisfied` — the change is `accepted`, its sign-off covers every task's
+ *    latest evidence, and its instant is at or after the newest instant at which
+ *    any of that evidence was accepted.
+ *  - `unsatisfied` — `rejected`, `blocked` or `superseded`; a sign-off dated
+ *    after the moment the report was derived; a task with no evidence, or whose
+ *    latest evidence has been rejected or is not accepted; or an `accepted`
+ *    sign-off **older** than the evidence it claims to cover.
+ *  - `unevaluable` — `not_ready` or `ready` (nobody decided), or the bundle would
+ *    not read at all (nothing is known, which is a different sentence).
  *
- * The altitude is the point. ADR-006 asks whether verification reaches the
- * relevant integration or real interface **for the change**, and `legion plan`
- * materializes one task per executable criterion — so a task-scoped all-unit rule
- * fires per *criterion*, and a change whose first criterion reaches a real
- * interface is blocked forever by a second criterion that honestly says it does
- * not. Punishing an accurate answer teaches operators to give an inaccurate one.
+ * The last `unsatisfied` branch is the one this gate exists for and the one
+ * nobody writes unless it is specified up front: a change signed off, rebuilt,
+ * and re-accepted *per task* while the whole-change sign-off kept its older
+ * instant. `approvedReviewLink` names this gate as the owner of that staleness
+ * and deliberately declines to answer it, so if this gate does not, nothing does.
  *
- * **No cell in the six earlier scenarios moved, and that is the honest report
- * rather than a weaker one.** None of those six builds a task contract carrying
- * a verification entry at all, so nothing declares a surface; the gate's
- * absent-declaration answer is `unevaluable`, which is exactly what the
- * `default:` arm answered before it had a producer. Writing "one gate moved" over
- * cells that did not move would be the defect this file's own header warns about.
- * What the unchanged cells assert is worth keeping: they are PR 0's invariant —
- * an absent fact yields `unevaluable`, never `satisfied` — checked from outside
- * the gate that has to hold it, and here checked against a gate that has three
- * different ways to be unmet.
+ * **No cell in the eight earlier scenarios moved, and that is the honest report
+ * rather than a weaker one.** None of those eight carries a `change.acceptance`
+ * at all — six load no change facts, and the two that do load them for other
+ * planes — so the gate's absent-bundle answer is `unevaluable`, which is exactly
+ * what the `default:` arm answered before it had a producer. What the unchanged
+ * cells assert is worth keeping: they are PR 0's invariant — an absent fact
+ * yields `unevaluable`, never `satisfied` — checked from outside the gate that
+ * has to hold it.
  *
- * The movement is in two new scenarios, and it takes two because this gate is the
- * first whose *negative* is not a failure:
+ * The movement is in two new scenarios, and it takes two because the pair is the
+ * claim. They differ in exactly one character position:
  *
- *  - "a verified real-interface surface" records
- *    `integration_or_real_interface_checks: "satisfied"` at R2 — a declared
- *    non-unit surface, a pin that still matches, and a passing
- *    `integration-surface-check`.
- *  - "only unit surfaces declared" records it `"unsatisfied"` at R2, with no
- *    change facts at all. A change that declared a surface for every executable
- *    criterion and wrote `unit` each time has answered R2's question, and the
- *    answer is no. That is decided from the declarations rather than from any
- *    verdict, which is why it needs no plane loaded and cannot go stale.
+ *  - "an accepted change covering its evidence" records
+ *    `whole_change_acceptance_evidence: "satisfied"` at R2, with the sign-off's
+ *    instant byte-equal to the evidence's — which is what one `legion review
+ *    --accept` actually writes, since it computes that instant once and stamps it
+ *    on the reviews, the evidence, the approvals and the acceptance. This cell is
+ *    what fails if the comparison is ever written `>` instead of `>=`.
+ *  - "a change rebuilt after its sign-off" records it `"unsatisfied"` at R2 with
+ *    the same items, the same reviews and the same acceptor, one hour earlier.
+ *
+ * Both carry the granted `workflow.review.accept` approval that corroborates the
+ * acceptor, because one `legion review --accept --approver` writes both and a
+ * fixture with the acceptance alone is a state no command produces. Without it
+ * the first cell is `unevaluable`: `acceptance.acceptedBy` is a bare id string
+ * with no `kind`, so the accepted-versus-ready distinction this gate reports has
+ * to be corroborated against a record rather than read off a name.
  *
  * Both scenarios' other three tier rows are cell-for-cell identical to "passing
  * verification and an accepted review", which is the second half of the claim:
- * declaring a surface moved this gate at the one tier that derives it, and
+ * recording an acceptance moved this gate at the one tier that derives it, and
  * nothing else.
  *
- * The gate id that moved in the release before this one was `approved_delta_spec`
- * — it reads the approval plane for a granted, pin-clean approval of every one of
- * the change's delta specs, and it was the first change-scoped entry in
- * `GATE_SCOPE`. Its cells are recorded below as they now stand, including the
- * sixth scenario that was added to move them.
+ * The gate id that moved in the release before this one was
+ * `integration_or_real_interface_checks`, and the one before that
+ * `approved_delta_spec`. Their cells are recorded below as they now stand,
+ * including the scenarios that were added to move them.
  *
  * **Readiness is transcribed separately, in `BASELINE_READY`, and it is not
  * uniformly false.** A draft of this paragraph asserted that `ready` was false
@@ -751,11 +841,85 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  "an accepted change covering its evidence": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      // One of the two cells this release adds, and the only one in this row
+      // that differs from "passing verification and an accepted review".
+      whole_change_acceptance_evidence: "satisfied"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a change rebuilt after its sign-off": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      // The other. One hour older than the row above and nothing else changed:
+      // the sign-off is about work that has since been replaced.
+      whole_change_acceptance_evidence: "unsatisfied"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
 };
 
 /**
- * `report.ready` for the same eight scenarios at the same four tiers.
+ * `report.ready` for the same ten scenarios at the same four tiers.
  *
  * Written out as literals rather than derived from the table above, which would
  * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
@@ -765,11 +929,17 @@ const BASELINE_GATE_STATUSES = {
  * in whatever suite happened to notice months later.
  *
  * No readiness cell moves in this release, and that is a claim rather than a
- * shrug. `a verified real-interface surface` is still R2-blocked *with*
- * `integration_or_real_interface_checks: satisfied`, because three of the R2
- * gates still have no producer — so a scenario satisfying the new gate proves the
- * gate moved without proving the tier became reachable, which is the honest shape
- * of this release: two of the R2 gates now have producers and three do not.
+ * shrug. `an accepted change covering its evidence` is still R2-blocked *with*
+ * `whole_change_acceptance_evidence: satisfied`, because this file's fixtures
+ * load no approvals plane, no oracle result and no surface declaration — so the
+ * other three R2 gates are unevaluable here for want of a fixture, not for want
+ * of a producer. Every R2 gate now has one, and a change carrying all four kinds
+ * of evidence really does report `ready`; that claim needs the whole CLI to make
+ * and is made end to end by "an R2 change ships ready, end to end, for the first
+ * time" in tests/change-acceptance.test.mjs, not from literals here. That
+ * cross-reference is the only route from this transcript to the evidence for the
+ * one claim the transcript declines to make itself, so it names a file that
+ * exists: it previously pointed at `tests/ship-r2-milestone`, which never did.
  */
 const BASELINE_READY = {
   "passing verification and an accepted review": { R0: true, R1: true, R2: false, R3: false },
@@ -779,7 +949,9 @@ const BASELINE_READY = {
   "failed oracle verification": { R0: true, R1: true, R2: false, R3: false },
   "an approved delta spec": { R0: true, R1: true, R2: false, R3: false },
   "a verified real-interface surface": { R0: true, R1: true, R2: false, R3: false },
-  "only unit surfaces declared": { R0: true, R1: true, R2: false, R3: false }
+  "only unit surfaces declared": { R0: true, R1: true, R2: false, R3: false },
+  "an accepted change covering its evidence": { R0: true, R1: true, R2: false, R3: false },
+  "a change rebuilt after its sign-off": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -804,7 +976,7 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
   }
 });
 
-test("the only change facts any gate reads are deltas, approvals, oracles, changeId and the clock", () => {
+test("the only change facts any gate reads are acceptance, deltas, approvals, oracles, changeId and the clock", () => {
   // The predecessor of this test asserted that no gate read any change fact,
   // by throwing on every property access. Its comment named the honest edit for
   // the day a gate started reading one: replace it with an assertion naming the
@@ -847,7 +1019,22 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
   // pass at the bottom is what witnesses the read. Ordering the gate's guard that
   // way is deliberate — `acceptance`, `taskRuns` and `release` still have no
   // reader, and each is a fail-open waiting for one.
-  function tripwire(reads, { approvals, deltas, oracles } = {}) {
+  //
+  // `acceptance` joins the allow-list with `whole_change_acceptance_evidence`'s
+  // producer, and it is the plane this trap was most explicitly holding open —
+  // the comment above named it first among the four fail-opens waiting for a
+  // reader. It is admitted with a stated reason: the gate's question *is*
+  // `bundle.change.acceptance`, one field with one answer for the whole change,
+  // and there is nowhere else it could be read from. Unlike `oracles`, this read
+  // happens on the absent-plane path too — an unreadable bundle is one of the
+  // gate's three distinct sentences — so it moves `ABSENT_PLANE_READS.R2` rather
+  // than needing a populated pass to witness it. A populated pass is added below
+  // anyway, because the absent path returns before the coverage quantifier runs
+  // and `evaluatedAt` is only reached past it.
+  //
+  // `taskRuns` and `release` still have no reader, and each is a fail-open
+  // waiting for one.
+  function tripwire(reads, { acceptance, approvals, deltas, oracles } = {}) {
     return new Proxy(
       // `verifyPin` is the one true exemption: the guard inside
       // `deriveShipGates` inspects it on every call, to substitute a verifier
@@ -856,6 +1043,7 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
       {
         verifyPin: () => "match",
         changeId: "chg_tripwire",
+        acceptance,
         approvals,
         deltas,
         oracles,
@@ -866,6 +1054,7 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
           if (property === "verifyPin") return target.verifyPin;
           if (
             property === "changeId" ||
+            property === "acceptance" ||
             property === "approvals" ||
             property === "deltas" ||
             property === "oracles" ||
@@ -885,7 +1074,12 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
   // does whatever that gate concluded. That read was hypothetical when this
   // exemption was last argued about and is now real, so it is recorded rather
   // than exempted.
-  const ABSENT_PLANE_READS = { R0: [], R1: [], R2: ["deltas", "changeId"], R3: ["approvals"] };
+  const ABSENT_PLANE_READS = {
+    R0: [],
+    R1: [],
+    R2: ["deltas", "changeId", "acceptance"],
+    R3: ["approvals"]
+  };
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
     const reads = [];
@@ -983,7 +1177,7 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
   });
   assert.deepEqual(
     [...new Set(populatedDeltaReads)].sort(),
-    ["approvals", "changeId", "deltas", "evaluatedAt"]
+    ["acceptance", "approvals", "changeId", "deltas", "evaluatedAt"]
   );
 
   // And once more with a task that names an oracle, which is the only shape that
@@ -1006,12 +1200,43 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
       ]
     })
   });
-  assert.deepEqual([...new Set(populatedOracleReads)].sort(), ["changeId", "deltas", "oracles"]);
+  assert.deepEqual(
+    [...new Set(populatedOracleReads)].sort(),
+    ["acceptance", "changeId", "deltas", "oracles"]
+  );
   // The oracle's declaration is genuinely read, not merely touched: a unit-only
   // declaration set is the gate's recorded negative.
   assert.equal(
     oracleReport.gates.find((gate) => gate.gate === "integration_or_real_interface_checks").status,
     "unsatisfied"
+  );
+
+  // And once more against a plane holding a real acceptance. The absent-plane
+  // loop above reaches `acceptance` and returns immediately, so without this the
+  // clock read past the coverage quantifier would be invisible — and a gate that
+  // silently stopped consulting `evaluatedAt` would be one that could no longer
+  // tell a future-dated sign-off from a live one.
+  const populatedAcceptanceReads = [];
+  const acceptanceReport = deriveShipGates({
+    tasks: [task("R2")],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedAcceptanceReads, {
+      acceptance: { status: "accepted", acceptedAt: EVIDENCE_ACCEPTED_AT, acceptedBy: "dasbl" },
+      // `chg_tripwire`, because the corroboration matches on strict change-id
+      // equality: facts too degraded to name their own change must match nothing
+      // rather than everything.
+      approvals: [{ ...reviewAcceptApproval(), changeId: "chg_tripwire" }]
+    })
+  });
+  assert.deepEqual(
+    [...new Set(populatedAcceptanceReads)].sort(),
+    ["acceptance", "approvals", "changeId", "deltas", "evaluatedAt"]
+  );
+  assert.equal(
+    acceptanceReport.gates.find((gate) => gate.gate === "whole_change_acceptance_evidence").status,
+    "satisfied"
   );
 });
 
@@ -1025,7 +1250,11 @@ test("the only change facts any gate reads are deltas, approvals, oracles, chang
  * refactor. It changes which subject the operator's diagnostic names and whether
  * that diagnostic is collapsed to one per change.
  */
-const CHANGE_SCOPED_GATES = new Set(["approved_delta_spec", "integration_or_real_interface_checks"]);
+const CHANGE_SCOPED_GATES = new Set([
+  "approved_delta_spec",
+  "integration_or_real_interface_checks",
+  "whole_change_acceptance_evidence"
+]);
 
 test("every gate names its scope and the subject that scope refers to", () => {
   // The ship command's blocked diagnostic interpolates `subjectId`, and nothing

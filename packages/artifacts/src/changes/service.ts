@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 
 import {
   LEGION_PROTOCOL_VERSION,
+  acceptanceStateSchema,
   actorSchema,
   changeIdSchema,
   decisionIdSchema,
@@ -10,6 +11,7 @@ import {
   projectIdSchema,
   requirementIdSchema,
   utcTimestampSchema,
+  type AcceptanceState,
   type Actor,
   type ArtifactPath,
   type ArtifactReference,
@@ -52,6 +54,8 @@ import {
   readCurrentSpec,
   type CurrentSpecSuccess
 } from "../specs/service.js";
+import { readEvidenceIndex, writeEvidenceIndex } from "../evidence-index/service.js";
+import { readTaskGraph, writeTaskGraph } from "../taskgraphs/service.js";
 import {
   CHANGE_BUNDLE_SCHEMA_VERSION,
   changeBundleSchema,
@@ -124,6 +128,107 @@ export interface ValidateChangeBundleInput {
   readonly repositoryRoot: string;
   readonly changeId: ChangeId | string;
 }
+
+export interface UpdateChangeAcceptanceInput {
+  readonly repositoryRoot: string;
+  readonly changeId: ChangeId | string;
+  readonly acceptance: AcceptanceState;
+  /**
+   * The bundle revision the caller read.
+   *
+   * Always at least 1. `createChangeBundle` writes `revision: 1` and
+   * `changeBundleSchema.revision` is `positive()`, so `0` names no state a
+   * change bundle can be in — which is why this deliberately does *not* copy the
+   * `expectedRevision ?? 0` default that `writeEvidenceIndex` and
+   * `writeTaskGraph` use. There, `0` means "create"; here creation is a
+   * different function whose preflight refuses an existing file.
+   */
+  readonly expectedRevision: number;
+  /**
+   * Recorded on the written `ArtifactRevision` only.
+   *
+   * It never overwrites `bundle.baseGitSha` or `change.currentTruth.baseGitSha`:
+   * those record the commit the change was *based on*, which an acceptance
+   * decision taken weeks later does not move.
+   */
+  readonly baseGitSha?: GitSha | string;
+  /**
+   * Stamped on `change.updatedAt`. Injected rather than read from the clock so
+   * that one `legion review --accept` writes one instant across the reviews, the
+   * evidence entries, the approvals and this.
+   */
+  readonly updatedAt?: UtcTimestamp | string;
+}
+
+/** One recorded artifact-input list that was re-pointed at the rewritten proposal. */
+export interface ChangeInputRepoint {
+  readonly artifactPath: ArtifactPath;
+  readonly from: number;
+  readonly to: number;
+  /** Which recorded input paths were substituted. */
+  readonly inputs: readonly ArtifactPath[];
+}
+
+export interface UpdateChangeAcceptanceSuccess {
+  readonly ok: true;
+  readonly status: "updated" | "unchanged";
+  readonly bundle: ChangeBundle;
+  readonly acceptance: AcceptanceState;
+  readonly artifactPath: ArtifactPath;
+  readonly reference: ArtifactReference;
+  readonly revision: ArtifactRevision;
+  readonly repointed: readonly ChangeInputRepoint[];
+  readonly diagnostics: readonly [];
+}
+
+/**
+ * A failed acceptance write, and whether the acceptance nonetheless reached disk.
+ *
+ * `written` is present on exactly one failure path: the proposal was rewritten
+ * and the re-point of the artifact inputs that pin it was not. Every other
+ * failure — an unreadable bundle, a revision conflict, an acceptance the schema
+ * refuses — happens before any byte is written, and leaves the field absent.
+ * The distinction exists because it decides what the CLI tells the operator and
+ * which command it sends them to, and a caller cannot infer it from the
+ * diagnostic codes.
+ */
+export interface UpdateChangeAcceptanceFailure extends ChangeBundleFailure {
+  readonly written?: {
+    readonly artifactPath: ArtifactPath;
+    readonly acceptance: AcceptanceState;
+    readonly revision: ArtifactRevision;
+  };
+}
+
+export type UpdateChangeAcceptanceResult = UpdateChangeAcceptanceSuccess | UpdateChangeAcceptanceFailure;
+
+export interface RepointChangeProposalInputsInput {
+  readonly repositoryRoot: string;
+  readonly changeId: ChangeId | string;
+  /**
+   * The proposal revision the recorded inputs are expected to still name.
+   *
+   * Exactly, hash included. This is the strict path, and it is strict on purpose:
+   * naming the one revision a call superseded is what keeps an out-of-band edit
+   * visible. It is also why it cannot repair its own torn write, which is what
+   * `repairChangeProposalPins` is for. See `namesExactly` and `namesSuperseded`.
+   */
+  readonly previous: ArtifactRevision;
+  /** The proposal revision on disk now. */
+  readonly current: ArtifactRevision;
+  readonly baseGitSha?: GitSha | string;
+}
+
+/** Input to the standalone repair `legion dev change repoint <changeId>` runs. */
+export interface RepairChangeProposalPinsInput {
+  readonly repositoryRoot: string;
+  readonly changeId: ChangeId | string;
+  readonly baseGitSha?: GitSha | string;
+}
+
+export type RepointChangeProposalInputsResult =
+  | { readonly ok: true; readonly repointed: readonly ChangeInputRepoint[]; readonly diagnostics: readonly [] }
+  | ChangeBundleFailure;
 
 export interface ChangeBundleSuccess {
   readonly ok: true;
@@ -1447,6 +1552,654 @@ export async function loadChangeBundle(input: LoadChangeBundleInput): Promise<Ch
       baseGitSha: bundle.baseGitSha
     })
   });
+}
+
+/**
+ * Does one recorded artifact input still name exactly this revision?
+ *
+ * Path, content hash **and** revision number, all three. This is the whole
+ * safety argument for the re-point below, so it is spelled out rather than
+ * shortened to a path comparison: a recorded input naming `change.yaml` with any
+ * other `{sha256, revision}` is drift that existed *before* this call — a
+ * hand-edited bundle, a graph planned against something else — and moving it
+ * would launder an out-of-band edit into freshness. `validateArtifactInputFreshness`
+ * is the only thing in the tree that can detect a hand-written or back-dated
+ * `change.acceptance`, because the proposal is not in `bundle.artifactRevisions`
+ * and `loadChangeBundle` never re-checks its own bytes. Substituting on path
+ * alone would delete that detector on the one field a gate now reads.
+ */
+function namesRevision(recorded: ArtifactRevision, expected: ArtifactRevision): boolean {
+  return (
+    recorded.artifact.path === expected.artifact.path &&
+    recorded.artifact.sha256 === expected.artifact.sha256 &&
+    recorded.revision === expected.revision
+  );
+}
+
+/**
+ * Which recorded inputs a re-point is allowed to move, and why there are two
+ * answers rather than one.
+ *
+ * A `ProposalPinSelector` names a recorded `artifactInputs` entry that must be
+ * re-pointed at the proposal on disk. Both selectors below re-point onto the
+ * same target; they differ only in what they are willing to recognize as
+ * *stale*, and that difference is a safety property rather than a convenience.
+ *
+ * `validateArtifactInputFreshness` is the only detector in the tree for a
+ * hand-written or back-dated `change.acceptance`: the proposal is not in
+ * `bundle.artifactRevisions` and `loadChangeBundle` never re-checks its own
+ * bytes, so these two pins are all that stand behind the field a ship gate now
+ * reads. A selector that matched on path alone would delete that detector.
+ */
+type ProposalPinSelector = (entry: ArtifactRevision) => boolean;
+
+/**
+ * The exact selector: only the one revision *this* write superseded.
+ *
+ * Used by `updateChangeAcceptance` after its proposal write. It is the strictest
+ * thing that can work, and it is what keeps a hand edit visible: an edit made out
+ * of band leaves a pin whose `{sha256}` disagrees with the bytes the write
+ * superseded, that pin is left exactly as it is, and `legion ship` keeps
+ * reporting the drift.
+ */
+function namesExactly(previous: ArtifactRevision): ProposalPinSelector {
+  return (entry) => namesRevision(entry, previous);
+}
+
+/**
+ * The superseded selector: any pin naming a **strictly older** revision of the
+ * proposal than the one on disk.
+ *
+ * Used only by `repairChangeProposalPins`, and it exists because the exact
+ * selector cannot repair its own torn write. The proposal write and the two
+ * re-point writes are three separate atomic renames with no transaction around
+ * them, so any I/O failure, process death or concurrent writer between them
+ * leaves `change.yaml` at revision N+1 with the pins still naming revision N —
+ * and `previous` is only ever the revision that call superseded, so no later
+ * call's exact selector could ever match them again. Reproduced end to end: with
+ * `taskgraph.json` unwritable, one `legion review --accept` left the change
+ * permanently unshippable, `legion plan` refused with `artifact_already_exists`,
+ * `legion build` did not rewrite `taskgraph.artifactInputs`, `legion validate`
+ * reported valid, and every retry walked the bundle one revision further while
+ * repairing nothing.
+ *
+ * **A hand edit does not bump `bundle.revision`.** That is the whole reason this
+ * is safe to widen: an out-of-band edit leaves a pin naming the live revision
+ * *number* with a disagreeing hash, which this refuses to move. Only a strictly
+ * older revision — the signature of a write that landed and a re-point that did
+ * not — is followed. A pin naming a *newer* revision is refused too: nothing in
+ * this repository produces one, and walking a pin backwards would be inventing
+ * history rather than restoring currency.
+ *
+ * The residual: hand-edit, then accept, then run the repair verb explicitly. The
+ * accept's own repair pass refuses (the revisions are equal at that moment) and
+ * ship reports the drift, so the operator is told. If they then run a command
+ * named `repoint`, the pin is re-pointed. That is an explicit operator act on a
+ * verb that says what it does, not a silent laundering inside another command.
+ */
+function namesSuperseded(current: ArtifactRevision): ProposalPinSelector {
+  return (entry) => entry.artifact.path === current.artifact.path && entry.revision < current.revision;
+}
+
+function substituteSelected(
+  inputs: readonly ArtifactRevision[],
+  select: ProposalPinSelector,
+  current: ArtifactRevision
+): { readonly inputs: readonly ArtifactRevision[]; readonly substituted: boolean } {
+  let substituted = false;
+  const next = inputs.map((entry) => {
+    if (!select(entry)) return entry;
+    substituted = true;
+    return current;
+  });
+  return { inputs: next, substituted };
+}
+
+/**
+ * The diagnostic every failure inside a re-point produces, and the one command
+ * that repairs the state it describes.
+ *
+ * Every arm below routes here rather than to `legion validate` or to a hand
+ * edit. Measured: on a torn accept, `legion validate` returns exit 0 and
+ * `{"status":"valid","diagnostics":[]}` — the traceability freshness check that
+ * sees the tear runs in `legion ship`, not there — so routing an operator to it
+ * confirms that nothing is wrong on a repository that cannot ship.
+ */
+function repointFailure(input: {
+  readonly message: string;
+  readonly path: ArtifactPath;
+  readonly status?: "invalid" | "conflict";
+}): ChangeBundleFailure {
+  return failure(input.status ?? "invalid", [
+    changeDiagnostic({
+      code: "change_inputs_not_repointed",
+      message: `${input.message} Rerun \`legion dev change repoint <changeId>\` to re-point the recorded inputs at the proposal on disk; until then legion ship reports change_traceability_broken for this change.`,
+      path: input.path
+    })
+  ]);
+}
+
+/**
+ * Run one artifact write, turning **every** failure into a re-point diagnostic.
+ *
+ * `writeTaskGraph` and `writeEvidenceIndex` catch only
+ * `ArtifactRevisionConflictError` and rethrow everything else, and nothing here
+ * used to catch what they rethrew. So the designed `change_inputs_not_repointed`
+ * diagnostic fired for exactly one failure class and never for the reachable one:
+ * with `taskgraph.json` unwritable, `legion review --accept --approver` exited 1
+ * with a raw `{"code":"unhandled_error","message":"EPERM: operation not
+ * permitted, rename '….tmp' -> '…/taskgraph.json'"}` — no nextAction, no path to
+ * a repair, and no statement anywhere that `change.yaml` had already recorded the
+ * sign-off. An operator reading that has every reason to believe the accept did
+ * nothing.
+ */
+async function guardedRepointWrite<T extends { readonly ok: boolean }>(
+  operation: () => Promise<T>,
+  onFailure: (detail: string, status: "invalid" | "conflict") => ChangeBundleFailure
+): Promise<T | ChangeBundleFailure> {
+  let written: T;
+  try {
+    written = await operation();
+  } catch (error) {
+    return onFailure(error instanceof Error ? error.message : String(error), "invalid");
+  }
+  if (written.ok) return written;
+  const result = written as unknown as { readonly status?: string; readonly diagnostics?: readonly ArtifactDiagnostic[] };
+  return onFailure(result.diagnostics?.[0]?.message ?? "the write failed", result.status === "conflict" ? "conflict" : "invalid");
+}
+
+/**
+ * Re-point the artifact-input lists that pinned the proposal we just rewrote.
+ *
+ * **Why this exists at all.** `legion plan` records the change proposal in the
+ * taskgraph's `artifactInputs` (`taskgraph-input.ts`), and `legion build` copies
+ * that list into the evidence index's `artifactManifest.inputs`. Both record the
+ * proposal's `{sha256, revision}`. Writing an acceptance into `change.yaml`
+ * changes both, so `validateArtifactInputFreshness` reports two
+ * `stale_revision_reference` diagnostics — and `legion ship` flattens those to
+ * `change_traceability_broken` *before any gate is evaluated*, so the very gate
+ * the acceptance was written for would never be reached to explain itself.
+ * Measured, not theorised: without this the whole-change acceptance gate could
+ * never be satisfied end to end.
+ *
+ * **Why re-pointing is honest, and not a fresher-looking lie.** `artifactInputs`
+ * feeds two things: this freshness check and the traceability graph's artifact
+ * nodes. The check compares recorded values against *live* artifacts and calls
+ * any divergence stale, which is a **currency** assertion — "this document is
+ * current with respect to these artifacts" — rather than a **provenance** one.
+ * `legion build` already treats it that way: it re-derives the evidence index's
+ * taskgraph entry from the live taskgraph at build time, long after the graph
+ * was planned. Re-pointing a pin this call itself invalidated is the same
+ * maintenance. The next reader will ask; the answer is here rather than left to
+ * be re-derived.
+ *
+ * **What keeps it from being a laundering mechanism** is the selector, and the
+ * two selectors carry that whole argument: `namesExactly` for a write that knows
+ * the revision it superseded, `namesSuperseded` for the repair that does not.
+ * Anything neither selects is left exactly as it is, so `legion ship` keeps
+ * reporting it.
+ *
+ * Ordering is forced. The taskgraph write bumps `taskgraph.json`'s revision, and
+ * the evidence index pins that too, so the evidence index must be written second
+ * and must substitute both entries. It terminates there: `expectedArtifactInputs`
+ * also adds the evidence index's own revision, but the scan walks only the
+ * taskgraph's and the evidence index's input lists and neither list contains
+ * `evidence-index.json`, so there is no third round.
+ *
+ * Exported because it is the repair for a torn write, and `repairChangeProposalPins`
+ * below is the entry point `legion dev change repoint` calls. That export is not
+ * decoration: a process death, an I/O failure or a concurrent writer between the
+ * proposal rename and the taskgraph rename used to leave a state with no route
+ * out at all, not through any verb and not by hand.
+ */
+export async function repointChangeProposalInputs(
+  input: RepointChangeProposalInputsInput
+): Promise<RepointChangeProposalInputsResult> {
+  return repointProposalPins({ ...input, select: namesExactly(input.previous) });
+}
+
+async function repointProposalPins(
+  input: RepointChangeProposalInputsInput & { readonly select: ProposalPinSelector }
+): Promise<RepointChangeProposalInputsResult> {
+  const changeId = parseChangeId(input.changeId);
+  if (typeof changeId !== "string") return changeId;
+
+  const repointed: ChangeInputRepoint[] = [];
+  const baseGitSha = input.baseGitSha;
+  const current = input.current;
+  const select = input.select;
+
+  const taskGraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!taskGraph.ok) {
+    // A bundle can legitimately exist before a plan, so "there is no taskgraph"
+    // is not a failure to re-point — there is nothing pinning the proposal.
+    if (taskGraph.status === "not_found") return { ok: true, repointed: [], diagnostics: [] };
+    return repointFailure({
+      message:
+        "This change's task graph could not be read, so the input that pins the change proposal could not be re-pointed at it.",
+      path: artifactPathForRole({ role: "taskgraph", changeId })
+    });
+  }
+
+  const graphInputs = substituteSelected(taskGraph.document.artifactInputs, select, current);
+  let taskGraphRevision: ArtifactRevision | undefined;
+  if (graphInputs.substituted) {
+    const written = await guardedRepointWrite(
+      () =>
+        writeTaskGraph({
+          repositoryRoot: input.repositoryRoot,
+          changeId,
+          tasks: taskGraph.document.tasks,
+          artifactInputs: graphInputs.inputs,
+          expectedRevision: taskGraph.document.revision,
+          ...(baseGitSha === undefined ? {} : { baseGitSha })
+        }),
+      (detail, status) =>
+        repointFailure({
+          message: `This change's task graph could not be re-pointed at the change proposal on disk: ${detail}.`,
+          path: taskGraph.artifactPath,
+          status
+        })
+    );
+    if (!written.ok) return written as ChangeBundleFailure;
+    const graphWrite = written as Extract<Awaited<ReturnType<typeof writeTaskGraph>>, { readonly ok: true }>;
+    repointed.push({
+      artifactPath: graphWrite.artifactPath,
+      from: taskGraph.document.revision,
+      to: graphWrite.document.revision,
+      inputs: [current.artifact.path]
+    });
+    taskGraphRevision = graphWrite.revision;
+  }
+
+  const evidenceIndex = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!evidenceIndex.ok) {
+    if (evidenceIndex.status === "not_found") {
+      return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+    }
+    return repointFailure({
+      message:
+        "This change's evidence index could not be read, so the input that pins the change proposal could not be re-pointed at it.",
+      path: artifactPathForRole({ role: "evidence-index", changeId })
+    });
+  }
+
+  const substitutedPaths: ArtifactPath[] = [];
+  const proposalInputs = substituteSelected(evidenceIndex.document.artifactManifest.inputs, select, current);
+  if (proposalInputs.substituted) substitutedPaths.push(current.artifact.path);
+  let evidenceInputs = proposalInputs.inputs;
+  if (taskGraphRevision !== undefined) {
+    // The taskgraph pin keeps the **narrow** exact-revision rule, deliberately.
+    // Only the bump this call just made is followed, because an evidence index
+    // pinning an older taskgraph for any other reason is a genuine replan whose
+    // staleness `legion ship` should keep reporting and `legion build` re-derives
+    // from the live graph. Widening this one the way the proposal pin was widened
+    // would mask that, and unlike the proposal pin it has a command that repairs
+    // it.
+    const graphPin = substituteSelected(evidenceInputs, namesExactly(taskGraph.revision), taskGraphRevision);
+    if (graphPin.substituted) substitutedPaths.push(taskGraphRevision.artifact.path);
+    evidenceInputs = graphPin.inputs;
+  }
+  if (substitutedPaths.length === 0) {
+    return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+  }
+
+  const written = await guardedRepointWrite(
+    () =>
+      writeEvidenceIndex({
+        repositoryRoot: input.repositoryRoot,
+        changeId,
+        entries: evidenceIndex.document.entries,
+        artifactInputs: evidenceInputs,
+        expectedRevision: evidenceIndex.document.revision,
+        ...(baseGitSha === undefined ? {} : { baseGitSha })
+      }),
+    (detail, status) =>
+      repointFailure({
+        message: `This change's evidence index could not be re-pointed at the change proposal on disk: ${detail}.`,
+        path: evidenceIndex.artifactPath,
+        status
+      })
+  );
+  if (!written.ok) return written as ChangeBundleFailure;
+  const indexWrite = written as Extract<Awaited<ReturnType<typeof writeEvidenceIndex>>, { readonly ok: true }>;
+  repointed.push({
+    artifactPath: indexWrite.artifactPath,
+    from: evidenceIndex.document.revision,
+    to: indexWrite.document.revision,
+    inputs: substitutedPaths
+  });
+
+  return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+}
+
+/**
+ * Re-read both pinned artifacts and confirm the selector matches nothing now.
+ *
+ * **Why a success path re-reads what it just wrote.** The proposal write and the
+ * two re-point writes take three separate per-file locks, one at a time, so a
+ * concurrent artifact writer in another process can land between them. Observed
+ * in 1 of 3 runs of `legion review --accept --approver` against a concurrent
+ * `legion build`: the accept exited 0 reporting `accepted` while the evidence
+ * index was left pinning a superseded proposal, and `legion ship` then failed
+ * with two `change_traceability_broken` that nothing in the accept's output had
+ * hinted at. A cross-file transaction is not available here —
+ * `withArtifactWriteLock` is per target path, and holding three at once
+ * introduces a lock-ordering problem across every writer in the tree — so this
+ * cannot *prevent* the race. It makes the race **reported** rather than silent,
+ * which is the difference between an operator who runs the repair and one who
+ * does not know there is anything to repair.
+ *
+ * The check is the caller's own selector re-applied, never a rule of its own.
+ * With a rule of its own it would fail the exact path on a state that path is
+ * required to leave alone: a hand-edited bundle leaves a pin the exact selector
+ * correctly declines to move, and a verifier asking "does any pin name an older
+ * revision" would then turn that correct decline into an error and take the
+ * accept down with it. What is being verified is "the work this call set out to
+ * do is done", which is exactly `select` matching nothing.
+ *
+ * Two reads, on a path that has already done far more I/O, and only ever on the
+ * way to reporting success.
+ */
+async function verifyProposalPins(input: {
+  readonly repositoryRoot: string;
+  readonly changeId: ChangeId;
+  readonly current: ArtifactRevision;
+  readonly select: ProposalPinSelector;
+  readonly repointed: readonly ChangeInputRepoint[];
+}): Promise<RepointChangeProposalInputsResult> {
+  const stale: string[] = [];
+
+  const taskGraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (taskGraph.ok) {
+    for (const entry of taskGraph.document.artifactInputs) {
+      if (input.select(entry)) stale.push(`${taskGraph.artifactPath} still names revision ${entry.revision}`);
+    }
+  } else if (taskGraph.status !== "not_found") {
+    stale.push(`${artifactPathForRole({ role: "taskgraph", changeId: input.changeId })} could not be re-read`);
+  }
+
+  const evidenceIndex = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (evidenceIndex.ok) {
+    for (const entry of evidenceIndex.document.artifactManifest.inputs) {
+      if (input.select(entry)) stale.push(`${evidenceIndex.artifactPath} still names revision ${entry.revision}`);
+    }
+  } else if (evidenceIndex.status !== "not_found") {
+    stale.push(`${artifactPathForRole({ role: "evidence-index", changeId: input.changeId })} could not be re-read`);
+  }
+
+  if (stale.length > 0) {
+    return repointFailure({
+      message: `The change proposal is at revision ${input.current.revision} on disk, but ${stale.join(
+        " and "
+      )} — another writer changed these artifacts while the re-point was running.`,
+      path: input.current.artifact.path,
+      status: "conflict"
+    });
+  }
+
+  return { ok: true, repointed: input.repointed, diagnostics: [] };
+}
+
+/**
+ * Re-point this change's recorded inputs at the change proposal on disk.
+ *
+ * The standalone repair `legion dev change repoint <changeId>` runs, and the
+ * only caller of `namesSuperseded`. It exists because the three-rename sequence
+ * in `updateChangeAcceptance` had no route out of a partial landing: the sign-off
+ * committed to `change.yaml` with the pins still naming the revision before it, a
+ * state `legion plan` refuses (`artifact_already_exists`), `legion build` cannot
+ * reach, `legion validate` calls valid, and `legion ship` correctly refuses to
+ * ship — with no verb and no hand edit that could repair it.
+ *
+ * Also run by `updateChangeAcceptance` *before* its own write, so an accept
+ * retried over a torn state repairs it rather than tearing further, and by
+ * `legion review --accept` before it derives the traceability verdict, so a
+ * defect this repair is about to fix is not first recorded as a `blocked`
+ * acceptance.
+ *
+ * Idempotent by construction: when every pin already names the live proposal,
+ * nothing is substituted and nothing is written, so running it on a healthy
+ * change is a pair of reads and a report of no repairs.
+ */
+export async function repairChangeProposalPins(
+  input: RepairChangeProposalPinsInput
+): Promise<RepointChangeProposalInputsResult> {
+  const loaded = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (!loaded.ok) return loaded;
+  return repointProposalPins({
+    repositoryRoot: input.repositoryRoot,
+    changeId: loaded.bundle.change.id,
+    previous: loaded.revision,
+    current: loaded.revision,
+    select: namesSuperseded(loaded.revision),
+    ...(input.baseGitSha === undefined ? {} : { baseGitSha: input.baseGitSha })
+  });
+}
+
+/**
+ * Record a whole-change acceptance decision on an existing change bundle.
+ *
+ * The change service's first write-after-create path. `createChangeBundle`
+ * writes `acceptance: {status: "not_ready"}` and, until this, nothing in the
+ * workflow ever moved it — so `whole_change_acceptance_evidence` had no
+ * producer and `archive`'s `acceptance.status === "accepted"` precondition was
+ * unreachable.
+ *
+ * The optimistic-revision discipline is `writeEvidenceIndex`'s, with one
+ * deliberate divergence: **the re-read is `loadChangeBundle`, not a bare
+ * `readJsonArtifact`.** That means an acceptance write inherits
+ * `delta_artifact_mismatch`, `design_artifact_mismatch`,
+ * `decision_artifact_mismatch` and the frontmatter cross-checks — so signing off
+ * on a bundle whose own parts no longer match what it records is refused rather
+ * than recorded. It is a real behaviour change for `legion review --accept`: a
+ * hand-edited `design.md` now blocks acceptance where before it only blocked
+ * ship. That is the right refusal and it is stated here because it is a new
+ * failure mode for an existing command.
+ *
+ * `mediaType` is passed explicitly on every write and read of this artifact. The
+ * proposal's path is `change.yaml` and its bytes are JSON; `mediaTypeForArtifactPath`
+ * would guess `application/yaml`, `referencesEqual` compares `mediaType`, and a
+ * reference minted with the wrong one matches nothing in the freshness map.
+ *
+ * `supersedes` is not optional here even though the schema allows it:
+ * `assertSupersededContent` re-hashes the file on disk and refuses unless it
+ * still matches the bytes this call read, which is the only thing that closes
+ * the window between the re-read and the rename.
+ *
+ * **The idempotence check compares the whole acceptance object, never
+ * `status` alone.** Short-circuiting on `status === "accepted"` would leave a
+ * stale `acceptedAt` in place after a rebuild: the writer would report success
+ * having written nothing, the gate would keep reporting the sign-off as older
+ * than the evidence it claims to cover, and no flag anywhere would make it
+ * write. That is the fail-open recorded at `ship-gates.ts`'s `isLiveDeltaSpecGrant`
+ * wearing a new costume, and the whole series exists to close it.
+ */
+export async function updateChangeAcceptance(
+  input: UpdateChangeAcceptanceInput
+): Promise<UpdateChangeAcceptanceResult> {
+  const changeId = parseChangeId(input.changeId);
+  if (typeof changeId !== "string") return changeId;
+  const paths = changePaths(changeId);
+
+  if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    return failure("invalid", [
+      changeDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a positive integer; a change bundle is created at revision 1.",
+        path: paths.proposal
+      })
+    ]);
+  }
+
+  const parsedAcceptance = acceptanceStateSchema.safeParse(input.acceptance);
+  if (!parsedAcceptance.success) {
+    return failure(
+      "invalid",
+      parsedAcceptance.error.issues.map((issue) =>
+        changeDiagnostic({
+          code: "invalid_acceptance",
+          message: `${issue.message}${issue.path.length > 0 ? ` at ${issue.path.join(".")}` : ""}`,
+          path: paths.proposal
+        })
+      )
+    );
+  }
+  const acceptance = parsedAcceptance.data;
+
+  let baseGitSha: GitSha | undefined;
+  if (input.baseGitSha !== undefined) {
+    const parsed = parseBaseGitSha(input.baseGitSha, paths.proposal);
+    if (typeof parsed !== "string") return parsed;
+    baseGitSha = parsed;
+  }
+
+  const updatedAt = parseTimestamp({
+    value: input.updatedAt,
+    path: paths.proposal,
+    code: "invalid_updated_at"
+  });
+  if (typeof updatedAt !== "string") return updatedAt;
+
+  const loaded = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!loaded.ok) return loaded;
+
+  if (loaded.bundle.revision !== input.expectedRevision) {
+    return failure("conflict", [
+      changeDiagnostic({
+        code: "revision_conflict",
+        message: `stale artifact revision: expected ${input.expectedRevision}, current ${loaded.bundle.revision}`,
+        path: paths.proposal
+      })
+    ]);
+  }
+
+  // **Repair before writing, and before deciding there is nothing to write.**
+  // A previous call that tore between the proposal rename and the re-point left
+  // the pins naming a superseded proposal, and every later exact-match re-point
+  // is powerless against them — so without this, retrying an accept walked the
+  // bundle one revision further on every round while repairing nothing, each
+  // round recording a fresh verdict on a change that stayed unshippable.
+  //
+  // It sits above the idempotence check on purpose: a retry that computes the
+  // identical acceptance is exactly the shape a retry after a tear takes, and
+  // returning `unchanged` without repairing would report success on the state
+  // being complained about. It also sits above the proposal write, so its own
+  // failure leaves nothing about the acceptance on disk — `written` stays absent
+  // and the caller says so.
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    ...(baseGitSha === undefined ? {} : { baseGitSha })
+  });
+  if (!repaired.ok) return repaired;
+
+  if (stableProtocolJson(loaded.bundle.change.acceptance) === stableProtocolJson(acceptance)) {
+    return {
+      ok: true,
+      status: "unchanged",
+      bundle: loaded.bundle,
+      acceptance: loaded.bundle.change.acceptance,
+      artifactPath: loaded.artifactPath,
+      reference: loaded.reference,
+      revision: loaded.revision,
+      repointed: repaired.repointed,
+      diagnostics: []
+    };
+  }
+
+  // Spread rather than a field list, at both levels. `artifactRevisions` is
+  // stored twice — on the bundle and on `bundle.change` — and nothing anywhere
+  // compares the two, so a rewrite that reconstructs one and not the other
+  // produces a document that parses cleanly and disagrees with itself. Spreading
+  // closes that by construction instead of by remembering, and it also carries
+  // through `currentTruth.baseSpecHash` and `proposedTruth.targetSpecHash`,
+  // which are hashes of create-time inputs that cannot be recomputed here and
+  // would be wrong if they were.
+  const nextBundle = changeBundleSchema.safeParse({
+    ...loaded.bundle,
+    revision: input.expectedRevision + 1,
+    change: {
+      ...loaded.bundle.change,
+      updatedAt,
+      acceptance
+    }
+  });
+  if (!nextBundle.success) {
+    return failure(
+      "invalid",
+      nextBundle.error.issues.map((issue) =>
+        changeDiagnostic({
+          code: "invalid_change_bundle",
+          message: `${issue.message}${issue.path.length > 0 ? ` at ${issue.path.join(".")}` : ""}`,
+          path: paths.proposal
+        })
+      )
+    );
+  }
+
+  let write;
+  try {
+    write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: paths.proposal,
+      role: "proposal",
+      content: stableProtocolJson(nextBundle.data),
+      expectedRevision: input.expectedRevision,
+      currentRevision: input.expectedRevision,
+      mediaType: "application/json",
+      ...(baseGitSha === undefined ? {} : { baseGitSha }),
+      supersedes: loaded.reference
+    });
+  } catch (error) {
+    if (error instanceof ArtifactRevisionConflictError) {
+      return failure("conflict", [
+        changeDiagnostic({
+          code: "revision_conflict",
+          message: error.message,
+          path: paths.proposal
+        })
+      ]);
+    }
+    throw error;
+  }
+
+  // The proposal is written first and the pins are re-pointed after, never the
+  // other way round. The tear window is the same width either way, but writing
+  // the proposal last would leave the taskgraph pinning a proposal revision that
+  // does not exist on disk — the same shape, with the human decision lost as
+  // well.
+  const repoint = await repointChangeProposalInputs({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    previous: loaded.revision,
+    current: write.revision,
+    ...(baseGitSha === undefined ? {} : { baseGitSha })
+  });
+  if (!repoint.ok) {
+    // **The failure says the acceptance landed.** Everything above this line is
+    // already committed to disk: `change.yaml` records the verdict at the new
+    // revision. A caller told only "the write failed" reports the opposite to
+    // the operator — and the one that did said so out loud, printing "Nothing
+    // was rolled back: legion ship will report whole_change_acceptance_evidence
+    // unevaluable" about a state where the acceptance *was* written and ship
+    // never reaches the gate at all, because it flattens the stale pins to
+    // `change_traceability_broken` first. `written` is how the caller can tell
+    // the two halves of this function apart.
+    return { ...repoint, written: { artifactPath: write.artifactPath, acceptance, revision: write.revision } };
+  }
+
+  return {
+    ok: true,
+    status: "updated",
+    bundle: nextBundle.data,
+    acceptance,
+    artifactPath: write.artifactPath,
+    reference: write.reference,
+    revision: write.revision,
+    repointed: [...repaired.repointed, ...repoint.repointed],
+    diagnostics: []
+  };
 }
 
 export async function validateChangeBundle(input: ValidateChangeBundleInput): Promise<ValidateChangeBundleResult> {

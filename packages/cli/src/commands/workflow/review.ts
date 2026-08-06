@@ -1,19 +1,27 @@
 import {
   LEGION_PROJECT_ROOT,
+  loadChangeBundle,
+  partitionTraceabilityDiagnostics,
   readApproval,
   readEvidenceIndex,
   readTaskGraph,
+  repairChangeProposalPins,
+  updateChangeAcceptance,
+  validateChangeTraceability,
   writeApproval,
   writeEvidenceIndex,
   writeReviewDecision,
   listReviewDecisionsForChange,
   type ApprovalSuccess,
   type EvidenceIndexEntry,
-  type ReviewDecisionSuccess
+  type ReviewDecisionSuccess,
+  type UpdateChangeAcceptanceFailure,
+  type UpdateChangeAcceptanceSuccess
 } from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
   buildIdempotencyKey,
+  type AcceptanceState,
   type Actor,
   type Approval,
   type ArtifactPath,
@@ -58,6 +66,10 @@ Review collected build evidence. A submitted passing review still requires expli
 
 --approver names a human decision owner recorded in .legion/project/project.json. It is
 required when a task in the change derives the explicit_human_approval risk gate.
+
+--accept also records the change's whole-change acceptance, which legion ship reads:
+"accepted" with an approver and clean traceability, "ready" without an approver, and
+"blocked" with the defect named when traceability reports one.
 
 Examples:
   legion review --executor fake
@@ -674,6 +686,56 @@ async function acceptLatestReview(
     );
   }
 
+  // Last of all, after the approvals, and that placement is the same argument
+  // the comment above makes. Whole-change acceptance is the strongest claim this
+  // command records — stronger than a per-task approval — so a crash before it
+  // leaves the change *less* accepted, never more. It also has to come after the
+  // evidence-index write for a mechanical reason: `validateChangeTraceability`
+  // reads disk, and `missing_accepted_evidence` fires on every R2 requirement
+  // until the acceptance flip has landed. Run before it, the promotion would
+  // write `blocked` on every single accept — a defect that would look exactly
+  // like the gate working.
+  const promotion = await promoteChangeAcceptance(context, {
+    changeId: evidence.document.changeId,
+    approver,
+    acceptedAt
+  });
+  if (!promotion.ok) {
+    // **Two failures, two true sentences, two different commands.** One message
+    // used to cover both, and in the branch that can actually produce it — the
+    // re-point failing *after* the proposal write landed — every clause of it
+    // was false. It said the acceptance could not be written when the bundle on
+    // disk already recorded it; it said `legion ship` would report
+    // `whole_change_acceptance_evidence` unevaluable when ship never reaches gate
+    // evaluation at all, because it flattens the two stale pins to
+    // `change_traceability_broken` first; and it sent the operator to `legion
+    // validate`, which on that exact repository exits 0 with
+    // `{"status":"valid","diagnostics":[]}`. Being told the wrong fact and sent
+    // to a command that confirms nothing is wrong is worse than a bare stack
+    // trace, because it ends the investigation.
+    return promotion.written === undefined
+      ? blockedReview(
+          promotion.diagnostics,
+          nextAction(
+            "legion dev change validate",
+            "The reviews, evidence and approvals were accepted, and the change's whole-change acceptance was not " +
+              "written — nothing about it reached disk. legion ship will report whole_change_acceptance_evidence " +
+              "unevaluable for this change until it is."
+          )
+        )
+      : blockedReview(
+          promotion.diagnostics,
+          nextAction(
+            `legion dev change repoint ${evidence.document.changeId}`,
+            `The whole-change acceptance WAS written: ${promotion.written.artifactPath} records ` +
+              `${promotion.written.acceptance.status} at revision ${promotion.written.revision.revision}. What did not ` +
+              "land is the re-point of the artifact inputs that pin it, so legion ship reports " +
+              "change_traceability_broken and never reaches the gate. That command re-points them; it is idempotent " +
+              "and writes nothing if they are already current."
+          )
+        );
+  }
+
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
   return success(
     {
@@ -688,15 +750,175 @@ async function acceptLatestReview(
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
       },
+      acceptance: acceptanceSummary(promotion.result),
       nextAction: action,
       diagnostics: []
     },
     [
       "Review accepted.",
       `Evidence accepted: ${evidenceWrite.artifactPath}.`,
+      `Change acceptance: ${promotion.result.acceptance.status}.`,
       renderNextAction(action)
     ].join("\n")
   );
+}
+
+/** What a host needs to see which whole-change decision this run recorded. */
+function acceptanceSummary(promotion: UpdateChangeAcceptanceSuccess): Record<string, unknown> {
+  return {
+    artifactPath: promotion.artifactPath,
+    status: promotion.acceptance.status,
+    revision: promotion.revision.revision,
+    ...(promotion.acceptance.acceptedBy === undefined ? {} : { acceptedBy: promotion.acceptance.acceptedBy }),
+    ...(promotion.acceptance.acceptedAt === undefined ? {} : { acceptedAt: promotion.acceptance.acceptedAt }),
+    ...(promotion.acceptance.reason === undefined ? {} : { reason: promotion.acceptance.reason }),
+    ...(promotion.repointed.length === 0 ? {} : { repointed: promotion.repointed })
+  };
+}
+
+/** The subset of a traceability diagnostic a recorded reason can carry. */
+interface TraceabilityDefect {
+  readonly code: string;
+  readonly message: string;
+  readonly source?: { readonly path?: string };
+}
+
+/**
+ * What a `blocked` acceptance records about why.
+ *
+ * `acceptanceReasonSchema` is 1..2048 characters and required for `blocked`, so
+ * the reason has to be built rather than borrowed. Three properties matter:
+ *
+ *  - **Deterministic.** Sorted, capped at three, hard-truncated. Identical runs
+ *    must produce identical bytes, or re-running the same command would rewrite
+ *    `change.yaml` and re-point two artifact-input lists for no reason at all.
+ *  - **Named.** The code and the path, not just the message: an operator reading
+ *    this in a blocked ship's gate diagnostic has no other route to which
+ *    artifact is wrong.
+ *  - **Bounded.** `validateChangeTraceability` also returns loader failures with
+ *    no report at all, so an unbounded splice of everything it returned would
+ *    put unrelated codes into a field that reads as a verdict.
+ */
+function blockedAcceptanceReason(diagnostics: readonly TraceabilityDefect[]): string {
+  const named = [...diagnostics]
+    .map((diagnostic) => `${diagnostic.code} (${diagnostic.source?.path ?? "unknown"}): ${diagnostic.message}`)
+    .sort((left, right) => left.localeCompare(right));
+  const shown = named.slice(0, 3);
+  const remainder = named.length > shown.length ? ` (+${named.length - shown.length} more)` : "";
+  const reason =
+    `Change traceability reported ${named.length} blocking defect${named.length === 1 ? "" : "s"} at legion review ` +
+    `--accept: ${shown.join(" | ")}${remainder}`;
+  return reason.length <= 2_048 ? reason : `${reason.slice(0, 2_045)}...`;
+}
+
+/**
+ * Promote `change.acceptance` from the `not_ready` that `createChangeBundle`
+ * writes and nothing ever moved.
+ *
+ * Three outcomes, and the middle one is the point of the whole gate:
+ *
+ *  - Traceability reports a blocking defect ⇒ `{status: "blocked", reason}`.
+ *    Written rather than skipped. By the time this runs the reviews, the
+ *    evidence index and the approvals are already on disk, so "refuse the
+ *    accept" is not available — only "refuse the promotion" — and refusing it
+ *    silently leaves `not_ready`, which `legion ship` reports as "nobody
+ *    decided" with no mention of the defect. `blocked` puts the reason where
+ *    ship can print it, and the verdict is re-derived from scratch on the next
+ *    accept, so repairing the defect and re-accepting replaces the record.
+ *  - Clean and `--approver` resolved ⇒ `{status: "accepted", acceptedAt,
+ *    acceptedBy: approver.id}`. `acceptedBy` is `approver.id`, a **string**:
+ *    `acceptanceActorSchema` is `z.string().min(1).max(128)` while
+ *    `reviewDecision.acceptedBy` and `approval.decidedBy` are both `Actor`
+ *    objects — three same-named fields, two types, one code path.
+ *  - Clean and no approver ⇒ `{status: "ready"}` and nothing else. Every task's
+ *    evidence is accepted and no human signed off on the change as a whole,
+ *    which is honestly short of accepted. All-or-nothing on `acceptedAt` and
+ *    `acceptedBy`, on the rule the review write states: the `ready` arm *permits*
+ *    both and requires neither, so a half-filled one parses cleanly and reads as
+ *    an abandoned sign-off.
+ *
+ * `acceptedAt` is the instant computed once at the top of the accept, not a
+ * fresh clock reading. It is already stamped on the reviews, on every promoted
+ * evidence entry and on the approvals, so the whole-change sign-off is *equal*
+ * to `max(evidence acceptedAt)` — which is why the gate compares with `>=`. A
+ * second clock reading inside one logical transaction would differ by
+ * milliseconds in a direction nothing controls, and could produce an `accepted`
+ * the gate immediately calls stale.
+ *
+ * **The traceability verdict is partitioned with the legacy allowance on,
+ * unconditionally.** `legion review` has no `--allow-legacy-evidence` flag, so a
+ * raw `traceability.ok` would write a sticky `{status: "blocked"}` into the
+ * bundle on a repository whose evidence predates requirement and oracle linking
+ * — and `legion ship --allow-legacy-evidence`, the allowance the operator
+ * explicitly opted into, would then read a hard `unsatisfied` no flag can undo.
+ * `orphan_evidence` is the one diagnostic whose interpretation is an operator
+ * judgement, and this command cannot hear it; recording a verdict on a judgement
+ * nobody made is worse than leaving the decision with ship, which already owns
+ * the flag.
+ */
+async function promoteChangeAcceptance(
+  context: CliContext,
+  input: {
+    readonly changeId: string;
+    readonly approver: Actor | undefined;
+    readonly acceptedAt: UtcTimestamp;
+  }
+): Promise<
+  | { readonly ok: true; readonly result: UpdateChangeAcceptanceSuccess }
+  | {
+      readonly ok: false;
+      readonly diagnostics: readonly unknown[];
+      readonly written?: UpdateChangeAcceptanceFailure["written"];
+    }
+> {
+  // **Repair before judging.** A previous accept that tore between the proposal
+  // rename and the re-point leaves the pins naming a superseded proposal, and
+  // `validateChangeTraceability` reports that as `stale_revision_reference` — so
+  // running the verdict first would record a `blocked` about a defect this call
+  // is about to fix, and every retry would record a fresh false block while the
+  // change stayed unshippable. The repair is idempotent and writes nothing on a
+  // healthy change, so the common path pays two reads for it.
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!repaired.ok) return { ok: false, diagnostics: repaired.diagnostics };
+
+  const bundle = await loadChangeBundle({ repositoryRoot: context.repositoryRoot, changeId: input.changeId });
+  if (!bundle.ok) return { ok: false, diagnostics: bundle.diagnostics };
+
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId
+  });
+  const blocking = traceability.ok
+    ? []
+    : partitionTraceabilityDiagnostics(traceability.diagnostics, { allowLegacyEvidence: true }).blocking;
+
+  const acceptance: AcceptanceState =
+    blocking.length > 0
+      ? { status: "blocked", reason: blockedAcceptanceReason(blocking) }
+      : input.approver === undefined
+        ? { status: "ready" }
+        : { status: "accepted", acceptedAt: input.acceptedAt, acceptedBy: input.approver.id };
+
+  const written = await updateChangeAcceptance({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    acceptance,
+    expectedRevision: bundle.bundle.revision,
+    updatedAt: input.acceptedAt,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!written.ok) {
+    return {
+      ok: false,
+      diagnostics: written.diagnostics,
+      ...(written.written === undefined ? {} : { written: written.written })
+    };
+  }
+  return { ok: true, result: written };
 }
 
 /**
@@ -912,6 +1134,89 @@ async function rejectLatestReview(
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence rejection could not be written."));
   }
 
+  // A fail-open this release would otherwise open. Before whole-change
+  // acceptance existed, rejecting a review rewrote every evidence entry to
+  // `rejected` and touched nothing else. After it, the sequence accept → reject
+  // would leave `change.acceptance.status === "accepted"` standing on disk with
+  // an `acceptedAt` later than any *accepted* evidence — because a reject leaves
+  // none — so the sign-off would outlive the evidence it claimed to cover. The
+  // gate closes that from its own side by reading each task's latest evidence
+  // acceptance, and this closes it from the artifact's side, because a gate that
+  // is right about a document that lies is one refactor away from being wrong.
+  //
+  // `not_ready`, not `rejected`: the *review* was rejected, not the change.
+  // `not_ready` with the reason recorded is the true statement, and it is what
+  // the gate reports as "nobody has decided", which is also true. It blocks ship
+  // exactly as an `unsatisfied` would.
+  //
+  // A bundle that will not load is a `blockedReview` rather than a silent skip:
+  // a skip is precisely the state described above, standing on disk with the
+  // command reporting success.
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId
+  });
+  if (!bundle.ok) {
+    return blockedReview(
+      bundle.diagnostics,
+      nextAction(
+        "legion dev change validate",
+        "The evidence was rejected, but the change bundle could not be read, so its whole-change acceptance still " +
+          "stands. legion ship would report whole_change_acceptance_evidence over rejected evidence until this is repaired."
+      )
+    );
+  }
+
+  // **The demotion is skipped when there is nothing to demote, and that guard is
+  // the whole reason a reject is not a second copy of the accept's tear.**
+  // `updateChangeAcceptance` compares the whole acceptance object, deliberately —
+  // see its docblock — so `{status:"not_ready"}` and
+  // `{status:"not_ready", reason}` are different objects and the write always
+  // fired. That made `legion review --reject-reason` rewrite the bundle and
+  // re-point both pinned artifacts on **every** invocation, including on a change
+  // nobody had ever accepted, which is every reject before this release. It
+  // inherited the accept's tear window for no gain: rejecting a `not_ready`
+  // change to `not_ready` records nothing a reader can act on, and a failed
+  // re-point in the middle of it left a never-accepted change unshippable.
+  //
+  // Status, not the whole object, and only here. What the demotion exists to
+  // prevent is an `accepted` or `ready` sign-off outliving the evidence it
+  // covered; a change already recorded as undecided cannot be that. The accept's
+  // idempotence check stays object-wide, because there a stale `acceptedAt` under
+  // an unchanged `status` is exactly the fail-open being closed.
+  const priorStatus = bundle.bundle.change.acceptance.status;
+  const demoted =
+    priorStatus === "not_ready"
+      ? undefined
+      : await updateChangeAcceptance({
+          repositoryRoot: context.repositoryRoot,
+          changeId: evidence.document.changeId,
+          expectedRevision: bundle.bundle.revision,
+          updatedAt: rejectedAt,
+          baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+          acceptance: {
+            status: "not_ready",
+            reason: `Review ${rejectedReviews[0]?.document.id ?? "(unnamed)"} was rejected at ${rejectedAt}: ${reason}`
+          }
+        });
+  if (demoted !== undefined && !demoted.ok) {
+    return blockedReview(
+      demoted.diagnostics,
+      demoted.written === undefined
+        ? nextAction(
+            "legion dev change validate",
+            "The evidence was rejected, and this change's whole-change acceptance could not be demoted alongside it. " +
+              "Nothing about the demotion reached disk, so the earlier sign-off still stands over rejected evidence."
+          )
+        : nextAction(
+            `legion dev change repoint ${evidence.document.changeId}`,
+            `The demotion WAS written: ${demoted.written.artifactPath} records ${demoted.written.acceptance.status} at ` +
+              `revision ${demoted.written.revision.revision}. What did not land is the re-point of the artifact inputs ` +
+              "that pin it. That command re-points them; it is idempotent and writes nothing if they are already current."
+          )
+    );
+  }
+
   const action = nextAction("legion build", "Rejected evidence needs a new build run.");
   return success(
     {
@@ -919,6 +1224,10 @@ async function rejectLatestReview(
       status: "rejected",
       ...(rejectedReviews[0] === undefined ? {} : { review: reviewSummary(rejectedReviews[0]) }),
       reviews: rejectedReviews.map(reviewSummary),
+      // Absent when the change was already undecided and nothing was written, so
+      // the payload of a reject on a never-accepted change is key-for-key what it
+      // was before whole-change acceptance existed.
+      ...(demoted === undefined ? {} : { acceptance: acceptanceSummary(demoted) }),
       nextAction: action,
       diagnostics: []
     },

@@ -28623,1384 +28623,6 @@ var changeBundleJsonSchema = jsonSchemaDocument7("https://schemas.9thlevelsoftwa
 
 // packages/artifacts/dist/changes/service.js
 import { readFile as readFile7, stat as stat3 } from "node:fs/promises";
-var INVALID_CHANGE_BUNDLE_PATH = `${PROJECT_ARTIFACT_PATHS.changes}/invalid-change/change.yaml`;
-function isEnoent4(error51) {
-  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
-}
-function compareStrings(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function failure4(status2, diagnostics) {
-  return { ok: false, status: status2, diagnostics };
-}
-function changeDiagnostic(input) {
-  return diagnosticForPath({
-    code: input.code,
-    message: input.message,
-    path: input.path ?? INVALID_CHANGE_BUNDLE_PATH
-  });
-}
-function parseChangeId2(input) {
-  const parsed = changeIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_change_id",
-      message: issue2.message
-    })));
-  }
-  return parsed.data;
-}
-function parseRequirementId2(input, path49) {
-  const parsed = requirementIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_requirement_id",
-      message: issue2.message,
-      path: path49
-    })));
-  }
-  return parsed.data;
-}
-function parseTimestamp2(input) {
-  const parsed = utcTimestampSchema.safeParse(input.value ?? (/* @__PURE__ */ new Date()).toISOString());
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: input.code,
-      message: issue2.message,
-      path: input.path
-    })));
-  }
-  return parsed.data;
-}
-function parseBaseGitSha(input, path49) {
-  const parsed = gitShaSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_base_git_sha",
-      message: issue2.message,
-      path: path49
-    })));
-  }
-  return parsed.data;
-}
-function parseOwners(input, path49) {
-  if (input.length === 0) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_owners",
-        message: "At least one owner is required for a change bundle.",
-        path: path49
-      })
-    ]);
-  }
-  const owners = [];
-  const diagnostics = [];
-  for (const owner of input) {
-    const parsed = actorSchema.safeParse(owner);
-    if (!parsed.success) {
-      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
-        code: "invalid_owner",
-        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: path49
-      })));
-      continue;
-    }
-    owners.push(parsed.data);
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return owners;
-}
-function changePaths(changeId) {
-  const proposal = artifactPathForRole({ role: "proposal", changeId });
-  return {
-    root: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}`,
-    proposal,
-    deltaSpecRoot: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/delta-specs`,
-    design: artifactPathForRole({ role: "design", changeId }),
-    decisions: artifactPathForRole({ role: "decision-log", changeId })
-  };
-}
-function frontmatterMarkdown(frontmatter, title, body) {
-  return [
-    "---",
-    stableProtocolJson(frontmatter).trimEnd(),
-    "---",
-    "",
-    `# ${title}`,
-    "",
-    ...body,
-    ""
-  ].join("\n");
-}
-function renderDeltaSpecMarkdown(delta) {
-  return frontmatterMarkdown(delta, `${delta.operation}: ${delta.requirementId}`, [
-    "## Rationale",
-    "",
-    delta.rationale,
-    "",
-    "## Proposed Requirement",
-    "",
-    delta.proposedRequirement === void 0 ? "Requirement is removed." : stableProtocolJson(delta.proposedRequirement).trimEnd()
-  ]);
-}
-function renderDesignMarkdown(design) {
-  return frontmatterMarkdown(design, design.title, [design.body]);
-}
-function renderDecisionLogMarkdown(log) {
-  const lines = log.decisions.flatMap((decision) => [
-    `## ${decision.title}`,
-    "",
-    `- ID: ${decision.id}`,
-    `- Status: ${decision.status}`,
-    `- Rationale: ${decision.rationale}`,
-    ""
-  ]);
-  return frontmatterMarkdown(log, "Decisions", lines);
-}
-function parseMarkdownFrontmatter(input) {
-  const normalized = input.content.replace(/\r\n/g, "\n");
-  if (!normalized.startsWith("---\n")) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "missing_frontmatter",
-        message: "Change artifact must start with JSON frontmatter.",
-        path: input.artifactPath
-      })
-    ]);
-  }
-  const closeIndex = normalized.indexOf("\n---\n", 4);
-  if (closeIndex < 0) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "unterminated_frontmatter",
-        message: "Change artifact frontmatter must close with --- on its own line.",
-        path: input.artifactPath
-      })
-    ]);
-  }
-  let parsedFrontmatter;
-  try {
-    parsedFrontmatter = JSON.parse(normalized.slice(4, closeIndex).trim());
-  } catch (error51) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_frontmatter_json",
-        message: error51 instanceof Error ? error51.message : "Change artifact frontmatter is not valid JSON.",
-        path: input.artifactPath
-      })
-    ]);
-  }
-  const parsed = input.schema.safeParse(parsedFrontmatter);
-  if (!parsed.success) {
-    return failure4("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_schema",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: input.artifactPath
-    })));
-  }
-  return { ok: true, document: parsed.data };
-}
-async function readMarkdownArtifact(input) {
-  let resolved;
-  try {
-    resolved = await resolveProjectArtifactPath({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath
-    });
-  } catch (error51) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_path",
-        message: error51 instanceof Error ? error51.message : String(error51),
-        path: input.artifactPath
-      })
-    ]);
-  }
-  let content;
-  try {
-    content = await readFile7(resolved.absolutePath, "utf8");
-  } catch (error51) {
-    if (isEnoent4(error51)) {
-      return failure4("not_found", [
-        changeDiagnostic({
-          code: "not_found",
-          message: "Change artifact does not exist.",
-          path: resolved.repositoryPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-  const parsed = parseMarkdownFrontmatter({
-    artifactPath: resolved.repositoryPath,
-    content,
-    schema: input.schema
-  });
-  if (!parsed.ok)
-    return parsed;
-  return {
-    document: parsed.document,
-    content,
-    reference: artifactReferenceForContent({
-      path: resolved.repositoryPath,
-      content,
-      mediaType: input.mediaType
-    })
-  };
-}
-async function readCurrentSpecByArtifactPath(input) {
-  let resolved;
-  try {
-    resolved = await resolveProjectArtifactPath({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath
-    });
-  } catch (error51) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_path",
-        message: error51 instanceof Error ? error51.message : String(error51),
-        path: input.artifactPath
-      })
-    ]);
-  }
-  let content;
-  try {
-    content = await readFile7(resolved.absolutePath, "utf8");
-  } catch (error51) {
-    if (isEnoent4(error51)) {
-      return failure4("not_found", [
-        changeDiagnostic({
-          code: "not_found",
-          message: "Current spec artifact does not exist.",
-          path: resolved.repositoryPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-  const parsed = parseCurrentSpecMarkdown({
-    artifactPath: resolved.repositoryPath,
-    content
-  });
-  if (!parsed.ok)
-    return failure4(parsed.status, parsed.diagnostics);
-  return {
-    ok: true,
-    document: parsed.document,
-    artifactPath: resolved.repositoryPath,
-    reference: artifactReferenceForContent({
-      path: resolved.repositoryPath,
-      content,
-      mediaType: "text/markdown"
-    })
-  };
-}
-async function currentRequirementExists(input) {
-  const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
-  if (!currentSpecs.ok)
-    return failure4(currentSpecs.status, currentSpecs.diagnostics);
-  return currentSpecs.index.entries.some((entry) => entry.requirements.some((requirement) => requirement.id === input.requirementId));
-}
-function bundleIdentityDiagnostics(input) {
-  const diagnostics = [];
-  const expected = input.expectedPaths;
-  const actual = input.bundle.paths;
-  if (input.bundle.change.id !== input.requestedChangeId) {
-    diagnostics.push(changeDiagnostic({
-      code: "change_bundle_identity_mismatch",
-      message: `Loaded change bundle declares ${input.bundle.change.id}, but ${input.requestedChangeId} was requested.`,
-      path: expected.proposal
-    }));
-  }
-  const pathChecks = ["root", "proposal", "deltaSpecRoot", "design", "decisions"];
-  for (const key of pathChecks) {
-    if (actual[key] !== expected[key]) {
-      diagnostics.push(changeDiagnostic({
-        code: "change_bundle_path_mismatch",
-        message: `Loaded change bundle path ${String(key)} must be ${expected[key]}, not ${actual[key]}.`,
-        path: expected.proposal
-      }));
-    }
-  }
-  return diagnostics;
-}
-function deltaEntryDiagnostics(input) {
-  const diagnostics = [];
-  if (input.delta.changeId !== input.changeId) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} declares change ${input.delta.changeId}, not ${input.changeId}.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.requirementId !== input.entry.requirementId) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} declares requirement ${input.delta.requirementId}, not ${input.entry.requirementId}.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.operation !== input.entry.operation) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} declares operation ${input.delta.operation}, not ${input.entry.operation}.`,
-      path: input.entry.path
-    }));
-  }
-  if (!referencesEqual(input.delta.baseCurrentSpec, input.entry.baseCurrentSpec)) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} base current spec does not match the bundle entry.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.baseCurrentSpecRevision !== input.entry.baseCurrentSpecRevision) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} base current spec revision does not match the bundle entry.`,
-      path: input.entry.path
-    }));
-  }
-  if (input.delta.baseRequirementHash !== input.entry.baseRequirementHash) {
-    diagnostics.push(changeDiagnostic({
-      code: "delta_frontmatter_mismatch",
-      message: `Delta spec ${input.entry.path} base requirement hash does not match the bundle entry.`,
-      path: input.entry.path
-    }));
-  }
-  return diagnostics;
-}
-function changeArtifactIdentityDiagnostics(input) {
-  if (input.actualChangeId === input.expectedChangeId)
-    return [];
-  return [
-    changeDiagnostic({
-      code: input.code,
-      message: `${input.label} declares change ${input.actualChangeId}, not ${input.expectedChangeId}.`,
-      path: input.artifactPath
-    })
-  ];
-}
-function referencesEqual(left, right) {
-  return left?.path === right?.path && left?.sha256 === right?.sha256 && left?.mediaType === right?.mediaType;
-}
-function findRevision(input) {
-  return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
-}
-function conflictDiagnostics(deltas, path49) {
-  const byRequirement = /* @__PURE__ */ new Map();
-  const diagnostics = [];
-  for (const delta of deltas) {
-    const prior = byRequirement.get(delta.requirementId);
-    if (prior !== void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "conflicting_delta_operations",
-        message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
-        path: path49
-      }));
-    }
-    byRequirement.set(delta.requirementId, delta.operation);
-  }
-  return diagnostics;
-}
-async function currentSpecMap(input) {
-  const specs = [];
-  const requirements = /* @__PURE__ */ new Map();
-  for (const requested of input.currentSpecs) {
-    const requirementId = parseRequirementId2(requested.requirementId, input.proposalPath);
-    if (typeof requirementId !== "string")
-      return requirementId;
-    const spec = await readCurrentSpec({
-      repositoryRoot: input.repositoryRoot,
-      requirementId
-    });
-    if (!spec.ok) {
-      return failure4(spec.status === "not_found" ? "not_found" : "invalid", spec.diagnostics);
-    }
-    if (spec.document.revision !== requested.expectedRevision) {
-      return failure4("invalid", [
-        changeDiagnostic({
-          code: "stale_change_base",
-          message: `Expected current spec ${requirementId} revision ${requested.expectedRevision}, but current revision is ${spec.document.revision}.`,
-          path: spec.artifactPath
-        })
-      ]);
-    }
-    specs.push(spec);
-    for (const requirement of spec.document.requirements) {
-      requirements.set(requirement.id, {
-        spec,
-        requirement,
-        requirementHash: hashContent(stableProtocolJson(requirement))
-      });
-    }
-  }
-  return { ok: true, specs, requirements };
-}
-async function normalizeDeltaSpecs(input) {
-  const diagnostics = [];
-  const normalizedHeaders = [];
-  const deltas = [];
-  for (const delta of input.deltas) {
-    const requirementId = parseRequirementId2(delta.requirementId, input.proposalPath);
-    if (typeof requirementId !== "string")
-      return requirementId;
-    normalizedHeaders.push({ requirementId, operation: delta.operation });
-  }
-  diagnostics.push(...conflictDiagnostics(normalizedHeaders, input.proposalPath));
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  for (const [index, delta] of input.deltas.entries()) {
-    const requirementId = normalizedHeaders[index]?.requirementId;
-    if (requirementId === void 0)
-      continue;
-    const base = input.baseRequirements.get(requirementId);
-    if ((delta.operation === "modify" || delta.operation === "remove") && base === void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "missing_delta_base",
-        message: `Delta ${delta.operation} for ${requirementId} has no matching current spec base.`,
-        path: input.proposalPath
-      }));
-      continue;
-    }
-    if (delta.operation === "add" && base !== void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "add_delta_targets_existing_requirement",
-        message: `Delta add for ${requirementId} targets an existing current requirement.`,
-        path: input.proposalPath
-      }));
-      continue;
-    }
-    if (delta.operation === "add") {
-      const exists = await currentRequirementExists({
-        repositoryRoot: input.repositoryRoot,
-        requirementId
-      });
-      if (typeof exists !== "boolean")
-        return exists;
-      if (exists) {
-        diagnostics.push(changeDiagnostic({
-          code: "add_delta_targets_existing_requirement",
-          message: `Delta add for ${requirementId} targets an existing current requirement.`,
-          path: input.proposalPath
-        }));
-        continue;
-      }
-    }
-    const parsed = changeDeltaSpecSchema.safeParse({
-      schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-      kind: "delta-spec",
-      changeId: input.changeId,
-      requirementId,
-      operation: delta.operation,
-      ...base === void 0 ? {} : {
-        baseCurrentSpec: base.spec.reference,
-        baseCurrentSpecRevision: base.spec.document.revision,
-        baseRequirementHash: base.requirementHash
-      },
-      ...delta.proposedRequirement === void 0 ? {} : { proposedRequirement: delta.proposedRequirement },
-      ...delta.sections === void 0 ? {} : { sections: delta.sections },
-      rationale: delta.rationale,
-      dependencies: [
-        ...base === void 0 ? [] : [base.spec.reference],
-        ...delta.dependencies ?? []
-      ]
-    });
-    if (!parsed.success) {
-      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
-        code: "invalid_delta_spec",
-        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: input.proposalPath
-      })));
-      continue;
-    }
-    deltas.push(parsed.data);
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return { ok: true, deltas };
-}
-function buildDecisionLog(input) {
-  const diagnostics = [];
-  const decisions = [];
-  for (const decision of input.decisions) {
-    const id = decisionIdSchema.safeParse(decision.id);
-    if (!id.success) {
-      diagnostics.push(changeDiagnostic({
-        code: "invalid_decision_id",
-        message: id.error.issues[0]?.message ?? "Invalid decision ID.",
-        path: input.decisionLogPath
-      }));
-      continue;
-    }
-    const createdAt = parseTimestamp2({
-      value: decision.createdAt ?? input.createdAt,
-      path: input.decisionLogPath,
-      code: "invalid_decision_created_at"
-    });
-    if (typeof createdAt !== "string") {
-      diagnostics.push(...createdAt.diagnostics);
-      continue;
-    }
-    const decidedAt = decision.decidedAt === void 0 ? void 0 : parseTimestamp2({
-      value: decision.decidedAt,
-      path: input.decisionLogPath,
-      code: "invalid_decision_decided_at"
-    });
-    if (decidedAt !== void 0 && typeof decidedAt !== "string") {
-      diagnostics.push(...decidedAt.diagnostics);
-      continue;
-    }
-    const parsed = decisionSchema.safeParse({
-      schemaVersion: LEGION_PROTOCOL_VERSION,
-      createdAt,
-      kind: "decision",
-      id: id.data,
-      projectId: input.projectId,
-      title: decision.title,
-      context: decision.context,
-      alternatives: decision.alternatives,
-      rationale: decision.rationale,
-      supersedes: decision.supersedes,
-      affectedArtifacts: input.affectedArtifacts,
-      traceRefs: [
-        {
-          path: input.decisionLogPath,
-          anchor: id.data,
-          relation: "records",
-          entity: { kind: "decision", id: id.data }
-        }
-      ],
-      status: decision.status,
-      ...decision.approver === void 0 ? {} : { approver: decision.approver },
-      ...decidedAt === void 0 ? {} : { decidedAt },
-      ...decision.supersededBy === void 0 ? {} : { supersededBy: decision.supersededBy }
-    });
-    if (!parsed.success) {
-      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
-        code: "invalid_decision",
-        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-        path: input.decisionLogPath
-      })));
-      continue;
-    }
-    decisions.push(parsed.data);
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return changeDecisionLogSchema.parse({
-    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-    kind: "decision-log",
-    changeId: input.changeId,
-    decisions
-  });
-}
-async function writeNewArtifact(input) {
-  try {
-    const write = await writeRevisionedArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath,
-      role: input.role,
-      content: input.content,
-      expectedRevision: 0,
-      currentRevision: 0,
-      mediaType: input.mediaType,
-      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha }
-    });
-    return { ok: true, reference: write.reference, revision: write.revision };
-  } catch (error51) {
-    if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure4("conflict", [
-        changeDiagnostic({
-          code: "revision_conflict",
-          message: error51.message,
-          path: input.artifactPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-}
-async function preflightNewArtifactPaths(input) {
-  const diagnostics = [];
-  for (const artifactPath of input.artifactPaths) {
-    let resolved;
-    try {
-      resolved = await resolveProjectArtifactPath({
-        repositoryRoot: input.repositoryRoot,
-        artifactPath
-      });
-    } catch (error51) {
-      return failure4("invalid", [
-        changeDiagnostic({
-          code: "invalid_path",
-          message: error51 instanceof Error ? error51.message : String(error51),
-          path: artifactPath
-        })
-      ]);
-    }
-    try {
-      await stat3(resolved.absolutePath);
-      diagnostics.push(changeDiagnostic({
-        code: "artifact_already_exists",
-        message: `Change artifact already exists: ${resolved.repositoryPath}.`,
-        path: resolved.repositoryPath
-      }));
-    } catch (error51) {
-      if (isEnoent4(error51))
-        continue;
-      throw error51;
-    }
-  }
-  if (diagnostics.length > 0)
-    return failure4("conflict", diagnostics);
-  return { ok: true };
-}
-function success4(input) {
-  return {
-    ok: true,
-    status: input.status,
-    bundle: input.bundle,
-    deltaSpecs: input.deltaSpecs,
-    design: input.design,
-    decisions: input.decisions,
-    artifactPath: input.artifactPath,
-    reference: input.reference,
-    revision: input.revision,
-    diagnostics: []
-  };
-}
-async function createChangeBundle(input) {
-  const changeId = parseChangeId2(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const projectId = projectIdSchema.safeParse(input.projectId);
-  const paths = changePaths(changeId);
-  if (input.deltaSpecs.length === 0) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_delta_specs",
-        message: "At least one delta spec is required to create a change bundle.",
-        path: paths.proposal
-      })
-    ]);
-  }
-  const baseGitSha = parseBaseGitSha(input.baseGitSha, paths.proposal);
-  if (typeof baseGitSha !== "string")
-    return baseGitSha;
-  if (!projectId.success) {
-    return failure4("invalid", [
-      changeDiagnostic({
-        code: "invalid_project_id",
-        message: projectId.error.issues[0]?.message ?? "Invalid project ID.",
-        path: paths.proposal
-      })
-    ]);
-  }
-  const owners = parseOwners(input.owners, paths.proposal);
-  if ("diagnostics" in owners)
-    return owners;
-  const createdAt = parseTimestamp2({
-    value: input.createdAt,
-    path: paths.proposal,
-    code: "invalid_created_at"
-  });
-  if (typeof createdAt !== "string")
-    return createdAt;
-  const current = await currentSpecMap({
-    repositoryRoot: input.repositoryRoot,
-    currentSpecs: input.currentSpecs,
-    proposalPath: paths.proposal
-  });
-  if (!current.ok)
-    return current;
-  const normalizedDeltas = await normalizeDeltaSpecs({
-    repositoryRoot: input.repositoryRoot,
-    changeId,
-    proposalPath: paths.proposal,
-    deltas: input.deltaSpecs,
-    baseRequirements: current.requirements
-  });
-  if (!normalizedDeltas.ok)
-    return normalizedDeltas;
-  const deltaArtifacts = normalizedDeltas.deltas.map((delta) => {
-    const artifactPath = artifactPathForRole({
-      role: "delta-spec",
-      changeId,
-      requirementId: delta.requirementId
-    });
-    const content = renderDeltaSpecMarkdown(delta);
-    const revision = artifactRevisionForContent({
-      role: "delta-spec",
-      path: artifactPath,
-      content,
-      revision: 1,
-      mediaType: "text/markdown",
-      baseGitSha
-    });
-    return { delta, artifactPath, content, reference: revision.artifact, revision };
-  });
-  const deltaArtifactsByRequirement = [...deltaArtifacts].sort((left, right) => compareStrings(left.delta.requirementId, right.delta.requirementId));
-  const design = changeDesignDocumentSchema.safeParse({
-    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-    kind: "change-design",
-    changeId,
-    title: input.design.title,
-    body: input.design.body,
-    dependencies: [
-      ...current.specs.map((spec) => spec.reference),
-      ...input.design.dependencies ?? []
-    ]
-  });
-  if (!design.success) {
-    return failure4("invalid", design.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_design",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: paths.design
-    })));
-  }
-  const designDocument = design.data;
-  const designContent = renderDesignMarkdown(designDocument);
-  const designRevision = artifactRevisionForContent({
-    role: "design",
-    path: paths.design,
-    content: designContent,
-    revision: 1,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  const decisionLog = buildDecisionLog({
-    changeId,
-    projectId: projectId.data,
-    createdAt,
-    decisionLogPath: paths.decisions,
-    affectedArtifacts: [designRevision.artifact, ...deltaArtifacts.map((artifact) => artifact.reference)],
-    decisions: input.decisions ?? []
-  });
-  if ("diagnostics" in decisionLog)
-    return decisionLog;
-  const decisionContent = renderDecisionLogMarkdown(decisionLog);
-  const decisionRevision = artifactRevisionForContent({
-    role: "decision-log",
-    path: paths.decisions,
-    content: decisionContent,
-    revision: 1,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  const preflight = await preflightNewArtifactPaths({
-    repositoryRoot: input.repositoryRoot,
-    artifactPaths: [
-      ...deltaArtifactsByRequirement.map((artifact) => artifact.artifactPath),
-      paths.design,
-      paths.decisions,
-      paths.proposal
-    ]
-  });
-  if (!preflight.ok)
-    return preflight;
-  const currentSpecsByPath = [...current.specs].sort((left, right) => compareStrings(left.artifactPath, right.artifactPath));
-  const currentRequirementIds = [...current.requirements.keys()].sort(compareStrings);
-  const deltaRequirementIds = normalizedDeltas.deltas.map((delta) => delta.requirementId).sort(compareStrings);
-  const artifactRevisions = [
-    ...deltaArtifactsByRequirement.map((artifact) => artifact.revision),
-    designRevision,
-    decisionRevision
-  ];
-  const change = {
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "change",
-    id: changeId,
-    projectId: projectId.data,
-    title: input.title,
-    summary: input.summary,
-    status: "draft",
-    currentTruth: {
-      specRefs: currentSpecsByPath.map((spec) => spec.reference),
-      baseSpecHash: hashContent(stableProtocolJson(currentSpecsByPath.map((spec) => ({
-        path: spec.artifactPath,
-        revision: spec.document.revision,
-        reference: spec.reference
-      })))),
-      baseGitSha,
-      requirementIds: currentRequirementIds
-    },
-    proposedTruth: {
-      deltaSpecRefs: deltaArtifactsByRequirement.map((artifact) => artifact.reference),
-      targetSpecHash: hashContent(stableProtocolJson(deltaArtifactsByRequirement.map((artifact) => ({
-        operation: artifact.delta.operation,
-        requirementId: artifact.delta.requirementId,
-        reference: artifact.reference
-      })))),
-      requirementIds: deltaRequirementIds
-    },
-    artifactRevisions,
-    risk: input.risk,
-    acceptance: { status: "not_ready" },
-    decisionRefs: decisionLog.decisions.map((decision) => decision.id),
-    oracleRefs: []
-  };
-  const parsedChange = changeBundleSchema.shape.change.safeParse(change);
-  if (!parsedChange.success) {
-    return failure4("invalid", parsedChange.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_change",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: paths.proposal
-    })));
-  }
-  const bundle = changeBundleSchema.safeParse({
-    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
-    kind: "change-bundle",
-    revision: 1,
-    owners,
-    baseGitSha,
-    paths,
-    change: parsedChange.data,
-    deltas: deltaArtifactsByRequirement.map((artifact) => ({
-      operation: artifact.delta.operation,
-      requirementId: artifact.delta.requirementId,
-      path: artifact.artifactPath,
-      ...artifact.delta.baseCurrentSpec === void 0 ? {} : { baseCurrentSpec: artifact.delta.baseCurrentSpec },
-      ...artifact.delta.baseCurrentSpecRevision === void 0 ? {} : { baseCurrentSpecRevision: artifact.delta.baseCurrentSpecRevision },
-      ...artifact.delta.baseRequirementHash === void 0 ? {} : { baseRequirementHash: artifact.delta.baseRequirementHash },
-      delta: artifact.reference
-    })),
-    artifactRevisions
-  });
-  if (!bundle.success) {
-    return failure4("invalid", bundle.error.issues.map((issue2) => changeDiagnostic({
-      code: "invalid_change_bundle",
-      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-      path: paths.proposal
-    })));
-  }
-  const bundleDocument = bundle.data;
-  const proposalContent = stableProtocolJson(bundleDocument);
-  for (const artifact of deltaArtifactsByRequirement) {
-    const written = await writeNewArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: artifact.artifactPath,
-      role: "delta-spec",
-      content: artifact.content,
-      mediaType: "text/markdown",
-      baseGitSha
-    });
-    if (!written.ok)
-      return written;
-  }
-  const writtenDesign = await writeNewArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.design,
-    role: "design",
-    content: designContent,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  if (!writtenDesign.ok)
-    return writtenDesign;
-  const writtenDecisions = await writeNewArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.decisions,
-    role: "decision-log",
-    content: decisionContent,
-    mediaType: "text/markdown",
-    baseGitSha
-  });
-  if (!writtenDecisions.ok)
-    return writtenDecisions;
-  const writtenProposal = await writeNewArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.proposal,
-    role: "proposal",
-    content: proposalContent,
-    mediaType: "application/json",
-    baseGitSha
-  });
-  if (!writtenProposal.ok)
-    return writtenProposal;
-  return success4({
-    status: "created",
-    bundle: bundleDocument,
-    deltaSpecs: normalizedDeltas.deltas,
-    design: designDocument,
-    decisions: decisionLog.decisions,
-    artifactPath: paths.proposal,
-    reference: writtenProposal.reference,
-    revision: writtenProposal.revision
-  });
-}
-async function loadChangeBundle(input) {
-  const changeId = parseChangeId2(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const paths = changePaths(changeId);
-  const proposal = await readJsonArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: paths.proposal,
-    schema: changeBundleSchema
-  });
-  if (!proposal.ok) {
-    const notFound = proposal.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found");
-    return failure4(notFound ? "not_found" : "invalid", proposal.diagnostics);
-  }
-  const bundle = proposal.value;
-  const diagnostics = [];
-  diagnostics.push(...bundleIdentityDiagnostics({
-    bundle,
-    requestedChangeId: changeId,
-    expectedPaths: paths
-  }));
-  const deltaSpecs = [];
-  for (const entry of bundle.deltas) {
-    const parsed = await readMarkdownArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: entry.path,
-      mediaType: "text/markdown",
-      schema: changeDeltaSpecSchema
-    });
-    if ("diagnostics" in parsed)
-      return parsed;
-    if (!referencesEqual(parsed.reference, entry.delta)) {
-      diagnostics.push(changeDiagnostic({
-        code: "delta_artifact_mismatch",
-        message: `Delta spec ${entry.path} bytes do not match the change bundle reference.`,
-        path: entry.path
-      }));
-    }
-    diagnostics.push(...deltaEntryDiagnostics({
-      entry,
-      delta: parsed.document,
-      changeId
-    }));
-    deltaSpecs.push(parsed.document);
-  }
-  const design = await readMarkdownArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: bundle.paths.design,
-    mediaType: "text/markdown",
-    schema: changeDesignDocumentSchema
-  });
-  if ("diagnostics" in design)
-    return design;
-  diagnostics.push(...changeArtifactIdentityDiagnostics({
-    artifactPath: bundle.paths.design,
-    actualChangeId: design.document.changeId,
-    expectedChangeId: changeId,
-    code: "design_change_id_mismatch",
-    label: "Design artifact"
-  }));
-  const designRevision = findRevision({ bundle, role: "design", path: bundle.paths.design });
-  if (!referencesEqual(design.reference, designRevision?.artifact)) {
-    diagnostics.push(changeDiagnostic({
-      code: "design_artifact_mismatch",
-      message: "Design bytes do not match the change bundle artifact revision.",
-      path: bundle.paths.design
-    }));
-  }
-  const decisions = await readMarkdownArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath: bundle.paths.decisions,
-    mediaType: "text/markdown",
-    schema: changeDecisionLogSchema
-  });
-  if ("diagnostics" in decisions)
-    return decisions;
-  diagnostics.push(...changeArtifactIdentityDiagnostics({
-    artifactPath: bundle.paths.decisions,
-    actualChangeId: decisions.document.changeId,
-    expectedChangeId: changeId,
-    code: "decision_log_change_id_mismatch",
-    label: "Decision log artifact"
-  }));
-  const decisionRevision = findRevision({ bundle, role: "decision-log", path: bundle.paths.decisions });
-  if (!referencesEqual(decisions.reference, decisionRevision?.artifact)) {
-    diagnostics.push(changeDiagnostic({
-      code: "decision_artifact_mismatch",
-      message: "Decision log bytes do not match the change bundle artifact revision.",
-      path: bundle.paths.decisions
-    }));
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return success4({
-    status: "read",
-    bundle,
-    deltaSpecs,
-    design: design.document,
-    decisions: decisions.document.decisions,
-    artifactPath: paths.proposal,
-    reference: proposal.reference,
-    revision: artifactRevisionForContent({
-      role: "proposal",
-      path: paths.proposal,
-      content: proposal.bytes,
-      revision: bundle.revision,
-      mediaType: "application/json",
-      baseGitSha: bundle.baseGitSha
-    })
-  });
-}
-async function validateChangeBundle(input) {
-  const loaded = await loadChangeBundle(input);
-  if (!loaded.ok)
-    return loaded;
-  const diagnostics = [];
-  diagnostics.push(...conflictDiagnostics(loaded.bundle.deltas, loaded.bundle.paths.proposal));
-  for (const delta of loaded.bundle.deltas) {
-    if (delta.operation === "add") {
-      const exists = await currentRequirementExists({
-        repositoryRoot: input.repositoryRoot,
-        requirementId: delta.requirementId
-      });
-      if (typeof exists !== "boolean") {
-        diagnostics.push(...exists.diagnostics);
-        continue;
-      }
-      if (exists) {
-        diagnostics.push(changeDiagnostic({
-          code: "add_delta_targets_existing_requirement",
-          message: `Current truth already contains requirement ${delta.requirementId}.`,
-          path: delta.path
-        }));
-      }
-      continue;
-    }
-    if (delta.baseCurrentSpec === void 0) {
-      diagnostics.push(changeDiagnostic({
-        code: "stale_change_base",
-        message: `Current spec base for ${delta.requirementId} is missing from the change bundle.`,
-        path: delta.path
-      }));
-      continue;
-    }
-    const current = await readCurrentSpecByArtifactPath({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: delta.baseCurrentSpec.path
-    });
-    if (!current.ok) {
-      diagnostics.push(changeDiagnostic({
-        code: "stale_change_base",
-        message: `Current spec for ${delta.requirementId} is no longer readable.`,
-        path: delta.path
-      }));
-      continue;
-    }
-    const requirement = current.document.requirements.find((entry) => entry.id === delta.requirementId);
-    const currentRequirementHash = requirement === void 0 ? void 0 : hashContent(stableProtocolJson(requirement));
-    if (!referencesEqual(current.reference, delta.baseCurrentSpec) || current.document.revision !== delta.baseCurrentSpecRevision || currentRequirementHash !== delta.baseRequirementHash) {
-      diagnostics.push(changeDiagnostic({
-        code: "stale_change_base",
-        message: `Current spec base for ${delta.requirementId} changed since this bundle was created.`,
-        path: delta.path
-      }));
-    }
-  }
-  if (diagnostics.length > 0)
-    return failure4("invalid", diagnostics);
-  return { ok: true, diagnostics: [] };
-}
-function diffChangeBundle(bundle) {
-  const added = bundle.deltas.filter((delta) => delta.operation === "add").map((delta) => delta.requirementId).sort();
-  const modified = bundle.deltas.filter((delta) => delta.operation === "modify").map((delta) => delta.requirementId).sort();
-  const removed = bundle.deltas.filter((delta) => delta.operation === "remove").map((delta) => delta.requirementId).sort();
-  return { added, modified, removed };
-}
-
-// packages/artifacts/dist/oracles/schema.js
-var ORACLE_ARTIFACT_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
-var oracleArtifactDocumentSchema = strictObject({
-  schemaVersion: schemaVersionSchema,
-  kind: literal("oracle-artifact"),
-  revision: number2().int().positive(),
-  oracle: oracleSchema
-});
-var oracleManifestSchema = strictObject({
-  schemaVersion: schemaVersionSchema,
-  kind: literal("oracle-manifest"),
-  changeId: changeIdSchema,
-  oracles: array(artifactRevisionSchema),
-  manifestHash: contentHashSchema
-});
-function jsonSchemaDocument8(id, title, schema) {
-  return {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: id,
-    title,
-    ...toJSONSchema(schema)
-  };
-}
-var oracleArtifactJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-artifact.schema.json", "Legion oracle artifact schema", oracleArtifactDocumentSchema);
-var oracleManifestJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-manifest.schema.json", "Legion oracle manifest schema", oracleManifestSchema);
-
-// packages/artifacts/dist/oracles/service.js
-import { readdir as readdir4 } from "node:fs/promises";
-import path12 from "node:path";
-var INVALID_ORACLE_PATH = ".legion/project/changes/invalid-change/oracle/invalid.yaml";
-function compareStrings2(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function compareOracleRevisions(left, right) {
-  return compareStrings2(left.artifact.path, right.artifact.path) || compareStrings2(left.artifact.sha256, right.artifact.sha256);
-}
-function failure5(status2, diagnostics) {
-  return { ok: false, status: status2, diagnostics };
-}
-function oracleDiagnostic(input) {
-  return diagnosticForPath({
-    code: input.code,
-    message: input.message,
-    path: input.path ?? INVALID_ORACLE_PATH
-  });
-}
-function schemaDiagnostics2(input) {
-  if (input.issues === void 0 || input.issues.length === 0) {
-    return [oracleDiagnostic({ code: input.code, message: "Oracle artifact failed schema validation.", path: input.path })];
-  }
-  return input.issues.map((issue2) => oracleDiagnostic({
-    code: input.code,
-    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
-    path: input.path
-  }));
-}
-function parseChangeId3(input) {
-  const parsed = changeIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
-      code: "invalid_change_id",
-      message: issue2.message
-    })));
-  }
-  return parsed.data;
-}
-function parseOracleId2(input, path49) {
-  const parsed = oracleIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
-      code: "invalid_oracle_id",
-      message: issue2.message,
-      path: path49
-    })));
-  }
-  return parsed.data;
-}
-function parseBaseGitSha2(input, path49) {
-  if (input === void 0)
-    return void 0;
-  const parsed = gitShaSchema.safeParse(input);
-  if (!parsed.success) {
-    return failure5("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
-      code: "invalid_base_git_sha",
-      message: issue2.message,
-      path: path49
-    })));
-  }
-  return parsed.data;
-}
-function oraclePath(changeId, oracleId) {
-  return artifactPathForRole({ role: "oracle", changeId, oracleId });
-}
-function normalizeOracle(input) {
-  const parsed = oracleSchema.safeParse(input.oracle);
-  if (!parsed.success) {
-    return failure5("invalid", schemaDiagnostics2({ code: "invalid_oracle", path: input.artifactPath, issues: parsed.error.issues }));
-  }
-  const diagnostics = [];
-  for (const protectedPath of parsed.data.protectedPaths) {
-    try {
-      canonicalProjectArtifactPath(protectedPath);
-    } catch (error51) {
-      diagnostics.push(oracleDiagnostic({
-        code: "invalid_protected_path",
-        message: error51 instanceof Error ? error51.message : String(error51),
-        path: input.artifactPath
-      }));
-    }
-  }
-  if (diagnostics.length > 0)
-    return failure5("invalid", diagnostics);
-  return parsed.data;
-}
-function oracleArtifactDocument(input) {
-  const parsed = oracleArtifactDocumentSchema.safeParse({
-    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
-    kind: "oracle-artifact",
-    revision: input.revision,
-    oracle: input.oracle
-  });
-  if (!parsed.success) {
-    return failure5("invalid", schemaDiagnostics2({ code: "invalid_oracle_artifact", path: input.artifactPath, issues: parsed.error.issues }));
-  }
-  return parsed.data;
-}
-function manifestFor(changeId, oracles) {
-  const sortedOracles = [...oracles].sort(compareOracleRevisions);
-  const manifestInput = {
-    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
-    kind: "oracle-manifest",
-    changeId,
-    oracles: sortedOracles
-  };
-  return oracleManifestSchema.parse({
-    ...manifestInput,
-    manifestHash: hashContent(stableProtocolJson(manifestInput))
-  });
-}
-async function writeOracleArtifact(input) {
-  const artifactDocument = oracleArtifactDocument({
-    oracle: input.oracle,
-    revision: input.currentRevision + 1,
-    artifactPath: input.artifactPath
-  });
-  if ("diagnostics" in artifactDocument)
-    return artifactDocument;
-  const content = stableProtocolJson(artifactDocument);
-  try {
-    const write = await writeRevisionedArtifact({
-      repositoryRoot: input.repositoryRoot,
-      artifactPath: input.artifactPath,
-      role: "oracle",
-      content,
-      expectedRevision: input.expectedRevision,
-      currentRevision: input.currentRevision,
-      mediaType: "application/json",
-      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha },
-      ...input.supersedes === void 0 ? {} : { supersedes: input.supersedes }
-    });
-    return {
-      ok: true,
-      status: input.status,
-      document: input.oracle,
-      artifactDocument,
-      artifactPath: write.artifactPath,
-      reference: write.reference,
-      revision: write.revision,
-      diagnostics: []
-    };
-  } catch (error51) {
-    if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure5("conflict", [
-        oracleDiagnostic({
-          code: "revision_conflict",
-          message: error51.message,
-          path: input.artifactPath
-        })
-      ]);
-    }
-    throw error51;
-  }
-}
-async function createOracleArtifact(input) {
-  const changeId = parseChangeId3(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const oracleId = parseOracleId2(input.oracle.id, INVALID_ORACLE_PATH);
-  if (typeof oracleId !== "string")
-    return oracleId;
-  const artifactPath = oraclePath(changeId, oracleId);
-  const oracle = normalizeOracle({ oracle: input.oracle, artifactPath });
-  if ("diagnostics" in oracle)
-    return oracle;
-  const baseGitSha = parseBaseGitSha2(input.baseGitSha, artifactPath);
-  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
-    return baseGitSha;
-  return writeOracleArtifact({
-    repositoryRoot: input.repositoryRoot,
-    changeId,
-    oracle,
-    artifactPath,
-    expectedRevision: 0,
-    currentRevision: 0,
-    ...baseGitSha === void 0 ? {} : { baseGitSha },
-    status: "created"
-  });
-}
-async function readOracleArtifact(input) {
-  const changeId = parseChangeId3(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const oracleId = parseOracleId2(input.oracleId, INVALID_ORACLE_PATH);
-  if (typeof oracleId !== "string")
-    return oracleId;
-  const artifactPath = oraclePath(changeId, oracleId);
-  const read = await readJsonArtifact({
-    repositoryRoot: input.repositoryRoot,
-    artifactPath,
-    schema: oracleArtifactDocumentSchema
-  });
-  if (!read.ok) {
-    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure5(status2, read.diagnostics);
-  }
-  if (read.value.oracle.id !== oracleId) {
-    return failure5("invalid", [
-      oracleDiagnostic({
-        code: "oracle_id_mismatch",
-        message: `Oracle artifact contains ${read.value.oracle.id}, not requested oracle ${oracleId}.`,
-        path: artifactPath
-      })
-    ]);
-  }
-  return {
-    ok: true,
-    status: "read",
-    document: read.value.oracle,
-    artifactDocument: read.value,
-    artifactPath,
-    reference: read.reference,
-    revision: artifactRevisionForContent({
-      role: "oracle",
-      path: artifactPath,
-      content: read.bytes,
-      revision: read.value.revision,
-      mediaType: "application/json"
-    }),
-    diagnostics: []
-  };
-}
-async function deriveOracleManifest(input) {
-  const changeId = parseChangeId3(input.changeId);
-  if (typeof changeId !== "string")
-    return changeId;
-  const oracleDirectory = path12.join(input.repositoryRoot, PROJECT_ARTIFACT_PATHS.changes, changeId, "oracle");
-  let entries;
-  try {
-    entries = await readdir4(oracleDirectory, { withFileTypes: true });
-  } catch (error51) {
-    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return {
-        ok: true,
-        status: "derived",
-        manifest: manifestFor(changeId, []),
-        diagnostics: []
-      };
-    }
-    throw error51;
-  }
-  const oracleRevisions = [];
-  for (const fileName of entries.filter((entry) => entry.isFile() && entry.name.endsWith(".yaml")).map((entry) => entry.name).sort(compareStrings2)) {
-    const oracleArtifactPath = `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/oracle/${fileName}`;
-    const oracleId = parseOracleId2(fileName.slice(0, -".yaml".length), oracleArtifactPath);
-    if (typeof oracleId !== "string")
-      return oracleId;
-    const oracle = await readOracleArtifact({
-      repositoryRoot: input.repositoryRoot,
-      changeId,
-      oracleId
-    });
-    if (!oracle.ok)
-      return oracle;
-    oracleRevisions.push(oracle.revision);
-  }
-  return {
-    ok: true,
-    status: "derived",
-    manifest: manifestFor(changeId, oracleRevisions),
-    diagnostics: []
-  };
-}
 
 // packages/artifacts/dist/taskgraphs/schema.js
 var TASKGRAPH_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
@@ -30050,7 +28672,7 @@ var taskGraphDocumentSchema = strictObject({
     }
   }
 });
-function jsonSchemaDocument9(id, title, schema) {
+function jsonSchemaDocument8(id, title, schema) {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: id,
@@ -30058,19 +28680,19 @@ function jsonSchemaDocument9(id, title, schema) {
     ...toJSONSchema(schema)
   };
 }
-var changeArtifactManifestJsonSchema = jsonSchemaDocument9("https://schemas.9thlevelsoftware.com/legion/artifacts/change-artifact-manifest.schema.json", "Legion change artifact manifest schema", changeArtifactManifestSchema);
-var taskGraphJsonSchema = jsonSchemaDocument9("https://schemas.9thlevelsoftware.com/legion/artifacts/taskgraph.schema.json", "Legion taskgraph artifact schema", taskGraphDocumentSchema);
+var changeArtifactManifestJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/change-artifact-manifest.schema.json", "Legion change artifact manifest schema", changeArtifactManifestSchema);
+var taskGraphJsonSchema = jsonSchemaDocument8("https://schemas.9thlevelsoftware.com/legion/artifacts/taskgraph.schema.json", "Legion taskgraph artifact schema", taskGraphDocumentSchema);
 
 // packages/artifacts/dist/taskgraphs/service.js
 var INVALID_TASKGRAPH_PATH = ".legion/project/changes/invalid-change/taskgraph.json";
-function compareStrings3(left, right) {
+function compareStrings(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function compareReferences(left, right) {
-  return compareStrings3(left.path, right.path) || compareStrings3(left.sha256, right.sha256);
+  return compareStrings(left.path, right.path) || compareStrings(left.sha256, right.sha256);
 }
 function compareArtifactRevisions(left, right) {
-  return compareStrings3(left.role, right.role) || compareReferences(left.artifact, right.artifact);
+  return compareStrings(left.role, right.role) || compareReferences(left.artifact, right.artifact);
 }
 function artifactInputDiagnostics(input) {
   if (input.artifactInputs.length === 0) {
@@ -30087,7 +28709,7 @@ function artifactInputDiagnostics(input) {
   for (const [index, artifactInput] of input.artifactInputs.entries()) {
     const parsed = artifactRevisionSchema.safeParse(artifactInput);
     if (!parsed.success) {
-      diagnostics.push(...schemaDiagnostics3({
+      diagnostics.push(...schemaDiagnostics2({
         code: "invalid_artifact_inputs",
         path: input.artifactPath,
         issues: parsed.error.issues.map((issue2) => ({
@@ -30108,7 +28730,7 @@ function artifactInputDiagnostics(input) {
   }
   return diagnostics;
 }
-function failure6(status2, diagnostics) {
+function failure4(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function taskGraphDiagnostic(input) {
@@ -30118,7 +28740,7 @@ function taskGraphDiagnostic(input) {
     path: input.path ?? INVALID_TASKGRAPH_PATH
   });
 }
-function schemaDiagnostics3(input) {
+function schemaDiagnostics2(input) {
   if (input.issues === void 0 || input.issues.length === 0) {
     return [taskGraphDiagnostic({ code: input.code, message: "Taskgraph failed schema validation.", path: input.path })];
   }
@@ -30128,22 +28750,22 @@ function schemaDiagnostics3(input) {
     path: input.path
   }));
 }
-function parseChangeId4(input) {
+function parseChangeId2(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
+    return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha3(input, path49) {
+function parseBaseGitSha(input, path49) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
-    return failure6("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
+    return failure4("invalid", parsed.error.issues.map((issue2) => taskGraphDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
       path: path49
@@ -30153,7 +28775,7 @@ function parseBaseGitSha3(input, path49) {
 }
 function assertExpectedRevision(value, path49) {
   if (!Number.isInteger(value) || value < 0) {
-    return failure6("invalid", [
+    return failure4("invalid", [
       taskGraphDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
@@ -30223,8 +28845,8 @@ function normalizeTaskGraph(input) {
     artifactPath: input.artifactPath
   });
   if (artifactInputIssues.length > 0)
-    return failure6("invalid", artifactInputIssues);
-  const tasks = [...input.tasks].sort((left, right) => compareStrings3(left.id, right.id));
+    return failure4("invalid", artifactInputIssues);
+  const tasks = [...input.tasks].sort((left, right) => compareStrings(left.id, right.id));
   const documentInput = {
     schemaVersion: TASKGRAPH_SCHEMA_VERSION,
     kind: "taskgraph",
@@ -30239,7 +28861,7 @@ function normalizeTaskGraph(input) {
   };
   const parsed = taskGraphDocumentSchema.safeParse(documentInput);
   if (!parsed.success) {
-    return failure6("invalid", schemaDiagnostics3({ code: "invalid_taskgraph", path: input.artifactPath, issues: parsed.error.issues }));
+    return failure4("invalid", schemaDiagnostics2({ code: "invalid_taskgraph", path: input.artifactPath, issues: parsed.error.issues }));
   }
   return parsed.data;
 }
@@ -30247,7 +28869,7 @@ async function currentTaskGraph(input) {
   return readTaskGraph(input);
 }
 async function writeTaskGraph(input) {
-  const changeId = parseChangeId4(input.changeId);
+  const changeId = parseChangeId2(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = taskgraphPath(changeId);
@@ -30255,7 +28877,7 @@ async function writeTaskGraph(input) {
   const revisionError = assertExpectedRevision(expectedRevision, artifactPath);
   if (revisionError !== void 0)
     return revisionError;
-  const baseGitSha = parseBaseGitSha3(input.baseGitSha, artifactPath);
+  const baseGitSha = parseBaseGitSha(input.baseGitSha, artifactPath);
   if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
     return baseGitSha;
   let supersedes;
@@ -30267,7 +28889,7 @@ async function writeTaskGraph(input) {
     if (!current.ok)
       return current;
     if (current.document.revision !== expectedRevision) {
-      return failure6("conflict", [
+      return failure4("conflict", [
         taskGraphDiagnostic({
           code: "revision_conflict",
           message: `stale artifact revision: expected ${expectedRevision}, current ${current.document.revision}`,
@@ -30310,7 +28932,7 @@ async function writeTaskGraph(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure6("conflict", [
+      return failure4("conflict", [
         taskGraphDiagnostic({
           code: "revision_conflict",
           message: error51.message,
@@ -30322,7 +28944,7 @@ async function writeTaskGraph(input) {
   }
 }
 async function readTaskGraph(input) {
-  const changeId = parseChangeId4(input.changeId);
+  const changeId = parseChangeId2(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = taskgraphPath(changeId);
@@ -30333,10 +28955,10 @@ async function readTaskGraph(input) {
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure6(status2, read.diagnostics);
+    return failure4(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure6("invalid", [
+    return failure4("invalid", [
       taskGraphDiagnostic({
         code: "taskgraph_change_mismatch",
         message: `Taskgraph change ID ${read.value.changeId} does not match requested change ${changeId}.`,
@@ -30349,19 +28971,19 @@ async function readTaskGraph(input) {
     artifactPath
   });
   if (artifactInputIssues.length > 0)
-    return failure6("invalid", artifactInputIssues);
+    return failure4("invalid", artifactInputIssues);
   const manifestInputIssues = manifestInputDiagnostics({
     document: read.value,
     artifactPath
   });
   if (manifestInputIssues.length > 0)
-    return failure6("invalid", manifestInputIssues);
+    return failure4("invalid", manifestInputIssues);
   const manifestDiagnostics = manifestHashDiagnostics({
     manifest: read.value.artifactManifest,
     artifactPath
   });
   if (manifestDiagnostics.length > 0)
-    return failure6("invalid", manifestDiagnostics);
+    return failure4("invalid", manifestDiagnostics);
   return {
     ok: true,
     status: "read",
@@ -30427,7 +29049,7 @@ var evidenceIndexDocumentSchema = strictObject({
     }
   }
 });
-function jsonSchemaDocument10(id, title, schema) {
+function jsonSchemaDocument9(id, title, schema) {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: id,
@@ -30435,17 +29057,17 @@ function jsonSchemaDocument10(id, title, schema) {
     ...toJSONSchema(schema)
   };
 }
-var evidenceIndexJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoftware.com/legion/artifacts/evidence-index.schema.json", "Legion evidence index artifact schema", evidenceIndexDocumentSchema);
+var evidenceIndexJsonSchema = jsonSchemaDocument9("https://schemas.9thlevelsoftware.com/legion/artifacts/evidence-index.schema.json", "Legion evidence index artifact schema", evidenceIndexDocumentSchema);
 
 // packages/artifacts/dist/evidence-index/service.js
 var INVALID_EVIDENCE_INDEX_PATH = ".legion/project/changes/invalid-change/evidence-index.json";
-function compareStrings4(left, right) {
+function compareStrings2(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function compareReferences2(left, right) {
-  return compareStrings4(left.path, right.path) || compareStrings4(left.sha256, right.sha256);
+  return compareStrings2(left.path, right.path) || compareStrings2(left.sha256, right.sha256);
 }
-function failure7(status2, diagnostics) {
+function failure5(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function evidenceDiagnostic(input) {
@@ -30455,7 +29077,7 @@ function evidenceDiagnostic(input) {
     path: input.path ?? INVALID_EVIDENCE_INDEX_PATH
   });
 }
-function schemaDiagnostics4(input) {
+function schemaDiagnostics3(input) {
   if (input.issues === void 0 || input.issues.length === 0) {
     return [evidenceDiagnostic({ code: input.code, message: "Evidence index failed schema validation.", path: input.path })];
   }
@@ -30465,22 +29087,22 @@ function schemaDiagnostics4(input) {
     path: input.path
   }));
 }
-function parseChangeId5(input) {
+function parseChangeId3(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
+    return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
   }
   return parsed.data;
 }
-function parseBaseGitSha4(input, path49) {
+function parseBaseGitSha2(input, path49) {
   if (input === void 0)
     return void 0;
   const parsed = gitShaSchema.safeParse(input);
   if (!parsed.success) {
-    return failure7("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
+    return failure5("invalid", parsed.error.issues.map((issue2) => evidenceDiagnostic({
       code: "invalid_base_git_sha",
       message: issue2.message,
       path: path49
@@ -30490,7 +29112,7 @@ function parseBaseGitSha4(input, path49) {
 }
 function assertExpectedRevision2(value, path49) {
   if (!Number.isInteger(value) || value < 0) {
-    return failure7("invalid", [
+    return failure5("invalid", [
       evidenceDiagnostic({
         code: "invalid_expected_revision",
         message: "Expected revision must be a non-negative integer.",
@@ -30521,7 +29143,7 @@ function artifactInputDiagnostics2(input) {
   for (const [index, artifactInput] of input.artifactInputs.entries()) {
     const parsed = artifactRevisionSchema.safeParse(artifactInput);
     if (!parsed.success) {
-      diagnostics.push(...schemaDiagnostics4({
+      diagnostics.push(...schemaDiagnostics3({
         code: "invalid_artifact_inputs",
         path: input.artifactPath,
         issues: parsed.error.issues.map((issue2) => ({
@@ -30647,10 +29269,10 @@ function normalizeEntries(input) {
       artifactPath: input.artifactPath
     });
     if (acceptanceDiagnostics.length > 0)
-      return failure7("invalid", acceptanceDiagnostics);
+      return failure5("invalid", acceptanceDiagnostics);
     const parsed = evidenceIndexEntrySchema.safeParse(entry);
     if (!parsed.success) {
-      return failure7("invalid", schemaDiagnostics4({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
+      return failure5("invalid", schemaDiagnostics3({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
     }
     entries.push(parsed.data);
   }
@@ -30660,8 +29282,8 @@ function normalizeEntries(input) {
     artifactPath: input.artifactPath
   });
   if (diagnostics.length > 0)
-    return failure7("invalid", diagnostics);
-  return entries.sort((left, right) => compareStrings4(left.evidence.id, right.evidence.id));
+    return failure5("invalid", diagnostics);
+  return entries.sort((left, right) => compareStrings2(left.evidence.id, right.evidence.id));
 }
 function evidenceReferences(entries) {
   const referencesByKey = /* @__PURE__ */ new Map();
@@ -30680,7 +29302,7 @@ function normalizeEvidenceIndex(input) {
     artifactPath: input.artifactPath
   });
   if (artifactInputIssues.length > 0)
-    return failure7("invalid", artifactInputIssues);
+    return failure5("invalid", artifactInputIssues);
   const entries = normalizeEntries({
     entries: input.entries,
     changeId: input.changeId,
@@ -30703,12 +29325,12 @@ function normalizeEvidenceIndex(input) {
   };
   const parsed = evidenceIndexDocumentSchema.safeParse(documentInput);
   if (!parsed.success) {
-    return failure7("invalid", schemaDiagnostics4({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
+    return failure5("invalid", schemaDiagnostics3({ code: "invalid_evidence_index", path: input.artifactPath, issues: parsed.error.issues }));
   }
   return parsed.data;
 }
 async function writeEvidenceIndex(input) {
-  const changeId = parseChangeId5(input.changeId);
+  const changeId = parseChangeId3(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = evidenceIndexPath(changeId);
@@ -30716,7 +29338,7 @@ async function writeEvidenceIndex(input) {
   const revisionError = assertExpectedRevision2(expectedRevision, artifactPath);
   if (revisionError !== void 0)
     return revisionError;
-  const baseGitSha = parseBaseGitSha4(input.baseGitSha, artifactPath);
+  const baseGitSha = parseBaseGitSha2(input.baseGitSha, artifactPath);
   if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
     return baseGitSha;
   let supersedes;
@@ -30728,7 +29350,7 @@ async function writeEvidenceIndex(input) {
     if (!current.ok)
       return current;
     if (current.document.revision !== expectedRevision) {
-      return failure7("conflict", [
+      return failure5("conflict", [
         evidenceDiagnostic({
           code: "revision_conflict",
           message: `stale artifact revision: expected ${expectedRevision}, current ${current.document.revision}`,
@@ -30771,7 +29393,7 @@ async function writeEvidenceIndex(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError) {
-      return failure7("conflict", [
+      return failure5("conflict", [
         evidenceDiagnostic({
           code: "revision_conflict",
           message: error51.message,
@@ -30783,7 +29405,7 @@ async function writeEvidenceIndex(input) {
   }
 }
 async function readEvidenceIndex(input) {
-  const changeId = parseChangeId5(input.changeId);
+  const changeId = parseChangeId3(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const artifactPath = evidenceIndexPath(changeId);
@@ -30794,10 +29416,10 @@ async function readEvidenceIndex(input) {
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure7(status2, read.diagnostics);
+    return failure5(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure7("invalid", [
+    return failure5("invalid", [
       evidenceDiagnostic({
         code: "evidence_index_change_mismatch",
         message: `Evidence index change ID ${read.value.changeId} does not match requested change ${changeId}.`,
@@ -30810,14 +29432,14 @@ async function readEvidenceIndex(input) {
     artifactPath
   });
   if (manifestDiagnostics.length > 0)
-    return failure7("invalid", manifestDiagnostics);
+    return failure5("invalid", manifestDiagnostics);
   const entryDiagnostics = validateEntries({
     entries: read.value.entries,
     changeId,
     artifactPath
   });
   if (entryDiagnostics.length > 0)
-    return failure7("invalid", entryDiagnostics);
+    return failure5("invalid", entryDiagnostics);
   return {
     ok: true,
     status: "read",
@@ -30831,6 +29453,1693 @@ async function readEvidenceIndex(input) {
       revision: read.value.revision,
       mediaType: "application/json"
     }),
+    diagnostics: []
+  };
+}
+
+// packages/artifacts/dist/changes/service.js
+var INVALID_CHANGE_BUNDLE_PATH = `${PROJECT_ARTIFACT_PATHS.changes}/invalid-change/change.yaml`;
+function isEnoent4(error51) {
+  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
+}
+function compareStrings3(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function failure6(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function changeDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_CHANGE_BUNDLE_PATH
+  });
+}
+function parseChangeId4(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseRequirementId2(input, path49) {
+  const parsed = requirementIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_requirement_id",
+      message: issue2.message,
+      path: path49
+    })));
+  }
+  return parsed.data;
+}
+function parseTimestamp2(input) {
+  const parsed = utcTimestampSchema.safeParse(input.value ?? (/* @__PURE__ */ new Date()).toISOString());
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: input.code,
+      message: issue2.message,
+      path: input.path
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha3(input, path49) {
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path49
+    })));
+  }
+  return parsed.data;
+}
+function parseOwners(input, path49) {
+  if (input.length === 0) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_owners",
+        message: "At least one owner is required for a change bundle.",
+        path: path49
+      })
+    ]);
+  }
+  const owners = [];
+  const diagnostics = [];
+  for (const owner of input) {
+    const parsed = actorSchema.safeParse(owner);
+    if (!parsed.success) {
+      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
+        code: "invalid_owner",
+        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+        path: path49
+      })));
+      continue;
+    }
+    owners.push(parsed.data);
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return owners;
+}
+function changePaths(changeId) {
+  const proposal = artifactPathForRole({ role: "proposal", changeId });
+  return {
+    root: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}`,
+    proposal,
+    deltaSpecRoot: `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/delta-specs`,
+    design: artifactPathForRole({ role: "design", changeId }),
+    decisions: artifactPathForRole({ role: "decision-log", changeId })
+  };
+}
+function frontmatterMarkdown(frontmatter, title, body) {
+  return [
+    "---",
+    stableProtocolJson(frontmatter).trimEnd(),
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    ...body,
+    ""
+  ].join("\n");
+}
+function renderDeltaSpecMarkdown(delta) {
+  return frontmatterMarkdown(delta, `${delta.operation}: ${delta.requirementId}`, [
+    "## Rationale",
+    "",
+    delta.rationale,
+    "",
+    "## Proposed Requirement",
+    "",
+    delta.proposedRequirement === void 0 ? "Requirement is removed." : stableProtocolJson(delta.proposedRequirement).trimEnd()
+  ]);
+}
+function renderDesignMarkdown(design) {
+  return frontmatterMarkdown(design, design.title, [design.body]);
+}
+function renderDecisionLogMarkdown(log) {
+  const lines = log.decisions.flatMap((decision) => [
+    `## ${decision.title}`,
+    "",
+    `- ID: ${decision.id}`,
+    `- Status: ${decision.status}`,
+    `- Rationale: ${decision.rationale}`,
+    ""
+  ]);
+  return frontmatterMarkdown(log, "Decisions", lines);
+}
+function parseMarkdownFrontmatter(input) {
+  const normalized = input.content.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "missing_frontmatter",
+        message: "Change artifact must start with JSON frontmatter.",
+        path: input.artifactPath
+      })
+    ]);
+  }
+  const closeIndex = normalized.indexOf("\n---\n", 4);
+  if (closeIndex < 0) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "unterminated_frontmatter",
+        message: "Change artifact frontmatter must close with --- on its own line.",
+        path: input.artifactPath
+      })
+    ]);
+  }
+  let parsedFrontmatter;
+  try {
+    parsedFrontmatter = JSON.parse(normalized.slice(4, closeIndex).trim());
+  } catch (error51) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_frontmatter_json",
+        message: error51 instanceof Error ? error51.message : "Change artifact frontmatter is not valid JSON.",
+        path: input.artifactPath
+      })
+    ]);
+  }
+  const parsed = input.schema.safeParse(parsedFrontmatter);
+  if (!parsed.success) {
+    return failure6("invalid", parsed.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_schema",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: input.artifactPath
+    })));
+  }
+  return { ok: true, document: parsed.data };
+}
+async function readMarkdownArtifact(input) {
+  let resolved;
+  try {
+    resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath
+    });
+  } catch (error51) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_path",
+        message: error51 instanceof Error ? error51.message : String(error51),
+        path: input.artifactPath
+      })
+    ]);
+  }
+  let content;
+  try {
+    content = await readFile7(resolved.absolutePath, "utf8");
+  } catch (error51) {
+    if (isEnoent4(error51)) {
+      return failure6("not_found", [
+        changeDiagnostic({
+          code: "not_found",
+          message: "Change artifact does not exist.",
+          path: resolved.repositoryPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+  const parsed = parseMarkdownFrontmatter({
+    artifactPath: resolved.repositoryPath,
+    content,
+    schema: input.schema
+  });
+  if (!parsed.ok)
+    return parsed;
+  return {
+    document: parsed.document,
+    content,
+    reference: artifactReferenceForContent({
+      path: resolved.repositoryPath,
+      content,
+      mediaType: input.mediaType
+    })
+  };
+}
+async function readCurrentSpecByArtifactPath(input) {
+  let resolved;
+  try {
+    resolved = await resolveProjectArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath
+    });
+  } catch (error51) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_path",
+        message: error51 instanceof Error ? error51.message : String(error51),
+        path: input.artifactPath
+      })
+    ]);
+  }
+  let content;
+  try {
+    content = await readFile7(resolved.absolutePath, "utf8");
+  } catch (error51) {
+    if (isEnoent4(error51)) {
+      return failure6("not_found", [
+        changeDiagnostic({
+          code: "not_found",
+          message: "Current spec artifact does not exist.",
+          path: resolved.repositoryPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+  const parsed = parseCurrentSpecMarkdown({
+    artifactPath: resolved.repositoryPath,
+    content
+  });
+  if (!parsed.ok)
+    return failure6(parsed.status, parsed.diagnostics);
+  return {
+    ok: true,
+    document: parsed.document,
+    artifactPath: resolved.repositoryPath,
+    reference: artifactReferenceForContent({
+      path: resolved.repositoryPath,
+      content,
+      mediaType: "text/markdown"
+    })
+  };
+}
+async function currentRequirementExists(input) {
+  const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
+  if (!currentSpecs.ok)
+    return failure6(currentSpecs.status, currentSpecs.diagnostics);
+  return currentSpecs.index.entries.some((entry) => entry.requirements.some((requirement) => requirement.id === input.requirementId));
+}
+function bundleIdentityDiagnostics(input) {
+  const diagnostics = [];
+  const expected = input.expectedPaths;
+  const actual = input.bundle.paths;
+  if (input.bundle.change.id !== input.requestedChangeId) {
+    diagnostics.push(changeDiagnostic({
+      code: "change_bundle_identity_mismatch",
+      message: `Loaded change bundle declares ${input.bundle.change.id}, but ${input.requestedChangeId} was requested.`,
+      path: expected.proposal
+    }));
+  }
+  const pathChecks = ["root", "proposal", "deltaSpecRoot", "design", "decisions"];
+  for (const key of pathChecks) {
+    if (actual[key] !== expected[key]) {
+      diagnostics.push(changeDiagnostic({
+        code: "change_bundle_path_mismatch",
+        message: `Loaded change bundle path ${String(key)} must be ${expected[key]}, not ${actual[key]}.`,
+        path: expected.proposal
+      }));
+    }
+  }
+  return diagnostics;
+}
+function deltaEntryDiagnostics(input) {
+  const diagnostics = [];
+  if (input.delta.changeId !== input.changeId) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} declares change ${input.delta.changeId}, not ${input.changeId}.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.requirementId !== input.entry.requirementId) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} declares requirement ${input.delta.requirementId}, not ${input.entry.requirementId}.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.operation !== input.entry.operation) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} declares operation ${input.delta.operation}, not ${input.entry.operation}.`,
+      path: input.entry.path
+    }));
+  }
+  if (!referencesEqual(input.delta.baseCurrentSpec, input.entry.baseCurrentSpec)) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} base current spec does not match the bundle entry.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.baseCurrentSpecRevision !== input.entry.baseCurrentSpecRevision) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} base current spec revision does not match the bundle entry.`,
+      path: input.entry.path
+    }));
+  }
+  if (input.delta.baseRequirementHash !== input.entry.baseRequirementHash) {
+    diagnostics.push(changeDiagnostic({
+      code: "delta_frontmatter_mismatch",
+      message: `Delta spec ${input.entry.path} base requirement hash does not match the bundle entry.`,
+      path: input.entry.path
+    }));
+  }
+  return diagnostics;
+}
+function changeArtifactIdentityDiagnostics(input) {
+  if (input.actualChangeId === input.expectedChangeId)
+    return [];
+  return [
+    changeDiagnostic({
+      code: input.code,
+      message: `${input.label} declares change ${input.actualChangeId}, not ${input.expectedChangeId}.`,
+      path: input.artifactPath
+    })
+  ];
+}
+function referencesEqual(left, right) {
+  return left?.path === right?.path && left?.sha256 === right?.sha256 && left?.mediaType === right?.mediaType;
+}
+function findRevision(input) {
+  return input.bundle.artifactRevisions.find((revision) => revision.role === input.role && revision.artifact.path === input.path);
+}
+function conflictDiagnostics(deltas, path49) {
+  const byRequirement = /* @__PURE__ */ new Map();
+  const diagnostics = [];
+  for (const delta of deltas) {
+    const prior = byRequirement.get(delta.requirementId);
+    if (prior !== void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "conflicting_delta_operations",
+        message: `Requirement ${delta.requirementId} has multiple delta operations: ${prior} and ${delta.operation}.`,
+        path: path49
+      }));
+    }
+    byRequirement.set(delta.requirementId, delta.operation);
+  }
+  return diagnostics;
+}
+async function currentSpecMap(input) {
+  const specs = [];
+  const requirements = /* @__PURE__ */ new Map();
+  for (const requested of input.currentSpecs) {
+    const requirementId = parseRequirementId2(requested.requirementId, input.proposalPath);
+    if (typeof requirementId !== "string")
+      return requirementId;
+    const spec = await readCurrentSpec({
+      repositoryRoot: input.repositoryRoot,
+      requirementId
+    });
+    if (!spec.ok) {
+      return failure6(spec.status === "not_found" ? "not_found" : "invalid", spec.diagnostics);
+    }
+    if (spec.document.revision !== requested.expectedRevision) {
+      return failure6("invalid", [
+        changeDiagnostic({
+          code: "stale_change_base",
+          message: `Expected current spec ${requirementId} revision ${requested.expectedRevision}, but current revision is ${spec.document.revision}.`,
+          path: spec.artifactPath
+        })
+      ]);
+    }
+    specs.push(spec);
+    for (const requirement of spec.document.requirements) {
+      requirements.set(requirement.id, {
+        spec,
+        requirement,
+        requirementHash: hashContent(stableProtocolJson(requirement))
+      });
+    }
+  }
+  return { ok: true, specs, requirements };
+}
+async function normalizeDeltaSpecs(input) {
+  const diagnostics = [];
+  const normalizedHeaders = [];
+  const deltas = [];
+  for (const delta of input.deltas) {
+    const requirementId = parseRequirementId2(delta.requirementId, input.proposalPath);
+    if (typeof requirementId !== "string")
+      return requirementId;
+    normalizedHeaders.push({ requirementId, operation: delta.operation });
+  }
+  diagnostics.push(...conflictDiagnostics(normalizedHeaders, input.proposalPath));
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  for (const [index, delta] of input.deltas.entries()) {
+    const requirementId = normalizedHeaders[index]?.requirementId;
+    if (requirementId === void 0)
+      continue;
+    const base = input.baseRequirements.get(requirementId);
+    if ((delta.operation === "modify" || delta.operation === "remove") && base === void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "missing_delta_base",
+        message: `Delta ${delta.operation} for ${requirementId} has no matching current spec base.`,
+        path: input.proposalPath
+      }));
+      continue;
+    }
+    if (delta.operation === "add" && base !== void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "add_delta_targets_existing_requirement",
+        message: `Delta add for ${requirementId} targets an existing current requirement.`,
+        path: input.proposalPath
+      }));
+      continue;
+    }
+    if (delta.operation === "add") {
+      const exists = await currentRequirementExists({
+        repositoryRoot: input.repositoryRoot,
+        requirementId
+      });
+      if (typeof exists !== "boolean")
+        return exists;
+      if (exists) {
+        diagnostics.push(changeDiagnostic({
+          code: "add_delta_targets_existing_requirement",
+          message: `Delta add for ${requirementId} targets an existing current requirement.`,
+          path: input.proposalPath
+        }));
+        continue;
+      }
+    }
+    const parsed = changeDeltaSpecSchema.safeParse({
+      schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+      kind: "delta-spec",
+      changeId: input.changeId,
+      requirementId,
+      operation: delta.operation,
+      ...base === void 0 ? {} : {
+        baseCurrentSpec: base.spec.reference,
+        baseCurrentSpecRevision: base.spec.document.revision,
+        baseRequirementHash: base.requirementHash
+      },
+      ...delta.proposedRequirement === void 0 ? {} : { proposedRequirement: delta.proposedRequirement },
+      ...delta.sections === void 0 ? {} : { sections: delta.sections },
+      rationale: delta.rationale,
+      dependencies: [
+        ...base === void 0 ? [] : [base.spec.reference],
+        ...delta.dependencies ?? []
+      ]
+    });
+    if (!parsed.success) {
+      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
+        code: "invalid_delta_spec",
+        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+        path: input.proposalPath
+      })));
+      continue;
+    }
+    deltas.push(parsed.data);
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return { ok: true, deltas };
+}
+function buildDecisionLog(input) {
+  const diagnostics = [];
+  const decisions = [];
+  for (const decision of input.decisions) {
+    const id = decisionIdSchema.safeParse(decision.id);
+    if (!id.success) {
+      diagnostics.push(changeDiagnostic({
+        code: "invalid_decision_id",
+        message: id.error.issues[0]?.message ?? "Invalid decision ID.",
+        path: input.decisionLogPath
+      }));
+      continue;
+    }
+    const createdAt = parseTimestamp2({
+      value: decision.createdAt ?? input.createdAt,
+      path: input.decisionLogPath,
+      code: "invalid_decision_created_at"
+    });
+    if (typeof createdAt !== "string") {
+      diagnostics.push(...createdAt.diagnostics);
+      continue;
+    }
+    const decidedAt = decision.decidedAt === void 0 ? void 0 : parseTimestamp2({
+      value: decision.decidedAt,
+      path: input.decisionLogPath,
+      code: "invalid_decision_decided_at"
+    });
+    if (decidedAt !== void 0 && typeof decidedAt !== "string") {
+      diagnostics.push(...decidedAt.diagnostics);
+      continue;
+    }
+    const parsed = decisionSchema.safeParse({
+      schemaVersion: LEGION_PROTOCOL_VERSION,
+      createdAt,
+      kind: "decision",
+      id: id.data,
+      projectId: input.projectId,
+      title: decision.title,
+      context: decision.context,
+      alternatives: decision.alternatives,
+      rationale: decision.rationale,
+      supersedes: decision.supersedes,
+      affectedArtifacts: input.affectedArtifacts,
+      traceRefs: [
+        {
+          path: input.decisionLogPath,
+          anchor: id.data,
+          relation: "records",
+          entity: { kind: "decision", id: id.data }
+        }
+      ],
+      status: decision.status,
+      ...decision.approver === void 0 ? {} : { approver: decision.approver },
+      ...decidedAt === void 0 ? {} : { decidedAt },
+      ...decision.supersededBy === void 0 ? {} : { supersededBy: decision.supersededBy }
+    });
+    if (!parsed.success) {
+      diagnostics.push(...parsed.error.issues.map((issue2) => changeDiagnostic({
+        code: "invalid_decision",
+        message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+        path: input.decisionLogPath
+      })));
+      continue;
+    }
+    decisions.push(parsed.data);
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return changeDecisionLogSchema.parse({
+    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+    kind: "decision-log",
+    changeId: input.changeId,
+    decisions
+  });
+}
+async function writeNewArtifact(input) {
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath,
+      role: input.role,
+      content: input.content,
+      expectedRevision: 0,
+      currentRevision: 0,
+      mediaType: input.mediaType,
+      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha }
+    });
+    return { ok: true, reference: write.reference, revision: write.revision };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure6("conflict", [
+        changeDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: input.artifactPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function preflightNewArtifactPaths(input) {
+  const diagnostics = [];
+  for (const artifactPath of input.artifactPaths) {
+    let resolved;
+    try {
+      resolved = await resolveProjectArtifactPath({
+        repositoryRoot: input.repositoryRoot,
+        artifactPath
+      });
+    } catch (error51) {
+      return failure6("invalid", [
+        changeDiagnostic({
+          code: "invalid_path",
+          message: error51 instanceof Error ? error51.message : String(error51),
+          path: artifactPath
+        })
+      ]);
+    }
+    try {
+      await stat3(resolved.absolutePath);
+      diagnostics.push(changeDiagnostic({
+        code: "artifact_already_exists",
+        message: `Change artifact already exists: ${resolved.repositoryPath}.`,
+        path: resolved.repositoryPath
+      }));
+    } catch (error51) {
+      if (isEnoent4(error51))
+        continue;
+      throw error51;
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure6("conflict", diagnostics);
+  return { ok: true };
+}
+function success4(input) {
+  return {
+    ok: true,
+    status: input.status,
+    bundle: input.bundle,
+    deltaSpecs: input.deltaSpecs,
+    design: input.design,
+    decisions: input.decisions,
+    artifactPath: input.artifactPath,
+    reference: input.reference,
+    revision: input.revision,
+    diagnostics: []
+  };
+}
+async function createChangeBundle(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const projectId = projectIdSchema.safeParse(input.projectId);
+  const paths = changePaths(changeId);
+  if (input.deltaSpecs.length === 0) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_delta_specs",
+        message: "At least one delta spec is required to create a change bundle.",
+        path: paths.proposal
+      })
+    ]);
+  }
+  const baseGitSha = parseBaseGitSha3(input.baseGitSha, paths.proposal);
+  if (typeof baseGitSha !== "string")
+    return baseGitSha;
+  if (!projectId.success) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_project_id",
+        message: projectId.error.issues[0]?.message ?? "Invalid project ID.",
+        path: paths.proposal
+      })
+    ]);
+  }
+  const owners = parseOwners(input.owners, paths.proposal);
+  if ("diagnostics" in owners)
+    return owners;
+  const createdAt = parseTimestamp2({
+    value: input.createdAt,
+    path: paths.proposal,
+    code: "invalid_created_at"
+  });
+  if (typeof createdAt !== "string")
+    return createdAt;
+  const current = await currentSpecMap({
+    repositoryRoot: input.repositoryRoot,
+    currentSpecs: input.currentSpecs,
+    proposalPath: paths.proposal
+  });
+  if (!current.ok)
+    return current;
+  const normalizedDeltas = await normalizeDeltaSpecs({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    proposalPath: paths.proposal,
+    deltas: input.deltaSpecs,
+    baseRequirements: current.requirements
+  });
+  if (!normalizedDeltas.ok)
+    return normalizedDeltas;
+  const deltaArtifacts = normalizedDeltas.deltas.map((delta) => {
+    const artifactPath = artifactPathForRole({
+      role: "delta-spec",
+      changeId,
+      requirementId: delta.requirementId
+    });
+    const content = renderDeltaSpecMarkdown(delta);
+    const revision = artifactRevisionForContent({
+      role: "delta-spec",
+      path: artifactPath,
+      content,
+      revision: 1,
+      mediaType: "text/markdown",
+      baseGitSha
+    });
+    return { delta, artifactPath, content, reference: revision.artifact, revision };
+  });
+  const deltaArtifactsByRequirement = [...deltaArtifacts].sort((left, right) => compareStrings3(left.delta.requirementId, right.delta.requirementId));
+  const design = changeDesignDocumentSchema.safeParse({
+    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+    kind: "change-design",
+    changeId,
+    title: input.design.title,
+    body: input.design.body,
+    dependencies: [
+      ...current.specs.map((spec) => spec.reference),
+      ...input.design.dependencies ?? []
+    ]
+  });
+  if (!design.success) {
+    return failure6("invalid", design.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_design",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.design
+    })));
+  }
+  const designDocument = design.data;
+  const designContent = renderDesignMarkdown(designDocument);
+  const designRevision = artifactRevisionForContent({
+    role: "design",
+    path: paths.design,
+    content: designContent,
+    revision: 1,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  const decisionLog = buildDecisionLog({
+    changeId,
+    projectId: projectId.data,
+    createdAt,
+    decisionLogPath: paths.decisions,
+    affectedArtifacts: [designRevision.artifact, ...deltaArtifacts.map((artifact) => artifact.reference)],
+    decisions: input.decisions ?? []
+  });
+  if ("diagnostics" in decisionLog)
+    return decisionLog;
+  const decisionContent = renderDecisionLogMarkdown(decisionLog);
+  const decisionRevision = artifactRevisionForContent({
+    role: "decision-log",
+    path: paths.decisions,
+    content: decisionContent,
+    revision: 1,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  const preflight = await preflightNewArtifactPaths({
+    repositoryRoot: input.repositoryRoot,
+    artifactPaths: [
+      ...deltaArtifactsByRequirement.map((artifact) => artifact.artifactPath),
+      paths.design,
+      paths.decisions,
+      paths.proposal
+    ]
+  });
+  if (!preflight.ok)
+    return preflight;
+  const currentSpecsByPath = [...current.specs].sort((left, right) => compareStrings3(left.artifactPath, right.artifactPath));
+  const currentRequirementIds = [...current.requirements.keys()].sort(compareStrings3);
+  const deltaRequirementIds = normalizedDeltas.deltas.map((delta) => delta.requirementId).sort(compareStrings3);
+  const artifactRevisions = [
+    ...deltaArtifactsByRequirement.map((artifact) => artifact.revision),
+    designRevision,
+    decisionRevision
+  ];
+  const change = {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "change",
+    id: changeId,
+    projectId: projectId.data,
+    title: input.title,
+    summary: input.summary,
+    status: "draft",
+    currentTruth: {
+      specRefs: currentSpecsByPath.map((spec) => spec.reference),
+      baseSpecHash: hashContent(stableProtocolJson(currentSpecsByPath.map((spec) => ({
+        path: spec.artifactPath,
+        revision: spec.document.revision,
+        reference: spec.reference
+      })))),
+      baseGitSha,
+      requirementIds: currentRequirementIds
+    },
+    proposedTruth: {
+      deltaSpecRefs: deltaArtifactsByRequirement.map((artifact) => artifact.reference),
+      targetSpecHash: hashContent(stableProtocolJson(deltaArtifactsByRequirement.map((artifact) => ({
+        operation: artifact.delta.operation,
+        requirementId: artifact.delta.requirementId,
+        reference: artifact.reference
+      })))),
+      requirementIds: deltaRequirementIds
+    },
+    artifactRevisions,
+    risk: input.risk,
+    acceptance: { status: "not_ready" },
+    decisionRefs: decisionLog.decisions.map((decision) => decision.id),
+    oracleRefs: []
+  };
+  const parsedChange = changeBundleSchema.shape.change.safeParse(change);
+  if (!parsedChange.success) {
+    return failure6("invalid", parsedChange.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  const bundle = changeBundleSchema.safeParse({
+    schemaVersion: CHANGE_BUNDLE_SCHEMA_VERSION,
+    kind: "change-bundle",
+    revision: 1,
+    owners,
+    baseGitSha,
+    paths,
+    change: parsedChange.data,
+    deltas: deltaArtifactsByRequirement.map((artifact) => ({
+      operation: artifact.delta.operation,
+      requirementId: artifact.delta.requirementId,
+      path: artifact.artifactPath,
+      ...artifact.delta.baseCurrentSpec === void 0 ? {} : { baseCurrentSpec: artifact.delta.baseCurrentSpec },
+      ...artifact.delta.baseCurrentSpecRevision === void 0 ? {} : { baseCurrentSpecRevision: artifact.delta.baseCurrentSpecRevision },
+      ...artifact.delta.baseRequirementHash === void 0 ? {} : { baseRequirementHash: artifact.delta.baseRequirementHash },
+      delta: artifact.reference
+    })),
+    artifactRevisions
+  });
+  if (!bundle.success) {
+    return failure6("invalid", bundle.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change_bundle",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  const bundleDocument = bundle.data;
+  const proposalContent = stableProtocolJson(bundleDocument);
+  for (const artifact of deltaArtifactsByRequirement) {
+    const written = await writeNewArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: artifact.artifactPath,
+      role: "delta-spec",
+      content: artifact.content,
+      mediaType: "text/markdown",
+      baseGitSha
+    });
+    if (!written.ok)
+      return written;
+  }
+  const writtenDesign = await writeNewArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.design,
+    role: "design",
+    content: designContent,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  if (!writtenDesign.ok)
+    return writtenDesign;
+  const writtenDecisions = await writeNewArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.decisions,
+    role: "decision-log",
+    content: decisionContent,
+    mediaType: "text/markdown",
+    baseGitSha
+  });
+  if (!writtenDecisions.ok)
+    return writtenDecisions;
+  const writtenProposal = await writeNewArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.proposal,
+    role: "proposal",
+    content: proposalContent,
+    mediaType: "application/json",
+    baseGitSha
+  });
+  if (!writtenProposal.ok)
+    return writtenProposal;
+  return success4({
+    status: "created",
+    bundle: bundleDocument,
+    deltaSpecs: normalizedDeltas.deltas,
+    design: designDocument,
+    decisions: decisionLog.decisions,
+    artifactPath: paths.proposal,
+    reference: writtenProposal.reference,
+    revision: writtenProposal.revision
+  });
+}
+async function loadChangeBundle(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const paths = changePaths(changeId);
+  const proposal = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: paths.proposal,
+    schema: changeBundleSchema
+  });
+  if (!proposal.ok) {
+    const notFound = proposal.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found");
+    return failure6(notFound ? "not_found" : "invalid", proposal.diagnostics);
+  }
+  const bundle = proposal.value;
+  const diagnostics = [];
+  diagnostics.push(...bundleIdentityDiagnostics({
+    bundle,
+    requestedChangeId: changeId,
+    expectedPaths: paths
+  }));
+  const deltaSpecs = [];
+  for (const entry of bundle.deltas) {
+    const parsed = await readMarkdownArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: entry.path,
+      mediaType: "text/markdown",
+      schema: changeDeltaSpecSchema
+    });
+    if ("diagnostics" in parsed)
+      return parsed;
+    if (!referencesEqual(parsed.reference, entry.delta)) {
+      diagnostics.push(changeDiagnostic({
+        code: "delta_artifact_mismatch",
+        message: `Delta spec ${entry.path} bytes do not match the change bundle reference.`,
+        path: entry.path
+      }));
+    }
+    diagnostics.push(...deltaEntryDiagnostics({
+      entry,
+      delta: parsed.document,
+      changeId
+    }));
+    deltaSpecs.push(parsed.document);
+  }
+  const design = await readMarkdownArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: bundle.paths.design,
+    mediaType: "text/markdown",
+    schema: changeDesignDocumentSchema
+  });
+  if ("diagnostics" in design)
+    return design;
+  diagnostics.push(...changeArtifactIdentityDiagnostics({
+    artifactPath: bundle.paths.design,
+    actualChangeId: design.document.changeId,
+    expectedChangeId: changeId,
+    code: "design_change_id_mismatch",
+    label: "Design artifact"
+  }));
+  const designRevision = findRevision({ bundle, role: "design", path: bundle.paths.design });
+  if (!referencesEqual(design.reference, designRevision?.artifact)) {
+    diagnostics.push(changeDiagnostic({
+      code: "design_artifact_mismatch",
+      message: "Design bytes do not match the change bundle artifact revision.",
+      path: bundle.paths.design
+    }));
+  }
+  const decisions = await readMarkdownArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath: bundle.paths.decisions,
+    mediaType: "text/markdown",
+    schema: changeDecisionLogSchema
+  });
+  if ("diagnostics" in decisions)
+    return decisions;
+  diagnostics.push(...changeArtifactIdentityDiagnostics({
+    artifactPath: bundle.paths.decisions,
+    actualChangeId: decisions.document.changeId,
+    expectedChangeId: changeId,
+    code: "decision_log_change_id_mismatch",
+    label: "Decision log artifact"
+  }));
+  const decisionRevision = findRevision({ bundle, role: "decision-log", path: bundle.paths.decisions });
+  if (!referencesEqual(decisions.reference, decisionRevision?.artifact)) {
+    diagnostics.push(changeDiagnostic({
+      code: "decision_artifact_mismatch",
+      message: "Decision log bytes do not match the change bundle artifact revision.",
+      path: bundle.paths.decisions
+    }));
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return success4({
+    status: "read",
+    bundle,
+    deltaSpecs,
+    design: design.document,
+    decisions: decisions.document.decisions,
+    artifactPath: paths.proposal,
+    reference: proposal.reference,
+    revision: artifactRevisionForContent({
+      role: "proposal",
+      path: paths.proposal,
+      content: proposal.bytes,
+      revision: bundle.revision,
+      mediaType: "application/json",
+      baseGitSha: bundle.baseGitSha
+    })
+  });
+}
+function namesRevision(recorded, expected) {
+  return recorded.artifact.path === expected.artifact.path && recorded.artifact.sha256 === expected.artifact.sha256 && recorded.revision === expected.revision;
+}
+function namesExactly(previous) {
+  return (entry) => namesRevision(entry, previous);
+}
+function namesSuperseded(current) {
+  return (entry) => entry.artifact.path === current.artifact.path && entry.revision < current.revision;
+}
+function substituteSelected(inputs, select, current) {
+  let substituted = false;
+  const next = inputs.map((entry) => {
+    if (!select(entry))
+      return entry;
+    substituted = true;
+    return current;
+  });
+  return { inputs: next, substituted };
+}
+function repointFailure(input) {
+  return failure6(input.status ?? "invalid", [
+    changeDiagnostic({
+      code: "change_inputs_not_repointed",
+      message: `${input.message} Rerun \`legion dev change repoint <changeId>\` to re-point the recorded inputs at the proposal on disk; until then legion ship reports change_traceability_broken for this change.`,
+      path: input.path
+    })
+  ]);
+}
+async function guardedRepointWrite(operation, onFailure) {
+  let written;
+  try {
+    written = await operation();
+  } catch (error51) {
+    return onFailure(error51 instanceof Error ? error51.message : String(error51), "invalid");
+  }
+  if (written.ok)
+    return written;
+  const result = written;
+  return onFailure(result.diagnostics?.[0]?.message ?? "the write failed", result.status === "conflict" ? "conflict" : "invalid");
+}
+async function repointChangeProposalInputs(input) {
+  return repointProposalPins({ ...input, select: namesExactly(input.previous) });
+}
+async function repointProposalPins(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const repointed = [];
+  const baseGitSha = input.baseGitSha;
+  const current = input.current;
+  const select = input.select;
+  const taskGraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!taskGraph.ok) {
+    if (taskGraph.status === "not_found")
+      return { ok: true, repointed: [], diagnostics: [] };
+    return repointFailure({
+      message: "This change's task graph could not be read, so the input that pins the change proposal could not be re-pointed at it.",
+      path: artifactPathForRole({ role: "taskgraph", changeId })
+    });
+  }
+  const graphInputs = substituteSelected(taskGraph.document.artifactInputs, select, current);
+  let taskGraphRevision;
+  if (graphInputs.substituted) {
+    const written2 = await guardedRepointWrite(() => writeTaskGraph({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      tasks: taskGraph.document.tasks,
+      artifactInputs: graphInputs.inputs,
+      expectedRevision: taskGraph.document.revision,
+      ...baseGitSha === void 0 ? {} : { baseGitSha }
+    }), (detail, status2) => repointFailure({
+      message: `This change's task graph could not be re-pointed at the change proposal on disk: ${detail}.`,
+      path: taskGraph.artifactPath,
+      status: status2
+    }));
+    if (!written2.ok)
+      return written2;
+    const graphWrite = written2;
+    repointed.push({
+      artifactPath: graphWrite.artifactPath,
+      from: taskGraph.document.revision,
+      to: graphWrite.document.revision,
+      inputs: [current.artifact.path]
+    });
+    taskGraphRevision = graphWrite.revision;
+  }
+  const evidenceIndex = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!evidenceIndex.ok) {
+    if (evidenceIndex.status === "not_found") {
+      return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+    }
+    return repointFailure({
+      message: "This change's evidence index could not be read, so the input that pins the change proposal could not be re-pointed at it.",
+      path: artifactPathForRole({ role: "evidence-index", changeId })
+    });
+  }
+  const substitutedPaths = [];
+  const proposalInputs = substituteSelected(evidenceIndex.document.artifactManifest.inputs, select, current);
+  if (proposalInputs.substituted)
+    substitutedPaths.push(current.artifact.path);
+  let evidenceInputs = proposalInputs.inputs;
+  if (taskGraphRevision !== void 0) {
+    const graphPin = substituteSelected(evidenceInputs, namesExactly(taskGraph.revision), taskGraphRevision);
+    if (graphPin.substituted)
+      substitutedPaths.push(taskGraphRevision.artifact.path);
+    evidenceInputs = graphPin.inputs;
+  }
+  if (substitutedPaths.length === 0) {
+    return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+  }
+  const written = await guardedRepointWrite(() => writeEvidenceIndex({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    entries: evidenceIndex.document.entries,
+    artifactInputs: evidenceInputs,
+    expectedRevision: evidenceIndex.document.revision,
+    ...baseGitSha === void 0 ? {} : { baseGitSha }
+  }), (detail, status2) => repointFailure({
+    message: `This change's evidence index could not be re-pointed at the change proposal on disk: ${detail}.`,
+    path: evidenceIndex.artifactPath,
+    status: status2
+  }));
+  if (!written.ok)
+    return written;
+  const indexWrite = written;
+  repointed.push({
+    artifactPath: indexWrite.artifactPath,
+    from: evidenceIndex.document.revision,
+    to: indexWrite.document.revision,
+    inputs: substitutedPaths
+  });
+  return verifyProposalPins({ repositoryRoot: input.repositoryRoot, changeId, current, select, repointed });
+}
+async function verifyProposalPins(input) {
+  const stale = [];
+  const taskGraph = await readTaskGraph({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (taskGraph.ok) {
+    for (const entry of taskGraph.document.artifactInputs) {
+      if (input.select(entry))
+        stale.push(`${taskGraph.artifactPath} still names revision ${entry.revision}`);
+    }
+  } else if (taskGraph.status !== "not_found") {
+    stale.push(`${artifactPathForRole({ role: "taskgraph", changeId: input.changeId })} could not be re-read`);
+  }
+  const evidenceIndex = await readEvidenceIndex({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (evidenceIndex.ok) {
+    for (const entry of evidenceIndex.document.artifactManifest.inputs) {
+      if (input.select(entry))
+        stale.push(`${evidenceIndex.artifactPath} still names revision ${entry.revision}`);
+    }
+  } else if (evidenceIndex.status !== "not_found") {
+    stale.push(`${artifactPathForRole({ role: "evidence-index", changeId: input.changeId })} could not be re-read`);
+  }
+  if (stale.length > 0) {
+    return repointFailure({
+      message: `The change proposal is at revision ${input.current.revision} on disk, but ${stale.join(" and ")} \u2014 another writer changed these artifacts while the re-point was running.`,
+      path: input.current.artifact.path,
+      status: "conflict"
+    });
+  }
+  return { ok: true, repointed: input.repointed, diagnostics: [] };
+}
+async function repairChangeProposalPins(input) {
+  const loaded = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+  if (!loaded.ok)
+    return loaded;
+  return repointProposalPins({
+    repositoryRoot: input.repositoryRoot,
+    changeId: loaded.bundle.change.id,
+    previous: loaded.revision,
+    current: loaded.revision,
+    select: namesSuperseded(loaded.revision),
+    ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha }
+  });
+}
+async function updateChangeAcceptance(input) {
+  const changeId = parseChangeId4(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const paths = changePaths(changeId);
+  if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    return failure6("invalid", [
+      changeDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a positive integer; a change bundle is created at revision 1.",
+        path: paths.proposal
+      })
+    ]);
+  }
+  const parsedAcceptance = acceptanceStateSchema.safeParse(input.acceptance);
+  if (!parsedAcceptance.success) {
+    return failure6("invalid", parsedAcceptance.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_acceptance",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  const acceptance = parsedAcceptance.data;
+  let baseGitSha;
+  if (input.baseGitSha !== void 0) {
+    const parsed = parseBaseGitSha3(input.baseGitSha, paths.proposal);
+    if (typeof parsed !== "string")
+      return parsed;
+    baseGitSha = parsed;
+  }
+  const updatedAt = parseTimestamp2({
+    value: input.updatedAt,
+    path: paths.proposal,
+    code: "invalid_updated_at"
+  });
+  if (typeof updatedAt !== "string")
+    return updatedAt;
+  const loaded = await loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId });
+  if (!loaded.ok)
+    return loaded;
+  if (loaded.bundle.revision !== input.expectedRevision) {
+    return failure6("conflict", [
+      changeDiagnostic({
+        code: "revision_conflict",
+        message: `stale artifact revision: expected ${input.expectedRevision}, current ${loaded.bundle.revision}`,
+        path: paths.proposal
+      })
+    ]);
+  }
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    ...baseGitSha === void 0 ? {} : { baseGitSha }
+  });
+  if (!repaired.ok)
+    return repaired;
+  if (stableProtocolJson(loaded.bundle.change.acceptance) === stableProtocolJson(acceptance)) {
+    return {
+      ok: true,
+      status: "unchanged",
+      bundle: loaded.bundle,
+      acceptance: loaded.bundle.change.acceptance,
+      artifactPath: loaded.artifactPath,
+      reference: loaded.reference,
+      revision: loaded.revision,
+      repointed: repaired.repointed,
+      diagnostics: []
+    };
+  }
+  const nextBundle = changeBundleSchema.safeParse({
+    ...loaded.bundle,
+    revision: input.expectedRevision + 1,
+    change: {
+      ...loaded.bundle.change,
+      updatedAt,
+      acceptance
+    }
+  });
+  if (!nextBundle.success) {
+    return failure6("invalid", nextBundle.error.issues.map((issue2) => changeDiagnostic({
+      code: "invalid_change_bundle",
+      message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+      path: paths.proposal
+    })));
+  }
+  let write;
+  try {
+    write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: paths.proposal,
+      role: "proposal",
+      content: stableProtocolJson(nextBundle.data),
+      expectedRevision: input.expectedRevision,
+      currentRevision: input.expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      supersedes: loaded.reference
+    });
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure6("conflict", [
+        changeDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: paths.proposal
+        })
+      ]);
+    }
+    throw error51;
+  }
+  const repoint2 = await repointChangeProposalInputs({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    previous: loaded.revision,
+    current: write.revision,
+    ...baseGitSha === void 0 ? {} : { baseGitSha }
+  });
+  if (!repoint2.ok) {
+    return { ...repoint2, written: { artifactPath: write.artifactPath, acceptance, revision: write.revision } };
+  }
+  return {
+    ok: true,
+    status: "updated",
+    bundle: nextBundle.data,
+    acceptance,
+    artifactPath: write.artifactPath,
+    reference: write.reference,
+    revision: write.revision,
+    repointed: [...repaired.repointed, ...repoint2.repointed],
+    diagnostics: []
+  };
+}
+async function validateChangeBundle(input) {
+  const loaded = await loadChangeBundle(input);
+  if (!loaded.ok)
+    return loaded;
+  const diagnostics = [];
+  diagnostics.push(...conflictDiagnostics(loaded.bundle.deltas, loaded.bundle.paths.proposal));
+  for (const delta of loaded.bundle.deltas) {
+    if (delta.operation === "add") {
+      const exists = await currentRequirementExists({
+        repositoryRoot: input.repositoryRoot,
+        requirementId: delta.requirementId
+      });
+      if (typeof exists !== "boolean") {
+        diagnostics.push(...exists.diagnostics);
+        continue;
+      }
+      if (exists) {
+        diagnostics.push(changeDiagnostic({
+          code: "add_delta_targets_existing_requirement",
+          message: `Current truth already contains requirement ${delta.requirementId}.`,
+          path: delta.path
+        }));
+      }
+      continue;
+    }
+    if (delta.baseCurrentSpec === void 0) {
+      diagnostics.push(changeDiagnostic({
+        code: "stale_change_base",
+        message: `Current spec base for ${delta.requirementId} is missing from the change bundle.`,
+        path: delta.path
+      }));
+      continue;
+    }
+    const current = await readCurrentSpecByArtifactPath({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: delta.baseCurrentSpec.path
+    });
+    if (!current.ok) {
+      diagnostics.push(changeDiagnostic({
+        code: "stale_change_base",
+        message: `Current spec for ${delta.requirementId} is no longer readable.`,
+        path: delta.path
+      }));
+      continue;
+    }
+    const requirement = current.document.requirements.find((entry) => entry.id === delta.requirementId);
+    const currentRequirementHash = requirement === void 0 ? void 0 : hashContent(stableProtocolJson(requirement));
+    if (!referencesEqual(current.reference, delta.baseCurrentSpec) || current.document.revision !== delta.baseCurrentSpecRevision || currentRequirementHash !== delta.baseRequirementHash) {
+      diagnostics.push(changeDiagnostic({
+        code: "stale_change_base",
+        message: `Current spec base for ${delta.requirementId} changed since this bundle was created.`,
+        path: delta.path
+      }));
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure6("invalid", diagnostics);
+  return { ok: true, diagnostics: [] };
+}
+function diffChangeBundle(bundle) {
+  const added = bundle.deltas.filter((delta) => delta.operation === "add").map((delta) => delta.requirementId).sort();
+  const modified = bundle.deltas.filter((delta) => delta.operation === "modify").map((delta) => delta.requirementId).sort();
+  const removed = bundle.deltas.filter((delta) => delta.operation === "remove").map((delta) => delta.requirementId).sort();
+  return { added, modified, removed };
+}
+
+// packages/artifacts/dist/oracles/schema.js
+var ORACLE_ARTIFACT_SCHEMA_VERSION = schemaVersionSchema.parse("0.1.0");
+var oracleArtifactDocumentSchema = strictObject({
+  schemaVersion: schemaVersionSchema,
+  kind: literal("oracle-artifact"),
+  revision: number2().int().positive(),
+  oracle: oracleSchema
+});
+var oracleManifestSchema = strictObject({
+  schemaVersion: schemaVersionSchema,
+  kind: literal("oracle-manifest"),
+  changeId: changeIdSchema,
+  oracles: array(artifactRevisionSchema),
+  manifestHash: contentHashSchema
+});
+function jsonSchemaDocument10(id, title, schema) {
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: id,
+    title,
+    ...toJSONSchema(schema)
+  };
+}
+var oracleArtifactJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-artifact.schema.json", "Legion oracle artifact schema", oracleArtifactDocumentSchema);
+var oracleManifestJsonSchema = jsonSchemaDocument10("https://schemas.9thlevelsoftware.com/legion/artifacts/oracle-manifest.schema.json", "Legion oracle manifest schema", oracleManifestSchema);
+
+// packages/artifacts/dist/oracles/service.js
+import { readdir as readdir4 } from "node:fs/promises";
+import path12 from "node:path";
+var INVALID_ORACLE_PATH = ".legion/project/changes/invalid-change/oracle/invalid.yaml";
+function compareStrings4(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function compareOracleRevisions(left, right) {
+  return compareStrings4(left.artifact.path, right.artifact.path) || compareStrings4(left.artifact.sha256, right.artifact.sha256);
+}
+function failure7(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function oracleDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_ORACLE_PATH
+  });
+}
+function schemaDiagnostics4(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [oracleDiagnostic({ code: input.code, message: "Oracle artifact failed schema validation.", path: input.path })];
+  }
+  return input.issues.map((issue2) => oracleDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId5(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_change_id",
+      message: issue2.message
+    })));
+  }
+  return parsed.data;
+}
+function parseOracleId2(input, path49) {
+  const parsed = oracleIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_oracle_id",
+      message: issue2.message,
+      path: path49
+    })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha4(input, path49) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure7("invalid", parsed.error.issues.map((issue2) => oracleDiagnostic({
+      code: "invalid_base_git_sha",
+      message: issue2.message,
+      path: path49
+    })));
+  }
+  return parsed.data;
+}
+function oraclePath(changeId, oracleId) {
+  return artifactPathForRole({ role: "oracle", changeId, oracleId });
+}
+function normalizeOracle(input) {
+  const parsed = oracleSchema.safeParse(input.oracle);
+  if (!parsed.success) {
+    return failure7("invalid", schemaDiagnostics4({ code: "invalid_oracle", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  const diagnostics = [];
+  for (const protectedPath of parsed.data.protectedPaths) {
+    try {
+      canonicalProjectArtifactPath(protectedPath);
+    } catch (error51) {
+      diagnostics.push(oracleDiagnostic({
+        code: "invalid_protected_path",
+        message: error51 instanceof Error ? error51.message : String(error51),
+        path: input.artifactPath
+      }));
+    }
+  }
+  if (diagnostics.length > 0)
+    return failure7("invalid", diagnostics);
+  return parsed.data;
+}
+function oracleArtifactDocument(input) {
+  const parsed = oracleArtifactDocumentSchema.safeParse({
+    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
+    kind: "oracle-artifact",
+    revision: input.revision,
+    oracle: input.oracle
+  });
+  if (!parsed.success) {
+    return failure7("invalid", schemaDiagnostics4({ code: "invalid_oracle_artifact", path: input.artifactPath, issues: parsed.error.issues }));
+  }
+  return parsed.data;
+}
+function manifestFor(changeId, oracles) {
+  const sortedOracles = [...oracles].sort(compareOracleRevisions);
+  const manifestInput = {
+    schemaVersion: ORACLE_ARTIFACT_SCHEMA_VERSION,
+    kind: "oracle-manifest",
+    changeId,
+    oracles: sortedOracles
+  };
+  return oracleManifestSchema.parse({
+    ...manifestInput,
+    manifestHash: hashContent(stableProtocolJson(manifestInput))
+  });
+}
+async function writeOracleArtifact(input) {
+  const artifactDocument = oracleArtifactDocument({
+    oracle: input.oracle,
+    revision: input.currentRevision + 1,
+    artifactPath: input.artifactPath
+  });
+  if ("diagnostics" in artifactDocument)
+    return artifactDocument;
+  const content = stableProtocolJson(artifactDocument);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath: input.artifactPath,
+      role: "oracle",
+      content,
+      expectedRevision: input.expectedRevision,
+      currentRevision: input.currentRevision,
+      mediaType: "application/json",
+      ...input.baseGitSha === void 0 ? {} : { baseGitSha: input.baseGitSha },
+      ...input.supersedes === void 0 ? {} : { supersedes: input.supersedes }
+    });
+    return {
+      ok: true,
+      status: input.status,
+      document: input.oracle,
+      artifactDocument,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure7("conflict", [
+        oracleDiagnostic({
+          code: "revision_conflict",
+          message: error51.message,
+          path: input.artifactPath
+        })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function createOracleArtifact(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleId = parseOracleId2(input.oracle.id, INVALID_ORACLE_PATH);
+  if (typeof oracleId !== "string")
+    return oracleId;
+  const artifactPath = oraclePath(changeId, oracleId);
+  const oracle = normalizeOracle({ oracle: input.oracle, artifactPath });
+  if ("diagnostics" in oracle)
+    return oracle;
+  const baseGitSha = parseBaseGitSha4(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  return writeOracleArtifact({
+    repositoryRoot: input.repositoryRoot,
+    changeId,
+    oracle,
+    artifactPath,
+    expectedRevision: 0,
+    currentRevision: 0,
+    ...baseGitSha === void 0 ? {} : { baseGitSha },
+    status: "created"
+  });
+}
+async function readOracleArtifact(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleId = parseOracleId2(input.oracleId, INVALID_ORACLE_PATH);
+  if (typeof oracleId !== "string")
+    return oracleId;
+  const artifactPath = oraclePath(changeId, oracleId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: oracleArtifactDocumentSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure7(status2, read.diagnostics);
+  }
+  if (read.value.oracle.id !== oracleId) {
+    return failure7("invalid", [
+      oracleDiagnostic({
+        code: "oracle_id_mismatch",
+        message: `Oracle artifact contains ${read.value.oracle.id}, not requested oracle ${oracleId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+  return {
+    ok: true,
+    status: "read",
+    document: read.value.oracle,
+    artifactDocument: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "oracle",
+      path: artifactPath,
+      content: read.bytes,
+      revision: read.value.revision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+async function deriveOracleManifest(input) {
+  const changeId = parseChangeId5(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const oracleDirectory = path12.join(input.repositoryRoot, PROJECT_ARTIFACT_PATHS.changes, changeId, "oracle");
+  let entries;
+  try {
+    entries = await readdir4(oracleDirectory, { withFileTypes: true });
+  } catch (error51) {
+    if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
+      return {
+        ok: true,
+        status: "derived",
+        manifest: manifestFor(changeId, []),
+        diagnostics: []
+      };
+    }
+    throw error51;
+  }
+  const oracleRevisions = [];
+  for (const fileName of entries.filter((entry) => entry.isFile() && entry.name.endsWith(".yaml")).map((entry) => entry.name).sort(compareStrings4)) {
+    const oracleArtifactPath = `${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/oracle/${fileName}`;
+    const oracleId = parseOracleId2(fileName.slice(0, -".yaml".length), oracleArtifactPath);
+    if (typeof oracleId !== "string")
+      return oracleId;
+    const oracle = await readOracleArtifact({
+      repositoryRoot: input.repositoryRoot,
+      changeId,
+      oracleId
+    });
+    if (!oracle.ok)
+      return oracle;
+    oracleRevisions.push(oracle.revision);
+  }
+  return {
+    ok: true,
+    status: "derived",
+    manifest: manifestFor(changeId, oracleRevisions),
     diagnostics: []
   };
 }
@@ -33441,6 +33750,401 @@ async function archiveAcceptedChange(input) {
   }
 }
 
+// packages/cli/src/workflow/change-input.ts
+import { execFileSync } from "node:child_process";
+import path16 from "node:path";
+
+// packages/cli/src/workflow/criteria.ts
+var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
+var MAX_CRITERION_SLUG_LENGTH = 48;
+function criterionIdFor(statement, index) {
+  const slug = statement.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_CRITERION_SLUG_LENGTH).replace(/-+$/g, "");
+  return slug.length > 0 ? `ac_${slug}-${index + 1}` : `ac_criterion-${index + 1}`;
+}
+function generatedCriterion(statement, index) {
+  return {
+    id: criterionIdFor(statement, index),
+    statement,
+    proof: {
+      mode: "manual",
+      reason: GENERATED_CRITERION_REASON
+    }
+  };
+}
+function generatedCriteria(statements) {
+  return statements.map((statement, index) => generatedCriterion(statement, index));
+}
+
+// packages/cli/src/workflow/phase-requirement.ts
+var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
+function requirementIdInPhase(phase) {
+  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
+}
+function partitionCriteria(requirement) {
+  const executable = [];
+  const manual = [];
+  for (const criterion of requirement.acceptance.criteria) {
+    if (criterion.proof.mode === "executable") executable.push(criterion);
+    else manual.push(criterion);
+  }
+  return { executable, manual };
+}
+async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
+  const requirementId = requirementIdInPhase(phase);
+  if (requirementId === void 0) return { ok: "absent" };
+  if (verified !== void 0) {
+    const found = verified.find((entry) => entry.id === requirementId);
+    if (found === void 0) {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+      };
+    }
+    return declinedOrResolved(found, phase);
+  }
+  const set2 = await readRequirementSet(repositoryRoot);
+  if (!set2.ok) {
+    if (set2.status === "not_found") {
+      return {
+        ok: false,
+        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
+      };
+    }
+    return { ok: false, reason: set2.reason };
+  }
+  const requirement = set2.requirements.find((entry) => entry.id === requirementId);
+  if (requirement === void 0) {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
+    };
+  }
+  return declinedOrResolved(requirement, phase);
+}
+function declinedOrResolved(requirement, phase) {
+  if (requirement.priority === "wont") {
+    return {
+      ok: false,
+      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
+    };
+  }
+  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
+}
+var MAX_CRITERION_DESCRIPTION = 1024;
+function clamp(value) {
+  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
+  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
+}
+function renderInvocation(command, args) {
+  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
+  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
+}
+function describeCriterion(criterion) {
+  if (criterion.proof.mode === "executable") {
+    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
+    return clamp(
+      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
+    );
+  }
+  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
+}
+
+// packages/cli/src/workflow/change-input.ts
+var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
+var MAX_ID_SUFFIX = 64;
+function suffixWithRoom(suffix, tail) {
+  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
+  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
+  return `${trimmed}${tail}`;
+}
+function phaseOracleAssignment(phase, requirement) {
+  const ids = phasePlanIds(phase);
+  if (requirement === void 0) {
+    return { byCriterionId: /* @__PURE__ */ new Map(), inspectionOracleId: ids.oracleId, all: [ids.oracleId] };
+  }
+  const { executable, manual } = partitionCriteria(requirement);
+  const byCriterionId = new Map(
+    executable.map((criterion, index) => [
+      criterion.id,
+      formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
+    ])
+  );
+  const criterionIds = [...byCriterionId.values()];
+  const inspectionOracleId = manual.length === 0 && criterionIds.length > 0 ? void 0 : ids.oracleId;
+  return {
+    byCriterionId,
+    inspectionOracleId,
+    all: inspectionOracleId === void 0 ? criterionIds : [...criterionIds, inspectionOracleId]
+  };
+}
+function phaseOracleIds(phase, requirement) {
+  return phaseOracleAssignment(phase, requirement).all;
+}
+function phasePlanIds(phase) {
+  const suffix = phaseIdSuffix(phase);
+  return {
+    suffix,
+    changeId: formatEntityId("change", suffix),
+    requirementId: formatEntityId("requirement", suffix),
+    oracleId: formatEntityId("oracle", suffix),
+    contractId: formatEntityId("contract", suffix)
+  };
+}
+function phaseRiskProfile(phase, recorded) {
+  if (recorded !== void 0) {
+    return riskProfileSchema.parse({
+      tier: recorded.tier,
+      reasons: [recorded.reason, `Phase ${phase.number} workflow plan creates a reviewable change.`]
+    });
+  }
+  return riskProfileSchema.parse({
+    tier: "R2",
+    reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]
+  });
+}
+function buildPhaseCurrentSpecInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  if (options.requirement !== void 0) {
+    const authored = requirementSchema.parse({
+      ...options.requirement,
+      traceRefs: withSpecAnchor(options.requirement)
+    });
+    return {
+      repositoryRoot: options.repositoryRoot,
+      document: {
+        primaryRequirementId: authored.id,
+        capability: {
+          id: ids.suffix,
+          title: `Phase ${options.phase.number}: ${options.phase.name}`,
+          status: "active"
+        },
+        requirements: [authored],
+        ...currentSpecTail(options, authored.id)
+      }
+    };
+  }
+  const currentSpecPath = artifactPathForRole({
+    role: "current-spec",
+    requirementId: ids.requirementId
+  });
+  const requirement = requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: ids.requirementId,
+    projectId: options.project.id,
+    priority: "must",
+    category: "behavior",
+    status: "accepted",
+    statement: `Phase ${options.phase.number} (${options.phase.name}) has a resolved planning source.`,
+    acceptance: {
+      language: `Phase ${options.phase.number} planning starts from a resolved source artifact.`,
+      criteria: generatedCriteria([`${options.phase.name} source is available for typed planning.`]),
+      oracleRefs: []
+    },
+    traceRefs: [
+      {
+        path: currentSpecPath,
+        anchor: ids.requirementId,
+        relation: "defines",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    supersedes: []
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    document: {
+      primaryRequirementId: ids.requirementId,
+      capability: {
+        id: ids.suffix,
+        title: `Phase ${options.phase.number}: ${options.phase.name}`,
+        status: "active"
+      },
+      requirements: [requirement],
+      ...currentSpecTail(options, ids.requirementId)
+    }
+  };
+}
+function currentSpecTail(options, traceRequirementId) {
+  return {
+    sections: {
+      purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
+      behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
+      constraints: "The baseline current spec is limited to planning-source availability.",
+      scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
+      interfaces: "legion plan",
+      compatibility: "The current spec exists so change bundles have explicit current truth.",
+      failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
+      traceIds: [traceRequirementId]
+    }
+  };
+}
+function currentUtcTimestamp() {
+  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
+}
+function resolveBaseGitSha(repositoryRoot) {
+  try {
+    const value = execFileSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim().toLowerCase();
+    return gitShaSchema.parse(value);
+  } catch {
+    return gitShaSchema.parse(ZERO_GIT_SHA);
+  }
+}
+function phaseSourceArtifactPath(repositoryRoot, phase) {
+  const relative = path16.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
+  const candidate = relative.length > 0 && !relative.startsWith("../") && !path16.isAbsolute(relative) ? relative : ".legion/project/project.json";
+  return artifactPathSchema.parse(candidate);
+}
+function withSpecAnchor(requirement) {
+  const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
+  const anchored = requirement.traceRefs.some(
+    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines" && traceRef.entity?.kind === "requirement" && traceRef.entity.id === requirement.id
+  );
+  if (anchored) return requirement.traceRefs;
+  return [
+    ...requirement.traceRefs,
+    {
+      path: specPath,
+      anchor: requirement.id,
+      relation: "defines",
+      entity: { kind: "requirement", id: requirement.id }
+    }
+  ];
+}
+function buildChangeBundleInput(options) {
+  const ids = phasePlanIds(options.phase);
+  const createdAt = options.createdAt ?? currentUtcTimestamp();
+  const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
+  const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
+  const owner = firstDecisionOwner(options.project);
+  const deltaRequirementId = options.requirement?.id ?? ids.requirementId;
+  const requirement = options.requirement === void 0 ? requirementSchema.parse({
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt,
+    kind: "requirement",
+    id: ids.requirementId,
+    projectId: options.project.id,
+    priority: "must",
+    category: "behavior",
+    status: "accepted",
+    statement: requirementStatement(options.phase),
+    acceptance: {
+      language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
+      criteria: generatedCriteria(acceptanceCriteria(options.phase)),
+      oracleRefs: [...phaseOracleIds(options.phase)]
+    },
+    traceRefs: [
+      {
+        path: sourcePath,
+        anchor: `phase-${options.phase.number}`,
+        relation: "defines",
+        entity: { kind: "requirement", id: ids.requirementId }
+      }
+    ],
+    supersedes: []
+  }) : requirementSchema.parse({
+    ...options.requirement,
+    // Only this phase's oracle.
+    //
+    // Retaining an imported requirement's earlier oracle IDs was tried and
+    // reverted: `validateChangeTraceability` loads only the current
+    // change's oracle manifest, so every retained ID reports
+    // `missing_oracle_artifact` and archive refuses the change outright.
+    // Carrying historical coverage needs cross-change oracle resolution,
+    // which is a larger piece of work than this.
+    //
+    // Nothing shipped produces a requirement with prior refs — intake
+    // writes `oracleRefs: []` — so no coverage is lost today. The legacy
+    // importer will be the first producer, and it must land together with
+    // that resolution rather than trading a silent loss for a hard block.
+    acceptance: {
+      ...options.requirement.acceptance,
+      oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
+    },
+    traceRefs: withSpecAnchor(options.requirement)
+  });
+  return {
+    repositoryRoot: options.repositoryRoot,
+    changeId: ids.changeId,
+    projectId: options.project.id,
+    title: `Plan phase ${options.phase.number}: ${options.phase.name}`,
+    summary: summarizePhase(options.phase),
+    owners: [owner],
+    baseGitSha,
+    risk: phaseRiskProfile(options.phase, options.enforcement),
+    createdAt,
+    currentSpecs: [
+      {
+        requirementId: options.currentSpec.document.primaryRequirementId,
+        expectedRevision: options.currentSpec.document.revision
+      }
+    ],
+    deltaSpecs: [
+      {
+        operation: "modify",
+        requirementId: deltaRequirementId,
+        proposedRequirement: requirement,
+        sections: {
+          purpose: summarizePhase(options.phase),
+          behaviors: options.phase.body || `Implement ${options.phase.name}.`,
+          constraints: "Preserve initialized project truth and create reviewable Legion plan artifacts.",
+          scenarios: `A maintainer runs legion plan ${options.phase.number} and receives a change, oracle, and taskgraph for ${options.phase.name}.`,
+          interfaces: "legion plan",
+          compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
+          failureModes: "Artifact service validation failures are returned with typed diagnostics.",
+          traceIds: [deltaRequirementId]
+        },
+        rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
+      }
+    ],
+    design: {
+      title: `Phase ${options.phase.number} implementation plan`,
+      body: [
+        `Source: ${sourcePath}`,
+        "",
+        options.phase.body || `Implement ${options.phase.name}.`
+      ].join("\n")
+    }
+  };
+}
+function firstDecisionOwner(project) {
+  const owner = project.policy.decisionOwners[0];
+  if (owner === void 0) {
+    throw new Error("Project policy must include at least one decision owner.");
+  }
+  return owner;
+}
+function phaseIdSuffix(phase) {
+  const prefix = `phase-${phase.number}-`;
+  const maxNameLength = Math.max(1, 63 - prefix.length);
+  const nameSlug = slugFromText(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
+  return `${prefix}${nameSlug || "plan"}`;
+}
+function slugFromText(value) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "plan";
+}
+function requirementStatement(phase) {
+  return truncate(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
+}
+function summarizePhase(phase) {
+  return truncate(phase.body || `Implement ${phase.name}.`, 512);
+}
+function acceptanceCriteria(phase) {
+  const bullets = phase.body.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.slice(2).trim()).filter((line) => line.length > 0).slice(0, 8);
+  return bullets.length > 0 ? bullets : [`${phase.name} is implemented and reviewable.`];
+}
+function truncate(value, maxLength) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return normalized.slice(0, maxLength - 1).trimEnd();
+}
+
 // packages/cli/src/commands/change/index.ts
 var CHANGE_HELP = `legion dev change <command>
 
@@ -33448,6 +34152,12 @@ Commands:
   create --input <file>     Create a change bundle from a JSON input object.
   validate <changeId>       Validate a persisted change bundle.
   diff <changeId>           Summarize proposed requirement changes.
+  repoint <changeId>        Re-point recorded artifact inputs at the change
+                            proposal on disk. Repairs a torn acceptance write,
+                            where change.yaml records the sign-off and the task
+                            graph or evidence index still pins the revision
+                            before it. Idempotent; writes nothing when the pins
+                            are already current.
   archive <changeId>        Archive an accepted change into current truth.
 
 Archive options:
@@ -33469,6 +34179,8 @@ async function handleChangeCommand(context) {
       return validate(commandContext);
     case "diff":
       return diff(commandContext);
+    case "repoint":
+      return repoint(commandContext);
     case "archive":
       return archive(commandContext);
     default:
@@ -33507,6 +34219,27 @@ async function validate(context) {
   if (changeId === void 0) return helpResult(CHANGE_HELP);
   const result = await validateChangeBundle({ repositoryRoot: context.repositoryRoot, changeId });
   return fromServiceResult(result, result.ok ? "Change is valid." : "Change validation failed.");
+}
+async function repoint(context) {
+  const changeId = context.args.positionals[0];
+  if (changeId === void 0) return helpResult(CHANGE_HELP);
+  const result = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!result.ok) {
+    return fromServiceResult(result, "Change inputs could not be re-pointed.");
+  }
+  return success2(
+    {
+      ok: true,
+      status: result.repointed.length === 0 ? "current" : "repointed",
+      repointed: result.repointed,
+      diagnostics: []
+    },
+    result.repointed.length === 0 ? `${changeId}: recorded artifact inputs already name the change proposal on disk; nothing was written.` : `${changeId}: re-pointed ${result.repointed.map((entry) => entry.artifactPath).join(", ")}.`
+  );
 }
 async function diff(context) {
   const changeId = context.args.positionals[0];
@@ -33559,23 +34292,23 @@ async function archive(context) {
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as existsSync3 } from "node:fs";
 import { readFile as readFile9 } from "node:fs/promises";
-import path17 from "node:path";
+import path18 from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // packages/cli/src/source-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import path16 from "node:path";
+import path17 from "node:path";
 import { fileURLToPath } from "node:url";
 function resolveCliSourceRoot(importMetaUrl, requiredRelativePath) {
-  const moduleDirectory = path16.dirname(fileURLToPath(importMetaUrl));
+  const moduleDirectory = path17.dirname(fileURLToPath(importMetaUrl));
   const candidates = [
     // Bundled root CLI: dist/legion-cli.mjs -> package root.
-    path16.resolve(moduleDirectory, ".."),
+    path17.resolve(moduleDirectory, ".."),
     // Package CLI build: packages/cli/dist/commands/<group>/index.js -> repo root.
-    path16.resolve(moduleDirectory, "..", "..", "..", "..", "..")
+    path17.resolve(moduleDirectory, "..", "..", "..", "..", "..")
   ];
   for (const candidate of candidates) {
-    if (existsSync2(path16.join(candidate, requiredRelativePath))) return candidate;
+    if (existsSync2(path17.join(candidate, requiredRelativePath))) return candidate;
   }
   return candidates[0] ?? process.cwd();
 }
@@ -33699,23 +34432,23 @@ async function capture(context) {
       "capture script did not return a run directory."
     );
   }
-  const resolvedRunDir = path17.isAbsolute(runDir) ? runDir : path17.join(context.repositoryRoot, runDir);
+  const resolvedRunDir = path18.isAbsolute(runDir) ? runDir : path18.join(context.repositoryRoot, runDir);
   if (!existsSync3(resolvedRunDir)) {
     return failure(
       { ok: false, status: "error", diagnostics: [{ code: "capture_failed", message: `captured run directory not found: ${resolvedRunDir}` }] },
       `captured run directory not found: ${resolvedRunDir}`
     );
   }
-  const manifestPath = path17.join(resolvedRunDir, "run-manifest.json");
-  const scorePath = path17.join(resolvedRunDir, "score.json");
+  const manifestPath = path18.join(resolvedRunDir, "run-manifest.json");
+  const scorePath = path18.join(resolvedRunDir, "score.json");
   const manifest = JSON.parse(await readFile9(manifestPath, "utf8"));
   return success2(
     {
       ok: true,
       status: "captured",
-      runDirectory: path17.relative(context.repositoryRoot, resolvedRunDir),
-      runManifest: path17.relative(context.repositoryRoot, manifestPath),
-      score: existsSync3(scorePath) ? path17.relative(context.repositoryRoot, scorePath) : null,
+      runDirectory: path18.relative(context.repositoryRoot, resolvedRunDir),
+      runManifest: path18.relative(context.repositoryRoot, manifestPath),
+      score: existsSync3(scorePath) ? path18.relative(context.repositoryRoot, scorePath) : null,
       manifest
     },
     `Captured run to ${resolvedRunDir}.`
@@ -33725,7 +34458,7 @@ async function grade(context) {
   if (hasFlag(context, "help")) return helpResult(EVALS_HELP);
   const runDirectory = requiredStringOption(context, "run-directory");
   if (typeof runDirectory !== "string") return runDirectory;
-  const resolvedRunDirectory = path17.resolve(context.repositoryRoot, runDirectory);
+  const resolvedRunDirectory = path18.resolve(context.repositoryRoot, runDirectory);
   const result = await runScript(context, ["scripts/baseline/grade-run.mjs", "--run-directory", resolvedRunDirectory]);
   if (result.exitCode !== 0) return result.cliResult;
   const scorePath = result.stdout.trim().split(/\s+/).pop() ?? "";
@@ -33733,7 +34466,7 @@ async function grade(context) {
     {
       ok: true,
       status: "graded",
-      score: scorePath ? path17.relative(context.repositoryRoot, scorePath) : scorePath
+      score: scorePath ? path18.relative(context.repositoryRoot, scorePath) : scorePath
     },
     `Graded ${runDirectory} -> ${scorePath}.`
   );
@@ -33749,11 +34482,11 @@ async function compare(context) {
     "--repository-root",
     context.repositoryRoot,
     "--v8-dir",
-    path17.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
+    path18.resolve(context.repositoryRoot, context.args.options.get("v8-dir")),
     "--v9-dir",
-    path17.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
+    path18.resolve(context.repositoryRoot, context.args.options.get("v9-dir")),
     "--output",
-    path17.resolve(context.repositoryRoot, context.args.options.get("output"))
+    path18.resolve(context.repositoryRoot, context.args.options.get("output"))
   ];
   const label = context.args.options.get("label");
   if (typeof label === "string") args.push("--label", label);
@@ -33764,8 +34497,8 @@ async function compare(context) {
     {
       ok: true,
       status: "compared",
-      abComparisonJson: jsonPath ? path17.relative(context.repositoryRoot, jsonPath) : jsonPath,
-      abComparisonMarkdown: mdPath ? path17.relative(context.repositoryRoot, mdPath) : mdPath
+      abComparisonJson: jsonPath ? path18.relative(context.repositoryRoot, jsonPath) : jsonPath,
+      abComparisonMarkdown: mdPath ? path18.relative(context.repositoryRoot, mdPath) : mdPath
     },
     `Compared v8/v9 sealed runs -> ${jsonPath}.`
   );
@@ -33779,13 +34512,13 @@ async function threatModel(context) {
   const args = [
     "scripts/baseline/threat-model.mjs",
     "--run-dir",
-    path17.resolve(context.repositoryRoot, runDir),
+    path18.resolve(context.repositoryRoot, runDir),
     "--output-root",
-    path17.resolve(context.repositoryRoot, outputRoot)
+    path18.resolve(context.repositoryRoot, outputRoot)
   ];
   if (context.repositoryRoot) args.push("--repository-root", context.repositoryRoot);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path17.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path18.resolve(context.repositoryRoot, report));
   const result = await runScript(context, args);
   const verdict = parseJsonVerdict(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -33836,7 +34569,7 @@ function parseJsonVerdict(stdout) {
 }
 async function runScript(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path17.join(V9_SOURCE_ROOT, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/baseline/capture-run.mjs" || arg === "scripts/baseline/grade-run.mjs" || arg === "scripts/baseline/compare-runs.mjs" || arg === "scripts/baseline/threat-model.mjs") ? path18.join(V9_SOURCE_ROOT, arg) : arg
   );
   try {
     const result = await execFile2(process.execPath, resolvedArgs, {
@@ -33881,12 +34614,12 @@ async function runScript(context, scriptArgs) {
 }
 
 // packages/cli/src/commands/migrate/index.ts
-import path20 from "node:path";
+import path21 from "node:path";
 
 // packages/legacy-bridge/dist/import-codex/index.js
 import { createHash as createHash16 } from "node:crypto";
 import { cp, mkdir as mkdir9, readFile as readFile10, readdir as readdir8, rename as rename3, rm as rm4, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
-import path18 from "node:path";
+import path19 from "node:path";
 var REPORT_PATH = ".legion/migration/codex-legion-migration-report.json";
 var LEGACY_PROTOCOL_ROOT = ".legion/legacy-protocol";
 var LEGION_ROOT = ".legion";
@@ -33895,7 +34628,7 @@ function compareStrings7(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath(value) {
-  return value.split(path18.sep).join("/");
+  return value.split(path19.sep).join("/");
 }
 function isEnoent5(error51) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT");
@@ -33935,13 +34668,13 @@ async function listFiles(root) {
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path18.join(directory, entry.name);
+      const absolutePath = path19.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath(path18.relative(root, absolutePath)));
+        files.push(toPosixPath(path19.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -33959,8 +34692,8 @@ async function listSymbolicLinks(root, displayedRoot) {
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings7(left.name, right.name))) {
-      const absolutePath = path18.join(directory, entry.name);
-      const displayedPath = `${displayedRoot}/${toPosixPath(path18.relative(root, absolutePath))}`;
+      const absolutePath = path19.join(directory, entry.name);
+      const displayedPath = `${displayedRoot}/${toPosixPath(path19.relative(root, absolutePath))}`;
       if (entry.isSymbolicLink()) {
         links.push(displayedPath);
         continue;
@@ -33989,7 +34722,7 @@ async function hashFiles(root, files) {
   for (const file2 of files) {
     hash2.update(file2);
     hash2.update("\0");
-    hash2.update(await readFile10(path18.join(root, ...file2.split("/"))));
+    hash2.update(await readFile10(path19.join(root, ...file2.split("/"))));
     hash2.update("\0");
   }
   return `sha256:${hash2.digest("hex")}`;
@@ -33998,23 +34731,23 @@ async function hashTree(root) {
   return hashFiles(root, await listFiles(root));
 }
 function containsPath(parent, child) {
-  const relative = path18.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative);
+  const relative = path19.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path19.isAbsolute(relative);
 }
 function pathsOverlap2(left, right) {
   return containsPath(left, right) || containsPath(right, left);
 }
 function sameResolvedPath(left, right) {
-  const resolvedLeft = path18.resolve(left);
-  const resolvedRight = path18.resolve(right);
+  const resolvedLeft = path19.resolve(left);
+  const resolvedRight = path19.resolve(right);
   if (process.platform === "win32")
     return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot(input) {
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const stagingRoot = path18.resolve(input.stagingRoot);
-  const legacyRoot = path18.join(repositoryRoot, ".legion");
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const stagingRoot = path19.resolve(input.stagingRoot);
+  const legacyRoot = path19.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
     return failure13("invalid", [
       diagnostic({
@@ -34027,9 +34760,9 @@ function safeResolvedStagingRoot(input) {
   return stagingRoot;
 }
 function safeResolvedBackupRoot(input) {
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const backupRoot = path18.resolve(input.backupRoot);
-  const legacyRoot = path18.join(repositoryRoot, ".legion");
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const backupRoot = path19.resolve(input.backupRoot);
+  const legacyRoot = path19.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
     return failure13("invalid", [
       diagnostic({
@@ -34063,9 +34796,9 @@ function readString(value) {
 }
 function normalizeReportedPath(repositoryRoot, value) {
   const normalized = value.replace(/\\/g, "/");
-  if (path18.isAbsolute(value)) {
-    const relative = path18.relative(repositoryRoot, value);
-    if (relative.length > 0 && !relative.startsWith("..") && !path18.isAbsolute(relative)) {
+  if (path19.isAbsolute(value)) {
+    const relative = path19.relative(repositoryRoot, value);
+    if (relative.length > 0 && !relative.startsWith("..") && !path19.isAbsolute(relative)) {
       return toPosixPath(relative);
     }
   }
@@ -34090,7 +34823,7 @@ function nativeSurface(input) {
   return { path: normalized, source: input.source };
 }
 async function parseCodexManifest(repositoryRoot, legionRoot) {
-  const manifestPath = path18.join(legionRoot, "manifest.json");
+  const manifestPath = path19.join(legionRoot, "manifest.json");
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(manifestPath, "utf8"));
@@ -34251,7 +34984,7 @@ function classifySourceFile(relativePath, generatedPaths) {
 async function sourceInventory(input) {
   const files = [];
   for (const file2 of await listFiles(input.legionRoot)) {
-    const bytes = await readFile10(path18.join(input.legionRoot, ...file2.split("/")));
+    const bytes = await readFile10(path19.join(input.legionRoot, ...file2.split("/")));
     const relativePath = `.legion/${file2}`;
     files.push({
       path: relativePath,
@@ -34301,18 +35034,18 @@ function validateReportMoves(report) {
   ]);
 }
 async function stageLegacyProtocol(input) {
-  const targetRoot = path18.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path19.join(input.stagingRoot, ".legion", "legacy-protocol");
   await rm4(input.stagingRoot, { recursive: true, force: true });
   await mkdir9(targetRoot, { recursive: true });
   for (const move of input.moves) {
-    const sourcePath = path18.join(input.repositoryRoot, ...move.sourcePath.split("/"));
-    const targetPath = path18.join(input.stagingRoot, ...move.targetPath.split("/"));
-    await mkdir9(path18.dirname(targetPath), { recursive: true });
+    const sourcePath = path19.join(input.repositoryRoot, ...move.sourcePath.split("/"));
+    const targetPath = path19.join(input.stagingRoot, ...move.targetPath.split("/"));
+    await mkdir9(path19.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath);
   }
   const files = [];
   for (const file2 of await listFiles(targetRoot)) {
-    const bytes = await readFile10(path18.join(targetRoot, ...file2.split("/")));
+    const bytes = await readFile10(path19.join(targetRoot, ...file2.split("/")));
     files.push({
       path: `${LEGACY_PROTOCOL_ROOT}/${file2}`,
       sha256: bytesHash(bytes),
@@ -34327,8 +35060,8 @@ async function stageLegacyProtocol(input) {
   };
 }
 async function writeReport(stagingRoot, report) {
-  const reportPath = path18.join(stagingRoot, ...REPORT_PATH.split("/"));
-  await mkdir9(path18.dirname(reportPath), { recursive: true });
+  const reportPath = path19.join(stagingRoot, ...REPORT_PATH.split("/"));
+  await mkdir9(path19.dirname(reportPath), { recursive: true });
   await writeFile4(reportPath, stableProtocolJson(report), "utf8");
 }
 function alreadyMigratedUncertainty(source, moves) {
@@ -34355,8 +35088,8 @@ async function createCodexLegionMigrationDryRun(input) {
   });
   if (typeof createdAt !== "string")
     return createdAt;
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const legionRoot = path19.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
     return failure13("invalid", [
       diagnostic({
@@ -34409,7 +35142,7 @@ async function createCodexLegionMigrationDryRun(input) {
   };
 }
 async function readReport(stagingRoot) {
-  const reportPath = path18.join(stagingRoot, ...REPORT_PATH.split("/"));
+  const reportPath = path19.join(stagingRoot, ...REPORT_PATH.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile10(reportPath, "utf8"));
@@ -34446,7 +35179,7 @@ function isBackupManifest(value) {
   return isRecord9(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "codex-legion-migration-backup" && typeof value["createdAt"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["backupPath"] === "string" && typeof value["preMigrationHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedTargetHash(input) {
-  const targetRoot = path18.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const targetRoot = path19.join(input.stagingRoot, ".legion", "legacy-protocol");
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
@@ -34459,7 +35192,7 @@ async function validateStagedTargetHash(input) {
   ]);
 }
 async function validateCurrentSourceHash(input) {
-  const currentHash = await hashTree(path18.join(input.repositoryRoot, ".legion"));
+  const currentHash = await hashTree(path19.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
   return failure13("invalid", [
@@ -34475,11 +35208,11 @@ function backupId(appliedAt, sourceHash) {
   return `codex-legion-migration-${appliedAt.replace(/[^0-9]/g, "").slice(0, 14)}-${hash2}`;
 }
 async function backupLegionRoot(input) {
-  const legionRoot = path18.join(input.repositoryRoot, ".legion");
+  const legionRoot = path19.join(input.repositoryRoot, ".legion");
   const preMigrationHash = await hashTree(legionRoot);
   const id = backupId(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path18.resolve(input.backupRoot, id);
-  const backupPath = path18.resolve(backupDirectory, "legion");
+  const backupDirectory = path19.resolve(input.backupRoot, id);
+  const backupPath = path19.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists3(legionRoot);
   await rm4(backupDirectory, { recursive: true, force: true });
   await mkdir9(backupDirectory, { recursive: true });
@@ -34496,7 +35229,7 @@ async function backupLegionRoot(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path18.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path19.resolve(backupDirectory, "backup-manifest.json");
   await writeFile4(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -34506,9 +35239,9 @@ async function backupLegionRoot(input) {
   };
 }
 async function installStagedLegacyProtocol(input) {
-  const legionRoot = path18.join(input.repositoryRoot, ".legion");
-  const destination = path18.join(legionRoot, "legacy-protocol");
-  const stagedLegacyProtocolRoot = path18.join(input.stagingRoot, ".legion", "legacy-protocol");
+  const legionRoot = path19.join(input.repositoryRoot, ".legion");
+  const destination = path19.join(legionRoot, "legacy-protocol");
+  const stagedLegacyProtocolRoot = path19.join(input.stagingRoot, ".legion", "legacy-protocol");
   if (input.report.moves.length > 0) {
     if (await pathExists3(destination)) {
       await mergeStagedLegacyProtocol({
@@ -34516,7 +35249,7 @@ async function installStagedLegacyProtocol(input) {
         destinationRoot: destination
       });
     } else {
-      const temporary = path18.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
+      const temporary = path19.join(legionRoot, `.legacy-protocol.${process.pid}.${Date.now()}.tmp`);
       await rm4(temporary, { recursive: true, force: true });
       await cp(stagedLegacyProtocolRoot, temporary, { recursive: true });
       await rename3(temporary, destination);
@@ -34527,13 +35260,13 @@ async function installStagedLegacyProtocol(input) {
     report: input.report
   });
   for (const root of roots) {
-    await rm4(path18.join(legionRoot, root), { recursive: true, force: true });
+    await rm4(path19.join(legionRoot, root), { recursive: true, force: true });
   }
 }
 async function mergeStagedLegacyProtocol(input) {
   for (const file2 of await listFiles(input.stagedRoot)) {
-    const stagedPath = path18.join(input.stagedRoot, ...file2.split("/"));
-    const destinationPath = path18.join(input.destinationRoot, ...file2.split("/"));
+    const stagedPath = path19.join(input.stagedRoot, ...file2.split("/"));
+    const destinationPath = path19.join(input.destinationRoot, ...file2.split("/"));
     const stagedBytes = await readFile10(stagedPath);
     let destinationStat;
     try {
@@ -34544,20 +35277,20 @@ async function mergeStagedLegacyProtocol(input) {
     }
     if (destinationStat !== void 0) {
       if (!destinationStat.isFile()) {
-        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path18.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol path is not a file: ${toPosixPath(path19.relative(input.destinationRoot, destinationPath))}.`);
       }
       const destinationBytes = await readFile10(destinationPath);
       if (Buffer.compare(stagedBytes, destinationBytes) !== 0) {
-        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path18.relative(input.destinationRoot, destinationPath))}.`);
+        throw new Error(`Existing legacy protocol file differs from staged migration bytes: ${toPosixPath(path19.relative(input.destinationRoot, destinationPath))}.`);
       }
       continue;
     }
-    await mkdir9(path18.dirname(destinationPath), { recursive: true });
+    await mkdir9(path19.dirname(destinationPath), { recursive: true });
     await cp(stagedPath, destinationPath);
   }
 }
 async function cleanupRoots(input) {
-  const legionRoot = path18.join(input.repositoryRoot, ".legion");
+  const legionRoot = path19.join(input.repositoryRoot, ".legion");
   const roots = new Set(input.report.moves.map((move) => topLevelLegionEntry(move.sourcePath.slice(".legion/".length))));
   for (const entry of await readdir8(legionRoot, { withFileTypes: true })) {
     if (!isReservedLegionRootEntry(entry.name))
@@ -34566,7 +35299,7 @@ async function cleanupRoots(input) {
   return [...roots].filter((entry) => entry.length > 0).sort(compareStrings7);
 }
 async function installedLegacyProtocolFiles(repositoryRoot) {
-  const targetRoot = path18.join(repositoryRoot, ".legion", "legacy-protocol");
+  const targetRoot = path19.join(repositoryRoot, ".legion", "legacy-protocol");
   return (await listFiles(targetRoot)).map((file2) => `${LEGACY_PROTOCOL_ROOT}/${file2}`);
 }
 async function applyCodexLegionMigration(input) {
@@ -34595,12 +35328,12 @@ async function applyCodexLegionMigration(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
   const backupRoot = safeResolvedBackupRoot(input);
   if (typeof backupRoot !== "string")
     return backupRoot;
   const symlinkFailure = await validateNoSymbolicLinks({
-    root: path18.join(repositoryRoot, ".legion"),
+    root: path19.join(repositoryRoot, ".legion"),
     displayedRoot: LEGION_ROOT
   });
   if (symlinkFailure !== void 0)
@@ -34652,7 +35385,7 @@ async function applyCodexLegionMigration(input) {
 }
 async function rollbackCodexLegionMigration(input) {
   let manifest;
-  const backupManifestPath = path18.resolve(input.backupManifestPath);
+  const backupManifestPath = path19.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile10(backupManifestPath, "utf8"));
     if (!isBackupManifest(parsed)) {
@@ -34668,8 +35401,8 @@ async function rollbackCodexLegionMigration(input) {
       })
     ]);
   }
-  const repositoryRoot = path18.resolve(input.repositoryRoot);
-  const legionRoot = path18.join(repositoryRoot, ".legion");
+  const repositoryRoot = path19.resolve(input.repositoryRoot);
+  const legionRoot = path19.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
     return failure13("invalid", [
       diagnostic({
@@ -34680,7 +35413,7 @@ async function rollbackCodexLegionMigration(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path18.isAbsolute(manifest.backupPath)) {
+    if (!path19.isAbsolute(manifest.backupPath)) {
       return failure13("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
@@ -34723,7 +35456,7 @@ async function rollbackCodexLegionMigration(input) {
 // packages/legacy-bridge/dist/import-planning/index.js
 import { createHash as createHash17 } from "node:crypto";
 import { cp as cp2, mkdir as mkdir10, readFile as readFile11, readdir as readdir9, realpath as realpath2, rm as rm5, stat as stat5, writeFile as writeFile5 } from "node:fs/promises";
-import path19 from "node:path";
+import path20 from "node:path";
 import { parse as parseYaml } from "yaml";
 var REPORT_PATH2 = ".legion/project/migration/planning-import-report.json";
 var EMPTY_TREE_HASH2 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -34731,7 +35464,7 @@ function compareStrings8(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 function toPosixPath2(value) {
-  return value.split(path19.sep).join("/");
+  return value.split(path20.sep).join("/");
 }
 function failure14(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
@@ -34754,7 +35487,7 @@ function hashFiles2(root, files) {
     for (const file2 of files) {
       hash2.update(file2);
       hash2.update("\0");
-      hash2.update(await readFile11(path19.join(root, ...file2.split("/"))));
+      hash2.update(await readFile11(path20.join(root, ...file2.split("/"))));
       hash2.update("\0");
     }
     return `sha256:${hash2.digest("hex")}`;
@@ -34782,13 +35515,13 @@ async function listFiles2(root) {
       throw error51;
     }
     for (const entry of [...entries].sort((left, right) => compareStrings8(left.name, right.name))) {
-      const absolutePath = path19.join(directory, entry.name);
+      const absolutePath = path20.join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(absolutePath);
         continue;
       }
       if (entry.isFile())
-        files.push(toPosixPath2(path19.relative(root, absolutePath)));
+        files.push(toPosixPath2(path20.relative(root, absolutePath)));
     }
   }
   await visit(root);
@@ -34838,9 +35571,9 @@ async function sourceInventory2(planningRoot) {
   }
   const files = [];
   for (const file2 of await listFiles2(planningRoot)) {
-    const absolutePath = path19.join(planningRoot, ...file2.split("/"));
+    const absolutePath = path20.join(planningRoot, ...file2.split("/"));
     const bytes = await readFile11(absolutePath);
-    const relativePath = toPosixPath2(path19.join(".planning", file2));
+    const relativePath = toPosixPath2(path20.join(".planning", file2));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -34858,7 +35591,7 @@ function requirementSuffix(code) {
   const normalized = code.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalized.length >= 3 ? normalized.slice(0, 63).replace(/-+$/g, "") : `legacy-${normalized}`;
 }
-function truncate(value, maxLength) {
+function truncate2(value, maxLength) {
   if (value.length <= maxLength)
     return value;
   return value.slice(0, maxLength - 1).trimEnd() + ".";
@@ -34890,7 +35623,7 @@ function extractRequirements(projectMarkdown) {
       code,
       id: id.data,
       sourcePath: ".planning/PROJECT.md",
-      statement: truncate(statement.trim(), 2048),
+      statement: truncate2(statement.trim(), 2048),
       checked: match[1]?.toLowerCase() === "x"
     });
   }
@@ -34942,7 +35675,7 @@ async function parsePlans(planningRoot, inventory) {
     if (file2.classification !== "phase-plan")
       continue;
     const relativeToPlanning = file2.path.slice(".planning/".length);
-    const content = await readFile11(path19.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
+    const content = await readFile11(path20.join(planningRoot, ...relativeToPlanning.split("/")), "utf8");
     const frontmatter = parsePlanFrontmatter(content);
     plans.push({
       sourcePath: file2.path,
@@ -34955,7 +35688,7 @@ async function planSummaryConflicts(planningRoot, plans) {
   const conflicts = [];
   for (const plan of plans) {
     const summaryPath = plan.sourcePath.replace(/-PLAN\.md$/, "-SUMMARY.md");
-    const summaryContent = await readUtf8IfExists(path19.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
+    const summaryContent = await readUtf8IfExists(path20.join(planningRoot, ...summaryPath.slice(".planning/".length).split("/")));
     if (summaryContent === void 0)
       continue;
     const summaryFiles = summaryFilesModified(summaryContent);
@@ -34992,7 +35725,7 @@ function unprovenRequirementUncertainties(requirements) {
   ];
 }
 async function stateUncertainties(planningRoot) {
-  const state = await readUtf8IfExists(path19.join(planningRoot, "STATE.md"));
+  const state = await readUtf8IfExists(path20.join(planningRoot, "STATE.md"));
   if (state === void 0)
     return [];
   const uncertainties = [
@@ -35061,7 +35794,7 @@ function requirementDocument(input) {
           // imported requirement, so any later join on criterion id is
           // ambiguous.
           id: importedCriterionId(input.requirement.code),
-          statement: truncate(input.requirement.statement, 1024),
+          statement: truncate2(input.requirement.statement, 1024),
           proof: {
             mode: "manual",
             reason: "Imported from legacy .planning; no acceptance criterion was defined at the source. Author a criterion before planning work against this requirement."
@@ -35087,18 +35820,18 @@ function sectionsForRequirement(requirement) {
   };
 }
 async function writeReport2(stagingRoot, report) {
-  const reportPath = path19.join(stagingRoot, ...REPORT_PATH2.split("/"));
-  await mkdir10(path19.dirname(reportPath), { recursive: true });
+  const reportPath = path20.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  await mkdir10(path20.dirname(reportPath), { recursive: true });
   await writeFile5(reportPath, stableProtocolJson(report), "utf8");
 }
 async function targetInventory(stagingRoot) {
-  const projectRoot = path19.join(stagingRoot, ".legion", "project");
+  const projectRoot = path20.join(stagingRoot, ".legion", "project");
   const files = [];
   for (const file2 of await listFiles2(projectRoot)) {
     if (file2 === "migration/planning-import-report.json")
       continue;
-    const bytes = await readFile11(path19.join(projectRoot, ...file2.split("/")));
-    const relativePath = toPosixPath2(path19.join(".legion/project", file2));
+    const bytes = await readFile11(path20.join(projectRoot, ...file2.split("/")));
+    const relativePath = toPosixPath2(path20.join(".legion/project", file2));
     files.push({
       path: relativePath,
       sha256: bytesHash2(bytes),
@@ -35113,24 +35846,24 @@ async function targetInventory(stagingRoot) {
   };
 }
 function containsPath2(parent, child) {
-  const relative = path19.relative(parent, child);
-  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path19.isAbsolute(relative);
+  const relative = path20.relative(parent, child);
+  return relative === "" || relative.length > 0 && !relative.startsWith("..") && !path20.isAbsolute(relative);
 }
 function pathsOverlap3(left, right) {
   return containsPath2(left, right) || containsPath2(right, left);
 }
 async function resolveExistingPathComponents(inputPath) {
-  const resolved = path19.resolve(inputPath);
+  const resolved = path20.resolve(inputPath);
   const suffix = [];
   let candidate = resolved;
   while (!await pathExists4(candidate)) {
-    const parent = path19.dirname(candidate);
+    const parent = path20.dirname(candidate);
     if (parent === candidate)
-      return path19.resolve(candidate, ...suffix);
-    suffix.unshift(path19.basename(candidate));
+      return path20.resolve(candidate, ...suffix);
+    suffix.unshift(path20.basename(candidate));
     candidate = parent;
   }
-  return path19.resolve(await realpath2(candidate), ...suffix);
+  return path20.resolve(await realpath2(candidate), ...suffix);
 }
 async function sameCanonicalPath(left, right) {
   const resolvedLeft = await resolveExistingPathComponents(left);
@@ -35140,9 +35873,9 @@ async function sameCanonicalPath(left, right) {
   return resolvedLeft === resolvedRight;
 }
 function safeResolvedStagingRoot2(input) {
-  const repositoryRoot = path19.resolve(input.repositoryRoot);
-  const planningRoot = path19.resolve(input.planningRoot);
-  const stagingRoot = path19.resolve(input.stagingRoot);
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const planningRoot = path20.resolve(input.planningRoot);
+  const stagingRoot = path20.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
     return failure14("invalid", [
       diagnostic2({
@@ -35154,11 +35887,11 @@ function safeResolvedStagingRoot2(input) {
   return stagingRoot;
 }
 async function safeResolvedBackupRoot2(input) {
-  const repositoryRoot = path19.resolve(input.repositoryRoot);
-  const backupRoot = path19.resolve(input.backupRoot);
-  const legionRoot = path19.join(repositoryRoot, ".legion");
-  const planningRoot = path19.resolve(input.planningRoot);
-  const stagingRoot = path19.resolve(input.stagingRoot);
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const backupRoot = path20.resolve(input.backupRoot);
+  const legionRoot = path20.join(repositoryRoot, ".legion");
+  const planningRoot = path20.resolve(input.planningRoot);
+  const stagingRoot = path20.resolve(input.stagingRoot);
   const realRepositoryRoot = await resolveExistingPathComponents(repositoryRoot);
   const realBackupRoot = await resolveExistingPathComponents(backupRoot);
   const realLegionRoot = await resolveExistingPathComponents(legionRoot);
@@ -35204,7 +35937,7 @@ async function createPlanningImportDryRun(input) {
   const inventory = await sourceInventory2(planningRoot);
   if ("diagnostics" in inventory)
     return inventory;
-  const projectMarkdown = await readUtf8IfExists(path19.join(planningRoot, "PROJECT.md"));
+  const projectMarkdown = await readUtf8IfExists(path20.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
     return failure14("invalid", [
       diagnostic2({
@@ -35250,7 +35983,7 @@ async function createPlanningImportDryRun(input) {
       primaryRequirementId: requirement.id,
       capability: {
         id: requirementSuffix(requirement.code),
-        title: truncate(`${requirement.code}: ${requirement.statement}`, 128),
+        title: truncate2(`${requirement.code}: ${requirement.statement}`, 128),
         status: "active"
       },
       requirements: [
@@ -35323,7 +36056,7 @@ async function createPlanningImportDryRun(input) {
   };
 }
 async function readReport2(stagingRoot) {
-  const reportPath = path19.join(stagingRoot, ...REPORT_PATH2.split("/"));
+  const reportPath = path20.join(stagingRoot, ...REPORT_PATH2.split("/"));
   let parsed;
   try {
     parsed = JSON.parse(await readFile11(reportPath, "utf8"));
@@ -35353,11 +36086,11 @@ function backupId2(appliedAt, sourceHash) {
 }
 async function backupLegionRoot2(input) {
   const repositoryRoot = await resolveExistingPathComponents(input.repositoryRoot);
-  const legionRoot = path19.join(repositoryRoot, ".legion");
+  const legionRoot = path20.join(repositoryRoot, ".legion");
   const preImportHash = await hashTree2(legionRoot);
   const id = backupId2(input.appliedAt, input.report.source.treeHash);
-  const backupDirectory = path19.resolve(input.backupRoot, id);
-  const backupPath = path19.resolve(backupDirectory, "legion");
+  const backupDirectory = path20.resolve(input.backupRoot, id);
+  const backupPath = path20.resolve(backupDirectory, "legion");
   const existingLegionRoot = await pathExists4(legionRoot);
   await rm5(backupDirectory, { recursive: true, force: true });
   await mkdir10(backupDirectory, { recursive: true });
@@ -35374,7 +36107,7 @@ async function backupLegionRoot2(input) {
     sourceHash: input.report.source.treeHash,
     existingLegionRoot
   };
-  const manifestPath = path19.resolve(backupDirectory, "backup-manifest.json");
+  const manifestPath = path20.resolve(backupDirectory, "backup-manifest.json");
   await writeFile5(manifestPath, stableProtocolJson(manifest), "utf8");
   return {
     manifestPath,
@@ -35384,9 +36117,9 @@ async function backupLegionRoot2(input) {
   };
 }
 async function installStagedProject(input) {
-  const stagedProject = path19.join(input.stagingRoot, ".legion", "project");
-  const destinationProject = path19.join(input.repositoryRoot, ".legion", "project");
-  await mkdir10(path19.dirname(destinationProject), { recursive: true });
+  const stagedProject = path20.join(input.stagingRoot, ".legion", "project");
+  const destinationProject = path20.join(input.repositoryRoot, ".legion", "project");
+  await mkdir10(path20.dirname(destinationProject), { recursive: true });
   await rm5(destinationProject, { recursive: true, force: true });
   await cp2(stagedProject, destinationProject, { recursive: true });
 }
@@ -35407,7 +36140,7 @@ function isBackupManifest2(value) {
   return isRecord10(value) && value["schemaVersion"] === "0.1.0" && value["kind"] === "planning-import-backup" && typeof value["createdAt"] === "string" && typeof value["backupPath"] === "string" && typeof value["repositoryRoot"] === "string" && typeof value["preImportHash"] === "string" && typeof value["sourceHash"] === "string" && typeof value["existingLegionRoot"] === "boolean";
 }
 async function validateStagedProjectHash(input) {
-  const stagedProject = path19.join(input.stagingRoot, ".legion", "project");
+  const stagedProject = path20.join(input.stagingRoot, ".legion", "project");
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
@@ -35438,7 +36171,7 @@ async function applyPlanningImport(input) {
   });
   if (stagedHashFailure !== void 0)
     return stagedHashFailure;
-  const destinationProject = path19.join(input.repositoryRoot, ".legion", "project");
+  const destinationProject = path20.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
     return failure14("conflict", [
       diagnostic2({
@@ -35494,13 +36227,13 @@ async function applyPlanningImport(input) {
     ok: true,
     status: "applied",
     backup,
-    installedFiles: (await listFiles2(path19.join(input.repositoryRoot, ".legion", "project"))).map((file2) => toPosixPath2(path19.join(".legion/project", file2))),
+    installedFiles: (await listFiles2(path20.join(input.repositoryRoot, ".legion", "project"))).map((file2) => toPosixPath2(path20.join(".legion/project", file2))),
     policy: report.policy
   };
 }
 async function rollbackPlanningImport(input) {
   let manifest;
-  const backupManifestPath = path19.resolve(input.backupManifestPath);
+  const backupManifestPath = path20.resolve(input.backupManifestPath);
   try {
     const parsed = JSON.parse(await readFile11(backupManifestPath, "utf8"));
     if (!isBackupManifest2(parsed)) {
@@ -35516,9 +36249,9 @@ async function rollbackPlanningImport(input) {
       })
     ]);
   }
-  const repositoryRoot = path19.resolve(input.repositoryRoot);
-  const legionRoot = path19.join(repositoryRoot, ".legion");
-  if (!path19.isAbsolute(manifest.repositoryRoot)) {
+  const repositoryRoot = path20.resolve(input.repositoryRoot);
+  const legionRoot = path20.join(repositoryRoot, ".legion");
+  if (!path20.isAbsolute(manifest.repositoryRoot)) {
     return failure14("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
@@ -35537,7 +36270,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (manifest.existingLegionRoot) {
-    if (!path19.isAbsolute(manifest.backupPath)) {
+    if (!path20.isAbsolute(manifest.backupPath)) {
       return failure14("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
@@ -35657,14 +36390,14 @@ async function handlePlanning(context, action) {
   if (action === "dry-run") {
     const planningRootOption = requiredStringOption(context, "planning-root");
     if (typeof planningRootOption !== "string") return planningRootOption;
-    const planningRoot = path20.resolve(context.repositoryRoot, planningRootOption);
+    const planningRoot = path21.resolve(context.repositoryRoot, planningRootOption);
     const stagingRoot = requiredStringOption(context, "staging-root");
     if (typeof stagingRoot !== "string") return stagingRoot;
     const runId = requiredStringOption(context, "run-id");
     if (typeof runId !== "string") return runId;
     const projectPath = requiredStringOption(context, "project");
     if (typeof projectPath !== "string") return projectPath;
-    const projectFile = await readJsonInput(path20.resolve(context.repositoryRoot, projectPath));
+    const projectFile = await readJsonInput(path21.resolve(context.repositoryRoot, projectPath));
     if (isCliResult(projectFile)) return projectFile;
     const project = coercePlanningProjectInput(projectFile, projectPath);
     if ("exitCode" in project) return project;
@@ -35845,7 +36578,7 @@ function projectHuman(result) {
 // packages/cli/src/commands/release/index.ts
 import { execFile as execFileCb2 } from "node:child_process";
 import { promisify as promisify3 } from "node:util";
-import path21 from "node:path";
+import path22 from "node:path";
 var execFile3 = promisify3(execFileCb2);
 var RELEASE_HELP = `legion dev release <command>
 
@@ -35903,10 +36636,10 @@ async function checklist(context) {
   args.push("--repository-root", context.repositoryRoot);
   const validateNextLog = context.args.options.get("validate-next-log");
   if (typeof validateNextLog === "string") {
-    args.push("--validate-next-log", path21.resolve(context.repositoryRoot, validateNextLog));
+    args.push("--validate-next-log", path22.resolve(context.repositoryRoot, validateNextLog));
   }
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path21.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path22.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -35933,13 +36666,13 @@ async function rollbackVerify(context) {
   if (hasFlag(context, "help")) return helpResult(RELEASE_HELP);
   const backupManifest = requiredStringOption(context, "backup-manifest");
   if (typeof backupManifest !== "string") return backupManifest;
-  const resolvedManifest = path21.resolve(context.repositoryRoot, backupManifest);
+  const resolvedManifest = path22.resolve(context.repositoryRoot, backupManifest);
   const args = ["scripts/release/rollback-policy.mjs", "--backup-manifest", resolvedManifest];
   args.push("--repository-root", context.repositoryRoot);
   const source = context.args.options.get("source");
   if (typeof source === "string") args.push("--source", source);
   const report = context.args.options.get("report");
-  if (typeof report === "string") args.push("--report", path21.resolve(context.repositoryRoot, report));
+  if (typeof report === "string") args.push("--report", path22.resolve(context.repositoryRoot, report));
   const result = await runScript2(context, args);
   const verdict = parseJsonVerdict2(result.stdout);
   if (verdict && typeof verdict === "object") {
@@ -35990,7 +36723,7 @@ function parseJsonVerdict2(stdout) {
 }
 async function runScript2(context, scriptArgs) {
   const resolvedArgs = scriptArgs.map(
-    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path21.join(V9_SOURCE_ROOT2, arg) : arg
+    (arg) => typeof arg === "string" && (arg === "scripts/release/release-checklist.mjs" || arg === "scripts/release/rollback-policy.mjs") ? path22.join(V9_SOURCE_ROOT2, arg) : arg
   );
   try {
     const result = await execFile3(process.execPath, resolvedArgs, {
@@ -36105,8 +36838,8 @@ async function handleDevCommand(context) {
 }
 
 // packages/cli/src/workflow/input.ts
-import { execFileSync } from "node:child_process";
-import path22 from "node:path";
+import { execFileSync as execFileSync2 } from "node:child_process";
+import path23 from "node:path";
 function slugFromName(name) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalizeProjectSlug(slug.length > 0 ? slug : "legion-project");
@@ -36127,7 +36860,7 @@ function createdAtOption(context) {
 function repositoryReference(repositoryRoot) {
   const git2 = (args) => {
     try {
-      return execFileSync("git", ["-C", repositoryRoot, ...args], {
+      return execFileSync2("git", ["-C", repositoryRoot, ...args], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"]
       }).trim();
@@ -36168,7 +36901,7 @@ function isStableDefaultBranch(branch) {
 
 // packages/cli/src/workflow/intake/driver.ts
 import { lstat as lstat3, readFile as readFile17, writeFile as writeFile8 } from "node:fs/promises";
-import path28 from "node:path";
+import path29 from "node:path";
 
 // packages/cli/src/workflow/render.ts
 function nextAction(command, reason) {
@@ -36194,13 +36927,13 @@ function renderDiagnostics(diagnostics) {
 
 // packages/cli/src/workflow/pinned-references.ts
 import { readFile as readFile12, realpath as realpath3 } from "node:fs/promises";
-import path23 from "node:path";
+import path24 from "node:path";
 function isErrorCode(error51, ...codes) {
   return error51 !== null && typeof error51 === "object" && "code" in error51 && typeof error51.code === "string" && codes.includes(error51.code);
 }
 function contains(root, candidate) {
-  const relative = path23.relative(root, candidate);
-  return relative === "" || !relative.startsWith("..") && !path23.isAbsolute(relative);
+  const relative = path24.relative(root, candidate);
+  return relative === "" || !relative.startsWith("..") && !path24.isAbsolute(relative);
 }
 function isWindowsStreamPath(artifactPath) {
   return artifactPath.includes(":");
@@ -36211,12 +36944,12 @@ function isCaseFoldedAlias(declaredPath, resolvedRelative) {
 async function resolveOne(repositoryRoot, artifactPath) {
   if (isWindowsStreamPath(artifactPath)) return { kind: "unverified" };
   const segments = artifactPath.split("/");
-  const target = path23.resolve(repositoryRoot, ...segments);
-  if (!contains(path23.resolve(repositoryRoot), target)) return { kind: "unverified" };
+  const target = path24.resolve(repositoryRoot, ...segments);
+  if (!contains(path24.resolve(repositoryRoot), target)) return { kind: "unverified" };
   try {
     const [realRoot, realTarget] = await Promise.all([realpath3(repositoryRoot), realpath3(target)]);
     if (!contains(realRoot, realTarget)) return { kind: "unverified" };
-    if (isCaseFoldedAlias(artifactPath, path23.relative(realRoot, realTarget).split(path23.sep).join("/"))) {
+    if (isCaseFoldedAlias(artifactPath, path24.relative(realRoot, realTarget).split(path24.sep).join("/"))) {
       return { kind: "unverified" };
     }
     return { kind: "hashed", sha256: hashContent(await readFile12(realTarget)) };
@@ -36251,27 +36984,6 @@ async function mintPinnedReferences(input) {
     const reference = artifactReferenceSchema.safeParse({ path: artifactPath, sha256: entry.sha256 });
     return reference.success ? reference.data : void 0;
   };
-}
-
-// packages/cli/src/workflow/criteria.ts
-var GENERATED_CRITERION_REASON = "Generated by Legion from a roadmap or ad-hoc source that defined no acceptance proof. Replace with an executable criterion before treating this as verified.";
-var MAX_CRITERION_SLUG_LENGTH = 48;
-function criterionIdFor(statement, index) {
-  const slug = statement.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_CRITERION_SLUG_LENGTH).replace(/-+$/g, "");
-  return slug.length > 0 ? `ac_${slug}-${index + 1}` : `ac_criterion-${index + 1}`;
-}
-function generatedCriterion(statement, index) {
-  return {
-    id: criterionIdFor(statement, index),
-    statement,
-    proof: {
-      mode: "manual",
-      reason: GENERATED_CRITERION_REASON
-    }
-  };
-}
-function generatedCriteria(statements) {
-  return statements.map((statement, index) => generatedCriterion(statement, index));
 }
 
 // packages/cli/src/workflow/intake/graph.ts
@@ -36879,7 +37591,7 @@ function validateSlotText(node, value) {
   });
   if (node.slot === "project.name") {
     if (value.length > 160) return fail("too_long", "Keep the name to 160 characters or fewer.");
-    if (slugFromText(value).length < 3) {
+    if (slugFromText2(value).length < 3) {
       return fail(
         "unslugifiable_name",
         "The name needs at least three letters or digits so it can become a project slug."
@@ -36960,7 +37672,7 @@ function validateSlotText(node, value) {
   }
   return void 0;
 }
-function slugFromText(value) {
+function slugFromText2(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64).replace(/-+$/g, "");
 }
 function answerText(answers, nodeId2) {
@@ -37154,7 +37866,7 @@ function validateAnswerSet(input) {
 var MAX_REQUIREMENT_SLUG = 48;
 var WONT_CRITERION_REASON = "Recorded during intake as out of scope. Nothing is built, so nothing is proven; this criterion exists to keep the decision visible.";
 function requirementIdFor(statement, index) {
-  const slug = slugFromText(statement).slice(0, MAX_REQUIREMENT_SLUG).replace(/-+$/g, "");
+  const slug = slugFromText2(statement).slice(0, MAX_REQUIREMENT_SLUG).replace(/-+$/g, "");
   return slug.length > 0 ? `req_${slug}-${index}` : `req_requirement-${index}`;
 }
 function answerText2(answers, nodeId2) {
@@ -37295,7 +38007,7 @@ function plannedRequirements(requirements) {
 function escapeTableCell(value) {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
 }
-function truncate2(value, limit) {
+function truncate3(value, limit) {
   return value.length <= limit ? value : `${value.slice(0, limit - 1).trimEnd()}\u2026`;
 }
 function bulletList(value) {
@@ -37351,7 +38063,7 @@ function renderRoadmap(input) {
   lines.push("|-------|------|--------------|--------|");
   for (const [index, requirement] of planned.entries()) {
     lines.push(
-      `| ${index + 1} | ${escapeTableCell(truncate2(requirement.statement, 60))} | ${requirement.id} | Pending |`
+      `| ${index + 1} | ${escapeTableCell(truncate3(requirement.statement, 60))} | ${requirement.id} | Pending |`
     );
   }
   if (planned.length === 0) {
@@ -37464,11 +38176,11 @@ function resolvedOpenQuestions(session) {
 // packages/cli/src/workflow/intake/exploration-source.ts
 import { createHash as createHash18 } from "node:crypto";
 import { readFile as readFile15 } from "node:fs/promises";
-import path26 from "node:path";
+import path27 from "node:path";
 
 // packages/cli/src/workflow/guidance-run.ts
 import { mkdir as mkdir11, readdir as readdir10, readFile as readFile14 } from "node:fs/promises";
-import path25 from "node:path";
+import path26 from "node:path";
 
 // packages/cli/src/workflow/budget.ts
 var DEFAULT_LINES_PER_FILE = 200;
@@ -37503,9 +38215,9 @@ import { execFile as execFile4, spawn } from "node:child_process";
 import { promisify as promisify4 } from "node:util";
 
 // packages/cli/src/workflow/executor/fake-plan.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
+import { execFileSync as execFileSync3 } from "node:child_process";
 import { mkdirSync as mkdirSync2, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import path24 from "node:path";
+import path25 from "node:path";
 var FAKE_PLAN_ENV = "LEGION_FAKE_EXECUTOR_PLAN";
 function readFakeExecutorPlan() {
   const raw = process.env[FAKE_PLAN_ENV];
@@ -37518,9 +38230,9 @@ function readFakeExecutorPlan() {
   }
 }
 function resolveInsideRepository(repositoryRoot, relative) {
-  const root = path24.resolve(repositoryRoot);
-  const absolute = path24.resolve(root, relative);
-  const prefix = root.endsWith(path24.sep) ? root : `${root}${path24.sep}`;
+  const root = path25.resolve(repositoryRoot);
+  const absolute = path25.resolve(root, relative);
+  const prefix = root.endsWith(path25.sep) ? root : `${root}${path25.sep}`;
   return absolute === root || absolute.startsWith(prefix) ? absolute : void 0;
 }
 function applyFakeExecutorPlan(input) {
@@ -37530,7 +38242,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writes ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path24.dirname(absolute), { recursive: true });
+    mkdirSync2(path25.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     written.push(entry.path);
     staged.push(entry.path);
@@ -37546,7 +38258,7 @@ function applyFakeExecutorPlan(input) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
     try {
-      mkdirSync2(path24.dirname(absolute), { recursive: true });
+      mkdirSync2(path25.dirname(absolute), { recursive: true });
       rmSync(absolute, { force: true });
       symlinkSync(entry.target, absolute);
       written.push(entry.path);
@@ -37556,8 +38268,8 @@ function applyFakeExecutorPlan(input) {
   }
   if (input.plan.commit === true && staged.length > 0) {
     try {
-      execFileSync2("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
-      execFileSync2(
+      execFileSync3("git", ["-C", input.repositoryRoot, "add", "--", ...staged], { stdio: "ignore" });
+      execFileSync3(
         "git",
         ["-C", input.repositoryRoot, "-c", "user.email=fake@legion", "-c", "user.name=Fake Executor", "commit", "-m", "fake executor commit"],
         { stdio: "ignore" }
@@ -37568,7 +38280,7 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.writesAfterCommit ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    mkdirSync2(path24.dirname(absolute), { recursive: true });
+    mkdirSync2(path25.dirname(absolute), { recursive: true });
     writeFileSync(absolute, entry.content, "utf8");
     if (!written.includes(entry.path)) written.push(entry.path);
   }
@@ -37990,7 +38702,7 @@ function guidanceCreatedAt(context) {
   }
 }
 async function createGuidanceRunPaths(input) {
-  const workflowRoot = path25.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
+  const workflowRoot = path26.join(input.repositoryRoot, ".legion", "project", "workflow", input.workflow);
   await mkdir11(workflowRoot, { recursive: true });
   const safeTimestamp = input.createdAt.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+$/g, "");
   const slug = slugFromName(input.slugSource);
@@ -37998,7 +38710,7 @@ async function createGuidanceRunPaths(input) {
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const runId = `${safeTimestamp}-${slug}${suffix}`;
     const artifactRoot = artifactPathSchema.parse(`.legion/project/workflow/${input.workflow}/${runId}`);
-    const absoluteRunRoot = path25.join(input.repositoryRoot, ...artifactRoot.split("/"));
+    const absoluteRunRoot = path26.join(input.repositoryRoot, ...artifactRoot.split("/"));
     try {
       await mkdir11(absoluteRunRoot);
       return {
@@ -38178,7 +38890,7 @@ async function latestGuidanceRuns(input) {
   const limit = input.limitPerWorkflow ?? 3;
   const runs = [];
   for (const workflow of workflows) {
-    const workflowRoot = path25.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
+    const workflowRoot = path26.join(input.repositoryRoot, ".legion", "project", "workflow", workflow);
     let entries;
     try {
       entries = await readdir10(workflowRoot, { withFileTypes: true });
@@ -38189,7 +38901,7 @@ async function latestGuidanceRuns(input) {
     const workflowRuns = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const runPath = path25.join(workflowRoot, entry.name, "workflow-run.json");
+      const runPath = path26.join(workflowRoot, entry.name, "workflow-run.json");
       try {
         const parsed = JSON.parse(await readFile14(runPath, "utf8"));
         if (parsed.kind === "workflow_run" && parsed.workflow === workflow) workflowRuns.push(parsed);
@@ -38259,7 +38971,7 @@ function explorationArtifactPathOf(run) {
 }
 async function readExplorationRunId(repositoryRoot, artifactPath) {
   try {
-    const raw = await readFile15(path26.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
+    const raw = await readFile15(path27.join(repositoryRoot, ...artifactPath.split("/")), "utf8");
     const parsed = JSON.parse(raw);
     const runId = parsed.runId;
     return typeof runId === "string" ? runId : void 0;
@@ -38310,7 +39022,7 @@ async function loadExploration(repositoryRoot, runId) {
   }
   let raw;
   try {
-    raw = await readFile15(path26.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
+    raw = await readFile15(path27.join(repositoryRoot, ...candidate.artifactPath.split("/")), "utf8");
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
     return { ok: false, reason: `Exploration ${runId} could not be read: ${message}` };
@@ -38403,11 +39115,11 @@ function renderSessionStatus(input) {
 
 // packages/cli/src/workflow/intake/session.ts
 import { mkdir as mkdir12, readFile as readFile16, readdir as readdir11, rename as rename4, rm as rm6, rmdir, stat as stat6, writeFile as writeFile7 } from "node:fs/promises";
-import path27 from "node:path";
+import path28 from "node:path";
 var INTAKE_ROOT = ".legion/project/intake";
 var SESSION_FILE = "session.json";
 function intakeSessionDirectory(repositoryRoot, sessionId) {
-  return path27.join(repositoryRoot, ".legion", "project", "intake", sessionId);
+  return path28.join(repositoryRoot, ".legion", "project", "intake", sessionId);
 }
 function intakeSessionArtifactPath(sessionId) {
   return `${INTAKE_ROOT}/${sessionId}/${SESSION_FILE}`;
@@ -38416,7 +39128,7 @@ function isNodeErrorCode2(error51, code) {
   return Boolean(error51 && typeof error51 === "object" && "code" in error51 && error51.code === code);
 }
 function sessionFilePath(repositoryRoot, sessionId) {
-  return path27.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
+  return path28.join(intakeSessionDirectory(repositoryRoot, sessionId), SESSION_FILE);
 }
 function nowTimestamp2() {
   return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
@@ -38602,8 +39314,8 @@ async function claimSessionDirectory(repositoryRoot, sessionId) {
     repositoryRoot,
     artifactPath: intakeSessionArtifactPath(sessionId)
   });
-  const sessionDirectory = path27.dirname(resolved.absolutePath);
-  await mkdir12(path27.dirname(sessionDirectory), { recursive: true });
+  const sessionDirectory = path28.dirname(resolved.absolutePath);
+  await mkdir12(path28.dirname(sessionDirectory), { recursive: true });
   try {
     await mkdir12(sessionDirectory, { recursive: false });
     return true;
@@ -38619,7 +39331,7 @@ async function releaseSessionId(repositoryRoot, sessionId) {
   }
 }
 async function listSessions(repositoryRoot) {
-  const root = path27.join(repositoryRoot, ".legion", "project", "intake");
+  const root = path28.join(repositoryRoot, ".legion", "project", "intake");
   let entries;
   try {
     entries = await readdir11(root, { withFileTypes: true });
@@ -39146,7 +39858,7 @@ async function handleBatchIntake(context) {
   if (filePath === void 0) return usageError("Provide a file as --intake <file>.");
   let parsed;
   try {
-    const absolute = path28.isAbsolute(filePath) ? filePath : path28.resolve(context.repositoryRoot, filePath);
+    const absolute = path29.isAbsolute(filePath) ? filePath : path29.resolve(context.repositoryRoot, filePath);
     parsed = JSON.parse(await readFile17(absolute, "utf8"));
   } catch (error51) {
     const message = error51 instanceof Error ? error51.message : String(error51);
@@ -39449,7 +40161,7 @@ ${initialized.diagnostics.map((entry) => `  - ${entry.message}`).join("\n")}`
     resolvedQuestions: resolvedOpenQuestions(session),
     createdAt
   });
-  const roadmapPath = path28.join(context.repositoryRoot, ROADMAP_FILE);
+  const roadmapPath = path29.join(context.repositoryRoot, ROADMAP_FILE);
   const roadmap = renderRoadmap({
     projectName: name,
     answers: session.answers,
@@ -39666,7 +40378,7 @@ ${rendered}` : "Project initialization failed.";
 // packages/cli/src/workflow/codebase-map.ts
 import { createHash as createHash19 } from "node:crypto";
 import { readdir as readdir12, readFile as readFile18, stat as stat7 } from "node:fs/promises";
-import path29 from "node:path";
+import path30 from "node:path";
 var EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([
   ".git",
   ".hg",
@@ -39776,7 +40488,7 @@ async function getLatestCodebaseMap(repositoryRoot) {
     const artifactPath = typeof run.outputs["mapArtifactPath"] === "string" ? run.outputs["mapArtifactPath"] : void 0;
     if (artifactPath === void 0) continue;
     try {
-      return JSON.parse(await readFile18(path29.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
+      return JSON.parse(await readFile18(path30.join(repositoryRoot, ...artifactPath.split("/")), "utf8"));
     } catch {
       continue;
     }
@@ -39813,23 +40525,23 @@ function queryCodebaseMap(map2, query, limit = 10) {
 }
 function normalizeScope(repositoryRoot, scope) {
   if (scope === void 0 || scope.trim().length === 0 || scope.trim() === ".") return ".";
-  const absolute = path29.resolve(repositoryRoot, scope);
-  const relative = path29.relative(repositoryRoot, absolute).replace(/\\/g, "/");
+  const absolute = path30.resolve(repositoryRoot, scope);
+  const relative = path30.relative(repositoryRoot, absolute).replace(/\\/g, "/");
   if (relative.length === 0) return ".";
-  if (relative.startsWith("../") || path29.isAbsolute(relative)) {
+  if (relative.startsWith("../") || path30.isAbsolute(relative)) {
     throw new Error(`Map scope must stay inside the repository: ${scope}`);
   }
   return relative;
 }
 async function collectSourceFiles(repositoryRoot, scope) {
-  const root = scope === "." ? repositoryRoot : path29.join(repositoryRoot, ...scope.split("/"));
+  const root = scope === "." ? repositoryRoot : path30.join(repositoryRoot, ...scope.split("/"));
   const rootStat = await stat7(root);
   const candidates = rootStat.isFile() ? [root] : await walk(root);
   const files = [];
   for (const absolutePath of [...candidates].sort((left, right) => left.localeCompare(right))) {
-    const relative = path29.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
-    const extension = path29.extname(relative).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path29.basename(relative))) continue;
+    const relative = path30.relative(repositoryRoot, absolutePath).replace(/\\/g, "/");
+    const extension = path30.extname(relative).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(extension) && !isTextLikeName(path30.basename(relative))) continue;
     const fileStat = await stat7(absolutePath);
     if (!fileStat.isFile() || fileStat.size > 512 * 1024) continue;
     const bytes = await readFile18(absolutePath);
@@ -39855,7 +40567,7 @@ async function walk(root) {
   const entries = await readdir12(root, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name.startsWith(".") && ![".github", ".codex-plugin", ".npmrc", ".nvmrc", ".node-version"].includes(entry.name)) continue;
-    const absolute = path29.join(root, entry.name);
+    const absolute = path30.join(root, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRECTORIES.has(entry.name)) continue;
       files.push(...await walk(absolute));
@@ -39900,7 +40612,7 @@ function fingerprintFiles(files) {
 function renderCodebaseMarkdown(map2) {
   const byExtension = /* @__PURE__ */ new Map();
   for (const file2 of map2.files) {
-    const extension = path29.extname(file2.path).toLowerCase() || "(none)";
+    const extension = path30.extname(file2.path).toLowerCase() || "(none)";
     byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
   }
   const extensionRows = [...byExtension.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([extension, count]) => `- ${extension}: ${count}`);
@@ -40015,7 +40727,7 @@ function ageInDays(generatedAt, now) {
 
 // packages/cli/src/workflow/traceability-check.ts
 import { readdir as readdir13 } from "node:fs/promises";
-import path30 from "node:path";
+import path31 from "node:path";
 var CHANGES_ROOT = ".legion/project/changes";
 var CURRENT_SPECS_ROOT = ".legion/project/specs";
 function taskgraphArtifactPath(changeId) {
@@ -40040,7 +40752,7 @@ async function guarded(artifactPath, code, read) {
 }
 async function changeIds(repositoryRoot) {
   return guarded(CHANGES_ROOT, "artifact_root_unreadable", async () => {
-    const entries = await readdir13(path30.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
+    const entries = await readdir13(path31.join(repositoryRoot, CHANGES_ROOT), { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   });
 }
@@ -40310,11 +41022,11 @@ function renderTraceabilityLine(traceability) {
 
 // packages/cli/src/workflow/state.ts
 import { readdir as readdir15 } from "node:fs/promises";
-import path33 from "node:path";
+import path34 from "node:path";
 
 // packages/cli/src/workflow/context.ts
 import { readdir as readdir14, stat as stat8 } from "node:fs/promises";
-import path31 from "node:path";
+import path32 from "node:path";
 async function loadWorkflowProject(context) {
   const loaded = await loadProject({ repositoryRoot: context.repositoryRoot });
   if (!loaded.ok) {
@@ -40340,7 +41052,7 @@ async function validateWorkflowProject(context) {
   return validateProject({ repositoryRoot: context.repositoryRoot });
 }
 async function detectPreInitCollision2(repositoryRoot) {
-  const legionRoot = path31.join(repositoryRoot, ".legion");
+  const legionRoot = path32.join(repositoryRoot, ".legion");
   if (!await pathExists6(legionRoot)) return [];
   const entries = await readdir14(legionRoot, { withFileTypes: true });
   const unknownEntries = entries.map((entry) => entry.name).filter((name) => name !== "project" && name !== "var" && name !== "legacy-protocol" && !isIgnorableLegionRootEntry3(name)).sort();
@@ -40349,8 +41061,8 @@ async function detectPreInitCollision2(repositoryRoot) {
       migrationDiagnostic(`Existing .legion entries require explicit migration before initialization: ${unknownEntries.join(", ")}.`)
     ];
   }
-  const projectRoot = path31.join(legionRoot, "project");
-  const manifestPath = path31.join(projectRoot, "project.json");
+  const projectRoot = path32.join(legionRoot, "project");
+  const manifestPath = path32.join(projectRoot, "project.json");
   if (await pathExists6(projectRoot) && !await pathExists6(manifestPath)) {
     if (await containsOnlyPreInitWorkflowRecords(projectRoot)) return [];
     return [
@@ -40410,7 +41122,7 @@ function latestEvidenceEntries(entries) {
 
 // packages/cli/src/workflow/run-artifacts.ts
 import { createHash as createHash20 } from "node:crypto";
-import path32 from "node:path";
+import path33 from "node:path";
 var ENTITY_SUFFIX_MAX_LENGTH = 64;
 var DERIVED_ID_HASH_LENGTH = 12;
 function taskIdForContractId(contractId) {
@@ -40453,7 +41165,7 @@ function reviewRunArtifactPath(input) {
   return artifactPathSchema.parse(`.legion/project/changes/${input.changeId}/reviews/${input.reviewId}/${input.fileName}`);
 }
 function absoluteArtifactPath(repositoryRoot, artifactPath) {
-  return path32.join(repositoryRoot, ...artifactPath.split("/"));
+  return path33.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
 // packages/cli/src/workflow/state.ts
@@ -40579,7 +41291,7 @@ function hasAcceptedEvidence(entries) {
   return entries.length > 0 && entries.every((entry) => entry.acceptance.status === "accepted");
 }
 async function listWorkflowChanges(repositoryRoot) {
-  const changesRoot = path33.join(repositoryRoot, ".legion", "project", "changes");
+  const changesRoot = path34.join(repositoryRoot, ".legion", "project", "changes");
   let entries;
   try {
     entries = await readdir15(changesRoot, { withFileTypes: true });
@@ -40635,7 +41347,7 @@ async function findLatestWorkflowChangeId(repositoryRoot) {
   const listed = await listWorkflowChanges(repositoryRoot);
   if (!listed.ok) return listed;
   const latest = listed.changes.at(-1);
-  if (latest === void 0) return noWorkflowChange(path33.join(repositoryRoot, ".legion", "project", "changes"));
+  if (latest === void 0) return noWorkflowChange(path34.join(repositoryRoot, ".legion", "project", "changes"));
   return { ok: true, changeId: latest.changeId };
 }
 async function isChangeComplete(input) {
@@ -40774,380 +41486,6 @@ async function resolveMapStatus(context) {
     scope: state.scope,
     ...state.latestSourceFingerprint === null ? {} : { sourceFingerprint: state.latestSourceFingerprint }
   };
-}
-
-// packages/cli/src/workflow/change-input.ts
-import { execFileSync as execFileSync3 } from "node:child_process";
-import path34 from "node:path";
-
-// packages/cli/src/workflow/phase-requirement.ts
-var REQUIREMENT_ANCHOR = /\*\*Requirement:\*\*\s*`(req_[A-Za-z0-9._@+=:,~-]+)`/;
-function requirementIdInPhase(phase) {
-  return REQUIREMENT_ANCHOR.exec(phase.body)?.[1];
-}
-function partitionCriteria(requirement) {
-  const executable = [];
-  const manual = [];
-  for (const criterion of requirement.acceptance.criteria) {
-    if (criterion.proof.mode === "executable") executable.push(criterion);
-    else manual.push(criterion);
-  }
-  return { executable, manual };
-}
-async function resolvePhaseRequirement(repositoryRoot, phase, verified) {
-  const requirementId = requirementIdInPhase(phase);
-  if (requirementId === void 0) return { ok: "absent" };
-  if (verified !== void 0) {
-    const found = verified.find((entry) => entry.id === requirementId);
-    if (found === void 0) {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-      };
-    }
-    return declinedOrResolved(found, phase);
-  }
-  const set2 = await readRequirementSet(repositoryRoot);
-  if (!set2.ok) {
-    if (set2.status === "not_found") {
-      return {
-        ok: false,
-        reason: `Phase ${phase.number} names requirement ${requirementId}, but this project has no requirement set. Re-render the roadmap, or remove the reference.`
-      };
-    }
-    return { ok: false, reason: set2.reason };
-  }
-  const requirement = set2.requirements.find((entry) => entry.id === requirementId);
-  if (requirement === void 0) {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names requirement ${requirementId}, which is not in the requirement set. The roadmap is stale; re-run legion start --finalize.`
-    };
-  }
-  return declinedOrResolved(requirement, phase);
-}
-function declinedOrResolved(requirement, phase) {
-  if (requirement.priority === "wont") {
-    return {
-      ok: false,
-      reason: `Phase ${phase.number} names ${requirement.id}, which was recorded during intake as out of scope. Remove the phase, or change the requirement's priority and re-render the roadmap.`
-    };
-  }
-  return { ok: true, resolved: { requirement, ...partitionCriteria(requirement) } };
-}
-var MAX_CRITERION_DESCRIPTION = 1024;
-function clamp(value) {
-  if (value.length <= MAX_CRITERION_DESCRIPTION) return value;
-  return `${value.slice(0, MAX_CRITERION_DESCRIPTION - 1).trimEnd()}\u2026`;
-}
-function renderInvocation(command, args) {
-  if (args.length === 0) return `${JSON.stringify(command)} with no arguments`;
-  return `${JSON.stringify(command)} with arguments ${JSON.stringify(args)}`;
-}
-function describeCriterion(criterion) {
-  if (criterion.proof.mode === "executable") {
-    const invocation = renderInvocation(criterion.proof.command, criterion.proof.args);
-    return clamp(
-      `${criterion.statement} \u2014 run ${invocation}; it must exit ${criterion.proof.expectedExitCode}`
-    );
-  }
-  return clamp(`${criterion.statement} \u2014 manual: ${criterion.proof.reason}`);
-}
-
-// packages/cli/src/workflow/change-input.ts
-var ZERO_GIT_SHA = "0000000000000000000000000000000000000000";
-var MAX_ID_SUFFIX = 64;
-function suffixWithRoom(suffix, tail) {
-  if (suffix.length + tail.length <= MAX_ID_SUFFIX) return `${suffix}${tail}`;
-  const trimmed = suffix.slice(0, MAX_ID_SUFFIX - tail.length).replace(/-+$/, "");
-  return `${trimmed}${tail}`;
-}
-function phaseOracleAssignment(phase, requirement) {
-  const ids = phasePlanIds(phase);
-  if (requirement === void 0) {
-    return { byCriterionId: /* @__PURE__ */ new Map(), inspectionOracleId: ids.oracleId, all: [ids.oracleId] };
-  }
-  const { executable, manual } = partitionCriteria(requirement);
-  const byCriterionId = new Map(
-    executable.map((criterion, index) => [
-      criterion.id,
-      formatEntityId("oracle", suffixWithRoom(ids.suffix, `-c${index + 1}`))
-    ])
-  );
-  const criterionIds = [...byCriterionId.values()];
-  const inspectionOracleId = manual.length === 0 && criterionIds.length > 0 ? void 0 : ids.oracleId;
-  return {
-    byCriterionId,
-    inspectionOracleId,
-    all: inspectionOracleId === void 0 ? criterionIds : [...criterionIds, inspectionOracleId]
-  };
-}
-function phaseOracleIds(phase, requirement) {
-  return phaseOracleAssignment(phase, requirement).all;
-}
-function phasePlanIds(phase) {
-  const suffix = phaseIdSuffix(phase);
-  return {
-    suffix,
-    changeId: formatEntityId("change", suffix),
-    requirementId: formatEntityId("requirement", suffix),
-    oracleId: formatEntityId("oracle", suffix),
-    contractId: formatEntityId("contract", suffix)
-  };
-}
-function phaseRiskProfile(phase, recorded) {
-  if (recorded !== void 0) {
-    return riskProfileSchema.parse({
-      tier: recorded.tier,
-      reasons: [recorded.reason, `Phase ${phase.number} workflow plan creates a reviewable change.`]
-    });
-  }
-  return riskProfileSchema.parse({
-    tier: "R2",
-    reasons: [`Phase ${phase.number} workflow plan creates a reviewable change.`]
-  });
-}
-function buildPhaseCurrentSpecInput(options) {
-  const ids = phasePlanIds(options.phase);
-  const createdAt = options.createdAt ?? currentUtcTimestamp();
-  if (options.requirement !== void 0) {
-    const authored = requirementSchema.parse({
-      ...options.requirement,
-      traceRefs: withSpecAnchor(options.requirement)
-    });
-    return {
-      repositoryRoot: options.repositoryRoot,
-      document: {
-        primaryRequirementId: authored.id,
-        capability: {
-          id: ids.suffix,
-          title: `Phase ${options.phase.number}: ${options.phase.name}`,
-          status: "active"
-        },
-        requirements: [authored],
-        ...currentSpecTail(options, authored.id)
-      }
-    };
-  }
-  const currentSpecPath = artifactPathForRole({
-    role: "current-spec",
-    requirementId: ids.requirementId
-  });
-  const requirement = requirementSchema.parse({
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "requirement",
-    id: ids.requirementId,
-    projectId: options.project.id,
-    priority: "must",
-    category: "behavior",
-    status: "accepted",
-    statement: `Phase ${options.phase.number} (${options.phase.name}) has a resolved planning source.`,
-    acceptance: {
-      language: `Phase ${options.phase.number} planning starts from a resolved source artifact.`,
-      criteria: generatedCriteria([`${options.phase.name} source is available for typed planning.`]),
-      oracleRefs: []
-    },
-    traceRefs: [
-      {
-        path: currentSpecPath,
-        anchor: ids.requirementId,
-        relation: "defines",
-        entity: { kind: "requirement", id: ids.requirementId }
-      }
-    ],
-    supersedes: []
-  });
-  return {
-    repositoryRoot: options.repositoryRoot,
-    document: {
-      primaryRequirementId: ids.requirementId,
-      capability: {
-        id: ids.suffix,
-        title: `Phase ${options.phase.number}: ${options.phase.name}`,
-        status: "active"
-      },
-      requirements: [requirement],
-      ...currentSpecTail(options, ids.requirementId)
-    }
-  };
-}
-function currentSpecTail(options, traceRequirementId) {
-  return {
-    sections: {
-      purpose: `Track phase ${options.phase.number} planning source as current project truth.`,
-      behaviors: `The project can create a typed change proposal for ${options.phase.name}.`,
-      constraints: "The baseline current spec is limited to planning-source availability.",
-      scenarios: `A maintainer can run legion plan ${options.phase.number} from the roadmap source.`,
-      interfaces: "legion plan",
-      compatibility: "The current spec exists so change bundles have explicit current truth.",
-      failureModes: "If the current spec cannot be read or created, planning fails with diagnostics.",
-      traceIds: [traceRequirementId]
-    }
-  };
-}
-function currentUtcTimestamp() {
-  return utcTimestampSchema.parse((/* @__PURE__ */ new Date()).toISOString());
-}
-function resolveBaseGitSha(repositoryRoot) {
-  try {
-    const value = execFileSync3("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim().toLowerCase();
-    return gitShaSchema.parse(value);
-  } catch {
-    return gitShaSchema.parse(ZERO_GIT_SHA);
-  }
-}
-function phaseSourceArtifactPath(repositoryRoot, phase) {
-  const relative = path34.relative(repositoryRoot, phase.sourcePath).replace(/\\/g, "/");
-  const candidate = relative.length > 0 && !relative.startsWith("../") && !path34.isAbsolute(relative) ? relative : ".legion/project/project.json";
-  return artifactPathSchema.parse(candidate);
-}
-function withSpecAnchor(requirement) {
-  const specPath = artifactPathForRole({ role: "current-spec", requirementId: requirement.id });
-  const anchored = requirement.traceRefs.some(
-    (traceRef) => traceRef.path === specPath && traceRef.anchor === requirement.id && traceRef.relation === "defines" && traceRef.entity?.kind === "requirement" && traceRef.entity.id === requirement.id
-  );
-  if (anchored) return requirement.traceRefs;
-  return [
-    ...requirement.traceRefs,
-    {
-      path: specPath,
-      anchor: requirement.id,
-      relation: "defines",
-      entity: { kind: "requirement", id: requirement.id }
-    }
-  ];
-}
-function buildChangeBundleInput(options) {
-  const ids = phasePlanIds(options.phase);
-  const createdAt = options.createdAt ?? currentUtcTimestamp();
-  const baseGitSha = options.baseGitSha ?? resolveBaseGitSha(options.repositoryRoot);
-  const sourcePath = phaseSourceArtifactPath(options.repositoryRoot, options.phase);
-  const owner = firstDecisionOwner(options.project);
-  const deltaRequirementId = options.requirement?.id ?? ids.requirementId;
-  const requirement = options.requirement === void 0 ? requirementSchema.parse({
-    schemaVersion: LEGION_PROTOCOL_VERSION,
-    createdAt,
-    kind: "requirement",
-    id: ids.requirementId,
-    projectId: options.project.id,
-    priority: "must",
-    category: "behavior",
-    status: "accepted",
-    statement: requirementStatement(options.phase),
-    acceptance: {
-      language: `Phase ${options.phase.number} is complete when ${options.phase.name} is implemented and verified.`,
-      criteria: generatedCriteria(acceptanceCriteria(options.phase)),
-      oracleRefs: [...phaseOracleIds(options.phase)]
-    },
-    traceRefs: [
-      {
-        path: sourcePath,
-        anchor: `phase-${options.phase.number}`,
-        relation: "defines",
-        entity: { kind: "requirement", id: ids.requirementId }
-      }
-    ],
-    supersedes: []
-  }) : requirementSchema.parse({
-    ...options.requirement,
-    // Only this phase's oracle.
-    //
-    // Retaining an imported requirement's earlier oracle IDs was tried and
-    // reverted: `validateChangeTraceability` loads only the current
-    // change's oracle manifest, so every retained ID reports
-    // `missing_oracle_artifact` and archive refuses the change outright.
-    // Carrying historical coverage needs cross-change oracle resolution,
-    // which is a larger piece of work than this.
-    //
-    // Nothing shipped produces a requirement with prior refs — intake
-    // writes `oracleRefs: []` — so no coverage is lost today. The legacy
-    // importer will be the first producer, and it must land together with
-    // that resolution rather than trading a silent loss for a hard block.
-    acceptance: {
-      ...options.requirement.acceptance,
-      oracleRefs: [...phaseOracleIds(options.phase, options.requirement)]
-    },
-    traceRefs: withSpecAnchor(options.requirement)
-  });
-  return {
-    repositoryRoot: options.repositoryRoot,
-    changeId: ids.changeId,
-    projectId: options.project.id,
-    title: `Plan phase ${options.phase.number}: ${options.phase.name}`,
-    summary: summarizePhase(options.phase),
-    owners: [owner],
-    baseGitSha,
-    risk: phaseRiskProfile(options.phase, options.enforcement),
-    createdAt,
-    currentSpecs: [
-      {
-        requirementId: options.currentSpec.document.primaryRequirementId,
-        expectedRevision: options.currentSpec.document.revision
-      }
-    ],
-    deltaSpecs: [
-      {
-        operation: "modify",
-        requirementId: deltaRequirementId,
-        proposedRequirement: requirement,
-        sections: {
-          purpose: summarizePhase(options.phase),
-          behaviors: options.phase.body || `Implement ${options.phase.name}.`,
-          constraints: "Preserve initialized project truth and create reviewable Legion plan artifacts.",
-          scenarios: `A maintainer runs legion plan ${options.phase.number} and receives a change, oracle, and taskgraph for ${options.phase.name}.`,
-          interfaces: "legion plan",
-          compatibility: "Dry-run planning remains preview-only; non-dry-run planning creates typed artifacts.",
-          failureModes: "Artifact service validation failures are returned with typed diagnostics.",
-          traceIds: [deltaRequirementId]
-        },
-        rationale: `Phase ${options.phase.number} needs typed artifacts before build can execute.`
-      }
-    ],
-    design: {
-      title: `Phase ${options.phase.number} implementation plan`,
-      body: [
-        `Source: ${sourcePath}`,
-        "",
-        options.phase.body || `Implement ${options.phase.name}.`
-      ].join("\n")
-    }
-  };
-}
-function firstDecisionOwner(project) {
-  const owner = project.policy.decisionOwners[0];
-  if (owner === void 0) {
-    throw new Error("Project policy must include at least one decision owner.");
-  }
-  return owner;
-}
-function phaseIdSuffix(phase) {
-  const prefix = `phase-${phase.number}-`;
-  const maxNameLength = Math.max(1, 63 - prefix.length);
-  const nameSlug = slugFromText2(phase.name).slice(0, maxNameLength).replace(/-+$/g, "");
-  return `${prefix}${nameSlug || "plan"}`;
-}
-function slugFromText2(value) {
-  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug.length > 0 ? slug : "plan";
-}
-function requirementStatement(phase) {
-  return truncate3(`Phase ${phase.number} (${phase.name}) must deliver: ${phase.body || phase.name}`, 2048);
-}
-function summarizePhase(phase) {
-  return truncate3(phase.body || `Implement ${phase.name}.`, 512);
-}
-function acceptanceCriteria(phase) {
-  const bullets = phase.body.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.slice(2).trim()).filter((line) => line.length > 0).slice(0, 8);
-  return bullets.length > 0 ? bullets : [`${phase.name} is implemented and reviewable.`];
-}
-function truncate3(value, maxLength) {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) return normalized;
-  return normalized.slice(0, maxLength - 1).trimEnd();
 }
 
 // packages/cli/src/workflow/oracle-input.ts
@@ -42921,7 +43259,7 @@ var GATE_SCOPE = {
   protected_oracle: "task",
   task_level_independent_review: "task",
   integration_or_real_interface_checks: "change",
-  whole_change_acceptance_evidence: "task",
+  whole_change_acceptance_evidence: "change",
   independent_baseline: "task",
   approved_spec_and_oracle: "task",
   architecture_or_security_review: "task",
@@ -43523,6 +43861,202 @@ function integrationSurfaceGateStatus(input) {
   const remainder = outcomes.length > 1 ? ` ${outcomes.length} of this change's declared surfaces are unmet.` : "";
   return { ...chosen, reason: `${chosen.reason}${remainder}` };
 }
+var ACCEPT_RECOVERY = {
+  command: "legion review --accept --approver <id>",
+  reason: "No whole-change sign-off has been recorded for this change, and a clean submitted review already covers its evidence. Accepting it records one, naming a human decision owner from the project manifest."
+};
+var RE_ACCEPT_RECOVERY = {
+  command: "legion review",
+  reason: "A whole-change verdict is already recorded, and `legion review --accept` will not replace it directly: the accept that recorded it flipped every covering review from submitted to accepted, and an accept refuses evidence no clean *submitted* review covers. Submit a fresh review first, then rerun `legion review --accept --approver <id>` \u2014 the promotion re-derives the verdict from scratch, so a recorded block or a sign-off that has gone stale is replaced rather than argued with."
+};
+var REBUILD_RECOVERY = {
+  command: "legion build",
+  reason: "The whole-change sign-off does not cover every task being shipped, because some task has no evidence in this change's index. Build it, review it, then accept: a sign-off cannot cover evidence that does not exist."
+};
+var REVIEW_RECOVERY = {
+  command: "legion review",
+  reason: "This change was re-run after it was signed off, and the newest evidence has not been accepted. Submit a review over it first \u2014 legion review --accept refuses to accept evidence no clean submitted review covers \u2014 and then accept, which re-dates the whole-change sign-off over what is there now."
+};
+var BUNDLE_RECOVERY = {
+  command: "legion dev change validate <changeId>",
+  reason: "This change's bundle could not be read, so nothing is known about whether it was accepted. That command reports what is wrong with it; it does not repair it \u2014 a drifted design, decision log or delta spec is corrected by hand."
+};
+function newestEvidenceAcceptance(entries) {
+  let newest;
+  for (const entry of entries) {
+    if (entry.acceptance.status !== "accepted") continue;
+    const acceptedAt = entry.acceptance.acceptedAt;
+    if (acceptedAt === void 0) continue;
+    if (newest === void 0 || acceptedAt > newest) newest = acceptedAt;
+  }
+  return newest;
+}
+function acceptorCorroboration(input) {
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but the approvals recorded for it could not be read, so nothing establishes that the acceptor was a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const named = [];
+  for (const approval of approvals) {
+    if (approval.changeId !== input.change?.changeId) continue;
+    if (approval.scope.action !== REVIEW_ACCEPT_ACTION) continue;
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.id !== input.acceptedBy) continue;
+    named.push(approval);
+  }
+  if (named.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but no granted ${REVIEW_ACCEPT_ACTION} approval for this change names that actor, so nothing establishes that the sign-off was taken by a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (!named.some((approval) => approval.decidedBy.kind === "human")) {
+    const kinds = [...new Set(named.map((approval) => approval.decidedBy.kind))].sort().join(", ");
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${input.acceptedBy}, and every granted ${REVIEW_ACCEPT_ACTION} approval naming that actor records it as ${kinds}, not as a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  return void 0;
+}
+function wholeChangeAcceptanceStatus(input) {
+  const acceptance = input.change?.acceptance;
+  if (acceptance == null) {
+    return {
+      status: "unevaluable",
+      reason: "The change bundle for this change could not be read, so whether the change as a whole was accepted is unestablished.",
+      recovery: BUNDLE_RECOVERY
+    };
+  }
+  if (acceptance.status === "not_ready") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as not_ready${acceptance.reason === void 0 ? "" : ` (${acceptance.reason})`}: no accept decision has been made about the change as a whole.`,
+      recovery: ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "ready") {
+    return {
+      status: "unevaluable",
+      reason: "This change's acceptance is recorded as ready: every task's evidence was accepted, and no named approver signed off on the change as a whole.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "rejected") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as rejected: ${acceptance.reason}`,
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  if (acceptance.status === "blocked") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as blocked: ${acceptance.reason}`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "superseded") {
+    return {
+      status: "unsatisfied",
+      reason: "This change's acceptance is recorded as superseded, so the recorded sign-off is no longer the current decision.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status !== "accepted") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as ${String(
+        acceptance.status
+      )}, which this Legion does not recognize as a whole-change verdict; it was written by a newer protocol or by hand.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const acceptedAt = acceptance.acceptedAt;
+  const acceptedBy = acceptance.acceptedBy;
+  if (acceptedBy === void 0 || acceptedBy.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records an acceptance with no acceptor, so who signed off on the change as a whole is unestablished.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptedAt === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${acceptedBy} with no instant, so it cannot be compared against the evidence it claims to cover.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const evaluatedAt = input.change?.evaluatedAt;
+  if (evaluatedAt !== void 0 && acceptedAt > evaluatedAt) {
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${acceptedBy} at ${acceptedAt}, later than the instant this report was derived (${evaluatedAt}); a sign-off cannot be dated after the moment it is read.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const corroborated = acceptorCorroboration({ change: input.change, acceptedBy });
+  if (corroborated !== void 0) return corroborated;
+  if (input.tasks.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no tasks, so there is no evidence for a whole-change sign-off to cover.",
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  const latest = latestEvidencePerTask(input.entries);
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const entry = latest.get(taskId);
+    if (entry === void 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId} has no evidence in this change's index, so the sign-off does not cover it.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status === "rejected") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} has since been rejected.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status !== "accepted") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} is not accepted, so this change was re-run after the sign-off and the sign-off does not cover what is there now.`,
+        recovery: REVIEW_RECOVERY
+      };
+    }
+    if (entry.acceptance.acceptedAt === void 0) {
+      return {
+        status: "unevaluable",
+        reason: `${taskId}'s latest evidence ${entry.evidence.id} is accepted with no acceptedAt, so the instant the whole-change sign-off must cover is unestablished.`,
+        recovery: RE_ACCEPT_RECOVERY
+      };
+    }
+  }
+  const newest = newestEvidenceAcceptance(input.entries);
+  if (acceptedAt >= newest) {
+    return {
+      status: "satisfied",
+      reason: `${acceptedBy} accepted this change at ${acceptedAt}, covering all ${input.tasks.length} task${input.tasks.length === 1 ? "" : "s"} and every accepted evidence bundle in it (newest accepted at ${newest}).`
+    };
+  }
+  return {
+    status: "unsatisfied",
+    reason: `${acceptedBy} accepted this change at ${acceptedAt}, which is older than the ${newest} at which this change's task evidence was last accepted: the change was rebuilt and re-accepted per task after the whole-change sign-off, so the sign-off is about work that has since been replaced.`,
+    recovery: RE_ACCEPT_RECOVERY
+  };
+}
 function fromVerdict(verdict, itemId) {
   if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
   if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
@@ -43556,6 +44090,13 @@ function evaluateGate(input) {
         taskIdFor: input.taskIdFor,
         entries,
         change: input.change
+      });
+    case "whole_change_acceptance_evidence":
+      return wholeChangeAcceptanceStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries
       });
     default:
       return {
@@ -43663,7 +44204,12 @@ var GATE_RECOVERY = {
   // a gate id — a payload renderer, a future summary — had no route out of the
   // one state where a route out is the whole point of this release's fix.
   integration_or_real_interface_checks: SURFACE_REAFFIRM_RECOVERY,
-  whole_change_acceptance_evidence: void 0,
+  // Four unmet states with four repairs here too, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays in the table is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // bundle written before this release is in: `acceptance: {status: "not_ready"}`,
+  // which nothing had ever moved.
+  whole_change_acceptance_evidence: ACCEPT_RECOVERY,
   independent_baseline: void 0,
   approved_spec_and_oracle: void 0,
   architecture_or_security_review: void 0,
@@ -44768,6 +45314,10 @@ Review collected build evidence. A submitted passing review still requires expli
 --approver names a human decision owner recorded in .legion/project/project.json. It is
 required when a task in the change derives the explicit_human_approval risk gate.
 
+--accept also records the change's whole-change acceptance, which legion ship reads:
+"accepted" with an approver and clean traceability, "ready" without an approver, and
+"blocked" with the defect named when traceability reports one.
+
 Examples:
   legion review --executor fake
   legion review --accept
@@ -45190,6 +45740,26 @@ async function acceptLatestReview(context, evidence, approver) {
       )
     );
   }
+  const promotion = await promoteChangeAcceptance(context, {
+    changeId: evidence.document.changeId,
+    approver,
+    acceptedAt
+  });
+  if (!promotion.ok) {
+    return promotion.written === void 0 ? blockedReview(
+      promotion.diagnostics,
+      nextAction(
+        "legion dev change validate",
+        "The reviews, evidence and approvals were accepted, and the change's whole-change acceptance was not written \u2014 nothing about it reached disk. legion ship will report whole_change_acceptance_evidence unevaluable for this change until it is."
+      )
+    ) : blockedReview(
+      promotion.diagnostics,
+      nextAction(
+        `legion dev change repoint ${evidence.document.changeId}`,
+        `The whole-change acceptance WAS written: ${promotion.written.artifactPath} records ${promotion.written.acceptance.status} at revision ${promotion.written.revision.revision}. What did not land is the re-point of the artifact inputs that pin it, so legion ship reports change_traceability_broken and never reaches the gate. That command re-points them; it is idempotent and writes nothing if they are already current.`
+      )
+    );
+  }
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
   return success2(
     {
@@ -45204,15 +45774,67 @@ async function acceptLatestReview(context, evidence, approver) {
         artifactPath: evidenceWrite.artifactPath,
         acceptedEntries: evidenceWrite.document.entries.filter((entry) => entry.acceptance.status === "accepted").length
       },
+      acceptance: acceptanceSummary(promotion.result),
       nextAction: action,
       diagnostics: []
     },
     [
       "Review accepted.",
       `Evidence accepted: ${evidenceWrite.artifactPath}.`,
+      `Change acceptance: ${promotion.result.acceptance.status}.`,
       renderNextAction(action)
     ].join("\n")
   );
+}
+function acceptanceSummary(promotion) {
+  return {
+    artifactPath: promotion.artifactPath,
+    status: promotion.acceptance.status,
+    revision: promotion.revision.revision,
+    ...promotion.acceptance.acceptedBy === void 0 ? {} : { acceptedBy: promotion.acceptance.acceptedBy },
+    ...promotion.acceptance.acceptedAt === void 0 ? {} : { acceptedAt: promotion.acceptance.acceptedAt },
+    ...promotion.acceptance.reason === void 0 ? {} : { reason: promotion.acceptance.reason },
+    ...promotion.repointed.length === 0 ? {} : { repointed: promotion.repointed }
+  };
+}
+function blockedAcceptanceReason(diagnostics) {
+  const named = [...diagnostics].map((diagnostic3) => `${diagnostic3.code} (${diagnostic3.source?.path ?? "unknown"}): ${diagnostic3.message}`).sort((left, right) => left.localeCompare(right));
+  const shown = named.slice(0, 3);
+  const remainder = named.length > shown.length ? ` (+${named.length - shown.length} more)` : "";
+  const reason = `Change traceability reported ${named.length} blocking defect${named.length === 1 ? "" : "s"} at legion review --accept: ${shown.join(" | ")}${remainder}`;
+  return reason.length <= 2048 ? reason : `${reason.slice(0, 2045)}...`;
+}
+async function promoteChangeAcceptance(context, input) {
+  const repaired = await repairChangeProposalPins({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!repaired.ok) return { ok: false, diagnostics: repaired.diagnostics };
+  const bundle = await loadChangeBundle({ repositoryRoot: context.repositoryRoot, changeId: input.changeId });
+  if (!bundle.ok) return { ok: false, diagnostics: bundle.diagnostics };
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId
+  });
+  const blocking = traceability.ok ? [] : partitionTraceabilityDiagnostics(traceability.diagnostics, { allowLegacyEvidence: true }).blocking;
+  const acceptance = blocking.length > 0 ? { status: "blocked", reason: blockedAcceptanceReason(blocking) } : input.approver === void 0 ? { status: "ready" } : { status: "accepted", acceptedAt: input.acceptedAt, acceptedBy: input.approver.id };
+  const written = await updateChangeAcceptance({
+    repositoryRoot: context.repositoryRoot,
+    changeId: input.changeId,
+    acceptance,
+    expectedRevision: bundle.bundle.revision,
+    updatedAt: input.acceptedAt,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot)
+  });
+  if (!written.ok) {
+    return {
+      ok: false,
+      diagnostics: written.diagnostics,
+      ...written.written === void 0 ? {} : { written: written.written }
+    };
+  }
+  return { ok: true, result: written };
 }
 async function recordReviewAcceptApprovals(context, input) {
   if (input.approver === void 0) return { ok: true, approvals: [] };
@@ -45361,6 +45983,43 @@ async function rejectLatestReview(context, evidence, reason) {
   if (!evidenceWrite.ok) {
     return blockedReview(evidenceWrite.diagnostics, nextAction("legion validate", "Evidence rejection could not be written."));
   }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId
+  });
+  if (!bundle.ok) {
+    return blockedReview(
+      bundle.diagnostics,
+      nextAction(
+        "legion dev change validate",
+        "The evidence was rejected, but the change bundle could not be read, so its whole-change acceptance still stands. legion ship would report whole_change_acceptance_evidence over rejected evidence until this is repaired."
+      )
+    );
+  }
+  const priorStatus = bundle.bundle.change.acceptance.status;
+  const demoted = priorStatus === "not_ready" ? void 0 : await updateChangeAcceptance({
+    repositoryRoot: context.repositoryRoot,
+    changeId: evidence.document.changeId,
+    expectedRevision: bundle.bundle.revision,
+    updatedAt: rejectedAt,
+    baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+    acceptance: {
+      status: "not_ready",
+      reason: `Review ${rejectedReviews[0]?.document.id ?? "(unnamed)"} was rejected at ${rejectedAt}: ${reason}`
+    }
+  });
+  if (demoted !== void 0 && !demoted.ok) {
+    return blockedReview(
+      demoted.diagnostics,
+      demoted.written === void 0 ? nextAction(
+        "legion dev change validate",
+        "The evidence was rejected, and this change's whole-change acceptance could not be demoted alongside it. Nothing about the demotion reached disk, so the earlier sign-off still stands over rejected evidence."
+      ) : nextAction(
+        `legion dev change repoint ${evidence.document.changeId}`,
+        `The demotion WAS written: ${demoted.written.artifactPath} records ${demoted.written.acceptance.status} at revision ${demoted.written.revision.revision}. What did not land is the re-point of the artifact inputs that pin it. That command re-points them; it is idempotent and writes nothing if they are already current.`
+      )
+    );
+  }
   const action = nextAction("legion build", "Rejected evidence needs a new build run.");
   return success2(
     {
@@ -45368,6 +46027,10 @@ async function rejectLatestReview(context, evidence, reason) {
       status: "rejected",
       ...rejectedReviews[0] === void 0 ? {} : { review: reviewSummary(rejectedReviews[0]) },
       reviews: rejectedReviews.map(reviewSummary),
+      // Absent when the change was already undecided and nothing was written, so
+      // the payload of a reject on a never-accepted change is key-for-key what it
+      // was before whole-change acceptance existed.
+      ...demoted === void 0 ? {} : { acceptance: acceptanceSummary(demoted) },
       nextAction: action,
       diagnostics: []
     },

@@ -1504,9 +1504,10 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
 
     // Accepting a review advances the workflow to ship_ready; it does not make
     // the change shippable. An R2 phase still requires approved delta specs, a
-    // protected oracle, integration checks and whole-change acceptance
-    // evidence, and this fixture never runs `legion approve spec`, so the gate
-    // blocks and names them.
+    // protected oracle, integration checks and a whole-change sign-off, and this
+    // fixture runs neither `legion approve spec` nor an accept with an
+    // `--approver`, declares no verification surface and names no oracle — so
+    // four gates block and the payload names each of them.
     //
     // This assertion used to be `some(entry => entry.code === "risk_gate_unevaluable")`
     // — a shrug at "something is unproven". That was as much as could be said
@@ -1558,13 +1559,44 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
       "a change-scoped verdict names the change as its subject, not the task"
     );
 
+    // And whole-change acceptance, which this fixture reaches by the one route
+    // that produces its *honest* middle answer: `legion review --accept` with no
+    // `--approver`. Every task's evidence is accepted and nobody named signed
+    // off on the change as a whole, so the bundle records `{status: "ready"}` —
+    // short of accepted, and reported as `unevaluable` rather than as a
+    // negative, because nobody was asked.
+    //
+    // This is also where the R2 answer to "what did the accept actually write"
+    // is pinned. Before this release the gate had no producer at all and this
+    // sentence read "Legion does not yet produce evidence for this gate."
+    const acceptanceGate = shipPayload.diagnostics.filter(
+      (entry) => entry.gate === "whole_change_acceptance_evidence"
+    );
+    assert.equal(acceptanceGate.length, 1, "the acceptance gate should be named once, for the change");
+    assert.equal(acceptanceGate[0].code, "risk_gate_unevaluable");
+    assert.match(acceptanceGate[0].message, /no named approver signed off on the change as a whole/);
+    assert.match(
+      acceptanceGate[0].message,
+      /is not satisfied for chg_/,
+      "a change-scoped verdict names the change as its subject, not the task"
+    );
+
     // The block has a route out, and this is the assertion that could not be
     // made before: `legion build` cannot produce an approval, so a blocked ship
     // that advised only a build sent the operator round a loop. Four gates are
     // unmet here, so the advice is still the fallback command — it must not
-    // claim one command unblocks the ship — but it names the one that can
+    // claim one command unblocks the ship — but it names the ones that can
     // produce the evidence it is missing.
     assert.match(shipPayload.nextAction.reason, /legion approve spec/);
+    // `legion review`, not `legion review --accept --approver`, and the
+    // difference is the point. This fixture reached `ready` by running the accept
+    // *without* `--approver`, which flipped the covering review from `submitted`
+    // to `accepted` — and `legion review --accept` refuses evidence no clean
+    // submitted review covers, so re-running it here exits 1 with
+    // `review_not_clean`. The gate used to name it anyway, in this exact state,
+    // which is the highest-frequency operator mistake this release introduces.
+    // The route out is a fresh review first, then the accept.
+    assert.match(shipPayload.nextAction.reason, /legion start --intake, legion review\.$/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

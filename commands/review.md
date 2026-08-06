@@ -44,6 +44,28 @@ not a human approval, and the ship gate reads it as one.
 running it reports the same refusal rather than a green answer the accept will
 later reject.
 
+`--accept` also records the change's **whole-change acceptance** — the field
+`legion ship` reads for the `whole_change_acceptance_evidence` gate — and the
+value depends on what the run could establish. With `--approver` and clean
+change traceability it records `accepted`; without an approver it records
+`ready`, which means every task's evidence was accepted and nobody signed off on
+the change as a whole; with a blocking traceability defect it records `blocked`
+and the defect's own message. All three are in the `acceptance` object of the
+JSON payload. Report what it says; do not restate `ready` as accepted.
+
+An accept that recorded `ready` cannot be corrected by rerunning the accept: the
+accept flipped every covering review from `submitted` to `accepted`, and an
+accept refuses evidence no clean *submitted* review covers. Run `legion review`
+first, then the accept with `--approver`. The same is true of every state a
+previous accept put the change in, and `legion ship` names `legion review` as the
+route out of each of them.
+
+If the accept exits non-zero with `change_inputs_not_repointed`, the acceptance
+itself reached disk and the artifact inputs that pin the change proposal did not.
+Run the `legion dev change repoint <changeId>` the payload's `nextAction` names.
+It is idempotent and writes nothing when the pins are already current. Do not
+route this to `legion validate`, which reports the repository as valid.
+
 What stays here is the panel: intent detection over natural-language invocation,
 review agent selection, the review cycle with its glob-routed fix agents, and the
 security-only output mode. Never record an acceptance the operator did not give,
