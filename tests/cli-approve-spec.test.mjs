@@ -566,11 +566,21 @@ test("legion approve refuses an unknown subject and a bare invocation", async (t
   assert.equal(bare.exitCode, 1);
   assert.equal(parseJsonOutput(bare).status, "usage_error");
 
-  const unknown = await runCliCapture(["--repository-root", root, "approve", "oracle", "--json"]);
+  // `protected-path` rather than `oracle`, which this test used to name: oracle
+  // is a subject now, and a test whose "unknown subject" quietly becomes a known
+  // one asserts that the CLI refuses something it accepts. The replacement is
+  // the next subject this verb is expected to grow, so the same drift is
+  // possible again and the same fix will be needed.
+  const unknown = await runCliCapture(["--repository-root", root, "approve", "protected-path", "--json"]);
   assert.equal(unknown.exitCode, 1);
   const payload = parseJsonOutput(unknown);
   assert.equal(payload.status, "usage_error");
-  assert.match(payload.diagnostics[0].message, /Supported subjects: spec/);
+  assert.match(payload.diagnostics[0].message, /Supported subjects: spec, oracle, surface/);
+
+  // And the subject that *is* known is accepted as one, so the assertion above
+  // cannot pass by the handler refusing everything.
+  const known = await runCliCapture(["--repository-root", root, "approve", "oracle", "--json"]);
+  assert.notEqual(parseJsonOutput(known).status, "usage_error");
 
   const help = await runCliCapture(["--repository-root", root, "approve", "--help"]);
   assert.equal(help.exitCode, 0);
@@ -587,8 +597,49 @@ test("each subject refuses the other's narrowing flag rather than ignoring it", 
   // discarded the one word that said what they wanted.
   //
   // The comment on that options list predicted this exact hazard when a second
-  // subject arrived. This is the second subject.
+  // subject arrived. This is now the third, and the third is what broke the
+  // mechanism: the guard used to be `subject === "spec" ? "path" : "requirement"`,
+  // a two-way ternary that does not generalise. With a third subject it refused
+  // `--requirement` for `oracle` by accident and **accepted `legion approve
+  // oracle --path ops/x.yml` in silence** — the exact failure it exists to
+  // prevent, failing open, with nothing in the tree asserting otherwise. It is a
+  // per-subject owned-option table now, and the loop below drives every ordered
+  // pair rather than the two that happened to be wired.
   const root = await planPhaseOne(t);
+
+  // subject → the flags it does *not* own, and the subject each belongs to.
+  const FOREIGN = {
+    spec: [["path", "surface"], ["oracle", "oracle"]],
+    oracle: [["path", "surface"], ["requirement", "spec"]],
+    surface: [["oracle", "oracle"], ["requirement", "spec"]]
+  };
+
+  for (const [subject, foreigners] of Object.entries(FOREIGN)) {
+    for (const [flag, owner] of foreigners) {
+      const result = await runCliCapture([
+        "--repository-root",
+        root,
+        "approve",
+        subject,
+        `--${flag}`,
+        "anything",
+        "--approver",
+        "dasbl",
+        "--json"
+      ]);
+      assert.equal(result.exitCode, 1, `${subject} --${flag}`);
+      const refused = parseJsonOutput(result);
+      assert.equal(refused.status, "usage_error", `${subject} --${flag}`);
+      assert.match(
+        refused.diagnostics[0].message,
+        new RegExp(`--${flag} is not an option of legion approve ${subject}`),
+        `${subject} --${flag}`
+      );
+      // The refusal says what the flag would have done where it belongs, so an
+      // operator who typed the wrong subject learns which one they meant.
+      assert.match(refused.diagnostics[0].message, new RegExp(`legion approve ${owner} --${flag}`));
+    }
+  }
 
   const specWithPath = await runCliCapture([
     "--repository-root",

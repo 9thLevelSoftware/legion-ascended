@@ -1584,10 +1584,14 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     // The block has a route out, and this is the assertion that could not be
     // made before: `legion build` cannot produce an approval, so a blocked ship
     // that advised only a build sent the operator round a loop. Four gates are
-    // unmet here, so the advice is still the fallback command — it must not
-    // claim one command unblocks the ship — but it names the ones that can
-    // produce the evidence it is missing.
+    // unmet here with three distinct repairs, so the advice cannot claim one
+    // command unblocks the ship — but the command it dispatches must still be one
+    // of the three, not the fallback. That last part is this release's correction:
+    // `nextAction.command` was `legion build` in every mixed state, which is a
+    // command no unmet gate here claims can produce anything.
+    assert.equal(shipPayload.nextAction.command, "legion approve spec --approver <id>");
     assert.match(shipPayload.nextAction.reason, /legion approve spec/);
+    assert.match(shipPayload.nextAction.reason, /No single command unblocks this ship/);
     // `legion review`, not `legion review --accept --approver`, and the
     // difference is the point. This fixture reached `ready` by running the accept
     // *without* `--approver`, which flipped the covering review from `submitted`
@@ -1596,7 +1600,7 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     // `review_not_clean`. The gate used to name it anyway, in this exact state,
     // which is the highest-frequency operator mistake this release introduces.
     // The route out is a fresh review first, then the accept.
-    assert.match(shipPayload.nextAction.reason, /legion start --intake, legion review\.$/);
+    assert.match(shipPayload.nextAction.reason, /legion start --intake, legion review\./);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

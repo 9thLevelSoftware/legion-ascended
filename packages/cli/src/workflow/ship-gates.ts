@@ -49,12 +49,18 @@ import type { VerifyPinnedReference } from "./pinned-references.js";
  * **As of this release every R2 gate has a producer**, so an R2 change carrying
  * approved delta specs, a passing oracle result, a verified non-unit
  * verification surface and a whole-change sign-off reports `ready` end to end —
- * the first tier above R0 for which that is true. R3 still cannot: independent
+ * the first tier above R0 for which that is true.
+ *
+ * **R3 still cannot, and this release does not try to make it.** Four of its ten
+ * gates now have producers — `protected_oracle` and `deterministic_verification`
+ * from the evidence items, `explicit_human_approval` from the approval plane, and
+ * `approved_spec_and_oracle` from this release — and six do not: independent
  * baselines, architecture and security review, protected acceptance tests,
- * spec-and-oracle ordering, release observation and rollback evidence remain
- * producerless, and the report names exactly which. Lowering the tier through an
- * audited `risk.override` is the supported way to ship work whose gates
- * genuinely do not apply.
+ * security or e2e evaluation, release observation and rollback evidence. The
+ * report names exactly which, and `tests/change-r3-ordering` asserts that set by
+ * name in both directions so each later release reddens it as it closes one.
+ * Lowering the tier through an audited `risk.override` is the supported way to
+ * ship work whose gates genuinely do not apply.
  */
 
 export type ShipGateStatus = "satisfied" | "unsatisfied" | "unevaluable";
@@ -210,8 +216,12 @@ export interface ShipGateChangeFacts {
    * reason. The run listing reports success while skipping runs it cannot read,
    * and every run it drops can only push `min(startedAt)` later — the direction
    * that makes an approval recorded after execution began look as though it came
-   * first. The listing now reports what it skipped and the caller turns any skip
+   * first. The listing reports what it skipped and the caller turns any skip
    * into absence, so a gate reading this reads either the whole set or nothing.
+   * `approved_spec_and_oracle` is that gate, so as of this release the rule is
+   * load-bearing rather than anticipatory: the `artifact_plane_incomplete`
+   * diagnostic naming a skipped run file is now something a real blocked ship
+   * prints.
    */
   readonly taskRuns: readonly TaskRun[] | undefined;
   /** At most one release plan per change, so singular. No reader yet. */
@@ -253,9 +263,21 @@ export interface ShipGateChangeFacts {
  * gate default silently to task scope, which silently disables both the
  * diagnostic collapse below and, once gates read facts, the absence guard.
  *
- * `approved_delta_spec`, `integration_or_real_interface_checks` and
- * `whole_change_acceptance_evidence` are the `"change"` entries. Each later gate
- * flips exactly its own line, next to the gate it implements.
+ * `approved_delta_spec`, `integration_or_real_interface_checks`,
+ * `whole_change_acceptance_evidence` and `approved_spec_and_oracle` are the
+ * `"change"` entries. Each later gate flips exactly its own line, next to the
+ * gate it implements.
+ *
+ * `approved_spec_and_oracle` is the newest of the four, and the one whose entry
+ * was already here — as `"task"` — before it had a producer. Nothing forces this
+ * line: the record is total, so an entry that is merely *wrong* compiles. The
+ * verdict quantifies over every delta spec the change ships and every oracle any
+ * task references, and compares the last of those decisions against
+ * `min(startedAt)` over the change's whole run set. That is one answer for the
+ * change. Left `"task"` it would print the identical sentence once per
+ * criterion-task and name, in `subjectId`, a task the sentence is not about —
+ * which is the altitude defect `integration_or_real_interface_checks` above
+ * already paid for once.
  *
  * `whole_change_acceptance_evidence` is change-scoped for the plainest reason of
  * the three: `change.acceptance` is one field on one bundle with exactly one
@@ -298,7 +320,7 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   integration_or_real_interface_checks: "change",
   whole_change_acceptance_evidence: "change",
   independent_baseline: "task",
-  approved_spec_and_oracle: "task",
+  approved_spec_and_oracle: "change",
   architecture_or_security_review: "task",
   protected_acceptance_tests: "task",
   security_or_e2e_evaluator: "task",
@@ -325,11 +347,46 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
 export function earliestExecutionStart(
   taskRuns: readonly TaskRun[] | undefined
 ): UtcTimestamp | undefined {
-  let earliest: UtcTimestamp | undefined;
+  return earliestExecutionRun(taskRuns)?.startedAt;
+}
+
+/**
+ * The same minimum, carrying the run that holds it.
+ *
+ * `approved_spec_and_oracle` has to name the run whose start beat the approval:
+ * "gated execution began at <t>" tells an operator a fact they cannot act on,
+ * and "run run_… of tsk_… began at <t>" tells them which attempt to look at. The
+ * `min` itself is not duplicated — `earliestExecutionStart` is expressed in terms
+ * of this, so there is still exactly one implementation and its direct test still
+ * covers both.
+ *
+ * Ties are broken by run id ascending rather than by list order, so two runs
+ * stamped in the same millisecond name the same one on every derivation. A
+ * sentence whose subject depends on directory read order is a sentence that
+ * changes for no reason between two runs of the same command.
+ */
+export function earliestExecutionRun(taskRuns: readonly TaskRun[] | undefined):
+  | { readonly startedAt: UtcTimestamp; readonly runId: string; readonly taskId: string }
+  | undefined {
+  let earliest: { startedAt: UtcTimestamp; runId: string; taskId: string } | undefined;
   for (const run of taskRuns ?? []) {
     const startedAt = run.startedAt;
     if (startedAt === undefined) continue;
-    if (earliest === undefined || startedAt < earliest) earliest = startedAt;
+    // `id` and `taskId` are required on every member of `taskRunSchema`, but the
+    // unit fixtures in this tree hand `earliestExecutionStart` bare
+    // `{startedAt}` literals, and a reason string reading "run undefined" is
+    // worse than one that declines to name a run at all.
+    const candidate = {
+      startedAt,
+      runId: (run.id as string | undefined) ?? "an unnamed run",
+      taskId: (run.taskId as string | undefined) ?? "an unnamed task"
+    };
+    if (earliest === undefined) {
+      earliest = candidate;
+      continue;
+    }
+    if (startedAt < earliest.startedAt) earliest = candidate;
+    else if (startedAt === earliest.startedAt && candidate.runId < earliest.runId) earliest = candidate;
   }
   return earliest;
 }
@@ -808,6 +865,51 @@ function approvedDeltaSpecPin(input: {
 }
 
 /**
+ * One subject's approval verdict, and the decision a `satisfied` one rests on.
+ *
+ * `decidedAt` was added for `approved_spec_and_oracle`, which compares the *last*
+ * of the decisions it read against the instant gated execution began. That
+ * maximum has to be taken over exactly the grants the gate was satisfied by, and
+ * over nothing else: the approvals plane is one flat directory holding every
+ * action the approve tree writes, and two of them — `workflow.review.accept` and
+ * `verification.surface.reaffirm` — are taken *after* a build by design. A
+ * maximum over the plane would therefore exceed `min(startedAt)` on every change
+ * that was ever reviewed, and the gate could never be satisfied by anything.
+ *
+ * Carried on the outcome rather than re-derived by the aggregator, because
+ * re-finding "the newest live grant that also survived the standing-negative and
+ * expiry rules" is a second implementation of the selection every function below
+ * already performs. Present on `satisfied` and absent on everything else: an
+ * instant attached to a verdict that is not a grant is a number with no claim
+ * behind it.
+ *
+ * `deltaSpecApprovalStatus` returns it too, although `approved_delta_spec` never
+ * reads it. At R3 that gate is not derived at all, so the requirement half of
+ * `approved_spec_and_oracle` is the only reader of a `spec.delta.approve` grant
+ * there — the alternative to widening this one return type was a second copy of
+ * the delta-spec rule inside the new gate.
+ */
+interface SubjectApprovalOutcome {
+  readonly status: ShipGateStatus;
+  readonly reason: string;
+  /** The instant of the grant a `satisfied` verdict rests on. */
+  readonly decidedAt?: UtcTimestamp;
+  /**
+   * The cure for *this* unmet subject, when it differs from the gate's.
+   *
+   * Set only by `oracleApprovalStatus`, whose unmet arms genuinely split: an
+   * oracle nobody approved is repaired by `legion approve oracle`, and an oracle
+   * whose bytes no longer match what was approved is not repaired by any command
+   * at all. The delta-spec side sets nothing, because every one of its reachable
+   * unmet arms — a standing withdrawal, a lapsed grant, a machine grant, a pin
+   * against bytes the change no longer ships — is repaired by the same
+   * `legion approve spec`, which is why `GATE_RECOVERY.approved_delta_spec` has
+   * been one table entry since PR 2.
+   */
+  readonly recovery?: ShipGateRecovery;
+}
+
+/**
  * Is one delta spec approved?
  *
  * The order is `humanApprovalStatus`'s, step for step, because every step of it
@@ -829,7 +931,7 @@ function deltaSpecApprovalStatus(input: {
   readonly delta: ChangeBundleDeltaEntry;
   readonly evaluatedAt: UtcTimestamp | undefined;
   readonly verifyPin: VerifyPinnedReference;
-}): { readonly status: ShipGateStatus; readonly reason: string } {
+}): SubjectApprovalOutcome {
   const relevant = input.approvals.filter(
     (approval) =>
       // Strict equality, so facts too degraded to name their own change match
@@ -906,7 +1008,8 @@ function deltaSpecApprovalStatus(input: {
     if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
     return {
       status: "satisfied",
-      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`,
+      decidedAt: newestGrant.decidedAt
     };
   }
 
@@ -2091,6 +2194,1000 @@ function wholeChangeAcceptanceStatus(input: {
   };
 }
 
+/**
+ * The action an oracle approval carries.
+ *
+ * The same literal `legion approve oracle` writes, spelled out in both places
+ * rather than shared through a constant, on `DELTA_SPEC_APPROVE_ACTION`'s rule:
+ * the gate and the writer are two sides of a contract, and a shared symbol would
+ * let a rename move both at once and leave every approval already on disk
+ * unreadable by the gate that reads them.
+ *
+ * Matched by **exact equality**, never a prefix. `archiveWithdrawnDecision` mints
+ * its copies under `${action}.superseded.r${revision}`, so a `startsWith` or an
+ * `includes` would pull every archived withdrawal back into the live set and
+ * make the recovery PR 2 built for exactly that case permanently ineffective.
+ */
+const ORACLE_APPROVE_ACTION = "oracle.approve";
+
+/** The cure when an oracle of the change carries no live grant. */
+const ORACLE_APPROVE_RECOVERY: ShipGateRecovery = {
+  command: "legion approve oracle --approver <id>",
+  reason:
+    "An oracle this change's tasks are judged against carries no granted approval, and no build produces one: the gate " +
+    "reads the approval plane. Approve every oracle and every delta spec **before** running legion build — this gate " +
+    "compares the last of those decisions against the instant the first task run started, and nothing re-orders a " +
+    "decision once it has been taken."
+};
+
+/** The cure when a delta spec of the change carries no live grant. */
+const SPEC_APPROVE_RECOVERY: ShipGateRecovery = {
+  command: "legion approve spec --approver <id>",
+  reason:
+    "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. At R3 " +
+    "`approved_delta_spec` is not derived at all, so this gate is the only reader of a spec.delta.approve grant — " +
+    "approve them before running legion build, then rerun legion ship."
+};
+
+/**
+ * The non-cure for a drifted oracle pin, and why it names `legion ship`.
+ *
+ * **Nothing in the tree updates an oracle.** `createOracleArtifact` has two
+ * callers, both of which create; `updateOracleArtifact` has no CLI caller at all.
+ * So an oracle whose bytes no longer hash to what an approval pinned was edited
+ * out of band, which is precisely the tampering this gate exists to catch.
+ *
+ * Re-approving is deliberately not offered, and would be wrong twice over. It
+ * would launder an out-of-band edit into a governance record — which
+ * `recoveryForDiscovery` already refuses to do for delta specs — and it would
+ * stamp a fresh `decidedAt` after execution had started, breaking the very
+ * ordering the same command would have been invoked to establish.
+ *
+ * `legion ship` is named on `recoveryFor`'s precedent in the ship command: when
+ * the repair is an edit no verb performs, the action names the artifact to
+ * correct and rerunning ship as the confirmation, because ship is the only
+ * command that re-reports the defect.
+ */
+const ORACLE_BYTES_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "An oracle document no longer holds the bytes its approval was granted against. No command in Legion rewrites an " +
+    "oracle — legion plan is create-only and nothing else writes one — so the file was edited out of band. Restore it " +
+    "to the bytes the approval records, then rerun this to confirm. Re-approving the edited bytes is deliberately not " +
+    "offered: it would launder the edit into a governance record and re-date the decision this gate orders."
+};
+
+/** The cure when everything is approved and nothing has run yet. */
+const ORDERING_BUILD_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "Every delta spec and oracle of this change is approved and no task has run, so there is no execution for those " +
+    "decisions to have preceded. This is the one unmet state of this gate a build repairs, and running it now is what " +
+    "makes the ordering true."
+};
+
+/**
+ * The honest answer for `decidedAt >= executionStartedAt`, and the sharpest
+ * instance of this series' first lesson.
+ *
+ * **No command in the tree repairs this state**, and every plausible candidate
+ * was checked rather than assumed. `writeTaskRun`'s only callers are the two in
+ * `legion build`; nothing rewinds, deletes or supersedes a run. `legion plan` is
+ * create-only and exits `artifact_already_exists` against a change that exists.
+ * `legion dev change repoint` rewrites the taskgraph with `tasks` untouched.
+ * And re-approving writes a *later* `decidedAt`, which makes the ordering
+ * strictly worse — so naming any `legion approve` verb here would reproduce the
+ * defect PR 4 found, where five verdicts named a command that exits 1 in all
+ * five, in the one place where the named command would exit 0 and still leave
+ * the change unshippable forever.
+ *
+ * So the recovery names the two things that genuinely move it: plan the
+ * remaining work as a new change and approve its spec and oracles before
+ * building it, or lower the tier through an audited `risk.override`.
+ * `SURFACE_DECLARE_RECOVERY` names the same command and the same override for
+ * the same reason.
+ */
+const ORDERING_REPLAN_RECOVERY: ShipGateRecovery = {
+  command: "legion start --intake",
+  reason:
+    "A specification approved at or after the work started is not an approval the work was done under, and no command " +
+    "re-orders a decision that has already been taken: nothing rewinds or deletes a task run, and re-approving only " +
+    "writes a later decision instant. Plan the remaining work as a new change and approve its delta specs and oracles " +
+    "before building it, or lower the risk tier through an audited risk.override if this change's ordering genuinely " +
+    "does not matter."
+};
+
+/**
+ * The advice every command that routes towards `legion build` owes an R3 change.
+ *
+ * **`legion build` is a one-way door at R3 and nothing said so.** Adversarial
+ * review drove a fresh R3 intake through the real CLI following only the tool's
+ * own `Next:` lines — `legion start --finalize` → `legion plan 1` → `legion build`
+ * → `legion review` → `legion review --accept` → `legion ship` — and reached a
+ * change on which `approved_spec_and_oracle` can never be satisfied, advised there
+ * by three separate commands, none of whose payloads contained the string
+ * "approve". `commands/approve.md` documents "Runs between legion plan and legion
+ * build"; no CLI output pointed at it. A gate with a producer that the workflow
+ * never reaches in time has no producer.
+ *
+ * So this constant lives beside the gate rather than in each command: `legion
+ * plan`, `resolveWorkflowState` (which is what `legion status` renders) and
+ * `legion ship`'s pre-build refusal all render it, and the sentence they render is
+ * the gate's own.
+ *
+ * It names the spec verb rather than the oracle verb because the two are a chain
+ * and the spec half comes first — `legion approve spec` on an R3 change routes on
+ * to `legion approve oracle`, which routes on to `legion build`. Naming both here
+ * would put a shell conjunction in `nextAction.command`, which hosts dispatch.
+ */
+export const APPROVE_BEFORE_BUILD_RECOVERY: ShipGateRecovery = {
+  command: "legion approve spec --approver <id>",
+  reason:
+    "This change carries R3 work, and R3 derives approved_spec_and_oracle: the gate compares the last approval of its " +
+    "delta specs and oracles against the instant its first task run started. legion build is a one-way door here — " +
+    "nothing re-orders a decision already taken, so a change built before it is approved can never satisfy that gate. " +
+    "Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that."
+};
+
+/** Does any task of this change derive the ordering gate? */
+export function derivesApprovalOrderingGate(tasks: readonly TaskContract[]): boolean {
+  return tasks.some((task) =>
+    deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "approved_spec_and_oracle"
+    )
+  );
+}
+
+/**
+ * The non-cure for a change artifact that would not load.
+ *
+ * Named separately from the table entry rather than left to it, because
+ * `GATE_RECOVERY[approved_spec_and_oracle]` is `legion approve oracle` and
+ * offering that here would be advice that fails: a change whose delta plane,
+ * approvals plane or oracle plane could not be read is not repaired by writing
+ * one more approval into it, and the writer would refuse for the same reason the
+ * gate did.
+ *
+ * `legion ship` on `recoveryFor`'s precedent in the ship command: when the
+ * repair is an edit no verb performs, the action names the artifact to correct
+ * and rerunning ship as the confirmation, because ship is the only command that
+ * re-reports the defect — and, for a plane the listing merely skipped, the only
+ * one that names the file.
+ */
+const UNREADABLE_PLANE_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "A change artifact this gate reads would not load as a complete set, so nothing about what was approved is known. " +
+    "No command rewrites a planned artifact — legion plan is create-only — so correct or remove the file the other " +
+    "diagnostics in this payload name, then rerun this to confirm the defect is gone. Approving again would not help: " +
+    "the writer reads the same planes and refuses for the same reason."
+};
+
+/** The cure when the run plane itself could not be established. */
+const ORDERING_UNREADABLE_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "This change's task runs could not be read as a complete set, so no ordering between an approval and the start of " +
+    "execution can be established. The artifact_plane_incomplete diagnostic in this same payload names the file that " +
+    "could not be read — remove or correct it, then rerun this."
+};
+
+/**
+ * The cure for an approval that is about this subject but filed against a task
+ * or a run.
+ *
+ * Separate from `UNREADABLE_PLANE_RECOVERY`, which used to answer this arm and
+ * described a state that is not this one: the approvals plane loaded cleanly, so
+ * no `artifact_plane_incomplete` diagnostic is emitted, so "correct or remove the
+ * file the other diagnostics in this payload name" points at evidence that does
+ * not exist — and the document in question is an approval, not a planned
+ * artifact. The gate's own reason names the offending approval id; this names
+ * what to do with it.
+ */
+const MISFILED_APPROVAL_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "An approval about this subject also names a task or a run, and this gate reads only change-scoped decisions, so " +
+    "it is not read here. No command rewrites an approval's scope — the approve verbs write neither field — so delete " +
+    "the approval this verdict names and take the decision again with the approve verb for this subject, then rerun " +
+    "this to confirm."
+};
+
+/**
+ * The recovery an unmet subject can honestly offer, given where execution is.
+ *
+ * **This is the series' first lesson applied to the one place PR 5's first draft
+ * deferred it**, and the deferral's justification was measurably wrong. That draft
+ * answered every unmet subject with the approve verb for that subject, whatever
+ * the run plane said. Adversarial review drove the consequence end to end: on an
+ * R3 change already built, `legion ship` reported this gate `unevaluable` and
+ * advised `legion approve spec --approver <id>`; the operator ran it; it exited 0
+ * with `status: "approved"` and no warning; and the next `legion ship` reported
+ * the same gate `unsatisfied` — permanently, because nothing re-orders a decision
+ * already taken. The advertised repair converted a blocked change into an
+ * unrepairable one and reported success doing it.
+ *
+ * So the rule is on the recovery rather than on the status. The status arms keep
+ * their order — the more actionable fact first, so an operator who has approved
+ * nothing is never told to build — and the *advice* becomes ordering-aware:
+ *
+ *  - **Nothing has run.** Approving is exactly the repair, and it is still
+ *    offered. This is the whole happy path of this release.
+ *  - **Execution has begun and the repair is "record a decision now".** That
+ *    decision would be stamped at or after `min(startedAt)`, so it cannot satisfy
+ *    this gate however many times it is taken. `ORDERING_REPLAN_RECOVERY` is the
+ *    honest answer and it is the same one the ordering arm itself gives.
+ *  - **Execution has begun and the repair is "restore the bytes".**
+ *    `ORACLE_BYTES_RECOVERY` still repairs that state: restoring an oracle to what
+ *    its approval pinned re-dates nothing, so a grant taken before the build stays
+ *    before the build. Preserved deliberately — collapsing every post-execution
+ *    verdict to "re-plan" would throw away the one tampering case that is
+ *    genuinely repairable.
+ *
+ *  - **Whether execution has begun is unestablished.** Also not a state in which
+ *    approving can be advised, and the reachable shape of it is not benign: a
+ *    change that has never run has no `runs/` directory at all, so
+ *    `listTaskRunsForChange` answers `{ok: true, taskRuns: [], skipped: []}` and
+ *    the plane is `[]` rather than absent. An *absent* run plane therefore means
+ *    the directory exists and something in it would not read — which is a change
+ *    that has almost certainly been built. Fix the plane first; only then can this
+ *    gate say whether a decision taken now would count.
+ *
+ * The discriminator is the recovery's own command rather than a new flag on
+ * `SubjectApprovalOutcome`, because the property that matters *is* "does this
+ * advice write a fresh `decidedAt`", and that is what an approve verb is.
+ */
+function orderingAwareRecovery(
+  recovery: ShipGateRecovery | undefined,
+  execution: ExecutionOrdering
+): ShipGateRecovery | undefined {
+  if (recovery === undefined) return recovery;
+  if (!recovery.command.startsWith("legion approve")) return recovery;
+  if (execution.kind === "started") return ORDERING_REPLAN_RECOVERY;
+  if (execution.kind === "unestablished") return ORDERING_UNREADABLE_RECOVERY;
+  return recovery;
+}
+
+/** Where this change's execution stands, as far as the run plane can say. */
+type ExecutionOrdering =
+  | { readonly kind: "none" }
+  | { readonly kind: "unestablished" }
+  | {
+      readonly kind: "started";
+      readonly startedAt: UtcTimestamp;
+      readonly runId: string;
+      readonly taskId: string;
+    };
+
+function executionOrdering(taskRuns: readonly TaskRun[] | undefined): ExecutionOrdering {
+  if (taskRuns === undefined) return { kind: "unestablished" };
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest !== undefined) return { kind: "started", ...earliest };
+  // Runs exist but none of them recorded a start: the set is there and the
+  // ordering still is not.
+  return taskRuns.length === 0 ? { kind: "none" } : { kind: "unestablished" };
+}
+
+/**
+ * Is the grant still about the bytes of the oracle this change carries?
+ *
+ * `approvedDeltaSpecPin`'s shape, widening order and verdict mapping, reused
+ * rather than re-argued — with one inversion worth stating, because a reader who
+ * knows the delta-spec version will expect the opposite arm to be the reachable
+ * one.
+ *
+ * For a delta spec the byte comparison is the live check and `verifyPin`'s
+ * `drift` arm is unreachable, because `loadChangeBundle` refuses a bundle whose
+ * delta bytes have moved before `legion ship` derives a gate. For an oracle it is
+ * the other way round: `deriveOracleManifest` re-hashes the file on every read,
+ * so `oracle.reference.sha256` *is* what is on disk and it is the byte comparison
+ * that fires — the approval pinned one digest and the change now carries another.
+ *
+ * **`verifyPin` is therefore a second opinion here, and only ever a falsifier.**
+ * It cannot be reached with a digest that disagrees with the oracle's, because
+ * the comparison above has already returned `stale` for that case, so its only
+ * reachable contributions are `drift` and `missing` — which say that the file
+ * moved *between* `loadOracleFacts` hashing it and `resolvePinnedReferences`
+ * hashing it, inside one ship run. That is a real window and a real check.
+ *
+ * **`unverified` is `current`, not `unknown`, and this is a correction.** The
+ * first draft mapped it to `unknown`, which made the gate report `unevaluable`
+ * for an oracle whose digest had *already* been compared against bytes hashed off
+ * disk in this same report. `legion approve oracle` then answered "already
+ * approved" over the same document, wrote nothing, exited 0, and `legion ship`
+ * repeated the same `unevaluable` forever — the writer/reader divergence loop PR 2
+ * closed for delta specs, reopened in the one arm the substitution below was
+ * introduced to prevent it in. A missing second opinion is an absent corroboration,
+ * not a failed check, and the check that matters was not missing.
+ */
+function approvedOraclePin(input: {
+  readonly approval: GrantedApproval;
+  readonly oracle: ShipGateOracleFact;
+  readonly changeId: string;
+  readonly verifyPin: VerifyPinnedReference;
+}): DeltaSpecPinLink {
+  const oracleId = input.oracle.document.id;
+  const oraclePath = input.oracle.reference.path;
+  const artifacts = input.approval.artifacts;
+  if (artifacts === undefined) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of oracle ${oracleId} were approved is unestablished.`
+    };
+  }
+
+  const pins = artifacts.filter((reference) => reference.path === oraclePath);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${oraclePath}, so it does not say oracle ${oracleId} was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    // `artifacts` carries no uniqueness constraint, so a `find` would take
+    // whichever duplicate came first and a document pinning both the right
+    // digest and a wrong one would sail through.
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${oraclePath}, so which bytes were approved is unestablished.`
+    };
+  }
+
+  const pin = pins[0] as ArtifactReference;
+  if (pin.sha256 !== input.oracle.reference.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of oracle ${oracleId} than change ${input.changeId} now carries: the oracle was edited after it was approved.`
+    };
+  }
+
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${oraclePath}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${oraclePath}, which is no longer present.`
+    };
+  }
+  // `unverified`. The second opinion is absent, and the first one already
+  // answered: the digest this pin was compared against was hashed off the bytes
+  // on disk by the oracle service in this same report. Returning `unknown` here
+  // would make the gate `unevaluable` over a comparison it had already made, and
+  // the writer — which has no verifier to offer at all — would keep reporting the
+  // same document as approved. See the doc comment above.
+  return { kind: "current" };
+}
+
+/**
+ * Is one oracle approved?
+ *
+ * `deltaSpecApprovalStatus`'s order, step for step — scope the plane yourself,
+ * refuse a misfiled document rather than filtering it away, bucket by loop so the
+ * union narrows onto the granted member, let a standing negative beat a grant
+ * unless a strictly later grant supersedes it, check expiry against the injected
+ * clock, require a human decider, then require the grant to still be about the
+ * bytes on disk.
+ *
+ * **The supersession rule is load-bearing here and is not a bare status scan.**
+ * A specification that said "unsatisfied when any approval is denied, revoked or
+ * expired" would make this gate permanently unsatisfied on every change that ever
+ * recovered from a withdrawal, because `archiveWithdrawnDecision` deliberately
+ * leaves a *second* denied or revoked document, with the same targets and the
+ * same `decidedAt`, in the same directory. That copy is the record the recovery
+ * PR 2 built depends on; reading it as a live negative would delete the recovery.
+ *
+ * The scoping predicate can name its own subject, unlike the surface one:
+ * `approvalTargetReferenceSchema` has had a first-class `{kind: "oracle"}` member
+ * since the protocol was written, so no `{kind: "change"}` fallback is needed and
+ * an approval about a different oracle of the same change matches nothing.
+ */
+function oracleApprovalStatus(input: {
+  readonly approvals: readonly Approval[];
+  readonly changeId: string;
+  readonly oracle: ShipGateOracleFact;
+  readonly evaluatedAt: UtcTimestamp | undefined;
+  readonly verifyPin: VerifyPinnedReference;
+}): SubjectApprovalOutcome {
+  const oracleId = input.oracle.document.id;
+  const relevant = input.approvals.filter(
+    (approval) =>
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than everything.
+      // An oracle id is derived from a phase slug and is not change-scoped, so
+      // this is load-bearing rather than belt-and-braces.
+      approval.changeId === input.changeId &&
+      approval.scope.action === ORACLE_APPROVE_ACTION &&
+      approval.scope.targets.some((target) => target.kind === "oracle" && target.id === oracleId)
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving oracle ${oracleId}.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+
+  const misfiled = relevant.find((approval) => approval.taskId !== undefined || approval.runId !== undefined);
+  if (misfiled !== undefined) {
+    // Named rather than filtered away in silence. A silent filter would report
+    // this as "nobody approved this oracle", which sends the operator to approve
+    // something that already has a record.
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but an oracle belongs to the change rather than to one task or run, so this approval is not read here.`,
+      recovery: MISFILED_APPROVAL_RECOVERY
+    };
+  }
+
+  const live: GrantedApproval[] = [];
+  const lapsed: GrantedApproval[] = [];
+  const unknownExpiry: GrantedApproval[] = [];
+  const nonHumanGrants: GrantedApproval[] = [];
+  for (const approval of relevant) {
+    // Positive, never `if (status === "denied")`: an unrecognized status must
+    // fall out of the granted bucket rather than into it.
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+
+  const standing = relevant
+    .filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired")
+    .filter((approval) => {
+      if (newestGrant === undefined) return true;
+      const decidedAt = approval.decidedAt;
+      if (decidedAt === undefined) return true;
+      return decidedAt >= newestGrant.decidedAt;
+    })
+    .sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason:
+        newestGrant === undefined
+          ? `Approval ${blocking.id} for oracle ${oracleId} is ${blocking.status}.`
+          : `Approval ${blocking.id} for oracle ${oracleId} is ${blocking.status}, and no later grant supersedes it.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+
+  if (newestGrant !== undefined) {
+    const link = approvedOraclePin({
+      approval: newestGrant,
+      oracle: input.oracle,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    // `stale` is `unsatisfied` and carries the byte recovery rather than the
+    // approve one. This is the tampering arm: the oracle changed after it was
+    // approved, and the repair is restoring it, not re-deciding it.
+    if (link.kind === "stale") {
+      return { status: "unsatisfied", reason: link.reason, recovery: ORACLE_BYTES_RECOVERY };
+    }
+    if (link.kind === "unknown") {
+      return { status: "unevaluable", reason: link.reason, recovery: ORACLE_APPROVE_RECOVERY };
+    }
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving oracle ${oracleId}.`,
+      decidedAt: newestGrant.decidedAt
+    };
+  }
+
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for oracle ${oracleId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== undefined) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for oracle ${oracleId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for oracle ${oracleId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+
+  return {
+    status: "unevaluable",
+    reason: `An approval for oracle ${oracleId} is recorded as requested and has not been decided.`,
+    recovery: ORACLE_APPROVE_RECOVERY
+  };
+}
+
+/** Which oracles this change's work is actually judged against, resolved. */
+export interface ChangeOracleDemand {
+  /** One entry per distinct oracle id some task names, resolved to its facts. */
+  readonly referenced: readonly {
+    readonly oracleId: string;
+    readonly taskIds: readonly string[];
+    readonly fact: ShipGateOracleFact;
+  }[];
+  /** Ids named by a task that resolve to no oracle document at all. */
+  readonly unresolved: readonly { readonly oracleId: string; readonly taskId: string }[];
+  /** Oracle documents in the change that no task names. */
+  readonly unreferenced: readonly string[];
+}
+
+/**
+ * The oracles the change's tasks demand, not the oracles its directory supplies.
+ *
+ * **This is PR 0's deferred question, answered.** That commit left the
+ * oracle-directory case open in its own words: `deriveOracleManifest` maps ENOENT
+ * on `.legion/project/changes/<id>/oracle/` to `{ok: true}` with an empty
+ * manifest, `loadOracleFacts` turns that into `[]` rather than `undefined`, and
+ * "every oracle is approved" is vacuously true over an empty list. It offered two
+ * routes: distinguish "declares none" from "directory deleted" in the oracles
+ * service, or require a non-empty oracle set before this gate can report
+ * satisfied.
+ *
+ * **Neither of those two closes the hole, and both were measured before this was
+ * written.** `deriveOracleManifest` reports `{ok: true, status: "derived"}` with a
+ * *short* list when one oracle file of three is deleted, and it carries no
+ * `skipped` field of any kind — it is the only plane in the tree where "the
+ * listing dropped something" is invisible to its caller. So an ENOENT flag would
+ * still report `derived` on that repository, and a bare non-emptiness rule still
+ * passes over three-minus-two survivors. Both routes defend the empty set and
+ * leave the short one.
+ *
+ * So the quantifier runs over the **demand** side instead, and the demand side is
+ * immune to every failure mode of the supply side for three structural reasons:
+ *
+ *  - `taskContractSchema.oracleRefs` is `.min(1)`, so no task can contribute an
+ *    empty set.
+ *  - `oracleRefs` lives in `taskgraph.json`, a different file from the oracle
+ *    directory, so deleting, renaming or `.bak`-ing an oracle cannot shrink it.
+ *  - A ref that resolves to nothing is a *positive, falsifiable* signal — this
+ *    change names an oracle it cannot show you — rather than an absence, which is
+ *    the difference between a gate that reports the deletion and one that is
+ *    silently satisfied by it.
+ *
+ * It is `declaredVerificationSurfaces`' `unestablished` shape, applied to the
+ * question it was already the right shape for. Exported because
+ * `legion approve oracle` has to walk exactly the set this gate quantifies over,
+ * on `changeVerificationSurfaces`' recorded argument: a writer walking its own
+ * smaller set could approve an oracle the gate does not read, or miss one it
+ * does.
+ *
+ * The residual, stated rather than implied: an oracle file the listing silently
+ * dropped and *no task names* is still invisible to everything. This gate is
+ * immune to it — an unnamed oracle was never part of the question — but
+ * `protected_oracle` is not, and adding `skipped` to `OracleManifestSuccess` is a
+ * change to a public result type with four consumers, which belongs in the diff
+ * whose subject is the oracle plane rather than in this one.
+ *
+ * Ids are deduped and sorted, so "the first unmet one" is stable rather than an
+ * accident of task order.
+ */
+export function changeOracleDemand(input: {
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  readonly change: ShipGateChangeFacts | undefined;
+}): ChangeOracleDemand {
+  const namedBy = new Map<string, string[]>();
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    for (const oracleId of task.oracleRefs ?? []) {
+      const tasks = namedBy.get(oracleId) ?? [];
+      if (!tasks.includes(taskId)) tasks.push(taskId);
+      namedBy.set(oracleId, tasks);
+    }
+  }
+
+  const oracles = input.change?.oracles;
+  const referenced: { oracleId: string; taskIds: readonly string[]; fact: ShipGateOracleFact }[] = [];
+  const unresolved: { oracleId: string; taskId: string }[] = [];
+  for (const oracleId of [...namedBy.keys()].sort()) {
+    const taskIds = namedBy.get(oracleId) as string[];
+    const fact = oracles?.find((entry) => entry.document.id === oracleId);
+    if (fact === undefined) {
+      unresolved.push({ oracleId, taskId: taskIds[0] as string });
+      continue;
+    }
+    referenced.push({ oracleId, taskIds, fact });
+  }
+
+  const unreferenced = (oracles ?? [])
+    .map((entry) => entry.document.id)
+    .filter((oracleId) => !namedBy.has(oracleId))
+    .sort();
+
+  return { referenced, unresolved, unreferenced };
+}
+
+/**
+ * Were the spec and the oracle both approved **before** gated execution
+ * proceeded?
+ *
+ * ADR-006's question, and the one the whole approval artifact was built for. It
+ * is not "was it approved" — `approved_delta_spec` asks that, and R3 does not
+ * even derive it — but "was it approved *first*". A specification decided after
+ * the work started is not a specification the work was done under.
+ *
+ * **`executionStartedAt` is `min(startedAt)` over the change's complete run
+ * set**, and each half of that is a decision:
+ *
+ *  - *`min`, not `max`.* `legion review --auto` calls the build inside the
+ *    ordinary fix cycle, `nextAttemptMap` bumps the attempt, and `runIdForTask`
+ *    puts attempt 2 in a new directory while attempt 1's record is untouched. So
+ *    under `max` the sequence build → approve → rebuild satisfies this gate, and
+ *    that sequence is not an exotic attack: it is the normal retry loop. `min` is
+ *    also monotone in the safe direction — a run added later can only move the
+ *    boundary earlier.
+ *  - *Complete, not partial.* Every run the set is missing pushes `min` later, and
+ *    later is the direction that makes a late approval look early.
+ *
+ * **What "complete" can and cannot mean here, corrected.** The first draft of this
+ * comment claimed that `ship.ts` "turns any skip into absence" and that this gate
+ * therefore "reads either the whole set or nothing, and says which". Adversarial
+ * review falsified both, end to end: `listTaskRunsForChange` records `skipped`
+ * only for directories it *saw and could not read*, so a `rm -rf` of the earliest
+ * run directory — or replacing it with a plain file, which
+ * `entries.filter((c) => c.isDirectory())` drops before the skip loop ever runs —
+ * left no trace anywhere, `min(startedAt)` moved later, and an approval taken
+ * after the build read as one taken before it. The gate flipped from
+ * `unsatisfied` to `satisfied` because a directory was deleted, which is the
+ * fail-open this gate exists to be.
+ *
+ * The run plane is the one plane this verdict rests on and the only one nothing
+ * content-pins: `validateChangeTraceability` catches an edited oracle, delta spec
+ * or taskgraph before gates are ever derived, and catches nothing about `runs/`.
+ * So completeness is now a *positive, corroborated* claim rather than the absence
+ * of a reported skip — `corroboratedTaskRuns` in `ship.ts` cross-checks the set
+ * against the evidence index and against its own attempt numbering, and hands this
+ * gate `undefined` when they disagree. Its doc comment states the bound, including
+ * the one deletion no record in the repository can falsify.
+ *
+ * **The maximum on the other side is taken over the grants this gate was
+ * satisfied by, never over the approvals plane.** That plane is one flat
+ * directory holding every action the approve tree writes, and two of them —
+ * `workflow.review.accept` and `verification.surface.reaffirm` — are taken after
+ * a build by design. A maximum over it could never be less than `min(startedAt)`
+ * on any change that had been reviewed, and the gate would be unsatisfiable.
+ *
+ * **`>=` fails.** Both stamps are millisecond wall-clock, so equal instants are
+ * reachable, and three existing rules in this tree already put that boundary on
+ * the blocking side: `grantExpiry` spends a grant that expires exactly now,
+ * both supersession filters leave a negative standing at an equal instant
+ * ("an unorderable pair is not evidence that the grant came second"), and
+ * `archiveWithdrawnDecision` refuses at `>=`. The one counter-example in this
+ * file — `wholeChangeAcceptanceStatus`, which *satisfies* at `>=` — does not
+ * transfer, and it is worth saying why: there one command computes one instant
+ * and stamps it on both sides, so with `>` no honest change would ship. Here no
+ * writer produces the equal pair on any happy path, because `legion approve
+ * oracle` writes no runs and `legion build` writes no approvals. Strictness costs
+ * nothing honest here and would cost everything there.
+ *
+ * **The ordering arm runs last, after every subject is satisfied**, and that
+ * order is not cosmetic. Run first, it would answer an operator who has approved
+ * nothing with "run legion build" — which is not merely unhelpful but actively
+ * destructive, since building is exactly what makes the ordering unrepairable.
+ * It is also the module's standing aggregation rule: the more actionable fact
+ * first.
+ *
+ * **The arm order is right and it was not sufficient**, which is the other half of
+ * what review found. Ordering the *statuses* stops the gate advising a build; it
+ * does nothing about advising an approval that the ordering has already made
+ * pointless. So the advice on every unmet subject now passes through
+ * `orderingAwareRecovery`, and the verdict says in its own sentence when approving
+ * can no longer help.
+ */
+function approvedSpecAndOracleStatus(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): GateOutcome {
+  const deltas = input.change?.deltas;
+  if (deltas === undefined) {
+    return {
+      status: "unevaluable",
+      reason:
+        "The delta specs recorded for this change could not be read, so whether its specification was approved before execution is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (deltas.length === 0) {
+    // `changeBundleSchema` marks `deltas` `.min(1)`, so this is unreachable from
+    // a bundle that loaded — but that is another module's invariant, this
+    // function's parameter type admits `[]`, and `[].every(...)` is `true`.
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is no specification to have been approved.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+
+  const approvals = input.change?.approvals;
+  if (approvals === undefined) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no approval is established.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+
+  if (input.change?.oracles === undefined) {
+    return {
+      status: "unevaluable",
+      reason:
+        "The oracles recorded for this change could not be read, so whether the criteria its work is judged against were approved is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+
+  const change = input.change as ShipGateChangeFacts;
+  const demand = changeOracleDemand({ tasks: input.tasks, taskIdFor: input.taskIdFor, change });
+
+  if (demand.referenced.length === 0 && demand.unresolved.length === 0) {
+    // The vacuity guard, and PR 0's question in its narrowest form. Unreachable
+    // from a parsed task contract — `oracleRefs` is `.min(1)` — and kept because
+    // a gate must not inherit its central truth claim from another module's
+    // invariant. Never `satisfied`: at R3 a change whose work is judged against
+    // no criteria has not answered ADR-006's question, it has skipped it.
+    return {
+      status: "unevaluable",
+      reason:
+        "No task of this change references an oracle, so there is no oracle whose approval could have preceded execution.",
+      recovery: ORDERING_REPLAN_RECOVERY
+    };
+  }
+
+  const missing = demand.unresolved[0];
+  if (missing !== undefined) {
+    // This is what makes `oracles: []` and a short manifest both non-vacuous.
+    return {
+      status: "unevaluable",
+      reason: `Task ${missing.taskId} is judged against oracle ${missing.oracleId}, which is not among the ${
+        change.oracles?.length ?? 0
+      } oracle document${(change.oracles?.length ?? 0) === 1 ? "" : "s"} this change carries, so whether it was approved cannot be established.`,
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+
+  // A task implementing a requirement this change ships no delta spec for is a
+  // requirement whose specification nothing in this change ever approved. The
+  // delta loop below cannot see it — it quantifies over what the change ships,
+  // and the point of this row is what it does not.
+  const shipped = new Set(deltas.map((delta) => delta.requirementId));
+  for (const task of input.tasks) {
+    for (const requirementId of task.requirementIds ?? []) {
+      if (shipped.has(requirementId)) continue;
+      return {
+        status: "unevaluable",
+        reason: `Task ${input.taskIdFor(
+          task
+        )} implements requirement ${requirementId}, which this change ships no delta spec for, so whether its specification was approved cannot be established.`,
+        recovery: ORDERING_REPLAN_RECOVERY
+      };
+    }
+  }
+
+  const outcomes: SubjectApprovalOutcome[] = [
+    ...deltas.map((delta) => {
+      const outcome = deltaSpecApprovalStatus({
+        approvals,
+        changeId: change.changeId,
+        delta,
+        evaluatedAt: change.evaluatedAt,
+        verifyPin: change.verifyPin
+      });
+      // Every reachable unmet delta-spec arm is repaired by the same command,
+      // which is why `approved_delta_spec` has answered with one table entry
+      // since PR 2: a standing withdrawal is archived and superseded by a
+      // strictly later grant, a lapsed grant is re-granted without an expiry, a
+      // machine grant is re-granted by a human, and a pin against bytes the
+      // change no longer ships is re-pinned against the ones it does.
+      return outcome.status === "satisfied" ? outcome : { ...outcome, recovery: SPEC_APPROVE_RECOVERY };
+    }),
+    ...demand.referenced.map((entry) =>
+      oracleApprovalStatus({
+        approvals,
+        changeId: change.changeId,
+        oracle: entry.fact,
+        evaluatedAt: change.evaluatedAt,
+        verifyPin: change.verifyPin
+      })
+    )
+  ];
+
+  // Where execution is, resolved *before* the unmet verdicts are rendered.
+  //
+  // The status arms below still run in their original order. What this feeds is
+  // only the advice: an unmet subject whose repair is "take the decision now" is
+  // not repairable once a run exists, and telling the operator to take it anyway
+  // is the defect `orderingAwareRecovery` documents in full.
+  const execution = executionOrdering(change.taskRuns);
+
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== undefined) {
+    const remainder =
+      unmet.length > 1
+        ? ` ${unmet.length} of the ${outcomes.length} approvals this gate reads are unmet.`
+        : "";
+    const recovery = orderingAwareRecovery(chosen.recovery, execution);
+    // Said in the verdict, not only in the recovery. A blocked ship's gate rows
+    // carry `{code, gate, message, path}` and nothing else — the recovery reaches
+    // the operator only through the payload's single aggregate `nextAction`, and
+    // only when this gate happens to be the one that supplied it. So the fact
+    // that approving can no longer help has to be in the sentence the row itself
+    // carries, or the operator on a multi-gate block never learns it.
+    const late =
+      recovery === chosen.recovery
+        ? ""
+        : execution.kind === "started"
+          ? ` Gated execution for this change already began at ${execution.startedAt} (run ${execution.runId} of ` +
+            `${execution.taskId}), so a decision recorded now would be dated after the work it claims to gate: ` +
+            "approving cannot satisfy this gate."
+          : " Whether gated execution for this change has already begun could not be established from its run plane, " +
+            "so whether a decision recorded now would count is unknown: repair the run plane before deciding.";
+    return {
+      ...chosen,
+      reason: `${chosen.reason}${remainder}${late}`,
+      ...(recovery === undefined ? {} : { recovery })
+    };
+  }
+
+  // Every subject is approved. Only now is the ordering question worth asking,
+  // and only now is a build the right advice.
+  const taskRuns = change.taskRuns;
+  if (taskRuns === undefined) {
+    // Checked on the field rather than on `earliestExecutionStart`'s return,
+    // which collapses "the plane could not be read", "the plane is empty" and
+    // "no run recorded a start" into one `undefined`. Three worlds, three
+    // sentences, and two different repairs.
+    return {
+      status: "unevaluable",
+      reason:
+        "Every delta spec and oracle of this change is approved, but its task runs could not be read as a complete set, so no ordering between those decisions and the start of execution can be established.",
+      recovery: ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  if (taskRuns.length === 0) {
+    return {
+      status: "unevaluable",
+      reason:
+        "Every delta spec and oracle of this change is approved, and no task of it has run, so there is nothing for those decisions to have preceded.",
+      recovery: ORDERING_BUILD_RECOVERY
+    };
+  }
+
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest === undefined) {
+    return {
+      status: "unevaluable",
+      reason: `Every delta spec and oracle of this change is approved, and none of its ${taskRuns.length} task run${
+        taskRuns.length === 1 ? "" : "s"
+      } records when it started, so no ordering can be established.`,
+      recovery: ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+
+  // The mirror of the dropped-run fail-open, in the other direction. A dropped
+  // run moves `min(startedAt)` later; a grant whose instant is skipped moves
+  // `max(decidedAt)` earlier. Both make a late approval look early, so neither
+  // may be a `continue`. Unreachable from a parsed approval — `decidedAt` is
+  // required on the granted member — and reachable from a fixture.
+  let latest: UtcTimestamp | undefined;
+  for (const outcome of outcomes) {
+    const decidedAt = outcome.decidedAt;
+    if (decidedAt === undefined) {
+      return {
+        status: "unevaluable",
+        reason:
+          "One of the approvals this gate reads records no decision instant, so the last of these decisions cannot be compared against the start of execution."
+      };
+    }
+    if (latest === undefined || decidedAt > latest) latest = decidedAt;
+  }
+  const latestDecision = latest as UtcTimestamp;
+
+  if (latestDecision >= earliest.startedAt) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `The last of the ${outcomes.length} approvals this gate reads was decided at ${latestDecision}, which is ` +
+        `${latestDecision === earliest.startedAt ? "the same instant as" : "not earlier than"} the ${earliest.startedAt} ` +
+        `at which gated execution for this change began (run ${earliest.runId} of ${earliest.taskId}). ` +
+        "A specification approved at or after the work started is not an approval the work was done under.",
+      recovery: ORDERING_REPLAN_RECOVERY
+    };
+  }
+
+  return {
+    status: "satisfied",
+    reason:
+      `All ${deltas.length} delta spec${deltas.length === 1 ? "" : "s"} and ${demand.referenced.length} oracle${
+        demand.referenced.length === 1 ? "" : "s"
+      } of this change were approved before gated execution began: the last of those decisions was taken at ` +
+      `${latestDecision} and the earliest run (${earliest.runId} of ${earliest.taskId}) started at ${earliest.startedAt}.`
+  };
+}
+
+/**
+ * Would this one document, alone, satisfy the oracle half of
+ * `approved_spec_and_oracle` for this oracle?
+ *
+ * Exported for `legion approve oracle`, on `isLiveDeltaSpecGrant`'s rule: a
+ * writer whose idea of "done" is weaker than the reader's idea of "satisfied"
+ * reports success, writes nothing, and leaves the change permanently blocked with
+ * no flag anywhere that would make it write. So this is not a second
+ * implementation — it *calls* `oracleApprovalStatus` against a one-document plane
+ * and asks whether the verdict is `satisfied`.
+ *
+ * **The verifier this passes is `unverified`, and saying why is the point.** The
+ * first draft passed `(reference) => reference.sha256 === fact.reference.sha256 ?
+ * "match" : "drift"` and claimed that made it stricter than
+ * `isLiveDeltaSpecGrant`'s `() => "match"`. Adversarial review measured that and
+ * it was false: `approvedOraclePin` compares the pin against
+ * `oracle.reference.sha256` *before* it calls the verifier, so a substitute can
+ * only ever be handed the matching digest and can only ever answer `match`. The
+ * substitution was a no-op dressed as a check, and the test named for it passed
+ * under exactly the mutation it named.
+ *
+ * `unverified` is the truthful value: this caller hashed nothing, and has no
+ * second opinion to offer. `approvedOraclePin` reads that as corroboration-absent
+ * rather than as a failed check — which is what makes the writer and the gate
+ * agree in the one state where they used to disagree, and is why that mapping is
+ * documented there rather than compensated for here.
+ *
+ * What actually makes this predicate strict is the byte comparison itself: an
+ * approval pinning bytes the change no longer carries answers `stale`, so the
+ * command re-decides rather than reporting "already approved".
+ *
+ * **The ordering clause is deliberately excluded**, and that exclusion is the
+ * one place this predicate is narrower than the gate. If it carried the
+ * comparison, a rerun after execution had started would report `regrant`, write a
+ * fresh `decidedAt`, and make the ordering strictly *worse* — the failure
+ * `plannedActionFor` has warned about by name since PR 2. `legion approve oracle`
+ * closes the resulting silence a different way: it reads the run plane itself and
+ * warns, at the one moment the operator could still act on it, that a decision
+ * recorded now would be dated after the work it claims to gate.
+ */
+export function isLiveOracleGrant(input: {
+  readonly approval: Approval;
+  readonly changeId: string;
+  readonly oracle: ShipGateOracleFact;
+  readonly evaluatedAt: UtcTimestamp | undefined;
+}): boolean {
+  const outcome = oracleApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    oracle: input.oracle,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "unverified"
+  });
+  return outcome.status === "satisfied";
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -2114,11 +3211,12 @@ function evaluateGate(input: {
    * function with plain literals and no facts at all. Making absence a type
    * makes the guard structural instead of a thing to remember once per gate.
    *
-   * Four arms read it now — `explicit_human_approval` the approvals plane,
+   * Five arms read it now — `explicit_human_approval` the approvals plane,
    * `approved_delta_spec` the deltas, `integration_or_real_interface_checks` the
-   * oracles and the pin verifier, and `whole_change_acceptance_evidence` the
-   * acceptance and the clock — so the signature is doing the job it was landed
-   * for: each gate's diff touches its own `case` rather than this one.
+   * oracles and the pin verifier, `whole_change_acceptance_evidence` the
+   * acceptance and the clock, and `approved_spec_and_oracle` all of those plus
+   * the run plane — so the signature is doing the job it was landed for: each
+   * gate's diff touches its own `case` rather than this one.
    */
   readonly change: ShipGateChangeFacts | undefined;
   /**
@@ -2129,7 +3227,10 @@ function evaluateGate(input: {
    * whole-change fact. `integration_or_real_interface_checks` asks about the
    * verification surfaces the change declares, and those live on the task
    * contracts — so the change-scoped question genuinely needs every contract,
-   * not just the one whose tier derived the gate.
+   * not just the one whose tier derived the gate. `approved_spec_and_oracle`
+   * needs them for a sharper reason still: the set of oracles that have to have
+   * been approved is the set the *tasks name*, which is the only reading of that
+   * set a deleted oracle file cannot shrink.
    */
   readonly tasks: readonly TaskContract[];
   readonly taskIdFor: (task: TaskContract) => string;
@@ -2218,15 +3319,26 @@ function evaluateGate(input: {
         entries
       });
 
+    case "approved_spec_and_oracle":
+      // No `taskId`, no `reviews`, no `entries`, on `approved_delta_spec`'s
+      // rule: a change-scoped gate must not be able to answer per task even by
+      // accident, so it is not handed anything per task to answer with. `tasks`
+      // and `taskIdFor` are the *denominator* — the set whose `oracleRefs` and
+      // `requirementIds` say what has to have been approved — rather than a
+      // per-task input.
+      return approvedSpecAndOracleStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+
     default:
-      // `approved_spec_and_oracle` asks whether the spec and oracle were
-      // approved *before* gated execution. A passing post-execution verdict does
-      // not answer that: there is no approval record, approver, or ordering
-      // timestamp to check, so satisfying it from the oracle result would claim
-      // a governance gate was met when no such approval exists.
-      //
-      // Independent baselines, security/e2e evaluation, release observation and
-      // rollback evidence have no producer in the workflow yet.
+      // Independent baselines, architecture and security review, protected
+      // acceptance tests, security/e2e evaluation, release observation and
+      // rollback evidence have no producer in the workflow yet. Those six are
+      // exactly what this arm answers for, and `tests/change-r3-ordering` names
+      // them one by one so each later release reddens that list as it closes
+      // one.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -2303,7 +3415,8 @@ export function shipGatePinnedReferences(input: {
   return [
     // The delta spec bytes `approved_delta_spec` compares an approval against.
     ...(input.deltas?.map((delta) => delta.delta) ?? []),
-    // The oracle documents themselves, for PR 5's ordering gate.
+    // The oracle documents themselves, which `approved_spec_and_oracle` compares
+    // an oracle approval's pin against.
     ...(input.oracles?.map((oracle) => oracle.reference) ?? []),
     // The files an oracle's declared verification surface pins.
     ...(input.oracles?.flatMap((oracle) => oracle.document.surface?.pinned ?? []) ?? []),
@@ -2511,7 +3624,14 @@ const GATE_RECOVERY: Readonly<
   // which nothing had ever moved.
   whole_change_acceptance_evidence: ACCEPT_RECOVERY,
   independent_baseline: undefined,
-  approved_spec_and_oracle: undefined,
+  // Six unmet states with four different cures, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays here is the state a caller
+  // holding only a gate id can be answered for, and the one every R3 change
+  // written before this release is in: no oracle approval exists at all, because
+  // nothing could write one. It is deliberately *not* the ordering cure — that
+  // one is reachable only after a build, and a table entry that assumed it would
+  // tell an operator who has approved nothing to re-plan.
+  approved_spec_and_oracle: ORACLE_APPROVE_RECOVERY,
   architecture_or_security_review: undefined,
   protected_acceptance_tests: undefined,
   security_or_e2e_evaluator: undefined,
@@ -2528,17 +3648,45 @@ export interface ShipGateRecovery {
 /**
  * The command a blocked ship should advise.
  *
- * Three arms, and the middle one is the one that matters:
+ * **One rule, and it replaces three arms that had a hole in the middle:** advise
+ * a command that some unmet gate says repairs it, and fall back to the caller's
+ * only when no unmet gate names one at all.
  *
- *  - Every unmet gate has the *same* recovery: advise it. Naming one repair when
- *    several are needed is the failure `recoveryFor` in the ship command already
- *    guards against with its own `.every()`.
- *  - Some unmet gates have a recovery and some do not: keep the caller's
- *    fallback command and append the ones that do. This is the honest answer
- *    while nine gates are still producerless — it does not claim one command
- *    unblocks the ship, and it still hands the operator the thread. It is also
- *    the arm every R2 change reaches today.
- *  - Nothing has a recovery: the fallback, unchanged, byte for byte.
+ * The arm this replaces kept `fallback.command` — `legion build`, from
+ * `ship.ts` — whenever *any* unmet gate had no recovery, and appended the
+ * commands that did to the reason. Its stated justification was that naming one
+ * repair when several are needed overclaims. That is true of the *reason* and it
+ * was never true of the command, and adversarial review measured what the
+ * difference costs at R3, where six of ten gates are producerless and the arm was
+ * therefore unconditional:
+ *
+ *     nextAction: { command: "legion build",
+ *                   reason: "… (1 failed, 6 unprovable). Of those, one has a
+ *                            command that can produce the missing evidence:
+ *                            legion start --intake." }
+ *
+ * — on a change whose only failing gate is `approved_spec_and_oracle`, whose own
+ * verdict says in as many words that no command re-orders a decision already
+ * taken and that a build is the act which made it unrepairable. `command` and
+ * `reason` contradicted each other inside one object, and `command` is the field
+ * hosts dispatch. Running it exits 0, writes another attempt, moves nothing, and
+ * ship repeats the identical verdict forever: the exits-0-and-still-blocked loop
+ * this series exists to close, emitted by the aggregator rather than by a gate.
+ *
+ * So:
+ *
+ *  - **Exactly one distinct repair among the unmet gates: advise it**, whether or
+ *    not the other unmet gates have one. A gate with no recovery has no repair to
+ *    withhold in favour of; withholding the one known repair helps nobody, and the
+ *    reason still says how many gates are unmet.
+ *  - **Several distinct repairs: advise the first in gate order** and list them
+ *    all in the reason. Gate order is the risk policy's own tier ordering, so this
+ *    is deterministic and is the order ADR-006 states the gates in, not an
+ *    accident of iteration. The reason continues to say plainly that no single
+ *    command unblocks the ship.
+ *  - **No unmet gate names a repair: the caller's fallback, unchanged, byte for
+ *    byte.** This is the only arm in which a command nothing claimed can repair is
+ *    advised, and by then there is nothing else to say.
  *
  * A gate's own `result.recovery` beats the table. The table is keyed by gate id
  * and therefore cannot distinguish two unmet states of the same gate, which is
@@ -2555,19 +3703,33 @@ export function shipGateRecovery(input: {
   const unmet = input.gates.filter((gate) => gate.status !== "satisfied");
   if (unmet.length === 0) return input.fallback;
 
-  const recoveries = [...new Set(unmet.map((gate) => gate.gate))]
+  const unmetIds = [...new Set(unmet.map((gate) => gate.gate))];
+  const recoveries = unmetIds
     .map((id) => unmet.find((gate) => gate.gate === id)?.recovery ?? GATE_RECOVERY[id])
     .filter((entry): entry is ShipGateRecovery => entry !== undefined);
   if (recoveries.length === 0) return input.fallback;
 
   const distinct = [...new Set(recoveries.map((entry) => entry.command))];
   const only = recoveries[0] as ShipGateRecovery;
-  if (distinct.length === 1 && recoveries.length === new Set(unmet.map((gate) => gate.gate)).size) {
-    return only;
+  if (distinct.length === 1) {
+    // The unrepairable remainder is named rather than implied. `only.reason` was
+    // written by a gate about its own state and cannot know that five other gates
+    // are also unmet, and an operator who runs one command and stays blocked has
+    // to have been told why.
+    const unnamed = unmetIds.length - recoveries.length;
+    return unnamed === 0
+      ? only
+      : {
+          command: only.command,
+          reason: `${only.reason} ${unnamed} other unmet gate${unnamed === 1 ? " has" : "s have"} no command that ` +
+            "produces its evidence, so this repairs what can be repaired rather than unblocking the ship."
+        };
   }
 
   return {
-    command: input.fallback.command,
-    reason: `${input.fallback.reason} Of those, ${distinct.length === 1 ? "one has" : `${distinct.length} have`} a command that can produce the missing evidence: ${distinct.join(", ")}.`
+    command: only.command,
+    reason:
+      `${input.fallback.reason} Of those, ${distinct.length} have a command that can produce the missing evidence: ` +
+      `${distinct.join(", ")}. No single command unblocks this ship; ${only.command} is the first of them in gate order.`
   };
 }

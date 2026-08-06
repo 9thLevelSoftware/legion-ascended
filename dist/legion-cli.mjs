@@ -41168,6 +41168,1420 @@ function absoluteArtifactPath(repositoryRoot, artifactPath) {
   return path33.join(repositoryRoot, ...artifactPath.split("/"));
 }
 
+// packages/cli/src/workflow/ship-gates.ts
+var GATE_SCOPE = {
+  current_task_contract_or_small_change_record: "task",
+  deterministic_verification: "task",
+  evidence_note: "task",
+  task_contract: "task",
+  scoped_implementer_run: "task",
+  evidence_bundle_or_log: "task",
+  lightweight_independent_review: "task",
+  approved_delta_spec: "change",
+  protected_oracle: "task",
+  task_level_independent_review: "task",
+  integration_or_real_interface_checks: "change",
+  whole_change_acceptance_evidence: "change",
+  independent_baseline: "task",
+  approved_spec_and_oracle: "change",
+  architecture_or_security_review: "task",
+  protected_acceptance_tests: "task",
+  security_or_e2e_evaluator: "task",
+  explicit_human_approval: "task",
+  release_observation_plan: "task",
+  rollback_or_forward_fix_evidence: "task"
+};
+function earliestExecutionRun(taskRuns) {
+  let earliest;
+  for (const run of taskRuns ?? []) {
+    const startedAt = run.startedAt;
+    if (startedAt === void 0) continue;
+    const candidate = {
+      startedAt,
+      runId: run.id ?? "an unnamed run",
+      taskId: run.taskId ?? "an unnamed task"
+    };
+    if (earliest === void 0) {
+      earliest = candidate;
+      continue;
+    }
+    if (startedAt < earliest.startedAt) earliest = candidate;
+    else if (startedAt === earliest.startedAt && candidate.runId < earliest.runId) earliest = candidate;
+  }
+  return earliest;
+}
+function evidenceItemVerdict(entries, taskId, itemId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  for (const item of entry.evidence.items) {
+    if (item.id !== itemId) continue;
+    if (item.verdict === "pass") return "pass";
+    if (item.verdict === "fail") return "fail";
+  }
+  return void 0;
+}
+function hasEvidence(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  return entry !== void 0 && entry.evidence.items.length > 0;
+}
+function hasAcceptedReview(reviews, taskId) {
+  return reviews.some(
+    (review) => review.document.status === "accepted" && review.document.taskId === taskId
+  );
+}
+var REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+var DELTA_SPEC_APPROVE_ACTION = "spec.delta.approve";
+function grantExpiry(approval, evaluatedAt) {
+  if (approval.expiresAt === void 0) return "live";
+  if (evaluatedAt === void 0) return "unknown";
+  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
+}
+function idempotencyTargetHash(key) {
+  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
+}
+function approvedReviewLink(input) {
+  const approvedIds = input.approval.scope.targets.filter((target) => target.kind === "review").map((target) => target.id);
+  if (approvedIds.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
+    };
+  }
+  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
+  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
+  if (named.length !== approvedIds.length) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
+    };
+  }
+  for (const review of named) {
+    if (review.document.status !== "accepted") {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
+      };
+    }
+    const superseding = taskReviews.find(
+      (candidate) => candidate.document.id !== review.document.id && (candidate.document.supersedes ?? []).includes(review.document.id)
+    );
+    if (superseding !== void 0) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
+      };
+    }
+    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
+    const currentHash = review.reference?.sha256;
+    if (approvedHash === void 0 || currentHash === void 0) {
+      return {
+        kind: "unknown",
+        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
+      };
+    }
+    if (approvedHash !== currentHash) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
+      };
+    }
+  }
+  return { kind: "current" };
+}
+function byDecisionInstant(left, right) {
+  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
+  if (byInstant !== 0) return byInstant;
+  return left.id.localeCompare(right.id);
+}
+function humanApprovalStatus(input) {
+  for (const review of input.reviews) {
+    if (review.document.status !== "accepted") continue;
+    if (review.document.taskId !== input.taskId) continue;
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === void 0 || acceptedBy.kind === "human") continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no human approval is established."
+    };
+  }
+  const relevant = approvals.filter(
+    (approval) => (
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than matching
+      // everything. Absence must never widen the set an approval can answer for.
+      approval.changeId === input.change?.changeId && // An approval whose two task claims disagree says two things; the gate
+      // reads neither. The service will persist such a document, so refusing it
+      // here is the only place it is refused.
+      (approval.taskId === void 0 || approval.taskId === input.taskId) && approval.scope.action === REVIEW_ACCEPT_ACTION && approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No approval records anyone accepting this task's review."
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for this task's review is ${blocking.status}.` : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: "An approval for this task's review is recorded as requested and has not been decided."
+  };
+}
+function approvedDeltaSpecPin(input) {
+  const artifacts = input.approval.artifacts;
+  if (artifacts === void 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of ${input.delta.requirementId}'s delta spec were approved is unestablished.`
+    };
+  }
+  const pins = artifacts.filter((reference) => reference.path === input.delta.path);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${input.delta.path}, so it does not say this delta spec was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${input.delta.path}, so which bytes were approved is unestablished.`
+    };
+  }
+  const pin = pins[0];
+  if (pin.sha256 !== input.delta.delta.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of ${input.delta.path} than change ${input.changeId} ships.`
+    };
+  }
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, which is no longer present.`
+    };
+  }
+  return {
+    kind: "unknown",
+    reason: `Approval ${input.approval.id} pins ${input.delta.path}, which this report did not hash, so what was approved cannot be compared against what is on disk.`
+  };
+}
+function deltaSpecApprovalStatus(input) {
+  const relevant = input.approvals.filter(
+    (approval) => (
+      // Strict equality, so facts too degraded to name their own change match
+      // nothing rather than everything. A requirement id is not change-scoped —
+      // the same id can appear in two changes — so this is load-bearing, not
+      // belt-and-braces.
+      approval.changeId === input.changeId && approval.scope.action === DELTA_SPEC_APPROVE_ACTION && approval.scope.targets.some(
+        (target) => target.kind === "requirement" && target.id === input.delta.requirementId
+      )
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving the delta spec for ${input.delta.requirementId}.`
+    };
+  }
+  const misfiled = relevant.find((approval) => approval.taskId !== void 0 || approval.runId !== void 0);
+  if (misfiled !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but a delta spec belongs to the change rather than to one task or run, so this approval is not read here.`
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}.` : `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedDeltaSpecPin({
+      approval: newestGrant,
+      delta: input.delta,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`,
+      decidedAt: newestGrant.decidedAt
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for ${input.delta.requirementId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for ${input.delta.requirementId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for ${input.delta.requirementId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `An approval for the delta spec of ${input.delta.requirementId} is recorded as requested and has not been decided.`
+  };
+}
+function isLiveDeltaSpecGrant(input) {
+  const outcome = deltaSpecApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    delta: input.delta,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "match"
+  });
+  return outcome.status === "satisfied";
+}
+function deltaSpecApprovalGateStatus(input) {
+  const deltas = input.change?.deltas;
+  if (deltas === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The delta specs recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  if (deltas.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is nothing to have been approved."
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  const change = input.change;
+  const outcomes = deltas.map(
+    (delta) => deltaSpecApprovalStatus({
+      approvals,
+      changeId: change.changeId,
+      delta,
+      evaluatedAt: change.evaluatedAt,
+      verifyPin: change.verifyPin
+    })
+  );
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== void 0) {
+    const remainder = unmet.length > 1 ? ` ${unmet.length} of ${deltas.length} delta specs in this change are unmet.` : "";
+    return { status: chosen.status, reason: `${chosen.reason}${remainder}` };
+  }
+  const first = outcomes[0];
+  return {
+    status: "satisfied",
+    reason: deltas.length === 1 ? first.reason : `All ${deltas.length} delta specs in this change are approved. ${first.reason}`
+  };
+}
+var INTEGRATION_SURFACE_ITEM = "integration-surface-check";
+var SURFACE_REAFFIRM_RECOVERY = {
+  command: "legion approve surface --approver <id>",
+  reason: "A file a verification surface pins has been edited since the declaration was made, so the declaration no longer describes what is on disk. If the edit was intended, re-affirm the declaration against the current bytes: that records a named human saying it still describes what they meant, and re-mints the pin. No command re-mints it silently, because that would launder an out-of-band edit into a declaration."
+};
+var SURFACE_BUILD_RECOVERY = {
+  command: "legion build",
+  reason: "This change declares a verification surface beyond unit, and no evidence records it being exercised. Run the build that executes it, then rerun legion ship."
+};
+var SURFACE_DECLARE_RECOVERY = {
+  command: "legion start --intake",
+  reason: "Nothing in this change declares a verification surface that reaches an integration or real interface. Declare one on an executable acceptance criterion and re-plan, or lower the risk tier through an audited risk.override if this change genuinely crosses no boundary."
+};
+function surfaceCheckVerdict(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  return entry.evidence.items.find((item) => item.id === INTEGRATION_SURFACE_ITEM)?.verdict;
+}
+var SURFACE_REAFFIRM_ACTION = "verification.surface.reaffirm";
+function surfaceIdentity(surface) {
+  const pins = surface.pinned.map((pin) => `${pin.path}@${pin.sha256}`).slice().sort();
+  return JSON.stringify([surface.kind, surface.interface, pins]);
+}
+function dedupeSurfaces(surfaces) {
+  const byIdentity = /* @__PURE__ */ new Map();
+  for (const declared of surfaces) {
+    const key = surfaceIdentity(declared.surface);
+    const existing = byIdentity.get(key);
+    if (existing === void 0) {
+      byIdentity.set(key, { origins: [...declared.origins], declared });
+      continue;
+    }
+    existing.origins.push(...declared.origins);
+  }
+  return [...byIdentity.values()].map((entry) => ({ ...entry.declared, origins: entry.origins }));
+}
+function declaredVerificationSurfaces(input) {
+  const surfaces = [];
+  for (const [index, entry] of (input.task.verification ?? []).entries()) {
+    if (entry?.surface === void 0) continue;
+    surfaces.push({
+      origins: [`verification entry ${index + 1} of ${input.taskId}`],
+      taskId: input.taskId,
+      surface: entry.surface
+    });
+  }
+  const oracleRefs = input.task.oracleRefs ?? [];
+  let unestablished;
+  if (oracleRefs.length > 0) {
+    const oracles = input.change?.oracles;
+    for (const oracleId of oracleRefs) {
+      const fact = oracles?.find((entry) => entry.document.id === oracleId);
+      if (fact === void 0) {
+        unestablished ??= oracleId;
+        continue;
+      }
+      if (fact.document.surface === void 0) continue;
+      surfaces.push({ origins: [`oracle ${oracleId}`], taskId: input.taskId, surface: fact.document.surface });
+    }
+  }
+  return { surfaces: dedupeSurfaces(surfaces), unestablished };
+}
+function surfacePinReaffirmation(input) {
+  const approvals = input.change.approvals;
+  if (approvals === void 0) return void 0;
+  const relevant = approvals.filter(
+    (approval) => approval.changeId === input.change.changeId && approval.scope.action === SURFACE_REAFFIRM_ACTION && (approval.artifacts ?? []).some((reference) => reference.path === input.path)
+  );
+  if (relevant.length === 0) return void 0;
+  const live = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") continue;
+    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
+    live.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  if (newestGrant === void 0) return void 0;
+  const standing = relevant.some(
+    (approval) => (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") && (approval.decidedAt === void 0 || approval.decidedAt >= newestGrant.decidedAt)
+  );
+  if (standing) return void 0;
+  const reaffirmed = (newestGrant.artifacts ?? []).find((reference) => reference.path === input.path);
+  if (reaffirmed === void 0) return void 0;
+  if (input.change.verifyPin(reaffirmed) !== "match") return void 0;
+  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
+}
+function isLiveSurfaceReaffirmation(input) {
+  const reaffirmed = surfacePinReaffirmation({
+    path: input.path,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: [input.approval],
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: input.evaluatedAt,
+      verifyPin: (reference) => reference.sha256 === input.currentSha256 ? "match" : "drift"
+    }
+  });
+  return reaffirmed !== void 0;
+}
+function surfacePinStatus(input) {
+  const { origins, surface } = input.declared;
+  const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+  if (surface.pinned.length === 0) {
+    return { status: "unevaluable", reason: `${describe3} pins no reference, so there is nothing to check it against.` };
+  }
+  const change = input.change;
+  const verifyPin = change?.verifyPin;
+  if (change === void 0 || verifyPin === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+    };
+  }
+  for (const pin of surface.pinned) {
+    const verdict = verifyPin(pin);
+    if (verdict === "match") continue;
+    if (verdict === "drift") {
+      const reaffirmed = surfacePinReaffirmation({ path: pin.path, change });
+      if (reaffirmed !== void 0) continue;
+      return {
+        status: "unsatisfied",
+        reason: `${describe3} pins ${pin.path}, whose bytes have changed since the declaration was made. If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.`,
+        recovery: SURFACE_REAFFIRM_RECOVERY
+      };
+    }
+    if (verdict === "missing") {
+      return { status: "unsatisfied", reason: `${describe3} pins ${pin.path}, which is no longer present.` };
+    }
+    return {
+      status: "unevaluable",
+      reason: `${describe3} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+    };
+  }
+  return void 0;
+}
+function changeVerificationSurfaces(input) {
+  const surfaces = [];
+  const unreadableOracles = [];
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const declared = declaredVerificationSurfaces({ task, taskId, change: input.change });
+    surfaces.push(...declared.surfaces);
+    if (declared.unestablished !== void 0) unreadableOracles.push(declared.unestablished);
+  }
+  return { surfaces, unreadableOracles };
+}
+function nonUnitSurfaceOutcome(input) {
+  const { origins, surface } = input.declared;
+  const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+  const pin = surfacePinStatus({ declared: input.declared, change: input.change });
+  if (pin !== void 0) return pin;
+  const verdict = surfaceCheckVerdict(input.entries, input.declared.taskId);
+  if (verdict === "pass") {
+    return { status: "satisfied", reason: `${describe3} was exercised, and every pinned reference still matches.` };
+  }
+  if (verdict === "fail") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} is covered by a failed integration-surface-check: a declared non-unit verification command did not pass.`
+    };
+  }
+  if (verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} is covered by an integration-surface-check that did not reach every declared non-unit surface, so it may never have been exercised.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `${describe3} has no integration-surface-check in ${input.declared.taskId}'s latest evidence, so nothing says it was exercised.`,
+    recovery: SURFACE_BUILD_RECOVERY
+  };
+}
+function integrationSurfaceGateStatus(input) {
+  const { surfaces, unreadableOracles } = changeVerificationSurfaces(input);
+  const unreadableOracle = unreadableOracles.length === 0 ? void 0 : `This change names oracle ${unreadableOracles[0]}, which this report could not read, so whether it declares a verification surface is unestablished.`;
+  if (surfaces.length === 0) {
+    if (unreadableOracle !== void 0) return { status: "unevaluable", reason: unreadableOracle };
+    return {
+      status: "unevaluable",
+      reason: "No task contract or oracle in this change declares a verification surface, so whether verification reached an integration or real interface is unestablished. Declare it on an acceptance criterion at intake and re-plan.",
+      recovery: SURFACE_DECLARE_RECOVERY
+    };
+  }
+  const nonUnit = surfaces.filter((declared) => declared.surface.kind !== "unit");
+  if (nonUnit.length === 0 && unreadableOracle === void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Every verification surface this change declares is a unit surface (${surfaces.map((declared) => declared.origins.join(" and ")).join(", ")}), so nothing in this change reaches an integration or real interface. That is a recorded answer, not a missing one.`,
+      recovery: SURFACE_DECLARE_RECOVERY
+    };
+  }
+  const outcomes = nonUnit.map(
+    (declared) => nonUnitSurfaceOutcome({ declared, entries: input.entries, change: input.change })
+  );
+  if (unreadableOracle !== void 0) outcomes.push({ status: "unevaluable", reason: unreadableOracle });
+  const met = outcomes.find((outcome) => outcome.status === "satisfied");
+  if (met !== void 0) {
+    const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+    const remainder2 = unmet.length === 0 ? "" : ` ${unmet.length} other declared surface${unmet.length === 1 ? " is" : "s are"} unmet, and this gate is satisfied by the one above rather than by them: ${unmet.map((outcome) => outcome.reason).join(" ")}`;
+    return { status: "satisfied", reason: `${met.reason}${remainder2}` };
+  }
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? outcomes[0];
+  const remainder = outcomes.length > 1 ? ` ${outcomes.length} of this change's declared surfaces are unmet.` : "";
+  return { ...chosen, reason: `${chosen.reason}${remainder}` };
+}
+var ACCEPT_RECOVERY = {
+  command: "legion review --accept --approver <id>",
+  reason: "No whole-change sign-off has been recorded for this change, and a clean submitted review already covers its evidence. Accepting it records one, naming a human decision owner from the project manifest."
+};
+var RE_ACCEPT_RECOVERY = {
+  command: "legion review",
+  reason: "A whole-change verdict is already recorded, and `legion review --accept` will not replace it directly: the accept that recorded it flipped every covering review from submitted to accepted, and an accept refuses evidence no clean *submitted* review covers. Submit a fresh review first, then rerun `legion review --accept --approver <id>` \u2014 the promotion re-derives the verdict from scratch, so a recorded block or a sign-off that has gone stale is replaced rather than argued with."
+};
+var REBUILD_RECOVERY = {
+  command: "legion build",
+  reason: "The whole-change sign-off does not cover every task being shipped, because some task has no evidence in this change's index. Build it, review it, then accept: a sign-off cannot cover evidence that does not exist."
+};
+var REVIEW_RECOVERY = {
+  command: "legion review",
+  reason: "This change was re-run after it was signed off, and the newest evidence has not been accepted. Submit a review over it first \u2014 legion review --accept refuses to accept evidence no clean submitted review covers \u2014 and then accept, which re-dates the whole-change sign-off over what is there now."
+};
+var BUNDLE_RECOVERY = {
+  command: "legion dev change validate <changeId>",
+  reason: "This change's bundle could not be read, so nothing is known about whether it was accepted. That command reports what is wrong with it; it does not repair it \u2014 a drifted design, decision log or delta spec is corrected by hand."
+};
+function newestEvidenceAcceptance(entries) {
+  let newest;
+  for (const entry of entries) {
+    if (entry.acceptance.status !== "accepted") continue;
+    const acceptedAt = entry.acceptance.acceptedAt;
+    if (acceptedAt === void 0) continue;
+    if (newest === void 0 || acceptedAt > newest) newest = acceptedAt;
+  }
+  return newest;
+}
+function acceptorCorroboration(input) {
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but the approvals recorded for it could not be read, so nothing establishes that the acceptor was a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const named = [];
+  for (const approval of approvals) {
+    if (approval.changeId !== input.change?.changeId) continue;
+    if (approval.scope.action !== REVIEW_ACCEPT_ACTION) continue;
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.id !== input.acceptedBy) continue;
+    named.push(approval);
+  }
+  if (named.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${input.acceptedBy}, but no granted ${REVIEW_ACCEPT_ACTION} approval for this change names that actor, so nothing establishes that the sign-off was taken by a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (!named.some((approval) => approval.decidedBy.kind === "human")) {
+    const kinds = [...new Set(named.map((approval) => approval.decidedBy.kind))].sort().join(", ");
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${input.acceptedBy}, and every granted ${REVIEW_ACCEPT_ACTION} approval naming that actor records it as ${kinds}, not as a human.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  return void 0;
+}
+function wholeChangeAcceptanceStatus(input) {
+  const acceptance = input.change?.acceptance;
+  if (acceptance == null) {
+    return {
+      status: "unevaluable",
+      reason: "The change bundle for this change could not be read, so whether the change as a whole was accepted is unestablished.",
+      recovery: BUNDLE_RECOVERY
+    };
+  }
+  if (acceptance.status === "not_ready") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as not_ready${acceptance.reason === void 0 ? "" : ` (${acceptance.reason})`}: no accept decision has been made about the change as a whole.`,
+      recovery: ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "ready") {
+    return {
+      status: "unevaluable",
+      reason: "This change's acceptance is recorded as ready: every task's evidence was accepted, and no named approver signed off on the change as a whole.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "rejected") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as rejected: ${acceptance.reason}`,
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  if (acceptance.status === "blocked") {
+    return {
+      status: "unsatisfied",
+      reason: `This change's acceptance is recorded as blocked: ${acceptance.reason}`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status === "superseded") {
+    return {
+      status: "unsatisfied",
+      reason: "This change's acceptance is recorded as superseded, so the recorded sign-off is no longer the current decision.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptance.status !== "accepted") {
+    return {
+      status: "unevaluable",
+      reason: `This change's acceptance is recorded as ${String(
+        acceptance.status
+      )}, which this Legion does not recognize as a whole-change verdict; it was written by a newer protocol or by hand.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const acceptedAt = acceptance.acceptedAt;
+  const acceptedBy = acceptance.acceptedBy;
+  if (acceptedBy === void 0 || acceptedBy.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records an acceptance with no acceptor, so who signed off on the change as a whole is unestablished.",
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  if (acceptedAt === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `This change records an acceptance by ${acceptedBy} with no instant, so it cannot be compared against the evidence it claims to cover.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const evaluatedAt = input.change?.evaluatedAt;
+  if (evaluatedAt !== void 0 && acceptedAt > evaluatedAt) {
+    return {
+      status: "unsatisfied",
+      reason: `This change records an acceptance by ${acceptedBy} at ${acceptedAt}, later than the instant this report was derived (${evaluatedAt}); a sign-off cannot be dated after the moment it is read.`,
+      recovery: RE_ACCEPT_RECOVERY
+    };
+  }
+  const corroborated = acceptorCorroboration({ change: input.change, acceptedBy });
+  if (corroborated !== void 0) return corroborated;
+  if (input.tasks.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no tasks, so there is no evidence for a whole-change sign-off to cover.",
+      recovery: REBUILD_RECOVERY
+    };
+  }
+  const latest = latestEvidencePerTask(input.entries);
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const entry = latest.get(taskId);
+    if (entry === void 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId} has no evidence in this change's index, so the sign-off does not cover it.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status === "rejected") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} has since been rejected.`,
+        recovery: REBUILD_RECOVERY
+      };
+    }
+    if (entry.acceptance.status !== "accepted") {
+      return {
+        status: "unsatisfied",
+        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} is not accepted, so this change was re-run after the sign-off and the sign-off does not cover what is there now.`,
+        recovery: REVIEW_RECOVERY
+      };
+    }
+    if (entry.acceptance.acceptedAt === void 0) {
+      return {
+        status: "unevaluable",
+        reason: `${taskId}'s latest evidence ${entry.evidence.id} is accepted with no acceptedAt, so the instant the whole-change sign-off must cover is unestablished.`,
+        recovery: RE_ACCEPT_RECOVERY
+      };
+    }
+  }
+  const newest = newestEvidenceAcceptance(input.entries);
+  if (acceptedAt >= newest) {
+    return {
+      status: "satisfied",
+      reason: `${acceptedBy} accepted this change at ${acceptedAt}, covering all ${input.tasks.length} task${input.tasks.length === 1 ? "" : "s"} and every accepted evidence bundle in it (newest accepted at ${newest}).`
+    };
+  }
+  return {
+    status: "unsatisfied",
+    reason: `${acceptedBy} accepted this change at ${acceptedAt}, which is older than the ${newest} at which this change's task evidence was last accepted: the change was rebuilt and re-accepted per task after the whole-change sign-off, so the sign-off is about work that has since been replaced.`,
+    recovery: RE_ACCEPT_RECOVERY
+  };
+}
+var ORACLE_APPROVE_ACTION = "oracle.approve";
+var ORACLE_APPROVE_RECOVERY = {
+  command: "legion approve oracle --approver <id>",
+  reason: "An oracle this change's tasks are judged against carries no granted approval, and no build produces one: the gate reads the approval plane. Approve every oracle and every delta spec **before** running legion build \u2014 this gate compares the last of those decisions against the instant the first task run started, and nothing re-orders a decision once it has been taken."
+};
+var SPEC_APPROVE_RECOVERY = {
+  command: "legion approve spec --approver <id>",
+  reason: "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. At R3 `approved_delta_spec` is not derived at all, so this gate is the only reader of a spec.delta.approve grant \u2014 approve them before running legion build, then rerun legion ship."
+};
+var ORACLE_BYTES_RECOVERY = {
+  command: "legion ship",
+  reason: "An oracle document no longer holds the bytes its approval was granted against. No command in Legion rewrites an oracle \u2014 legion plan is create-only and nothing else writes one \u2014 so the file was edited out of band. Restore it to the bytes the approval records, then rerun this to confirm. Re-approving the edited bytes is deliberately not offered: it would launder the edit into a governance record and re-date the decision this gate orders."
+};
+var ORDERING_BUILD_RECOVERY = {
+  command: "legion build",
+  reason: "Every delta spec and oracle of this change is approved and no task has run, so there is no execution for those decisions to have preceded. This is the one unmet state of this gate a build repairs, and running it now is what makes the ordering true."
+};
+var ORDERING_REPLAN_RECOVERY = {
+  command: "legion start --intake",
+  reason: "A specification approved at or after the work started is not an approval the work was done under, and no command re-orders a decision that has already been taken: nothing rewinds or deletes a task run, and re-approving only writes a later decision instant. Plan the remaining work as a new change and approve its delta specs and oracles before building it, or lower the risk tier through an audited risk.override if this change's ordering genuinely does not matter."
+};
+var APPROVE_BEFORE_BUILD_RECOVERY = {
+  command: "legion approve spec --approver <id>",
+  reason: "This change carries R3 work, and R3 derives approved_spec_and_oracle: the gate compares the last approval of its delta specs and oracles against the instant its first task run started. legion build is a one-way door here \u2014 nothing re-orders a decision already taken, so a change built before it is approved can never satisfy that gate. Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that."
+};
+function derivesApprovalOrderingGate(tasks) {
+  return tasks.some(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "approved_spec_and_oracle"
+    )
+  );
+}
+var UNREADABLE_PLANE_RECOVERY = {
+  command: "legion ship",
+  reason: "A change artifact this gate reads would not load as a complete set, so nothing about what was approved is known. No command rewrites a planned artifact \u2014 legion plan is create-only \u2014 so correct or remove the file the other diagnostics in this payload name, then rerun this to confirm the defect is gone. Approving again would not help: the writer reads the same planes and refuses for the same reason."
+};
+var ORDERING_UNREADABLE_RECOVERY = {
+  command: "legion ship",
+  reason: "This change's task runs could not be read as a complete set, so no ordering between an approval and the start of execution can be established. The artifact_plane_incomplete diagnostic in this same payload names the file that could not be read \u2014 remove or correct it, then rerun this."
+};
+var MISFILED_APPROVAL_RECOVERY = {
+  command: "legion ship",
+  reason: "An approval about this subject also names a task or a run, and this gate reads only change-scoped decisions, so it is not read here. No command rewrites an approval's scope \u2014 the approve verbs write neither field \u2014 so delete the approval this verdict names and take the decision again with the approve verb for this subject, then rerun this to confirm."
+};
+function orderingAwareRecovery(recovery, execution) {
+  if (recovery === void 0) return recovery;
+  if (!recovery.command.startsWith("legion approve")) return recovery;
+  if (execution.kind === "started") return ORDERING_REPLAN_RECOVERY;
+  if (execution.kind === "unestablished") return ORDERING_UNREADABLE_RECOVERY;
+  return recovery;
+}
+function executionOrdering(taskRuns) {
+  if (taskRuns === void 0) return { kind: "unestablished" };
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest !== void 0) return { kind: "started", ...earliest };
+  return taskRuns.length === 0 ? { kind: "none" } : { kind: "unestablished" };
+}
+function approvedOraclePin(input) {
+  const oracleId = input.oracle.document.id;
+  const oraclePath2 = input.oracle.reference.path;
+  const artifacts = input.approval.artifacts;
+  if (artifacts === void 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of oracle ${oracleId} were approved is unestablished.`
+    };
+  }
+  const pins = artifacts.filter((reference) => reference.path === oraclePath2);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${oraclePath2}, so it does not say oracle ${oracleId} was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${oraclePath2}, so which bytes were approved is unestablished.`
+    };
+  }
+  const pin = pins[0];
+  if (pin.sha256 !== input.oracle.reference.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of oracle ${oracleId} than change ${input.changeId} now carries: the oracle was edited after it was approved.`
+    };
+  }
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${oraclePath2}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${oraclePath2}, which is no longer present.`
+    };
+  }
+  return { kind: "current" };
+}
+function oracleApprovalStatus(input) {
+  const oracleId = input.oracle.document.id;
+  const relevant = input.approvals.filter(
+    (approval) => (
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than everything.
+      // An oracle id is derived from a phase slug and is not change-scoped, so
+      // this is load-bearing rather than belt-and-braces.
+      approval.changeId === input.changeId && approval.scope.action === ORACLE_APPROVE_ACTION && approval.scope.targets.some((target) => target.kind === "oracle" && target.id === oracleId)
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving oracle ${oracleId}.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  const misfiled = relevant.find((approval) => approval.taskId !== void 0 || approval.runId !== void 0);
+  if (misfiled !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but an oracle belongs to the change rather than to one task or run, so this approval is not read here.`,
+      recovery: MISFILED_APPROVAL_RECOVERY
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for oracle ${oracleId} is ${blocking.status}.` : `Approval ${blocking.id} for oracle ${oracleId} is ${blocking.status}, and no later grant supersedes it.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedOraclePin({
+      approval: newestGrant,
+      oracle: input.oracle,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    if (link.kind === "stale") {
+      return { status: "unsatisfied", reason: link.reason, recovery: ORACLE_BYTES_RECOVERY };
+    }
+    if (link.kind === "unknown") {
+      return { status: "unevaluable", reason: link.reason, recovery: ORACLE_APPROVE_RECOVERY };
+    }
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving oracle ${oracleId}.`,
+      decidedAt: newestGrant.decidedAt
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for oracle ${oracleId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for oracle ${oracleId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for oracle ${oracleId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`,
+      recovery: ORACLE_APPROVE_RECOVERY
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `An approval for oracle ${oracleId} is recorded as requested and has not been decided.`,
+    recovery: ORACLE_APPROVE_RECOVERY
+  };
+}
+function changeOracleDemand(input) {
+  const namedBy = /* @__PURE__ */ new Map();
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    for (const oracleId of task.oracleRefs ?? []) {
+      const tasks = namedBy.get(oracleId) ?? [];
+      if (!tasks.includes(taskId)) tasks.push(taskId);
+      namedBy.set(oracleId, tasks);
+    }
+  }
+  const oracles = input.change?.oracles;
+  const referenced = [];
+  const unresolved = [];
+  for (const oracleId of [...namedBy.keys()].sort()) {
+    const taskIds = namedBy.get(oracleId);
+    const fact = oracles?.find((entry) => entry.document.id === oracleId);
+    if (fact === void 0) {
+      unresolved.push({ oracleId, taskId: taskIds[0] });
+      continue;
+    }
+    referenced.push({ oracleId, taskIds, fact });
+  }
+  const unreferenced = (oracles ?? []).map((entry) => entry.document.id).filter((oracleId) => !namedBy.has(oracleId)).sort();
+  return { referenced, unresolved, unreferenced };
+}
+function approvedSpecAndOracleStatus(input) {
+  const deltas = input.change?.deltas;
+  if (deltas === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The delta specs recorded for this change could not be read, so whether its specification was approved before execution is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (deltas.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is no specification to have been approved.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no approval is established.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (input.change?.oracles === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The oracles recorded for this change could not be read, so whether the criteria its work is judged against were approved is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  const change = input.change;
+  const demand = changeOracleDemand({ tasks: input.tasks, taskIdFor: input.taskIdFor, change });
+  if (demand.referenced.length === 0 && demand.unresolved.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No task of this change references an oracle, so there is no oracle whose approval could have preceded execution.",
+      recovery: ORDERING_REPLAN_RECOVERY
+    };
+  }
+  const missing = demand.unresolved[0];
+  if (missing !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Task ${missing.taskId} is judged against oracle ${missing.oracleId}, which is not among the ${change.oracles?.length ?? 0} oracle document${(change.oracles?.length ?? 0) === 1 ? "" : "s"} this change carries, so whether it was approved cannot be established.`,
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  const shipped = new Set(deltas.map((delta) => delta.requirementId));
+  for (const task of input.tasks) {
+    for (const requirementId of task.requirementIds ?? []) {
+      if (shipped.has(requirementId)) continue;
+      return {
+        status: "unevaluable",
+        reason: `Task ${input.taskIdFor(
+          task
+        )} implements requirement ${requirementId}, which this change ships no delta spec for, so whether its specification was approved cannot be established.`,
+        recovery: ORDERING_REPLAN_RECOVERY
+      };
+    }
+  }
+  const outcomes = [
+    ...deltas.map((delta) => {
+      const outcome = deltaSpecApprovalStatus({
+        approvals,
+        changeId: change.changeId,
+        delta,
+        evaluatedAt: change.evaluatedAt,
+        verifyPin: change.verifyPin
+      });
+      return outcome.status === "satisfied" ? outcome : { ...outcome, recovery: SPEC_APPROVE_RECOVERY };
+    }),
+    ...demand.referenced.map(
+      (entry) => oracleApprovalStatus({
+        approvals,
+        changeId: change.changeId,
+        oracle: entry.fact,
+        evaluatedAt: change.evaluatedAt,
+        verifyPin: change.verifyPin
+      })
+    )
+  ];
+  const execution = executionOrdering(change.taskRuns);
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== void 0) {
+    const remainder = unmet.length > 1 ? ` ${unmet.length} of the ${outcomes.length} approvals this gate reads are unmet.` : "";
+    const recovery = orderingAwareRecovery(chosen.recovery, execution);
+    const late = recovery === chosen.recovery ? "" : execution.kind === "started" ? ` Gated execution for this change already began at ${execution.startedAt} (run ${execution.runId} of ${execution.taskId}), so a decision recorded now would be dated after the work it claims to gate: approving cannot satisfy this gate.` : " Whether gated execution for this change has already begun could not be established from its run plane, so whether a decision recorded now would count is unknown: repair the run plane before deciding.";
+    return {
+      ...chosen,
+      reason: `${chosen.reason}${remainder}${late}`,
+      ...recovery === void 0 ? {} : { recovery }
+    };
+  }
+  const taskRuns = change.taskRuns;
+  if (taskRuns === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "Every delta spec and oracle of this change is approved, but its task runs could not be read as a complete set, so no ordering between those decisions and the start of execution can be established.",
+      recovery: ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  if (taskRuns.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "Every delta spec and oracle of this change is approved, and no task of it has run, so there is nothing for those decisions to have preceded.",
+      recovery: ORDERING_BUILD_RECOVERY
+    };
+  }
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Every delta spec and oracle of this change is approved, and none of its ${taskRuns.length} task run${taskRuns.length === 1 ? "" : "s"} records when it started, so no ordering can be established.`,
+      recovery: ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  let latest;
+  for (const outcome of outcomes) {
+    const decidedAt = outcome.decidedAt;
+    if (decidedAt === void 0) {
+      return {
+        status: "unevaluable",
+        reason: "One of the approvals this gate reads records no decision instant, so the last of these decisions cannot be compared against the start of execution."
+      };
+    }
+    if (latest === void 0 || decidedAt > latest) latest = decidedAt;
+  }
+  const latestDecision = latest;
+  if (latestDecision >= earliest.startedAt) {
+    return {
+      status: "unsatisfied",
+      reason: `The last of the ${outcomes.length} approvals this gate reads was decided at ${latestDecision}, which is ${latestDecision === earliest.startedAt ? "the same instant as" : "not earlier than"} the ${earliest.startedAt} at which gated execution for this change began (run ${earliest.runId} of ${earliest.taskId}). A specification approved at or after the work started is not an approval the work was done under.`,
+      recovery: ORDERING_REPLAN_RECOVERY
+    };
+  }
+  return {
+    status: "satisfied",
+    reason: `All ${deltas.length} delta spec${deltas.length === 1 ? "" : "s"} and ${demand.referenced.length} oracle${demand.referenced.length === 1 ? "" : "s"} of this change were approved before gated execution began: the last of those decisions was taken at ${latestDecision} and the earliest run (${earliest.runId} of ${earliest.taskId}) started at ${earliest.startedAt}.`
+  };
+}
+function isLiveOracleGrant(input) {
+  const outcome = oracleApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    oracle: input.oracle,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "unverified"
+  });
+  return outcome.status === "satisfied";
+}
+function fromVerdict(verdict, itemId) {
+  if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
+  if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
+  return { status: "unevaluable", reason: `No ${itemId} evidence was recorded for this task.` };
+}
+function evaluateGate(input) {
+  const { gate, taskId, entries, reviews } = input;
+  switch (gate.id) {
+    case "task_contract":
+    case "current_task_contract_or_small_change_record":
+      return { status: "satisfied", reason: "A typed task contract defines this work." };
+    case "deterministic_verification":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "declared-verification"), "declared-verification");
+    case "scoped_implementer_run":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "diff-reconciliation"), "diff-reconciliation");
+    case "evidence_note":
+    case "evidence_bundle_or_log":
+      return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
+    case "lightweight_independent_review":
+    case "task_level_independent_review":
+      return hasAcceptedReview(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
+    case "explicit_human_approval":
+      return humanApprovalStatus({ change: input.change, reviews, taskId });
+    case "approved_delta_spec":
+      return deltaSpecApprovalGateStatus({ change: input.change });
+    case "protected_oracle":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
+    case "integration_or_real_interface_checks":
+      return integrationSurfaceGateStatus({
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries,
+        change: input.change
+      });
+    case "whole_change_acceptance_evidence":
+      return wholeChangeAcceptanceStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries
+      });
+    case "approved_spec_and_oracle":
+      return approvedSpecAndOracleStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+    default:
+      return {
+        status: "unevaluable",
+        reason: "Legion does not yet produce evidence for this gate."
+      };
+  }
+}
+var UNRESOLVED_PINS = () => "unverified";
+function shipGatePinnedReferences(input) {
+  return [
+    // The delta spec bytes `approved_delta_spec` compares an approval against.
+    ...input.deltas?.map((delta) => delta.delta) ?? [],
+    // The oracle documents themselves, which `approved_spec_and_oracle` compares
+    // an oracle approval's pin against.
+    ...input.oracles?.map((oracle) => oracle.reference) ?? [],
+    // The files an oracle's declared verification surface pins.
+    ...input.oracles?.flatMap((oracle) => oracle.document.surface?.pinned ?? []) ?? [],
+    // The files a task contract's declared verification surface pins. Ordinary
+    // repository files rather than project artifacts, which is the case
+    // `pinned-references.ts` resolves paths for itself.
+    ...input.tasks.flatMap((task) => (task.verification ?? []).flatMap((entry) => entry.surface?.pinned ?? [])),
+    // The bytes any approval was decided against.
+    ...input.approvals?.flatMap((approval) => approval.artifacts ?? []) ?? []
+  ];
+}
+function normalizeChangeFacts(change) {
+  if (change === null || typeof change !== "object") return void 0;
+  const facts = change;
+  if (typeof facts.verifyPin === "function") return facts;
+  return { ...facts, verifyPin: UNRESOLVED_PINS };
+}
+function deriveShipGates(input) {
+  const change = normalizeChangeFacts(input.change);
+  const gates = [];
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const derived = deriveGateSet({
+      tier: task.risk.tier,
+      gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
+    });
+    for (const gate of derived) {
+      const outcome = evaluateGate({
+        gate,
+        task,
+        taskId,
+        entries: input.entries,
+        reviews: input.reviews,
+        change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+      const scope = GATE_SCOPE[gate.id];
+      gates.push({
+        ...outcome,
+        gate: gate.id,
+        label: gate.label,
+        taskId,
+        scope,
+        subjectId: scope === "change" && change !== void 0 ? change.changeId : taskId
+      });
+    }
+  }
+  const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
+  const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
+  const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
+  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
+}
+function shipGateDiagnostics(input) {
+  const reported = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  for (const gate of input.gates) {
+    if (gate.status === "satisfied") continue;
+    if (gate.scope === "change") {
+      if (reported.has(gate.gate)) continue;
+      reported.add(gate.gate);
+    }
+    diagnostics.push({
+      code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
+      gate: gate.gate,
+      message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
+      path: input.path
+    });
+  }
+  return diagnostics;
+}
+var GATE_RECOVERY = {
+  current_task_contract_or_small_change_record: void 0,
+  deterministic_verification: void 0,
+  evidence_note: void 0,
+  task_contract: void 0,
+  scoped_implementer_run: void 0,
+  evidence_bundle_or_log: void 0,
+  lightweight_independent_review: void 0,
+  approved_delta_spec: {
+    command: "legion approve spec --approver <id>",
+    reason: "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. Approve them, then rerun legion ship."
+  },
+  protected_oracle: void 0,
+  task_level_independent_review: void 0,
+  // This gate has four unmet states with four different cures, so its verdict
+  // carries its own `recovery` and `shipGateRecovery` prefers that over this
+  // entry. What stays here is the state a table *can* answer for and the one an
+  // operator is most likely to be in: a pinned file legitimately edited after the
+  // declaration was made. Leaving it `undefined` would mean a caller holding only
+  // a gate id — a payload renderer, a future summary — had no route out of the
+  // one state where a route out is the whole point of this release's fix.
+  integration_or_real_interface_checks: SURFACE_REAFFIRM_RECOVERY,
+  // Four unmet states with four repairs here too, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays in the table is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // bundle written before this release is in: `acceptance: {status: "not_ready"}`,
+  // which nothing had ever moved.
+  whole_change_acceptance_evidence: ACCEPT_RECOVERY,
+  independent_baseline: void 0,
+  // Six unmet states with four different cures, so the verdict carries its own
+  // and `shipGateRecovery` prefers that. What stays here is the state a caller
+  // holding only a gate id can be answered for, and the one every R3 change
+  // written before this release is in: no oracle approval exists at all, because
+  // nothing could write one. It is deliberately *not* the ordering cure — that
+  // one is reachable only after a build, and a table entry that assumed it would
+  // tell an operator who has approved nothing to re-plan.
+  approved_spec_and_oracle: ORACLE_APPROVE_RECOVERY,
+  architecture_or_security_review: void 0,
+  protected_acceptance_tests: void 0,
+  security_or_e2e_evaluator: void 0,
+  explicit_human_approval: void 0,
+  release_observation_plan: void 0,
+  rollback_or_forward_fix_evidence: void 0
+};
+function shipGateRecovery(input) {
+  const unmet = input.gates.filter((gate) => gate.status !== "satisfied");
+  if (unmet.length === 0) return input.fallback;
+  const unmetIds = [...new Set(unmet.map((gate) => gate.gate))];
+  const recoveries = unmetIds.map((id) => unmet.find((gate) => gate.gate === id)?.recovery ?? GATE_RECOVERY[id]).filter((entry) => entry !== void 0);
+  if (recoveries.length === 0) return input.fallback;
+  const distinct = [...new Set(recoveries.map((entry) => entry.command))];
+  const only = recoveries[0];
+  if (distinct.length === 1) {
+    const unnamed = unmetIds.length - recoveries.length;
+    return unnamed === 0 ? only : {
+      command: only.command,
+      reason: `${only.reason} ${unnamed} other unmet gate${unnamed === 1 ? " has" : "s have"} no command that produces its evidence, so this repairs what can be repaired rather than unblocking the ship.`
+    };
+  }
+  return {
+    command: only.command,
+    reason: `${input.fallback.reason} Of those, ${distinct.length} have a command that can produce the missing evidence: ${distinct.join(", ")}. No single command unblocks this ship; ${only.command} is the first of them in gate order.`
+  };
+}
+
 // packages/cli/src/workflow/state.ts
 async function resolveWorkflowState(context) {
   const project = await loadWorkflowProject(context);
@@ -41249,7 +42663,7 @@ async function resolveWorkflowState(context) {
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId
   });
-  if (evidence.ok && reviews.ok && hasAcceptedReview(reviews.reviews) && hasAcceptedEvidence(evidence.document.entries)) {
+  if (evidence.ok && reviews.ok && hasAcceptedReview2(reviews.reviews) && hasAcceptedEvidence(evidence.document.entries)) {
     return {
       stage: "ship_ready",
       projectId: project.loaded.project.id,
@@ -41280,11 +42694,11 @@ async function resolveWorkflowState(context) {
     stage: "planned",
     projectId: project.loaded.project.id,
     currentSpecCount: specs.documents.length,
-    nextAction: nextAction("legion build", "Latest planned change is ready for guided build execution."),
+    nextAction: derivesApprovalOrderingGate(taskgraph.document.tasks) ? nextAction(APPROVE_BEFORE_BUILD_RECOVERY.command, APPROVE_BEFORE_BUILD_RECOVERY.reason) : nextAction("legion build", "Latest planned change is ready for guided build execution."),
     diagnostics: []
   };
 }
-function hasAcceptedReview(reviews) {
+function hasAcceptedReview2(reviews) {
   return reviews.some((review) => review.document.status === "accepted");
 }
 function hasAcceptedEvidence(entries) {
@@ -42188,6 +43602,7 @@ async function handlePlanWorkflow(context) {
   if (!taskgraph.ok) {
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);
   }
+  const plannedAction = derivesApprovalOrderingGate(taskgraph.document.tasks) ? nextAction(APPROVE_BEFORE_BUILD_RECOVERY.command, APPROVE_BEFORE_BUILD_RECOVERY.reason) : action;
   return success2(
     {
       ok: true,
@@ -42213,10 +43628,10 @@ async function handlePlanWorkflow(context) {
       },
       autoRefine: hasFlag(context, "auto-refine"),
       retrospectiveActions: retroActions,
-      nextAction: action,
+      nextAction: plannedAction,
       diagnostics: []
     },
-    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
+    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, plannedAction, retroActions)
   );
 }
 function parsePhaseNumber(value) {
@@ -43243,995 +44658,6 @@ async function runGuardedExecution(input) {
     restored: containment.restored,
     unrestored: containment.unrestored,
     ...inContract ? {} : { blockedReason: reasons.join(" ") }
-  };
-}
-
-// packages/cli/src/workflow/ship-gates.ts
-var GATE_SCOPE = {
-  current_task_contract_or_small_change_record: "task",
-  deterministic_verification: "task",
-  evidence_note: "task",
-  task_contract: "task",
-  scoped_implementer_run: "task",
-  evidence_bundle_or_log: "task",
-  lightweight_independent_review: "task",
-  approved_delta_spec: "change",
-  protected_oracle: "task",
-  task_level_independent_review: "task",
-  integration_or_real_interface_checks: "change",
-  whole_change_acceptance_evidence: "change",
-  independent_baseline: "task",
-  approved_spec_and_oracle: "task",
-  architecture_or_security_review: "task",
-  protected_acceptance_tests: "task",
-  security_or_e2e_evaluator: "task",
-  explicit_human_approval: "task",
-  release_observation_plan: "task",
-  rollback_or_forward_fix_evidence: "task"
-};
-function evidenceItemVerdict(entries, taskId, itemId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  if (entry === void 0) return void 0;
-  for (const item of entry.evidence.items) {
-    if (item.id !== itemId) continue;
-    if (item.verdict === "pass") return "pass";
-    if (item.verdict === "fail") return "fail";
-  }
-  return void 0;
-}
-function hasEvidence(entries, taskId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  return entry !== void 0 && entry.evidence.items.length > 0;
-}
-function hasAcceptedReview2(reviews, taskId) {
-  return reviews.some(
-    (review) => review.document.status === "accepted" && review.document.taskId === taskId
-  );
-}
-var REVIEW_ACCEPT_ACTION = "workflow.review.accept";
-var DELTA_SPEC_APPROVE_ACTION = "spec.delta.approve";
-function grantExpiry(approval, evaluatedAt) {
-  if (approval.expiresAt === void 0) return "live";
-  if (evaluatedAt === void 0) return "unknown";
-  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
-}
-function idempotencyTargetHash(key) {
-  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
-}
-function approvedReviewLink(input) {
-  const approvedIds = input.approval.scope.targets.filter((target) => target.kind === "review").map((target) => target.id);
-  if (approvedIds.length === 0) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
-    };
-  }
-  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
-  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
-  if (named.length !== approvedIds.length) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
-    };
-  }
-  for (const review of named) {
-    if (review.document.status !== "accepted") {
-      return {
-        kind: "stale",
-        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
-      };
-    }
-    const superseding = taskReviews.find(
-      (candidate) => candidate.document.id !== review.document.id && (candidate.document.supersedes ?? []).includes(review.document.id)
-    );
-    if (superseding !== void 0) {
-      return {
-        kind: "stale",
-        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
-      };
-    }
-    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
-    const currentHash = review.reference?.sha256;
-    if (approvedHash === void 0 || currentHash === void 0) {
-      return {
-        kind: "unknown",
-        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
-      };
-    }
-    if (approvedHash !== currentHash) {
-      return {
-        kind: "stale",
-        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
-      };
-    }
-  }
-  return { kind: "current" };
-}
-function byDecisionInstant(left, right) {
-  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
-  if (byInstant !== 0) return byInstant;
-  return left.id.localeCompare(right.id);
-}
-function humanApprovalStatus(input) {
-  for (const review of input.reviews) {
-    if (review.document.status !== "accepted") continue;
-    if (review.document.taskId !== input.taskId) continue;
-    const acceptedBy = review.document.acceptedBy;
-    if (acceptedBy === void 0 || acceptedBy.kind === "human") continue;
-    return {
-      status: "unsatisfied",
-      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
-    };
-  }
-  const approvals = input.change?.approvals;
-  if (approvals === void 0) {
-    return {
-      status: "unevaluable",
-      reason: "The approvals recorded for this change could not be read, so no human approval is established."
-    };
-  }
-  const relevant = approvals.filter(
-    (approval) => (
-      // Strict equality against a possibly-absent change id, so facts too
-      // degraded to name their own change match nothing rather than matching
-      // everything. Absence must never widen the set an approval can answer for.
-      approval.changeId === input.change?.changeId && // An approval whose two task claims disagree says two things; the gate
-      // reads neither. The service will persist such a document, so refusing it
-      // here is the only place it is refused.
-      (approval.taskId === void 0 || approval.taskId === input.taskId) && approval.scope.action === REVIEW_ACCEPT_ACTION && approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
-    )
-  );
-  if (relevant.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: "No approval records anyone accepting this task's review."
-    };
-  }
-  const live = [];
-  const lapsed = [];
-  const unknownExpiry = [];
-  const nonHumanGrants = [];
-  for (const approval of relevant) {
-    if (approval.status !== "granted") continue;
-    if (approval.decidedBy.kind !== "human") {
-      nonHumanGrants.push(approval);
-      continue;
-    }
-    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
-    if (expiry === "live") live.push(approval);
-    else if (expiry === "lapsed") lapsed.push(approval);
-    else unknownExpiry.push(approval);
-  }
-  live.sort(byDecisionInstant);
-  const newestGrant = live.at(-1);
-  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
-    if (newestGrant === void 0) return true;
-    const decidedAt = approval.decidedAt;
-    if (decidedAt === void 0) return true;
-    return decidedAt >= newestGrant.decidedAt;
-  }).sort(byDecisionInstant);
-  const blocking = standing.at(-1);
-  if (blocking !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: newestGrant === void 0 ? `Approval ${blocking.id} for this task's review is ${blocking.status}.` : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
-    };
-  }
-  if (newestGrant !== void 0) {
-    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
-    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
-    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
-    return {
-      status: "satisfied",
-      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
-    };
-  }
-  const spent = lapsed.sort(byDecisionInstant).at(-1);
-  if (spent !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
-    };
-  }
-  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
-  if (unchecked !== void 0) {
-    return {
-      status: "unevaluable",
-      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
-    };
-  }
-  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
-  if (byMachine !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
-    };
-  }
-  return {
-    status: "unevaluable",
-    reason: "An approval for this task's review is recorded as requested and has not been decided."
-  };
-}
-function approvedDeltaSpecPin(input) {
-  const artifacts = input.approval.artifacts;
-  if (artifacts === void 0) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of ${input.delta.requirementId}'s delta spec were approved is unestablished.`
-    };
-  }
-  const pins = artifacts.filter((reference) => reference.path === input.delta.path);
-  if (pins.length === 0) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} pins no reference to ${input.delta.path}, so it does not say this delta spec was approved.`
-    };
-  }
-  if (pins.length > 1) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${input.delta.path}, so which bytes were approved is unestablished.`
-    };
-  }
-  const pin = pins[0];
-  if (pin.sha256 !== input.delta.delta.sha256) {
-    return {
-      kind: "stale",
-      reason: `Approval ${input.approval.id} was granted against different bytes of ${input.delta.path} than change ${input.changeId} ships.`
-    };
-  }
-  const verdict = input.verifyPin(pin);
-  if (verdict === "match") return { kind: "current" };
-  if (verdict === "drift") {
-    return {
-      kind: "stale",
-      reason: `Approval ${input.approval.id} pins ${input.delta.path}, whose bytes have changed since it was granted.`
-    };
-  }
-  if (verdict === "missing") {
-    return {
-      kind: "stale",
-      reason: `Approval ${input.approval.id} pins ${input.delta.path}, which is no longer present.`
-    };
-  }
-  return {
-    kind: "unknown",
-    reason: `Approval ${input.approval.id} pins ${input.delta.path}, which this report did not hash, so what was approved cannot be compared against what is on disk.`
-  };
-}
-function deltaSpecApprovalStatus(input) {
-  const relevant = input.approvals.filter(
-    (approval) => (
-      // Strict equality, so facts too degraded to name their own change match
-      // nothing rather than everything. A requirement id is not change-scoped —
-      // the same id can appear in two changes — so this is load-bearing, not
-      // belt-and-braces.
-      approval.changeId === input.changeId && approval.scope.action === DELTA_SPEC_APPROVE_ACTION && approval.scope.targets.some(
-        (target) => target.kind === "requirement" && target.id === input.delta.requirementId
-      )
-    )
-  );
-  if (relevant.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: `No approval records anyone approving the delta spec for ${input.delta.requirementId}.`
-    };
-  }
-  const misfiled = relevant.find((approval) => approval.taskId !== void 0 || approval.runId !== void 0);
-  if (misfiled !== void 0) {
-    return {
-      status: "unevaluable",
-      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but a delta spec belongs to the change rather than to one task or run, so this approval is not read here.`
-    };
-  }
-  const live = [];
-  const lapsed = [];
-  const unknownExpiry = [];
-  const nonHumanGrants = [];
-  for (const approval of relevant) {
-    if (approval.status !== "granted") continue;
-    if (approval.decidedBy.kind !== "human") {
-      nonHumanGrants.push(approval);
-      continue;
-    }
-    const expiry = grantExpiry(approval, input.evaluatedAt);
-    if (expiry === "live") live.push(approval);
-    else if (expiry === "lapsed") lapsed.push(approval);
-    else unknownExpiry.push(approval);
-  }
-  live.sort(byDecisionInstant);
-  const newestGrant = live.at(-1);
-  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
-    if (newestGrant === void 0) return true;
-    const decidedAt = approval.decidedAt;
-    if (decidedAt === void 0) return true;
-    return decidedAt >= newestGrant.decidedAt;
-  }).sort(byDecisionInstant);
-  const blocking = standing.at(-1);
-  if (blocking !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: newestGrant === void 0 ? `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}.` : `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}, and no later grant supersedes it.`
-    };
-  }
-  if (newestGrant !== void 0) {
-    const link = approvedDeltaSpecPin({
-      approval: newestGrant,
-      delta: input.delta,
-      changeId: input.changeId,
-      verifyPin: input.verifyPin
-    });
-    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
-    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
-    return {
-      status: "satisfied",
-      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`
-    };
-  }
-  const spent = lapsed.sort(byDecisionInstant).at(-1);
-  if (spent !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Approval ${spent.id} for ${input.delta.requirementId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
-    };
-  }
-  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
-  if (unchecked !== void 0) {
-    return {
-      status: "unevaluable",
-      reason: `Approval ${unchecked.id} for ${input.delta.requirementId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
-    };
-  }
-  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
-  if (byMachine !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Approval ${byMachine.id} for ${input.delta.requirementId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
-    };
-  }
-  return {
-    status: "unevaluable",
-    reason: `An approval for the delta spec of ${input.delta.requirementId} is recorded as requested and has not been decided.`
-  };
-}
-function isLiveDeltaSpecGrant(input) {
-  const outcome = deltaSpecApprovalStatus({
-    approvals: [input.approval],
-    changeId: input.changeId,
-    delta: input.delta,
-    evaluatedAt: input.evaluatedAt,
-    verifyPin: () => "match"
-  });
-  return outcome.status === "satisfied";
-}
-function deltaSpecApprovalGateStatus(input) {
-  const deltas = input.change?.deltas;
-  if (deltas === void 0) {
-    return {
-      status: "unevaluable",
-      reason: "The delta specs recorded for this change could not be read, so no delta-spec approval is established."
-    };
-  }
-  if (deltas.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: "This change records no delta specs, so there is nothing to have been approved."
-    };
-  }
-  const approvals = input.change?.approvals;
-  if (approvals === void 0) {
-    return {
-      status: "unevaluable",
-      reason: "The approvals recorded for this change could not be read, so no delta-spec approval is established."
-    };
-  }
-  const change = input.change;
-  const outcomes = deltas.map(
-    (delta) => deltaSpecApprovalStatus({
-      approvals,
-      changeId: change.changeId,
-      delta,
-      evaluatedAt: change.evaluatedAt,
-      verifyPin: change.verifyPin
-    })
-  );
-  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
-  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
-  const chosen = negative ?? unmet[0];
-  if (chosen !== void 0) {
-    const remainder = unmet.length > 1 ? ` ${unmet.length} of ${deltas.length} delta specs in this change are unmet.` : "";
-    return { status: chosen.status, reason: `${chosen.reason}${remainder}` };
-  }
-  const first = outcomes[0];
-  return {
-    status: "satisfied",
-    reason: deltas.length === 1 ? first.reason : `All ${deltas.length} delta specs in this change are approved. ${first.reason}`
-  };
-}
-var INTEGRATION_SURFACE_ITEM = "integration-surface-check";
-var SURFACE_REAFFIRM_RECOVERY = {
-  command: "legion approve surface --approver <id>",
-  reason: "A file a verification surface pins has been edited since the declaration was made, so the declaration no longer describes what is on disk. If the edit was intended, re-affirm the declaration against the current bytes: that records a named human saying it still describes what they meant, and re-mints the pin. No command re-mints it silently, because that would launder an out-of-band edit into a declaration."
-};
-var SURFACE_BUILD_RECOVERY = {
-  command: "legion build",
-  reason: "This change declares a verification surface beyond unit, and no evidence records it being exercised. Run the build that executes it, then rerun legion ship."
-};
-var SURFACE_DECLARE_RECOVERY = {
-  command: "legion start --intake",
-  reason: "Nothing in this change declares a verification surface that reaches an integration or real interface. Declare one on an executable acceptance criterion and re-plan, or lower the risk tier through an audited risk.override if this change genuinely crosses no boundary."
-};
-function surfaceCheckVerdict(entries, taskId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  if (entry === void 0) return void 0;
-  return entry.evidence.items.find((item) => item.id === INTEGRATION_SURFACE_ITEM)?.verdict;
-}
-var SURFACE_REAFFIRM_ACTION = "verification.surface.reaffirm";
-function surfaceIdentity(surface) {
-  const pins = surface.pinned.map((pin) => `${pin.path}@${pin.sha256}`).slice().sort();
-  return JSON.stringify([surface.kind, surface.interface, pins]);
-}
-function dedupeSurfaces(surfaces) {
-  const byIdentity = /* @__PURE__ */ new Map();
-  for (const declared of surfaces) {
-    const key = surfaceIdentity(declared.surface);
-    const existing = byIdentity.get(key);
-    if (existing === void 0) {
-      byIdentity.set(key, { origins: [...declared.origins], declared });
-      continue;
-    }
-    existing.origins.push(...declared.origins);
-  }
-  return [...byIdentity.values()].map((entry) => ({ ...entry.declared, origins: entry.origins }));
-}
-function declaredVerificationSurfaces(input) {
-  const surfaces = [];
-  for (const [index, entry] of (input.task.verification ?? []).entries()) {
-    if (entry?.surface === void 0) continue;
-    surfaces.push({
-      origins: [`verification entry ${index + 1} of ${input.taskId}`],
-      taskId: input.taskId,
-      surface: entry.surface
-    });
-  }
-  const oracleRefs = input.task.oracleRefs ?? [];
-  let unestablished;
-  if (oracleRefs.length > 0) {
-    const oracles = input.change?.oracles;
-    for (const oracleId of oracleRefs) {
-      const fact = oracles?.find((entry) => entry.document.id === oracleId);
-      if (fact === void 0) {
-        unestablished ??= oracleId;
-        continue;
-      }
-      if (fact.document.surface === void 0) continue;
-      surfaces.push({ origins: [`oracle ${oracleId}`], taskId: input.taskId, surface: fact.document.surface });
-    }
-  }
-  return { surfaces: dedupeSurfaces(surfaces), unestablished };
-}
-function surfacePinReaffirmation(input) {
-  const approvals = input.change.approvals;
-  if (approvals === void 0) return void 0;
-  const relevant = approvals.filter(
-    (approval) => approval.changeId === input.change.changeId && approval.scope.action === SURFACE_REAFFIRM_ACTION && (approval.artifacts ?? []).some((reference) => reference.path === input.path)
-  );
-  if (relevant.length === 0) return void 0;
-  const live = [];
-  for (const approval of relevant) {
-    if (approval.status !== "granted") continue;
-    if (approval.decidedBy.kind !== "human") continue;
-    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
-    live.push(approval);
-  }
-  live.sort(byDecisionInstant);
-  const newestGrant = live.at(-1);
-  if (newestGrant === void 0) return void 0;
-  const standing = relevant.some(
-    (approval) => (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") && (approval.decidedAt === void 0 || approval.decidedAt >= newestGrant.decidedAt)
-  );
-  if (standing) return void 0;
-  const reaffirmed = (newestGrant.artifacts ?? []).find((reference) => reference.path === input.path);
-  if (reaffirmed === void 0) return void 0;
-  if (input.change.verifyPin(reaffirmed) !== "match") return void 0;
-  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
-}
-function isLiveSurfaceReaffirmation(input) {
-  const reaffirmed = surfacePinReaffirmation({
-    path: input.path,
-    change: {
-      changeId: input.changeId,
-      acceptance: void 0,
-      approvals: [input.approval],
-      deltas: void 0,
-      oracles: void 0,
-      taskRuns: void 0,
-      release: void 0,
-      evaluatedAt: input.evaluatedAt,
-      verifyPin: (reference) => reference.sha256 === input.currentSha256 ? "match" : "drift"
-    }
-  });
-  return reaffirmed !== void 0;
-}
-function surfacePinStatus(input) {
-  const { origins, surface } = input.declared;
-  const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
-  if (surface.pinned.length === 0) {
-    return { status: "unevaluable", reason: `${describe3} pins no reference, so there is nothing to check it against.` };
-  }
-  const change = input.change;
-  const verifyPin = change?.verifyPin;
-  if (change === void 0 || verifyPin === void 0) {
-    return {
-      status: "unevaluable",
-      reason: `${describe3} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
-    };
-  }
-  for (const pin of surface.pinned) {
-    const verdict = verifyPin(pin);
-    if (verdict === "match") continue;
-    if (verdict === "drift") {
-      const reaffirmed = surfacePinReaffirmation({ path: pin.path, change });
-      if (reaffirmed !== void 0) continue;
-      return {
-        status: "unsatisfied",
-        reason: `${describe3} pins ${pin.path}, whose bytes have changed since the declaration was made. If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.`,
-        recovery: SURFACE_REAFFIRM_RECOVERY
-      };
-    }
-    if (verdict === "missing") {
-      return { status: "unsatisfied", reason: `${describe3} pins ${pin.path}, which is no longer present.` };
-    }
-    return {
-      status: "unevaluable",
-      reason: `${describe3} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
-    };
-  }
-  return void 0;
-}
-function changeVerificationSurfaces(input) {
-  const surfaces = [];
-  const unreadableOracles = [];
-  for (const task of input.tasks) {
-    const taskId = input.taskIdFor(task);
-    const declared = declaredVerificationSurfaces({ task, taskId, change: input.change });
-    surfaces.push(...declared.surfaces);
-    if (declared.unestablished !== void 0) unreadableOracles.push(declared.unestablished);
-  }
-  return { surfaces, unreadableOracles };
-}
-function nonUnitSurfaceOutcome(input) {
-  const { origins, surface } = input.declared;
-  const describe3 = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
-  const pin = surfacePinStatus({ declared: input.declared, change: input.change });
-  if (pin !== void 0) return pin;
-  const verdict = surfaceCheckVerdict(input.entries, input.declared.taskId);
-  if (verdict === "pass") {
-    return { status: "satisfied", reason: `${describe3} was exercised, and every pinned reference still matches.` };
-  }
-  if (verdict === "fail") {
-    return {
-      status: "unsatisfied",
-      reason: `${describe3} is covered by a failed integration-surface-check: a declared non-unit verification command did not pass.`
-    };
-  }
-  if (verdict === "unknown") {
-    return {
-      status: "unevaluable",
-      reason: `${describe3} is covered by an integration-surface-check that did not reach every declared non-unit surface, so it may never have been exercised.`
-    };
-  }
-  return {
-    status: "unevaluable",
-    reason: `${describe3} has no integration-surface-check in ${input.declared.taskId}'s latest evidence, so nothing says it was exercised.`,
-    recovery: SURFACE_BUILD_RECOVERY
-  };
-}
-function integrationSurfaceGateStatus(input) {
-  const { surfaces, unreadableOracles } = changeVerificationSurfaces(input);
-  const unreadableOracle = unreadableOracles.length === 0 ? void 0 : `This change names oracle ${unreadableOracles[0]}, which this report could not read, so whether it declares a verification surface is unestablished.`;
-  if (surfaces.length === 0) {
-    if (unreadableOracle !== void 0) return { status: "unevaluable", reason: unreadableOracle };
-    return {
-      status: "unevaluable",
-      reason: "No task contract or oracle in this change declares a verification surface, so whether verification reached an integration or real interface is unestablished. Declare it on an acceptance criterion at intake and re-plan.",
-      recovery: SURFACE_DECLARE_RECOVERY
-    };
-  }
-  const nonUnit = surfaces.filter((declared) => declared.surface.kind !== "unit");
-  if (nonUnit.length === 0 && unreadableOracle === void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Every verification surface this change declares is a unit surface (${surfaces.map((declared) => declared.origins.join(" and ")).join(", ")}), so nothing in this change reaches an integration or real interface. That is a recorded answer, not a missing one.`,
-      recovery: SURFACE_DECLARE_RECOVERY
-    };
-  }
-  const outcomes = nonUnit.map(
-    (declared) => nonUnitSurfaceOutcome({ declared, entries: input.entries, change: input.change })
-  );
-  if (unreadableOracle !== void 0) outcomes.push({ status: "unevaluable", reason: unreadableOracle });
-  const met = outcomes.find((outcome) => outcome.status === "satisfied");
-  if (met !== void 0) {
-    const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
-    const remainder2 = unmet.length === 0 ? "" : ` ${unmet.length} other declared surface${unmet.length === 1 ? " is" : "s are"} unmet, and this gate is satisfied by the one above rather than by them: ${unmet.map((outcome) => outcome.reason).join(" ")}`;
-    return { status: "satisfied", reason: `${met.reason}${remainder2}` };
-  }
-  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
-  const chosen = negative ?? outcomes[0];
-  const remainder = outcomes.length > 1 ? ` ${outcomes.length} of this change's declared surfaces are unmet.` : "";
-  return { ...chosen, reason: `${chosen.reason}${remainder}` };
-}
-var ACCEPT_RECOVERY = {
-  command: "legion review --accept --approver <id>",
-  reason: "No whole-change sign-off has been recorded for this change, and a clean submitted review already covers its evidence. Accepting it records one, naming a human decision owner from the project manifest."
-};
-var RE_ACCEPT_RECOVERY = {
-  command: "legion review",
-  reason: "A whole-change verdict is already recorded, and `legion review --accept` will not replace it directly: the accept that recorded it flipped every covering review from submitted to accepted, and an accept refuses evidence no clean *submitted* review covers. Submit a fresh review first, then rerun `legion review --accept --approver <id>` \u2014 the promotion re-derives the verdict from scratch, so a recorded block or a sign-off that has gone stale is replaced rather than argued with."
-};
-var REBUILD_RECOVERY = {
-  command: "legion build",
-  reason: "The whole-change sign-off does not cover every task being shipped, because some task has no evidence in this change's index. Build it, review it, then accept: a sign-off cannot cover evidence that does not exist."
-};
-var REVIEW_RECOVERY = {
-  command: "legion review",
-  reason: "This change was re-run after it was signed off, and the newest evidence has not been accepted. Submit a review over it first \u2014 legion review --accept refuses to accept evidence no clean submitted review covers \u2014 and then accept, which re-dates the whole-change sign-off over what is there now."
-};
-var BUNDLE_RECOVERY = {
-  command: "legion dev change validate <changeId>",
-  reason: "This change's bundle could not be read, so nothing is known about whether it was accepted. That command reports what is wrong with it; it does not repair it \u2014 a drifted design, decision log or delta spec is corrected by hand."
-};
-function newestEvidenceAcceptance(entries) {
-  let newest;
-  for (const entry of entries) {
-    if (entry.acceptance.status !== "accepted") continue;
-    const acceptedAt = entry.acceptance.acceptedAt;
-    if (acceptedAt === void 0) continue;
-    if (newest === void 0 || acceptedAt > newest) newest = acceptedAt;
-  }
-  return newest;
-}
-function acceptorCorroboration(input) {
-  const approvals = input.change?.approvals;
-  if (approvals === void 0) {
-    return {
-      status: "unevaluable",
-      reason: `This change records an acceptance by ${input.acceptedBy}, but the approvals recorded for it could not be read, so nothing establishes that the acceptor was a human.`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  const named = [];
-  for (const approval of approvals) {
-    if (approval.changeId !== input.change?.changeId) continue;
-    if (approval.scope.action !== REVIEW_ACCEPT_ACTION) continue;
-    if (approval.status !== "granted") continue;
-    if (approval.decidedBy.id !== input.acceptedBy) continue;
-    named.push(approval);
-  }
-  if (named.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: `This change records an acceptance by ${input.acceptedBy}, but no granted ${REVIEW_ACCEPT_ACTION} approval for this change names that actor, so nothing establishes that the sign-off was taken by a human.`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  if (!named.some((approval) => approval.decidedBy.kind === "human")) {
-    const kinds = [...new Set(named.map((approval) => approval.decidedBy.kind))].sort().join(", ");
-    return {
-      status: "unsatisfied",
-      reason: `This change records an acceptance by ${input.acceptedBy}, and every granted ${REVIEW_ACCEPT_ACTION} approval naming that actor records it as ${kinds}, not as a human.`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  return void 0;
-}
-function wholeChangeAcceptanceStatus(input) {
-  const acceptance = input.change?.acceptance;
-  if (acceptance == null) {
-    return {
-      status: "unevaluable",
-      reason: "The change bundle for this change could not be read, so whether the change as a whole was accepted is unestablished.",
-      recovery: BUNDLE_RECOVERY
-    };
-  }
-  if (acceptance.status === "not_ready") {
-    return {
-      status: "unevaluable",
-      reason: `This change's acceptance is recorded as not_ready${acceptance.reason === void 0 ? "" : ` (${acceptance.reason})`}: no accept decision has been made about the change as a whole.`,
-      recovery: ACCEPT_RECOVERY
-    };
-  }
-  if (acceptance.status === "ready") {
-    return {
-      status: "unevaluable",
-      reason: "This change's acceptance is recorded as ready: every task's evidence was accepted, and no named approver signed off on the change as a whole.",
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  if (acceptance.status === "rejected") {
-    return {
-      status: "unsatisfied",
-      reason: `This change's acceptance is recorded as rejected: ${acceptance.reason}`,
-      recovery: REBUILD_RECOVERY
-    };
-  }
-  if (acceptance.status === "blocked") {
-    return {
-      status: "unsatisfied",
-      reason: `This change's acceptance is recorded as blocked: ${acceptance.reason}`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  if (acceptance.status === "superseded") {
-    return {
-      status: "unsatisfied",
-      reason: "This change's acceptance is recorded as superseded, so the recorded sign-off is no longer the current decision.",
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  if (acceptance.status !== "accepted") {
-    return {
-      status: "unevaluable",
-      reason: `This change's acceptance is recorded as ${String(
-        acceptance.status
-      )}, which this Legion does not recognize as a whole-change verdict; it was written by a newer protocol or by hand.`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  const acceptedAt = acceptance.acceptedAt;
-  const acceptedBy = acceptance.acceptedBy;
-  if (acceptedBy === void 0 || acceptedBy.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: "This change records an acceptance with no acceptor, so who signed off on the change as a whole is unestablished.",
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  if (acceptedAt === void 0) {
-    return {
-      status: "unevaluable",
-      reason: `This change records an acceptance by ${acceptedBy} with no instant, so it cannot be compared against the evidence it claims to cover.`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  const evaluatedAt = input.change?.evaluatedAt;
-  if (evaluatedAt !== void 0 && acceptedAt > evaluatedAt) {
-    return {
-      status: "unsatisfied",
-      reason: `This change records an acceptance by ${acceptedBy} at ${acceptedAt}, later than the instant this report was derived (${evaluatedAt}); a sign-off cannot be dated after the moment it is read.`,
-      recovery: RE_ACCEPT_RECOVERY
-    };
-  }
-  const corroborated = acceptorCorroboration({ change: input.change, acceptedBy });
-  if (corroborated !== void 0) return corroborated;
-  if (input.tasks.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: "This change records no tasks, so there is no evidence for a whole-change sign-off to cover.",
-      recovery: REBUILD_RECOVERY
-    };
-  }
-  const latest = latestEvidencePerTask(input.entries);
-  for (const task of input.tasks) {
-    const taskId = input.taskIdFor(task);
-    const entry = latest.get(taskId);
-    if (entry === void 0) {
-      return {
-        status: "unsatisfied",
-        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId} has no evidence in this change's index, so the sign-off does not cover it.`,
-        recovery: REBUILD_RECOVERY
-      };
-    }
-    if (entry.acceptance.status === "rejected") {
-      return {
-        status: "unsatisfied",
-        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} has since been rejected.`,
-        recovery: REBUILD_RECOVERY
-      };
-    }
-    if (entry.acceptance.status !== "accepted") {
-      return {
-        status: "unsatisfied",
-        reason: `${acceptedBy} accepted this change at ${acceptedAt}, but ${taskId}'s latest evidence ${entry.evidence.id} is not accepted, so this change was re-run after the sign-off and the sign-off does not cover what is there now.`,
-        recovery: REVIEW_RECOVERY
-      };
-    }
-    if (entry.acceptance.acceptedAt === void 0) {
-      return {
-        status: "unevaluable",
-        reason: `${taskId}'s latest evidence ${entry.evidence.id} is accepted with no acceptedAt, so the instant the whole-change sign-off must cover is unestablished.`,
-        recovery: RE_ACCEPT_RECOVERY
-      };
-    }
-  }
-  const newest = newestEvidenceAcceptance(input.entries);
-  if (acceptedAt >= newest) {
-    return {
-      status: "satisfied",
-      reason: `${acceptedBy} accepted this change at ${acceptedAt}, covering all ${input.tasks.length} task${input.tasks.length === 1 ? "" : "s"} and every accepted evidence bundle in it (newest accepted at ${newest}).`
-    };
-  }
-  return {
-    status: "unsatisfied",
-    reason: `${acceptedBy} accepted this change at ${acceptedAt}, which is older than the ${newest} at which this change's task evidence was last accepted: the change was rebuilt and re-accepted per task after the whole-change sign-off, so the sign-off is about work that has since been replaced.`,
-    recovery: RE_ACCEPT_RECOVERY
-  };
-}
-function fromVerdict(verdict, itemId) {
-  if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
-  if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
-  return { status: "unevaluable", reason: `No ${itemId} evidence was recorded for this task.` };
-}
-function evaluateGate(input) {
-  const { gate, taskId, entries, reviews } = input;
-  switch (gate.id) {
-    case "task_contract":
-    case "current_task_contract_or_small_change_record":
-      return { status: "satisfied", reason: "A typed task contract defines this work." };
-    case "deterministic_verification":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "declared-verification"), "declared-verification");
-    case "scoped_implementer_run":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "diff-reconciliation"), "diff-reconciliation");
-    case "evidence_note":
-    case "evidence_bundle_or_log":
-      return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
-    case "lightweight_independent_review":
-    case "task_level_independent_review":
-      return hasAcceptedReview2(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
-    case "explicit_human_approval":
-      return humanApprovalStatus({ change: input.change, reviews, taskId });
-    case "approved_delta_spec":
-      return deltaSpecApprovalGateStatus({ change: input.change });
-    case "protected_oracle":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
-    case "integration_or_real_interface_checks":
-      return integrationSurfaceGateStatus({
-        tasks: input.tasks,
-        taskIdFor: input.taskIdFor,
-        entries,
-        change: input.change
-      });
-    case "whole_change_acceptance_evidence":
-      return wholeChangeAcceptanceStatus({
-        change: input.change,
-        tasks: input.tasks,
-        taskIdFor: input.taskIdFor,
-        entries
-      });
-    default:
-      return {
-        status: "unevaluable",
-        reason: "Legion does not yet produce evidence for this gate."
-      };
-  }
-}
-var UNRESOLVED_PINS = () => "unverified";
-function shipGatePinnedReferences(input) {
-  return [
-    // The delta spec bytes `approved_delta_spec` compares an approval against.
-    ...input.deltas?.map((delta) => delta.delta) ?? [],
-    // The oracle documents themselves, for PR 5's ordering gate.
-    ...input.oracles?.map((oracle) => oracle.reference) ?? [],
-    // The files an oracle's declared verification surface pins.
-    ...input.oracles?.flatMap((oracle) => oracle.document.surface?.pinned ?? []) ?? [],
-    // The files a task contract's declared verification surface pins. Ordinary
-    // repository files rather than project artifacts, which is the case
-    // `pinned-references.ts` resolves paths for itself.
-    ...input.tasks.flatMap((task) => (task.verification ?? []).flatMap((entry) => entry.surface?.pinned ?? [])),
-    // The bytes any approval was decided against.
-    ...input.approvals?.flatMap((approval) => approval.artifacts ?? []) ?? []
-  ];
-}
-function normalizeChangeFacts(change) {
-  if (change === null || typeof change !== "object") return void 0;
-  const facts = change;
-  if (typeof facts.verifyPin === "function") return facts;
-  return { ...facts, verifyPin: UNRESOLVED_PINS };
-}
-function deriveShipGates(input) {
-  const change = normalizeChangeFacts(input.change);
-  const gates = [];
-  for (const task of input.tasks) {
-    const taskId = input.taskIdFor(task);
-    const derived = deriveGateSet({
-      tier: task.risk.tier,
-      gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
-    });
-    for (const gate of derived) {
-      const outcome = evaluateGate({
-        gate,
-        task,
-        taskId,
-        entries: input.entries,
-        reviews: input.reviews,
-        change,
-        tasks: input.tasks,
-        taskIdFor: input.taskIdFor
-      });
-      const scope = GATE_SCOPE[gate.id];
-      gates.push({
-        ...outcome,
-        gate: gate.id,
-        label: gate.label,
-        taskId,
-        scope,
-        subjectId: scope === "change" && change !== void 0 ? change.changeId : taskId
-      });
-    }
-  }
-  const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
-  const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
-  const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
-  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
-}
-function shipGateDiagnostics(input) {
-  const reported = /* @__PURE__ */ new Set();
-  const diagnostics = [];
-  for (const gate of input.gates) {
-    if (gate.status === "satisfied") continue;
-    if (gate.scope === "change") {
-      if (reported.has(gate.gate)) continue;
-      reported.add(gate.gate);
-    }
-    diagnostics.push({
-      code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
-      gate: gate.gate,
-      message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
-      path: input.path
-    });
-  }
-  return diagnostics;
-}
-var GATE_RECOVERY = {
-  current_task_contract_or_small_change_record: void 0,
-  deterministic_verification: void 0,
-  evidence_note: void 0,
-  task_contract: void 0,
-  scoped_implementer_run: void 0,
-  evidence_bundle_or_log: void 0,
-  lightweight_independent_review: void 0,
-  approved_delta_spec: {
-    command: "legion approve spec --approver <id>",
-    reason: "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. Approve them, then rerun legion ship."
-  },
-  protected_oracle: void 0,
-  task_level_independent_review: void 0,
-  // This gate has four unmet states with four different cures, so its verdict
-  // carries its own `recovery` and `shipGateRecovery` prefers that over this
-  // entry. What stays here is the state a table *can* answer for and the one an
-  // operator is most likely to be in: a pinned file legitimately edited after the
-  // declaration was made. Leaving it `undefined` would mean a caller holding only
-  // a gate id — a payload renderer, a future summary — had no route out of the
-  // one state where a route out is the whole point of this release's fix.
-  integration_or_real_interface_checks: SURFACE_REAFFIRM_RECOVERY,
-  // Four unmet states with four repairs here too, so the verdict carries its own
-  // and `shipGateRecovery` prefers that. What stays in the table is the state a
-  // caller holding only a gate id can be answered for, and the one every change
-  // bundle written before this release is in: `acceptance: {status: "not_ready"}`,
-  // which nothing had ever moved.
-  whole_change_acceptance_evidence: ACCEPT_RECOVERY,
-  independent_baseline: void 0,
-  approved_spec_and_oracle: void 0,
-  architecture_or_security_review: void 0,
-  protected_acceptance_tests: void 0,
-  security_or_e2e_evaluator: void 0,
-  explicit_human_approval: void 0,
-  release_observation_plan: void 0,
-  rollback_or_forward_fix_evidence: void 0
-};
-function shipGateRecovery(input) {
-  const unmet = input.gates.filter((gate) => gate.status !== "satisfied");
-  if (unmet.length === 0) return input.fallback;
-  const recoveries = [...new Set(unmet.map((gate) => gate.gate))].map((id) => unmet.find((gate) => gate.gate === id)?.recovery ?? GATE_RECOVERY[id]).filter((entry) => entry !== void 0);
-  if (recoveries.length === 0) return input.fallback;
-  const distinct = [...new Set(recoveries.map((entry) => entry.command))];
-  const only = recoveries[0];
-  if (distinct.length === 1 && recoveries.length === new Set(unmet.map((gate) => gate.gate)).size) {
-    return only;
-  }
-  return {
-    command: input.fallback.command,
-    reason: `${input.fallback.reason} Of those, ${distinct.length === 1 ? "one has" : `${distinct.length} have`} a command that can produce the missing evidence: ${distinct.join(", ")}.`
   };
 }
 
@@ -46533,6 +46959,350 @@ async function loadOracleFacts(input) {
   return oracles;
 }
 
+// packages/cli/src/commands/workflow/ship.ts
+var SHIP_HELP = [
+  "legion ship [--canary] [--allow-legacy-evidence]",
+  "",
+  "Run the ship readiness gate. This layer does not publish or release.",
+  "",
+  "Options:",
+  "  --canary                  Report canary readiness alongside the gate.",
+  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
+  "                            linking. `legion dev change archive` applies the same",
+  "                            check, so pass it there too."
+].join("\n");
+var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
+function recoveryFor(diagnostics) {
+  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
+    return nextAction(
+      "legion build",
+      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
+    );
+  }
+  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
+    return nextAction(
+      "legion ship --allow-legacy-evidence",
+      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
+    );
+  }
+  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
+  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
+  return nextAction(
+    "legion ship",
+    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: correct ${where} by hand, then rerun this to confirm the defect is gone.`
+  );
+}
+function isPath(value) {
+  return value !== void 0 && value.length > 0;
+}
+function completeTaskRuns(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.taskRuns.map((run) => run.document);
+}
+function taskRunPlaneContradictions(input) {
+  const contradictions = [];
+  const present = new Set(input.taskRuns.map((run) => run.id));
+  const named = [
+    ...new Set(
+      input.entries.map((entry) => entry.evidence.runId).filter((runId) => runId !== void 0)
+    )
+  ].sort();
+  for (const runId of named) {
+    if (present.has(runId)) continue;
+    contradictions.push(
+      `The evidence index records a bundle produced by run ${runId}, and no such run is in this change's run directory.`
+    );
+  }
+  const attemptsByTask = /* @__PURE__ */ new Map();
+  for (const run of input.taskRuns) {
+    const taskId = run.taskId;
+    const attempt = run.attempt;
+    if (taskId === void 0 || attempt === void 0) continue;
+    const attempts = attemptsByTask.get(taskId) ?? /* @__PURE__ */ new Set();
+    attempts.add(attempt);
+    attemptsByTask.set(taskId, attempts);
+  }
+  for (const taskId of [...attemptsByTask.keys()].sort()) {
+    const attempts = attemptsByTask.get(taskId);
+    const highest = Math.max(...attempts);
+    const holes = [];
+    for (let attempt = 1; attempt <= highest; attempt += 1) {
+      if (!attempts.has(attempt)) holes.push(attempt);
+    }
+    if (holes.length === 0) continue;
+    contradictions.push(
+      `${taskId} records attempt ${highest} but not attempt${holes.length === 1 ? "" : "s"} ${holes.join(", ")}, so its earlier runs are not in this change's run directory.`
+    );
+  }
+  const earliestStart = input.taskRuns.map((run) => run.startedAt).filter((startedAt) => startedAt !== void 0).sort()[0];
+  const earliestEvidence = input.entries.map((entry) => entry.evidence.createdAt).filter((createdAt) => createdAt !== void 0).sort()[0];
+  if (earliestStart !== void 0 && earliestEvidence !== void 0 && earliestEvidence < earliestStart) {
+    contradictions.push(
+      `The evidence index holds a bundle created at ${earliestEvidence}, which is earlier than the ${earliestStart} at which the earliest run this change records started, so execution began before its run directory admits.`
+    );
+  }
+  return contradictions;
+}
+function completeApprovals(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.approvals.map((approval) => approval.document);
+}
+function planeSkipDiagnostics(skips) {
+  return skips.map((skip) => ({
+    code: "artifact_plane_incomplete",
+    message: `${skip.entries.length} file${skip.entries.length === 1 ? "" : "s"} under ${skip.directory} could not be read as ${skip.plane} and ${skip.entries.length === 1 ? "was" : "were"} skipped: ${skip.entries.join(", ")}. Every gate that reads the ${skip.plane} plane reports unevaluable while this is true, because a listing that dropped a file may have dropped a withdrawal. Remove or correct the named file, then rerun this.`,
+    path: skip.directory
+  }));
+}
+function runPlaneContradictionDiagnostics(input) {
+  if (input.contradictions.length === 0) return [];
+  return [
+    {
+      code: "task_run_plane_contradicted",
+      message: `${input.directory} does not hold every run this change's own records name: ${input.contradictions.join(" ")} A run set that is short reports a later first execution than the truth, which is the direction that makes an approval taken after the work look as though it came first, so approved_spec_and_oracle reports unevaluable rather than answering from what is left. Restore the missing run records, then rerun this.`,
+      path: input.directory
+    }
+  ];
+}
+async function loadShipGateChangeFacts(input) {
+  const bundleResult = await absentOnFailure(
+    () => loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const bundle = bundleResult !== void 0 && bundleResult.ok ? bundleResult.bundle : void 0;
+  const oracles = await loadOracleFacts(input);
+  const runsResult = await absentOnFailure(
+    () => listTaskRunsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const listedRuns = completeTaskRuns(runsResult);
+  const runPlaneContradictions = listedRuns === void 0 ? [] : taskRunPlaneContradictions({ taskRuns: listedRuns, entries: input.entries });
+  const taskRuns = runPlaneContradictions.length === 0 ? listedRuns : void 0;
+  const approvalsResult = await absentOnFailure(
+    () => listApprovalsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const approvals = completeApprovals(approvalsResult);
+  const verifyPin = await resolvePinnedReferences({
+    repositoryRoot: input.repositoryRoot,
+    references: shipGatePinnedReferences({
+      deltas: bundle?.deltas,
+      oracles,
+      approvals,
+      tasks: input.tasks
+    })
+  });
+  const changeRoot = `.legion/project/changes/${input.changeId}`;
+  const skips = [];
+  if (runsResult !== void 0 && runsResult.ok && runsResult.skipped.length > 0) {
+    skips.push({ plane: "task run", directory: `${changeRoot}/runs`, entries: runsResult.skipped });
+  }
+  if (approvalsResult !== void 0 && approvalsResult.ok && approvalsResult.skipped.length > 0) {
+    skips.push({ plane: "approval", directory: `${changeRoot}/approvals`, entries: approvalsResult.skipped });
+  }
+  return {
+    facts: {
+      changeId: input.changeId,
+      acceptance: bundle?.change.acceptance,
+      approvals,
+      deltas: bundle?.deltas,
+      oracles,
+      taskRuns,
+      release: void 0,
+      // Read once, here, for the same reason the pins are hashed once here: a
+      // report is a snapshot of a moment. Gates that ask "is this still valid"
+      // must all ask about the same instant, or a change could be reported
+      // approved and expired in one payload.
+      evaluatedAt: currentUtcTimestamp(),
+      verifyPin
+    },
+    skips,
+    runPlaneContradictions
+  };
+}
+async function preBuildAction(context, changeId, fallback) {
+  const taskgraph = await readTaskGraph({ repositoryRoot: context.repositoryRoot, changeId });
+  if (!taskgraph.ok || !derivesApprovalOrderingGate(taskgraph.document.tasks)) {
+    return nextAction(fallback.command, fallback.reason);
+  }
+  return nextAction(
+    APPROVE_BEFORE_BUILD_RECOVERY.command,
+    `${fallback.reason} ${APPROVE_BEFORE_BUILD_RECOVERY.reason}`
+  );
+}
+async function handleShipWorkflow(context) {
+  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
+    return helpResult(SHIP_HELP);
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    const action = nextAction("legion plan 1", "Shipping requires a planned change.");
+    return blockedShip(latestChange.diagnostics, action);
+  }
+  const evidence = await readEvidenceIndex({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!evidence.ok) {
+    return blockedShip(
+      evidence.diagnostics,
+      await preBuildAction(context, latestChange.changeId, {
+        command: "legion build",
+        reason: "Shipping requires accepted build evidence."
+      })
+    );
+  }
+  const reviews = await listReviewDecisionsForChange({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!reviews.ok) {
+    return blockedShip(reviews.diagnostics, nextAction("legion review", "Shipping requires an accepted review."));
+  }
+  const acceptedReview = reviews.reviews.find((review) => review.document.status === "accepted");
+  const acceptedEvidence = evidence.document.entries.length > 0 && evidence.document.entries.every((entry) => entry.acceptance.status === "accepted");
+  if (acceptedReview === void 0 || !acceptedEvidence) {
+    return blockedShip(
+      [
+        {
+          code: "review_evidence_missing",
+          message: "No accepted review and accepted evidence pair was found. Run legion review --accept first."
+        }
+      ],
+      // Nothing has run yet on an evidence index with no entries, so this is the
+      // other pre-build refusal and it takes the same fork.
+      evidence.document.entries.length === 0 ? await preBuildAction(context, latestChange.changeId, {
+        command: "legion review --accept",
+        reason: "Shipping requires accepted review evidence."
+      }) : nextAction("legion review --accept", "Shipping requires accepted review evidence.")
+    );
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
+  }
+  let traceabilityWarnings = [];
+  const traceability = await validateChangeTraceability({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!traceability.ok) {
+    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
+      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
+    });
+    const legacyEvidence = allowed;
+    if (blocking.length > 0) {
+      return blockedShip(
+        blocking.map((diagnostic3) => ({
+          code: "change_traceability_broken",
+          message: diagnostic3.message,
+          path: diagnostic3.source?.path ?? taskgraph.artifactPath
+        })),
+        recoveryFor(blocking)
+      );
+    }
+    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
+      code: "legacy_evidence_unlinked",
+      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
+    }));
+  }
+  const changeFacts = await loadShipGateChangeFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId,
+    tasks: taskgraph.document.tasks,
+    entries: evidence.document.entries
+  });
+  const gateReport = deriveShipGates({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    entries: evidence.document.entries,
+    reviews: reviews.reviews,
+    change: changeFacts.facts
+  });
+  const planeSkips = [
+    ...planeSkipDiagnostics(changeFacts.skips),
+    ...runPlaneContradictionDiagnostics({
+      contradictions: changeFacts.runPlaneContradictions,
+      directory: `.legion/project/changes/${latestChange.changeId}/runs`
+    })
+  ];
+  if (!gateReport.ready) {
+    const recovery = shipGateRecovery({
+      gates: gateReport.gates,
+      fallback: {
+        command: "legion build",
+        reason: `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
+      }
+    });
+    return blockedShip(
+      [...planeSkips, ...shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath })],
+      nextAction(recovery.command, recovery.reason)
+    );
+  }
+  const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
+  return {
+    exitCode: 0,
+    payload: {
+      ok: true,
+      status: "ready",
+      change: {
+        changeId: latestChange.changeId
+      },
+      review: {
+        reviewId: acceptedReview.document.id,
+        artifactPath: acceptedReview.artifactPath
+      },
+      evidenceIndex: {
+        artifactPath: evidence.artifactPath,
+        acceptedEntries: evidence.document.entries.length
+      },
+      ...traceabilityWarnings.length === 0 && planeSkips.length === 0 ? {} : {
+        warnings: [
+          ...traceabilityWarnings,
+          ...planeSkips.map((diagnostic3) => ({ code: diagnostic3.code, message: diagnostic3.message }))
+        ]
+      },
+      riskGates: {
+        satisfied: gateReport.satisfied,
+        unsatisfied: gateReport.unsatisfied,
+        unevaluable: gateReport.unevaluable,
+        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))]
+      },
+      diagnostics: []
+    },
+    human: [
+      "Ship ready.",
+      // Shown, not only recorded. `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload was invisible to
+      // exactly the operator who opted into the allowance.
+      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
+      `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
+      ...unevaluable.length === 0 ? [] : [
+        `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,
+        "These gates are required by the change's risk tier but are not proven."
+      ],
+      "No publish or release action was performed."
+    ].join("\n")
+  };
+}
+function blockedShip(diagnostics, action) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      diagnostics,
+      nextAction: action
+    },
+    [
+      "Ship blocked.",
+      diagnostics.map((diagnostic3) => diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3 ? String(diagnostic3.message) : String(diagnostic3)).join("\n"),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
 // packages/cli/src/commands/workflow/approve.ts
 var APPROVE_HELP = `legion approve <subject>
 
@@ -46541,6 +47311,7 @@ artifact and nothing else: it does not plan, build, review or ship.
 
 Subjects:
   spec     Approve the change's delta specs.
+  oracle   Approve the oracles the change's work will be judged against.
   surface  Re-affirm a verification surface whose pinned file has been edited.
 
 legion approve spec [--requirement <id>] --approver <id> [--dry-run]
@@ -46555,6 +47326,23 @@ legion approve spec [--requirement <id>] --approver <id> [--dry-run]
                       a second --requirement replaces the first.
   --dry-run           Resolve the approver and the delta specs, report what would
                       be written, and write nothing.
+
+legion approve oracle [--oracle <id>] --approver <id> [--dry-run]
+
+  An oracle states the criteria a task's work will be judged against. Approving
+  one records a named human saying those are the right criteria \u2014 before the work
+  exists, which is the whole point. The approved_spec_and_oracle risk gate at R3
+  compares the last of these decisions against the instant the first task run
+  started, so this belongs beside legion approve spec and before legion build.
+
+  Nothing re-orders a decision once it has been taken. Run this after a build and
+  the gate reports unsatisfied for good, with no command able to move it.
+
+  --approver <id>     Required, same rule as above.
+  --oracle <id>       Approve only this oracle. Omitted, every oracle the change's
+                      tasks are judged against is approved, which is what the gate
+                      asks about. Not repeatable.
+  --dry-run           Report what would be approved and write nothing.
 
 legion approve surface [--path <file>] --approver <id> [--dry-run]
 
@@ -46578,31 +47366,52 @@ Examples:
   legion approve spec --approver dasbl
   legion approve spec --approver dasbl --dry-run
   legion approve spec --requirement req_editor-saves-metadata --approver dasbl
+  legion approve oracle --approver dasbl
+  legion approve oracle --oracle orc_phase-1-c1 --approver dasbl
   legion approve surface --approver dasbl
   legion approve surface --path ops/compose.integration.yml --approver dasbl`;
 var DELTA_SPEC_APPROVE_ACTION2 = "spec.delta.approve";
+var ORACLE_APPROVE_ACTION2 = "oracle.approve";
+var SUBJECT_OPTIONS = {
+  spec: {
+    owns: "requirement",
+    hint: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>."
+  },
+  oracle: {
+    owns: "oracle",
+    hint: "It narrows an oracle approval to one oracle: legion approve oracle --oracle <id>."
+  },
+  surface: {
+    owns: "path",
+    hint: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
+  }
+};
+var APPROVAL_SUBJECTS = Object.keys(SUBJECT_OPTIONS);
 async function handleApproveWorkflow(context) {
   const subject = context.args.positionals[0];
   if (hasFlag(context, "help") || subject === "help") {
     return helpResult(APPROVE_HELP);
   }
+  const supported = APPROVAL_SUBJECTS.join(", ");
   if (subject === void 0) {
     return usageError(
-      "legion approve requires a subject. Supported subjects: spec, surface. Example: legion approve spec --approver <id>."
+      `legion approve requires a subject. Supported subjects: ${supported}. Example: legion approve spec --approver <id>.`
     );
   }
-  if (subject !== "spec" && subject !== "surface") {
+  if (!APPROVAL_SUBJECTS.includes(subject)) {
+    return usageError(`Unknown approval subject: legion approve ${subject}. Supported subjects: ${supported}.`);
+  }
+  const named = subject;
+  for (const other of APPROVAL_SUBJECTS) {
+    if (other === named) continue;
+    const foreign = SUBJECT_OPTIONS[other].owns;
+    if (!context.args.options.has(foreign)) continue;
     return usageError(
-      `Unknown approval subject: legion approve ${subject}. Supported subjects: spec, surface.`
+      `--${foreign} is not an option of legion approve ${named}. ${SUBJECT_OPTIONS[other].hint}`
     );
   }
-  const foreign = subject === "spec" ? "path" : "requirement";
-  if (context.args.options.has(foreign)) {
-    return usageError(
-      `--${foreign} is not an option of legion approve ${subject}. ` + (subject === "spec" ? "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>." : "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>.")
-    );
-  }
-  if (subject === "surface") return approveVerificationSurfaces(context);
+  if (named === "surface") return approveVerificationSurfaces(context);
+  if (named === "oracle") return approveOracles(context);
   return approveDeltaSpecs(context);
 }
 async function approveDeltaSpecs(context) {
@@ -46678,9 +47487,17 @@ async function approveDeltaSpecs(context) {
   const planned = states.filter((state) => selectedIds.has(state.delta.requirementId)).map((state) => ({ ...state, ...plannedActionFor(state, approver.approver) }));
   const unapprovedNow = states.filter((state) => !state.approved).map((state) => state.delta.requirementId);
   const unapprovedAfter = states.filter((state) => !state.approved && !selectedIds.has(state.delta.requirementId)).map((state) => state.delta.requirementId);
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const ordered = taskgraph.ok && derivesApprovalOrderingGate(taskgraph.document.tasks);
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const executionWarnings = orderingWarnings({ changeId: latestChange.changeId, execution, ordered });
+  const alreadyRan = executionWarnings.length > 0;
   if (hasFlag(context, "dry-run")) {
     const unapproved2 = unapprovedNow;
-    const action2 = dryRunNextActionFor(unapproved2, bundle.bundle.deltas.length);
+    const action2 = dryRunNextActionFor(unapproved2, bundle.bundle.deltas.length, { ordered, alreadyRan });
     return success2(
       {
         ok: true,
@@ -46688,6 +47505,7 @@ async function approveDeltaSpecs(context) {
         dryRun: true,
         change: { changeId: latestChange.changeId },
         approver: approver.approver,
+        ...executionWarnings.length === 0 ? {} : { warnings: executionWarnings },
         // No `status` and no `decidedAt` on these entries: nothing was decided,
         // and a dry-run payload that carried them would read as a record of a
         // decision to anything parsing it.
@@ -46708,6 +47526,7 @@ async function approveDeltaSpecs(context) {
         `Dry run: ${planned.length} delta spec${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
         ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.delta.requirementId}  ${entry.delta.path}`),
         `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
         "No approval was written.",
         renderNextAction(action2)
       ].join("\n")
@@ -46763,13 +47582,16 @@ async function approveDeltaSpecs(context) {
     written.push(write);
   }
   const unapproved = unapprovedAfter;
-  const action = nextActionFor(unapproved, bundle.bundle.deltas.length);
+  const action = nextActionFor(unapproved, bundle.bundle.deltas.length, { ordered, alreadyRan });
   const decided = planned.filter((entry) => entry.action !== "unchanged").length;
-  const warnings = superseded.map((record2) => ({
-    code: "withdrawn_approval_superseded",
-    message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
-    path: record2.artifactPath
-  }));
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record2) => ({
+      code: "withdrawn_approval_superseded",
+      message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+      path: record2.artifactPath
+    }))
+  ];
   return success2(
     {
       ok: true,
@@ -46952,11 +47774,23 @@ function selectDeltas(deltas, requirementId) {
   }
   return { ok: true, deltas: matched };
 }
-function nextActionFor(unapproved, total) {
+function nextActionFor(unapproved, total, execution) {
   if (unapproved.length > 0) {
     return nextAction(
       "legion approve spec",
       `${unapproved.length} of ${total} delta specs in this change are still unapproved (${unapproved.join(", ")}); the approved_delta_spec gate is satisfied only when every one of them carries a granted approval.`
+    );
+  }
+  if (execution.alreadyRan) {
+    return nextAction(
+      "legion ship",
+      "Every delta spec in this change is approved, and this change has already run. approved_spec_and_oracle compares the decision instants against the start of execution; legion ship reports which gates that leaves unmet and why."
+    );
+  }
+  if (execution.ordered) {
+    return nextAction(
+      "legion approve oracle --approver <id>",
+      "Every delta spec in this change is approved. At R3 approved_spec_and_oracle reads the oracles too, and both halves have to be decided before the first task run: approve the oracles next, then build."
     );
   }
   return nextAction(
@@ -46964,8 +47798,20 @@ function nextActionFor(unapproved, total) {
     "Every delta spec in this change is approved; the change is ready for guided build execution."
   );
 }
-function dryRunNextActionFor(unapproved, total) {
+function dryRunNextActionFor(unapproved, total, execution) {
   if (unapproved.length === 0) {
+    if (execution.alreadyRan) {
+      return nextAction(
+        "legion ship",
+        `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this change has already run; legion ship reports which gates that leaves unmet and why.`
+      );
+    }
+    if (execution.ordered) {
+      return nextAction(
+        "legion approve oracle --approver <id>",
+        `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval. At R3 approved_spec_and_oracle reads the oracles too, and both halves have to be decided before the first task run.`
+      );
+    }
     return nextAction(
       "legion build",
       `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this dry run found nothing left to decide; the change is ready for guided build execution.`
@@ -47049,6 +47895,448 @@ function blockedApprove(diagnostics, action, extras = {}) {
       nextAction: action
     },
     ["Approve blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+async function approveOracles(context) {
+  const oracleRaw = stringOption(context, "oracle")?.trim();
+  if (context.args.options.get("oracle") === true || oracleRaw === "") {
+    return usageError(
+      "Missing required value for --oracle. Example: legion approve oracle --oracle orc_phase-1-c1."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction(
+        "legion plan 1",
+        "Which oracles this change's work is judged against is recorded on its task contracts, and the task graph could not be read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (oracles === void 0) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_plane_unreadable",
+          message: `The oracles of ${latestChange.changeId} could not be read as a complete set, so which criteria this change's work is judged against is unestablished. The manifest fails on any malformed oracle in the directory; correct or remove it, then run this again.`,
+          path: `.legion/project/changes/${latestChange.changeId}/oracle`
+        }
+      ],
+      // `legion ship`, not `legion dev change validate`.
+      //
+      // The first draft named the validate verb, and adversarial review measured
+      // it: drop any unparseable `.yaml` under `oracle/` and `legion dev change
+      // validate <changeId>` exits 0 with `{"ok":true,"diagnostics":[]}` on
+      // exactly that repository, because it checks the bundle's schema rather
+      // than the oracle plane. Being sent to a command that reports success on
+      // the broken state ends the investigation at "nothing is wrong" — PR 4's
+      // named defect, reproduced in this release's new command. `legion ship` is
+      // the command that does see it: on the same repository it reports
+      // `change_traceability_broken` naming the offending file by path, which is
+      // the one fact this refusal cannot supply — the oracle manifest fails as a
+      // whole and reports the directory.
+      nextAction(
+        "legion ship",
+        "An oracle document in this change will not parse, and the manifest fails as a set, so this names the directory rather than the file. legion ship reports change_traceability_broken naming the file itself; correct or remove it, then run this again. Approving a subset of a set that cannot be established would record a decision about criteria nobody can read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const demand = changeOracleDemand({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      deltas: void 0,
+      oracles,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      // Never consulted: `changeOracleDemand` resolves ids against documents and
+      // asks nothing about disk. Supplied because the facts shape requires it,
+      // and `unverified` is the value that cannot be mistaken for a check that
+      // passed.
+      verifyPin: () => "unverified"
+    }
+  });
+  const missing = demand.unresolved[0];
+  if (missing !== void 0) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_in_change",
+          message: `Task ${missing.taskId} is judged against oracle ${missing.oracleId}, and no such oracle document is in ${latestChange.changeId}. Approving the oracles that are there would record a decision about a set this change cannot show you. Restore the missing oracle, or re-plan the work as a new change.`,
+          path: `.legion/project/changes/${latestChange.changeId}/oracle/${missing.oracleId}.yaml`
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "An oracle a task names is not on disk. legion ship names which gate that leaves unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (demand.referenced.length === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_referenced_oracle",
+          message: `No task contract in ${latestChange.changeId} references an oracle, so there are no criteria to approve. legion plan writes one oracle per executable acceptance criterion and one covering the manual ones; a change built from a legacy import or a hand-written task graph may reference none.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be approved. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (oracleRaw !== void 0 && !demand.referenced.some((entry) => entry.oracleId === oracleRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_in_change",
+          message: `--oracle ${oracleRaw} is not an oracle this change's tasks are judged against. They name: ${demand.referenced.map((entry) => entry.oracleId).join(", ")}. Approving an oracle Legion cannot show you would approve nothing.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion approve oracle --approver <id>", "Name an oracle this change's tasks actually reference."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve oracle",
+    decision: "an oracle"
+  });
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const selectedIds = new Set(
+    demand.referenced.filter((entry) => oracleRaw === void 0 || entry.oracleId === oracleRaw).map((entry) => entry.oracleId)
+  );
+  const states = [];
+  for (const entry of demand.referenced) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: ORACLE_APPROVE_ACTION2,
+      subject: { kind: "oracle", id: entry.oracleId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (selectedIds.has(entry.oracleId)) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve oracle",
+            `An approval already exists for ${entry.oracleId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({ oracleId: entry.oracleId, fact: entry.fact, taskIds: entry.taskIds, approvalId, approved: false });
+      continue;
+    }
+    states.push({
+      oracleId: entry.oracleId,
+      fact: entry.fact,
+      taskIds: entry.taskIds,
+      approvalId,
+      approved: existing.ok && isLiveOracleGrant({
+        approval: existing.document,
+        changeId: bundle.bundle.change.id,
+        oracle: entry.fact,
+        evaluatedAt: decidedAt
+      }),
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const planned = states.filter((state) => selectedIds.has(state.oracleId)).map((state) => ({ ...state, ...plannedActionFor(state, approver.approver) }));
+  const unapprovedNow = states.filter((state) => !state.approved).map((state) => state.oracleId);
+  const unapprovedAfter = states.filter((state) => !state.approved && !selectedIds.has(state.oracleId)).map((state) => state.oracleId);
+  const ordered = derivesApprovalOrderingGate(taskgraph.document.tasks);
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const executionWarnings = orderingWarnings({ changeId: latestChange.changeId, execution, ordered });
+  const alreadyRan = executionWarnings.length > 0;
+  if (hasFlag(context, "dry-run")) {
+    const action2 = dryRunOracleNextAction(unapprovedNow, states.length, alreadyRan);
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...executionWarnings.length === 0 ? {} : { warnings: executionWarnings },
+        // No `status` and no `decidedAt`: nothing was decided, and a dry-run
+        // payload carrying them would read as a record of a decision to anything
+        // parsing it.
+        approvals: planned.map((entry) => ({
+          oracleId: entry.oracleId,
+          oraclePath: entry.fact.reference.path,
+          taskIds: entry.taskIds,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        unapproved: unapprovedNow,
+        ...demand.unreferenced.length === 0 ? {} : { unreferencedOracles: demand.unreferenced },
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.fact.reference.path}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: entry.oracleId,
+      action: ORACLE_APPROVE_ACTION2,
+      target: { kind: "oracle", id: entry.oracleId },
+      command: "legion approve oracle",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        approvals: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: oracleApproval({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...archived.record === void 0 ? {} : { superseding: archived.record }
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve oracle",
+          "Some oracles were approved and one write failed. Rerunning re-decides only what is not already approved."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          approvals: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const action = oracleNextActionFor(unapprovedAfter, states.length, alreadyRan);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record2) => ({
+      code: "withdrawn_approval_superseded",
+      message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+      path: record2.artifactPath
+    }))
+  ];
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      approvals: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          oracleId: entry.oracleId,
+          oraclePath: entry.fact.reference.path,
+          taskIds: entry.taskIds,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // The field an obvious implementation omits: the gate is change-scoped and
+      // satisfied only by full coverage, so approving one of three oracles
+      // leaves ship blocked over two the operator never saw.
+      unapproved: unapprovedAfter,
+      // Reported and never approved. An oracle no task references proves nothing
+      // about the criteria the work was judged against, and writing a governance
+      // record for a decision nobody had to make is what `legion approve surface`
+      // already refuses to do for an undrifted pin.
+      ...demand.unreferenced.length === 0 ? {} : { unreferencedOracles: demand.unreferenced },
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Already approved: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.` : `Approved ${decided} oracle${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.fact.reference.path}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+async function executionAlreadyStarted(repositoryRoot, changeId) {
+  let listing;
+  let index;
+  try {
+    listing = await listTaskRunsForChange({ repositoryRoot, changeId });
+    index = await readEvidenceIndex({ repositoryRoot, changeId });
+  } catch {
+    return { kind: "none" };
+  }
+  if (!listing.ok) return { kind: "none" };
+  const taskRuns = listing.taskRuns.map((run) => run.document);
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest !== void 0) return { kind: "started", ...earliest };
+  const entries = index !== void 0 && index.ok ? index.document.entries : [];
+  const contradictions = taskRunPlaneContradictions({ taskRuns, entries });
+  if (contradictions.length > 0) return { kind: "contradicted", detail: contradictions.join(" ") };
+  return { kind: "none" };
+}
+function orderingWarnings(input) {
+  if (!input.ordered) return [];
+  const runs = `.legion/project/changes/${input.changeId}/runs`;
+  if (input.execution.kind === "started") {
+    return [
+      {
+        code: "approval_after_execution",
+        message: `Gated execution for ${input.changeId} began at ${input.execution.startedAt} (run ${input.execution.runId} of ${input.execution.taskId}). A decision recorded now is dated after it, and approved_spec_and_oracle compares those two instants: at R3 this change cannot satisfy that gate, and no command re-orders a decision that has already been taken. Approving is still recorded \u2014 the governance fact is real \u2014 but plan the remaining work as a new change if the gate has to pass.`,
+        path: runs
+      }
+    ];
+  }
+  if (input.execution.kind === "contradicted") {
+    return [
+      {
+        code: "execution_record_incomplete",
+        message: `${input.execution.detail} So this change's run directory cannot say when gated execution began, and approved_spec_and_oracle compares the last of these decisions against exactly that instant: it will report unevaluable until the run records are restored, and a decision recorded now may already be later than the work it claims to gate. Approving is still recorded \u2014 the governance fact is real.`,
+        path: runs
+      }
+    ];
+  }
+  return [];
+}
+function oracleApproval(input) {
+  const existing = input.entry.existing;
+  const reference = input.entry.fact.reference;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: ORACLE_APPROVE_ACTION2,
+      targets: [
+        // Re-parsed rather than cast. `changeOracleDemand` types an oracle id as
+        // a plain string, because `ship-gates.ts` deliberately keeps protocol
+        // brands out of its fact shapes — and a cast here would put an
+        // unvalidated string into `scope.targets`, where the gate's exact-target
+        // filter is the only thing that stops one approval answering for
+        // another.
+        { kind: "oracle", id: oracleIdSchema.parse(input.entry.oracleId) },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: ORACLE_APPROVE_ACTION2,
+      targetHash: reference.sha256
+    }),
+    artifacts: [reference],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason: `${input.approver.id} approved oracle ${input.entry.oracleId} at ${reference.sha256} via legion approve oracle. It states the criteria ${input.entry.taskIds.join(", ")} will be judged against.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function oracleNextActionFor(unapproved, total, executionStarted) {
+  if (unapproved.length > 0) {
+    return nextAction(
+      "legion approve oracle",
+      `${unapproved.length} of ${total} oracles this change's tasks are judged against are still unapproved (${unapproved.join(", ")}); the approved_spec_and_oracle gate is satisfied only when every one of them carries a granted approval.`
+    );
+  }
+  if (executionStarted) {
+    return nextAction(
+      "legion ship",
+      "Every oracle this change's tasks are judged against is approved, and this change has already run. approved_spec_and_oracle compares the decision instants against the start of execution; legion ship reports what that ordering leaves unmet."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every oracle this change's tasks are judged against is approved. Approve its delta specs too if you have not \u2014 approved_spec_and_oracle reads both \u2014 and then build, which is what these decisions have to precede."
+  );
+}
+function dryRunOracleNextAction(unapproved, total, executionStarted) {
+  if (unapproved.length === 0) {
+    return nextAction(
+      executionStarted ? "legion ship" : "legion build",
+      `All ${total} oracle${total === 1 ? "" : "s"} this change's tasks are judged against already carry a granted approval, and this dry run found nothing left to decide.`
+    );
+  }
+  return nextAction(
+    "legion approve oracle --approver <id>",
+    `This was a dry run and no approval was written. ${unapproved.length} of ${total} oracles are unapproved (${unapproved.join(", ")}); the approved_spec_and_oracle gate stays unmet until this command is run without --dry-run.`
   );
 }
 var SURFACE_REAFFIRM_ACTION2 = "verification.surface.reaffirm";
@@ -49480,265 +50768,6 @@ function renderDerivedMetrics(metrics) {
   ];
 }
 
-// packages/cli/src/commands/workflow/ship.ts
-var SHIP_HELP = [
-  "legion ship [--canary] [--allow-legacy-evidence]",
-  "",
-  "Run the ship readiness gate. This layer does not publish or release.",
-  "",
-  "Options:",
-  "  --canary                  Report canary readiness alongside the gate.",
-  "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
-  "                            linking. `legion dev change archive` applies the same",
-  "                            check, so pass it there too."
-].join("\n");
-var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
-function recoveryFor(diagnostics) {
-  if (diagnostics.every((diagnostic3) => REBUILDABLE.has(diagnostic3.code))) {
-    return nextAction(
-      "legion build",
-      "The task has no accepted evidence yet; building produces it with the requirement and oracle links this gate checks."
-    );
-  }
-  if (diagnostics.every((diagnostic3) => diagnostic3.code === "orphan_evidence")) {
-    return nextAction(
-      "legion ship --allow-legacy-evidence",
-      "This evidence carries no requirement or oracle link. Rebuilding cannot repair it \u2014 a rebuild adds a new entry and leaves the old one in the index. If it predates linking, this accepts it; if it is current evidence that lost its links, the index is corrupt and has to be corrected rather than allowed."
-    );
-  }
-  const paths = [...new Set(diagnostics.map((diagnostic3) => diagnostic3.source?.path).filter(isPath))];
-  const where = paths.length === 0 ? "the planned artifacts" : paths.join(", ");
-  return nextAction(
-    "legion ship",
-    `Requirement, oracle and task links must resolve before a change can ship. No command rewrites them: correct ${where} by hand, then rerun this to confirm the defect is gone.`
-  );
-}
-function isPath(value) {
-  return value !== void 0 && value.length > 0;
-}
-function completeTaskRuns(listing) {
-  if (listing === void 0 || !listing.ok) return void 0;
-  if (listing.skipped.length > 0) return void 0;
-  return listing.taskRuns.map((run) => run.document);
-}
-function completeApprovals(listing) {
-  if (listing === void 0 || !listing.ok) return void 0;
-  if (listing.skipped.length > 0) return void 0;
-  return listing.approvals.map((approval) => approval.document);
-}
-function planeSkipDiagnostics(skips) {
-  return skips.map((skip) => ({
-    code: "artifact_plane_incomplete",
-    message: `${skip.entries.length} file${skip.entries.length === 1 ? "" : "s"} under ${skip.directory} could not be read as ${skip.plane} and ${skip.entries.length === 1 ? "was" : "were"} skipped: ${skip.entries.join(", ")}. Every gate that reads the ${skip.plane} plane reports unevaluable while this is true, because a listing that dropped a file may have dropped a withdrawal. Remove or correct the named file, then rerun this.`,
-    path: skip.directory
-  }));
-}
-async function loadShipGateChangeFacts(input) {
-  const bundleResult = await absentOnFailure(
-    () => loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
-  );
-  const bundle = bundleResult !== void 0 && bundleResult.ok ? bundleResult.bundle : void 0;
-  const oracles = await loadOracleFacts(input);
-  const runsResult = await absentOnFailure(
-    () => listTaskRunsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
-  );
-  const taskRuns = completeTaskRuns(runsResult);
-  const approvalsResult = await absentOnFailure(
-    () => listApprovalsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
-  );
-  const approvals = completeApprovals(approvalsResult);
-  const verifyPin = await resolvePinnedReferences({
-    repositoryRoot: input.repositoryRoot,
-    references: shipGatePinnedReferences({
-      deltas: bundle?.deltas,
-      oracles,
-      approvals,
-      tasks: input.tasks
-    })
-  });
-  const changeRoot = `.legion/project/changes/${input.changeId}`;
-  const skips = [];
-  if (runsResult !== void 0 && runsResult.ok && runsResult.skipped.length > 0) {
-    skips.push({ plane: "task run", directory: `${changeRoot}/runs`, entries: runsResult.skipped });
-  }
-  if (approvalsResult !== void 0 && approvalsResult.ok && approvalsResult.skipped.length > 0) {
-    skips.push({ plane: "approval", directory: `${changeRoot}/approvals`, entries: approvalsResult.skipped });
-  }
-  return {
-    facts: {
-      changeId: input.changeId,
-      acceptance: bundle?.change.acceptance,
-      approvals,
-      deltas: bundle?.deltas,
-      oracles,
-      taskRuns,
-      release: void 0,
-      // Read once, here, for the same reason the pins are hashed once here: a
-      // report is a snapshot of a moment. Gates that ask "is this still valid"
-      // must all ask about the same instant, or a change could be reported
-      // approved and expired in one payload.
-      evaluatedAt: currentUtcTimestamp(),
-      verifyPin
-    },
-    skips
-  };
-}
-async function handleShipWorkflow(context) {
-  if (context.args.options.has("help") || context.args.positionals[0] === "help") {
-    return helpResult(SHIP_HELP);
-  }
-  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
-  if (!latestChange.ok) {
-    const action = nextAction("legion plan 1", "Shipping requires a planned change.");
-    return blockedShip(latestChange.diagnostics, action);
-  }
-  const evidence = await readEvidenceIndex({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!evidence.ok) {
-    return blockedShip(evidence.diagnostics, nextAction("legion build", "Shipping requires accepted build evidence."));
-  }
-  const reviews = await listReviewDecisionsForChange({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!reviews.ok) {
-    return blockedShip(reviews.diagnostics, nextAction("legion review", "Shipping requires an accepted review."));
-  }
-  const acceptedReview = reviews.reviews.find((review) => review.document.status === "accepted");
-  const acceptedEvidence = evidence.document.entries.length > 0 && evidence.document.entries.every((entry) => entry.acceptance.status === "accepted");
-  if (acceptedReview === void 0 || !acceptedEvidence) {
-    return blockedShip(
-      [
-        {
-          code: "review_evidence_missing",
-          message: "No accepted review and accepted evidence pair was found. Run legion review --accept first."
-        }
-      ],
-      nextAction("legion review --accept", "Shipping requires accepted review evidence.")
-    );
-  }
-  const taskgraph = await readTaskGraph({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!taskgraph.ok) {
-    return blockedShip(taskgraph.diagnostics, nextAction("legion plan 1", "Ship readiness requires a readable task graph."));
-  }
-  let traceabilityWarnings = [];
-  const traceability = await validateChangeTraceability({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
-  });
-  if (!traceability.ok) {
-    const { blocking, allowed } = partitionTraceabilityDiagnostics(traceability.diagnostics, {
-      allowLegacyEvidence: hasFlag(context, "allow-legacy-evidence")
-    });
-    const legacyEvidence = allowed;
-    if (blocking.length > 0) {
-      return blockedShip(
-        blocking.map((diagnostic3) => ({
-          code: "change_traceability_broken",
-          message: diagnostic3.message,
-          path: diagnostic3.source?.path ?? taskgraph.artifactPath
-        })),
-        recoveryFor(blocking)
-      );
-    }
-    traceabilityWarnings = legacyEvidence.map((diagnostic3) => ({
-      code: "legacy_evidence_unlinked",
-      message: `${diagnostic3.message} This evidence predates requirement and oracle linking; rebuilding the task will add it.`
-    }));
-  }
-  const changeFacts = await loadShipGateChangeFacts({
-    repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId,
-    tasks: taskgraph.document.tasks
-  });
-  const gateReport = deriveShipGates({
-    tasks: taskgraph.document.tasks,
-    taskIdFor: (task) => taskIdForContractId(task.id),
-    entries: evidence.document.entries,
-    reviews: reviews.reviews,
-    change: changeFacts.facts
-  });
-  const planeSkips = planeSkipDiagnostics(changeFacts.skips);
-  if (!gateReport.ready) {
-    const recovery = shipGateRecovery({
-      gates: gateReport.gates,
-      fallback: {
-        command: "legion build",
-        reason: `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
-      }
-    });
-    return blockedShip(
-      [...planeSkips, ...shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath })],
-      nextAction(recovery.command, recovery.reason)
-    );
-  }
-  const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
-  return {
-    exitCode: 0,
-    payload: {
-      ok: true,
-      status: "ready",
-      change: {
-        changeId: latestChange.changeId
-      },
-      review: {
-        reviewId: acceptedReview.document.id,
-        artifactPath: acceptedReview.artifactPath
-      },
-      evidenceIndex: {
-        artifactPath: evidence.artifactPath,
-        acceptedEntries: evidence.document.entries.length
-      },
-      ...traceabilityWarnings.length === 0 && planeSkips.length === 0 ? {} : {
-        warnings: [
-          ...traceabilityWarnings,
-          ...planeSkips.map((diagnostic3) => ({ code: diagnostic3.code, message: diagnostic3.message }))
-        ]
-      },
-      riskGates: {
-        satisfied: gateReport.satisfied,
-        unsatisfied: gateReport.unsatisfied,
-        unevaluable: gateReport.unevaluable,
-        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))]
-      },
-      diagnostics: []
-    },
-    human: [
-      "Ship ready.",
-      // Shown, not only recorded. `writeResult` prints `human` for a terminal
-      // run, so a warning that lived solely in the payload was invisible to
-      // exactly the operator who opted into the allowance.
-      ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
-      `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
-      ...unevaluable.length === 0 ? [] : [
-        `Legion cannot yet produce evidence for: ${[...new Set(unevaluable.map((gate) => gate.gate))].join(", ")}.`,
-        "These gates are required by the change's risk tier but are not proven."
-      ],
-      "No publish or release action was performed."
-    ].join("\n")
-  };
-}
-function blockedShip(diagnostics, action) {
-  return failure(
-    {
-      ok: false,
-      status: "blocked",
-      diagnostics,
-      nextAction: action
-    },
-    [
-      "Ship blocked.",
-      diagnostics.map((diagnostic3) => diagnostic3 && typeof diagnostic3 === "object" && "message" in diagnostic3 ? String(diagnostic3.message) : String(diagnostic3)).join("\n"),
-      renderNextAction(action)
-    ].join("\n")
-  );
-}
-
 // packages/cli/src/commands/workflow/validate.ts
 import { stat as stat9 } from "node:fs/promises";
 import path47 from "node:path";
@@ -49989,13 +51018,18 @@ var DECLARED = Object.freeze({
   // One list for every `legion approve <subject>`, because
   // `undeclaredOptionError` runs on the stripped context before the handler and
   // cannot see which subject was named. The boundary between subjects is
-  // therefore the handler's, and `handleApproveWorkflow` now enforces it: this
-  // release adds `surface` and its `--path`, so `--requirement` is meaningless
-  // to a surface re-affirmation and `--path` is meaningless to a delta-spec
-  // approval. Accepted here and refused there, by name — the alternative is a
-  // flag the operator typed being ignored in silence, which is how a command
-  // reports success for a thing it did not do.
-  approve: ["approver", "dry-run", "path", "requirement"],
+  // therefore the handler's, and `handleApproveWorkflow` enforces it: each
+  // subject owns exactly one narrowing flag — `spec` owns `--requirement`,
+  // `oracle` owns `--oracle`, `surface` owns `--path` — and every subject
+  // refuses the other two by name. Accepted here and refused there — the
+  // alternative is a flag the operator typed being ignored in silence, which is
+  // how a command reports success for a thing it did not do.
+  //
+  // `--oracle` takes a value, so like `--approver` it must NOT also go in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--oracle orc_x` bind
+  // nothing and read as absent, which here means approving the change's whole
+  // oracle set when the operator named one.
+  approve: ["approver", "dry-run", "oracle", "path", "requirement"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

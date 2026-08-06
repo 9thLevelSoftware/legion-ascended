@@ -243,10 +243,19 @@ test("every derived gate names the task it belongs to", () => {
 
 test("approved_spec_and_oracle is not satisfied by a passing oracle run", () => {
   // That gate asks whether the spec and oracle were approved *before* gated
-  // execution. A post-execution test verdict cannot answer it: there is no
-  // approval record, approver, or ordering timestamp anywhere to check.
-  // Satisfying it from the oracle result would claim a governance gate was met
-  // when no such approval exists.
+  // execution. A post-execution test verdict cannot answer it: an oracle that
+  // held is not an oracle anybody agreed to, and it says nothing at all about
+  // when the agreeing happened. Satisfying it from the oracle result would claim
+  // a governance gate was met when no such approval exists.
+  //
+  // The claim is unchanged from the release before this one; what changed is why
+  // it holds. It used to hold because the gate fell through `evaluateGate`'s
+  // `default:` arm and answered "Legion does not yet produce evidence for this
+  // gate" about everything. It now holds because the gate looked and found no
+  // approval plane — so the assertion on that literal reason string is gone, and
+  // the `if (gate !== undefined)` guard with it: at R3 the gate is always
+  // derived, and a guard that skipped the body would have made this test pass by
+  // asserting nothing.
   const report = derive({
     tier: "R3",
     items: [
@@ -258,10 +267,9 @@ test("approved_spec_and_oracle is not satisfied by a passing oracle run", () => 
   });
 
   const gate = report.gates.find((entry) => entry.gate === "approved_spec_and_oracle");
-  if (gate !== undefined) {
-    assert.equal(gate.status, "unevaluable");
-    assert.match(gate.reason, /does not yet produce/);
-  }
+  assert.notEqual(gate, undefined, "R3 derives this gate, so a missing row is the test failing silently");
+  assert.equal(gate.status, "unevaluable");
+  assert.doesNotMatch(gate.reason, /does not yet produce/);
 });
 
 // --- the seam that carries change-scoped facts ------------------------------
@@ -288,6 +296,58 @@ const UNIT_SURFACE = {
   rationale: "Exercises the pricing module in process; nothing outside this repository is reached.",
   pinned: [{ path: "packages/pricing/src/engine.ts", sha256: `sha256:${"c".repeat(64)}` }]
 };
+
+// The oracle `approved_spec_and_oracle` quantifies over, and the reference an
+// oracle approval pins. `legion approve oracle` copies `readOracleArtifact`'s own
+// reference rather than minting a digest, so the fixture's `reference` and the
+// approval's `artifacts[0]` are the same object shape and the same bytes.
+const ORACLE_ID = "orc_transcript-c1";
+const ORACLE_PIN = {
+  path: `.legion/project/changes/${CHANGE_ID}/oracle/${ORACLE_ID}.yaml`,
+  sha256: `sha256:${"d".repeat(64)}`
+};
+
+// The instant every ordering fixture below is measured against: one run, one
+// start. The two new scenarios differ from each other in exactly one field —
+// when the oracle was approved relative to this — and in nothing else.
+const EXECUTION_STARTED_AT = "2026-08-02T09:00:00.000Z";
+const APPROVED_BEFORE_AT = "2026-08-01T12:00:00.000Z";
+
+function deltaSpecApproval(decidedAt = APPROVED_BEFORE_AT) {
+  return {
+    id: "apv_transcript-approval",
+    changeId: CHANGE_ID,
+    status: "granted",
+    scope: { action: "spec.delta.approve", targets: [{ kind: "requirement", id: REQUIREMENT_ID }] },
+    artifacts: [DELTA_SPEC_PIN],
+    decidedBy: { kind: "human", id: "dasbl" },
+    decidedAt
+  };
+}
+
+function oracleApproval(decidedAt = APPROVED_BEFORE_AT) {
+  return {
+    id: "apv_transcript-oracle",
+    changeId: CHANGE_ID,
+    status: "granted",
+    scope: { action: "oracle.approve", targets: [{ kind: "oracle", id: ORACLE_ID }] },
+    artifacts: [ORACLE_PIN],
+    decidedBy: { kind: "human", id: "dasbl" },
+    decidedAt
+  };
+}
+
+function orderedChange(oracleDecidedAt) {
+  return {
+    changeId: CHANGE_ID,
+    deltas: [{ requirementId: REQUIREMENT_ID, path: DELTA_SPEC_PATH, delta: DELTA_SPEC_PIN }],
+    approvals: [deltaSpecApproval(), oracleApproval(oracleDecidedAt)],
+    oracles: [{ document: { id: ORACLE_ID }, reference: ORACLE_PIN }],
+    taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }],
+    evaluatedAt: "2026-08-10T00:00:00.000Z",
+    verifyPin: () => "match"
+  };
+}
 
 const SCENARIOS = [
   {
@@ -450,6 +510,48 @@ const SCENARIOS = [
       evaluatedAt: "2026-08-10T00:00:00.000Z",
       verifyPin: () => "match"
     }
+  },
+  {
+    // The eleventh, added with `approved_spec_and_oracle`'s producer, and the
+    // first row this transcript has ever produced from `change.taskRuns`. It is
+    // also the first row that needs *four* planes at once — deltas, approvals,
+    // oracles and runs — because the gate's question spans all of them: every
+    // delta spec and every oracle a task names carries a granted, pin-clean
+    // approval, and the last of those decisions is strictly earlier than the
+    // earliest run's start.
+    //
+    // The task contract carries `oracleRefs`, and that is load-bearing rather
+    // than decorative: the gate quantifies over the oracles the change's *tasks
+    // name*, not over the files its oracle directory holds. Strip the ref and
+    // this cell becomes `unevaluable` — "no task of this change references an
+    // oracle" — rather than vacuously satisfied, which is the whole of PR 0's
+    // deferred question answered in one fixture.
+    name: "a spec and oracle approved before execution",
+    contract: { oracleRefs: [ORACLE_ID] },
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: orderedChange(APPROVED_BEFORE_AT)
+  },
+  {
+    // The twelfth, and the pair's other half. Identical to the row above in
+    // every field but one: the oracle's `decidedAt` is the run's `startedAt`, to
+    // the millisecond.
+    //
+    // That is the boundary, and it is deliberately the equal case rather than a
+    // comfortably later one. Millisecond wall-clock stamps make an exact
+    // collision reachable, and an unorderable pair is not evidence that the
+    // decision came first — so `>=` blocks, matching `grantExpiry`, both
+    // supersession filters and `archiveWithdrawnDecision`. This cell is what
+    // fails if anyone ever writes `>` here, and it is worth noting that the one
+    // gate in this file that satisfies at `>=` —
+    // `whole_change_acceptance_evidence` — does so because one command stamps one
+    // instant on both sides of *its* comparison. No writer stamps both sides of
+    // this one.
+    name: "an oracle approved in the instant execution began",
+    contract: { oracleRefs: [ORACLE_ID] },
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: orderedChange(EXECUTION_STARTED_AT)
   }
 ];
 
@@ -468,7 +570,41 @@ const SCENARIOS = [
  * behaviour change, stated in one place, and reviewing it is reviewing the
  * central claim of the change that makes it.
  *
- * **One gate id has changed behaviour since the last release, and exactly one:
+ * **One gate id has changed behaviour in this release, and exactly one:
+ * `approved_spec_and_oracle`.** It gained a producer, and it is the ordering
+ * gate the whole approval artifact was built for: not "was this approved" —
+ * `approved_delta_spec` asks that, and R3 does not even derive it — but "was it
+ * approved *first*". `satisfied` requires every delta spec the change ships and
+ * every oracle any task *names* to carry a granted, pin-clean approval, and the
+ * last of those decisions to be strictly earlier than `min(startedAt)` over the
+ * change's complete run set. `unsatisfied` for a standing negative, for an
+ * oracle whose bytes no longer match what was approved, and for a decision taken
+ * at or after the start. `unevaluable` for anything unestablished — including a
+ * task naming an oracle the change cannot show, which is what makes an empty or
+ * short oracle directory non-vacuous.
+ *
+ * It is **change-scoped**, the fourth entry in `GATE_SCOPE` that is not
+ * `"task"`, and that flip is part of this release's behaviour change rather than
+ * a tidy-up: the entry was already there, reading `"task"`, so nothing failed to
+ * compile. `legion plan` materialises one task per executable criterion, and a
+ * task-scoped version would have re-answered one change-level ordering question
+ * once per criterion under a `subjectId` naming a task the sentence is not about.
+ *
+ * **No cell in the ten earlier scenarios moved.** Eight of them load no oracle
+ * plane and no run plane at all, and the two that load a plane load it for
+ * another gate — so this gate's absent-fact answer is `unevaluable`, which is
+ * exactly what the `default:` arm answered before it had a producer. What those
+ * unchanged cells assert is worth keeping: they are PR 0's invariant — an absent
+ * fact yields `unevaluable`, never `satisfied` — checked from outside the gate
+ * that has to hold it.
+ *
+ * The movement is in two new scenarios, and it takes two because the pair is the
+ * claim. They differ in one field: the oracle's `decidedAt`. Approved the day
+ * before the run, the gate is `satisfied`; approved in the run's own
+ * millisecond, it is `unsatisfied`, because an unorderable pair is not evidence
+ * that the decision came first.
+ *
+ * **The gate id that moved in the release before this one was
  * `whole_change_acceptance_evidence`.** It gained a producer — it reads
  * `bundle.change.acceptance`, which `legion review --accept` now promotes from
  * the `{status: "not_ready"}` that `createChangeBundle` writes and nothing had
@@ -915,11 +1051,96 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  "a spec and oracle approved before execution": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      // R2 does not derive this release's gate at all, so its whole row is
+      // recorded here to show what a change carrying four loaded planes looks
+      // like at the tier that asks none of this release's questions. The one
+      // cell that is not "passing verification and an accepted review"'s is
+      // `approved_delta_spec`, which the spec approval satisfies — the same fact
+      // this release's gate reads for its requirement half, seen through the
+      // gate that has read it since PR 2.
+      approved_delta_spec: "satisfied",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      // The cell this release adds, and the first `satisfied` this gate has ever
+      // produced.
+      approved_spec_and_oracle: "satisfied",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      // The approvals plane holds records, and neither is a review acceptance.
+      // This gate matches `scope.action` exactly, so it reads them as naming
+      // nothing about a review — which is absence, not a negative.
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "an oracle approved in the instant execution began": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "satisfied",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      // The other cell, and the first `unsatisfied` this gate has ever produced.
+      // One millisecond apart from the row above — literally zero, since the two
+      // instants are equal — and nothing else differs.
+      approved_spec_and_oracle: "unsatisfied",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
 };
 
 /**
- * `report.ready` for the same ten scenarios at the same four tiers.
+ * `report.ready` for the same twelve scenarios at the same four tiers.
  *
  * Written out as literals rather than derived from the table above, which would
  * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
@@ -951,7 +1172,14 @@ const BASELINE_READY = {
   "a verified real-interface surface": { R0: true, R1: true, R2: false, R3: false },
   "only unit surfaces declared": { R0: true, R1: true, R2: false, R3: false },
   "an accepted change covering its evidence": { R0: true, R1: true, R2: false, R3: false },
-  "a change rebuilt after its sign-off": { R0: true, R1: true, R2: false, R3: false }
+  "a change rebuilt after its sign-off": { R0: true, R1: true, R2: false, R3: false },
+  // R3 stays blocked in both, and that is the honest report rather than a
+  // weaker one: six of R3's ten gates still have no producer, so no fixture in
+  // this file could make R3 ready and one that appeared to would be lying about
+  // the release. `tests/change-r3-ordering` names those six and asserts the set
+  // in both directions.
+  "a spec and oracle approved before execution": { R0: true, R1: true, R2: false, R3: false },
+  "an oracle approved in the instant execution began": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -976,7 +1204,7 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
   }
 });
 
-test("the only change facts any gate reads are acceptance, deltas, approvals, oracles, changeId and the clock", () => {
+test("the only change facts any gate reads are acceptance, deltas, approvals, oracles, taskRuns, changeId and the clock", () => {
   // The predecessor of this test asserted that no gate read any change fact,
   // by throwing on every property access. Its comment named the honest edit for
   // the day a gate started reading one: replace it with an assertion naming the
@@ -1032,9 +1260,24 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   // anyway, because the absent path returns before the coverage quantifier runs
   // and `evaluatedAt` is only reached past it.
   //
-  // `taskRuns` and `release` still have no reader, and each is a fail-open
-  // waiting for one.
-  function tripwire(reads, { acceptance, approvals, deltas, oracles } = {}) {
+  // `taskRuns` joins the allow-list with `approved_spec_and_oracle`'s producer,
+  // and it is the last of the four fail-opens this trap was holding open to gain
+  // a reader. It is admitted with a stated reason: that gate's question *is*
+  // "were these decisions taken before gated execution began", the only record
+  // of when execution began is `min(startedAt)` over the run plane, and there is
+  // nowhere else it could be read from.
+  //
+  // Like `oracles`, the read is guarded — it happens only once every delta spec
+  // and every referenced oracle is already approved, because a gate that
+  // complained about ordering before it complained about an unapproved oracle
+  // would tell an operator with nothing approved to run a build, which is the one
+  // act that makes the ordering unrepairable. So `ABSENT_PLANE_READS` does not
+  // move for it at all, and the populated ordering pass at the bottom is what
+  // witnesses the read. An admission with no populated witness is an admission
+  // nothing witnesses.
+  //
+  // `release` still has no reader, and it is still a fail-open waiting for one.
+  function tripwire(reads, { acceptance, approvals, deltas, oracles, taskRuns } = {}) {
     return new Proxy(
       // `verifyPin` is the one true exemption: the guard inside
       // `deriveShipGates` inspects it on every call, to substitute a verifier
@@ -1047,6 +1290,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
         approvals,
         deltas,
         oracles,
+        taskRuns,
         evaluatedAt: undefined
       },
       {
@@ -1058,6 +1302,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
             property === "approvals" ||
             property === "deltas" ||
             property === "oracles" ||
+            property === "taskRuns" ||
             property === "evaluatedAt"
           ) {
             reads.push(property);
@@ -1078,7 +1323,13 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
     R0: [],
     R1: [],
     R2: ["deltas", "changeId", "acceptance"],
-    R3: ["approvals"]
+    // R3 gains `deltas` and `changeId` with `approved_spec_and_oracle`: it reads
+    // the delta plane first of all, returns on finding it absent, and
+    // `deriveShipGates` then reads the change id to name a change-scoped gate's
+    // subject. `oracles` and `taskRuns` are deliberately absent from this list —
+    // the gate never reaches them on a degraded change — which is the guard
+    // ordering asserted rather than assumed.
+    R3: ["deltas", "changeId", "approvals"]
   };
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
@@ -1152,7 +1403,12 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
       ]
     })
   });
-  assert.deepEqual([...new Set(populatedReviewReads)].sort(), ["approvals", "changeId"]);
+  // `deltas` joins this R3 pass with `approved_spec_and_oracle`'s producer: the
+  // gate reads the delta plane first of all and returns on finding it absent,
+  // before it can reach an oracle or a run. That it stops there is the point —
+  // a populated approvals plane must not be enough to make an ordering gate
+  // start consulting planes nobody loaded.
+  assert.deepEqual([...new Set(populatedReviewReads)].sort(), ["approvals", "changeId", "deltas"]);
 
   const populatedDeltaReads = [];
   deriveShipGates({
@@ -1238,6 +1494,49 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
     acceptanceReport.gates.find((gate) => gate.gate === "whole_change_acceptance_evidence").status,
     "satisfied"
   );
+
+  // And once more at R3, against every plane the ordering gate reads, with a
+  // task that actually names an oracle. Both guarded reads — `oracles` and
+  // `taskRuns` — are reachable only from here: the absent-plane loop returns at
+  // the delta arm, and a gate with an unapproved subject returns before the
+  // ordering arm. Without this pass, admitting `taskRuns` to the allow-list
+  // above would be a widening nothing witnesses, which is the failure mode this
+  // file's own comments warn about.
+  const populatedOrderingReads = [];
+  const orderingReport = deriveShipGates({
+    tasks: [task("R3", { oracleRefs: [ORACLE_ID] })],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedOrderingReads, {
+      deltas: [{ requirementId: REQUIREMENT_ID, path: DELTA_SPEC_PATH, delta: DELTA_SPEC_PIN }],
+      // `chg_tripwire` on both, because every scoping predicate here matches on
+      // strict change-id equality: facts too degraded to name their own change
+      // must match nothing rather than everything.
+      approvals: [
+        { ...deltaSpecApproval(), changeId: "chg_tripwire" },
+        { ...oracleApproval(), changeId: "chg_tripwire" }
+      ],
+      oracles: [{ document: { id: ORACLE_ID }, reference: ORACLE_PIN }],
+      taskRuns: [{ id: "run_tripwire-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  });
+  assert.deepEqual(
+    [...new Set(populatedOrderingReads)].sort(),
+    ["approvals", "changeId", "deltas", "evaluatedAt", "oracles", "taskRuns"]
+  );
+  // The planes are genuinely read to a decision, not merely touched: this is the
+  // gate's `satisfied` arm, which no other assertion in this file reaches.
+  const ordering = orderingReport.gates.find((gate) => gate.gate === "approved_spec_and_oracle");
+  assert.equal(ordering.status, "satisfied");
+  // A satisfied verdict that hides its margin is unauditable, so both instants
+  // are in the sentence an operator reads.
+  assert.match(ordering.reason, new RegExp(APPROVED_BEFORE_AT));
+  assert.match(ordering.reason, new RegExp(EXECUTION_STARTED_AT));
+  // Change-scoped, so the subject is the change the sentence is about — the
+  // fixture's own change id rather than the transcript's, because the tripwire
+  // names itself.
+  assert.equal(ordering.subjectId, "chg_tripwire");
 });
 
 /**
@@ -1253,7 +1552,12 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
 const CHANGE_SCOPED_GATES = new Set([
   "approved_delta_spec",
   "integration_or_real_interface_checks",
-  "whole_change_acceptance_evidence"
+  "whole_change_acceptance_evidence",
+  // Added in this release, and the flip is the claim rather than the
+  // consequence: `GATE_SCOPE` already carried an entry for this id, so changing
+  // it from `"task"` to `"change"` compiles either way and nothing but this line
+  // and the one beside it in `ship-gates.ts` records the decision.
+  "approved_spec_and_oracle"
 ]);
 
 test("every gate names its scope and the subject that scope refers to", () => {

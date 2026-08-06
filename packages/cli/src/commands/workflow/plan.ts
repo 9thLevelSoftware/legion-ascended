@@ -33,6 +33,10 @@ import { resolvePhaseSource, type PhaseSource } from "../../workflow/phase-compa
 import { resolvePhaseRequirement } from "../../workflow/phase-requirement.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import { outstandingRetroActions, readRetroIndex } from "../../workflow/retro-index.js";
+import {
+  APPROVE_BEFORE_BUILD_RECOVERY,
+  derivesApprovalOrderingGate
+} from "../../workflow/ship-gates.js";
 import { resolveWorkflowState } from "../../workflow/state.js";
 import { buildTaskGraphInput } from "../../workflow/taskgraph-input.js";
 
@@ -288,6 +292,18 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
     return artifactCreationFailure("taskgraph", taskgraph.status, taskgraph.diagnostics, action);
   }
 
+  // The routing correction this release owes its own gate.
+  //
+  // Every advisory above this line is emitted before the task graph exists, so
+  // none of them can know the tier. This one can, and it is the first place in the
+  // workflow where the answer is knowable: `legion plan` has just written the
+  // contracts whose `risk.tier` decides whether `approved_spec_and_oracle` is
+  // derived at all. An R3 change routed to `legion build` from here is a change
+  // the operator can no longer make shippable, so the fork is here.
+  const plannedAction = derivesApprovalOrderingGate(taskgraph.document.tasks)
+    ? nextAction(APPROVE_BEFORE_BUILD_RECOVERY.command, APPROVE_BEFORE_BUILD_RECOVERY.reason)
+    : action;
+
   return success(
     {
       ok: true,
@@ -313,10 +329,10 @@ export async function handlePlanWorkflow(context: CliContext): Promise<CliResult
       },
       autoRefine: hasFlag(context, "auto-refine"),
       retrospectiveActions: retroActions,
-      nextAction: action,
+      nextAction: plannedAction,
       diagnostics: []
     },
-    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, action, retroActions)
+    planningSuccessHuman(resolved.phase.number, resolved.phase.name, dryRun, plannedAction, retroActions)
   );
 }
 

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { completeApprovals, completeTaskRuns } from "../packages/cli/dist/commands/workflow/ship.js";
+import {
+  completeApprovals,
+  completeTaskRuns,
+  taskRunPlaneContradictions
+} from "../packages/cli/dist/commands/workflow/ship.js";
 import { shipGateDiagnostics, shipGateRecovery } from "../packages/cli/dist/workflow/ship-gates.js";
 
 /**
@@ -152,19 +156,27 @@ test("a block whose only unmet gate has a recovery advises that command", () => 
   assert.match(recovery.reason, /no build produces that/);
 });
 
-test("a block with several unmet gates keeps the fallback and names the ones with a route", () => {
-  // Advising `legion approve spec` here would claim one command unblocks a ship
-  // that two gates are holding — the failure `recoveryFor` in the ship command
-  // already guards against with its own `.every()`. Saying nothing would leave
-  // the operator with `legion build` and no thread at all.
+test("a block mixing gates with a route and gates without advises the route, not the fallback", () => {
+  // The behaviour this test asserted before is the defect it now guards against,
+  // and the correction is to the specification rather than to an implementation
+  // that missed it.
   //
-  // Re-pointed at `independent_baseline`. This fixture's whole shape is "one gate
-  // with a route, one without", and it used `whole_change_acceptance_evidence`
-  // for the second slot precisely *because* that gate had no `GATE_RECOVERY`
-  // entry. This release gives it one, so leaving it here would have kept the
-  // assertions green while the fixture no longer built the case they describe —
-  // the "two have a command" arm rather than the "one has" one. Green for the
-  // wrong reason is the failure this file exists to catch elsewhere.
+  // The old rule was: if *any* unmet gate has no recovery, keep the caller's
+  // fallback command and merely name the ones that do. Its justification was that
+  // naming one repair when several are needed overclaims — which is true of the
+  // reason and was never true of the command. Adversarial review measured what it
+  // costs at R3, where six of ten gates are producerless and the arm is therefore
+  // unconditional: `legion ship` emitted `{command: "legion build", reason: "… one
+  // has a command that can produce the missing evidence: legion start --intake."}`
+  // on a change whose only failing gate says in as many words that no command
+  // re-orders a decision already taken and that a build is what made it
+  // unrepairable. `command` and `reason` contradicted each other inside one
+  // object, and `command` is the field hosts dispatch.
+  //
+  // A gate with no recovery has no repair to withhold the known one in favour of.
+  // So the command is the route, and the reason says plainly that other gates are
+  // unmet and unrepairable — which is the honest version of what the fallback was
+  // trying to express.
   const recovery = shipGateRecovery({
     gates: [
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
@@ -173,12 +185,31 @@ test("a block with several unmet gates keeps the fallback and names the ones wit
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
 
-  assert.equal(recovery.command, "legion build");
+  assert.equal(recovery.command, "legion approve spec --approver <id>");
+  assert.match(recovery.reason, /no build produces that/);
+  assert.match(recovery.reason, /1 other unmet gate has no command/);
+  // And it does not claim to unblock the ship.
+  assert.match(recovery.reason, /rather than unblocking the ship/);
+});
+
+test("a block with several distinct routes advises one of them and names them all", () => {
+  // The remaining multi-route arm, and it still must not fall back to a command
+  // no unmet gate claims can repair anything. Gate order decides, which is the
+  // risk policy's own tier ordering rather than an accident of iteration.
+  const recovery = shipGateRecovery({
+    gates: [
+      gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
+      gateResult({ gate: "whole_change_acceptance_evidence", scope: "change", subjectId: "chg_x" }),
+      gateResult({ gate: "independent_baseline" })
+    ],
+    fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
+  });
+
+  assert.equal(recovery.command, "legion approve spec --approver <id>");
   assert.match(recovery.reason, /^Required risk gates are not satisfied\./);
-  assert.match(recovery.reason, /legion approve spec --approver <id>/);
-  // "one has", not "2 have" — which is what pins that the second gate really is
-  // one without a route, rather than a second route being summarised away.
-  assert.match(recovery.reason, /one has a command/);
+  assert.match(recovery.reason, /2 have a command/);
+  assert.match(recovery.reason, /legion review --accept --approver <id>/);
+  assert.match(recovery.reason, /No single command unblocks this ship/);
 });
 
 test("a block whose unmet gates have no recovery keeps the fallback unchanged", () => {
@@ -250,6 +281,102 @@ test("a failed or absent listing is absence too", () => {
   // that lost some: it stays an empty list so a gate can say "no run exists"
   // rather than "the runs could not be established".
   assert.deepEqual(completeTaskRuns(listing()), []);
+});
+
+// --- the run set is corroborated, not merely un-skipped ---------------------
+
+// `completeTaskRuns` refuses a listing the *listing* said it shortened, and that
+// turned out to be necessary and not sufficient. `listTaskRunsForChange` records
+// `skipped` only for directories it saw and could not read: it filters
+// `entries.filter((c) => c.isDirectory())` before the skip loop, so a run
+// directory replaced by a plain file leaves no trace, and one deleted outright
+// leaves no entry at all. Adversarial review drove that end to end — `rm -rf` of
+// the earliest run flipped `approved_spec_and_oracle` from `unsatisfied` to
+// `satisfied`, with no diagnostic anywhere and `legion validate` exiting 0.
+//
+// The run plane is the only plane a gate verdict rests on that nothing
+// content-pins. So completeness became a positive claim, corroborated by records
+// outside the run directory and by the run set's own numbering.
+
+const taskRun = (overrides = {}) => ({
+  id: "run_a-attempt-1",
+  taskId: "tsk_a",
+  attempt: 1,
+  startedAt: "2026-01-01T10:00:00.000Z",
+  ...overrides
+});
+
+const evidenceEntry = (overrides = {}) => ({
+  evidence: {
+    id: "evidence_a-attempt-1",
+    runId: "run_a-attempt-1",
+    createdAt: "2026-01-01T10:00:00.000Z",
+    ...overrides
+  },
+  acceptance: { status: "pending" }
+});
+
+test("a whole run set with matching evidence reports no contradiction", () => {
+  // The happy path has to be quiet, or the check is a permanent block wearing a
+  // corroboration's name. `executeTask` stamps one `createdAt` on both the run's
+  // `startedAt` and its evidence bundle, so equality is the ordinary case and the
+  // comparison must be strict.
+  assert.deepEqual(
+    taskRunPlaneContradictions({
+      taskRuns: [taskRun(), taskRun({ id: "run_a-attempt-2", attempt: 2, startedAt: "2026-01-01T11:00:00.000Z" })],
+      entries: [
+        evidenceEntry(),
+        evidenceEntry({ id: "evidence_a-attempt-2", runId: "run_a-attempt-2", createdAt: "2026-01-01T11:00:00.000Z" })
+      ]
+    }),
+    []
+  );
+  assert.deepEqual(taskRunPlaneContradictions({ taskRuns: [], entries: [] }), []);
+});
+
+test("evidence naming a run the directory no longer holds is a contradiction, by name", () => {
+  // The falsifier that was already in the payload and unread. Evidence ids are
+  // derived per attempt, so deleting attempt 1's directory leaves attempt 1's
+  // index entry behind naming it — and the operator's next act is to look at that
+  // run, so the sentence has to carry the id.
+  const contradictions = taskRunPlaneContradictions({
+    taskRuns: [taskRun({ id: "run_a-attempt-2", attempt: 2, startedAt: "2026-01-01T11:00:00.000Z" })],
+    entries: [evidenceEntry({ createdAt: "2026-01-01T11:00:00.000Z" })]
+  });
+
+  assert.ok(contradictions.some((entry) => entry.includes("run_a-attempt-1")));
+});
+
+test("a task whose attempts skip a number is a contradiction from inside the run set", () => {
+  // The falsifier that survives the evidence index being edited too. `attempt` is
+  // on every run document and `nextAttemptMap` counts up from what is on disk, so
+  // `{2}` or `{1,3}` for one task is a set with a hole in it and needs no second
+  // artifact to say so.
+  const missingFirst = taskRunPlaneContradictions({
+    taskRuns: [taskRun({ id: "run_a-attempt-2", attempt: 2 })],
+    entries: []
+  });
+  assert.ok(missingFirst.some((entry) => entry.includes("tsk_a") && entry.includes("attempt 1")));
+
+  const hole = taskRunPlaneContradictions({
+    taskRuns: [taskRun(), taskRun({ id: "run_a-attempt-3", attempt: 3 })],
+    entries: []
+  });
+  assert.ok(hole.some((entry) => entry.includes("attempt 2")));
+});
+
+test("evidence created before the earliest recorded run start bounds the quantity the gate uses", () => {
+  // The sharpest of the three, because it does not detect a deletion — it
+  // contradicts the exact number `approved_spec_and_oracle` compares against.
+  // `min(evidence.createdAt) >= min(run.startedAt)` holds over a whole set, so a
+  // strictly earlier bundle is direct proof that execution began before the run
+  // directory admits.
+  const contradictions = taskRunPlaneContradictions({
+    taskRuns: [taskRun({ startedAt: "2026-01-01T12:00:00.000Z" })],
+    entries: [evidenceEntry({ runId: undefined, createdAt: "2026-01-01T09:00:00.000Z" })]
+  });
+
+  assert.ok(contradictions.some((entry) => entry.includes("earlier than")));
 });
 
 const approvalListing = (overrides = {}) => ({

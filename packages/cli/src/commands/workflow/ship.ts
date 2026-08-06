@@ -8,6 +8,7 @@ import {
   readTaskGraph,
   validateChangeTraceability,
   type ApprovalListResult,
+  type EvidenceIndexEntry,
   type TaskRunListResult
 } from "@legion/artifacts";
 import type { Approval, TaskContract, TaskRun } from "@legion/protocol";
@@ -19,7 +20,9 @@ import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { resolvePinnedReferences } from "../../workflow/pinned-references.js";
 import { taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
+  APPROVE_BEFORE_BUILD_RECOVERY,
   deriveShipGates,
+  derivesApprovalOrderingGate,
   shipGateDiagnostics,
   shipGatePinnedReferences,
   shipGateRecovery,
@@ -119,15 +122,136 @@ function isPath(value: string | undefined): value is string {
  * ordering. `skipped` is how the listing says it dropped something; absence here
  * is how ship refuses to answer from what it kept.
  *
- * Exported and pure because it is otherwise untestable: nothing reads
- * `taskRuns` in this release, so a change collapsing this back to
- * `runs.taskRuns.map(...)` would leave every suite green. The one thing that can
- * falsify it is a direct test, so there is one.
+ * Exported and pure because it was otherwise untestable: when this landed
+ * nothing read `taskRuns` at all, so a change collapsing it back to
+ * `runs.taskRuns.map(...)` would have left every suite green. The one thing that
+ * could falsify it was a direct test, so there is one.
+ *
+ * `approved_spec_and_oracle` is now that reader, and it is the gate this
+ * function was written for by name. Collapsing this today would not make a gate
+ * *fail* — it would make one silently answer from a `min(startedAt)` later than
+ * the truth, which is the fail-open direction. The direct test still stands, and
+ * it is still the only thing that distinguishes the two.
  */
 export function completeTaskRuns(listing: TaskRunListResult | undefined): readonly TaskRun[] | undefined {
   if (listing === undefined || !listing.ok) return undefined;
   if (listing.skipped.length > 0) return undefined;
   return listing.taskRuns.map((run) => run.document);
+}
+
+/**
+ * Ways the run set can be shown to be short by something other than itself.
+ *
+ * **`completeTaskRuns` is necessary and it is not sufficient, and this exists
+ * because the difference was measured rather than argued.** That function refuses
+ * a listing the *listing* said it shortened. `listTaskRunsForChange` records
+ * `skipped` only for directories it saw and could not read: it filters
+ * `entries.filter((c) => c.isDirectory())` before the skip loop, so a run
+ * directory replaced by a plain file leaves no trace, and a directory that was
+ * deleted outright leaves no entry to skip in the first place. Both produce a
+ * clean short listing, `min(startedAt)` moves later, and `approved_spec_and_oracle`
+ * flips from `unsatisfied` to `satisfied` — a governance verdict reversed by an
+ * `rm -rf`, with no diagnostic anywhere and `legion validate` still exiting 0.
+ *
+ * The run plane is the only plane a gate's verdict rests on that nothing
+ * content-pins. `taskgraph.json` pins every oracle and delta spec through
+ * `artifactInputs`, and `validateChangeTraceability` blocks ship on any of those
+ * moving before a gate is derived; nothing pins `runs/`. So completeness has to be
+ * corroborated from the outside, and the corroborating records were already in the
+ * payload and unread.
+ *
+ * Three independent falsifiers, none of which can be satisfied by a shorter set:
+ *
+ *  - **The evidence index names a run that is not there.** Every entry carries
+ *    `evidence.runId`, and evidence ids are derived per attempt, so a deleted
+ *    attempt-1 directory leaves attempt-1's entry behind naming it.
+ *  - **A task's attempts are not contiguous from 1.** `nextAttemptMap` counts up
+ *    from the runs on disk and `runIdForTask` puts each attempt in its own
+ *    directory, so `{2}` or `{1,3}` for one task is a set with a hole in it. This
+ *    is the falsifier that survives the evidence index also being edited, because
+ *    it is internal to the run set.
+ *  - **Evidence predates the earliest run start.** `executeTask` stamps one
+ *    `createdAt` on both the run's `startedAt` and its evidence bundle, so
+ *    `min(evidence.createdAt) >= min(run.startedAt)` holds over a whole set, with
+ *    equality on the earliest run's own evidence. A strictly earlier evidence
+ *    bundle is direct proof that execution began before the run plane admits — it
+ *    bounds the exact quantity the gate compares against.
+ *
+ * **The bound, stated rather than implied.** Deleting the *entire* `runs/`
+ * directory and rebuilding is not detectable by any of these, and is not
+ * detectable by anything else in the repository either: attempts reset to 1,
+ * `runIdForTask` is deterministic, `evidenceIdForRun` is derived from the run id,
+ * so the rebuild replaces the same evidence entry and every surviving record is
+ * byte-consistent with an honest change that was planned, approved, built and
+ * reviewed in that order. Closing it needs a record outside the change directory —
+ * a signed run log or the git history of `runs/` — which is a different artifact
+ * from this one. What this closes is every deletion that leaves any other record
+ * behind, which is every deletion short of removing the plane wholesale.
+ *
+ * Returns sentences rather than booleans: the operator's next act is to look at a
+ * named run, and "the run plane is incomplete" without the name is the
+ * unactionable diagnostic `ShipGatePlaneSkip` was written to stop being.
+ */
+export function taskRunPlaneContradictions(input: {
+  readonly taskRuns: readonly TaskRun[];
+  readonly entries: readonly EvidenceIndexEntry[];
+}): readonly string[] {
+  const contradictions: string[] = [];
+  const present = new Set(input.taskRuns.map((run) => run.id as string));
+
+  const named = [
+    ...new Set(
+      input.entries
+        .map((entry) => entry.evidence.runId as string | undefined)
+        .filter((runId): runId is string => runId !== undefined)
+    )
+  ].sort();
+  for (const runId of named) {
+    if (present.has(runId)) continue;
+    contradictions.push(
+      `The evidence index records a bundle produced by run ${runId}, and no such run is in this change's run directory.`
+    );
+  }
+
+  const attemptsByTask = new Map<string, Set<number>>();
+  for (const run of input.taskRuns) {
+    const taskId = run.taskId as string | undefined;
+    const attempt = run.attempt as number | undefined;
+    if (taskId === undefined || attempt === undefined) continue;
+    const attempts = attemptsByTask.get(taskId) ?? new Set<number>();
+    attempts.add(attempt);
+    attemptsByTask.set(taskId, attempts);
+  }
+  for (const taskId of [...attemptsByTask.keys()].sort()) {
+    const attempts = attemptsByTask.get(taskId) as Set<number>;
+    const highest = Math.max(...attempts);
+    const holes = [];
+    for (let attempt = 1; attempt <= highest; attempt += 1) {
+      if (!attempts.has(attempt)) holes.push(attempt);
+    }
+    if (holes.length === 0) continue;
+    contradictions.push(
+      `${taskId} records attempt ${highest} but not attempt${holes.length === 1 ? "" : "s"} ${holes.join(", ")}, ` +
+        "so its earlier runs are not in this change's run directory."
+    );
+  }
+
+  const earliestStart = input.taskRuns
+    .map((run) => run.startedAt as string | undefined)
+    .filter((startedAt): startedAt is string => startedAt !== undefined)
+    .sort()[0];
+  const earliestEvidence = input.entries
+    .map((entry) => entry.evidence.createdAt as string | undefined)
+    .filter((createdAt): createdAt is string => createdAt !== undefined)
+    .sort()[0];
+  if (earliestStart !== undefined && earliestEvidence !== undefined && earliestEvidence < earliestStart) {
+    contradictions.push(
+      `The evidence index holds a bundle created at ${earliestEvidence}, which is earlier than the ${earliestStart} at ` +
+        "which the earliest run this change records started, so execution began before its run directory admits."
+    );
+  }
+
+  return contradictions;
 }
 
 /**
@@ -195,13 +319,50 @@ function planeSkipDiagnostics(skips: readonly ShipGatePlaneSkip[]) {
 }
 
 /**
+ * The diagnostic for a run plane the listing kept whole and the records deny.
+ *
+ * A separate code from `artifact_plane_incomplete`, because it is a different
+ * fact and a different repair. That one says "a file under this directory would
+ * not parse"; this one says "this directory is missing a run that another
+ * artifact of this change still names", and there is no file to correct — the
+ * repair is restoring the run record or accepting that the change's ordering can
+ * no longer be established.
+ *
+ * Emitted even on a ship that is otherwise ready, as a warning, on the same rule
+ * `ShipGatePlaneSkip` states: the run plane feeds one gate that only R3 derives,
+ * so an R2 change with a shortened run plane ships green today and the operator
+ * still has to know its execution record has a hole in it.
+ */
+function runPlaneContradictionDiagnostics(input: {
+  readonly contradictions: readonly string[];
+  readonly directory: string;
+}) {
+  if (input.contradictions.length === 0) return [];
+  return [
+    {
+      code: "task_run_plane_contradicted",
+      message:
+        `${input.directory} does not hold every run this change's own records name: ${input.contradictions.join(" ")} ` +
+        "A run set that is short reports a later first execution than the truth, which is the direction that makes an " +
+        "approval taken after the work look as though it came first, so approved_spec_and_oracle reports unevaluable " +
+        "rather than answering from what is left. Restore the missing run records, then rerun this.",
+      path: input.directory
+    }
+  ];
+}
+
+/**
  * The change-scoped planes `legion ship` can read, and what it could not read.
  *
- * Three gates consume them: `explicit_human_approval` and `approved_delta_spec`
- * read `approvals`, the second also reads `deltas`, and
- * `integration_or_real_interface_checks` reads `oracles` and the pin verifier.
- * Everything else here is still loaded ahead of its reader, so that the change
- * adding each gate is a diff about that gate rather than about the plumbing.
+ * Five gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * read `approvals`, the second also reads `deltas`,
+ * `integration_or_real_interface_checks` reads `oracles` and the pin verifier,
+ * `whole_change_acceptance_evidence` reads `acceptance` and the clock, and
+ * `approved_spec_and_oracle` reads all of those plus `taskRuns`. Every plane
+ * this function loads now has a reader, which it did not when the seam landed —
+ * the point of loading them ahead of their gates was that the change adding each
+ * gate would be a diff about that gate rather than about the plumbing, and this
+ * release is the last one that collects on it.
  *
  * The release plane is still passed as `undefined` rather than as an empty
  * value. Its schema exists but nothing reads or writes it, so "consulted and
@@ -216,7 +377,19 @@ async function loadShipGateChangeFacts(input: {
   readonly repositoryRoot: string;
   readonly changeId: string;
   readonly tasks: readonly TaskContract[];
-}): Promise<{ readonly facts: ShipGateChangeFacts; readonly skips: readonly ShipGatePlaneSkip[] }> {
+  /**
+   * The evidence index the caller already read, for `taskRunPlaneContradictions`.
+   *
+   * Passed rather than re-read for the reason every other input to this function
+   * is: a report is a snapshot of one moment, and an index read twice could
+   * corroborate the run plane against a state that never coexisted with it.
+   */
+  readonly entries: readonly EvidenceIndexEntry[];
+}): Promise<{
+  readonly facts: ShipGateChangeFacts;
+  readonly skips: readonly ShipGatePlaneSkip[];
+  readonly runPlaneContradictions: readonly string[];
+}> {
   const bundleResult = await absentOnFailure(() =>
     loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
@@ -227,7 +400,15 @@ async function loadShipGateChangeFacts(input: {
   const runsResult = await absentOnFailure(() =>
     listTaskRunsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
-  const taskRuns = completeTaskRuns(runsResult);
+  const listedRuns = completeTaskRuns(runsResult);
+  // Two questions, asked in order, and the second is the one the listing cannot
+  // answer about itself: did it report dropping anything, and do this change's
+  // other records agree that what it kept is all there was?
+  const runPlaneContradictions =
+    listedRuns === undefined
+      ? []
+      : taskRunPlaneContradictions({ taskRuns: listedRuns, entries: input.entries });
+  const taskRuns = runPlaneContradictions.length === 0 ? listedRuns : undefined;
 
   const approvalsResult = await absentOnFailure(() =>
     listApprovalsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
@@ -280,8 +461,40 @@ async function loadShipGateChangeFacts(input: {
       evaluatedAt: currentUtcTimestamp(),
       verifyPin
     },
-    skips
+    skips,
+    runPlaneContradictions
   };
+}
+
+/**
+ * "Build first" — unless building first is the thing that cannot be undone.
+ *
+ * Ship's two pre-build refusals return before a gate is ever evaluated, so this
+ * command cannot report `approved_spec_and_oracle` until *after* the point of no
+ * return. Review found that measurable: `legion ship` on a planned, unbuilt R3
+ * change answered `{command: "legion build", reason: "Shipping requires accepted
+ * build evidence."}`, the operator built, and the first mention of approval
+ * arrived when it was already too late to matter.
+ *
+ * The task graph is read here rather than earlier so that nothing about which
+ * defect a broken change reports first moves: this runs only on a path that has
+ * already decided to block, and only to choose the sentence. A task graph that
+ * will not read falls back to the caller's advice, because a change whose
+ * contracts cannot be parsed has no tier to route on.
+ */
+async function preBuildAction(
+  context: CliContext,
+  changeId: string,
+  fallback: { readonly command: string; readonly reason: string }
+) {
+  const taskgraph = await readTaskGraph({ repositoryRoot: context.repositoryRoot, changeId });
+  if (!taskgraph.ok || !derivesApprovalOrderingGate(taskgraph.document.tasks)) {
+    return nextAction(fallback.command, fallback.reason);
+  }
+  return nextAction(
+    APPROVE_BEFORE_BUILD_RECOVERY.command,
+    `${fallback.reason} ${APPROVE_BEFORE_BUILD_RECOVERY.reason}`
+  );
 }
 
 export async function handleShipWorkflow(context: CliContext): Promise<CliResult> {
@@ -300,7 +513,13 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     changeId: latestChange.changeId
   });
   if (!evidence.ok) {
-    return blockedShip(evidence.diagnostics, nextAction("legion build", "Shipping requires accepted build evidence."));
+    return blockedShip(
+      evidence.diagnostics,
+      await preBuildAction(context, latestChange.changeId, {
+        command: "legion build",
+        reason: "Shipping requires accepted build evidence."
+      })
+    );
   }
 
   const reviews = await listReviewDecisionsForChange({
@@ -322,7 +541,14 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
           message: "No accepted review and accepted evidence pair was found. Run legion review --accept first."
         }
       ],
-      nextAction("legion review --accept", "Shipping requires accepted review evidence.")
+      // Nothing has run yet on an evidence index with no entries, so this is the
+      // other pre-build refusal and it takes the same fork.
+      evidence.document.entries.length === 0
+        ? await preBuildAction(context, latestChange.changeId, {
+            command: "legion review --accept",
+            reason: "Shipping requires accepted review evidence."
+          })
+        : nextAction("legion review --accept", "Shipping requires accepted review evidence.")
     );
   }
 
@@ -392,7 +618,8 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   const changeFacts = await loadShipGateChangeFacts({
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId,
-    tasks: taskgraph.document.tasks
+    tasks: taskgraph.document.tasks,
+    entries: evidence.document.entries
   });
 
   const gateReport = deriveShipGates({
@@ -402,7 +629,13 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     reviews: reviews.reviews,
     change: changeFacts.facts
   });
-  const planeSkips = planeSkipDiagnostics(changeFacts.skips);
+  const planeSkips = [
+    ...planeSkipDiagnostics(changeFacts.skips),
+    ...runPlaneContradictionDiagnostics({
+      contradictions: changeFacts.runPlaneContradictions,
+      directory: `.legion/project/changes/${latestChange.changeId}/runs`
+    })
+  ];
 
   if (!gateReport.ready) {
     // Both blocking statuses are named. Reporting only `unsatisfied` would make

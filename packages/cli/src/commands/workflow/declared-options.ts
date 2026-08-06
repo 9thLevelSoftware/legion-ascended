@@ -50,13 +50,18 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   // One list for every `legion approve <subject>`, because
   // `undeclaredOptionError` runs on the stripped context before the handler and
   // cannot see which subject was named. The boundary between subjects is
-  // therefore the handler's, and `handleApproveWorkflow` now enforces it: this
-  // release adds `surface` and its `--path`, so `--requirement` is meaningless
-  // to a surface re-affirmation and `--path` is meaningless to a delta-spec
-  // approval. Accepted here and refused there, by name — the alternative is a
-  // flag the operator typed being ignored in silence, which is how a command
-  // reports success for a thing it did not do.
-  approve: ["approver", "dry-run", "path", "requirement"],
+  // therefore the handler's, and `handleApproveWorkflow` enforces it: each
+  // subject owns exactly one narrowing flag — `spec` owns `--requirement`,
+  // `oracle` owns `--oracle`, `surface` owns `--path` — and every subject
+  // refuses the other two by name. Accepted here and refused there — the
+  // alternative is a flag the operator typed being ignored in silence, which is
+  // how a command reports success for a thing it did not do.
+  //
+  // `--oracle` takes a value, so like `--approver` it must NOT also go in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--oracle orc_x` bind
+  // nothing and read as absent, which here means approving the change's whole
+  // oracle set when the operator named one.
+  approve: ["approver", "dry-run", "oracle", "path", "requirement"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

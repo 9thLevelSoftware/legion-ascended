@@ -522,7 +522,7 @@
       "executorBacked": false,
       "sharedWith": [],
       "class": "B",
-      "rationale": "The verb records one governance decision and pins the bytes it was made against. It resolves the approver from the project manifest and refuses anything it cannot resolve, so the host cannot supply an identity; what stays in the host is showing the person deciding what their decision is about — the delta spec text for a spec approval, and the diff of the pinned file for a surface re-affirmation — and asking who they are.",
+      "rationale": "The verb records one governance decision and pins the bytes it was made against. It resolves the approver from the project manifest and refuses anything it cannot resolve, so the host cannot supply an identity; what stays in the host is showing the person deciding what their decision is about - the delta spec text for a spec approval, the oracle's criteria for an oracle approval, and the diff of the pinned file for a surface re-affirmation - and asking who they are.",
       "hostOnly": [
         {
           "capability": "Refusing to supply an approver the user did not name, including the project's only decision owner",
@@ -539,6 +539,10 @@
         {
           "capability": "Showing what actually changed in a pinned file before a verification surface is re-affirmed, and refusing the re-affirmation when the edit replaced a real dependency with a stub",
           "anchor": "Show the user what actually changed in that file."
+        },
+        {
+          "capability": "Reading the oracle's criteria to the approver before an oracle approval, rather than a hash and an id",
+          "anchor": "Read the oracle to the approver."
         }
       ],
       "cliGaps": []

@@ -1,6 +1,8 @@
 import {
+  listTaskRunsForChange,
   loadChangeBundle,
   readApproval,
+  readEvidenceIndex,
   readTaskGraph,
   writeApproval,
   type ApprovalSuccess,
@@ -10,6 +12,7 @@ import {
   LEGION_PROTOCOL_VERSION,
   artifactReferenceSchema,
   buildChangeIdempotencyKey,
+  oracleIdSchema,
   type Actor,
   type Approval
 } from "@legion/protocol";
@@ -36,10 +39,16 @@ import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/
 import { mintPinnedReferences } from "../../workflow/pinned-references.js";
 import { approvalIdForSubject, taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
+  changeOracleDemand,
   changeVerificationSurfaces,
+  derivesApprovalOrderingGate,
+  earliestExecutionRun,
   isLiveDeltaSpecGrant,
-  isLiveSurfaceReaffirmation
+  isLiveOracleGrant,
+  isLiveSurfaceReaffirmation,
+  type ShipGateOracleFact
 } from "../../workflow/ship-gates.js";
+import { taskRunPlaneContradictions } from "./ship.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
 const APPROVE_HELP = `legion approve <subject>
@@ -49,6 +58,7 @@ artifact and nothing else: it does not plan, build, review or ship.
 
 Subjects:
   spec     Approve the change's delta specs.
+  oracle   Approve the oracles the change's work will be judged against.
   surface  Re-affirm a verification surface whose pinned file has been edited.
 
 legion approve spec [--requirement <id>] --approver <id> [--dry-run]
@@ -63,6 +73,23 @@ legion approve spec [--requirement <id>] --approver <id> [--dry-run]
                       a second --requirement replaces the first.
   --dry-run           Resolve the approver and the delta specs, report what would
                       be written, and write nothing.
+
+legion approve oracle [--oracle <id>] --approver <id> [--dry-run]
+
+  An oracle states the criteria a task's work will be judged against. Approving
+  one records a named human saying those are the right criteria — before the work
+  exists, which is the whole point. The approved_spec_and_oracle risk gate at R3
+  compares the last of these decisions against the instant the first task run
+  started, so this belongs beside legion approve spec and before legion build.
+
+  Nothing re-orders a decision once it has been taken. Run this after a build and
+  the gate reports unsatisfied for good, with no command able to move it.
+
+  --approver <id>     Required, same rule as above.
+  --oracle <id>       Approve only this oracle. Omitted, every oracle the change's
+                      tasks are judged against is approved, which is what the gate
+                      asks about. Not repeatable.
+  --dry-run           Report what would be approved and write nothing.
 
 legion approve surface [--path <file>] --approver <id> [--dry-run]
 
@@ -86,6 +113,8 @@ Examples:
   legion approve spec --approver dasbl
   legion approve spec --approver dasbl --dry-run
   legion approve spec --requirement req_editor-saves-metadata --approver dasbl
+  legion approve oracle --approver dasbl
+  legion approve oracle --oracle orc_phase-1-c1 --approver dasbl
   legion approve surface --approver dasbl
   legion approve surface --path ops/compose.integration.yml --approver dasbl`;
 
@@ -101,11 +130,57 @@ Examples:
 const DELTA_SPEC_APPROVE_ACTION = "spec.delta.approve";
 
 /**
+ * The action an oracle approval carries.
+ *
+ * Spelled out here and in `ship-gates.ts` rather than shared, on
+ * `DELTA_SPEC_APPROVE_ACTION`'s rule: the gate and the writer are two sides of a
+ * contract, and a shared symbol would let a rename move both at once and leave
+ * every approval already on disk unreadable by the gate that reads them.
+ */
+const ORACLE_APPROVE_ACTION = "oracle.approve";
+
+/**
+ * Which narrowing flag belongs to which subject, and what it means.
+ *
+ * A table rather than the two-way ternary this replaces, and the replacement is a
+ * defect fix rather than tidiness. The old form was
+ * `const foreign = subject === "spec" ? "path" : "requirement"`, which does not
+ * generalize: with a third subject it refuses `--requirement` for `oracle` by
+ * accident and **accepts `legion approve oracle --path ops/x.yml` in silence** —
+ * exactly the "a flag the operator typed is ignored" failure the guard exists to
+ * prevent, failing open, in the direction where the command reports success for a
+ * thing it did not do.
+ *
+ * `declared-options.ts` holds one list for every subject, because
+ * `undeclaredOptionError` runs before this handler and cannot see which subject
+ * was named. So the per-subject boundary has to be here, and it has to refuse
+ * every option owned by another subject rather than one of them.
+ */
+const SUBJECT_OPTIONS = {
+  spec: {
+    owns: "requirement",
+    hint: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>."
+  },
+  oracle: {
+    owns: "oracle",
+    hint: "It narrows an oracle approval to one oracle: legion approve oracle --oracle <id>."
+  },
+  surface: {
+    owns: "path",
+    hint: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
+  }
+} as const;
+
+type ApprovalSubject = keyof typeof SUBJECT_OPTIONS;
+
+const APPROVAL_SUBJECTS = Object.keys(SUBJECT_OPTIONS) as readonly ApprovalSubject[];
+
+/**
  * `legion approve <subject>`, a subject positional rather than `--spec`.
  *
- * Later work approves oracles and protected paths. As booleans those become
- * mutually exclusive flags needing runtime cross-validation; as a positional
- * they are a closed switch whose `default:` arm enumerates what exists.
+ * Later work approves protected paths. As booleans those become mutually
+ * exclusive flags needing runtime cross-validation; as a positional they are a
+ * closed switch whose `default:` arm enumerates what exists.
  *
  * Bare `legion approve` is a usage error rather than a help screen. A host that
  * mis-splits its argv must not read a help screen as a completed approval.
@@ -115,35 +190,31 @@ export async function handleApproveWorkflow(context: CliContext): Promise<CliRes
   if (hasFlag(context, "help") || subject === "help") {
     return helpResult(APPROVE_HELP);
   }
+  const supported = APPROVAL_SUBJECTS.join(", ");
   if (subject === undefined) {
     return usageError(
-      "legion approve requires a subject. Supported subjects: spec, surface. Example: legion approve spec --approver <id>."
+      `legion approve requires a subject. Supported subjects: ${supported}. Example: legion approve spec --approver <id>.`
     );
   }
-  if (subject !== "spec" && subject !== "surface") {
+  if (!APPROVAL_SUBJECTS.includes(subject as ApprovalSubject)) {
+    return usageError(`Unknown approval subject: legion approve ${subject}. Supported subjects: ${supported}.`);
+  }
+  const named = subject as ApprovalSubject;
+
+  // Every option another subject owns is refused by name, with the sentence that
+  // says what it would have done there. A silent ignore here is how a command
+  // reports success for a thing it did not do.
+  for (const other of APPROVAL_SUBJECTS) {
+    if (other === named) continue;
+    const foreign = SUBJECT_OPTIONS[other].owns;
+    if (!context.args.options.has(foreign)) continue;
     return usageError(
-      `Unknown approval subject: legion approve ${subject}. Supported subjects: spec, surface.`
+      `--${foreign} is not an option of legion approve ${named}. ${SUBJECT_OPTIONS[other].hint}`
     );
   }
 
-  // `declared-options.ts` holds one list for every subject, because
-  // `undeclaredOptionError` runs before this handler and cannot see which subject
-  // was named. So the per-subject boundary is here, and it is a refusal rather
-  // than a silent ignore: `legion approve surface --requirement req_x` typed by
-  // an operator who meant `spec` would otherwise re-affirm every drifted pin in
-  // the change and report success, having quietly discarded the one word that
-  // said what they wanted.
-  const foreign = subject === "spec" ? "path" : "requirement";
-  if (context.args.options.has(foreign)) {
-    return usageError(
-      `--${foreign} is not an option of legion approve ${subject}. ` +
-        (subject === "spec"
-          ? "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
-          : "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>.")
-    );
-  }
-
-  if (subject === "surface") return approveVerificationSurfaces(context);
+  if (named === "surface") return approveVerificationSurfaces(context);
+  if (named === "oracle") return approveOracles(context);
   return approveDeltaSpecs(context);
 }
 
@@ -298,9 +369,33 @@ async function approveDeltaSpecs(context: CliContext): Promise<CliResult> {
     .filter((state) => !state.approved && !selectedIds.has(state.delta.requirementId))
     .map((state) => state.delta.requirementId);
 
+  // The ordering warning, which this verb did not carry and its sibling did.
+  //
+  // `legion approve oracle` and `legion approve spec` feed the *same* gate at R3,
+  // and only one of them said so. Adversarial review followed ship's own advice on
+  // an already-built R3 change — `legion approve spec --approver dasbl` — and got
+  // `status: "approved"`, `warnings: undefined`, and a gate that had moved from
+  // `unevaluable` to permanently `unsatisfied` with nothing in the payload
+  // recording that anything had changed for the worse. At R2 the same command is
+  // exactly as useful after a build as before it, which is why the warning is
+  // gated on the tier that derives the ordering gate rather than emitted always.
+  //
+  // The task graph is read only for the tier. It failing to read is not a reason
+  // to refuse an approval — the decision is a governance fact about the delta
+  // specs, which loaded — so an unreadable graph degrades to no warning, which is
+  // the pre-existing behaviour rather than a new refusal.
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const ordered = taskgraph.ok && derivesApprovalOrderingGate(taskgraph.document.tasks);
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const executionWarnings = orderingWarnings({ changeId: latestChange.changeId, execution, ordered });
+  const alreadyRan = executionWarnings.length > 0;
+
   if (hasFlag(context, "dry-run")) {
     const unapproved = unapprovedNow;
-    const action = dryRunNextActionFor(unapproved, bundle.bundle.deltas.length);
+    const action = dryRunNextActionFor(unapproved, bundle.bundle.deltas.length, { ordered, alreadyRan });
     return success(
       {
         ok: true,
@@ -308,6 +403,7 @@ async function approveDeltaSpecs(context: CliContext): Promise<CliResult> {
         dryRun: true,
         change: { changeId: latestChange.changeId },
         approver: approver.approver,
+        ...(executionWarnings.length === 0 ? {} : { warnings: executionWarnings }),
         // No `status` and no `decidedAt` on these entries: nothing was decided,
         // and a dry-run payload that carried them would read as a record of a
         // decision to anything parsing it.
@@ -328,6 +424,7 @@ async function approveDeltaSpecs(context: CliContext): Promise<CliResult> {
         `Dry run: ${planned.length} delta spec${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
         ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.delta.requirementId}  ${entry.delta.path}`),
         `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
         "No approval was written.",
         renderNextAction(action)
       ].join("\n")
@@ -400,17 +497,20 @@ async function approveDeltaSpecs(context: CliContext): Promise<CliResult> {
   }
 
   const unapproved = unapprovedAfter;
-  const action = nextActionFor(unapproved, bundle.bundle.deltas.length);
+  const action = nextActionFor(unapproved, bundle.bundle.deltas.length, { ordered, alreadyRan });
   const decided = planned.filter((entry) => entry.action !== "unchanged").length;
-  const warnings = superseded.map((record) => ({
-    code: "withdrawn_approval_superseded",
-    message:
-      `${record.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record.document.status}` +
-      `${record.document.decisionReason === undefined ? "" : ` ("${record.document.decisionReason}")`}` +
-      `, and this grant supersedes that decision. The withdrawal is preserved at ${record.artifactPath} ` +
-      "and is the standing record of it; nothing was deleted.",
-    path: record.artifactPath
-  }));
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record) => ({
+      code: "withdrawn_approval_superseded",
+      message:
+        `${record.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record.document.status}` +
+        `${record.document.decisionReason === undefined ? "" : ` ("${record.document.decisionReason}")`}` +
+        `, and this grant supersedes that decision. The withdrawal is preserved at ${record.artifactPath} ` +
+        "and is the standing record of it; nothing was deleted.",
+      path: record.artifactPath
+    }))
+  ];
   return success(
     {
       ok: true,
@@ -527,7 +627,7 @@ function recoveryForDiscovery(diagnostics: readonly unknown[]): ReturnType<typeo
  * below, not the storage model, which does not preserve anything on its own.
  */
 function plannedActionFor(
-  state: DeltaSpecState,
+  state: { readonly existing?: ApprovalSuccess; readonly approved: boolean },
   approver: Actor
 ): { readonly action: PlannedApproval["action"]; readonly previousStatus?: Approval["status"] } {
   const existing = state.existing;
@@ -784,12 +884,39 @@ function selectDeltas(
  * `unapproved` must be requirements left without a live grant, not requirements
  * this invocation did not select — see `unapprovedAfter` at the call site.
  */
-function nextActionFor(unapproved: readonly string[], total: number): ReturnType<typeof nextAction> {
+function nextActionFor(
+  unapproved: readonly string[],
+  total: number,
+  execution: { readonly ordered: boolean; readonly alreadyRan: boolean }
+): ReturnType<typeof nextAction> {
   if (unapproved.length > 0) {
     return nextAction(
       "legion approve spec",
       `${unapproved.length} of ${total} delta specs in this change are still unapproved (${unapproved.join(", ")}); ` +
         "the approved_delta_spec gate is satisfied only when every one of them carries a granted approval."
+    );
+  }
+  // Two corrections in one branch, both measured on real R3 changes.
+  //
+  // A change already built was advised to build again — "the change is ready for
+  // guided build execution" on a change that had run, which is the advice that
+  // made its ordering unrepairable in the first place. And at R3 the delta specs
+  // are only half of what `approved_spec_and_oracle` reads: routing straight to a
+  // build here skips the oracles entirely, so the operator builds a change whose
+  // oracle half nobody has approved and can no longer approve in time.
+  if (execution.alreadyRan) {
+    return nextAction(
+      "legion ship",
+      "Every delta spec in this change is approved, and this change has already run. approved_spec_and_oracle " +
+        "compares the decision instants against the start of execution; legion ship reports which gates that leaves " +
+        "unmet and why."
+    );
+  }
+  if (execution.ordered) {
+    return nextAction(
+      "legion approve oracle --approver <id>",
+      "Every delta spec in this change is approved. At R3 approved_spec_and_oracle reads the oracles too, and both " +
+        "halves have to be decided before the first task run: approve the oracles next, then build."
     );
   }
   return nextAction(
@@ -815,8 +942,26 @@ function nextActionFor(unapproved: readonly string[], total: number): ReturnType
  * The advice is always this command, never the next stage: after a dry run
  * nothing has been decided, so the next act is to take the decision.
  */
-function dryRunNextActionFor(unapproved: readonly string[], total: number): ReturnType<typeof nextAction> {
+function dryRunNextActionFor(
+  unapproved: readonly string[],
+  total: number,
+  execution: { readonly ordered: boolean; readonly alreadyRan: boolean }
+): ReturnType<typeof nextAction> {
   if (unapproved.length === 0) {
+    if (execution.alreadyRan) {
+      return nextAction(
+        "legion ship",
+        `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this ` +
+          "change has already run; legion ship reports which gates that leaves unmet and why."
+      );
+    }
+    if (execution.ordered) {
+      return nextAction(
+        "legion approve oracle --approver <id>",
+        `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval. At R3 ` +
+          "approved_spec_and_oracle reads the oracles too, and both halves have to be decided before the first task run."
+      );
+    }
     return nextAction(
       "legion build",
       `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this dry run ` +
@@ -937,6 +1082,705 @@ function blockedApprove(
       nextAction: action
     },
     ["Approve blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+
+/** What the approvals plane already records about one of the change's oracles. */
+interface OracleState {
+  readonly oracleId: string;
+  readonly fact: ShipGateOracleFact;
+  /** Which tasks are judged against it, for the sentence the operator reads. */
+  readonly taskIds: readonly string[];
+  readonly approvalId: ReturnType<typeof approvalIdForSubject>;
+  readonly existing?: ApprovalSuccess;
+  /**
+   * Does the document on disk already satisfy the gate's oracle half for this
+   * oracle — whoever granted it?
+   *
+   * `isLiveOracleGrant`, the gate's own predicate, imported rather than
+   * restated. A writer whose idea of "done" is weaker than the reader's idea of
+   * "satisfied" reports success, writes nothing, and leaves the change blocked
+   * forever with no flag that would make it write.
+   */
+  readonly approved: boolean;
+}
+
+interface PlannedOracleApproval extends OracleState {
+  readonly action: "grant" | "regrant" | "unchanged";
+  readonly previousStatus?: Approval["status"];
+}
+
+/**
+ * `legion approve oracle` — the decision `approved_spec_and_oracle` orders.
+ *
+ * An oracle states the criteria a task's work will be judged against.
+ * `legion plan` writes one per executable acceptance criterion plus one covering
+ * the manual ones, and until this release nothing anywhere recorded a human
+ * agreeing to them — so ADR-006's R3 gate, whose whole question is whether the
+ * spec and the oracle were approved *before* gated execution proceeded, fell
+ * through `evaluateGate`'s `default:` arm and every R3 change was structurally
+ * unshippable.
+ *
+ * Three things about this verb are deliberate and each closes a hole:
+ *
+ *  - **The subject set is the gate's, computed by the gate's own function.**
+ *    `changeOracleDemand` is what the gate quantifies over — the oracles the
+ *    change's *tasks name*, not the files its oracle directory happens to hold —
+ *    and a writer walking its own set could approve an oracle the gate does not
+ *    read or miss one it does. `legion approve surface` calls
+ *    `changeVerificationSurfaces` for the same reason.
+ *  - **The pin is `fact.reference`, copied whole.** That is the digest the
+ *    artifact service hashed off the bytes in the read this decision is about,
+ *    and it is one of the families `shipGatePinnedReferences` pre-resolves. The
+ *    taskgraph carries a second, independently staleable copy of the same
+ *    sha256; pinning that, or minting a third by hand, would answer `unverified`
+ *    at ship time forever against a record this command reported as written.
+ *  - **It warns when execution has already begun.** The "already approved"
+ *    predicate deliberately excludes the ordering clause — including it would
+ *    make a harmless rerun write a fresh `decidedAt` and make the ordering
+ *    strictly worse — so a decision taken after a build succeeds here and can
+ *    never satisfy the gate. Saying so at the one moment the operator could still
+ *    act on it is what stops that from being the silent no-route-out loop PR 2
+ *    closed for delta specs.
+ */
+async function approveOracles(context: CliContext): Promise<CliResult> {
+  const oracleRaw = stringOption(context, "oracle")?.trim();
+  if (context.args.options.get("oracle") === true || oracleRaw === "") {
+    return usageError(
+      "Missing required value for --oracle. Example: legion approve oracle --oracle orc_phase-1-c1."
+    );
+  }
+
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction(
+        "legion plan 1",
+        "Which oracles this change's work is judged against is recorded on its task contracts, and the task graph could not be read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (oracles === undefined) {
+    // The deliberate divergence from `legion approve surface`, which ignores an
+    // unreadable oracle because that state routes its operator somewhere else
+    // entirely. Here the oracles *are* the subject: approving a subset of a set
+    // that could not be established would write records for whichever documents
+    // happened to read, which is the partial-plane fail-open one level up.
+    return blockedApprove(
+      [
+        {
+          code: "oracle_plane_unreadable",
+          message:
+            `The oracles of ${latestChange.changeId} could not be read as a complete set, so which criteria this ` +
+            "change's work is judged against is unestablished. The manifest fails on any malformed oracle in the " +
+            "directory; correct or remove it, then run this again.",
+          path: `.legion/project/changes/${latestChange.changeId}/oracle`
+        }
+      ],
+      // `legion ship`, not `legion dev change validate`.
+      //
+      // The first draft named the validate verb, and adversarial review measured
+      // it: drop any unparseable `.yaml` under `oracle/` and `legion dev change
+      // validate <changeId>` exits 0 with `{"ok":true,"diagnostics":[]}` on
+      // exactly that repository, because it checks the bundle's schema rather
+      // than the oracle plane. Being sent to a command that reports success on
+      // the broken state ends the investigation at "nothing is wrong" — PR 4's
+      // named defect, reproduced in this release's new command. `legion ship` is
+      // the command that does see it: on the same repository it reports
+      // `change_traceability_broken` naming the offending file by path, which is
+      // the one fact this refusal cannot supply — the oracle manifest fails as a
+      // whole and reports the directory.
+      nextAction(
+        "legion ship",
+        "An oracle document in this change will not parse, and the manifest fails as a set, so this names the " +
+          "directory rather than the file. legion ship reports change_traceability_broken naming the file itself; " +
+          "correct or remove it, then run this again. Approving a subset of a set that cannot be established would " +
+          "record a decision about criteria nobody can read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  const demand = changeOracleDemand({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: undefined,
+      approvals: undefined,
+      deltas: undefined,
+      oracles,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: undefined,
+      // Never consulted: `changeOracleDemand` resolves ids against documents and
+      // asks nothing about disk. Supplied because the facts shape requires it,
+      // and `unverified` is the value that cannot be mistaken for a check that
+      // passed.
+      verifyPin: () => "unverified"
+    }
+  });
+
+  const missing = demand.unresolved[0];
+  if (missing !== undefined) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_in_change",
+          message:
+            `Task ${missing.taskId} is judged against oracle ${missing.oracleId}, and no such oracle document is in ` +
+            `${latestChange.changeId}. Approving the oracles that are there would record a decision about a set this ` +
+            "change cannot show you. Restore the missing oracle, or re-plan the work as a new change.",
+          path: `.legion/project/changes/${latestChange.changeId}/oracle/${missing.oracleId}.yaml`
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "An oracle a task names is not on disk. legion ship names which gate that leaves unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  if (demand.referenced.length === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_referenced_oracle",
+          message:
+            `No task contract in ${latestChange.changeId} references an oracle, so there are no criteria to approve. ` +
+            "legion plan writes one oracle per executable acceptance criterion and one covering the manual ones; a " +
+            "change built from a legacy import or a hand-written task graph may reference none.",
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be approved. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  // A `--oracle` naming nothing in the change is blocked rather than a usage
+  // error, on `selectDeltas`' precedent: the argv is well formed, and what
+  // refuses is the change's own contents.
+  if (oracleRaw !== undefined && !demand.referenced.some((entry) => entry.oracleId === oracleRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_in_change",
+          message:
+            `--oracle ${oracleRaw} is not an oracle this change's tasks are judged against. ` +
+            `They name: ${demand.referenced.map((entry) => entry.oracleId).join(", ")}. ` +
+            "Approving an oracle Legion cannot show you would approve nothing.",
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion approve oracle --approver <id>", "Name an oracle this change's tasks actually reference."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  // Resolved before the dry run returns, and before any approval is read: a dry
+  // run that resolves nothing answers "yes" to `--approver dasbi`.
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve oracle",
+    decision: "an oracle"
+  });
+  if (!approver.ok) return approver.result;
+
+  // One instant for the whole run: the clock the gate's expiry comparison is
+  // made against *and* the decision instant written into every approval this run
+  // records. Two reads would let a grant be judged live against one moment and
+  // dated at another.
+  const decidedAt = currentUtcTimestamp();
+  const selectedIds = new Set(
+    demand.referenced
+      .filter((entry) => oracleRaw === undefined || entry.oracleId === oracleRaw)
+      .map((entry) => entry.oracleId)
+  );
+
+  const states: OracleState[] = [];
+  for (const entry of demand.referenced) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: ORACLE_APPROVE_ACTION,
+      subject: { kind: "oracle", id: entry.oracleId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      // Blocking only for an oracle this run would write. Creating over an
+      // unread existing approval is the one way to silently replace a revocation
+      // with a fresh grant.
+      if (selectedIds.has(entry.oracleId)) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve oracle",
+            `An approval already exists for ${entry.oracleId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({ oracleId: entry.oracleId, fact: entry.fact, taskIds: entry.taskIds, approvalId, approved: false });
+      continue;
+    }
+
+    states.push({
+      oracleId: entry.oracleId,
+      fact: entry.fact,
+      taskIds: entry.taskIds,
+      approvalId,
+      approved:
+        existing.ok &&
+        isLiveOracleGrant({
+          approval: existing.document,
+          changeId: bundle.bundle.change.id,
+          oracle: entry.fact,
+          evaluatedAt: decidedAt
+        }),
+      ...(existing.ok ? { existing } : {})
+    });
+  }
+
+  const planned: PlannedOracleApproval[] = states
+    .filter((state) => selectedIds.has(state.oracleId))
+    .map((state) => ({ ...state, ...plannedActionFor(state, approver.approver) }));
+
+  // Two different questions. A dry run writes nothing, so it reports the state
+  // as it stands; the write path reports the state this run leaves behind.
+  const unapprovedNow = states.filter((state) => !state.approved).map((state) => state.oracleId);
+  const unapprovedAfter = states
+    .filter((state) => !state.approved && !selectedIds.has(state.oracleId))
+    .map((state) => state.oracleId);
+
+  const ordered = derivesApprovalOrderingGate(taskgraph.document.tasks);
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const executionWarnings = orderingWarnings({ changeId: latestChange.changeId, execution, ordered });
+  const alreadyRan = executionWarnings.length > 0;
+
+  if (hasFlag(context, "dry-run")) {
+    const action = dryRunOracleNextAction(unapprovedNow, states.length, alreadyRan);
+    return success(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...(executionWarnings.length === 0 ? {} : { warnings: executionWarnings }),
+        // No `status` and no `decidedAt`: nothing was decided, and a dry-run
+        // payload carrying them would read as a record of a decision to anything
+        // parsing it.
+        approvals: planned.map((entry) => ({
+          oracleId: entry.oracleId,
+          oraclePath: entry.fact.reference.path,
+          taskIds: entry.taskIds,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...(entry.previousStatus === undefined ? {} : { previousStatus: entry.previousStatus })
+        })),
+        unapproved: unapprovedNow,
+        ...(demand.unreferenced.length === 0 ? {} : { unreferencedOracles: demand.unreferenced }),
+        nextAction: action,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.fact.reference.path}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action)
+      ].join("\n")
+    );
+  }
+
+  const written: ApprovalSuccess[] = [];
+  const superseded: ApprovalSuccess[] = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: entry.oracleId,
+      action: ORACLE_APPROVE_ACTION,
+      target: { kind: "oracle", id: entry.oracleId },
+      command: "legion approve oracle",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        approvals: written.map(approvalSummary)
+      });
+    }
+    if (archived.record !== undefined) superseded.push(archived.record);
+
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === undefined ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: oracleApproval({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...(archived.record === undefined ? {} : { superseding: archived.record })
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve oracle",
+          "Some oracles were approved and one write failed. Rerunning re-decides only what is not already approved."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          approvals: written.map(approvalSummary)
+        }
+      );
+    }
+    written.push(write);
+  }
+
+  const action = oracleNextActionFor(unapprovedAfter, states.length, alreadyRan);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record) => ({
+      code: "withdrawn_approval_superseded",
+      message:
+        `${record.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record.document.status}` +
+        `${record.document.decisionReason === undefined ? "" : ` ("${record.document.decisionReason}")`}` +
+        `, and this grant supersedes that decision. The withdrawal is preserved at ${record.artifactPath} ` +
+        "and is the standing record of it; nothing was deleted.",
+      path: record.artifactPath
+    }))
+  ];
+
+  return success(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...(warnings.length === 0 ? {} : { warnings }),
+      ...(superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary) }),
+      approvals: planned.map((entry) => {
+        const record = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          oracleId: entry.oracleId,
+          oraclePath: entry.fact.reference.path,
+          taskIds: entry.taskIds,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...(entry.previousStatus === undefined ? {} : { previousStatus: entry.previousStatus }),
+          artifactPath: record?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // The field an obvious implementation omits: the gate is change-scoped and
+      // satisfied only by full coverage, so approving one of three oracles
+      // leaves ship blocked over two the operator never saw.
+      unapproved: unapprovedAfter,
+      // Reported and never approved. An oracle no task references proves nothing
+      // about the criteria the work was judged against, and writing a governance
+      // record for a decision nobody had to make is what `legion approve surface`
+      // already refuses to do for an undrifted pin.
+      ...(demand.unreferenced.length === 0 ? {} : { unreferencedOracles: demand.unreferenced }),
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0
+        ? `Already approved: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`
+        : `Approved ${decided} oracle${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.fact.reference.path}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+/** What this change's records say about whether gated execution has begun. */
+type ExecutionEvidence =
+  | { readonly kind: "started"; readonly startedAt: string; readonly runId: string; readonly taskId: string }
+  | { readonly kind: "contradicted"; readonly detail: string }
+  | { readonly kind: "none" };
+
+/**
+ * Has gated execution for this change already begun?
+ *
+ * Read here, in a verb whose contract is otherwise "write a governance artifact
+ * and nothing else", because the alternative is silence at the one moment the
+ * operator could still act. `approved_spec_and_oracle` compares the last of these
+ * decisions against `min(startedAt)`, and nothing re-orders a decision once
+ * taken — so a run that already exists means this command will exit 0 and leave
+ * ship blocked forever. That is the shape PR 2 closed for delta specs by making
+ * the writer call the reader; here the writer *cannot* refuse (the record is
+ * still a true governance fact, and refusing would leave no way to record one at
+ * all), so it warns instead.
+ *
+ * `earliestExecutionRun` is the gate's own minimum rather than a second one. The
+ * listing is read raw rather than through `completeTaskRuns`: a partial listing
+ * makes the gate answer `unevaluable`, but for a *warning* any run that is
+ * visible is enough, and a warning suppressed because one sibling file would not
+ * parse is a warning that fails in the direction of silence.
+ *
+ * **The evidence index is read too, and that is a correction.** The first draft
+ * read only the run plane, so `rm -rf .../runs/*` silenced this warning
+ * completely: adversarial review built a change, emptied its run directory,
+ * approved everything, rebuilt, and this command reported no warning at all —
+ * because it was asking the same emptied directory the gate would later be misled
+ * by. `taskRunPlaneContradictions` is `legion ship`'s own corroboration rule,
+ * reused rather than paraphrased, so the warning fires whenever the change's other
+ * records say execution happened and the run plane cannot show it.
+ */
+async function executionAlreadyStarted(repositoryRoot: string, changeId: string): Promise<ExecutionEvidence> {
+  let listing;
+  let index;
+  try {
+    listing = await listTaskRunsForChange({ repositoryRoot, changeId });
+    index = await readEvidenceIndex({ repositoryRoot, changeId });
+  } catch {
+    return { kind: "none" };
+  }
+  if (!listing.ok) return { kind: "none" };
+
+  const taskRuns = listing.taskRuns.map((run) => run.document);
+  const earliest = earliestExecutionRun(taskRuns);
+  if (earliest !== undefined) return { kind: "started", ...earliest };
+
+  const entries = index !== undefined && index.ok ? index.document.entries : [];
+  const contradictions = taskRunPlaneContradictions({ taskRuns, entries });
+  if (contradictions.length > 0) return { kind: "contradicted", detail: contradictions.join(" ") };
+  return { kind: "none" };
+}
+
+/**
+ * The warning both approve verbs owe an R3 change whose work has already run.
+ *
+ * Shared, because the first draft carried it on `legion approve oracle` and not on
+ * `legion approve spec`, and the two feed the *same* gate — so the operator
+ * following ship's own advice to `legion approve spec` on an already-built R3
+ * change got `status: "approved"`, `warnings: undefined`, and a gate that had
+ * silently moved from `unevaluable` to permanently `unsatisfied`. Review
+ * reproduced that end to end and it is the sharpest instance in this series of a
+ * command exiting 0 while making the change strictly worse.
+ *
+ * Gated on the change deriving the gate at all. Only R3 does, and a warning that
+ * an R2 operator can do nothing with — `approved_delta_spec` has no ordering
+ * clause — is noise that teaches people to ignore the line that matters.
+ */
+function orderingWarnings(input: {
+  readonly changeId: string;
+  readonly execution: ExecutionEvidence;
+  readonly ordered: boolean;
+}) {
+  if (!input.ordered) return [];
+  const runs = `.legion/project/changes/${input.changeId}/runs`;
+  if (input.execution.kind === "started") {
+    return [
+      {
+        code: "approval_after_execution",
+        message:
+          `Gated execution for ${input.changeId} began at ${input.execution.startedAt} (run ${input.execution.runId} of ` +
+          `${input.execution.taskId}). A decision recorded now is dated after it, and approved_spec_and_oracle compares ` +
+          "those two instants: at R3 this change cannot satisfy that gate, and no command re-orders a decision " +
+          "that has already been taken. Approving is still recorded — the governance fact is real — but plan the " +
+          "remaining work as a new change if the gate has to pass.",
+        path: runs
+      }
+    ];
+  }
+  if (input.execution.kind === "contradicted") {
+    return [
+      {
+        code: "execution_record_incomplete",
+        message:
+          `${input.execution.detail} So this change's run directory cannot say when gated execution began, and ` +
+          "approved_spec_and_oracle compares the last of these decisions against exactly that instant: it will report " +
+          "unevaluable until the run records are restored, and a decision recorded now may already be later than the " +
+          "work it claims to gate. Approving is still recorded — the governance fact is real.",
+        path: runs
+      }
+    ];
+  }
+  return [];
+}
+
+/**
+ * The oracle approval document, pinning the bytes of the oracle it is about.
+ *
+ * `artifacts` is `fact.reference` copied whole rather than a digest minted here.
+ * `readOracleArtifact` hashes the file in the same read that produced the
+ * document this decision is about, so the reference has already been established
+ * against disk *by this same command*; hashing again would establish the same
+ * fact twice. It is also the reference `shipGatePinnedReferences` pre-resolves,
+ * and it must be that one and no other — an approval pinning any other path
+ * answers `unverified` at ship time and pins the gate at `unevaluable` forever.
+ *
+ * `scope.targets` names the oracle itself, which is where this departs from
+ * `legion approve surface`: `approvalTargetReferenceSchema` has had a
+ * first-class `{kind: "oracle"}` member since the protocol was written, so no
+ * `{kind: "change"}` fallback is needed and the gate can filter on an exact
+ * target.
+ *
+ * `taskId` and `runId` are omitted even though an oracle is named by exactly one
+ * task today. The decision is about the criteria, not about an execution — and
+ * the gate refuses an approval carrying either, by name, because a document that
+ * claims a task says something this act does not.
+ */
+function oracleApproval(input: {
+  readonly entry: PlannedOracleApproval;
+  readonly projectId: Parameters<typeof buildChangeIdempotencyKey>[0]["projectId"];
+  readonly changeId: Parameters<typeof buildChangeIdempotencyKey>[0]["changeId"];
+  readonly approver: Actor;
+  readonly decidedAt: ReturnType<typeof currentUtcTimestamp>;
+  /** The withdrawal this grant overrules, once it has been safely copied aside. */
+  readonly superseding?: ApprovalSuccess;
+}): Approval {
+  const existing = input.entry.existing;
+  const reference = input.entry.fact.reference;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === undefined ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === undefined ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: ORACLE_APPROVE_ACTION,
+      targets: [
+        // Re-parsed rather than cast. `changeOracleDemand` types an oracle id as
+        // a plain string, because `ship-gates.ts` deliberately keeps protocol
+        // brands out of its fact shapes — and a cast here would put an
+        // unvalidated string into `scope.targets`, where the gate's exact-target
+        // filter is the only thing that stops one approval answering for
+        // another.
+        { kind: "oracle", id: oracleIdSchema.parse(input.entry.oracleId) },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: ORACLE_APPROVE_ACTION,
+      targetHash: reference.sha256
+    }),
+    artifacts: [reference],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason:
+      `${input.approver.id} approved oracle ${input.entry.oracleId} at ${reference.sha256} via legion approve oracle. ` +
+      `It states the criteria ${input.entry.taskIds.join(", ")} will be judged against.` +
+      (input.superseding === undefined
+        ? ""
+        : ` This supersedes the ${input.superseding.document.status} decision recorded by ` +
+          `${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+
+/**
+ * Where the operator goes next after an oracle approval.
+ *
+ * `legion build` once nothing is left unapproved — but only while no run exists.
+ * Once one does, the ordering this gate checks is already settled and advising a
+ * build would route the operator past the only thing that could still be said
+ * about it.
+ */
+function oracleNextActionFor(
+  unapproved: readonly string[],
+  total: number,
+  executionStarted: boolean
+): ReturnType<typeof nextAction> {
+  if (unapproved.length > 0) {
+    return nextAction(
+      "legion approve oracle",
+      `${unapproved.length} of ${total} oracles this change's tasks are judged against are still unapproved ` +
+        `(${unapproved.join(", ")}); the approved_spec_and_oracle gate is satisfied only when every one of them carries ` +
+        "a granted approval."
+    );
+  }
+  if (executionStarted) {
+    return nextAction(
+      "legion ship",
+      "Every oracle this change's tasks are judged against is approved, and this change has already run. " +
+        "approved_spec_and_oracle compares the decision instants against the start of execution; legion ship reports " +
+        "what that ordering leaves unmet."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every oracle this change's tasks are judged against is approved. Approve its delta specs too if you have not — " +
+      "approved_spec_and_oracle reads both — and then build, which is what these decisions have to precede."
+  );
+}
+
+function dryRunOracleNextAction(
+  unapproved: readonly string[],
+  total: number,
+  executionStarted: boolean
+): ReturnType<typeof nextAction> {
+  if (unapproved.length === 0) {
+    return nextAction(
+      executionStarted ? "legion ship" : "legion build",
+      `All ${total} oracle${total === 1 ? "" : "s"} this change's tasks are judged against already carry a granted ` +
+        "approval, and this dry run found nothing left to decide."
+    );
+  }
+  return nextAction(
+    "legion approve oracle --approver <id>",
+    `This was a dry run and no approval was written. ${unapproved.length} of ${total} oracles are unapproved ` +
+      `(${unapproved.join(", ")}); the approved_spec_and_oracle gate stays unmet until this command is run without ` +
+      "--dry-run."
   );
 }
 
