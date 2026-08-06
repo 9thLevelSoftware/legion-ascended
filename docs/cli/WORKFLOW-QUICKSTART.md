@@ -47,6 +47,21 @@ legion polish packages/cli
 legion build --executor codex
 ```
 
+## Approving Delta Specs
+
+`legion plan` writes one delta spec per requirement — the proposed change to that requirement's specification — and nothing approves them by default. An R2 change cannot ship until every one carries a granted approval, so this step sits between planning and building:
+
+```powershell
+legion approve spec --dry-run --approver dasbl --json
+legion approve spec --approver dasbl
+```
+
+`--approver` names a human recorded in the project manifest's `policy.decisionOwners`. No approver is inferred from the environment, from git config, or from a project having only one owner. The dry run resolves the approver and shows exactly which bytes would be pinned, so a mistyped id fails before anything is written.
+
+The approval records the delta spec's content hash, and `legion ship` re-hashes the file before it trusts the approval. In practice an edited delta spec is caught earlier still: the change bundle also pins those bytes, so a spec changed after planning stops the change loading at all and `legion ship` reports `delta_artifact_mismatch` rather than an unmet gate. Nothing in Legion rewrites a delta spec — `legion plan` is create-only — so the repair is to restore the file, not to re-approve it, and `legion approve spec` refuses to launder an out-of-band edit into a governance record.
+
+Re-running after a successful approval reports `unchanged` and rewrites nothing. If the approval on disk is anything the gate would not accept — withdrawn, expired, or edited so it no longer pins the spec — the rerun re-grants it instead; a withdrawn decision is copied to its own file first, so re-approving supersedes it rather than erasing it. Changes built by `legion plan` carry a single requirement today; on a change with more than one, `legion approve spec --requirement <id>` approves just that one and the payload's `unapproved` list names the requirements still without a grant.
+
 ## Guided Build And Review
 
 ```powershell

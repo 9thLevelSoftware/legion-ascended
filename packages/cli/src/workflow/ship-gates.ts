@@ -63,11 +63,11 @@ export type ShipGateStatus = "satisfied" | "unsatisfied" | "unevaluable";
  * repeating them per task in the operator's diagnostics says the same sentence
  * N times.
  *
- * No gate is change-scoped yet — `GATE_SCOPE` below maps all twenty ids to
- * `"task"`, which is an accurate statement of what this release produces. The
- * vocabulary lands ahead of its first user so that the change that adds a
- * change-scoped gate is a diff about that gate, rather than a diff that also
- * invents a scope model and a rendering rule.
+ * `approved_delta_spec` is the first change-scoped gate and, for now, the only
+ * one: its question is "does every delta spec this change ships carry a granted
+ * approval", which is a property of `bundle.deltas` and has one answer for the
+ * whole change. The vocabulary landed one release ahead of it so that this diff
+ * is about the gate rather than about inventing a scope model.
  */
 export type ShipGateScope = "task" | "change";
 
@@ -233,9 +233,18 @@ export interface ShipGateChangeFacts {
  * gate default silently to task scope, which silently disables both the
  * diagnostic collapse below and, once gates read facts, the absence guard.
  *
- * Every entry is `"task"` in this release. That is not a placeholder — it is
- * what this release produces — and each later gate flips exactly its own line,
- * next to the gate it implements.
+ * `approved_delta_spec` is the one `"change"` entry. Each later gate flips
+ * exactly its own line, next to the gate it implements.
+ *
+ * Task scoping was available for it and is refused for a concrete reason rather
+ * than a stylistic one. A task-scoped version would intersect
+ * `task.requirementIds` with `bundle.deltas[].requirementId`, and that
+ * intersection can be empty — at which point `every` over it is vacuously true
+ * and the gate reports `satisfied` because of a scoping choice rather than
+ * because of an approval. Closing that needs a non-emptiness invariant nothing
+ * else in this file needs. It would also answer a weaker question: "were the
+ * delta specs this task touches approved", which lets a change ship with an
+ * unapproved requirement no task happens to cover.
  */
 const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   current_task_contract_or_small_change_record: "task",
@@ -245,7 +254,7 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   scoped_implementer_run: "task",
   evidence_bundle_or_log: "task",
   lightweight_independent_review: "task",
-  approved_delta_spec: "task",
+  approved_delta_spec: "change",
   protected_oracle: "task",
   task_level_independent_review: "task",
   integration_or_real_interface_checks: "task",
@@ -328,6 +337,16 @@ function hasAcceptedReview(reviews: readonly ReviewDecisionSuccess[], taskId: st
  * would let one approval satisfy a gate it was never granted for.
  */
 const REVIEW_ACCEPT_ACTION = "workflow.review.accept";
+
+/**
+ * The action an approval carries when it records a delta-spec decision.
+ *
+ * Matched exactly, for the same reason as the constant above: a review
+ * acceptance also carries a `{kind: "change"}` target, so a loose action match
+ * would let "somebody accepted a review" answer "somebody approved this
+ * requirement's specification".
+ */
+const DELTA_SPEC_APPROVE_ACTION = "spec.delta.approve";
 
 /** An approval narrowed to the member whose `decidedBy` and `decidedAt` exist. */
 type GrantedApproval = Extract<Approval, { readonly status: "granted" }>;
@@ -649,6 +668,377 @@ function humanApprovalStatus(input: {
   };
 }
 
+type DeltaSpecPinLink =
+  | { readonly kind: "current" }
+  | { readonly kind: "stale"; readonly reason: string }
+  | { readonly kind: "unknown"; readonly reason: string };
+
+/**
+ * Is the grant still about the bytes this change ships?
+ *
+ * The delta-spec analogue of `approvedReviewLink`, and the reason
+ * `approvalBaseSchema.artifacts` exists. Without it, "approved" is a claim about
+ * an act with no link to any text: the approval names a requirement id, and a
+ * requirement id survives every possible edit of the document that specifies it.
+ *
+ * Three checks, in widening order — does the approval say which bytes, do those
+ * bytes agree with the ones the change carries, and are those bytes still on
+ * disk:
+ *
+ *  - **Identity.** An approval with no `artifacts`, or with none naming this
+ *    delta spec's path, does not say what was approved. That is the shape every
+ *    approval written before this release has, and the shape a host or a
+ *    hand-written file takes; the honest answer is that nothing says, which is
+ *    `unknown` and never a pass. More than one pin at the same path is also
+ *    `unknown`: `artifacts` carries no uniqueness constraint, so a `find` would
+ *    take whichever duplicate came first and a document pinning both the right
+ *    hash and a wrong one would sail through.
+ *  - **Agreement.** The pinned hash must equal the hash the change bundle
+ *    records for that delta spec. This is the check that fires in practice: it
+ *    is pure, in-memory, and independent of the working tree, and a stale
+ *    approval — one granted against text the change no longer ships — is the
+ *    only form of this staleness that is actually reachable, because
+ *    `loadChangeBundle` refuses a bundle whose delta bytes have moved before
+ *    `legion ship` ever derives a gate.
+ *  - **Working tree.** `verifyPin` on the *approval's* reference, not the
+ *    bundle's, so a pin whose hash has drifted answers `drift` rather than
+ *    matching the bundle's own clean reference. `drift` and `missing` are
+ *    unreachable through `legion ship` today for the reason just given; they are
+ *    kept because a gate must not inherit its central truth claim from another
+ *    module's invariant, and they are driven directly by unit test.
+ *
+ * Deliberately not checked: the idempotency key's target hash against the pin.
+ * Both are written by one statement of one writer, so requiring them to agree
+ * checks the writer rather than the world, and it would add an `unevaluable`
+ * path with no threat behind it. `approvedReviewLink` reads the key only because
+ * `artifacts` is deliberately unset there.
+ */
+function approvedDeltaSpecPin(input: {
+  readonly approval: GrantedApproval;
+  readonly delta: ChangeBundleDeltaEntry;
+  readonly changeId: string;
+  readonly verifyPin: VerifyPinnedReference;
+}): DeltaSpecPinLink {
+  const artifacts = input.approval.artifacts;
+  if (artifacts === undefined) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of ${input.delta.requirementId}'s delta spec were approved is unestablished.`
+    };
+  }
+
+  const pins = artifacts.filter((reference) => reference.path === input.delta.path);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${input.delta.path}, so it does not say this delta spec was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${input.delta.path}, so which bytes were approved is unestablished.`
+    };
+  }
+
+  const pin = pins[0] as ArtifactReference;
+  if (pin.sha256 !== input.delta.delta.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of ${input.delta.path} than change ${input.changeId} ships.`
+    };
+  }
+
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, which is no longer present.`
+    };
+  }
+  return {
+    kind: "unknown",
+    reason: `Approval ${input.approval.id} pins ${input.delta.path}, which this report did not hash, so what was approved cannot be compared against what is on disk.`
+  };
+}
+
+/**
+ * Is one delta spec approved?
+ *
+ * The order is `humanApprovalStatus`'s, step for step, because every step of it
+ * closes a fail-open that is not specific to reviews: scope the plane yourself,
+ * bucket by loop so the union narrows, let a standing negative beat a grant
+ * unless a strictly later grant supersedes it, check expiry against an injected
+ * clock, then check that the grant is still about the bytes being shipped.
+ *
+ * The one addition is the third step. An approval that also claims a task or a
+ * run is not read, and says so rather than being filtered away in silence. A
+ * delta spec is a property of the change and this verb writes neither field, so
+ * a document carrying one was written by something else with something else in
+ * mind; a silent filter would report that as "nobody approved this", which sends
+ * the operator to approve something that already has a record.
+ */
+function deltaSpecApprovalStatus(input: {
+  readonly approvals: readonly Approval[];
+  readonly changeId: string;
+  readonly delta: ChangeBundleDeltaEntry;
+  readonly evaluatedAt: UtcTimestamp | undefined;
+  readonly verifyPin: VerifyPinnedReference;
+}): { readonly status: ShipGateStatus; readonly reason: string } {
+  const relevant = input.approvals.filter(
+    (approval) =>
+      // Strict equality, so facts too degraded to name their own change match
+      // nothing rather than everything. A requirement id is not change-scoped —
+      // the same id can appear in two changes — so this is load-bearing, not
+      // belt-and-braces.
+      approval.changeId === input.changeId &&
+      approval.scope.action === DELTA_SPEC_APPROVE_ACTION &&
+      approval.scope.targets.some(
+        (target) => target.kind === "requirement" && target.id === input.delta.requirementId
+      )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving the delta spec for ${input.delta.requirementId}.`
+    };
+  }
+
+  const misfiled = relevant.find((approval) => approval.taskId !== undefined || approval.runId !== undefined);
+  if (misfiled !== undefined) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but a delta spec belongs to the change rather than to one task or run, so this approval is not read here.`
+    };
+  }
+
+  const live: GrantedApproval[] = [];
+  const lapsed: GrantedApproval[] = [];
+  const unknownExpiry: GrantedApproval[] = [];
+  const nonHumanGrants: GrantedApproval[] = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+
+  const standing = relevant
+    .filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired")
+    .filter((approval) => {
+      if (newestGrant === undefined) return true;
+      const decidedAt = approval.decidedAt;
+      if (decidedAt === undefined) return true;
+      return decidedAt >= newestGrant.decidedAt;
+    })
+    .sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason:
+        newestGrant === undefined
+          ? `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}.`
+          : `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+
+  if (newestGrant !== undefined) {
+    const link = approvedDeltaSpecPin({
+      approval: newestGrant,
+      delta: input.delta,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`
+    };
+  }
+
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for ${input.delta.requirementId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== undefined) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for ${input.delta.requirementId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for ${input.delta.requirementId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+
+  return {
+    status: "unevaluable",
+    reason: `An approval for the delta spec of ${input.delta.requirementId} is recorded as requested and has not been decided.`
+  };
+}
+
+/**
+ * Would this one document, alone, satisfy `approved_delta_spec` for this delta?
+ *
+ * Exported for `legion approve spec`, which has to answer "is there anything
+ * left to decide here" and must not answer it with its own weaker rule. It did:
+ * an earlier draft checked `status === "granted"`, a human decider, no expiry
+ * and *some* pin at the delta's path, which four document shapes satisfy while
+ * the gate rejects them — two pins at that path, a `taskId`, a `scope.action`
+ * that is not `spec.delta.approve`, and a requirement target naming something
+ * else. In each of those the command reported "already approved", wrote nothing,
+ * and `legion ship` stayed blocked on this gate forever, with no flag anywhere
+ * that could make it write. A writer whose idea of "done" is weaker than the
+ * reader's idea of "satisfied" is a no-route-out loop by construction.
+ *
+ * So this is not a second implementation of the rule — it *calls* the gate's own
+ * predicate against a one-document plane and asks whether the verdict is
+ * `satisfied`. The two cannot drift because there is only one of them.
+ *
+ * The one substitution is `verifyPin`, which answers `match`. Hashing is I/O and
+ * this function is synchronous, and the caller has already established the same
+ * fact by a stronger route: `loadChangeBundle` re-reads every delta spec and
+ * refuses the bundle unless the bytes on disk hash to `delta.delta.sha256`, and
+ * the predicate below requires the approval's pin to equal that same hash. A pin
+ * that gets past this function therefore matches disk, checked once rather than
+ * twice. A caller that has *not* loaded a bundle must not use this function.
+ *
+ * It deliberately says nothing about *who* granted the approval. The gate does
+ * not care, so neither does this; a caller that cares — and `legion approve
+ * spec` does, because a rerun by the same approver is a no-op while a decision
+ * by a different one is a decision — checks that itself, on top.
+ */
+export function isLiveDeltaSpecGrant(input: {
+  readonly approval: Approval;
+  readonly changeId: string;
+  readonly delta: ChangeBundleDeltaEntry;
+  readonly evaluatedAt: UtcTimestamp | undefined;
+}): boolean {
+  const outcome = deltaSpecApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    delta: input.delta,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "match"
+  });
+  return outcome.status === "satisfied";
+}
+
+/**
+ * Are every one of this change's delta specs approved?
+ *
+ * **The loop runs over `change.deltas`, never over `change.approvals`.** That is
+ * the single most important line in this gate and the easiest to get backwards,
+ * because both spellings read as "check the approvals". Iterating approvals asks
+ * "is every approval clean", which is trivially true when zero of five
+ * requirements are approved — and it also silently exempts a requirement added
+ * to the change after the others were approved. Iterating deltas demands one
+ * decision per thing being shipped, which is what the gate's name says.
+ *
+ * Four absent-fact branches come first, and none of them may be reordered below
+ * the loop:
+ *
+ *  - No facts at all, or a bundle that would not load, means the change's delta
+ *    specs are unknown. This must produce the same sentence in both cases,
+ *    because "an absent plane is worth no more than no facts at all" is an
+ *    invariant a test holds from outside.
+ *  - An empty `deltas` list is `unevaluable` rather than vacuously satisfied.
+ *    `changeBundleSchema` marks it `.min(1)`, so this is unreachable from a
+ *    bundle that loaded — but that is another module's invariant, this
+ *    function's parameter type admits `[]`, and `[].every(...)` is `true`.
+ *  - An approvals plane that could not be established says nothing about
+ *    whether anything was approved. A dropped approval file is as likely to hold
+ *    a revocation as a grant.
+ *
+ * Aggregation is: any `unsatisfied` wins, then any `unevaluable`, then
+ * `satisfied`. A revoked approval on one requirement must not be masked by an
+ * absent one on another — the negative is the more actionable fact and the one
+ * an operator has to answer.
+ */
+function deltaSpecApprovalGateStatus(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+}): { readonly status: ShipGateStatus; readonly reason: string } {
+  const deltas = input.change?.deltas;
+  if (deltas === undefined) {
+    return {
+      status: "unevaluable",
+      reason: "The delta specs recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  if (deltas.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is nothing to have been approved."
+    };
+  }
+
+  const approvals = input.change?.approvals;
+  if (approvals === undefined) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+
+  const change = input.change as ShipGateChangeFacts;
+  const outcomes = deltas.map((delta) =>
+    deltaSpecApprovalStatus({
+      approvals,
+      changeId: change.changeId,
+      delta,
+      evaluatedAt: change.evaluatedAt,
+      verifyPin: change.verifyPin
+    })
+  );
+
+  // `bundle.deltas` arrives sorted by requirement id, so "the first failing one"
+  // is stable rather than an accident of read order.
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== undefined) {
+    // The count is appended when more than one is unmet, so an operator who
+    // fixes the named one is not surprised that the gate still blocks.
+    const remainder =
+      unmet.length > 1 ? ` ${unmet.length} of ${deltas.length} delta specs in this change are unmet.` : "";
+    return { status: chosen.status, reason: `${chosen.reason}${remainder}` };
+  }
+
+  const first = outcomes[0] as { readonly reason: string };
+  return {
+    status: "satisfied",
+    reason:
+      deltas.length === 1
+        ? first.reason
+        : `All ${deltas.length} delta specs in this change are approved. ${first.reason}`
+  };
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -712,6 +1102,13 @@ function evaluateGate(input: {
     case "explicit_human_approval":
       return humanApprovalStatus({ change: input.change, reviews, taskId });
 
+    case "approved_delta_spec":
+      // No `taskId`, no `reviews`, no `entries`. That signature is the
+      // executable form of this gate being change-scoped: it cannot answer
+      // per-task even by accident, because it is not given anything per-task to
+      // answer with.
+      return deltaSpecApprovalGateStatus({ change: input.change });
+
     case "protected_oracle":
       // Oracle satisfaction is its own evidence item. It was folded into
       // `declared-verification`, whose verdict answers a different question —
@@ -734,9 +1131,9 @@ function evaluateGate(input: {
       // timestamp to check, so satisfying it from the oracle result would claim
       // a governance gate was met when no such approval exists.
       //
-      // Delta specs, integration checks, whole-change acceptance, independent
-      // baselines, security/e2e evaluation, release observation and rollback
-      // evidence have no producer in the workflow yet.
+      // Integration checks, whole-change acceptance, independent baselines,
+      // security/e2e evaluation, release observation and rollback evidence have
+      // no producer in the workflow yet.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -763,13 +1160,16 @@ const UNRESOLVED_PINS: VerifyPinnedReference = () => "unverified";
  * Repairing it once here beats one chance to remember it per gate.
  *
  * Exported because it is otherwise unobservable, and machinery that no test can
- * see is machinery the next change deletes as dead. Nothing in this release
- * reads a change fact, so removing this guard entirely — replacing the call with
- * `input.change` — leaves every gate assertion in the tree green; the tests that
- * hold it are the direct ones in `tests/ship-risk-gates.test.mjs`, which call
- * this function itself rather than hoping a gate happens to route through it.
- * When the first change-scoped gate lands, those tests stay honest and gain a
- * second, indirect witness.
+ * see is machinery the next change deletes as dead. Two gates now read a change
+ * fact, and that still does not give this guard an indirect witness: the tests
+ * that supply degraded facts supply them without a `verifyPin`, and every gate
+ * answers an absent plane and returns before it would call one. So removing this
+ * guard — replacing the call with `input.change` — leaves every gate assertion in
+ * the tree green, and the only things that fail are the direct tests at the end
+ * of `tests/ship-risk-gates.test.mjs`, which call this function itself. The
+ * shape that would actually throw without it is a caller supplying real deltas
+ * and a granted, pin-clean approval but no verifier, which nothing in the tree
+ * produces; a direct test stands in for it rather than a gate happening to.
  */
 export function normalizeChangeFacts(change: unknown): ShipGateChangeFacts | undefined {
   if (change === null || typeof change !== "object") return undefined;
@@ -841,6 +1241,17 @@ export function deriveShipGates(input: {
 
 export interface ShipGateDiagnostic {
   readonly code: "risk_gate_unsatisfied" | "risk_gate_unevaluable";
+  /**
+   * Which gate is unmet, machine-readable.
+   *
+   * The blocked payload is the only ship output an operator on a failing change
+   * ever sees, and until now it carried no gate id at all — while the *ready*
+   * payload has exposed `riskGates.unevaluableGates` all along. Anything wanting
+   * to name a gate had to match the human label inside `message`, which couples
+   * an assertion to prose in `@legion/core` that no reader would recognise as a
+   * contract. Additive, so nothing that reads `code`, `message` or `path` moves.
+   */
+  readonly gate: RiskGateId;
   readonly message: string;
   readonly path: string;
 }
@@ -857,8 +1268,13 @@ export interface ShipGateDiagnostic {
  * nothing in the tree would notice: every assertion on this list checks that it
  * is non-empty or that it contains a particular code, never how many entries it
  * has. A silent behaviour change is exactly what this release must not ship, so
- * the `seen` set is written only for change-scoped gates — and since nothing is
- * change-scoped yet, in production it is never written at all.
+ * the `seen` set is written only for change-scoped gates.
+ *
+ * `approved_delta_spec` is the first gate to reach that branch in production.
+ * Every change `legion plan` can build has exactly one task, so the collapse is
+ * not *witnessed* end to end — asserting that a blocked ship names it once
+ * passes with or without the collapse — and the witness stays the direct tests
+ * below, against a hand-built two-task list.
  *
  * **It lives here rather than inline in the ship command.** Inline, the
  * collapse would be reachable only through the full CLI, and there is no
@@ -868,11 +1284,13 @@ export interface ShipGateDiagnostic {
  * a hand-built list. Unreachable in production is acceptable only when it is
  * reachable by test.
  *
- * The message interpolates `subjectId`, not `taskId`. That is byte-identical
- * today because every gate this release emits is task-scoped with
- * `subjectId === taskId`, which a unit test pins rather than assumes. Written
- * the other way, the first change-scoped gate would report a verdict about the
- * change under the name of one arbitrary task.
+ * The message interpolates `subjectId`, not `taskId`, and as of this release the
+ * two differ: `approved_delta_spec` is change-scoped, so a blocked R2 ship reads
+ * "Approved Delta Spec is not satisfied for chg_…" where every other gate still
+ * names a `tsk_…`. That is the point of the field and it is a visible change to
+ * the blocked payload's prose — anything keyed on the task id appearing in every
+ * diagnostic message has one gate that no longer carries it. `CHANGE_SCOPED_GATES`
+ * in `tests/ship-risk-gates.test.mjs` is what pins which gates those are.
  */
 export function shipGateDiagnostics(input: {
   readonly gates: readonly ShipGateResult[];
@@ -889,10 +1307,100 @@ export function shipGateDiagnostics(input: {
     }
     diagnostics.push({
       code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
+      gate: gate.gate,
       message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
       path: input.path
     });
   }
 
   return diagnostics;
+}
+
+/**
+ * Which command can produce the evidence a gate is missing.
+ *
+ * A total `Record<RiskGateId, ...>` for `GATE_SCOPE`'s reason: a gate added
+ * upstream must not default silently to "no route out", and each of the gates
+ * still to gain a producer answers this question on its own line, in its own
+ * diff, next to the producer it adds.
+ *
+ * Until this release the question could not be asked. `legion ship` blocked on
+ * ten producerless gates and always advised `legion build`, which was true
+ * enough while nothing could satisfy any of them. `approved_delta_spec` is the
+ * first gate whose evidence a build can never produce — it reads the approval
+ * plane — so continuing to advise a build would send an operator round a loop
+ * that cannot end.
+ */
+const GATE_RECOVERY: Readonly<
+  Record<RiskGateId, { readonly command: string; readonly reason: string } | undefined>
+> = {
+  current_task_contract_or_small_change_record: undefined,
+  deterministic_verification: undefined,
+  evidence_note: undefined,
+  task_contract: undefined,
+  scoped_implementer_run: undefined,
+  evidence_bundle_or_log: undefined,
+  lightweight_independent_review: undefined,
+  approved_delta_spec: {
+    command: "legion approve spec --approver <id>",
+    reason:
+      "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. " +
+      "Approve them, then rerun legion ship."
+  },
+  protected_oracle: undefined,
+  task_level_independent_review: undefined,
+  integration_or_real_interface_checks: undefined,
+  whole_change_acceptance_evidence: undefined,
+  independent_baseline: undefined,
+  approved_spec_and_oracle: undefined,
+  architecture_or_security_review: undefined,
+  protected_acceptance_tests: undefined,
+  security_or_e2e_evaluator: undefined,
+  explicit_human_approval: undefined,
+  release_observation_plan: undefined,
+  rollback_or_forward_fix_evidence: undefined
+};
+
+export interface ShipGateRecovery {
+  readonly command: string;
+  readonly reason: string;
+}
+
+/**
+ * The command a blocked ship should advise.
+ *
+ * Three arms, and the middle one is the one that matters:
+ *
+ *  - Every unmet gate has the *same* recovery: advise it. Naming one repair when
+ *    several are needed is the failure `recoveryFor` in the ship command already
+ *    guards against with its own `.every()`.
+ *  - Some unmet gates have a recovery and some do not: keep the caller's
+ *    fallback command and append the ones that do. This is the honest answer
+ *    while nine gates are still producerless — it does not claim one command
+ *    unblocks the ship, and it still hands the operator the thread. It is also
+ *    the arm every R2 change reaches today.
+ *  - Nothing has a recovery: the fallback, unchanged, byte for byte.
+ */
+export function shipGateRecovery(input: {
+  readonly gates: readonly ShipGateResult[];
+  readonly fallback: ShipGateRecovery;
+}): ShipGateRecovery {
+  const unmet = input.gates.filter((gate) => gate.status !== "satisfied");
+  if (unmet.length === 0) return input.fallback;
+
+  const recoveries = [...new Set(unmet.map((gate) => gate.gate))]
+    .map((id) => GATE_RECOVERY[id])
+    .filter((entry): entry is ShipGateRecovery => entry !== undefined);
+  if (recoveries.length === 0) return input.fallback;
+
+  const distinct = [...new Set(recoveries.map((entry) => entry.command))];
+  const only = recoveries[0] as ShipGateRecovery;
+  if (distinct.length === 1 && recoveries.length === new Set(unmet.map((gate) => gate.gate)).size) {
+    return only;
+  }
+
+  return {
+    command: input.fallback.command,
+    reason: `${input.fallback.reason} Of those, ${distinct.length === 1 ? "one has" : `${distinct.length} have`} a command that can produce the missing evidence: ${distinct.join(", ")}.`
+  };
 }

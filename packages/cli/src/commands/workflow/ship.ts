@@ -22,6 +22,7 @@ import { taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
   deriveShipGates,
   shipGateDiagnostics,
+  shipGateRecovery,
   type ShipGateChangeFacts,
   type ShipGateOracleFact
 } from "../../workflow/ship-gates.js";
@@ -117,11 +118,13 @@ function isPath(value: string | undefined): value is string {
  * with its own recovery command — turning it into a second failure here would
  * change which defect the operator is told about.
  *
- * This deliberately does not distinguish "nothing there" from "something there
- * I could not read", which the traceability checker in this package does. It
- * cannot yet: reporting the difference means adding a warning to the payload,
- * and this release changes no output. The first gate to consume these facts is
- * the right place to decide how an unreadable plane is surfaced.
+ * This does not itself distinguish "nothing there" from "something there I could
+ * not read", which the traceability checker in this package does. The
+ * distinction is made one level up instead: a listing that reports `skipped`
+ * entries produces a `ShipGatePlaneSkip`, which reaches the payload by name. A
+ * thrown read still arrives as bare absence, which is the weaker answer and the
+ * one worth improving next; what it is not is the common case, which is a file
+ * the listing declined to parse.
  */
 async function absentOnFailure<T>(read: () => Promise<T>): Promise<T | undefined> {
   try {
@@ -208,6 +211,11 @@ export function completeTaskRuns(listing: TaskRunListResult | undefined): readon
  * accepted by a Legion that had no approval plane, which the gate reports as
  * `unevaluable` for its own reason and in its own words. A read that failed is
  * a different thing and must not be spelled the same way.
+ *
+ * Returning absence is only half of it. The caller also carries the skipped
+ * filenames into the payload — see `ShipGatePlaneSkip` — because "the approvals
+ * for this change could not be read" is unactionable without the name of the
+ * file that could not be read, and the operator has no other way to learn it.
  */
 export function completeApprovals(listing: ApprovalListResult | undefined): readonly Approval[] | undefined {
   if (listing === undefined || !listing.ok) return undefined;
@@ -216,11 +224,49 @@ export function completeApprovals(listing: ApprovalListResult | undefined): read
 }
 
 /**
- * The change-scoped planes `legion ship` can read.
+ * A directory entry that made a whole plane absent, and where it is.
  *
- * One gate consumes one of them: `explicit_human_approval` reads `approvals`.
- * Everything else here is still loaded ahead of its reader, so that the change
- * adding each gate is a diff about that gate rather than about the plumbing.
+ * `completeApprovals` and `completeTaskRuns` refuse to answer from a partial
+ * listing, which is right — a dropped approval file is as likely to hold a
+ * revocation as a grant. What was wrong was doing it silently. Any file under
+ * `approvals/` that is not a parseable `.json` — a `.DS_Store`, a `Thumbs.db`,
+ * an editor swap file, a `.gitkeep` — collapsed the plane, pinned
+ * `approved_delta_spec` to `unevaluable` for good, and told the operator to run
+ * `legion approve spec`, which then reported the change fully approved and wrote
+ * nothing. Both commands were individually honest and the pair was a loop with
+ * no exit and no clue in it, because the one fact that explains the state — the
+ * filename — was read and discarded.
+ *
+ * So the skip is carried to the payload. It is a diagnostic on a blocked ship
+ * and a warning on a ready one: on a ready ship the collapsed plane fed no gate
+ * that ran, but a repository accumulating junk in an artifact directory is still
+ * something the operator has to know before it blocks something.
+ */
+interface ShipGatePlaneSkip {
+  readonly plane: string;
+  readonly directory: string;
+  readonly entries: readonly string[];
+}
+
+function planeSkipDiagnostics(skips: readonly ShipGatePlaneSkip[]) {
+  return skips.map((skip) => ({
+    code: "artifact_plane_incomplete",
+    message:
+      `${skip.entries.length} file${skip.entries.length === 1 ? "" : "s"} under ${skip.directory} could not be read as ` +
+      `${skip.plane} and ${skip.entries.length === 1 ? "was" : "were"} skipped: ${skip.entries.join(", ")}. ` +
+      `Every gate that reads the ${skip.plane} plane reports unevaluable while this is true, because a listing that ` +
+      "dropped a file may have dropped a withdrawal. Remove or correct the named file, then rerun this.",
+    path: skip.directory
+  }));
+}
+
+/**
+ * The change-scoped planes `legion ship` can read, and what it could not read.
+ *
+ * Two gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * read `approvals`, and the second also reads `deltas`. Everything else here is
+ * still loaded ahead of its reader, so that the change adding each gate is a
+ * diff about that gate rather than about the plumbing.
  *
  * The release plane is still passed as `undefined` rather than as an empty
  * value. Its schema exists but nothing reads or writes it, so "consulted and
@@ -229,7 +275,7 @@ export function completeApprovals(listing: ApprovalListResult | undefined): read
 async function loadShipGateChangeFacts(input: {
   readonly repositoryRoot: string;
   readonly changeId: string;
-}): Promise<ShipGateChangeFacts> {
+}): Promise<{ readonly facts: ShipGateChangeFacts; readonly skips: readonly ShipGatePlaneSkip[] }> {
   const bundleResult = await absentOnFailure(() =>
     loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
@@ -260,20 +306,32 @@ async function loadShipGateChangeFacts(input: {
     references: pinned
   });
 
+  const changeRoot = `.legion/project/changes/${input.changeId}`;
+  const skips: ShipGatePlaneSkip[] = [];
+  if (runsResult !== undefined && runsResult.ok && runsResult.skipped.length > 0) {
+    skips.push({ plane: "task run", directory: `${changeRoot}/runs`, entries: runsResult.skipped });
+  }
+  if (approvalsResult !== undefined && approvalsResult.ok && approvalsResult.skipped.length > 0) {
+    skips.push({ plane: "approval", directory: `${changeRoot}/approvals`, entries: approvalsResult.skipped });
+  }
+
   return {
-    changeId: input.changeId,
-    acceptance: bundle?.change.acceptance,
-    approvals,
-    deltas: bundle?.deltas,
-    oracles,
-    taskRuns,
-    release: undefined,
-    // Read once, here, for the same reason the pins are hashed once here: a
-    // report is a snapshot of a moment. Gates that ask "is this still valid"
-    // must all ask about the same instant, or a change could be reported
-    // approved and expired in one payload.
-    evaluatedAt: currentUtcTimestamp(),
-    verifyPin
+    facts: {
+      changeId: input.changeId,
+      acceptance: bundle?.change.acceptance,
+      approvals,
+      deltas: bundle?.deltas,
+      oracles,
+      taskRuns,
+      release: undefined,
+      // Read once, here, for the same reason the pins are hashed once here: a
+      // report is a snapshot of a moment. Gates that ask "is this still valid"
+      // must all ask about the same instant, or a change could be reported
+      // approved and expired in one payload.
+      evaluatedAt: currentUtcTimestamp(),
+      verifyPin
+    },
+    skips
   };
 }
 
@@ -392,8 +450,9 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     taskIdFor: (task) => taskIdForContractId(task.id),
     entries: evidence.document.entries,
     reviews: reviews.reviews,
-    change: changeFacts
+    change: changeFacts.facts
   });
+  const planeSkips = planeSkipDiagnostics(changeFacts.skips);
 
   if (!gateReport.ready) {
     // Both blocking statuses are named. Reporting only `unsatisfied` would make
@@ -403,12 +462,25 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     // The counts in the ready payload below still come from the report, never
     // from these diagnostics: the report stays one row per (task, gate) so the
     // tier arithmetic holds, while the diagnostics are what the operator reads.
+    // The recovery is derived from the gates rather than fixed at `legion build`.
+    // Now that one gate reads the approval plane, a build can never produce its
+    // evidence, and advising one would send the operator round a loop with no
+    // end — the failure family this whole series exists to close.
+    const recovery = shipGateRecovery({
+      gates: gateReport.gates,
+      fallback: {
+        command: "legion build",
+        reason: `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
+      }
+    });
+    // The skips come first. They are the *cause* of some of the gate rows below
+    // — an unreadable approvals plane is why `approved_delta_spec` is
+    // unevaluable — and a reader who acts on the gate diagnostic without seeing
+    // them runs the recovery command, is told the change is fully approved, and
+    // is back where they started.
     return blockedShip(
-      shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath }),
-      nextAction(
-        "legion build",
-        `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
-      )
+      [...planeSkips, ...shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath })],
+      nextAction(recovery.command, recovery.reason)
     );
   }
 
@@ -429,7 +501,14 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
-      ...(traceabilityWarnings.length === 0 ? {} : { warnings: traceabilityWarnings }),
+      ...(traceabilityWarnings.length === 0 && planeSkips.length === 0
+        ? {}
+        : {
+            warnings: [
+              ...traceabilityWarnings,
+              ...planeSkips.map((diagnostic) => ({ code: diagnostic.code, message: diagnostic.message }))
+            ]
+          }),
       riskGates: {
         satisfied: gateReport.satisfied,
         unsatisfied: gateReport.unsatisfied,

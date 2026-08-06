@@ -427,6 +427,7 @@ test("core workflow commands expose command-specific help", async () => {
     ["plan", /legion plan <phase-number>/],
     ["build", /legion build \[--executor codex\|manual\|fake\]/],
     ["review", /legion review \[--executor codex\|manual\|fake\]/],
+    ["approve", /legion approve <subject>/],
     ["status", /legion status/],
     ["validate", /legion validate/],
     ["doctor", /legion doctor/]
@@ -1504,17 +1505,39 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     // Accepting a review advances the workflow to ship_ready; it does not make
     // the change shippable. An R2 phase still requires approved delta specs, a
     // protected oracle, integration checks and whole-change acceptance
-    // evidence, none of which Legion produces yet, so the gate blocks and names
-    // them. Phase D flips this back to `ready`.
+    // evidence, and this fixture never runs `legion approve spec`, so the gate
+    // blocks and names them.
+    //
+    // This assertion used to be `some(entry => entry.code === "risk_gate_unevaluable")`
+    // — a shrug at "something is unproven". That was as much as could be said
+    // while no gate had a producer and the blocked payload carried no gate id.
+    // Now that `approved_delta_spec` has one and the diagnostic carries `gate`,
+    // the fixture names it. The difference matters: with the loose assertion, a
+    // later change that satisfied `approved_delta_spec` and broke a different
+    // gate would leave this test green for the wrong reason, and so would one
+    // that stopped deriving R2's gates entirely.
     const ship = await runCliCapture(["--repository-root", root, "ship", "--json"]);
     assert.equal(ship.exitCode, 1);
     const shipPayload = parseJsonOutput(ship);
     assert.equal(shipPayload.status, "blocked");
     assert.ok(shipPayload.diagnostics.length > 0, "blocked ship should name unproven gates");
-    assert.ok(
-      shipPayload.diagnostics.some((entry) => entry.code === "risk_gate_unevaluable"),
-      "ship should block on unprovable risk gates, not on missing review evidence"
-    );
+
+    const deltaSpecGate = shipPayload.diagnostics.filter((entry) => entry.gate === "approved_delta_spec");
+    // One, not one per task. This fixture has a single task, so it passes with
+    // or without the change-scoped collapse — tests/ship-gate-diagnostics holds
+    // that rule against a two-task list, and this only checks that nothing here
+    // duplicates it.
+    assert.equal(deltaSpecGate.length, 1, "the delta-spec gate should be named once, for the change");
+    assert.equal(deltaSpecGate[0].code, "risk_gate_unevaluable");
+    assert.match(deltaSpecGate[0].message, /No approval records anyone approving the delta spec for req_/);
+
+    // The block has a route out, and this is the assertion that could not be
+    // made before: `legion build` cannot produce an approval, so a blocked ship
+    // that advised only a build sent the operator round a loop. Four gates are
+    // unmet here, so the advice is still the fallback command — it must not
+    // claim one command unblocks the ship — but it names the one that can
+    // produce the evidence it is missing.
+    assert.match(shipPayload.nextAction.reason, /legion approve spec/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1945,7 +1968,7 @@ for (const retroCase of [
   });
 }
 
-for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "council"]) {
+for (const command of ["explore", "map", "quick", "advise", "polish", "learn", "milestone", "retro", "ship", "approve", "council"]) {
   test(`legion ${command} has a user-facing contract`, async () => {
     const result = await runCliCapture([command, "--help"]);
     assert.equal(result.exitCode, 0);

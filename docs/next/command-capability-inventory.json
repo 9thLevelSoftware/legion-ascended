@@ -513,6 +513,33 @@
       ]
     },
     {
+      "command": "approve",
+      "verb": "approve",
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/approve.ts",
+        "symbol": "handleApproveWorkflow"
+      },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb records one governance decision and pins the bytes it was made against. It resolves the approver from the project manifest and refuses anything it cannot resolve, so the host cannot supply an identity; what stays in the host is showing the delta spec to the person deciding and asking who they are.",
+      "hostOnly": [
+        {
+          "capability": "Refusing to supply an approver the user did not name, including the project's only decision owner",
+          "anchor": "If the user has not named an approver, ask."
+        },
+        {
+          "capability": "Offering to show the approver the delta spec text their decision is about",
+          "anchor": "Offer to display the delta spec itself."
+        },
+        {
+          "capability": "Saying plainly that an approval records a person's yes to specific bytes and does not establish that they read them",
+          "anchor": "It does not establish that they read them."
+        }
+      ],
+      "cliGaps": []
+    },
+    {
       "command": "ship",
       "verb": "ship",
       "handler": {

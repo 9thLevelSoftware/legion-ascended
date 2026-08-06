@@ -22,6 +22,23 @@ export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
   "dist/legion-cli.mjs.map"
 ]);
 
+/**
+ * Command markdown added after the v8 pack baseline was frozen.
+ *
+ * `package.json` ships `commands/`, so every new command file enters
+ * `npm pack` and is compared against a baseline whose `commands/` set is
+ * exactly the nineteen files v8 shipped. Neither `ROOT_ROUTER_PACKAGE_PATHS`
+ * nor `CLI_RUNTIME_PACKAGE_FILES` means "a command file added since then", and
+ * folding one in there would say something false about what it is.
+ *
+ * Both directions are checked, so the entry and the file have to land in the
+ * same commit: an unapproved extra path fails, and an approved path that does
+ * not exist fails too.
+ */
+export const POST_V8_COMMAND_PATHS = Object.freeze([
+  "commands/approve.md"
+]);
+
 export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([
   "evals/baseline/corpus-manifest.yaml",
   "evals/baseline/fixture-hashes.sha256",
@@ -263,7 +280,8 @@ export async function checkLegacyPackageContents(input = {}) {
     currentPaths: current.files,
     approvedExtraPaths: [
       ...ROOT_ROUTER_PACKAGE_PATHS,
-      ...CLI_RUNTIME_PACKAGE_FILES
+      ...CLI_RUNTIME_PACKAGE_FILES,
+      ...POST_V8_COMMAND_PATHS
     ],
     approvedExtraPrefixes: CLI_RUNTIME_PACKAGE_PREFIXES
   });

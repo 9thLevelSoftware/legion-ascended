@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { completeApprovals, completeTaskRuns } from "../packages/cli/dist/commands/workflow/ship.js";
-import { shipGateDiagnostics } from "../packages/cli/dist/workflow/ship-gates.js";
+import { shipGateDiagnostics, shipGateRecovery } from "../packages/cli/dist/workflow/ship-gates.js";
 
 /**
  * The blocked-ship diagnostics, and the collapse rule for change-scoped gates.
@@ -20,9 +20,16 @@ import { shipGateDiagnostics } from "../packages/cli/dist/workflow/ship-gates.js
  * dogfood checks only that the count is above zero. That is a real behaviour
  * change hiding inside a rendering change, invisible to CI.
  *
- * No gate is change-scoped yet, so nothing else in the tree reaches the collapse
- * branch. It is asserted here against a hand-built gate list instead, because
- * unreachable-in-production is only acceptable when it is reachable by test.
+ * `approved_delta_spec` is the first change-scoped gate, so the collapse branch
+ * now has a production user — but not a production *witness*: every change
+ * `legion plan` can build has exactly one task, so an end-to-end assertion that
+ * a blocked ship names it once passes with or without the collapse. The hand-
+ * built lists below stay the thing that can falsify it.
+ *
+ * `release_observation_plan` is still used as the stand-in change-scoped gate
+ * here, deliberately: these tests are about the rendering rule rather than about
+ * any gate's verdict, and using the one gate that really is change-scoped would
+ * couple them to a scope decision they do not assert.
  *
  * These fixtures are hand-built results rather than reports from
  * `deriveShipGates`. That is not a fixture in a shape that could never exist: a
@@ -115,6 +122,69 @@ test("a diagnostic names the gate, its subject, its reason and the artifact path
     "Deterministic Verification is not satisfied for tsk_a: Evidence records a failed declared-verification."
   );
   assert.equal(diagnostic.path, ".legion/project/changes/chg_x/evidence/index.json");
+  // Machine-readable, beside the prose. Until this release a blocked ship
+  // carried no gate id at all — while the *ready* payload has listed
+  // `riskGates.unevaluableGates` all along — so the only way to name a gate in
+  // the payload an operator on a failing change actually sees was to match the
+  // human label inside `message`. That couples a CI-blocking assertion to a
+  // string in `@legion/core` that no reader would recognise as a contract.
+  assert.equal(diagnostic.gate, "deterministic_verification");
+});
+
+// --- the route out of a block -----------------------------------------------
+
+// `legion ship` blocked on ten producerless gates and always advised `legion
+// build`. That was true enough while nothing could satisfy any of them.
+// `approved_delta_spec` is the first gate whose evidence a build can never
+// produce — it reads the approval plane — so the old advice became a loop with
+// no end: run build, get the same block, run build again.
+
+test("a block whose only unmet gate has a recovery advises that command", () => {
+  const recovery = shipGateRecovery({
+    gates: [
+      gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x", status: "unevaluable" }),
+      gateResult({ gate: "deterministic_verification", status: "satisfied" })
+    ],
+    fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
+  });
+
+  assert.equal(recovery.command, "legion approve spec --approver <id>");
+  assert.match(recovery.reason, /no build produces that/);
+});
+
+test("a block with several unmet gates keeps the fallback and names the ones with a route", () => {
+  // The arm every R2 change reaches today, and the one that matters. Advising
+  // `legion approve spec` here would claim one command unblocks a ship that four
+  // gates are holding — the failure `recoveryFor` in the ship command already
+  // guards against with its own `.every()`. Saying nothing would leave the
+  // operator with `legion build` and no thread at all.
+  const recovery = shipGateRecovery({
+    gates: [
+      gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
+      gateResult({ gate: "whole_change_acceptance_evidence" })
+    ],
+    fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
+  });
+
+  assert.equal(recovery.command, "legion build");
+  assert.match(recovery.reason, /^Required risk gates are not satisfied\./);
+  assert.match(recovery.reason, /legion approve spec --approver <id>/);
+});
+
+test("a block whose unmet gates have no recovery keeps the fallback unchanged", () => {
+  // Byte-identical to what shipped before this release, which is most of what
+  // this function does today: nine of the ten gates still have no producer and
+  // therefore no command to name.
+  const fallback = { command: "legion build", reason: "Required risk gates are not satisfied." };
+  assert.deepEqual(
+    shipGateRecovery({ gates: [gateResult({ gate: "protected_oracle" })], fallback }),
+    fallback
+  );
+  assert.deepEqual(shipGateRecovery({ gates: [], fallback }), fallback);
+  assert.deepEqual(
+    shipGateRecovery({ gates: [gateResult({ status: "satisfied" })], fallback }),
+    fallback
+  );
 });
 
 // --- the run listing is carried whole or not at all -------------------------

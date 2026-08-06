@@ -14938,6 +14938,7 @@ var artifactReferenceSchema = strictObject({
 });
 var effectKindSchema = string2().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid effect kind").brand();
 var idempotencyKeySchema = string2().regex(/^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:tsk_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:run_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$/, "Invalid idempotency key").brand().describe("Stable logical operation key: project:change:task:run:effect-kind:target-hash.");
+var changeScopedIdempotencyKeySchema = string2().regex(/^prj_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:chg_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]:[a-z][a-z0-9._-]{1,63}:sha256:[0-9a-f]{64}$/, "Invalid change-scoped idempotency key").brand().describe("Stable logical operation key for a change-scoped decision: project:change:effect-kind:target-hash.");
 var correlationIdSchema = string2().regex(/^cor_[0-9a-hjkmnp-tv-z]{26}$/, "Invalid correlation ID").brand();
 var paginationCursorSchema = string2().regex(/^cur_[A-Za-z0-9_-]{4,256}$/, "Invalid pagination cursor").brand();
 function createJsonValueSchema(options = {}) {
@@ -14985,6 +14986,13 @@ function buildIdempotencyKey(input) {
   const effectKind = effectKindSchema.parse(input.effectKind);
   const targetHash = contentHashSchema.parse(input.targetHash);
   return idempotencyKeySchema.parse(`${projectId}:${changeId}:${taskId}:${runId}:${effectKind}:${targetHash}`);
+}
+function buildChangeIdempotencyKey(input) {
+  const projectId = projectIdSchema.parse(input.projectId);
+  const changeId = changeIdSchema.parse(input.changeId);
+  const effectKind = effectKindSchema.parse(input.effectKind);
+  const targetHash = contentHashSchema.parse(input.targetHash);
+  return changeScopedIdempotencyKeySchema.parse(`${projectId}:${changeId}:${effectKind}:${targetHash}`);
 }
 
 // packages/protocol/dist/versioning/index.js
@@ -15491,7 +15499,22 @@ var approvalBaseSchema = schemaMetadataSchema.extend({
   requestedBy: actorSchema,
   requestedAt: utcTimestampSchema,
   scope: approvalScopeSchema,
-  idempotencyKey: idempotencyKeySchema,
+  /**
+   * Which logical operation this decision is.
+   *
+   * Two shapes, admitted here and nowhere else. `idempotencyKeySchema` names a
+   * task and a run, which every approval written before this release does and
+   * which `legion review --accept` still does. A delta-spec approval is taken
+   * between `legion plan` and `legion build`, when no run exists — so it carries
+   * the change-scoped form instead of borrowing ids that would assert an
+   * execution that never happened.
+   *
+   * The union is ordered with the task-scoped form first, so every key already
+   * on disk parses through the branch it was minted by. The two patterns are
+   * disjoint (the effect segment forbids `:`), so which branch a key takes is a
+   * property of the key rather than of the order.
+   */
+  idempotencyKey: union([idempotencyKeySchema, changeScopedIdempotencyKeySchema]),
   /**
    * The exact bytes the decision was made against.
    *
@@ -35975,6 +35998,7 @@ var WORKFLOW_COMMANDS = Object.freeze([
   { name: "map", summary: "Generate, refresh, check, or query codebase context." },
   { name: "plan", summary: "Plan a phase or change into typed task contracts." },
   { name: "build", summary: "Execute approved task contracts through a runtime driver." },
+  { name: "approve", summary: "Record a human decision about the change's delta specs." },
   { name: "review", summary: "Review task outputs with verification and independent gates." },
   { name: "ship", summary: "Run release readiness, promotion, and observation gates." },
   { name: "retro", summary: "Record retrospective evidence for future planning." },
@@ -44490,6 +44514,1026 @@ async function resolvePhaseChange(repositoryRoot, phase) {
   return { ok: true, changeId: matched.changeId, diagnostics: [] };
 }
 
+// packages/cli/src/workflow/ship-gates.ts
+var GATE_SCOPE = {
+  current_task_contract_or_small_change_record: "task",
+  deterministic_verification: "task",
+  evidence_note: "task",
+  task_contract: "task",
+  scoped_implementer_run: "task",
+  evidence_bundle_or_log: "task",
+  lightweight_independent_review: "task",
+  approved_delta_spec: "change",
+  protected_oracle: "task",
+  task_level_independent_review: "task",
+  integration_or_real_interface_checks: "task",
+  whole_change_acceptance_evidence: "task",
+  independent_baseline: "task",
+  approved_spec_and_oracle: "task",
+  architecture_or_security_review: "task",
+  protected_acceptance_tests: "task",
+  security_or_e2e_evaluator: "task",
+  explicit_human_approval: "task",
+  release_observation_plan: "task",
+  rollback_or_forward_fix_evidence: "task"
+};
+function evidenceItemVerdict(entries, taskId, itemId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  for (const item of entry.evidence.items) {
+    if (item.id !== itemId) continue;
+    if (item.verdict === "pass") return "pass";
+    if (item.verdict === "fail") return "fail";
+  }
+  return void 0;
+}
+function hasEvidence(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  return entry !== void 0 && entry.evidence.items.length > 0;
+}
+function hasAcceptedReview2(reviews, taskId) {
+  return reviews.some(
+    (review) => review.document.status === "accepted" && review.document.taskId === taskId
+  );
+}
+var REVIEW_ACCEPT_ACTION2 = "workflow.review.accept";
+var DELTA_SPEC_APPROVE_ACTION = "spec.delta.approve";
+function grantExpiry(approval, evaluatedAt) {
+  if (approval.expiresAt === void 0) return "live";
+  if (evaluatedAt === void 0) return "unknown";
+  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
+}
+function idempotencyTargetHash(key) {
+  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
+}
+function approvedReviewLink(input) {
+  const approvedIds = input.approval.scope.targets.filter((target) => target.kind === "review").map((target) => target.id);
+  if (approvedIds.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
+    };
+  }
+  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
+  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
+  if (named.length !== approvedIds.length) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
+    };
+  }
+  for (const review of named) {
+    if (review.document.status !== "accepted") {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
+      };
+    }
+    const superseding = taskReviews.find(
+      (candidate) => candidate.document.id !== review.document.id && (candidate.document.supersedes ?? []).includes(review.document.id)
+    );
+    if (superseding !== void 0) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
+      };
+    }
+    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
+    const currentHash = review.reference?.sha256;
+    if (approvedHash === void 0 || currentHash === void 0) {
+      return {
+        kind: "unknown",
+        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
+      };
+    }
+    if (approvedHash !== currentHash) {
+      return {
+        kind: "stale",
+        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
+      };
+    }
+  }
+  return { kind: "current" };
+}
+function byDecisionInstant(left, right) {
+  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
+  if (byInstant !== 0) return byInstant;
+  return left.id.localeCompare(right.id);
+}
+function humanApprovalStatus(input) {
+  for (const review of input.reviews) {
+    if (review.document.status !== "accepted") continue;
+    if (review.document.taskId !== input.taskId) continue;
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === void 0 || acceptedBy.kind === "human") continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no human approval is established."
+    };
+  }
+  const relevant = approvals.filter(
+    (approval) => (
+      // Strict equality against a possibly-absent change id, so facts too
+      // degraded to name their own change match nothing rather than matching
+      // everything. Absence must never widen the set an approval can answer for.
+      approval.changeId === input.change?.changeId && // An approval whose two task claims disagree says two things; the gate
+      // reads neither. The service will persist such a document, so refusing it
+      // here is the only place it is refused.
+      (approval.taskId === void 0 || approval.taskId === input.taskId) && approval.scope.action === REVIEW_ACCEPT_ACTION2 && approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No approval records anyone accepting this task's review."
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for this task's review is ${blocking.status}.` : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: "An approval for this task's review is recorded as requested and has not been decided."
+  };
+}
+function approvedDeltaSpecPin(input) {
+  const artifacts = input.approval.artifacts;
+  if (artifacts === void 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no artifact, so which bytes of ${input.delta.requirementId}'s delta spec were approved is unestablished.`
+    };
+  }
+  const pins = artifacts.filter((reference) => reference.path === input.delta.path);
+  if (pins.length === 0) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins no reference to ${input.delta.path}, so it does not say this delta spec was approved.`
+    };
+  }
+  if (pins.length > 1) {
+    return {
+      kind: "unknown",
+      reason: `Approval ${input.approval.id} pins ${pins.length} references to ${input.delta.path}, so which bytes were approved is unestablished.`
+    };
+  }
+  const pin = pins[0];
+  if (pin.sha256 !== input.delta.delta.sha256) {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} was granted against different bytes of ${input.delta.path} than change ${input.changeId} ships.`
+    };
+  }
+  const verdict = input.verifyPin(pin);
+  if (verdict === "match") return { kind: "current" };
+  if (verdict === "drift") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, whose bytes have changed since it was granted.`
+    };
+  }
+  if (verdict === "missing") {
+    return {
+      kind: "stale",
+      reason: `Approval ${input.approval.id} pins ${input.delta.path}, which is no longer present.`
+    };
+  }
+  return {
+    kind: "unknown",
+    reason: `Approval ${input.approval.id} pins ${input.delta.path}, which this report did not hash, so what was approved cannot be compared against what is on disk.`
+  };
+}
+function deltaSpecApprovalStatus(input) {
+  const relevant = input.approvals.filter(
+    (approval) => (
+      // Strict equality, so facts too degraded to name their own change match
+      // nothing rather than everything. A requirement id is not change-scoped —
+      // the same id can appear in two changes — so this is load-bearing, not
+      // belt-and-braces.
+      approval.changeId === input.changeId && approval.scope.action === DELTA_SPEC_APPROVE_ACTION && approval.scope.targets.some(
+        (target) => target.kind === "requirement" && target.id === input.delta.requirementId
+      )
+    )
+  );
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No approval records anyone approving the delta spec for ${input.delta.requirementId}.`
+    };
+  }
+  const misfiled = relevant.find((approval) => approval.taskId !== void 0 || approval.runId !== void 0);
+  if (misfiled !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${misfiled.id} names ${misfiled.taskId ?? misfiled.runId}, but a delta spec belongs to the change rather than to one task or run, so this approval is not read here.`
+    };
+  }
+  const live = [];
+  const lapsed = [];
+  const unknownExpiry = [];
+  const nonHumanGrants = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") {
+      nonHumanGrants.push(approval);
+      continue;
+    }
+    const expiry = grantExpiry(approval, input.evaluatedAt);
+    if (expiry === "live") live.push(approval);
+    else if (expiry === "lapsed") lapsed.push(approval);
+    else unknownExpiry.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
+    if (newestGrant === void 0) return true;
+    const decidedAt = approval.decidedAt;
+    if (decidedAt === void 0) return true;
+    return decidedAt >= newestGrant.decidedAt;
+  }).sort(byDecisionInstant);
+  const blocking = standing.at(-1);
+  if (blocking !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: newestGrant === void 0 ? `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}.` : `Approval ${blocking.id} for the delta spec of ${input.delta.requirementId} is ${blocking.status}, and no later grant supersedes it.`
+    };
+  }
+  if (newestGrant !== void 0) {
+    const link = approvedDeltaSpecPin({
+      approval: newestGrant,
+      delta: input.delta,
+      changeId: input.changeId,
+      verifyPin: input.verifyPin
+    });
+    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
+    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
+    return {
+      status: "satisfied",
+      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} approving the delta spec for ${input.delta.requirementId}.`
+    };
+  }
+  const spent = lapsed.sort(byDecisionInstant).at(-1);
+  if (spent !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${spent.id} for ${input.delta.requirementId}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
+    };
+  }
+  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
+  if (unchecked !== void 0) {
+    return {
+      status: "unevaluable",
+      reason: `Approval ${unchecked.id} for ${input.delta.requirementId} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
+    };
+  }
+  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
+  if (byMachine !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Approval ${byMachine.id} for ${input.delta.requirementId} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `An approval for the delta spec of ${input.delta.requirementId} is recorded as requested and has not been decided.`
+  };
+}
+function isLiveDeltaSpecGrant(input) {
+  const outcome = deltaSpecApprovalStatus({
+    approvals: [input.approval],
+    changeId: input.changeId,
+    delta: input.delta,
+    evaluatedAt: input.evaluatedAt,
+    verifyPin: () => "match"
+  });
+  return outcome.status === "satisfied";
+}
+function deltaSpecApprovalGateStatus(input) {
+  const deltas = input.change?.deltas;
+  if (deltas === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The delta specs recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  if (deltas.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "This change records no delta specs, so there is nothing to have been approved."
+    };
+  }
+  const approvals = input.change?.approvals;
+  if (approvals === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The approvals recorded for this change could not be read, so no delta-spec approval is established."
+    };
+  }
+  const change = input.change;
+  const outcomes = deltas.map(
+    (delta) => deltaSpecApprovalStatus({
+      approvals,
+      changeId: change.changeId,
+      delta,
+      evaluatedAt: change.evaluatedAt,
+      verifyPin: change.verifyPin
+    })
+  );
+  const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? unmet[0];
+  if (chosen !== void 0) {
+    const remainder = unmet.length > 1 ? ` ${unmet.length} of ${deltas.length} delta specs in this change are unmet.` : "";
+    return { status: chosen.status, reason: `${chosen.reason}${remainder}` };
+  }
+  const first = outcomes[0];
+  return {
+    status: "satisfied",
+    reason: deltas.length === 1 ? first.reason : `All ${deltas.length} delta specs in this change are approved. ${first.reason}`
+  };
+}
+function fromVerdict(verdict, itemId) {
+  if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
+  if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
+  return { status: "unevaluable", reason: `No ${itemId} evidence was recorded for this task.` };
+}
+function evaluateGate(input) {
+  const { gate, taskId, entries, reviews } = input;
+  switch (gate.id) {
+    case "task_contract":
+    case "current_task_contract_or_small_change_record":
+      return { status: "satisfied", reason: "A typed task contract defines this work." };
+    case "deterministic_verification":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "declared-verification"), "declared-verification");
+    case "scoped_implementer_run":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "diff-reconciliation"), "diff-reconciliation");
+    case "evidence_note":
+    case "evidence_bundle_or_log":
+      return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
+    case "lightweight_independent_review":
+    case "task_level_independent_review":
+      return hasAcceptedReview2(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
+    case "explicit_human_approval":
+      return humanApprovalStatus({ change: input.change, reviews, taskId });
+    case "approved_delta_spec":
+      return deltaSpecApprovalGateStatus({ change: input.change });
+    case "protected_oracle":
+      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
+    default:
+      return {
+        status: "unevaluable",
+        reason: "Legion does not yet produce evidence for this gate."
+      };
+  }
+}
+var UNRESOLVED_PINS = () => "unverified";
+function normalizeChangeFacts(change) {
+  if (change === null || typeof change !== "object") return void 0;
+  const facts = change;
+  if (typeof facts.verifyPin === "function") return facts;
+  return { ...facts, verifyPin: UNRESOLVED_PINS };
+}
+function deriveShipGates(input) {
+  const change = normalizeChangeFacts(input.change);
+  const gates = [];
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const derived = deriveGateSet({
+      tier: task.risk.tier,
+      gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
+    });
+    for (const gate of derived) {
+      const outcome = evaluateGate({
+        gate,
+        task,
+        taskId,
+        entries: input.entries,
+        reviews: input.reviews,
+        change
+      });
+      const scope = GATE_SCOPE[gate.id];
+      gates.push({
+        ...outcome,
+        gate: gate.id,
+        label: gate.label,
+        taskId,
+        scope,
+        subjectId: scope === "change" && change !== void 0 ? change.changeId : taskId
+      });
+    }
+  }
+  const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
+  const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
+  const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
+  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
+}
+function shipGateDiagnostics(input) {
+  const reported = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  for (const gate of input.gates) {
+    if (gate.status === "satisfied") continue;
+    if (gate.scope === "change") {
+      if (reported.has(gate.gate)) continue;
+      reported.add(gate.gate);
+    }
+    diagnostics.push({
+      code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
+      gate: gate.gate,
+      message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
+      path: input.path
+    });
+  }
+  return diagnostics;
+}
+var GATE_RECOVERY = {
+  current_task_contract_or_small_change_record: void 0,
+  deterministic_verification: void 0,
+  evidence_note: void 0,
+  task_contract: void 0,
+  scoped_implementer_run: void 0,
+  evidence_bundle_or_log: void 0,
+  lightweight_independent_review: void 0,
+  approved_delta_spec: {
+    command: "legion approve spec --approver <id>",
+    reason: "This change's delta specs are not approved, and no build produces that: the gate reads the approval plane. Approve them, then rerun legion ship."
+  },
+  protected_oracle: void 0,
+  task_level_independent_review: void 0,
+  integration_or_real_interface_checks: void 0,
+  whole_change_acceptance_evidence: void 0,
+  independent_baseline: void 0,
+  approved_spec_and_oracle: void 0,
+  architecture_or_security_review: void 0,
+  protected_acceptance_tests: void 0,
+  security_or_e2e_evaluator: void 0,
+  explicit_human_approval: void 0,
+  release_observation_plan: void 0,
+  rollback_or_forward_fix_evidence: void 0
+};
+function shipGateRecovery(input) {
+  const unmet = input.gates.filter((gate) => gate.status !== "satisfied");
+  if (unmet.length === 0) return input.fallback;
+  const recoveries = [...new Set(unmet.map((gate) => gate.gate))].map((id) => GATE_RECOVERY[id]).filter((entry) => entry !== void 0);
+  if (recoveries.length === 0) return input.fallback;
+  const distinct = [...new Set(recoveries.map((entry) => entry.command))];
+  const only = recoveries[0];
+  if (distinct.length === 1 && recoveries.length === new Set(unmet.map((gate) => gate.gate)).size) {
+    return only;
+  }
+  return {
+    command: input.fallback.command,
+    reason: `${input.fallback.reason} Of those, ${distinct.length === 1 ? "one has" : `${distinct.length} have`} a command that can produce the missing evidence: ${distinct.join(", ")}.`
+  };
+}
+
+// packages/cli/src/commands/workflow/approve.ts
+var APPROVE_HELP = `legion approve <subject>
+
+Record a human decision about part of the latest change. This writes a governance
+artifact and nothing else: it does not plan, build, review or ship.
+
+Subjects:
+  spec    Approve the change's delta specs.
+
+legion approve spec [--requirement <id>] --approver <id> [--dry-run]
+
+  --approver <id>     Required. A human decision owner recorded in
+                      .legion/project/project.json. No approver is inferred from
+                      the environment, from git config, or from a project having
+                      only one owner.
+  --requirement <id>  Approve only this requirement's delta spec. Omitted, every
+                      delta spec in the change is approved, which is what the
+                      approved_delta_spec ship gate asks about. Not repeatable:
+                      a second --requirement replaces the first.
+  --dry-run           Resolve the approver and the delta specs, report what would
+                      be written, and write nothing.
+
+Examples:
+  legion approve spec --approver dasbl
+  legion approve spec --approver dasbl --dry-run
+  legion approve spec --requirement req_editor-saves-metadata --approver dasbl`;
+var DELTA_SPEC_APPROVE_ACTION2 = "spec.delta.approve";
+async function handleApproveWorkflow(context) {
+  const subject = context.args.positionals[0];
+  if (hasFlag(context, "help") || subject === "help") {
+    return helpResult(APPROVE_HELP);
+  }
+  if (subject === void 0) {
+    return usageError(
+      "legion approve requires a subject. Supported subjects: spec. Example: legion approve spec --approver <id>."
+    );
+  }
+  if (subject !== "spec") {
+    return usageError(
+      `Unknown approval subject: legion approve ${subject}. Supported subjects: spec.`
+    );
+  }
+  return approveDeltaSpecs(context);
+}
+async function approveDeltaSpecs(context) {
+  const requirementRaw = stringOption(context, "requirement")?.trim();
+  if (context.args.options.get("requirement") === true || requirementRaw === "") {
+    return usageError(
+      "Missing required value for --requirement. Example: legion approve spec --requirement req_editor-saves-metadata."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const selected = selectDeltas(bundle.bundle.deltas, requirementRaw);
+  if (!selected.ok) {
+    return blockedApprove(
+      selected.diagnostics,
+      nextAction("legion approve spec", "Approve a delta spec this change actually records."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context);
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const selectedIds = new Set(selected.deltas.map((delta) => delta.requirementId));
+  const states = [];
+  for (const delta of bundle.bundle.deltas) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: DELTA_SPEC_APPROVE_ACTION2,
+      subject: { kind: "requirement", id: delta.requirementId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (selectedIds.has(delta.requirementId)) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve spec",
+            `An approval already exists for ${delta.requirementId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({ delta, approvalId, approved: false });
+      continue;
+    }
+    states.push({
+      delta,
+      approvalId,
+      approved: existing.ok && isLiveDeltaSpecGrant({
+        approval: existing.document,
+        changeId: bundle.bundle.change.id,
+        delta,
+        evaluatedAt: decidedAt
+      }),
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const planned = states.filter((state) => selectedIds.has(state.delta.requirementId)).map((state) => ({ ...state, ...plannedActionFor(state, approver.approver) }));
+  const unapprovedNow = states.filter((state) => !state.approved).map((state) => state.delta.requirementId);
+  const unapprovedAfter = states.filter((state) => !state.approved && !selectedIds.has(state.delta.requirementId)).map((state) => state.delta.requirementId);
+  if (hasFlag(context, "dry-run")) {
+    const unapproved2 = unapprovedNow;
+    const action2 = dryRunNextActionFor(unapproved2, bundle.bundle.deltas.length);
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        // No `status` and no `decidedAt` on these entries: nothing was decided,
+        // and a dry-run payload that carried them would read as a record of a
+        // decision to anything parsing it.
+        approvals: planned.map((entry) => ({
+          requirementId: entry.delta.requirementId,
+          deltaSpecPath: entry.delta.path,
+          approvalId: entry.approvalId,
+          pinned: entry.delta.delta,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        unapproved: unapproved2,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} delta spec${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.delta.requirementId}  ${entry.delta.path}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      entry,
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        approvals: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const document = deltaSpecApproval({
+      entry,
+      projectId: bundle.bundle.change.projectId,
+      changeId: bundle.bundle.change.id,
+      approver: approver.approver,
+      decidedAt,
+      ...archived.record === void 0 ? {} : { superseding: archived.record }
+    });
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve spec",
+          "Some delta specs were approved and one write failed. Rerunning re-decides only what is not already approved."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          approvals: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const unapproved = unapprovedAfter;
+  const action = nextActionFor(unapproved, bundle.bundle.deltas.length);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = superseded.map((record2) => ({
+    code: "withdrawn_approval_superseded",
+    message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this approval as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+    path: record2.artifactPath
+  }));
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      approvals: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          requirementId: entry.delta.requirementId,
+          deltaSpecPath: entry.delta.path,
+          approvalId: entry.approvalId,
+          pinned: entry.delta.delta,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // The field an obvious implementation omits, and the one that stops an
+      // operator believing a partial approval finished the job: the gate is
+      // change-scoped and satisfied only by full coverage, so approving one of
+      // three requirements leaves ship blocked over two the operator never saw.
+      unapproved,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Already approved: ${planned.length} delta spec${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.` : `Approved ${decided} delta spec${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.delta.requirementId}  ${entry.delta.path}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function recoveryForDiscovery(diagnostics) {
+  const codes = new Set(
+    diagnostics.map(
+      (diagnostic3) => diagnostic3 !== null && typeof diagnostic3 === "object" && "code" in diagnostic3 ? String(diagnostic3.code) : ""
+    ).filter((code) => code.length > 0)
+  );
+  if (codes.has("delta_artifact_mismatch")) {
+    return nextAction(
+      "legion approve spec",
+      "A delta spec's bytes no longer match the hash its change bundle records, so the change will not load. No command rewrites a delta spec \u2014 plan is create-only \u2014 so restore the file to the bytes the bundle records, then run this again. Re-approving edited bytes is deliberately not offered."
+    );
+  }
+  return nextAction("legion plan 1", "Approving a delta spec requires a planned change.");
+}
+function plannedActionFor(state, approver) {
+  const existing = state.existing;
+  if (existing === void 0) return { action: "grant" };
+  const document = existing.document;
+  if (state.approved && document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: document.status };
+  }
+  return { action: "regrant", previousStatus: document.status };
+}
+async function archiveWithdrawnDecision(input) {
+  const existing = input.entry.existing;
+  if (existing === void 0) return { ok: true };
+  const document = existing.document;
+  if (document.status !== "denied" && document.status !== "revoked") return { ok: true };
+  if (document.decidedAt >= input.decidedAt) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "withdrawal_not_superseded",
+          message: `Approval ${document.id} for ${input.entry.delta.requirementId} was ${document.status} at ${document.decidedAt}, which is not before this run's decision instant ${input.decidedAt}. A grant only supersedes a withdrawal when it is strictly later, so writing one now would leave the withdrawal standing and the change unshippable. Nothing was written.`,
+          path: existing.artifactPath
+        }
+      ],
+      action: nextAction(
+        "legion approve spec",
+        "The recorded withdrawal is dated at or after now, so no grant taken now can supersede it. Check the clock on the machine that wrote it, then run this again."
+      )
+    };
+  }
+  const archiveId = approvalIdForSubject({
+    changeId: document.changeId,
+    // The subject of the archive is "the decision that stood at revision N",
+    // which is what makes the id distinct and stable: a second withdrawal of the
+    // same requirement is a different revision and lands beside this one rather
+    // than on it. Colliding ids would fail the write, which is a refusal — never
+    // an overwrite.
+    action: `${DELTA_SPEC_APPROVE_ACTION2}.superseded.r${existing.revision.revision}`,
+    subject: { kind: "requirement", id: input.entry.delta.requirementId }
+  });
+  const write = await writeApproval({
+    repositoryRoot: input.repositoryRoot,
+    expectedRevision: 0,
+    baseGitSha: resolveBaseGitSha(input.repositoryRoot),
+    document: {
+      ...document,
+      id: archiveId,
+      updatedAt: input.decidedAt,
+      metadata: {
+        ...document.metadata ?? {},
+        attributes: {
+          ...document.metadata?.attributes ?? {},
+          superseded_approval_id: document.id,
+          superseded_at: input.decidedAt
+        }
+      }
+    }
+  });
+  if (!write.ok) {
+    return {
+      ok: false,
+      diagnostics: write.diagnostics,
+      action: nextAction(
+        "legion approve spec",
+        `The ${document.status} approval for ${input.entry.delta.requirementId} could not be copied aside, so nothing was overwritten. A grant is not written over a withdrawal that cannot first be preserved.`
+      )
+    };
+  }
+  return { ok: true, record: write };
+}
+function deltaSpecApproval(input) {
+  const existing = input.entry.existing;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    // `createdAt` and `requestedAt` are the request instant and survive every
+    // re-decision, so the approvals listing's sort order does not move when a
+    // requirement is re-approved. `decidedAt` is the instant of *this* decision.
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: DELTA_SPEC_APPROVE_ACTION2,
+      targets: [
+        { kind: "requirement", id: input.entry.delta.requirementId },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: DELTA_SPEC_APPROVE_ACTION2,
+      targetHash: input.entry.delta.delta.sha256
+    }),
+    artifacts: [input.entry.delta.delta],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    // The overruled withdrawal is named in the grant as well as preserved beside
+    // it. The copy is the record; this sentence is what a reader of *this*
+    // document sees without having to list the directory, and it is why the
+    // supersession does not depend on somebody noticing a second file.
+    decisionReason: `${input.approver.id} approved the delta spec for ${input.entry.delta.requirementId} at ${input.entry.delta.delta.sha256} via legion approve spec.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function selectDeltas(deltas, requirementId) {
+  if (requirementId === void 0) return { ok: true, deltas };
+  const matched = deltas.filter((delta) => delta.requirementId === requirementId);
+  if (matched.length === 0) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "requirement_not_in_change",
+          message: `--requirement ${requirementId} has no delta spec in this change. This change's delta specs cover: ${deltas.map((delta) => delta.requirementId).join(", ")}. A requirement with no delta spec is not part of this change, and approving one Legion cannot show you would approve nothing.`
+        }
+      ]
+    };
+  }
+  return { ok: true, deltas: matched };
+}
+function nextActionFor(unapproved, total) {
+  if (unapproved.length > 0) {
+    return nextAction(
+      "legion approve spec",
+      `${unapproved.length} of ${total} delta specs in this change are still unapproved (${unapproved.join(", ")}); the approved_delta_spec gate is satisfied only when every one of them carries a granted approval.`
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every delta spec in this change is approved; the change is ready for guided build execution."
+  );
+}
+function dryRunNextActionFor(unapproved, total) {
+  if (unapproved.length === 0) {
+    return nextAction(
+      "legion build",
+      `All ${total} delta spec${total === 1 ? "" : "s"} in this change already carry a granted approval, and this dry run found nothing left to decide; the change is ready for guided build execution.`
+    );
+  }
+  return nextAction(
+    "legion approve spec --approver <id>",
+    `This was a dry run and no approval was written. ${unapproved.length} of ${total} delta specs in this change are unapproved (${unapproved.join(", ")}); the approved_delta_spec gate stays unsatisfied until this command is run without --dry-run.`
+  );
+}
+async function resolveSpecApprover(context) {
+  const raw = stringOption(context, "approver")?.trim();
+  if (context.args.options.get("approver") === true || raw === "") {
+    return {
+      ok: false,
+      result: usageError("Missing required value for --approver. Example: legion approve spec --approver dasbl.")
+    };
+  }
+  if (raw === void 0) {
+    return {
+      ok: false,
+      result: blockedApprove(
+        [
+          {
+            code: "approver_required",
+            message: `legion approve spec records a human's decision about a delta spec, so it requires --approver <id> naming a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. No approver is inferred from the environment, from git config, or from a project having only one owner \u2014 an approval recorded against a defaulted identity is not a human approval.`,
+            path: PROJECT_MANIFEST_PATH2
+          }
+        ],
+        nextAction("legion approve spec --approver <id>", "A delta-spec approval requires a named human approver.")
+      )
+    };
+  }
+  const project = await loadWorkflowProject(context);
+  if (!project.ok) {
+    return {
+      ok: false,
+      result: blockedApprove(
+        project.diagnostics,
+        nextAction("legion start", "The project manifest records who may approve, and it could not be read.")
+      )
+    };
+  }
+  const owners = project.loaded.project.policy.decisionOwners;
+  const resolved = resolveApprover({ raw, decisionOwners: owners });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      result: blockedApprove(
+        resolved.diagnostics,
+        nextAction(
+          "legion approve spec --approver <id>",
+          `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH2}. Recorded owners: ${describeDecisionOwners(owners)}.`
+        )
+      )
+    };
+  }
+  return { ok: true, approver: resolved.approver };
+}
+function approvalSummary2(approval) {
+  return {
+    approvalId: approval.document.id,
+    artifactPath: approval.artifactPath,
+    status: approval.document.status,
+    action: approval.document.scope.action,
+    pinned: approval.document.artifacts?.[0],
+    decidedBy: approval.document.decidedBy,
+    decidedAt: approval.document.decidedAt
+  };
+}
+function blockedApprove(diagnostics, action, extras = {}) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      ...extras,
+      diagnostics,
+      nextAction: action
+    },
+    ["Approve blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile22 } from "node:fs/promises";
 import path43 from "node:path";
@@ -46591,302 +47635,6 @@ async function resolvePinnedReferences(input) {
   };
 }
 
-// packages/cli/src/workflow/ship-gates.ts
-var GATE_SCOPE = {
-  current_task_contract_or_small_change_record: "task",
-  deterministic_verification: "task",
-  evidence_note: "task",
-  task_contract: "task",
-  scoped_implementer_run: "task",
-  evidence_bundle_or_log: "task",
-  lightweight_independent_review: "task",
-  approved_delta_spec: "task",
-  protected_oracle: "task",
-  task_level_independent_review: "task",
-  integration_or_real_interface_checks: "task",
-  whole_change_acceptance_evidence: "task",
-  independent_baseline: "task",
-  approved_spec_and_oracle: "task",
-  architecture_or_security_review: "task",
-  protected_acceptance_tests: "task",
-  security_or_e2e_evaluator: "task",
-  explicit_human_approval: "task",
-  release_observation_plan: "task",
-  rollback_or_forward_fix_evidence: "task"
-};
-function evidenceItemVerdict(entries, taskId, itemId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  if (entry === void 0) return void 0;
-  for (const item of entry.evidence.items) {
-    if (item.id !== itemId) continue;
-    if (item.verdict === "pass") return "pass";
-    if (item.verdict === "fail") return "fail";
-  }
-  return void 0;
-}
-function hasEvidence(entries, taskId) {
-  const entry = latestEvidencePerTask(entries).get(taskId);
-  return entry !== void 0 && entry.evidence.items.length > 0;
-}
-function hasAcceptedReview2(reviews, taskId) {
-  return reviews.some(
-    (review) => review.document.status === "accepted" && review.document.taskId === taskId
-  );
-}
-var REVIEW_ACCEPT_ACTION2 = "workflow.review.accept";
-function grantExpiry(approval, evaluatedAt) {
-  if (approval.expiresAt === void 0) return "live";
-  if (evaluatedAt === void 0) return "unknown";
-  return approval.expiresAt <= evaluatedAt ? "lapsed" : "live";
-}
-function idempotencyTargetHash(key) {
-  return /:(sha256:[0-9a-f]{64})$/.exec(key)?.[1];
-}
-function approvedReviewLink(input) {
-  const approvedIds = input.approval.scope.targets.filter((target) => target.kind === "review").map((target) => target.id);
-  if (approvedIds.length === 0) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} names no review, so it cannot be checked against this task's accepted review.`
-    };
-  }
-  const taskReviews = input.reviews.filter((review) => review.document.taskId === input.taskId);
-  const named = taskReviews.filter((review) => approvedIds.includes(review.document.id));
-  if (named.length !== approvedIds.length) {
-    return {
-      kind: "unknown",
-      reason: `Approval ${input.approval.id} records accepting ${approvedIds.join(", ")}, which is not among this task's readable reviews.`
-    };
-  }
-  for (const review of named) {
-    if (review.document.status !== "accepted") {
-      return {
-        kind: "stale",
-        reason: `Approval ${input.approval.id} records accepting review ${review.document.id}, which is now ${review.document.status}.`
-      };
-    }
-    const superseding = taskReviews.find(
-      (candidate) => candidate.document.id !== review.document.id && (candidate.document.supersedes ?? []).includes(review.document.id)
-    );
-    if (superseding !== void 0) {
-      return {
-        kind: "stale",
-        reason: `Approval ${input.approval.id} approved review ${review.document.id}, which review ${superseding.document.id} has since superseded.`
-      };
-    }
-    const approvedHash = idempotencyTargetHash(input.approval.idempotencyKey);
-    const currentHash = review.reference?.sha256;
-    if (approvedHash === void 0 || currentHash === void 0) {
-      return {
-        kind: "unknown",
-        reason: `Approval ${input.approval.id} cannot be compared against the bytes of review ${review.document.id}, so what was approved is unestablished.`
-      };
-    }
-    if (approvedHash !== currentHash) {
-      return {
-        kind: "stale",
-        reason: `Approval ${input.approval.id} was granted against different bytes of review ${review.document.id}, which has been rewritten since.`
-      };
-    }
-  }
-  return { kind: "current" };
-}
-function byDecisionInstant(left, right) {
-  const byInstant = (left.decidedAt ?? "").localeCompare(right.decidedAt ?? "");
-  if (byInstant !== 0) return byInstant;
-  return left.id.localeCompare(right.id);
-}
-function humanApprovalStatus(input) {
-  for (const review of input.reviews) {
-    if (review.document.status !== "accepted") continue;
-    if (review.document.taskId !== input.taskId) continue;
-    const acceptedBy = review.document.acceptedBy;
-    if (acceptedBy === void 0 || acceptedBy.kind === "human") continue;
-    return {
-      status: "unsatisfied",
-      reason: `Review ${review.document.id} was accepted by ${acceptedBy.kind} ${acceptedBy.id}, not by a human.`
-    };
-  }
-  const approvals = input.change?.approvals;
-  if (approvals === void 0) {
-    return {
-      status: "unevaluable",
-      reason: "The approvals recorded for this change could not be read, so no human approval is established."
-    };
-  }
-  const relevant = approvals.filter(
-    (approval) => (
-      // Strict equality against a possibly-absent change id, so facts too
-      // degraded to name their own change match nothing rather than matching
-      // everything. Absence must never widen the set an approval can answer for.
-      approval.changeId === input.change?.changeId && // An approval whose two task claims disagree says two things; the gate
-      // reads neither. The service will persist such a document, so refusing it
-      // here is the only place it is refused.
-      (approval.taskId === void 0 || approval.taskId === input.taskId) && approval.scope.action === REVIEW_ACCEPT_ACTION2 && approval.scope.targets.some((target) => target.kind === "task" && target.id === input.taskId)
-    )
-  );
-  if (relevant.length === 0) {
-    return {
-      status: "unevaluable",
-      reason: "No approval records anyone accepting this task's review."
-    };
-  }
-  const live = [];
-  const lapsed = [];
-  const unknownExpiry = [];
-  const nonHumanGrants = [];
-  for (const approval of relevant) {
-    if (approval.status !== "granted") continue;
-    if (approval.decidedBy.kind !== "human") {
-      nonHumanGrants.push(approval);
-      continue;
-    }
-    const expiry = grantExpiry(approval, input.change?.evaluatedAt);
-    if (expiry === "live") live.push(approval);
-    else if (expiry === "lapsed") lapsed.push(approval);
-    else unknownExpiry.push(approval);
-  }
-  live.sort(byDecisionInstant);
-  const newestGrant = live.at(-1);
-  const standing = relevant.filter((approval) => approval.status === "denied" || approval.status === "revoked" || approval.status === "expired").filter((approval) => {
-    if (newestGrant === void 0) return true;
-    const decidedAt = approval.decidedAt;
-    if (decidedAt === void 0) return true;
-    return decidedAt >= newestGrant.decidedAt;
-  }).sort(byDecisionInstant);
-  const blocking = standing.at(-1);
-  if (blocking !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: newestGrant === void 0 ? `Approval ${blocking.id} for this task's review is ${blocking.status}.` : `Approval ${blocking.id} for this task's review is ${blocking.status}, and no later grant supersedes it.`
-    };
-  }
-  if (newestGrant !== void 0) {
-    const link = approvedReviewLink({ approval: newestGrant, reviews: input.reviews, taskId: input.taskId });
-    if (link.kind === "stale") return { status: "unsatisfied", reason: link.reason };
-    if (link.kind === "unknown") return { status: "unevaluable", reason: link.reason };
-    return {
-      status: "satisfied",
-      reason: `Approval ${newestGrant.id} records ${newestGrant.decidedBy.id} accepting this task's review.`
-    };
-  }
-  const spent = lapsed.sort(byDecisionInstant).at(-1);
-  if (spent !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Approval ${spent.id}, granted by ${spent.decidedBy.id}, expired at ${spent.expiresAt}.`
-    };
-  }
-  const unchecked = unknownExpiry.sort(byDecisionInstant).at(-1);
-  if (unchecked !== void 0) {
-    return {
-      status: "unevaluable",
-      reason: `Approval ${unchecked.id} expires at ${unchecked.expiresAt}, and this report carries no clock to check that against.`
-    };
-  }
-  const byMachine = nonHumanGrants.sort(byDecisionInstant).at(-1);
-  if (byMachine !== void 0) {
-    return {
-      status: "unsatisfied",
-      reason: `Approval ${byMachine.id} was granted by ${byMachine.decidedBy.kind} ${byMachine.decidedBy.id}, not by a human.`
-    };
-  }
-  return {
-    status: "unevaluable",
-    reason: "An approval for this task's review is recorded as requested and has not been decided."
-  };
-}
-function fromVerdict(verdict, itemId) {
-  if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
-  if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
-  return { status: "unevaluable", reason: `No ${itemId} evidence was recorded for this task.` };
-}
-function evaluateGate(input) {
-  const { gate, taskId, entries, reviews } = input;
-  switch (gate.id) {
-    case "task_contract":
-    case "current_task_contract_or_small_change_record":
-      return { status: "satisfied", reason: "A typed task contract defines this work." };
-    case "deterministic_verification":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "declared-verification"), "declared-verification");
-    case "scoped_implementer_run":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "diff-reconciliation"), "diff-reconciliation");
-    case "evidence_note":
-    case "evidence_bundle_or_log":
-      return hasEvidence(entries, taskId) ? { status: "satisfied", reason: "A reviewable evidence bundle was recorded." } : { status: "unsatisfied", reason: "No evidence bundle exists for this task." };
-    case "lightweight_independent_review":
-    case "task_level_independent_review":
-      return hasAcceptedReview2(reviews, taskId) ? { status: "satisfied", reason: "An accepted review decision exists for this task." } : { status: "unsatisfied", reason: "No accepted review decision exists for this task." };
-    case "explicit_human_approval":
-      return humanApprovalStatus({ change: input.change, reviews, taskId });
-    case "protected_oracle":
-      return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
-    default:
-      return {
-        status: "unevaluable",
-        reason: "Legion does not yet produce evidence for this gate."
-      };
-  }
-}
-var UNRESOLVED_PINS = () => "unverified";
-function normalizeChangeFacts(change) {
-  if (change === null || typeof change !== "object") return void 0;
-  const facts = change;
-  if (typeof facts.verifyPin === "function") return facts;
-  return { ...facts, verifyPin: UNRESOLVED_PINS };
-}
-function deriveShipGates(input) {
-  const change = normalizeChangeFacts(input.change);
-  const gates = [];
-  for (const task of input.tasks) {
-    const taskId = input.taskIdFor(task);
-    const derived = deriveGateSet({
-      tier: task.risk.tier,
-      gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
-    });
-    for (const gate of derived) {
-      const outcome = evaluateGate({
-        gate,
-        task,
-        taskId,
-        entries: input.entries,
-        reviews: input.reviews,
-        change
-      });
-      const scope = GATE_SCOPE[gate.id];
-      gates.push({
-        ...outcome,
-        gate: gate.id,
-        label: gate.label,
-        taskId,
-        scope,
-        subjectId: scope === "change" && change !== void 0 ? change.changeId : taskId
-      });
-    }
-  }
-  const satisfied = gates.filter((entry) => entry.status === "satisfied").length;
-  const unsatisfied = gates.filter((entry) => entry.status === "unsatisfied").length;
-  const unevaluable = gates.filter((entry) => entry.status === "unevaluable").length;
-  return { gates, satisfied, unsatisfied, unevaluable, ready: unsatisfied === 0 && unevaluable === 0 };
-}
-function shipGateDiagnostics(input) {
-  const reported = /* @__PURE__ */ new Set();
-  const diagnostics = [];
-  for (const gate of input.gates) {
-    if (gate.status === "satisfied") continue;
-    if (gate.scope === "change") {
-      if (reported.has(gate.gate)) continue;
-      reported.add(gate.gate);
-    }
-    diagnostics.push({
-      code: gate.status === "unsatisfied" ? "risk_gate_unsatisfied" : "risk_gate_unevaluable",
-      message: `${gate.label} is not satisfied for ${gate.subjectId}: ${gate.reason}`,
-      path: input.path
-    });
-  }
-  return diagnostics;
-}
-
 // packages/cli/src/commands/workflow/ship.ts
 var SHIP_HELP = [
   "legion ship [--canary] [--allow-legacy-evidence]",
@@ -46961,6 +47709,13 @@ function completeApprovals(listing) {
   if (listing.skipped.length > 0) return void 0;
   return listing.approvals.map((approval) => approval.document);
 }
+function planeSkipDiagnostics(skips) {
+  return skips.map((skip) => ({
+    code: "artifact_plane_incomplete",
+    message: `${skip.entries.length} file${skip.entries.length === 1 ? "" : "s"} under ${skip.directory} could not be read as ${skip.plane} and ${skip.entries.length === 1 ? "was" : "were"} skipped: ${skip.entries.join(", ")}. Every gate that reads the ${skip.plane} plane reports unevaluable while this is true, because a listing that dropped a file may have dropped a withdrawal. Remove or correct the named file, then rerun this.`,
+    path: skip.directory
+  }));
+}
 async function loadShipGateChangeFacts(input) {
   const bundleResult = await absentOnFailure(
     () => loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
@@ -46983,20 +47738,31 @@ async function loadShipGateChangeFacts(input) {
     repositoryRoot: input.repositoryRoot,
     references: pinned
   });
+  const changeRoot = `.legion/project/changes/${input.changeId}`;
+  const skips = [];
+  if (runsResult !== void 0 && runsResult.ok && runsResult.skipped.length > 0) {
+    skips.push({ plane: "task run", directory: `${changeRoot}/runs`, entries: runsResult.skipped });
+  }
+  if (approvalsResult !== void 0 && approvalsResult.ok && approvalsResult.skipped.length > 0) {
+    skips.push({ plane: "approval", directory: `${changeRoot}/approvals`, entries: approvalsResult.skipped });
+  }
   return {
-    changeId: input.changeId,
-    acceptance: bundle?.change.acceptance,
-    approvals,
-    deltas: bundle?.deltas,
-    oracles,
-    taskRuns,
-    release: void 0,
-    // Read once, here, for the same reason the pins are hashed once here: a
-    // report is a snapshot of a moment. Gates that ask "is this still valid"
-    // must all ask about the same instant, or a change could be reported
-    // approved and expired in one payload.
-    evaluatedAt: currentUtcTimestamp(),
-    verifyPin
+    facts: {
+      changeId: input.changeId,
+      acceptance: bundle?.change.acceptance,
+      approvals,
+      deltas: bundle?.deltas,
+      oracles,
+      taskRuns,
+      release: void 0,
+      // Read once, here, for the same reason the pins are hashed once here: a
+      // report is a snapshot of a moment. Gates that ask "is this still valid"
+      // must all ask about the same instant, or a change could be reported
+      // approved and expired in one payload.
+      evaluatedAt: currentUtcTimestamp(),
+      verifyPin
+    },
+    skips
   };
 }
 async function handleShipWorkflow(context) {
@@ -47076,15 +47842,20 @@ async function handleShipWorkflow(context) {
     taskIdFor: (task) => taskIdForContractId(task.id),
     entries: evidence.document.entries,
     reviews: reviews.reviews,
-    change: changeFacts
+    change: changeFacts.facts
   });
+  const planeSkips = planeSkipDiagnostics(changeFacts.skips);
   if (!gateReport.ready) {
+    const recovery = shipGateRecovery({
+      gates: gateReport.gates,
+      fallback: {
+        command: "legion build",
+        reason: `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
+      }
+    });
     return blockedShip(
-      shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath }),
-      nextAction(
-        "legion build",
-        `Required risk gates are not satisfied for this change (${gateReport.unsatisfied} failed, ${gateReport.unevaluable} unprovable).`
-      )
+      [...planeSkips, ...shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath })],
+      nextAction(recovery.command, recovery.reason)
     );
   }
   const unevaluable = gateReport.gates.filter((gate) => gate.status === "unevaluable");
@@ -47104,7 +47875,12 @@ async function handleShipWorkflow(context) {
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
-      ...traceabilityWarnings.length === 0 ? {} : { warnings: traceabilityWarnings },
+      ...traceabilityWarnings.length === 0 && planeSkips.length === 0 ? {} : {
+        warnings: [
+          ...traceabilityWarnings,
+          ...planeSkips.map((diagnostic3) => ({ code: diagnostic3.code, message: diagnostic3.message }))
+        ]
+      },
       riskGates: {
         satisfied: gateReport.satisfied,
         unsatisfied: gateReport.unsatisfied,
@@ -47391,6 +48167,14 @@ var DECLARED = Object.freeze({
   // absent, which for this flag means an R3 accept refusing an approver the
   // operator did name.
   review: ["accept", "approver", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  // One list for every `legion approve <subject>`, because
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. With one subject there is nothing that
+  // could observe a per-subject boundary, so none is built. The verb that adds a
+  // second subject owns refusing another subject's flags inside the handler —
+  // `--requirement` is meaningless to an oracle approval and would otherwise be
+  // accepted here in silence.
+  approve: ["approver", "dry-run", "requirement"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
@@ -47431,6 +48215,7 @@ var COMMAND_SPECIFIC_HELP = /* @__PURE__ */ new Set([
   "plan",
   "build",
   "review",
+  "approve",
   "validate",
   "doctor",
   "quick",
@@ -47466,6 +48251,8 @@ async function handleWorkflowCommand(context) {
       return handleBuildWorkflow(commandContext);
     case "review":
       return handleReviewWorkflow(commandContext);
+    case "approve":
+      return handleApproveWorkflow(commandContext);
     case "ship":
       return handleShipWorkflow(commandContext);
     case "validate":

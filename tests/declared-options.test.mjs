@@ -32,7 +32,14 @@ const IGNORED = [
   { command: "plan", args: ["plan", "1", "--auto"], flag: "--auto" },
   { command: "polish", args: ["polish", "--dry-run"], flag: "--dry-run" },
   { command: "validate", args: ["validate", "--fix"], flag: "--fix" },
-  { command: "validate", args: ["validate", "--ci"], flag: "--ci" }
+  { command: "validate", args: ["validate", "--ci"], flag: "--ci" },
+  // `--phase` is what an operator familiar with `legion review` reaches for
+  // first, and `legion approve spec` does not read it: it acts on the latest
+  // change. Declared here because `undeclaredOptionError` returns `undefined`
+  // for a command with no entry in `DECLARED`, so forgetting the new verb's
+  // declaration produces a green tree with the guard disabled on the newest
+  // verb — the exact class of defect the declaration boundary exists to close.
+  { command: "approve", args: ["approve", "spec", "--phase", "1"], flag: "--phase" }
 ];
 
 for (const entry of IGNORED) {

@@ -16,18 +16,20 @@ const TASK_ID = "tsk_phase-1";
 // Do not "fix" them into real documents; the cost would be a slow suite that
 // asserts the same things.
 //
-// `derive()` also passes no `change` facts at all, even though `deriveShipGates`
-// now requires them in TypeScript. That is deliberate too. These tests import
-// compiled JavaScript, where required-ness is not enforced, and they stand in
-// for the runtime cases the type cannot cover: a caller that degraded to absent
-// facts because a change artifact would not read.
+// `derive()` passes no `change` facts unless a caller supplies them, even though
+// `deriveShipGates` requires them in TypeScript. That is deliberate too. These
+// tests import compiled JavaScript, where required-ness is not enforced, and
+// they stand in for the runtime cases the type cannot cover: a caller that
+// degraded to absent facts because a change artifact would not read.
 //
-// What that does *not* do is protect the guard. No gate reads a change fact in
-// this release, so deleting `normalizeChangeFacts` and reading `input.change`
-// directly leaves every assertion below passing — an earlier draft of this
-// comment claimed the opposite, which is the more dangerous kind of wrong: a
-// note telling the next reader that an edit is covered when it is not. The guard
-// is held by the tests at the end of this file, which call it directly.
+// What that does *not* do is protect the guard. `normalizeChangeFacts` only
+// repairs an absent or non-callable `verifyPin`, and the one gate that calls a
+// verifier returns before reaching it whenever the facts are that degraded — so
+// deleting the guard and reading `input.change` directly still leaves every
+// assertion below passing. An earlier draft of this comment claimed the
+// opposite, which is the more dangerous kind of wrong: a note telling the next
+// reader that an edit is covered when it is not. The guard is held by the tests
+// at the end of this file, which call it directly.
 
 function task(tier) {
   return { id: "ctr_phase-1", risk: { tier, reasons: ["test"] } };
@@ -45,12 +47,17 @@ function acceptedReview() {
   return { document: { id: "rev_1", status: "accepted", taskId: TASK_ID } };
 }
 
-function derive({ tier = "R2", items = [], reviews = [] } = {}) {
+function derive({ tier = "R2", items = [], reviews = [], change } = {}) {
   return deriveShipGates({
     tasks: [task(tier)],
     taskIdFor: () => TASK_ID,
     entries: [entry(items)],
-    reviews
+    reviews,
+    // Spread conditionally rather than passed as `undefined`, so the default
+    // stays "no `change` key at all" — the shape a caller that never loaded the
+    // planes produces, which is not the same as one that loaded them and found
+    // nothing.
+    ...(change === undefined ? {} : { change })
   });
 }
 
@@ -217,6 +224,11 @@ test("approved_spec_and_oracle is not satisfied by a passing oracle run", () => 
 
 // --- the seam that carries change-scoped facts ------------------------------
 
+const CHANGE_ID = "chg_transcript";
+const REQUIREMENT_ID = "req_transcript";
+const DELTA_SPEC_PATH = `.legion/project/changes/${CHANGE_ID}/delta-specs/${REQUIREMENT_ID}.md`;
+const DELTA_SPEC_PIN = { path: DELTA_SPEC_PATH, sha256: `sha256:${"a".repeat(64)}` };
+
 const SCENARIOS = [
   {
     name: "passing verification and an accepted review",
@@ -246,6 +258,44 @@ const SCENARIOS = [
       item("oracle-verification", "fail")
     ],
     reviews: [acceptedReview()]
+  },
+  {
+    // The sixth scenario, added with `approved_delta_spec`'s producer. Every
+    // scenario above derives with no change facts at all, so a gate reading the
+    // approvals plane answers `unevaluable` there whether it has a producer or
+    // not — which is why none of their cells move (see the transcript comment
+    // below). This is the first row in this transcript any gate has ever
+    // produced from a change fact, and the first `satisfied` cell for a gate
+    // that had no producer.
+    //
+    // The facts are structurally minimal, matching this file's convention: the
+    // smallest shapes the gate reads, not schema-valid protocol documents.
+    // tests/ship-delta-spec-approval parses every fixture through
+    // `approvalSchema` and `changeBundleDeltaEntrySchema`; what this scenario
+    // exists to hold is the transcript, not the document shapes.
+    name: "an approved delta spec",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: {
+      changeId: CHANGE_ID,
+      deltas: [{ requirementId: REQUIREMENT_ID, path: DELTA_SPEC_PATH, delta: DELTA_SPEC_PIN }],
+      approvals: [
+        {
+          id: "apv_transcript-approval",
+          changeId: CHANGE_ID,
+          status: "granted",
+          scope: {
+            action: "spec.delta.approve",
+            targets: [{ kind: "requirement", id: REQUIREMENT_ID }]
+          },
+          artifacts: [DELTA_SPEC_PIN],
+          decidedBy: { kind: "human", id: "dasbl" },
+          decidedAt: "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      evaluatedAt: "2026-08-10T00:00:00.000Z",
+      verifyPin: () => "match"
+    }
   }
 ];
 
@@ -264,25 +314,43 @@ const SCENARIOS = [
  * behaviour change, stated in one place, and reviewing it is reviewing the
  * central claim of the change that makes it.
  *
- * **One gate id has moved since that transcript was taken, and exactly one:
- * `explicit_human_approval`.** It appears once per scenario, all five times at
- * R3, and all five cells are now `unevaluable`. No other gate id moved in any
- * scenario at any tier, and the arithmetic guard below still holds because the
- * gate stayed task-scoped.
+ * **One gate id has changed behaviour since the last release, and exactly one:
+ * `approved_delta_spec`.** It gained a producer — it reads the approval plane
+ * for a granted, pin-clean approval of every one of the change's delta specs —
+ * and it became the first change-scoped gate in `GATE_SCOPE`.
  *
- * Four of the five moved from `satisfied`, which is the point of the change:
- * the gate shared an arm with the two independent-review gates and answered
- * from any accepted review, so it reported a human approval on a change whose
- * every review records `reviewer: {kind: "tool"}` and where no human identity
- * existed anywhere. `derive()` passes no `change` facts, so the approvals plane
- * is absent, and absent is `unevaluable`.
+ * **No cell in the five original scenarios moved, and that is the honest
+ * report rather than a weaker one.** Those five derive with no `change` facts,
+ * so the delta specs are absent; the gate's absent-fact answer is `unevaluable`,
+ * which is exactly what the `default:` arm answered before it had a producer.
+ * Writing "one gate moved" over cells that did not move would be the defect this
+ * file's own header warns about. What the unchanged cells assert is worth
+ * keeping: they are PR 0's invariant — an absent fact yields `unevaluable`,
+ * never `satisfied` — checked from outside the gate that has to hold it.
  *
- * The fifth — "no evidence and no review" at R3 — moved from `unsatisfied` to
- * `unevaluable`, which is a loosening and is deliberate. That scenario has no
- * review at all, so the old arm reported a negative human-approval verdict it
- * had no basis for: nobody had been asked. It now reports that the plane was
- * never consulted. `ready` is false either way, in all five, so no readiness
- * assertion moved with them.
+ * The movement is in the sixth scenario, which is new. "an approved delta spec"
+ * carries real change facts, and its R2 row records `approved_delta_spec:
+ * "satisfied"` — a cell no earlier build of this file could produce, because no
+ * gate read a change fact at all. Its other three tier rows are cell-for-cell
+ * identical to "passing verification and an accepted review", which is the
+ * second half of the claim: supplying change facts moved this gate and nothing
+ * else.
+ *
+ * **Readiness is transcribed separately, in `BASELINE_READY`, and it is not
+ * uniformly false.** A draft of this paragraph asserted that `ready` was false
+ * in all six scenarios at every tier above R0 and that no readiness assertion
+ * therefore moved. Both halves were wrong: `ready` is `true` at R0 *and* R1 in
+ * four of the six, because those tiers derive only gates Legion produces; and
+ * the test below compared gate statuses and row counts only, so it asserted
+ * `ready` nowhere at all. That is precisely the defect this file's header names
+ * — a note telling the next reader that an edit is covered when it is not —
+ * written inside the comment that exists to be the review artifact for a
+ * deliberate verdict move. The table is now recorded and asserted cell by cell,
+ * so a future gate that flips one of those `true` rows to blocked fails here
+ * with the scenario and tier named.
+ *
+ * The gate id that moved in the previous release was `explicit_human_approval`,
+ * and its cells are recorded below as they now stand.
  */
 const BASELINE_GATE_STATUSES = {
   "passing verification and an accepted review": {
@@ -459,13 +527,81 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  "an approved delta spec": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      // The one cell this release adds, and the only one in this row that
+      // differs from "passing verification and an accepted review".
+      approved_delta_spec: "satisfied",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      // The approvals plane holds a record, and it is a delta-spec approval.
+      // This gate matches `scope.action` exactly, so it reads it as naming
+      // nothing about a review — which is absence, not a negative.
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
+};
+
+/**
+ * `report.ready` for the same six scenarios at the same four tiers.
+ *
+ * Written out as literals rather than derived from the table above, which would
+ * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
+ * === 0` and could not fail independently. What it pins is that R0 and R1 are
+ * genuinely reachable — four scenarios ship-ready at both — so a later gate that
+ * quietly blocked a tier Legion can already satisfy would fail here rather than
+ * in whatever suite happened to notice months later.
+ *
+ * `an approved delta spec` is R2-blocked with `approved_delta_spec: satisfied`,
+ * which is the honest shape of this release: one of the R2 gates now has a
+ * producer and three still do not.
+ */
+const BASELINE_READY = {
+  "passing verification and an accepted review": { R0: true, R1: true, R2: false, R3: false },
+  "no evidence and no review": { R0: false, R1: false, R2: false, R3: false },
+  "failed declared-verification": { R0: false, R1: false, R2: false, R3: false },
+  "passing oracle verification": { R0: true, R1: true, R2: false, R3: false },
+  "failed oracle verification": { R0: true, R1: true, R2: false, R3: false },
+  "an approved delta spec": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
   for (const scenario of SCENARIOS) {
     for (const tier of ["R0", "R1", "R2", "R3"]) {
-      const report = derive({ tier, items: scenario.items, reviews: scenario.reviews });
+      const report = derive({
+        tier,
+        items: scenario.items,
+        reviews: scenario.reviews,
+        ...(scenario.change === undefined ? {} : { change: scenario.change })
+      });
       const actual = Object.fromEntries(report.gates.map((gate) => [gate.gate, gate.status]));
 
       // One row per (task, gate) — the arithmetic the report's counts and its
@@ -473,11 +609,12 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
       // pass the status comparison below and still change every count.
       assert.equal(Object.keys(actual).length, report.gates.length);
       assert.deepEqual(actual, BASELINE_GATE_STATUSES[scenario.name][tier], `${scenario.name} @ ${tier}`);
+      assert.equal(report.ready, BASELINE_READY[scenario.name][tier], `ready @ ${scenario.name} @ ${tier}`);
     }
   }
 });
 
-test("the only change facts any gate reads are approvals, changeId and the clock", () => {
+test("the only change facts any gate reads are deltas, approvals, changeId and the clock", () => {
   // The predecessor of this test asserted that no gate read any change fact,
   // by throwing on every property access. Its comment named the honest edit for
   // the day a gate started reading one: replace it with an assertion naming the
@@ -485,35 +622,41 @@ test("the only change facts any gate reads are approvals, changeId and the clock
   // deleting it. This is that edit.
   //
   // It is stronger than the version it replaces, in both directions. The trap
-  // still throws on the other nine planes, so the boundary claim stays
-  // falsifiable for `acceptance`, `deltas`, `oracles`, `taskRuns` and `release`
-  // — none of which has a reader yet, and each of which is a fail-open waiting
-  // for one. And it now records what *was* read, so the test also fails if
+  // still throws on the other eight planes, so the boundary claim stays
+  // falsifiable for `acceptance`, `oracles`, `taskRuns` and `release` — none of
+  // which has a reader yet, and each of which is a fail-open waiting for one.
+  // And it records what *was* read, so the test also fails if
   // `explicit_human_approval` stops consulting the approvals plane and quietly
   // goes back to answering from the accepted review.
   //
-  // The equality below is the second half of the claim: reading an absent
-  // `approvals` produces the same report as passing no facts at all. An absent
-  // fact must never be worth more than no facts.
+  // `deltas` joined the allow-list with `approved_delta_spec`'s producer, and it
+  // is admitted with a stated reason rather than by widening the trap: that gate
+  // quantifies over `bundle.deltas`, so the set of things needing an approval
+  // *is* that plane. The per-tier expectation below is what keeps the admission
+  // from becoming a blanket one — R2 may read `deltas` and R3 may not, because
+  // only R2 derives the gate.
   // An earlier version of this test exempted `changeId` on the claim that
   // `deriveShipGates` reads it to name a change-scoped gate's subject. That was
-  // false — `GATE_SCOPE` maps all twenty ids to "task", so the read
-  // short-circuits — and an exemption granted for a reason that does not hold
-  // only widens the boundary the test exists to pin. `changeId` is recorded like
-  // any other read now, and it is genuinely read: the approval gate scopes the
-  // plane to this change itself rather than trusting the loader to have listed
-  // one directory.
-  function tripwire(reads, approvals) {
+  // false at the time, and an exemption granted for a reason that does not hold
+  // only widens the boundary the test exists to pin. It is now true — this
+  // release adds the first change-scoped gate — and `changeId` is still recorded
+  // like any other read rather than exempted for it.
+  function tripwire(reads, { approvals, deltas } = {}) {
     return new Proxy(
       // `verifyPin` is the one true exemption: the guard inside
       // `deriveShipGates` inspects it on every call, to substitute a verifier
       // when a caller supplied something that is not one, so recording it would
       // say nothing about which gate read what.
-      { verifyPin: () => "unverified", changeId: "chg_tripwire", approvals, evaluatedAt: undefined },
+      { verifyPin: () => "match", changeId: "chg_tripwire", approvals, deltas, evaluatedAt: undefined },
       {
         get(target, property) {
           if (property === "verifyPin") return target.verifyPin;
-          if (property === "changeId" || property === "approvals" || property === "evaluatedAt") {
+          if (
+            property === "changeId" ||
+            property === "approvals" ||
+            property === "deltas" ||
+            property === "evaluatedAt"
+          ) {
             reads.push(property);
             return target[property];
           }
@@ -523,6 +666,13 @@ test("the only change facts any gate reads are approvals, changeId and the clock
     );
   }
 
+  // R2 reads `changeId` even against an absent plane, and not from a gate:
+  // `deriveShipGates` reads it to name a change-scoped gate's subject, which it
+  // does whatever that gate concluded. That read was hypothetical when this
+  // exemption was last argued about and is now real, so it is recorded rather
+  // than exempted.
+  const ABSENT_PLANE_READS = { R0: [], R1: [], R2: ["deltas", "changeId"], R3: ["approvals"] };
+
   for (const tier of ["R0", "R1", "R2", "R3"]) {
     const reads = [];
     const withFacts = deriveShipGates({
@@ -530,58 +680,137 @@ test("the only change facts any gate reads are approvals, changeId and the clock
       taskIdFor: () => TASK_ID,
       entries: [entry(PASSING_R2.items)],
       reviews: PASSING_R2.reviews,
-      change: tripwire(reads, undefined)
+      change: tripwire(reads)
     });
+    const withoutFacts = derive({ tier, ...PASSING_R2 });
 
-    assert.deepEqual(withFacts, derive({ tier, ...PASSING_R2 }));
-    // Only R3 derives explicit_human_approval, so only R3 should have touched
-    // the plane. A lower tier reading it would mean the gate set and the fact
-    // set had drifted apart. An unreadable plane is answered without consulting
-    // anything else, which is why `changeId` is not in this list.
+    // Reading an absent plane produces the same *verdicts* as passing no facts
+    // at all. An absent fact must never be worth more than no facts.
+    //
+    // Compared verdict by verdict rather than as whole reports, because one
+    // field legitimately differs and it is not a verdict: a change-scoped gate
+    // names the change as its subject when a change id is known and falls back
+    // to the task id when it is not, so `subjectId` moves the moment any facts
+    // are supplied. That difference is asserted immediately below rather than
+    // waved through — a `deepEqual` on the whole report would have to be deleted
+    // or narrowed, and narrowing it silently is how a boundary test becomes a
+    // no-op.
+    assert.deepEqual(
+      withFacts.gates.map((gate) => ({ gate: gate.gate, status: gate.status, reason: gate.reason })),
+      withoutFacts.gates.map((gate) => ({ gate: gate.gate, status: gate.status, reason: gate.reason })),
+      `${tier} verdicts moved when an absent plane replaced no facts`
+    );
+    assert.equal(withFacts.ready, withoutFacts.ready);
+    assert.equal(withFacts.unevaluable, withoutFacts.unevaluable);
+    assert.equal(withFacts.unsatisfied, withoutFacts.unsatisfied);
+    for (const [index, gate] of withFacts.gates.entries()) {
+      const expectedSubject = gate.scope === "change" ? "chg_tripwire" : TASK_ID;
+      assert.equal(gate.subjectId, expectedSubject, gate.gate);
+      assert.equal(withoutFacts.gates[index].subjectId, TASK_ID, gate.gate);
+    }
+
+    // Only R2 derives approved_delta_spec and only R3 derives
+    // explicit_human_approval, so only those tiers should have touched a plane.
+    // A lower tier reading one would mean the gate set and the fact set had
+    // drifted apart. An unreadable plane is answered without consulting anything
+    // else, which is why `changeId` is not in these lists.
     assert.deepEqual(
       [...new Set(reads)],
-      tier === "R3" ? ["approvals"] : [],
+      ABSENT_PLANE_READS[tier],
       `${tier} read ${JSON.stringify([...new Set(reads)])}`
     );
   }
 
-  // The same wire against a plane that holds a record, because the loop above
+  // The same wire against planes that hold records, because the loop above
   // answers an unreadable plane without consulting anything else and an empty
-  // one without running the scoping predicate at all. Without this pass, a gate
-  // could start reading `deltas` or `taskRuns` on the populated path and no
-  // assertion anywhere would notice.
+  // one without running the scoping predicate at all. Without these passes, a
+  // gate could start reading `oracles` or `taskRuns` on the populated path and
+  // no assertion anywhere would notice.
   //
-  // The stand-in approval is structurally minimal, like every other fixture in
-  // this file: enough fields for the scoping predicate to run to a decision, no
-  // more. Real `approvalSchema` documents are what tests/ship-human-approval-gate
-  // asserts the verdicts against.
-  const populatedReads = [];
+  // The stand-in documents are structurally minimal, like every other fixture in
+  // this file: enough fields for the scoping predicates to run to a decision, no
+  // more. Real `approvalSchema` documents are what
+  // tests/ship-human-approval-gate and tests/ship-delta-spec-approval assert the
+  // verdicts against.
+  const populatedReviewReads = [];
   deriveShipGates({
     tasks: [task("R3")],
     taskIdFor: () => TASK_ID,
     entries: [entry(PASSING_R2.items)],
     reviews: PASSING_R2.reviews,
-    change: tripwire(populatedReads, [
-      { changeId: "chg_tripwire", taskId: TASK_ID, scope: { action: "workflow.review.accept", targets: [] } }
-    ])
+    change: tripwire(populatedReviewReads, {
+      approvals: [
+        { changeId: "chg_tripwire", taskId: TASK_ID, scope: { action: "workflow.review.accept", targets: [] } }
+      ]
+    })
   });
-  assert.deepEqual([...new Set(populatedReads)].sort(), ["approvals", "changeId"]);
+  assert.deepEqual([...new Set(populatedReviewReads)].sort(), ["approvals", "changeId"]);
+
+  const populatedDeltaReads = [];
+  deriveShipGates({
+    tasks: [task("R2")],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedDeltaReads, {
+      approvals: [
+        {
+          id: "apv_tripwire",
+          changeId: "chg_tripwire",
+          status: "granted",
+          scope: { action: "spec.delta.approve", targets: [{ kind: "requirement", id: REQUIREMENT_ID }] },
+          artifacts: [DELTA_SPEC_PIN],
+          decidedBy: { kind: "human", id: "dasbl" },
+          decidedAt: "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      deltas: [{ requirementId: REQUIREMENT_ID, path: DELTA_SPEC_PATH, delta: DELTA_SPEC_PIN }]
+    })
+  });
+  assert.deepEqual(
+    [...new Set(populatedDeltaReads)].sort(),
+    ["approvals", "changeId", "deltas", "evaluatedAt"]
+  );
 });
 
+/**
+ * Which gate ids are about the change rather than about one task.
+ *
+ * Written out here, against the compiled module, rather than imported from it:
+ * a test that read `GATE_SCOPE` would assert that the record equals itself. This
+ * list is the claim, and changing a scope means changing this line beside the
+ * one in `ship-gates.ts` — which is the point, because a scope flip is not a
+ * refactor. It changes which subject the operator's diagnostic names and whether
+ * that diagnostic is collapsed to one per change.
+ */
+const CHANGE_SCOPED_GATES = new Set(["approved_delta_spec"]);
+
 test("every gate names its scope and the subject that scope refers to", () => {
-  // The ship command's blocked diagnostic interpolates `subjectId` where it
-  // interpolated `taskId`. That text is byte-identical only because every gate
-  // this release emits is task-scoped with `subjectId === taskId`; nothing else
-  // in the tree checks the message text, so without this the equivalence would
-  // be an assumption rather than a fact.
+  // The ship command's blocked diagnostic interpolates `subjectId`, and nothing
+  // else in the tree checks its text — so without this, "a task-scoped gate
+  // names its task and a change-scoped one names its change" would be an
+  // assumption rather than a fact.
+  //
+  // Both halves are asserted, because they fail in opposite directions. A gate
+  // wrongly marked task-scoped repeats one sentence once per task; a gate
+  // wrongly marked change-scoped reports a verdict about one task under the
+  // change's name and swallows the other tasks' diagnostics entirely.
   for (const tier of ["R0", "R1", "R2", "R3"]) {
-    const report = derive({ tier, ...PASSING_R2 });
+    const report = derive({ tier, ...PASSING_R2, change: SCENARIOS.at(-1).change });
     assert.ok(report.gates.length > 0);
     for (const gate of report.gates) {
-      assert.equal(gate.scope, "task", gate.gate);
-      assert.equal(gate.subjectId, gate.taskId, gate.gate);
+      const expected = CHANGE_SCOPED_GATES.has(gate.gate) ? "change" : "task";
+      assert.equal(gate.scope, expected, gate.gate);
+      assert.equal(gate.subjectId, expected === "change" ? CHANGE_ID : TASK_ID, gate.gate);
       assert.equal(gate.taskId, TASK_ID);
     }
+  }
+
+  // With no facts at all, a change-scoped gate still names the task: naming a
+  // task that exists beats naming a change that does not, and the gate is
+  // unevaluable in that case anyway.
+  for (const gate of derive({ tier: "R2", ...PASSING_R2 }).gates) {
+    assert.equal(gate.subjectId, TASK_ID, gate.gate);
   }
 });
 

@@ -11,7 +11,9 @@ import {
   artifactPathSchema,
   artifactReferenceSchema,
   blockerSchema,
+  buildChangeIdempotencyKey,
   buildIdempotencyKey,
+  changeScopedIdempotencyKeySchema,
   contentHashSchema,
   correlationIdSchema,
   createJsonValueSchema,
@@ -104,6 +106,43 @@ test("artifact, correlation, cursor, and idempotency primitives are deterministi
   assert.equal(key, `${projectId}:${changeId}:${taskId}:${runId}:git.commit:${targetHash}`);
   assert.equal(idempotencyKeySchema.parse(key), key);
   assert.throws(() => idempotencyKeySchema.parse(`${changeId}:${projectId}:${taskId}:${runId}:git.commit:${targetHash}`), /Invalid/);
+});
+
+test("a change-scoped idempotency key drops task and run together, and stays disjoint from the task-scoped form", () => {
+  // A decision taken about the change before any execution exists — approving a
+  // delta spec, which happens between `legion plan` and `legion build` — has no
+  // run to name. The two rejected alternatives were widening the shared schema,
+  // which would let a task run claim it had neither a task nor a run, and
+  // minting a placeholder `run_` segment, which writes a run id naming no run
+  // into an audit artifact.
+  const projectId = formatEntityId("project", "legion-next");
+  const changeId = formatEntityId("change", "legion-next-001");
+  const taskId = formatEntityId("task", "legion-next-001-a");
+  const runId = formatEntityId("run", "legion-next-001-a-1");
+
+  const changeKey = buildChangeIdempotencyKey({
+    projectId,
+    changeId,
+    effectKind: "spec.delta.approve",
+    targetHash
+  });
+  assert.equal(changeKey, `${projectId}:${changeId}:spec.delta.approve:${targetHash}`);
+  assert.equal(changeScopedIdempotencyKeySchema.parse(changeKey), changeKey);
+
+  // Disjoint in both directions, which is what makes admitting both forms on
+  // `approvalSchema.idempotencyKey` a widening rather than an ambiguity: every
+  // key already on disk still parses, and still parses as what it was. The
+  // effect segment forbids `:`, so neither pattern can absorb the other.
+  const taskKey = buildIdempotencyKey({ projectId, changeId, taskId, runId, effectKind: "git.commit", targetHash });
+  assert.equal(changeScopedIdempotencyKeySchema.safeParse(taskKey).success, false);
+  assert.equal(idempotencyKeySchema.safeParse(changeKey).success, false);
+
+  // The task and run segments drop together, never separately: a key naming a
+  // task but no run would assert a task-scoped operation that never executed.
+  assert.equal(
+    changeScopedIdempotencyKeySchema.safeParse(`${projectId}:${changeId}:${taskId}:spec.delta.approve:${targetHash}`).success,
+    false
+  );
 });
 
 test("strict JSON value and metadata schemas reject non-JSON or over-limit data", () => {
