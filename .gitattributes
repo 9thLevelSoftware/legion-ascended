@@ -1,2 +1,12 @@
 schemas/**/*.md text eol=lf
 bundles/*.md text eol=lf
+# Evidence reports an attestation can pin.
+#
+# `legion attest` pins a source by the sha256 of its raw bytes and `legion ship`
+# re-hashes them, deliberately without normalising line endings — see
+# packages/cli/src/workflow/pinned-references.ts, whose pins were all minted raw.
+# Without this rule these files check out CRLF on Windows and LF elsewhere, so an
+# attestation minted on one platform reads `drift` on the other, and `drift` is
+# the gates' strongest negative arm: a governance verdict would flip on a
+# checkout setting. The index already holds LF, so this changes no committed blob.
+docs/next/evidence/** text eol=lf

@@ -62,6 +62,21 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   // nothing and read as absent, which here means approving the change's whole
   // oracle set when the operator named one.
   approve: ["approver", "dry-run", "oracle", "path", "requirement"],
+  // One list for one flat verb: `legion attest <kind>` takes a positional rather
+  // than a subject tree, and every kind reads the identical flag set, so there
+  // is no per-subject boundary for the handler to enforce.
+  //
+  // `--source`, `--covers`, `--verdict`, `--attested-by`, `--statement` and
+  // `--waiver-reason` all take values, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--attested-by dasbl`
+  // bind nothing and read as absent, which here means an attestation recorded
+  // against no resolvable identity. `--source` and `--covers` are additionally
+  // repeatable, which `parseCliArgs` records in `repeated` — see the comment
+  // there for why comma-splitting was refused.
+  //
+  // This release adds no VALUELESS_OPTIONS entry at all: `--dry-run` and
+  // `--json` are already there, and the verb has no other boolean.
+  attest: ["attested-by", "covers", "dry-run", "source", "statement", "verdict", "waiver-reason"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

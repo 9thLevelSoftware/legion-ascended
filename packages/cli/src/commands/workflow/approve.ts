@@ -1233,6 +1233,7 @@ async function approveOracles(context: CliContext): Promise<CliResult> {
       changeId: latestChange.changeId,
       acceptance: undefined,
       approvals: undefined,
+      attestations: undefined,
       deltas: undefined,
       oracles,
       taskRuns: undefined,
@@ -1240,9 +1241,10 @@ async function approveOracles(context: CliContext): Promise<CliResult> {
       evaluatedAt: undefined,
       // Never consulted: `changeOracleDemand` resolves ids against documents and
       // asks nothing about disk. Supplied because the facts shape requires it,
-      // and `unverified` is the value that cannot be mistaken for a check that
-      // passed.
-      verifyPin: () => "unverified"
+      // and `unverified`/`unread` are the values that cannot be mistaken for a
+      // check that passed.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
     }
   });
 
@@ -1909,6 +1911,7 @@ async function approveVerificationSurfaces(context: CliContext): Promise<CliResu
       changeId: latestChange.changeId,
       acceptance: undefined,
       approvals: undefined,
+      attestations: undefined,
       deltas: undefined,
       oracles,
       taskRuns: undefined,
@@ -1917,9 +1920,10 @@ async function approveVerificationSurfaces(context: CliContext): Promise<CliResu
       // Never consulted: nothing below asks whether a *declared* pin still
       // matches through this verifier, because this command hashes the files
       // itself and compares against the declaration. Supplied because the facts
-      // shape requires it, and answering `unverified` is the value that cannot
-      // be mistaken for a check that passed.
-      verifyPin: () => "unverified"
+      // shape requires it, and answering `unverified`/`unread` are the values
+      // that cannot be mistaken for a check that passed.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
     }
   });
 

@@ -36,7 +36,8 @@ export const ROOT_ROUTER_PACKAGE_PATHS = Object.freeze([
  * not exist fails too.
  */
 export const POST_V8_COMMAND_PATHS = Object.freeze([
-  "commands/approve.md"
+  "commands/approve.md",
+  "commands/attest.md"
 ]);
 
 export const CLI_RUNTIME_PACKAGE_FILES = Object.freeze([

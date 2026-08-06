@@ -1,6 +1,7 @@
 import * as z from "zod";
 
 import { approvalSchema } from "./approval.js";
+import { attestationSchema } from "./attestation.js";
 import { changeSchema } from "./change.js";
 import { decisionSchema } from "./decision.js";
 import { evidenceBundleSchema } from "./evidence.js";
@@ -127,6 +128,18 @@ export const entityJsonSchemas = {
     "https://schemas.9thlevelsoftware.com/legion/entities/intake-session.schema.json",
     "Legion protocol intake session entity schema",
     intakeSessionSchema
+  ),
+  // Here rather than in `lifecycleJsonSchemas`, which is spread in below and
+  // would emit the same file. That group is paired with
+  // `lifecycleFixtureCorpusSchema`, a `z.strictObject` that
+  // `packages/protocol/test/lifecycle.test.mjs` parses a committed fixture
+  // through, so a new required key there reddens that suite until the fixture
+  // is extended. An attestation has no lifecycle to fixture; it belongs in the
+  // plain entity group.
+  attestation: jsonSchemaDocument(
+    "https://schemas.9thlevelsoftware.com/legion/entities/attestation.schema.json",
+    "Legion protocol attestation entity schema",
+    attestationSchema
   ),
   ...lifecycleJsonSchemas
 } as const;

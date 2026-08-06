@@ -156,15 +156,16 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
 test("gates with no producer are unevaluable, not silently satisfied", () => {
   const report = derive({ tier: "R3", ...PASSING_R2 });
 
-  // Re-pointed at `independent_baseline`, which is R3-only and genuinely has no
-  // producer. It has now been re-pointed twice: `protected_oracle` lost the job
-  // when oracle results became their own evidence item, and
-  // `whole_change_acceptance_evidence` lost it in this release, which is why the
-  // tier moved to R3 with it. The point of this test is the `default:` arm of
-  // `evaluateGate` — a gate Legion cannot answer at all must say so rather than
-  // pass — so it has to name a gate that still falls through that arm, not one
-  // that merely used to.
-  const unproduced = report.gates.find((entry) => entry.gate === "independent_baseline");
+  // Re-pointed at `architecture_or_security_review`, which is R3-only and
+  // genuinely has no producer. It has now been re-pointed three times:
+  // `protected_oracle` lost the job when oracle results became their own
+  // evidence item, `whole_change_acceptance_evidence` lost it when acceptance
+  // gained a producer, and `independent_baseline` lost it in this release, when
+  // the attestation plane gave all three of its gates producers. The point of
+  // this test is the `default:` arm of `evaluateGate` — a gate Legion cannot
+  // answer at all must say so rather than pass — so it has to name a gate that
+  // still falls through that arm, not one that merely used to.
+  const unproduced = report.gates.find((entry) => entry.gate === "architecture_or_security_review");
   assert.equal(unproduced.status, "unevaluable");
   assert.match(unproduced.reason, /does not yet produce/);
 
@@ -346,6 +347,73 @@ function orderedChange(oracleDecidedAt) {
     taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }],
     evaluatedAt: "2026-08-10T00:00:00.000Z",
     verifyPin: () => "match"
+  };
+}
+
+// --- the attestation plane --------------------------------------------------
+//
+// An attestation cites ordinary repository files rather than project artifacts,
+// which is why `pinned-references.ts` resolves paths itself and why these pins
+// live outside `.legion/project`. They are also deliberately distinct from every
+// other family's paths in this file: `shipGatePinnedReferences` records that a
+// dropped collector was once unfalsifiable precisely because two families shared
+// a path, so nothing here may share one.
+const THREAT_MODEL_PATH = "docs/next/evidence/transcript/threat-model.json";
+const THREAT_MODEL_PIN = { path: THREAT_MODEL_PATH, sha256: `sha256:${"e".repeat(64)}` };
+const AB_COMPARISON_PATH = "docs/next/evidence/transcript/ab-comparison.json";
+const AB_COMPARISON_PIN = { path: AB_COMPARISON_PATH, sha256: `sha256:${"f".repeat(64)}` };
+const WAIVER_BASIS_PATH = "docs/adr/ADR-006-risk-gates.md";
+const WAIVER_BASIS_PIN = { path: WAIVER_BASIS_PATH, sha256: `sha256:${"1".repeat(64)}` };
+
+// The classifier `legion ship` injects, stood in for. The real one parses bytes;
+// what the gate needs from it is a verdict per path, and asserting the gate
+// against a fixture classifier is what keeps this suite filesystem-free.
+// tests/evidence-sources asserts the parser itself against the committed
+// artefacts, which is where the shape recognition is actually pinned.
+function classifier(overrides = {}) {
+  const table = {
+    [THREAT_MODEL_PATH]: { kind: "clean", shape: "threat-model", enveloped: false },
+    [AB_COMPARISON_PATH]: { kind: "clean", shape: "ab-comparison", enveloped: false },
+    [WAIVER_BASIS_PATH]: { kind: "unrecognised" },
+    ...overrides
+  };
+  return (reference) => table[reference.path] ?? { kind: "unrecognised" };
+}
+
+const ATTESTED_BEFORE_AT = "2026-08-01T18:00:00.000Z";
+
+function attestationRecord({
+  attests,
+  verdict = "pass",
+  sources,
+  attestedAt = ATTESTED_BEFORE_AT,
+  attestedBy = { kind: "human", id: "dasbl" },
+  waiverReason,
+  covers = [{ kind: "task", id: TASK_ID }]
+}) {
+  return {
+    id: `att_transcript-attestation-${attests}`,
+    changeId: CHANGE_ID,
+    attests,
+    verdict,
+    attestedBy,
+    attestedAt,
+    sources,
+    covers,
+    statement: `${attestedBy.id} attests ${attests} as ${verdict}.`,
+    ...(waiverReason === undefined ? {} : { waiverReason })
+  };
+}
+
+/** A change carrying exactly one attestation and the run it is ordered against. */
+function attestedChange({ attestation, taskRuns, classifySource = classifier() }) {
+  return {
+    changeId: CHANGE_ID,
+    attestations: [attestation],
+    ...(taskRuns === undefined ? {} : { taskRuns }),
+    evaluatedAt: "2026-08-10T00:00:00.000Z",
+    verifyPin: () => "match",
+    classifySource
   };
 }
 
@@ -552,6 +620,112 @@ const SCENARIOS = [
     items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
     reviews: [acceptedReview()],
     change: orderedChange(EXECUTION_STARTED_AT)
+  },
+  {
+    // The thirteenth, added with the attestation plane, and the first row this
+    // transcript has ever produced from `change.attestations`. A security
+    // evaluation attested as passed, citing a threat-model report that reads
+    // clean and whose pin still matches.
+    //
+    // `security_or_e2e_evaluator` has no ordering rule and this scenario carries
+    // no run plane, which is the claim: evaluating the implemented change
+    // necessarily comes after implementing it, so an ordering rule here would
+    // make an honest attestation permanently unsatisfiable.
+    name: "a security evaluation attested against a clean threat model",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: attestedChange({
+      attestation: attestationRecord({ attests: "security-evaluation", sources: [THREAT_MODEL_PIN] })
+    })
+  },
+  {
+    // The fourteenth, and the pair's other half. Identical to the row above in
+    // every field but one: the cited report's own verdict.
+    //
+    // This is the arm that makes `legion attest` more than a rubber stamp
+    // enforceable at *read* time. The writer refuses a pass over a red report,
+    // and the gate re-derives the same answer rather than trusting the record —
+    // because `legion attest` is not the only way a JSON file reaches the
+    // attestations directory, and a gate that trusted the record's own verdict
+    // would certify a pass over evidence saying the opposite.
+    name: "a security evaluation attested over a failing threat model",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: attestedChange({
+      attestation: attestationRecord({ attests: "security-evaluation", sources: [THREAT_MODEL_PIN] }),
+      classifySource: classifier({
+        [THREAT_MODEL_PATH]: {
+          kind: "blocking",
+          shape: "threat-model",
+          enveloped: false,
+          reason: "its own ok is false and it records 2 findings"
+        }
+      })
+    })
+  },
+  {
+    // The fifteenth. A baseline attested before the change's first run started,
+    // which is the only shape that satisfies `independent_baseline` on evidence.
+    name: "a baseline attested before execution began",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: attestedChange({
+      attestation: attestationRecord({
+        attests: "independent-baseline",
+        sources: [AB_COMPARISON_PIN],
+        attestedAt: ATTESTED_BEFORE_AT
+      }),
+      taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  },
+  {
+    // The sixteenth, and the pair's other half. Identical but for `attestedAt`,
+    // which is the run's own `startedAt` to the millisecond.
+    //
+    // The boundary is deliberately the equal case rather than a comfortably
+    // later one, on `approved_spec_and_oracle`'s recorded rule: millisecond
+    // wall-clock stamps make an exact collision reachable, and an unorderable
+    // pair is not evidence that the baseline came first. `>=` blocks. This cell
+    // is what fails if anyone ever writes `>` here.
+    //
+    // It is `unsatisfied` rather than `unevaluable`, and that distinction is the
+    // whole point of the arm: a baseline captured after the run it is supposed
+    // to be independent of is not an absence of evidence, it is evidence that
+    // there was no independence.
+    name: "a baseline attested in the instant execution began",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: attestedChange({
+      attestation: attestationRecord({
+        attests: "independent-baseline",
+        sources: [AB_COMPARISON_PIN],
+        attestedAt: EXECUTION_STARTED_AT
+      }),
+      taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  },
+  {
+    // The seventeenth, and the one arm in these three gates with no falsifiable
+    // evidence behind it: an audited waiver. ADR-006 permits a waived gate, and
+    // this is what it looks like — a named human, a recorded instant, a reason a
+    // reviewer can disagree with, and a pinned document supporting the claim.
+    //
+    // The cited document is deliberately `unrecognised` by the classifier. A
+    // waiver cites the decision record that supports "this does not apply", not
+    // a report of the check being waived — and a waiver over a *failing* report
+    // of that check is refused at both ends, which is asserted in
+    // tests/attestation-gates rather than as a transcript cell.
+    name: "a rollback gate waived by a named human",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: attestedChange({
+      attestation: attestationRecord({
+        attests: "rollback-evidence",
+        verdict: "not_applicable",
+        sources: [WAIVER_BASIS_PIN],
+        waiverReason: "This change ships no migration and touches no persisted state, so there is nothing to roll back."
+      })
+    })
   }
 ];
 
@@ -570,7 +744,53 @@ const SCENARIOS = [
  * behaviour change, stated in one place, and reviewing it is reviewing the
  * central claim of the change that makes it.
  *
- * **One gate id has changed behaviour in this release, and exactly one:
+ * **Three gate ids changed behaviour in this release, and exactly three:
+ * `independent_baseline`, `security_or_e2e_evaluator` and
+ * `rollback_or_forward_fix_evidence`.** All three gained a producer at once
+ * because all three had the same problem — the verdict they want already exists
+ * in this repository as JSON keyed by phase or by release, with no concept of a
+ * change anywhere in it — and the same answer: an `Attestation`, in which a named
+ * human asserts at a recorded instant that specific hash-pinned files are this
+ * change's evidence, and which `legion ship` re-hashes and re-reads.
+ *
+ * Their shared shape:
+ *
+ *  - `satisfied` — a `pass` attestation of an accepted kind whose sources all
+ *    hash clean and at least one of which is a report shape this tree can read a
+ *    green verdict out of; **or** an audited waiver (`not_applicable`, a human
+ *    attester, a recorded reason), which ship echoes as a `risk_gate_waived`
+ *    warning on every payload that carries one.
+ *  - `unsatisfied` — verdict `fail`; a source that drifted or is gone; a cited
+ *    report that is negative by its own producer's rule; a `covers` list leaving
+ *    a deriving task out; a `pass` over a shape nothing can read a verdict from.
+ *  - `unevaluable` — no attestation of an accepted kind, a plane that would not
+ *    read as a complete set, verdict `unknown`, or a source nobody re-hashed.
+ *
+ * `independent_baseline` alone carries an ordering rule: `attestedAt <
+ * executionStartedAt`, reusing `approved_spec_and_oracle`'s `executionOrdering`
+ * rather than a second minimum, and blocking at `>=` for the same reason. The
+ * specification also asked for an attester distinct from the executor recorded in
+ * the task runs; that half was measured and dropped, because `legion build`
+ * writes the hard-coded literal `{kind: "tool", id: "legion-cli"}` as `claimedBy`
+ * on every run of every change, so the check could never fail. What survives is
+ * the falsifier alone — a *human* executor whose id equals the attester's — which
+ * can only refuse and never satisfy, so its vacuity is harmless.
+ *
+ * All three are **change-scoped**, the fifth, sixth and seventh entries in
+ * `GATE_SCOPE` that are not `"task"`. An attestation is keyed by `changeId` and
+ * there is at most one per kind per change, so all three answer once for the
+ * change; `CHANGE_SCOPED_GATES` below is the hand-written duplicate that records
+ * the flip.
+ *
+ * **No cell in the twelve earlier scenarios moved.** None of them carries an
+ * attestation plane at all, so all three gates answer `unevaluable` there —
+ * exactly what the `default:` arm answered before they had producers. The
+ * movement is in five new scenarios, and it takes five because the pairs are the
+ * claim: a clean threat model against a red one, a baseline before the run
+ * against one in the run's own millisecond, and the audited waiver on its own,
+ * which has no pair because it is the arm with no evidence behind it.
+ *
+ * **The gate id that moved in the release before this one was
  * `approved_spec_and_oracle`.** It gained a producer, and it is the ordering
  * gate the whole approval artifact was built for: not "was this approved" —
  * `approved_delta_spec` asks that, and R3 does not even derive it — but "was it
@@ -1136,11 +1356,186 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  "a security evaluation attested against a clean threat model": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "satisfied",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a security evaluation attested over a failing threat model": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unsatisfied",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a baseline attested before execution began": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "satisfied",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a baseline attested in the instant execution began": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unsatisfied",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a rollback gate waived by a named human": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "satisfied"
+    }
   }
 };
 
 /**
- * `report.ready` for the same twelve scenarios at the same four tiers.
+ * `report.ready` for the same seventeen scenarios at the same four tiers.
  *
  * Written out as literals rather than derived from the table above, which would
  * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
@@ -1173,13 +1568,20 @@ const BASELINE_READY = {
   "only unit surfaces declared": { R0: true, R1: true, R2: false, R3: false },
   "an accepted change covering its evidence": { R0: true, R1: true, R2: false, R3: false },
   "a change rebuilt after its sign-off": { R0: true, R1: true, R2: false, R3: false },
-  // R3 stays blocked in both, and that is the honest report rather than a
-  // weaker one: six of R3's ten gates still have no producer, so no fixture in
-  // this file could make R3 ready and one that appeared to would be lying about
-  // the release. `tests/change-r3-ordering` names those six and asserts the set
-  // in both directions.
+  // R3 stays blocked in every one of these, and that is the honest report rather
+  // than a weaker one: three of R3's ten gates still have no producer — and even
+  // the five attestation scenarios below move exactly one gate each, leaving the
+  // other nine unmet — so no fixture in this file could make R3 ready and one
+  // that appeared to would be lying about the release.
+  // `tests/change-r3-ordering` derives the producerless set from `evaluateGate`'s
+  // own `default:` reason string and asserts it in both directions.
   "a spec and oracle approved before execution": { R0: true, R1: true, R2: false, R3: false },
-  "an oracle approved in the instant execution began": { R0: true, R1: true, R2: false, R3: false }
+  "an oracle approved in the instant execution began": { R0: true, R1: true, R2: false, R3: false },
+  "a security evaluation attested against a clean threat model": { R0: true, R1: true, R2: false, R3: false },
+  "a security evaluation attested over a failing threat model": { R0: true, R1: true, R2: false, R3: false },
+  "a baseline attested before execution began": { R0: true, R1: true, R2: false, R3: false },
+  "a baseline attested in the instant execution began": { R0: true, R1: true, R2: false, R3: false },
+  "a rollback gate waived by a named human": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -1277,17 +1679,22 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   // nothing witnesses.
   //
   // `release` still has no reader, and it is still a fail-open waiting for one.
-  function tripwire(reads, { acceptance, approvals, deltas, oracles, taskRuns } = {}) {
+  function tripwire(
+    reads,
+    { acceptance, approvals, attestations, deltas, oracles, taskRuns, classifySource } = {}
+  ) {
     return new Proxy(
-      // `verifyPin` is the one true exemption: the guard inside
-      // `deriveShipGates` inspects it on every call, to substitute a verifier
-      // when a caller supplied something that is not one, so recording it would
-      // say nothing about which gate read what.
+      // `verifyPin` and `classifySource` are the two true exemptions: the guard
+      // inside `deriveShipGates` inspects both on every call, to substitute one
+      // when a caller supplied something that is not a function, so recording
+      // them would say nothing about which gate read what.
       {
         verifyPin: () => "match",
+        classifySource: classifySource ?? (() => ({ kind: "unrecognised" })),
         changeId: "chg_tripwire",
         acceptance,
         approvals,
+        attestations,
         deltas,
         oracles,
         taskRuns,
@@ -1296,10 +1703,12 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
       {
         get(target, property) {
           if (property === "verifyPin") return target.verifyPin;
+          if (property === "classifySource") return target.classifySource;
           if (
             property === "changeId" ||
             property === "acceptance" ||
             property === "approvals" ||
+            property === "attestations" ||
             property === "deltas" ||
             property === "oracles" ||
             property === "taskRuns" ||
@@ -1323,13 +1732,16 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
     R0: [],
     R1: [],
     R2: ["deltas", "changeId", "acceptance"],
-    // R3 gains `deltas` and `changeId` with `approved_spec_and_oracle`: it reads
-    // the delta plane first of all, returns on finding it absent, and
-    // `deriveShipGates` then reads the change id to name a change-scoped gate's
-    // subject. `oracles` and `taskRuns` are deliberately absent from this list —
-    // the gate never reaches them on a degraded change — which is the guard
-    // ordering asserted rather than assumed.
-    R3: ["deltas", "changeId", "approvals"]
+    // R3 reads `attestations` first of all, because `independent_baseline` is
+    // the first gate in R3's order and the attestation plane is the first thing
+    // it asks about; `changeId` follows immediately, because that gate is now
+    // change-scoped and `deriveShipGates` reads the id to name its subject.
+    // `deltas` is `approved_spec_and_oracle`'s first read and `approvals` is
+    // `explicit_human_approval`'s. `oracles` and `taskRuns` are deliberately
+    // absent — no gate reaches them on a degraded change — which is the guard
+    // ordering asserted rather than assumed, and the order of this list is the
+    // gate order asserted rather than assumed too.
+    R3: ["attestations", "changeId", "deltas", "approvals"]
   };
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
@@ -1408,7 +1820,10 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   // before it can reach an oracle or a run. That it stops there is the point —
   // a populated approvals plane must not be enough to make an ordering gate
   // start consulting planes nobody loaded.
-  assert.deepEqual([...new Set(populatedReviewReads)].sort(), ["approvals", "changeId", "deltas"]);
+  assert.deepEqual(
+    [...new Set(populatedReviewReads)].sort(),
+    ["approvals", "attestations", "changeId", "deltas"]
+  );
 
   const populatedDeltaReads = [];
   deriveShipGates({
@@ -1523,7 +1938,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   });
   assert.deepEqual(
     [...new Set(populatedOrderingReads)].sort(),
-    ["approvals", "changeId", "deltas", "evaluatedAt", "oracles", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "evaluatedAt", "oracles", "taskRuns"]
   );
   // The planes are genuinely read to a decision, not merely touched: this is the
   // gate's `satisfied` arm, which no other assertion in this file reaches.
@@ -1537,6 +1952,61 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   // fixture's own change id rather than the transcript's, because the tripwire
   // names itself.
   assert.equal(ordering.subjectId, "chg_tripwire");
+
+  // And once more against a populated attestation plane, because `attestations`
+  // joins the allow-list in this release and this file's standard is that an
+  // admission with no populated witness is an admission nothing witnesses. The
+  // absent-plane loop above reaches `attestations` and returns immediately, so
+  // without this pass nothing would show the plane being read to a decision —
+  // and the two guarded reads past it, `taskRuns` for the ordering clause and
+  // the injected classifier for the source verdict, would be invisible.
+  const populatedAttestationReads = [];
+  const attestationReport = deriveShipGates({
+    tasks: [task("R3")],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedAttestationReads, {
+      // `chg_tripwire`, because the scoping predicate matches on strict
+      // change-id equality: an attestation cites ordinary repository files that
+      // several changes could name, so a record too degraded to name its own
+      // change must match nothing rather than everything.
+      attestations: [
+        {
+          ...attestationRecord({ attests: "independent-baseline", sources: [AB_COMPARISON_PIN] }),
+          changeId: "chg_tripwire"
+        },
+        {
+          ...attestationRecord({ attests: "security-evaluation", sources: [THREAT_MODEL_PIN] }),
+          changeId: "chg_tripwire"
+        }
+      ],
+      taskRuns: [{ id: "run_tripwire-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }],
+      classifySource: classifier()
+    })
+  });
+  assert.deepEqual(
+    [...new Set(populatedAttestationReads)].sort(),
+    ["approvals", "attestations", "changeId", "deltas", "taskRuns"]
+  );
+  // Read to a decision rather than merely touched: the baseline gate reaches its
+  // ordering clause, which no other assertion in this file does, and the
+  // security gate reaches the source classifier.
+  assert.equal(
+    attestationReport.gates.find((gate) => gate.gate === "independent_baseline").status,
+    "satisfied"
+  );
+  assert.equal(
+    attestationReport.gates.find((gate) => gate.gate === "security_or_e2e_evaluator").status,
+    "satisfied"
+  );
+  // And the third gate stays `unevaluable` on the same populated plane, because
+  // nothing attests it: a plane that is readable and holds records is not the
+  // same fact as a plane that answers this gate's question.
+  assert.equal(
+    attestationReport.gates.find((gate) => gate.gate === "rollback_or_forward_fix_evidence").status,
+    "unevaluable"
+  );
 });
 
 /**
@@ -1553,11 +2023,19 @@ const CHANGE_SCOPED_GATES = new Set([
   "approved_delta_spec",
   "integration_or_real_interface_checks",
   "whole_change_acceptance_evidence",
-  // Added in this release, and the flip is the claim rather than the
-  // consequence: `GATE_SCOPE` already carried an entry for this id, so changing
-  // it from `"task"` to `"change"` compiles either way and nothing but this line
-  // and the one beside it in `ship-gates.ts` records the decision.
-  "approved_spec_and_oracle"
+  // The flip is the claim rather than the consequence: `GATE_SCOPE` already
+  // carried an entry for each of these, so changing one from `"task"` to
+  // `"change"` compiles either way and nothing but this line and the one beside
+  // it in `ship-gates.ts` records the decision.
+  "approved_spec_and_oracle",
+  // Added with the attestation plane. An `Attestation` is keyed by `changeId`,
+  // there is at most one per kind per change, and its `covers` array names which
+  // of the change's tasks it speaks for — so all three answer once for the
+  // change. Left `"task"` they would repeat one sentence per criterion-task
+  // under a `subjectId` naming a task the sentence is not about.
+  "independent_baseline",
+  "security_or_e2e_evaluator",
+  "rollback_or_forward_fix_evidence"
 ]);
 
 test("every gate names its scope and the subject that scope refers to", () => {

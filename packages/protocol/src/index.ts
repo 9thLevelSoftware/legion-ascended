@@ -7,6 +7,7 @@ export type LegionProtocolVersion = typeof LEGION_PROTOCOL_VERSION;
 export * from "./api/contracts.js";
 export * from "./api/schema-documents.js";
 export * from "./entities/approval.js";
+export * from "./entities/attestation.js";
 export * from "./entities/change.js";
 export * from "./entities/common.js";
 export * from "./entities/decision.js";

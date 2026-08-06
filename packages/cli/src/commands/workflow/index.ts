@@ -13,6 +13,7 @@ import { handlePlanWorkflow } from "./plan.js";
 import { handleBuildWorkflow } from "./build.js";
 import { handleReviewWorkflow } from "./review.js";
 import { handleApproveWorkflow } from "./approve.js";
+import { handleAttestWorkflow } from "./attest.js";
 import { handleAdHocWorkflow } from "./ad-hoc.js";
 import { handleContextualWorkflow } from "./contextual.js";
 import { handleShipWorkflow } from "./ship.js";
@@ -31,6 +32,7 @@ const COMMAND_SPECIFIC_HELP = new Set([
   "build",
   "review",
   "approve",
+  "attest",
   "validate",
   "doctor",
   "quick",
@@ -72,6 +74,8 @@ export async function handleWorkflowCommand(context: CliContext): Promise<CliRes
       return handleReviewWorkflow(commandContext);
     case "approve":
       return handleApproveWorkflow(commandContext);
+    case "attest":
+      return handleAttestWorkflow(commandContext);
     case "ship":
       return handleShipWorkflow(commandContext);
     case "validate":

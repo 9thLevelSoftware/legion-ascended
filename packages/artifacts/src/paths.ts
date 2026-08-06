@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   approvalIdSchema,
   artifactPathSchema,
+  attestationIdSchema,
   changeIdSchema,
   oracleIdSchema,
   requirementIdSchema,
@@ -11,6 +12,7 @@ import {
   runIdSchema,
   type ApprovalId,
   type ArtifactPath,
+  type AttestationId,
   type ArtifactRole,
   type ChangeId,
   type OracleId,
@@ -89,6 +91,7 @@ export interface ArtifactPathForRoleInput {
   readonly runId?: RunId | string;
   readonly reviewId?: ReviewId | string;
   readonly approvalId?: ApprovalId | string;
+  readonly attestationId?: AttestationId | string;
 }
 
 export class ArtifactPathError extends Error {
@@ -216,6 +219,10 @@ function parseApprovalId(input: ApprovalId | string | undefined): ApprovalId {
   return approvalIdSchema.parse(input);
 }
 
+function parseAttestationId(input: AttestationId | string | undefined): AttestationId {
+  return attestationIdSchema.parse(input);
+}
+
 export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPath {
   switch (input.role) {
     case "project-manifest":
@@ -270,6 +277,11 @@ export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPa
       const changeId = parseChangeId(input.changeId);
       const approvalId = parseApprovalId(input.approvalId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/approvals/${approvalId}.json`);
+    }
+    case "attestation": {
+      const changeId = parseChangeId(input.changeId);
+      const attestationId = parseAttestationId(input.attestationId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/attestations/${attestationId}.json`);
     }
     case "archive": {
       const changeId = parseChangeId(input.changeId);

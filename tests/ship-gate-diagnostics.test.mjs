@@ -165,8 +165,8 @@ test("a block mixing gates with a route and gates without advises the route, not
   // fallback command and merely name the ones that do. Its justification was that
   // naming one repair when several are needed overclaims — which is true of the
   // reason and was never true of the command. Adversarial review measured what it
-  // costs at R3, where six of ten gates are producerless and the arm is therefore
-  // unconditional: `legion ship` emitted `{command: "legion build", reason: "… one
+  // costs at R3, where the arm was unconditional because six of ten gates were
+  // producerless: `legion ship` emitted `{command: "legion build", reason: "… one
   // has a command that can produce the missing evidence: legion start --intake."}`
   // on a change whose only failing gate says in as many words that no command
   // re-orders a decision already taken and that a build is what made it
@@ -180,7 +180,10 @@ test("a block mixing gates with a route and gates without advises the route, not
   const recovery = shipGateRecovery({
     gates: [
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
-      gateResult({ gate: "independent_baseline" })
+      // Re-pointed from `independent_baseline`, which gained a recovery with the
+      // attestation plane and is therefore no longer an example of a gate with
+      // none. `protected_acceptance_tests` is one of the three that still is.
+      gateResult({ gate: "protected_acceptance_tests" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
@@ -200,7 +203,8 @@ test("a block with several distinct routes advises one of them and names them al
     gates: [
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
       gateResult({ gate: "whole_change_acceptance_evidence", scope: "change", subjectId: "chg_x" }),
-      gateResult({ gate: "independent_baseline" })
+      // Re-pointed for the same reason as the test above.
+      gateResult({ gate: "protected_acceptance_tests" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
@@ -213,9 +217,10 @@ test("a block with several distinct routes advises one of them and names them al
 });
 
 test("a block whose unmet gates have no recovery keeps the fallback unchanged", () => {
-  // Byte-identical to what shipped before this release, which is most of what
-  // this function does today: nine of the ten gates still have no producer and
-  // therefore no command to name.
+  // Byte-identical to what shipped before this release. It is a narrower case
+  // than it once was: seven of R3's ten gates now have a producer, and four of
+  // the twenty gate ids carry a recovery, so this arm is reached only when every
+  // unmet gate is one of the ones that still names no command.
   const fallback = { command: "legion build", reason: "Required risk gates are not satisfied." };
   assert.deepEqual(
     shipGateRecovery({ gates: [gateResult({ gate: "protected_oracle" })], fallback }),

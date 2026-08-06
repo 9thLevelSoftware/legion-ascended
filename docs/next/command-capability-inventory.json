@@ -548,6 +548,37 @@
       "cliGaps": []
     },
     {
+      "command": "attest",
+      "verb": "attest",
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/attest.ts",
+        "symbol": "handleAttestWorkflow"
+      },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb records one governance assertion, pins the bytes it is about, and parses those bytes to refuse a pass over a report that is red or a shape it cannot read. It resolves the attester from the project manifest and refuses anything it cannot resolve, so the host cannot supply an identity. What stays in the host is reading the cited report to the person asserting it, and being honest that an attestation links a phase-keyed artifact to a change by a human act rather than by having run anything against the change.",
+      "hostOnly": [
+        {
+          "capability": "Refusing to supply an attester the user did not name, including the project's only decision owner",
+          "anchor": "Never invent an attester id"
+        },
+        {
+          "capability": "Reading the cited report to the attester before the assertion is recorded, rather than a path and a hash",
+          "anchor": "Ask which file the assertion rests on and read it with the user."
+        },
+        {
+          "capability": "Saying plainly that an attestation links a phase-keyed artifact to a change by a human act and does not make the underlying check change-scoped",
+          "anchor": "What it cannot do is turn a phase-keyed artifact into a change-keyed one."
+        },
+        {
+          "capability": "Refusing to help an operator waive a check whose own report says it failed",
+          "anchor": "Refuse to help work around it."
+        }
+      ],
+      "cliGaps": []
+    },
+    {
       "command": "ship",
       "verb": "ship",
       "handler": {

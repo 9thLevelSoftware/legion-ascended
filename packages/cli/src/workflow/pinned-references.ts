@@ -86,7 +86,7 @@ export interface ResolvePinnedReferencesInput {
 
 /** What one path resolved to. `undefined` digest means it could not be hashed. */
 type ResolvedPath =
-  | { readonly kind: "hashed"; readonly sha256: string }
+  | { readonly kind: "hashed"; readonly sha256: string; readonly content?: string }
   | { readonly kind: "missing" }
   | { readonly kind: "unverified" };
 
@@ -160,7 +160,11 @@ function isCaseFoldedAlias(declaredPath: string, resolvedRelative: string): bool
   );
 }
 
-async function resolveOne(repositoryRoot: string, artifactPath: string): Promise<ResolvedPath> {
+async function resolveOne(
+  repositoryRoot: string,
+  artifactPath: string,
+  retainContent: boolean
+): Promise<ResolvedPath> {
   if (isWindowsStreamPath(artifactPath)) return { kind: "unverified" };
 
   const segments = artifactPath.split("/");
@@ -173,7 +177,20 @@ async function resolveOne(repositoryRoot: string, artifactPath: string): Promise
     if (isCaseFoldedAlias(artifactPath, path.relative(realRoot, realTarget).split(path.sep).join("/"))) {
       return { kind: "unverified" };
     }
-    return { kind: "hashed", sha256: hashContent(await readFile(realTarget)) };
+    const bytes = await readFile(realTarget);
+    // The digest and the retained text come from **one** read of one buffer, and
+    // that is the whole reason retention lives here rather than in a second pass
+    // by the caller. `legion ship` asks two questions about an attestation's
+    // cited source — "do these bytes still hash to what was pinned" and "what
+    // does this report say" — and a second read could answer them about two
+    // different states of the file. Retained only for the paths the caller names,
+    // because a verification surface may pin arbitrarily large repository files
+    // that nothing needs the contents of.
+    return {
+      kind: "hashed",
+      sha256: hashContent(bytes),
+      ...(retainContent ? { content: bytes.toString("utf8") } : {})
+    };
   } catch (error) {
     // ENOENT and ENOTDIR are the file genuinely not being there. Everything
     // else — EACCES, EISDIR, ELOOP, a name the platform refuses — is a read
@@ -200,19 +217,61 @@ async function resolveOne(repositoryRoot: string, artifactPath: string): Promise
 export async function resolvePinnedReferences(
   input: ResolvePinnedReferencesInput
 ): Promise<VerifyPinnedReference> {
+  return (await resolvePinnedReferenceReader({ ...input, retainContentFor: [] })).verifyPin;
+}
+
+/**
+ * What a caller that also needs to *read* some of the pinned bytes gets back.
+ *
+ * `contentOf` answers only for paths named in `retainContentFor`, and only when
+ * they hashed. `undefined` is every other case — absent, refused, unhashed, not
+ * asked for — because the one consumer treats all of them the same way: a source
+ * whose bytes this report did not collect is a source it cannot read a verdict
+ * out of, and that is never a pass.
+ */
+export interface PinnedReferenceReader {
+  readonly verifyPin: VerifyPinnedReference;
+  readonly contentOf: (reference: { readonly path: string }) => string | undefined;
+}
+
+/**
+ * Hash every distinct path once, retaining the text of the ones the caller
+ * named, and answer both questions synchronously afterwards.
+ *
+ * The retention list exists because `legion ship` has to ask an attestation's
+ * cited sources what they *say* as well as whether they moved — see (D) of the
+ * attestation gates — and asking that from a second pass would let the hash and
+ * the content describe two different moments of the same file. This is the same
+ * argument the module already makes for doing the I/O once: a report is a
+ * snapshot of one moment rather than a mix of the moments each gate happened to
+ * ask.
+ */
+export async function resolvePinnedReferenceReader(
+  input: ResolvePinnedReferencesInput & { readonly retainContentFor: Iterable<string> }
+): Promise<PinnedReferenceReader> {
+  const retain = new Set(input.retainContentFor);
   const resolved = new Map<string, ResolvedPath>();
 
   for (const reference of input.references) {
     if (resolved.has(reference.path)) continue;
-    resolved.set(reference.path, await resolveOne(input.repositoryRoot, reference.path));
+    resolved.set(
+      reference.path,
+      await resolveOne(input.repositoryRoot, reference.path, retain.has(reference.path))
+    );
   }
 
-  return (reference: ArtifactReference): PinVerdict => {
-    const entry = resolved.get(reference.path);
-    if (entry === undefined) return "unverified";
-    if (entry.kind === "missing") return "missing";
-    if (entry.kind === "unverified") return "unverified";
-    return entry.sha256 === reference.sha256 ? "match" : "drift";
+  return {
+    verifyPin: (reference: ArtifactReference): PinVerdict => {
+      const entry = resolved.get(reference.path);
+      if (entry === undefined) return "unverified";
+      if (entry.kind === "missing") return "missing";
+      if (entry.kind === "unverified") return "unverified";
+      return entry.sha256 === reference.sha256 ? "match" : "drift";
+    },
+    contentOf: (reference: { readonly path: string }): string | undefined => {
+      const entry = resolved.get(reference.path);
+      return entry !== undefined && entry.kind === "hashed" ? entry.content : undefined;
+    }
   };
 }
 
@@ -250,7 +309,7 @@ export async function mintPinnedReferences(input: {
 
   for (const artifactPath of input.paths) {
     if (resolved.has(artifactPath)) continue;
-    resolved.set(artifactPath, await resolveOne(input.repositoryRoot, artifactPath));
+    resolved.set(artifactPath, await resolveOne(input.repositoryRoot, artifactPath, false));
   }
 
   return (artifactPath: string): ArtifactReference | undefined => {

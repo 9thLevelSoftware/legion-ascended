@@ -1,5 +1,6 @@
 import {
   listApprovalsForChange,
+  listAttestationsForChange,
   listReviewDecisionsForChange,
   listTaskRunsForChange,
   loadChangeBundle,
@@ -8,16 +9,18 @@ import {
   readTaskGraph,
   validateChangeTraceability,
   type ApprovalListResult,
+  type AttestationListResult,
   type EvidenceIndexEntry,
   type TaskRunListResult
 } from "@legion/artifacts";
-import type { Approval, TaskContract, TaskRun } from "@legion/protocol";
+import type { Approval, Attestation, TaskContract, TaskRun } from "@legion/protocol";
 
 import { failure, hasFlag, helpResult, type CliContext, type CliResult } from "../../runtime.js";
 import { currentUtcTimestamp } from "../../workflow/change-input.js";
 import { absentOnFailure, loadOracleFacts } from "../../workflow/change-planes.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
-import { resolvePinnedReferences } from "../../workflow/pinned-references.js";
+import { classifyEvidenceSource } from "../../workflow/evidence-sources.js";
+import { resolvePinnedReferenceReader } from "../../workflow/pinned-references.js";
 import { taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
   APPROVE_BEFORE_BUILD_RECOVERY,
@@ -26,6 +29,8 @@ import {
   shipGateDiagnostics,
   shipGatePinnedReferences,
   shipGateRecovery,
+  shipGateSourcePaths,
+  shipGateWaivers,
   type ShipGateChangeFacts,
   type ShipGateOracleFact
 } from "../../workflow/ship-gates.js";
@@ -282,6 +287,31 @@ export function completeApprovals(listing: ApprovalListResult | undefined): read
 }
 
 /**
+ * Every attestation recorded for this change, or `undefined` when the listing
+ * dropped any of them.
+ *
+ * `completeApprovals`' rule, and the reason is sharper by one degree. An
+ * approval file can be re-decided in place, so a dropped one drops whatever
+ * decision stood. An attestation file is *only ever* the current verdict for its
+ * kind — `legion attest` derives the id from the change and the kind, so
+ * retaking an assertion overwrites rather than accumulates — which means a
+ * dropped file is exactly as likely to be a `fail` or a `not_applicable` as a
+ * `pass`. Three gates read this plane, and each of them is satisfiable, so
+ * answering from what the listing kept is a fail-open in all three.
+ *
+ * Exported and pure so a direct test can falsify it: collapsing this to
+ * `listing.attestations.map(...)` would leave every end-to-end assertion green,
+ * because a healthy change has nothing to skip.
+ */
+export function completeAttestations(
+  listing: AttestationListResult | undefined
+): readonly Attestation[] | undefined {
+  if (listing === undefined || !listing.ok) return undefined;
+  if (listing.skipped.length > 0) return undefined;
+  return listing.attestations.map((attestation) => attestation.document);
+}
+
+/**
  * A directory entry that made a whole plane absent, and where it is.
  *
  * `completeApprovals` and `completeTaskRuns` refuse to answer from a partial
@@ -354,15 +384,21 @@ function runPlaneContradictionDiagnostics(input: {
 /**
  * The change-scoped planes `legion ship` can read, and what it could not read.
  *
- * Five gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * Eight gates consume them: `explicit_human_approval` and `approved_delta_spec`
  * read `approvals`, the second also reads `deltas`,
  * `integration_or_real_interface_checks` reads `oracles` and the pin verifier,
- * `whole_change_acceptance_evidence` reads `acceptance` and the clock, and
- * `approved_spec_and_oracle` reads all of those plus `taskRuns`. Every plane
- * this function loads now has a reader, which it did not when the seam landed —
- * the point of loading them ahead of their gates was that the change adding each
- * gate would be a diff about that gate rather than about the plumbing, and this
- * release is the last one that collects on it.
+ * `whole_change_acceptance_evidence` reads `acceptance` and the clock,
+ * `approved_spec_and_oracle` reads all of those plus `taskRuns`, and
+ * `independent_baseline`, `security_or_e2e_evaluator` and
+ * `rollback_or_forward_fix_evidence` read `attestations`, the pin verifier and
+ * the source classifier — the first also `taskRuns`.
+ *
+ * A previous version of this paragraph claimed the release that added
+ * `approved_spec_and_oracle` was "the last one that collects on" loading planes
+ * ahead of their gates. That was wrong twice over: `release` still has no reader
+ * at all, and this release added a plane rather than only a reader. What the
+ * seam bought is real and is narrower than the claim — each gate's diff is about
+ * that gate rather than about the plumbing.
  *
  * The release plane is still passed as `undefined` rather than as an empty
  * value. Its schema exists but nothing reads or writes it, so "consulted and
@@ -415,6 +451,11 @@ async function loadShipGateChangeFacts(input: {
   );
   const approvals = completeApprovals(approvalsResult);
 
+  const attestationsResult = await absentOnFailure(() =>
+    listAttestationsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  const attestations = completeAttestations(attestationsResult);
+
   // The pins a gate can ask about are hashed here, once, because the evaluator
   // is synchronous. A reference nobody collects answers `unverified`, which
   // reads as "not checked" rather than as "clean" — so a gate whose collector
@@ -426,14 +467,23 @@ async function loadShipGateChangeFacts(input: {
   // test could falsify a dropped family, and mutation testing showed it could
   // not — either verification-surface collector alone resolved every path the
   // other would have, so deleting one reddened nothing anywhere in the tree.
-  const verifyPin = await resolvePinnedReferences({
+  //
+  // The attestation gates need one thing more than a hash: they ask what the
+  // cited report *says*, and the answer has to come off the same bytes the
+  // digest was taken from. `retainContentFor` is how that happens in one read
+  // rather than two — a second pass could hash one state of a file and classify
+  // another, and the whole point of doing the I/O here is that the report is a
+  // snapshot of one moment.
+  const pinned = await resolvePinnedReferenceReader({
     repositoryRoot: input.repositoryRoot,
     references: shipGatePinnedReferences({
       deltas: bundle?.deltas,
       oracles,
       approvals,
+      attestations,
       tasks: input.tasks
-    })
+    }),
+    retainContentFor: shipGateSourcePaths(attestations)
   });
 
   const changeRoot = `.legion/project/changes/${input.changeId}`;
@@ -444,12 +494,20 @@ async function loadShipGateChangeFacts(input: {
   if (approvalsResult !== undefined && approvalsResult.ok && approvalsResult.skipped.length > 0) {
     skips.push({ plane: "approval", directory: `${changeRoot}/approvals`, entries: approvalsResult.skipped });
   }
+  if (attestationsResult !== undefined && attestationsResult.ok && attestationsResult.skipped.length > 0) {
+    skips.push({
+      plane: "attestation",
+      directory: `${changeRoot}/attestations`,
+      entries: attestationsResult.skipped
+    });
+  }
 
   return {
     facts: {
       changeId: input.changeId,
       acceptance: bundle?.change.acceptance,
       approvals,
+      attestations,
       deltas: bundle?.deltas,
       oracles,
       taskRuns,
@@ -459,7 +517,9 @@ async function loadShipGateChangeFacts(input: {
       // must all ask about the same instant, or a change could be reported
       // approved and expired in one payload.
       evaluatedAt: currentUtcTimestamp(),
-      verifyPin
+      verifyPin: pinned.verifyPin,
+      classifySource: (reference) =>
+        classifyEvidenceSource(pinned.contentOf(reference), { repositoryRoot: input.repositoryRoot })
     },
     skips,
     runPlaneContradictions
@@ -622,6 +682,20 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     entries: evidence.document.entries
   });
 
+  // The waivers, hoisted before the readiness fork because both arms owe the
+  // operator the same sentence.
+  //
+  // **Five surfaces, and fewer would reproduce a defect this file already
+  // records.** A waived gate is `satisfied`, so `shipGateDiagnostics` skips it
+  // and the payload would otherwise be silent about the one arm in these three
+  // gates with no falsifiable evidence behind it. `payload.warnings` alone is not
+  // enough either: `human` renders only `traceabilityWarnings`, so a warning that
+  // lived solely in the payload would be invisible to exactly the operator who
+  // relied on it - which is the defect the comment beside that render already
+  // names. So a waiver reaches the operator through the gate's own `reason`, a
+  // machine-readable `waived` field on the result, a `risk_gate_waived` warning
+  // code distinct from every other, the `human` render on both the ready and the
+  // blocked path, and `riskGates.waivedGates` on the ready payload.
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
     taskIdFor: (task) => taskIdForContractId(task.id),
@@ -629,6 +703,13 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     reviews: reviews.reviews,
     change: changeFacts.facts
   });
+  const waiverWarnings = shipGateWaivers(gateReport.gates).map((waiver) => ({
+    code: "risk_gate_waived",
+    message:
+      `${waiver.gate} was satisfied by an audited waiver rather than by evidence: ${waiver.attestedBy} recorded it ` +
+      `as not applicable at ${waiver.attestedAt} (attests: ${waiver.attests}), because "${waiver.reason}". ` +
+      "Nothing was checked for this gate. ADR-006 permits this and requires it to be visible."
+  }));
   const planeSkips = [
     ...planeSkipDiagnostics(changeFacts.skips),
     ...runPlaneContradictionDiagnostics({
@@ -663,7 +744,8 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     // is back where they started.
     return blockedShip(
       [...planeSkips, ...shipGateDiagnostics({ gates: gateReport.gates, path: evidence.artifactPath })],
-      nextAction(recovery.command, recovery.reason)
+      nextAction(recovery.command, recovery.reason),
+      waiverWarnings
     );
   }
 
@@ -684,19 +766,26 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
         artifactPath: evidence.artifactPath,
         acceptedEntries: evidence.document.entries.length
       },
-      ...(traceabilityWarnings.length === 0 && planeSkips.length === 0
+      ...(traceabilityWarnings.length === 0 && planeSkips.length === 0 && waiverWarnings.length === 0
         ? {}
         : {
             warnings: [
               ...traceabilityWarnings,
-              ...planeSkips.map((diagnostic) => ({ code: diagnostic.code, message: diagnostic.message }))
+              ...planeSkips.map((diagnostic) => ({ code: diagnostic.code, message: diagnostic.message })),
+              ...waiverWarnings
             ]
           }),
       riskGates: {
         satisfied: gateReport.satisfied,
         unsatisfied: gateReport.unsatisfied,
         unevaluable: gateReport.unevaluable,
-        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))]
+        unevaluableGates: [...new Set(unevaluable.map((gate) => gate.gate))],
+        // Beside `unevaluableGates` rather than folded into it: a waived gate was
+        // answered, and answered `satisfied`. What makes it different from every
+        // other satisfied gate is that nothing was checked, and a ready payload
+        // that did not say which gates those were would be a ready payload
+        // claiming more than it established.
+        waivedGates: shipGateWaivers(gateReport.gates).map((waiver) => waiver.gate)
       },
       diagnostics: []
     },
@@ -706,6 +795,7 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
       // run, so a warning that lived solely in the payload was invisible to
       // exactly the operator who opted into the allowance.
       ...traceabilityWarnings.map((warning) => `warning: ${warning.message}`),
+      ...waiverWarnings.map((warning) => `warning: ${warning.message}`),
       `Risk gates: ${gateReport.satisfied} satisfied, ${gateReport.unevaluable} unevaluable.`,
       ...(unevaluable.length === 0
         ? []
@@ -718,16 +808,25 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   };
 }
 
-function blockedShip(diagnostics: readonly unknown[], action: ReturnType<typeof nextAction>): CliResult {
+function blockedShip(
+  diagnostics: readonly unknown[],
+  action: ReturnType<typeof nextAction>,
+  warnings: readonly { readonly code: string; readonly message: string }[] = []
+): CliResult {
   return failure(
     {
       ok: false,
       status: "blocked",
+      ...(warnings.length === 0 ? {} : { warnings }),
       diagnostics,
       nextAction: action
     },
     [
       "Ship blocked.",
+      // Rendered on the blocked path too. A change can be blocked by one gate
+      // while another was waived, and an operator reading only the blockers would
+      // never learn that a gate they believe was checked was not.
+      ...warnings.map((warning) => `warning: ${warning.message}`),
       diagnostics.map((diagnostic) => diagnostic && typeof diagnostic === "object" && "message" in diagnostic
         ? String((diagnostic as { readonly message: unknown }).message)
         : String(diagnostic)).join("\n"),

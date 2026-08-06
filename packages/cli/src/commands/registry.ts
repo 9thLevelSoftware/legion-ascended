@@ -10,6 +10,7 @@ export const WORKFLOW_COMMANDS: readonly CommandHelpEntry[] = Object.freeze([
   { name: "plan", summary: "Plan a phase or change into typed task contracts." },
   { name: "build", summary: "Execute approved task contracts through a runtime driver." },
   { name: "approve", summary: "Record a human decision about the change's delta specs." },
+  { name: "attest", summary: "Record a human assertion that pinned files are this change's evidence." },
   { name: "review", summary: "Review task outputs with verification and independent gates." },
   { name: "ship", summary: "Run release readiness, promotion, and observation gates." },
   { name: "retro", summary: "Record retrospective evidence for future planning." },

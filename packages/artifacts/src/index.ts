@@ -11,6 +11,7 @@ export * from "./evidence-index/index.js";
 export * from "./task-runs/index.js";
 export * from "./reviews/index.js";
 export * from "./approvals/index.js";
+export * from "./attestations/index.js";
 export * from "./traceability/index.js";
 export * from "./invalidation/index.js";
 export * from "./archive/index.js";

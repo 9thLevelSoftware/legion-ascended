@@ -1165,6 +1165,7 @@
                 "task-run",
                 "review",
                 "approval",
+                "attestation",
                 "archive"
               ]
             },

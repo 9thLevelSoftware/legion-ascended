@@ -39,7 +39,13 @@ const IGNORED = [
   // for a command with no entry in `DECLARED`, so forgetting the new verb's
   // declaration produces a green tree with the guard disabled on the newest
   // verb — the exact class of defect the declaration boundary exists to close.
-  { command: "approve", args: ["approve", "spec", "--phase", "1"], flag: "--phase" }
+  { command: "approve", args: ["approve", "spec", "--phase", "1"], flag: "--phase" },
+  // `--approver` is what an operator who has just used `legion approve` reaches
+  // for, and `legion attest` spells the same idea `--attested-by`. The entry
+  // exists for the reason above: a command with no `DECLARED` entry has
+  // `undeclaredOptionError` return `undefined`, so the guard would be silently
+  // disabled on the newest verb and the whole tree would still be green.
+  { command: "attest", args: ["attest", "security-evaluation", "--approver", "dasbl"], flag: "--approver" }
 ];
 
 for (const entry of IGNORED) {

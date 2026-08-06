@@ -6,6 +6,7 @@ import {
   formatEntityId,
   type ApprovalId,
   type ArtifactPath,
+  type AttestationId,
   type ChangeId,
   type ContractId,
   type EvidenceId,
@@ -82,6 +83,41 @@ export function approvalIdForSubject(input: {
     "approval",
     derivedSuffix(input.changeId.slice("chg_".length), `-approval-${digest}`)
   ) as ApprovalId;
+}
+
+/**
+ * The attestation id for one kind of assertion about one change.
+ *
+ * Identity is `(changeId, attests)` and nothing else, so a change carries **at
+ * most one attestation of each kind** and re-attesting rewrites the same path at
+ * the next revision. Three things are deliberately *not* in it, and each
+ * omission is a fail-open closed:
+ *
+ *  - **Not the attester.** Two people attesting the same kind would otherwise be
+ *    two files, and every gate here asks an existential — so the favourable
+ *    record would win and the unfavourable one would sit beside it unread.
+ *  - **Not the sources.** A re-attestation over fresh evidence would otherwise
+ *    coexist with the record it was meant to withdraw.
+ *  - **Not a sequence tail.** `reviewIdForChange`'s idiom is right for reviews,
+ *    which accumulate; an assertion is retaken rather than accumulated, and a
+ *    second `pass` would leave the first on disk with no reader.
+ *
+ * The tail is **readable** where `approvalIdForSubject`'s is a digest, and the
+ * divergence is a budget fact rather than a taste one. `derivedSuffix` reserves
+ * `tail.length + 13`, so an approval's unbounded subject id overruns 64 and
+ * throws — hence its digest. `attests` is a closed seven-member enum whose
+ * longest values are 20 characters, reserving 46 of 64, so it cannot throw, and
+ * the payoff is a filename that says what the record is:
+ * `att_<change>-attestation-independent-baseline.json`.
+ */
+export function attestationIdForKind(input: {
+  readonly changeId: ChangeId;
+  readonly attests: string;
+}): AttestationId {
+  return formatEntityId(
+    "attestation",
+    derivedSuffix(input.changeId.slice("chg_".length), `-attestation-${input.attests}`)
+  ) as AttestationId;
 }
 
 function derivedSuffix(baseSuffix: string, tail: string): string {

@@ -1188,6 +1188,7 @@
                   "task-run",
                   "review",
                   "approval",
+                  "attestation",
                   "archive"
                 ]
               },
@@ -1700,6 +1701,7 @@
               "task-run",
               "review",
               "approval",
+              "attestation",
               "archive"
             ]
           },

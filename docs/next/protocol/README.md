@@ -13,7 +13,7 @@ This directory is generated from the typed protocol and core transition sources.
 
 | Surface | Generated coverage |
 | --- | --- |
-| Schema catalog | 26 JSON Schema documents across primitives, entities, events, and API contracts. |
+| Schema catalog | 27 JSON Schema documents across primitives, entities, events, and API contracts. |
 | Event contracts | 28 append-only event types from the event catalog. |
 | API contracts | 23 command types plus query envelope contracts. |
 | State machines | 8 core transition matrices derived from reducer source. |

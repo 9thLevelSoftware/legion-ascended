@@ -13,6 +13,8 @@ import type {
   AcceptanceState,
   Approval,
   ArtifactReference,
+  Attestation,
+  AttestationKind,
   Oracle,
   Release,
   TaskContract,
@@ -22,6 +24,12 @@ import type {
 } from "@legion/protocol";
 
 import { latestEvidencePerTask } from "./evidence-selection.js";
+import {
+  EVIDENCE_SOURCE_PRODUCERS,
+  UNRECOGNISED_SOURCE_HINT,
+  type ClassifyEvidenceSource,
+  type EvidenceSourceShape
+} from "./evidence-sources.js";
 import type { VerifyPinnedReference } from "./pinned-references.js";
 
 /**
@@ -51,16 +59,19 @@ import type { VerifyPinnedReference } from "./pinned-references.js";
  * verification surface and a whole-change sign-off reports `ready` end to end —
  * the first tier above R0 for which that is true.
  *
- * **R3 still cannot, and this release does not try to make it.** Four of its ten
+ * **R3 still cannot, and this release does not try to make it.** Seven of its ten
  * gates now have producers — `protected_oracle` and `deterministic_verification`
- * from the evidence items, `explicit_human_approval` from the approval plane, and
- * `approved_spec_and_oracle` from this release — and six do not: independent
- * baselines, architecture and security review, protected acceptance tests,
- * security or e2e evaluation, release observation and rollback evidence. The
- * report names exactly which, and `tests/change-r3-ordering` asserts that set by
- * name in both directions so each later release reddens it as it closes one.
+ * from the evidence items, `explicit_human_approval` from the approval plane,
+ * `approved_spec_and_oracle` from the approval plane's ordering, and
+ * `independent_baseline`, `security_or_e2e_evaluator` and
+ * `rollback_or_forward_fix_evidence` from this release's attestation plane — and
+ * three do not: architecture and security review, protected acceptance tests and
+ * release observation. The report names exactly which, and
+ * `tests/change-r3-ordering` derives that set from `evaluateGate`'s own
+ * `default:` reason string so each later release reddens it as it closes one.
  * Lowering the tier through an audited `risk.override` is the supported way to
- * ship work whose gates genuinely do not apply.
+ * ship work whose gates genuinely do not apply, and an audited waiver recorded
+ * as a `not_applicable` attestation is the per-gate version of the same idea.
  */
 
 export type ShipGateStatus = "satisfied" | "unsatisfied" | "unevaluable";
@@ -114,6 +125,17 @@ export interface ShipGateResult {
    * state it is in is the one that answers.
    */
   readonly recovery?: ShipGateRecovery;
+  /**
+   * The audited waiver this gate was satisfied by, when it was satisfied by one.
+   *
+   * Machine-readable rather than left for `reason` to be matched against,
+   * because ship has to echo it and nothing should have to parse prose to find
+   * out that a gate passed on a human's sentence rather than on evidence. A
+   * satisfied gate emits no diagnostic at all — `shipGateDiagnostics` skips them
+   * — so without this the one arm with no falsifiable evidence behind it would
+   * be the quietest thing in the payload.
+   */
+  readonly waived?: ShipGateWaiver;
 }
 
 export interface ShipGateReport {
@@ -158,13 +180,8 @@ export interface ShipGateOracleFact {
  * The invariant every gate built on this must hold: **an absent fact yields
  * `unevaluable`, never `satisfied`.** Nothing here may be read as a positive.
  *
- * There is deliberately no `attestations` field. No attestation entity, schema,
- * id prefix or path role exists anywhere in the repository, so the only
- * available spellings are `unknown[]`, `never[]` or an invented local interface
- * — each a shape that could never exist on disk, and each unreadable by any
- * test in this release. The change that introduces the entity adds the field in
- * the same diff, which is both a smaller change than retyping a placeholder and
- * impossible to misread as "attestations were checked and none existed".
+ * The release that introduces the `Attestation` entity adds `attestations`
+ * below in the same diff, which is what the paragraph this replaces promised.
  */
 export interface ShipGateChangeFacts {
   /** Identity, not a read: ship cannot reach the evaluator without it. */
@@ -192,6 +209,19 @@ export interface ShipGateChangeFacts {
    * read the directory can.
    */
   readonly approvals: readonly Approval[] | undefined;
+  /**
+   * Every attestation recorded for this change, or `undefined` when the set
+   * could not be established.
+   *
+   * The same three values and the same all-or-nothing rule as `approvals`, and
+   * the reason transfers with one degree more force. `legion attest` writes one
+   * document per `(change, kind)` and *replaces* it when the assertion is
+   * retaken, so a `fail` or a `not_applicable` lives at exactly the path a
+   * `pass` used to. A dropped file therefore drops whichever verdict was current,
+   * as likely negative as positive, and a gate answering from what the listing
+   * kept would answer from a record that had been withdrawn.
+   */
+  readonly attestations: readonly Attestation[] | undefined;
   /** `bundle.deltas`. Undefined when the bundle did not load. */
   readonly deltas: readonly ChangeBundleDeltaEntry[] | undefined;
   /**
@@ -252,6 +282,29 @@ export interface ShipGateChangeFacts {
    * always-`unverified` verifier rather than letting a gate call a non-function.
    */
   readonly verifyPin: VerifyPinnedReference;
+  /**
+   * Read the verdict out of an attestation's cited source, off the same bytes
+   * `verifyPin` hashed.
+   *
+   * Injected for `verifyPin`'s reason — reading is I/O and this module is
+   * synchronous and pure — and it exists as a *second* function rather than as a
+   * widening of `PinVerdict` because the two answer different questions about
+   * different populations. `verifyPin` serves delta specs, oracles, approval
+   * pins and verification surfaces, which are arbitrary repository files with no
+   * shape at all; this serves only the sources an attestation cites, and its
+   * question is what the file says rather than whether it moved.
+   *
+   * It is what stops the writer being the only thing enforcing "a `pass` must be
+   * over a report that is actually green". `legion attest` is not the only way a
+   * JSON file reaches `.legion/project/changes/<id>/attestations/`, and a gate
+   * that trusted the record's own `verdict` field would certify a pass over a
+   * red report — PR 2's writer/reader divergence in mirror image.
+   *
+   * Total and never `undefined`, on `verifyPin`'s rule: `normalizeChangeFacts`
+   * substitutes an always-`unread` classifier rather than letting a gate call a
+   * non-function.
+   */
+  readonly classifySource: ClassifyEvidenceSource;
 }
 
 /**
@@ -263,10 +316,24 @@ export interface ShipGateChangeFacts {
  * gate default silently to task scope, which silently disables both the
  * diagnostic collapse below and, once gates read facts, the absence guard.
  *
- * `approved_delta_spec`, `integration_or_real_interface_checks`,
- * `whole_change_acceptance_evidence` and `approved_spec_and_oracle` are the
- * `"change"` entries. Each later gate flips exactly its own line, next to the
- * gate it implements.
+ * Seven `"change"` entries as of this release. Each later gate flips exactly its
+ * own line, next to the gate it implements.
+ *
+ * `independent_baseline`, `security_or_e2e_evaluator` and
+ * `rollback_or_forward_fix_evidence` are the three newest, and all three flipped
+ * from `"task"` in the release that gave them producers. An `Attestation` is
+ * keyed by `changeId`: there is at most one record per kind per change, its
+ * `covers` array names which of the change's tasks it claims to speak for, and
+ * `independent_baseline` additionally compares against `min(startedAt)` over the
+ * change's whole run set. That is one answer for the change in all three cases.
+ * Left `"task"` they would print the identical sentence once per criterion-task
+ * under a `subjectId` naming a task the sentence is not about — the altitude
+ * defect `integration_or_real_interface_checks` below already paid for once, and
+ * that `approved_spec_and_oracle` paid for a second time by being left `"task"`
+ * through four releases while it had no producer. Nothing forces these lines:
+ * the record is total, so an entry that is merely *wrong* still compiles, and
+ * `CHANGE_SCOPED_GATES` in `tests/ship-risk-gates.test.mjs` is a deliberate
+ * hand-written duplicate that has to move with them.
  *
  * `approved_spec_and_oracle` is the newest of the four, and the one whose entry
  * was already here — as `"task"` — before it had a producer. Nothing forces this
@@ -319,14 +386,14 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   task_level_independent_review: "task",
   integration_or_real_interface_checks: "change",
   whole_change_acceptance_evidence: "change",
-  independent_baseline: "task",
+  independent_baseline: "change",
   approved_spec_and_oracle: "change",
   architecture_or_security_review: "task",
   protected_acceptance_tests: "task",
-  security_or_e2e_evaluator: "task",
+  security_or_e2e_evaluator: "change",
   explicit_human_approval: "task",
   release_observation_plan: "task",
-  rollback_or_forward_fix_evidence: "task"
+  rollback_or_forward_fix_evidence: "change"
 };
 
 /**
@@ -1233,6 +1300,8 @@ interface GateOutcome {
   readonly status: ShipGateStatus;
   readonly reason: string;
   readonly recovery?: ShipGateRecovery;
+  /** Set only by the attestation gates, on their audited-waiver arm. */
+  readonly waived?: ShipGateWaiver;
 }
 
 /**
@@ -1506,12 +1575,14 @@ export function isLiveSurfaceReaffirmation(input: {
       changeId: input.changeId,
       acceptance: undefined,
       approvals: [input.approval],
+      attestations: undefined,
       deltas: undefined,
       oracles: undefined,
       taskRuns: undefined,
       release: undefined,
       evaluatedAt: input.evaluatedAt,
-      verifyPin: (reference) => (reference.sha256 === input.currentSha256 ? "match" : "drift")
+      verifyPin: (reference) => (reference.sha256 === input.currentSha256 ? "match" : "drift"),
+      classifySource: UNREAD_SOURCES
     }
   });
   return reaffirmed !== undefined;
@@ -2319,6 +2390,18 @@ const ORDERING_REPLAN_RECOVERY: ShipGateRecovery = {
  * and the spec half comes first — `legion approve spec` on an R3 change routes on
  * to `legion approve oracle`, which routes on to `legion build`. Naming both here
  * would put a shell conjunction in `nextAction.command`, which hosts dispatch.
+ *
+ * **`independent_baseline` is named in the reason and not in the command, and the
+ * asymmetry is deliberate.** That gate also compares against `min(startedAt)`, so
+ * a build closes a door for it too — but unlike `approved_spec_and_oracle` it has
+ * a route out afterwards, because ADR-006 permits a waived gate and a
+ * `not_applicable` attestation is exempt from the ordering rule for exactly the
+ * reason PR 5 recorded: a state with no route out at all is worse than an audited
+ * one. So it does not need a link in the pre-build chain to have a reachable
+ * producer, and adding one would send every R3 operator to a verb whose only
+ * pre-build answer, against this repository's sealed eval corpus, is a waiver.
+ * What it does need is for the operator to know the door exists before they walk
+ * through it, which is what this sentence is.
  */
 export const APPROVE_BEFORE_BUILD_RECOVERY: ShipGateRecovery = {
   command: "legion approve spec --approver <id>",
@@ -2326,7 +2409,10 @@ export const APPROVE_BEFORE_BUILD_RECOVERY: ShipGateRecovery = {
     "This change carries R3 work, and R3 derives approved_spec_and_oracle: the gate compares the last approval of its " +
     "delta specs and oracles against the instant its first task run started. legion build is a one-way door here — " +
     "nothing re-orders a decision already taken, so a change built before it is approved can never satisfy that gate. " +
-    "Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that."
+    "Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that. R3 " +
+    "also derives independent_baseline, which compares an attestation's instant against the same run start: capture " +
+    "and attest a baseline before building if this change is to satisfy that gate on evidence rather than on an " +
+    "audited waiver."
 };
 
 /** Does any task of this change derive the ordering gate? */
@@ -3188,6 +3274,744 @@ export function isLiveOracleGrant(input: {
   return outcome.status === "satisfied";
 }
 
+// --- the attestation gates --------------------------------------------------
+
+/**
+ * Which attestation kinds each gate reads.
+ *
+ * Exported because `legion attest` warns when it has just written a kind that no
+ * gate reads, and the honest way to compute that warning is to ask the reader
+ * rather than to keep a second list beside it. PR 7 adds
+ * `architecture_or_security_review` and PR 9 `release_observation_plan`; each
+ * adds one line here and the warning disappears with no message anywhere going
+ * stale.
+ */
+export const ATTESTATION_GATE_KINDS: Readonly<Partial<Record<RiskGateId, readonly AttestationKind[]>>> = {
+  independent_baseline: ["independent-baseline"],
+  security_or_e2e_evaluator: ["security-evaluation", "e2e-evaluation"],
+  rollback_or_forward_fix_evidence: ["rollback-evidence", "forward-fix-evidence"]
+};
+
+/** Every attestation kind some gate in this module reads. */
+export const GATE_READ_ATTESTATION_KINDS: ReadonlySet<AttestationKind> = new Set(
+  Object.values(ATTESTATION_GATE_KINDS).flatMap((kinds) => kinds ?? [])
+);
+
+/**
+ * Which recognised report shapes can carry a `pass` for each attestation kind.
+ *
+ * A per-kind list rather than one global "any clean report will do", because
+ * without it `legion attest rollback-evidence --source threat-model.json` would
+ * satisfy the rollback gate off a security report. The matrix is what makes a
+ * source *admissible* as well as clean.
+ *
+ * **Five of seven kinds have an empty list, and that is the honest state of this
+ * repository rather than an oversight.** An empty list means `verdict: "pass"`
+ * cannot be recorded for that kind at all — a positive check with nothing to
+ * fall through to, never a default. Concretely:
+ *
+ *  - `e2e-evaluation` — no end-to-end report shape exists here. `apps/cli-e2e`
+ *    runs against the change's own built code and writes a log, and recognising
+ *    that log is a real bridge a later release can build; a threat model over a
+ *    sealed corpus scenario is not that, and pretending otherwise would be the
+ *    naming-convention inference this entity exists to replace.
+ *  - `forward-fix-evidence` — nothing in the tree produces one.
+ *  - `architecture-review`, `release-observation` — no gate here reads them.
+ *
+ * `security_or_e2e_evaluator` is therefore satisfiable by evidence only through
+ * `security-evaluation`, and `rollback_or_forward_fix_evidence` only through
+ * `rollback-evidence`. Both remain satisfiable through the audited waiver, which
+ * is ADR-006's own escape and is echoed on every payload that uses it.
+ *
+ * **And `rollback-evidence` needs a report produced *here*, which today means
+ * producing one rather than citing one.** A rollback verdict records the
+ * filesystem tree it audited, and `classifyEvidenceSource` compares that to the
+ * repository being shipped — so the committed
+ * `docs/next/evidence/P13-T03/rollback-policy.json`, taken in a macOS temp
+ * directory, is `blocking` here. That artefact was what made this gate look
+ * satisfiable off the shelf, and it never was: it is green about a tree that has
+ * no `.legion` directory in it. Until somebody runs `legion dev release
+ * rollback-verify` against this repository and commits the result,
+ * `rollback_or_forward_fix_evidence` is a waiver-or-nothing gate, and saying so
+ * is the point — a gate satisfied by another checkout's audit is worse than one
+ * nobody can satisfy.
+ */
+const ADMISSIBLE_SOURCE_SHAPES: Readonly<Record<AttestationKind, readonly EvidenceSourceShape[]>> = {
+  "independent-baseline": ["ab-comparison"],
+  "security-evaluation": ["threat-model"],
+  "e2e-evaluation": [],
+  "architecture-review": [],
+  "rollback-evidence": ["rollback-policy"],
+  "forward-fix-evidence": [],
+  "release-observation": []
+};
+
+export function admissibleSourceShapes(attests: AttestationKind): readonly EvidenceSourceShape[] {
+  return ADMISSIBLE_SOURCE_SHAPES[attests];
+}
+
+/** The verb that records the first attestation of a kind for a change. */
+function attestCommand(kinds: readonly AttestationKind[]): string {
+  return `legion attest ${kinds[0] as string} --attested-by <id> --source <path>`;
+}
+
+/** The cure when nothing at all attests this question for the change. */
+function attestRecovery(gate: RiskGateId, kinds: readonly AttestationKind[]): ShipGateRecovery {
+  const alternatives =
+    kinds.length === 1 ? "" : ` (or ${kinds.slice(1).join(", ")}, which this gate reads too)`;
+  return {
+    command: attestCommand(kinds),
+    reason:
+      `Nothing in this change asserts ${gate}, and no build produces one: the gate reads the attestation plane. ` +
+      `Record a ${kinds[0]} attestation${alternatives} citing the report it rests on — legion attest re-reads that ` +
+      "report and refuses a pass over one that is red, and legion ship re-hashes it. If the check genuinely does not " +
+      "apply to this change, record that instead with --verdict not_applicable --waiver-reason <text>, which ADR-006 " +
+      "permits as an audited waiver and which this command echoes as a warning on every payload that carries one."
+  };
+}
+
+/**
+ * The cure when a cited source's bytes have moved or gone.
+ *
+ * `ORACLE_BYTES_RECOVERY`'s argument, applied to a different plane and for the
+ * same reason: re-attesting over the edited bytes would launder an out-of-band
+ * edit into a governance record. The repair is restoring the file, and ship is
+ * what re-reports whether it worked.
+ */
+const ATTESTATION_BYTES_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "An attestation cites a file that no longer holds the bytes it was recorded against. Restore the file to the " +
+    "bytes the attestation pins, then rerun this to confirm. Re-attesting the edited bytes is deliberately not " +
+    "offered: an attestation's whole content is 'these exact bytes are this change's evidence', so re-pinning " +
+    "whatever is there now would launder the edit into the record that was supposed to catch it."
+};
+
+/**
+ * The cure when the cited report is red.
+ *
+ * Named separately from the absence cure, because attesting again cannot help:
+ * `legion attest` reads the same file and refuses the same pass. What moves this
+ * is producing a green report.
+ */
+const ATTESTATION_EVIDENCE_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "An attestation records a pass over a report whose own verdict is negative, and legion ship re-reads that report " +
+    "rather than trusting the record. Attesting again cannot move this — the writer applies the same check and " +
+    "refuses the same pass. Re-run the check named in this verdict until it passes, re-attest against the report it " +
+    "produces, then rerun this."
+};
+
+/**
+ * The honest answer for a baseline attested after the run it is supposed to be
+ * independent of.
+ *
+ * `ORDERING_REPLAN_RECOVERY`'s situation exactly, one plane over, and it names
+ * the same command deliberately: nothing re-dates an attestation, and attesting
+ * again writes a *later* `attestedAt` and makes this strictly worse — the PR 5
+ * defect reproduced for a new verb if the absence cure were offered here.
+ *
+ * The waiver is named in the reason rather than in the command. Both are real
+ * routes out and only one is a good outcome, so the field hosts dispatch carries
+ * the one that leaves the change honest, and the sentence carries the one ADR-006
+ * permits when no baseline applies.
+ */
+const BASELINE_AFTER_EXECUTION_RECOVERY: ShipGateRecovery = {
+  command: "legion start --intake",
+  reason:
+    "A baseline captured after the run it is supposed to be independent of is not one, and no command re-dates an " +
+    "attestation: attesting now writes a later attestedAt and makes this gate strictly worse rather than better. " +
+    "Plan the remaining work as a new change and attest its baseline before building it — or, if no independent " +
+    "baseline applies to this change at all, record that as an audited waiver with legion attest " +
+    "independent-baseline --verdict not_applicable --waiver-reason <text> --attested-by <id>, which ADR-006 permits " +
+    "and which legion ship echoes as a warning on every payload that carries one."
+};
+
+/** The cure when the run plane cannot say whether the baseline came first. */
+const BASELINE_ORDERING_UNREADABLE_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "This change's task runs could not be read as a complete set, so whether its baseline was captured before " +
+    "execution began cannot be established. The artifact_plane_incomplete or task_run_plane_contradicted diagnostic " +
+    "in this same payload names what is missing — restore or correct it, then rerun this."
+};
+
+/** A waiver a gate accepted, carried so that ship can echo it without matching prose. */
+export interface ShipGateWaiver {
+  readonly gate: RiskGateId;
+  readonly attests: AttestationKind;
+  readonly attestedBy: string;
+  readonly attestedAt: string;
+  readonly reason: string;
+}
+
+/**
+ * The tasks whose risk tier actually derived this gate.
+ *
+ * The denominator `covers` is checked against. `deriveShipGates` emits one row
+ * per (task, gate), so a change-scoped gate is evaluated once per deriving task
+ * and has to answer the same thing every time — which it can only do from the
+ * whole task list rather than from the one it happens to be holding.
+ */
+function tasksDeriving(gate: RiskGateId, tasks: readonly TaskContract[]): readonly TaskContract[] {
+  return tasks.filter((task) =>
+    deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (derived) => derived.id === gate
+    )
+  );
+}
+
+/**
+ * Is a human attester equal to a human executor this change records?
+ *
+ * **The only surviving half of the "attester distinct from the executor" rule,
+ * and the half that was measured rather than assumed.** The specification asked
+ * for a distinctness check against the executor recorded in the task runs.
+ * `legion build` writes the hard-coded literal `{kind: "tool", id: "legion-cli",
+ * displayName: "Legion CLI"}` as `claimedBy` on every run of every change —
+ * `--executor fake` lands in `manifest.model.id`, not there — and
+ * `taskRunSchema.claimedBy` is optional besides. So a check that any human
+ * attester differs from every recorded executor is true on every honest change
+ * *and* vacuously true when no run records an executor at all: a positive check
+ * with no reachable negative, wearing the name of an independence guarantee.
+ * Shipping it as specified would have been lesson 4 and lesson 5 in one place.
+ *
+ * What is kept is the falsifier alone, and its bound is stated the way
+ * `approvedOraclePin` states `verifyPin`'s. It can only ever *refuse*, never
+ * satisfy, so its vacuity is harmless: the load-bearing clause is the ordering
+ * one, and the ordering clause is never vacuous. It is unreachable through the
+ * CLI today and reachable through a hand-written or host-written run, which is
+ * the same threat model `humanApprovalStatus` already states.
+ *
+ * Independence itself is carried by the ordering comparison, and the gate says
+ * so in its own verdict. The residual is that a baseline attested by the same
+ * person who later ran the build is indistinguishable from an independent one;
+ * closing that needs an executor identity the CLI does not record.
+ */
+function humanExecutorMatchingAttester(
+  taskRuns: readonly TaskRun[] | undefined,
+  attesterId: string
+): TaskRun | undefined {
+  for (const run of taskRuns ?? []) {
+    const claimedBy = run.claimedBy;
+    if (claimedBy === undefined) continue;
+    if (claimedBy.kind !== "human") continue;
+    if (claimedBy.id === attesterId) return run;
+  }
+  return undefined;
+}
+
+/**
+ * The shared shape of `independent_baseline`, `security_or_e2e_evaluator` and
+ * `rollback_or_forward_fix_evidence`.
+ *
+ * All three ask the same question of the same plane — is there a record of the
+ * right kind for this change, does it say yes, and is what it cites still there
+ * and still green — so they share one implementation and differ only in which
+ * kinds they accept and in whether they carry an ordering rule. Three copies
+ * would be three chances to get the empty-set guards wrong.
+ *
+ * Every quantifier below is checked against its empty case, because this series
+ * has now paid five times for one that was not:
+ *
+ *  - **No attestation of an accepted kind** — `unevaluable`, never `satisfied`.
+ *    That is the absence arm and it is what every change written before this
+ *    release is in.
+ *  - **`sources` empty** — `unevaluable`. Unreachable from a parsed document
+ *    (`.min(1)`), and kept because this function's parameter type admits it and
+ *    `[].every(clean)` is `true`. A gate must not inherit its central truth
+ *    claim from another module's invariant.
+ *  - **`covers` empty, or no task derives the gate** — `unevaluable`. "This
+ *    attestation covers every deriving task" over an empty denominator is the
+ *    same vacuous truth in the other direction.
+ *  - **`admissible` empty for the attested kind** — `unsatisfied`, positively:
+ *    the record claims a pass that no report in this repository can evidence.
+ *
+ * **Two of these gates accept two kinds, and two records is the normal state
+ * rather than a corruption.** `attestationIdForKind` derives an id from
+ * `(changeId, attests)`, so `legion attest` writes one document *per kind* and a
+ * change can legitimately carry both a `security-evaluation` and an
+ * `e2e-evaluation`. The one-per-kind rule is therefore checked per kind, and the
+ * several records are evaluated separately and combined by
+ * `combineAttestationOutcomes`. Treating them as hand-filed siblings — which is
+ * what this function did before — collapsed a satisfied gate to `unevaluable`
+ * the moment a second legitimate kind was recorded, and turned a recorded `fail`
+ * into "unestablished": the precise inversion the one-per-kind rule exists to
+ * prevent, performed by the rule itself.
+ */
+function attestationGateStatus(input: {
+  readonly gate: RiskGateId;
+  readonly kinds: readonly AttestationKind[];
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  /** Only `independent_baseline` passes this. */
+  readonly requireBeforeExecution?: boolean;
+}): GateOutcome {
+  const change = input.change;
+  const attestations = change?.attestations;
+  const absence = attestRecovery(input.gate, input.kinds);
+  const named = input.kinds.join(" or ");
+
+  if (change === undefined || attestations === undefined) {
+    return {
+      status: "unevaluable",
+      reason:
+        `The attestations recorded for this change could not be read as a complete set, so whether anyone asserted ` +
+        `${named} for it is unestablished.`,
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+
+  // **The cure, computed once and used by every unmet arm below.**
+  //
+  // It was previously computed once for the absence arm and then the raw
+  // `absence` was returned by seven others, which is this series' first lesson
+  // reproduced in its sharpest form: on a change whose runs have started,
+  // `legion attest independent-baseline` is advice that exits 0, writes a
+  // *later* `attestedAt`, and moves the gate from `unevaluable` to permanently
+  // `unsatisfied`. Ship promotes the first R3 gate's recovery to
+  // `nextAction.command`, and `independent_baseline` is first — so that advice
+  // was what hosts dispatched on for every blocked R3 ship. There is one cure
+  // for this gate's unmet arms because there is one state they are all in.
+  const cure =
+    input.requireBeforeExecution === true
+      ? orderingAwareBaselineRecovery(absence, executionOrdering(change.taskRuns))
+      : absence;
+
+  const accepted = new Set<string>(input.kinds);
+  const relevant = attestations.filter(
+    // Strict equality against a possibly-absent change id, on the approvals
+    // plane's rule: a record too degraded to name its own change matches nothing
+    // rather than everything. It matters here because an attestation's cited
+    // sources are ordinary repository files shared across changes, so a record
+    // that matched loosely could answer for a change it was never about.
+    (attestation) => attestation.changeId === change.changeId && accepted.has(attestation.attests)
+  );
+
+  if (relevant.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No attestation records anyone asserting ${named} for change ${change.changeId}.`,
+      recovery: cure
+    };
+  }
+
+  // The duplication guard, **per kind**. `attestationIdForKind` derives an id
+  // from `(changeId, attests)`, so Legion writes exactly one document per kind
+  // and two of one kind can only be siblings somebody filed by hand. Answering
+  // from either would let a favourable record hide an unfavourable one, which is
+  // the fail-open one-per-kind exists to remove — so the duplication is named
+  // rather than resolved, and it dominates the combination below: a gate cannot
+  // be satisfied by one kind while another kind's record is ambiguous.
+  for (const kind of input.kinds) {
+    const ofKind = relevant.filter((attestation) => attestation.attests === kind);
+    if (ofKind.length > 1) {
+      const ids = ofKind.map((attestation) => attestation.id).sort();
+      return {
+        status: "unevaluable",
+        reason:
+          `Change ${change.changeId} carries ${ofKind.length} attestations of kind ${kind} (${ids.join(", ")}). ` +
+          "Legion writes exactly one per change per kind, so these were filed by hand, and answering from either " +
+          "would let a favourable record hide an unfavourable one. Remove the ones that are not the record.",
+        recovery: MISFILED_ATTESTATION_RECOVERY
+      };
+    }
+  }
+
+  const outcomes = input.kinds
+    .map((kind) => relevant.find((attestation) => attestation.attests === kind))
+    .filter((attestation): attestation is Attestation => attestation !== undefined)
+    .map((record) =>
+      attestationRecordStatus({
+        gate: input.gate,
+        change,
+        record,
+        cure,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        ...(input.requireBeforeExecution === true ? { requireBeforeExecution: true } : {})
+      })
+    );
+  return combineAttestationOutcomes(outcomes);
+}
+
+/**
+ * Reduce one record's verdict per accepted kind to the gate's verdict.
+ *
+ * **`unsatisfied` beats `satisfied`, and that ordering is the whole content of
+ * this function.** These gates read an OR of kinds — a security evaluation *or*
+ * an end-to-end one — and the naive reduction is "any satisfied satisfies". That
+ * reduction lets a `pass` on one kind bury a recorded `fail` on the other, which
+ * is the same favourable-hides-unfavourable fail-open the per-kind duplication
+ * guard above refuses; an OR over evidence must not become an OR over verdicts a
+ * human recorded. `unevaluable` is last because it is the absence of a claim
+ * rather than a claim, so a real verdict of either polarity outranks it.
+ *
+ * The unfavourable verdict keeps its own recovery, because it is the one that
+ * has to be repaired.
+ */
+function combineAttestationOutcomes(outcomes: readonly GateOutcome[]): GateOutcome {
+  const first = outcomes[0] as GateOutcome;
+  if (outcomes.length <= 1) return first;
+
+  const unsatisfied = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  if (unsatisfied !== undefined) {
+    const others = outcomes.filter((outcome) => outcome !== unsatisfied && outcome.status === "satisfied");
+    if (others.length === 0) return unsatisfied;
+    return {
+      ...unsatisfied,
+      reason:
+        `${unsatisfied.reason} This change also carries ${others.length} favourable attestation${
+          others.length === 1 ? "" : "s"
+        } of another kind this gate reads, and ${others.length === 1 ? "it does" : "they do"} not override the one ` +
+        "above: an attestation recorded against this change is a statement somebody made about it, and a later " +
+        "record of a different kind does not unmake it."
+    };
+  }
+
+  const satisfied = outcomes.find((outcome) => outcome.status === "satisfied");
+  return satisfied ?? first;
+}
+
+/** One attestation's verdict, for the gate that reads its kind. */
+function attestationRecordStatus(input: {
+  readonly gate: RiskGateId;
+  readonly change: ShipGateChangeFacts;
+  readonly record: Attestation;
+  readonly cure: ShipGateRecovery;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  readonly requireBeforeExecution?: boolean;
+}): GateOutcome {
+  const change = input.change;
+  const record = input.record;
+  const cure = input.cure;
+  const describe = `Attestation ${record.id} records ${record.attestedBy.id} asserting ${record.attests} for change ${change.changeId}`;
+
+  if (record.verdict === "fail") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe} as failed: "${record.statement}"`,
+      recovery: ATTESTATION_EVIDENCE_RECOVERY
+    };
+  }
+  if (record.verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${describe} with verdict "unknown": a record exists for this question and asserts nothing about it.`,
+      recovery: cure
+    };
+  }
+
+  if (record.sources.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe}, and cites no source, so there is nothing this report can check the assertion against.`,
+      recovery: cure
+    };
+  }
+
+  // Pins first, for both verdicts. A record whose cited bytes have moved is not
+  // a record about the bytes anyone looked at, and that is as true of a waiver
+  // citing an ADR as of a pass citing a report.
+  for (const source of record.sources) {
+    const verdict = change.verifyPin(source);
+    if (verdict === "drift") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe}, and cites ${source.path}, whose bytes have changed since the attestation was recorded.`,
+        recovery: ATTESTATION_BYTES_RECOVERY
+      };
+    }
+    if (verdict === "missing") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe}, and cites ${source.path}, which is no longer present.`,
+        recovery: ATTESTATION_BYTES_RECOVERY
+      };
+    }
+    if (verdict !== "match") {
+      // `unverified`: nobody hashed it. Never `satisfied` — and never `missing`
+      // either, which would blame the artifact for the reader's problem.
+      return {
+        status: "unevaluable",
+        reason: `${describe}, and cites ${source.path}, which this report did not re-hash, so whether the attestation is still about the bytes on disk is unestablished.`,
+        recovery: UNREADABLE_PLANE_RECOVERY
+      };
+    }
+  }
+
+  // A red report contradicts the record whatever the record says, so this runs
+  // before the two verdicts split. A waiver over a failing report of the very
+  // check being waived converts a negative result into a satisfied gate with no
+  // evidence in between, which is the one thing an audited waiver must not be
+  // able to do.
+  for (const source of record.sources) {
+    const classified = change.classifySource(source);
+    if (classified.kind === "blocking") {
+      return {
+        status: "unsatisfied",
+        reason:
+          `${describe}, and cites ${source.path}, which is a ${classified.shape} report that is negative by its own ` +
+          `rule: ${classified.reason}. Producing a green one is ${EVIDENCE_SOURCE_PRODUCERS[classified.shape]}; the ` +
+          "coupling is named here because nothing in this repository validates these reports against a schema, so a " +
+          "producer that changed its output shape would degrade this check silently.",
+        recovery: ATTESTATION_EVIDENCE_RECOVERY
+      };
+    }
+  }
+
+  const deriving = tasksDeriving(input.gate, input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe}, and no task of this change derives ${input.gate}, so there is nothing for the attestation to cover.`,
+      recovery: cure
+    };
+  }
+  const covered = new Set(record.covers.filter((entry) => entry.kind === "task").map((entry) => entry.id as string));
+  const uncovered = deriving.map(input.taskIdFor).filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe}, and its covers list names ${covered.size} task${covered.size === 1 ? "" : "s"}, leaving ` +
+        `${uncovered.join(", ")} uncovered. This gate is derived by ${deriving.length} task${
+          deriving.length === 1 ? "" : "s"
+        } of this change and is satisfied only when the attestation claims to speak for all of them.`,
+      recovery: cure
+    };
+  }
+
+  if (record.verdict === "not_applicable") {
+    const waiverReason = record.waiverReason;
+    // Positive on both conditions rather than trusting the schema, on
+    // `oracleApprovalStatus`'s rule: this arm is the one `satisfied` verdict in
+    // these three gates with no falsifiable evidence behind it, so an
+    // unrecognised shape must fall *out* of it rather than into it.
+    if (record.attestedBy.kind !== "human" || waiverReason === undefined) {
+      return {
+        status: "unsatisfied",
+        reason:
+          `${describe} as not applicable, but a waiver requires a human attester and a recorded reason and this one ` +
+          `has ${record.attestedBy.kind === "human" ? "no reason" : `a ${record.attestedBy.kind} attester`}. ` +
+          "ADR-006 permits a waived gate only as an audited waiver.",
+        recovery: cure
+      };
+    }
+    return {
+      status: "satisfied",
+      reason:
+        `${input.gate} is waived for change ${change.changeId} by ${record.attestedBy.id} (human) at ` +
+        `${record.attestedAt} as not applicable: "${waiverReason}". No evidence was checked for this gate.`,
+      waived: {
+        gate: input.gate,
+        attests: record.attests,
+        attestedBy: record.attestedBy.id,
+        attestedAt: record.attestedAt,
+        reason: waiverReason
+      }
+    };
+  }
+
+  // `pass`. Positive from here down: the record has to point at something this
+  // report can read a green verdict out of, and a shape nobody recognises is not
+  // a shape that passed.
+  const admissible = ADMISSIBLE_SOURCE_SHAPES[record.attests];
+  if (admissible.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} as passed, and no report shape in this repository can evidence a ${record.attests} pass. ` +
+        `${UNRECOGNISED_SOURCE_HINT} Record what is actually established with --verdict unknown, or, if the check ` +
+        "does not apply to this change, as an audited waiver with --verdict not_applicable.",
+      recovery: cure
+    };
+  }
+  const admitted = new Set<string>(admissible);
+  const evidencing = record.sources.filter((source) => {
+    const classified = change.classifySource(source);
+    return classified.kind === "clean" && admitted.has(classified.shape);
+  });
+  if (evidencing.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} as passed, and none of the ${record.sources.length} file${
+          record.sources.length === 1 ? "" : "s"
+        } it cites is a ${admissible.join(" or ")} report this report can read a verdict out of. A pass attestation ` +
+        `is a claim about a machine-checkable verdict; this one is a sentence. ${UNRECOGNISED_SOURCE_HINT}`,
+      recovery: cure
+    };
+  }
+
+  if (input.requireBeforeExecution !== true) {
+    return {
+      status: "satisfied",
+      reason:
+        `${describe} as passed, against ${evidencing.length} hash-clean ${admissible.join("/")} report${
+          evidencing.length === 1 ? "" : "s"
+        } (${evidencing.map((source) => source.path).join(", ")}) whose own verdicts are green.`
+    };
+  }
+
+  // The ordering half, `independent_baseline` only. A baseline captured after
+  // the run it is supposed to be independent of is not one — which is
+  // `unsatisfied`, a positive negative, and not the absence the plane would
+  // otherwise read as.
+  const execution = executionOrdering(change.taskRuns);
+  if (execution.kind === "unestablished") {
+    return {
+      status: "unevaluable",
+      reason: `${describe} as passed at ${record.attestedAt}, and this change's task runs could not be read as a complete set, so whether the baseline preceded execution cannot be established.`,
+      recovery: BASELINE_ORDERING_UNREADABLE_RECOVERY
+    };
+  }
+  if (execution.kind === "none") {
+    // "Attested before nothing" is the vacuous truth this series has paid for
+    // four times. A change with no runs has not yet had the execution the
+    // baseline is supposed to precede, so nothing has been established.
+    return {
+      status: "unevaluable",
+      reason: `${describe} as passed at ${record.attestedAt}, and no task of this change has run, so there is nothing yet for the baseline to have preceded.`,
+      recovery: ORDERING_BUILD_RECOVERY
+    };
+  }
+  if (record.attestedAt >= execution.startedAt) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} as passed at ${record.attestedAt}, which is ${
+          record.attestedAt === execution.startedAt ? "the same instant as" : "not earlier than"
+        } the ${execution.startedAt} at which gated execution for this change began (run ${execution.runId} of ` +
+        `${execution.taskId}). A baseline captured after the run it is supposed to be independent of is not one.`,
+      recovery: BASELINE_AFTER_EXECUTION_RECOVERY
+    };
+  }
+
+  const collision = humanExecutorMatchingAttester(change.taskRuns, record.attestedBy.id);
+  if (collision !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe} as passed, and run ${collision.id as string} of this change records ${record.attestedBy.id} as the executor who claimed it. A baseline captured by the person who then ran the work is not independent of it.`,
+      recovery: BASELINE_AFTER_EXECUTION_RECOVERY
+    };
+  }
+
+  return {
+    status: "satisfied",
+    reason:
+      `${describe} as passed at ${record.attestedAt}, before gated execution began at ${execution.startedAt} ` +
+      `(run ${execution.runId} of ${execution.taskId}), against ${evidencing.length} hash-clean ` +
+      `${admissible.join("/")} report${evidencing.length === 1 ? "" : "s"} ` +
+      `(${evidencing.map((source) => source.path).join(", ")}) whose own verdicts are green. Independence here is ` +
+      "temporal: Legion records no executor identity that varies, so ordering is what carries the claim."
+  };
+}
+
+/**
+ * The unmet cure, adjusted for where execution stands — `independent_baseline`
+ * only.
+ *
+ * Applied to **every** unmet arm of that gate rather than only to the absence
+ * one. The arms differ in what they say and agree completely on what to do: once
+ * a run exists, no route through `legion attest` can produce a baseline dated
+ * before it, so advice naming that verb is advice that exits 0 and deepens the
+ * state whether the record is missing, `unknown`, sourceless, uncovered or
+ * citing the wrong shape.
+ *
+ * `orderingAwareRecovery` above is deliberately **not** reused, and the reason is
+ * not stylistic. That helper keys on the recovery's own command starting with
+ * `legion approve`, and widening it to match `legion attest` would rewrite
+ * `security_or_e2e_evaluator`'s and `rollback_or_forward_fix_evidence`'s
+ * perfectly good advice into "re-plan the change" on every change that has been
+ * built — and neither of those gates has an ordering rule, so attesting after
+ * the build is exactly right for them. The ordering-aware advice belongs on the
+ * one gate whose rule it is.
+ */
+function orderingAwareBaselineRecovery(
+  recovery: ShipGateRecovery,
+  execution: ExecutionOrdering
+): ShipGateRecovery {
+  if (execution.kind === "started") return BASELINE_AFTER_EXECUTION_RECOVERY;
+  if (execution.kind === "unestablished") return BASELINE_ORDERING_UNREADABLE_RECOVERY;
+  return recovery;
+}
+
+/** The cure for two hand-filed attestations of one kind. */
+const MISFILED_ATTESTATION_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "A change carries more than one attestation of one kind. legion attest derives an attestation's id from the " +
+    "change and the kind alone, so it can never write a second — these were filed by hand. Delete the ones that are " +
+    "not the record and re-attest if the survivor is not what you meant, then rerun this to confirm."
+};
+
+/**
+ * Would this one document, alone, satisfy the gate that reads its kind?
+ *
+ * Exported for `legion attest`, on `isLiveOracleGrant`'s rule: a writer whose
+ * idea of "done" is weaker than the reader's idea of "satisfied" reports
+ * success, writes nothing, and leaves the change permanently blocked with no
+ * flag anywhere that would make it write. So this is not a second implementation
+ * — it calls `attestationGateStatus` against a one-document plane and asks
+ * whether the verdict is `satisfied`.
+ *
+ * **The ordering clause is deliberately excluded**, exactly as `isLiveOracleGrant`
+ * excludes its own. Carrying it would make a harmless rerun on an already-built
+ * change report "re-attest", write a fresh `attestedAt`, and make
+ * `independent_baseline` strictly worse — the command invoked to repair the
+ * state would be the one that deepened it. `legion attest` closes the resulting
+ * silence by warning instead, at the one moment the operator could still act.
+ */
+export function isSatisfyingAttestation(input: {
+  readonly attestation: Attestation;
+  readonly gate: RiskGateId;
+  readonly kinds: readonly AttestationKind[];
+  readonly changeId: string;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  readonly verifyPin: VerifyPinnedReference;
+  readonly classifySource: ClassifyEvidenceSource;
+}): boolean {
+  const outcome = attestationGateStatus({
+    gate: input.gate,
+    kinds: input.kinds,
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: undefined,
+      approvals: undefined,
+      attestations: [input.attestation],
+      deltas: undefined,
+      oracles: undefined,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: undefined,
+      verifyPin: input.verifyPin,
+      classifySource: input.classifySource
+    }
+  });
+  return outcome.status === "satisfied";
+}
+
+/** Every waiver the gates in this report accepted, for ship to echo. */
+export function shipGateWaivers(gates: readonly ShipGateResult[]): readonly ShipGateWaiver[] {
+  const seen = new Set<string>();
+  const waivers: ShipGateWaiver[] = [];
+  for (const gate of gates) {
+    const waived = gate.waived;
+    if (waived === undefined) continue;
+    if (seen.has(waived.gate)) continue;
+    seen.add(waived.gate);
+    waivers.push(waived);
+  }
+  return waivers;
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -3332,13 +4156,35 @@ function evaluateGate(input: {
         taskIdFor: input.taskIdFor
       });
 
+    case "independent_baseline":
+    case "security_or_e2e_evaluator":
+    case "rollback_or_forward_fix_evidence": {
+      // No `taskId`, no `reviews`, no `entries`, on `approved_delta_spec`'s
+      // rule: a change-scoped gate must not be able to answer per task even by
+      // accident, so it is not handed anything per task to answer with. `tasks`
+      // and `taskIdFor` are the *denominator* — the set `covers` is checked
+      // against — rather than a per-task input.
+      const kinds = ATTESTATION_GATE_KINDS[gate.id] as readonly AttestationKind[];
+      return attestationGateStatus({
+        gate: gate.id,
+        kinds,
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        // Only this one. `security_or_e2e_evaluator` evaluates the implemented
+        // change, which necessarily comes after it, and rollback evidence is
+        // about the repository as it stands — an ordering rule on either would
+        // make an honest attestation permanently unsatisfiable.
+        ...(gate.id === "independent_baseline" ? { requireBeforeExecution: true } : {})
+      });
+    }
+
     default:
-      // Independent baselines, architecture and security review, protected
-      // acceptance tests, security/e2e evaluation, release observation and
-      // rollback evidence have no producer in the workflow yet. Those six are
-      // exactly what this arm answers for, and `tests/change-r3-ordering` names
-      // them one by one so each later release reddens that list as it closes
-      // one.
+      // Architecture and security review, protected acceptance tests and release
+      // observation have no producer in the workflow yet. Those three are
+      // exactly what this arm answers for, and `tests/change-r3-ordering`
+      // derives that set from this very reason string so each later release
+      // reddens it as it closes one.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -3348,6 +4194,19 @@ function evaluateGate(input: {
 
 /** The verifier substituted when a caller supplied none. Answers nothing. */
 const UNRESOLVED_PINS: VerifyPinnedReference = () => "unverified";
+
+/**
+ * The classifier substituted when a caller supplied none.
+ *
+ * `unread` rather than `unrecognised`, because the two are different facts with
+ * different sentences: "nobody collected these bytes" is the reader's problem,
+ * and "these bytes are in no shape I know" is the artifact's. Both refuse a
+ * pass, so the substitution cannot fail open either way.
+ */
+const UNREAD_SOURCES: ClassifyEvidenceSource = () => ({
+  kind: "unread",
+  reason: "this report carries no way to read a cited source"
+});
 
 /**
  * The runtime guard, applied once, to the whole facts object.
@@ -3410,6 +4269,7 @@ export function shipGatePinnedReferences(input: {
   readonly deltas: readonly ChangeBundleDeltaEntry[] | undefined;
   readonly oracles: readonly ShipGateOracleFact[] | undefined;
   readonly approvals: readonly Approval[] | undefined;
+  readonly attestations: readonly Attestation[] | undefined;
   readonly tasks: readonly TaskContract[];
 }): readonly ArtifactReference[] {
   return [
@@ -3425,15 +4285,35 @@ export function shipGatePinnedReferences(input: {
     // `pinned-references.ts` resolves paths for itself.
     ...input.tasks.flatMap((task) => (task.verification ?? []).flatMap((entry) => entry.surface?.pinned ?? [])),
     // The bytes any approval was decided against.
-    ...(input.approvals?.flatMap((approval) => approval.artifacts ?? []) ?? [])
+    ...(input.approvals?.flatMap((approval) => approval.artifacts ?? []) ?? []),
+    // The reports any attestation cites. The sixth family, and the first whose
+    // paths are guaranteed to be *outside* `.legion/project` — an attestation
+    // pins `docs/next/evidence/...`, which is exactly the case
+    // `pinned-references.ts` resolves paths itself for. It is also the family
+    // whose omission would be least visible: an attestation whose sources
+    // answered `unverified` would pin its gate at `unevaluable` forever, which
+    // is indistinguishable at the readiness arithmetic from nobody having
+    // attested anything.
+    ...(input.attestations?.flatMap((attestation) => attestation.sources) ?? [])
   ];
+}
+
+/** The paths whose bytes a gate reads rather than only hashes. */
+export function shipGateSourcePaths(
+  attestations: readonly Attestation[] | undefined
+): readonly string[] {
+  return (attestations ?? []).flatMap((attestation) => attestation.sources.map((source) => source.path));
 }
 
 export function normalizeChangeFacts(change: unknown): ShipGateChangeFacts | undefined {
   if (change === null || typeof change !== "object") return undefined;
   const facts = change as ShipGateChangeFacts;
-  if (typeof facts.verifyPin === "function") return facts;
-  return { ...facts, verifyPin: UNRESOLVED_PINS };
+  if (typeof facts.verifyPin === "function" && typeof facts.classifySource === "function") return facts;
+  return {
+    ...facts,
+    ...(typeof facts.verifyPin === "function" ? {} : { verifyPin: UNRESOLVED_PINS }),
+    ...(typeof facts.classifySource === "function" ? {} : { classifySource: UNREAD_SOURCES })
+  };
 }
 
 export function deriveShipGates(input: {
@@ -3623,7 +4503,18 @@ const GATE_RECOVERY: Readonly<
   // bundle written before this release is in: `acceptance: {status: "not_ready"}`,
   // which nothing had ever moved.
   whole_change_acceptance_evidence: ACCEPT_RECOVERY,
-  independent_baseline: undefined,
+  // Six unmet states with five cures — no record, a `fail`, a drifted or absent
+  // source, a cited report that is red, a `covers` list that leaves a deriving
+  // task out, and a baseline dated after the run it claims to precede — so the
+  // verdict carries its own and `shipGateRecovery` prefers that. What stays here
+  // is the state a caller holding only a gate id can be answered for, and the one
+  // every change written before this release is in: nothing attests a baseline,
+  // because nothing could.
+  //
+  // Deliberately **not** the post-execution cure. That one is reachable only
+  // after a build, and a table entry assuming it would tell an operator who has
+  // attested nothing that their only route out is to re-plan.
+  independent_baseline: attestRecovery("independent_baseline", ["independent-baseline"]),
   // Six unmet states with four different cures, so the verdict carries its own
   // and `shipGateRecovery` prefers that. What stays here is the state a caller
   // holding only a gate id can be answered for, and the one every R3 change
@@ -3634,10 +4525,20 @@ const GATE_RECOVERY: Readonly<
   approved_spec_and_oracle: ORACLE_APPROVE_RECOVERY,
   architecture_or_security_review: undefined,
   protected_acceptance_tests: undefined,
-  security_or_e2e_evaluator: undefined,
+  // Five unmet states with four cures, so the verdict carries its own. The table
+  // holds the absence, which is where every change written before this release
+  // is. There is no ordering rule on this gate: evaluating the implemented
+  // change necessarily comes after implementing it.
+  security_or_e2e_evaluator: attestRecovery("security_or_e2e_evaluator", [
+    "security-evaluation",
+    "e2e-evaluation"
+  ]),
   explicit_human_approval: undefined,
   release_observation_plan: undefined,
-  rollback_or_forward_fix_evidence: undefined
+  rollback_or_forward_fix_evidence: attestRecovery("rollback_or_forward_fix_evidence", [
+    "rollback-evidence",
+    "forward-fix-evidence"
+  ])
 };
 
 export interface ShipGateRecovery {

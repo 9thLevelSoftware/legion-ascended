@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { deriveShipGates } from "../packages/cli/dist/workflow/ship-gates.js";
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 
 /**
@@ -18,13 +19,15 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
  * unshippable for a reason no command could move.
  *
  * **This file does not claim R3 ships, and asserting that it does not is half its
- * point.** Four of R3's ten gates now have producers — `protected_oracle` and
+ * point.** Seven of R3's ten gates now have producers — `protected_oracle` and
  * `deterministic_verification` from the evidence items, `explicit_human_approval`
- * from the approval plane, and this release's — and six do not. The set below is
- * asserted by name, in both directions, so it is a claim rather than a count: as
- * each later release gives one of the six a producer, this test reddens and has
- * to be edited, which is exactly the review artifact the transcript in
- * tests/ship-risk-gates is for the gate verdicts.
+ * from the approval plane, `approved_spec_and_oracle` from its ordering, and
+ * `independent_baseline`, `security_or_e2e_evaluator` and
+ * `rollback_or_forward_fix_evidence` from the attestation plane — and three do
+ * not. That set is **derived from the compiled gate module** rather than typed
+ * out here, for a reason the previous release's hand-written array could not
+ * serve: a list edited by hand stays true when a gate silently regresses to
+ * `evaluateGate`'s `default:` arm, and the derivation reddens when it does.
  *
  * The two things this file can prove that no unit test can: that the real
  * command sequence produces the ordering the gate needs, and that the verdict
@@ -35,24 +38,59 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 const CREATED_AT = "2026-08-04T12:00:00.000Z";
 const COMPOSE_PATH = "ops/compose.integration.yml";
 
+/** The sentence `evaluateGate`'s `default:` arm answers with, matched exactly. */
+const NO_PRODUCER_REASON = "Legion does not yet produce evidence for this gate.";
+
 /**
- * The six R3 gates that still answer from `evaluateGate`'s `default:` arm.
+ * The R3 gates that still answer from `evaluateGate`'s `default:` arm, derived
+ * from the compiled module rather than transcribed.
  *
- * Named rather than counted, and asserted in both directions. A count would stay
- * true if this release's gate silently went back to unevaluable and one of the
- * six gained a producer on the same day; the names would not.
+ * The previous release named the six by hand and asserted the set in both
+ * directions, on the argument that a count would stay true if one gate silently
+ * regressed while another gained a producer. That argument was right and the
+ * mechanism was not sufficient: a hand-written array is edited by whoever closes
+ * a gate, and it stays green if the gate they closed quietly falls back to the
+ * `default:` arm on the very next change. Deriving it from `deriveShipGates` over
+ * an R3 task with **no change facts at all** closes that, because the only rows
+ * this can select are rows that genuinely came from that arm.
  *
- * Each carries the release that is expected to close it, so the failure message
- * a later author sees points at their own work rather than at this file.
+ * It is asserted against the expected three below rather than only used, so this
+ * is still a claim a later author has to edit rather than a tautology.
+ */
+function producerlessR3Gates() {
+  const report = deriveShipGates({
+    tasks: [{ id: "ctr_derivation", risk: { tier: "R3", reasons: ["derivation"] } }],
+    taskIdFor: () => "tsk_derivation",
+    entries: [],
+    reviews: [],
+    change: undefined
+  });
+  return [
+    ...new Set(report.gates.filter((gate) => gate.reason === NO_PRODUCER_REASON).map((gate) => gate.gate))
+  ].sort();
+}
+
+/**
+ * The three expected to survive this release, each carrying the release that is
+ * expected to close it, so the failure message a later author sees points at
+ * their own work rather than at this file.
  */
 const PRODUCERLESS_R3_GATES = [
+  // PR 7.
   "architecture_or_security_review",
-  "independent_baseline",
+  // PR 8.
   "protected_acceptance_tests",
-  "release_observation_plan",
-  "rollback_or_forward_fix_evidence",
-  "security_or_e2e_evaluator"
+  // PR 9.
+  "release_observation_plan"
 ];
+
+test("the R3 gates with no producer are exactly the three later releases still owe", () => {
+  // Both directions, and derived on one side. Give one of these a producer and
+  // this assertion is the thing to edit; let one of the seven that *has* a
+  // producer fall back to the `default:` arm and this reddens without anybody
+  // having touched it, which the array it replaces could not do.
+  assert.deepEqual(producerlessR3Gates(), PRODUCERLESS_R3_GATES);
+});
 
 /**
  * R3 with one executable criterion declaring a real-interface surface.
@@ -220,10 +258,53 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
     0,
     `expected no failing gate: ${JSON.stringify(payload.diagnostics.map((entry) => entry.gate))}`
   );
+  // Six gate ids are still unmet, and the set did not shrink in this release —
+  // which is the honest report and is worth stating plainly. Three of the six
+  // gained a producer here; what a producer gives them is the ability to be
+  // *satisfied*, and this change attests nothing, so all three answer the absence
+  // arm. The difference is in the reason, asserted immediately below: three of
+  // these rows now say what is missing and name a command that produces it, and
+  // three still say Legion produces no evidence for them at all.
+  const unmet = [...new Set(payload.diagnostics.map((entry) => entry.gate))].sort();
+  assert.deepEqual(unmet, [
+    "architecture_or_security_review",
+    "independent_baseline",
+    "protected_acceptance_tests",
+    "release_observation_plan",
+    "rollback_or_forward_fix_evidence",
+    "security_or_e2e_evaluator"
+  ]);
+
+  const stillProducerless = payload.diagnostics
+    .filter((entry) => entry.message.includes(NO_PRODUCER_REASON))
+    .map((entry) => entry.gate)
+    .sort();
   assert.deepEqual(
-    [...new Set(payload.diagnostics.map((entry) => entry.gate))].sort(),
+    stillProducerless,
     PRODUCERLESS_R3_GATES,
-    "the true remaining set. Give one of these a producer and this assertion is the thing to edit"
+    "the true remaining set, read off the real command. Give one of these a producer and this is the thing to edit"
+  );
+  // And the three this release closed no longer answer from that arm: each names
+  // the attestation plane it looked at and what it did not find there.
+  for (const gate of ["independent_baseline", "security_or_e2e_evaluator", "rollback_or_forward_fix_evidence"]) {
+    const row = payload.diagnostics.find((entry) => entry.gate === gate);
+    assert.notEqual(row, undefined, gate);
+    assert.doesNotMatch(row.message, /does not yet produce/, gate);
+    assert.match(row.message, /No attestation records anyone asserting/, gate);
+    // Change-scoped, so one row for the change rather than one per task.
+    assert.match(row.message, /is not satisfied for chg_/, gate);
+  }
+
+  // The payload's aggregate advice moved as a side effect of those three gaining
+  // recoveries, and it moved in the right direction. Before this release the
+  // advice on this exact fixture was `legion build` — the fallback arm, because
+  // none of the six unmet gates had a recovery — on a change that had already
+  // been built, reviewed and accepted. That is the exits-0-and-still-blocked loop
+  // this series exists to close, emitted by the aggregator rather than by a gate.
+  assert.notEqual(
+    payload.nextAction.command,
+    "legion build",
+    "a change that has been built, reviewed and accepted must not be advised to build"
   );
   // Which is the same as saying this release's gate is satisfied — stated
   // separately because the set above is what a later author will edit, and the
@@ -308,10 +389,31 @@ test("an oracle approved after the build blocks the gate, naming both instants a
   // worse — nor a build, which has already happened.
   assert.equal(payload.nextAction.command, "legion start --intake");
   assert.doesNotMatch(payload.nextAction.command, /approve/);
-  assert.match(payload.nextAction.reason, /no command re-orders a decision that has already been taken/);
-  // And it discloses that repairing this one does not unblock the ship, because
-  // six R3 gates still have no producer at all.
-  assert.match(payload.nextAction.reason, /6 other unmet gates have no command/);
+
+  // **The reason moved in this release, and the command deliberately did not.**
+  //
+  // Three of R3's producerless gates gained recoveries here, so `shipGateRecovery`
+  // now sees three distinct repair commands among the unmet set instead of one and
+  // takes its mixed arm: the reason is built from ship's fallback rather than from
+  // the ordering gate's own sentence. That is the aggregator working as specified
+  // — it says plainly that no single command unblocks the ship and names them all.
+  //
+  // What had to be checked rather than assumed is `command`, because
+  // `independent_baseline` is **first** in R3's gate order
+  // (packages/core/src/risk/index.ts) and is therefore `recoveries[0]` on every
+  // blocked R3 ship from now on. It stays `legion start --intake` because that
+  // gate's own post-execution recovery is the same command as the ordering gate's,
+  // for the same reason: nothing re-dates an attestation any more than it re-orders
+  // an approval, so attesting a baseline now would write a later instant and make
+  // the state strictly worse. Two gates, one honest repair, and the field hosts
+  // dispatch is unchanged.
+  assert.match(payload.nextAction.reason, /No single command unblocks this ship/);
+  assert.match(payload.nextAction.reason, /legion start --intake is the first of them in gate order/);
+  // And the ordering gate's own sentence still carries the fact the aggregate no
+  // longer does, which is the point of putting it in the verdict as well as in the
+  // recovery: a blocked ship's gate rows are `{code, gate, message, path}` and the
+  // recovery reaches the operator only through the single aggregate `nextAction`.
+  assert.match(blocked.message, /not earlier than/);
 });
 
 test("every advisory before the build routes an R3 operator to approve first", async (t) => {
