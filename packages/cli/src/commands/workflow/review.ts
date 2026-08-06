@@ -21,25 +21,40 @@ import {
 import {
   LEGION_PROTOCOL_VERSION,
   buildIdempotencyKey,
+  reviewDomainSchema,
   type AcceptanceState,
   type Actor,
   type Approval,
   type ArtifactPath,
   type EvidenceId,
   type ReviewDecision,
+  type ReviewDomain,
   type ReviewFinding,
   type ReviewId,
   type TaskContract,
   type UtcTimestamp
 } from "@legion/protocol";
 
-import { failure, hasFlag, helpResult, stringOption, success, usageError, type CliContext, type CliResult } from "../../runtime.js";
+import {
+  failure,
+  hasFlag,
+  helpResult,
+  repeatedStringOptions,
+  stringOption,
+  success,
+  usageError,
+  type CliContext,
+  type CliResult,
+  type CliWarning
+} from "../../runtime.js";
 import {
   describeDecisionOwners,
+  requiresDomainReview,
   requiresHumanApproval,
   resolveApprover,
   PROJECT_MANIFEST_PATH
 } from "../../workflow/approver.js";
+import { DOMAIN_REVIEW_GATE_DOMAINS, isDomainReviewSatisfying } from "../../workflow/ship-gates.js";
 import { buildExecutionPrompt, writeContextPack } from "../../workflow/context-pack.js";
 import { loadWorkflowProject } from "../../workflow/context.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
@@ -60,12 +75,19 @@ import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { findLatestWorkflowChangeId, listWorkflowChanges } from "../../workflow/state.js";
 import { handleBuildWorkflow } from "./build.js";
 
-const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+const REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
 
 --approver names a human decision owner recorded in .legion/project/project.json. It is
 required when a task in the change derives the explicit_human_approval risk gate.
+
+--domain names the competence this review was performed in: implementation,
+architecture, security, performance or operability. Repeat it for more than one. It is
+read only on a run that performs a review — legion review --accept refuses it, because a
+domain is declared when the review happens rather than when it is signed. legion ship's
+architecture_or_security_review gate reads architecture and security, and reports
+unevaluable for a review that records no domain at all.
 
 --accept also records the change's whole-change acceptance, which legion ship reads:
 "accepted" with an approver and clean traceability, "ready" without an approver, and
@@ -73,6 +95,7 @@ required when a task in the change derives the explicit_human_approval risk gate
 
 Examples:
   legion review --executor fake
+  legion review --domain architecture --domain security --executor fake
   legion review --accept
   legion review --accept --approver dasbl
   legion review --auto --max-cycles 3 --executor codex`;
@@ -167,6 +190,15 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   });
   if (!approver.ok) return approver.result;
 
+  // Resolved here for `resolveReviewApprover`'s reasons, both of which transfer
+  // exactly: ahead of the dry run, so a dry run answers "will this command line
+  // work" rather than yes to `--domain architecure`; and ahead of the evidence
+  // read, so nothing is written before a malformed flag is refused.
+  const domains = resolveReviewDomains(context, {
+    submitting: !hasFlag(context, "accept") && stringOption(context, "reject-reason") === undefined
+  });
+  if (!domains.ok) return domains.result;
+
   const taskCount = taskgraph.document.tasks.length;
   if (hasFlag(context, "dry-run")) {
     const action = nextAction(
@@ -211,7 +243,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   }
 
   if (hasFlag(context, "accept")) {
-    return acceptLatestReview(context, evidence, approver.approver);
+    return acceptLatestReview(context, evidence, approver.approver, taskgraph.document.tasks);
   }
 
   const rejectReason = stringOption(context, "reject-reason");
@@ -230,6 +262,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
       taskgraph,
       evidence,
       ...(approver.approver === undefined ? {} : { approver: approver.approver }),
+      ...(domains.domains.length === 0 ? {} : { domains: domains.domains }),
       ...(phaseOption === undefined ? {} : { phase: phaseOption })
     });
   }
@@ -237,7 +270,8 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
   const submitted = await submitReview(context, {
     executor: selectedExecutor,
     taskgraph,
-    evidence
+    evidence,
+    ...(domains.domains.length === 0 ? {} : { domains: domains.domains })
   });
   if (!submitted.ok) {
     return blockedReview(submitted.diagnostics, nextAction("legion build", "Review could not be submitted until build evidence is usable."));
@@ -252,6 +286,15 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
         "A passing review was submitted and needs human acceptance."
       )
     : nextAction("legion build", "Address review findings and collect new evidence.");
+  // Warned at submit as well as at accept, because this is the last moment the
+  // flag is cheap: a domain is recorded when the review is performed, so an
+  // operator told at the accept has to review again.
+  const warnings = domainReviewWarnings({
+    tasks: taskgraph.document.tasks,
+    changeId: taskgraph.document.changeId,
+    reviews: submitted.reviews,
+    accepting: false
+  });
   return success(
     {
       ok: true,
@@ -262,6 +305,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
             review: reviewSummary(firstReview)
           }),
       reviews: submitted.reviews.map(reviewSummary),
+      ...(warnings.length === 0 ? {} : { warnings }),
       evidenceIndex: evidence.artifactPath,
       nextAction: action,
       diagnostics: []
@@ -270,6 +314,7 @@ export async function handleReviewWorkflow(context: CliContext): Promise<CliResu
       "Review submitted.",
       `Reviews: ${submitted.reviews.length}.`,
       clean ? "Verdict: pass." : `Findings: ${findingCount}.`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -298,8 +343,150 @@ interface SubmitReviewInput {
   readonly evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true };
   /** Resolved once by the caller, because `--auto` also accepts. */
   readonly approver?: Actor;
+  /** The competences `--domain` declared, stamped on every review this run writes. */
+  readonly domains?: readonly ReviewDomain[];
   /** The `--phase N` the caller gave, so follow-up actions keep the scope. */
   readonly phase?: string;
+}
+
+type ReviewDomainDecision =
+  | { readonly ok: true; readonly domains: readonly ReviewDomain[] }
+  | { readonly ok: false; readonly result: CliResult };
+
+/**
+ * Turn `--domain <d>...` into validated domains, and refuse it on a run that
+ * performs no review.
+ *
+ * Repeated rather than comma-separated, and that needed no parser change:
+ * `parseCliArgs` already records every string occurrence of every option in
+ * `repeated`, and its comment records why a comma list was refused — a second
+ * parser to keep honest. `repeatedStringOptions` is the same reader `legion
+ * attest --source` uses.
+ *
+ * Three refusals, and the first two are `resolveReviewApprover`'s mirrored:
+ *
+ *  - A bare `--domain` at the end of argv is **not** recorded in `repeated` at
+ *    all — it sets `options.get("domain") === true` — so without this check the
+ *    operator's flag reads as absent and the command records nothing while
+ *    exiting 0. This is `legion attest --verdict`'s guard, for the same shape.
+ *  - A value the protocol's own enum does not admit is refused by name rather
+ *    than dropped. Validated against `reviewDomainSchema` instead of a
+ *    hand-written list, on the argument `legion attest` makes for
+ *    `attestationKindSchema`: a second list is a second thing to keep in step.
+ *  - **`--domain` on a run that submits nothing is refused, not ignored.**
+ *    `legion review --accept --domain architecture` is the command an operator
+ *    will type, and the accept path spreads `...review.document`, so it *could*
+ *    stamp a domain onto a review that was performed with no domain knowledge at
+ *    all. A label applied after the looking records a signature rather than a
+ *    competence, which empties the field of meaning on the day it is introduced.
+ *    Accepted-and-ignored is the silent class `declared-options.ts` exists to
+ *    close, so it is refused by name with the two-command repair in the message.
+ *    `--auto` accepts it, because `--auto` submits before it accepts.
+ */
+function resolveReviewDomains(
+  context: CliContext,
+  input: { readonly submitting: boolean }
+): ReviewDomainDecision {
+  const supported = reviewDomainSchema.options.join(", ");
+  if (context.args.options.get("domain") === true) {
+    return {
+      ok: false,
+      result: usageError(
+        `Missing required value for --domain. Supported domains: ${supported}. Example: legion review --domain architecture.`
+      )
+    };
+  }
+
+  const raw = [...new Set(repeatedStringOptions(context, "domain").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (raw.length === 0) return { ok: true, domains: [] };
+
+  if (!input.submitting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --domain only on a run that performs a review. --accept records who accepted a review " +
+          "that already exists and --reject-reason records a rejection; a domain stamped on either would say a " +
+          "competence looked at the work when what happened was a signature. Run legion review --domain architecture " +
+          "first, then legion review --accept --approver <id>."
+      )
+    };
+  }
+
+  const domains: ReviewDomain[] = [];
+  for (const value of raw) {
+    const parsed = reviewDomainSchema.safeParse(value);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        result: usageError(`Unknown review domain: --domain ${value}. Supported domains: ${supported}.`)
+      };
+    }
+    domains.push(parsed.data);
+  }
+  return { ok: true, domains };
+}
+
+/**
+ * The warning a run owes when this change derives the domain gate and nothing
+ * this run wrote will satisfy it.
+ *
+ * **Lesson 3, and the two paths ask two different questions on purpose.**
+ *
+ * The accept path calls `isDomainReviewSatisfying`, which is the reader's own
+ * gate function against a one-plane fact set rather than a paraphrase of it. A
+ * hand-written "did somebody pass --domain architecture" would be a second
+ * definition of satisfied, and the first time the two drifted `legion review
+ * --accept` would exit 0 on an R3 change and ship would block forever with no
+ * flag anywhere that would fix it.
+ *
+ * The submit path cannot use that predicate and must not pretend to: the gate
+ * reads *accepted* reviews, so a freshly submitted one never satisfies it and a
+ * warning built on it would fire on every R3 submit — including the one that did
+ * everything right, which is how a warning teaches operators to ignore it. What
+ * it asks instead is the one part of the gate that is decided at submit time and
+ * nowhere else: does any review this run wrote name a domain the gate reads.
+ * `DOMAIN_REVIEW_GATE_DOMAINS` is exported from the gate module for exactly this,
+ * so the narrower question is still asked against the reader's own list.
+ *
+ * A warning rather than a refusal — see `requiresDomainReview` for why — and both
+ * name the audited waiver as the other route, because ADR-006 permits it.
+ */
+function domainReviewWarnings(input: {
+  readonly tasks: readonly TaskContract[];
+  readonly changeId: string;
+  readonly reviews: readonly ReviewDecisionSuccess[];
+  readonly accepting: boolean;
+}): readonly CliWarning[] {
+  if (!requiresDomainReview(input.tasks)) return [];
+  const satisfied = input.accepting
+    ? isDomainReviewSatisfying({
+        reviews: input.reviews,
+        changeId: input.changeId,
+        tasks: input.tasks,
+        taskIdFor: (task) => taskIdForContractId(task.id)
+      })
+    : input.reviews.some((review) =>
+        (review.document.domains ?? []).some((domain) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain))
+      );
+  if (satisfied) return [];
+  return [
+    {
+      code: "review_domain_not_recorded",
+      message: input.accepting
+        ? "A task in this change derives the architecture_or_security_review risk gate, and no review this accept " +
+          "recorded was performed in the architecture or security domain — so legion ship still reports that gate " +
+          "unevaluable and the change cannot ship. Nothing here is wrong and nothing was rolled back: the approval " +
+          "and the acceptance are real. Run legion review --domain architecture (or --domain security, or both) and " +
+          "accept again, or record an audited waiver with legion attest architecture-review --verdict " +
+          "not_applicable --waiver-reason <text> --attested-by <id> --source <path>."
+        : "A task in this change derives the architecture_or_security_review risk gate, and this review records no " +
+          "domain — so legion ship reports that gate unevaluable and the change cannot ship. Re-run as legion review " +
+          "--domain architecture (or --domain security, or both) before accepting. A domain is declared when the " +
+          "review is performed: legion review --accept does not take --domain and cannot add one afterwards."
+    }
+  ];
 }
 
 type ReviewApproverDecision =
@@ -534,7 +721,8 @@ async function submitReview(context: CliContext, input: SubmitReviewInput): Prom
       evidenceIndexPath: input.evidence.artifactPath,
       createdAt,
       executor: input.executor,
-      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId)
+      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId),
+      ...(input.domains === undefined || input.domains.length === 0 ? {} : { domains: input.domains })
     });
     const write = await writeReviewDecision({
       repositoryRoot: context.repositoryRoot,
@@ -591,7 +779,15 @@ function failedObservations(
 async function acceptLatestReview(
   context: CliContext,
   evidence: Awaited<ReturnType<typeof readEvidenceIndex>> & { readonly ok: true },
-  approver: Actor | undefined
+  approver: Actor | undefined,
+  /**
+   * The change's task contracts, for the domain-review warning alone.
+   *
+   * Threaded rather than re-read: this command has already loaded the task graph
+   * to resolve the approver, and the warning has to be about the same tiers that
+   * decision was taken against.
+   */
+  tasks: readonly TaskContract[]
 ): Promise<CliResult> {
   const failed = failedObservations(evidence);
   if (failed.length > 0) {
@@ -737,12 +933,19 @@ async function acceptLatestReview(
   }
 
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
+  const warnings = domainReviewWarnings({
+    tasks,
+    changeId: evidence.document.changeId,
+    reviews: acceptedReviews,
+    accepting: true
+  });
   return success(
     {
       ok: true,
       status: "accepted",
       ...(acceptedReviews[0] === undefined ? {} : { review: reviewSummary(acceptedReviews[0]) }),
       reviews: acceptedReviews.map(reviewSummary),
+      ...(warnings.length === 0 ? {} : { warnings }),
       // Spread conditionally so a run that recorded no approver produces the
       // payload it produced before this release, key for key.
       ...(approvals.approvals.length === 0 ? {} : { approvals: approvals.approvals.map(approvalSummary) }),
@@ -758,6 +961,10 @@ async function acceptLatestReview(
       "Review accepted.",
       `Evidence accepted: ${evidenceWrite.artifactPath}.`,
       `Change acceptance: ${promotion.result.acceptance.status}.`,
+      // Shown, not only recorded: `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload would be invisible to
+      // exactly the operator who has to act on it.
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -1271,11 +1478,14 @@ async function runAutoReview(
       // "accepted" without this cannot distinguish a first-pass review from one
       // that needed two fix rounds, and the difference is the whole point of
       // running with --auto.
-      return withCycleState(await acceptLatestReview(context, refreshedEvidence, input.approver), {
-        cycle,
-        maxCycles,
-        outcome: "clean"
-      });
+      return withCycleState(
+        await acceptLatestReview(context, refreshedEvidence, input.approver, input.taskgraph.document.tasks),
+        {
+          cycle,
+          maxCycles,
+          outcome: "clean"
+        }
+      );
     }
 
     if (cycle < maxCycles) {
@@ -1447,6 +1657,14 @@ export function reviewDecisionForExecution(input: {
   readonly createdAt: ReturnType<typeof currentUtcTimestamp>;
   readonly executor: ExecutionAdapterKind;
   readonly supersedes: readonly ReviewId[];
+  /**
+   * The competences this review was performed in, when the operator declared any.
+   *
+   * Spread conditionally below, exactly as `acceptedBy` is on the accept path, so
+   * a review with no declared domain produces the byte-identical document it
+   * produced before this release.
+   */
+  readonly domains?: readonly ReviewDomain[];
 }): ReviewDecision {
   const evidenceRefs = input.evidenceEntries.map((entry) => entry.evidence.id);
   const findings = input.result.findings.map((finding, index) => reviewFindingForExecution(finding, evidenceRefs, index));
@@ -1474,6 +1692,7 @@ export function reviewDecisionForExecution(input: {
     confidence: input.executor === "fake" ? "high" : "medium",
     findings,
     supersedes: [...input.supersedes],
+    ...(input.domains === undefined || input.domains.length === 0 ? {} : { domains: [...input.domains] }),
     evidenceRefs: [...evidenceRefs],
     traceRefs: [
       {
@@ -1661,6 +1880,10 @@ export function reviewSummary(review: ReviewDecisionSuccess): Record<string, unk
     ...(review.document.acceptedBy === undefined
       ? {}
       : { acceptedBy: review.document.acceptedBy, acceptedAt: review.document.acceptedAt }),
+    // The competences this review was performed in, spread conditionally on the
+    // rule above so a review that declared none produces the payload it produced
+    // before this release, key for key.
+    ...(review.document.domains === undefined ? {} : { domains: review.document.domains }),
     // The revision chain. A review that supersedes nothing is a first attempt,
     // which is what the first-pass rate in `legion retro` counts.
     supersedes: review.document.supersedes,

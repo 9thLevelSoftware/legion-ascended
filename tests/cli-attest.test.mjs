@@ -493,12 +493,16 @@ test("an attestation for a kind no gate reads is written and says that it moves 
   //
   // The warning is derived from the gate module's own exported set, so the release
   // that adds the reader deletes this warning by adding one line there — there is
-  // no second list to go stale.
+  // no second list to go stale. This test has been re-pointed once for exactly
+  // that reason: it named `architecture-review` until the release that gave
+  // `architecture_or_security_review` a producer, and `release-observation` is now
+  // the one kind no gate in the module reads. Re-pointing it is the intended
+  // repair; deleting it would retire the only assertion that the warning fires.
   const { run } = await acceptedR3(t);
 
   const attested = await run(
     "attest",
-    "architecture-review",
+    "release-observation",
     "--attested-by",
     "dasbl",
     "--verdict",
@@ -517,9 +521,77 @@ test("an attestation for a kind no gate reads is written and says that it moves 
   // And the gate it looks like it should have moved is untouched, still answering
   // from `evaluateGate`'s `default:` arm.
   const shipPayload = parseJsonOutput(await run("ship", "--json"));
-  const row = shipPayload.diagnostics.find((entry) => entry.gate === "architecture_or_security_review");
+  const row = shipPayload.diagnostics.find((entry) => entry.gate === "release_observation_plan");
   assert.notEqual(row, undefined);
   assert.match(row.message, /does not yet produce/);
+});
+
+test("an architecture-review pass is recorded on a person's sentence, and refused without one", async (t) => {
+  // **The third admissibility state, driven end to end through the real CLI.**
+  //
+  // Under the previous encoding this kind shared the empty-shape list with
+  // `e2e-evaluation`, and both ends read that as a positive refusal: `legion
+  // attest architecture-review --verdict pass` exited 1, while `--verdict
+  // not_applicable --waiver-reason <text>` satisfied the same gate. An operator
+  // who genuinely held an architecture review in a PR thread was told to record
+  // that no architecture review applied — a gate that punishes an accurate answer,
+  // which is the defect `GATE_SCOPE`'s own comment names one gate over.
+  //
+  // What the arm gives up is asserted rather than described. There is no report to
+  // read, so the record's whole content is the attester's sentence: the pass needs
+  // an authored `--statement`, and `legion ship` echoes it as a distinct warning
+  // on a gate that would otherwise emit nothing at all.
+  const { run } = await acceptedR3(t);
+
+  const bare = await run(
+    "attest",
+    "architecture-review",
+    "--attested-by",
+    "dasbl",
+    "--verdict",
+    "pass",
+    "--source",
+    ADR_PATH,
+    "--json"
+  );
+  assert.equal(bare.exitCode, 1, "a pass carrying a statement Legion wrote asserts nothing anybody said");
+  const barePayload = parseJsonOutput(bare);
+  assert.equal(barePayload.diagnostics[0].code, "judgement_requires_statement");
+  assert.match(barePayload.diagnostics[0].message, /requires --statement/);
+
+  const attested = await run(
+    "attest",
+    "architecture-review",
+    "--attested-by",
+    "dasbl",
+    "--verdict",
+    "pass",
+    "--statement",
+    "The pricing boundary was reviewed against ADR-006 and introduces no new coupling.",
+    "--source",
+    ADR_PATH,
+    "--json"
+  );
+  assert.equal(attested.exitCode, 0, attested.stdout + attested.stderr);
+  const payload = parseJsonOutput(attested);
+  assert.equal(payload.status, "attested");
+  // The kind now has a reader, so the stale warning is gone — computed from the
+  // gate module's own set rather than from a second list.
+  assert.equal(
+    (payload.warnings ?? []).some((entry) => entry.code === "attestation_kind_has_no_reader"),
+    false
+  );
+
+  const shipPayload = parseJsonOutput(await run("ship", "--json"));
+  assert.equal(
+    shipPayload.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
+    false,
+    "a pin-clean pass by a named human is the attestation route this gate keeps open"
+  );
+  const judgement = shipPayload.warnings.find((entry) => entry.code === "risk_gate_human_judgement");
+  assert.notEqual(judgement, undefined, "a satisfied gate emits no diagnostic, so this arm has to warn");
+  assert.match(judgement.message, /satisfied by a recorded human judgement/);
+  assert.match(judgement.message, /no new coupling/);
 });
 
 test("an unpinnable source is refused by name, and no identity is invented", async (t) => {

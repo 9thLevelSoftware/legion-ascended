@@ -57,6 +57,32 @@ export function requiresHumanApproval(tasks: readonly TaskContract[]): boolean {
   );
 }
 
+/**
+ * Whether this change's reviews have to record the domain they were performed
+ * in.
+ *
+ * `requiresHumanApproval`'s shape and `requiresHumanApproval`'s argument, for
+ * the gate this release gives a producer. Derived from the gate set with the
+ * identical two-argument `deriveGateSet` call `ship-gates.ts` makes, because
+ * computed any other way the warning and the gate can disagree — and a warning
+ * that fires where the gate does not is worse than none, since the operator
+ * learns to ignore it.
+ *
+ * It drives a *warning* rather than a refusal, unlike `--approver`. An approver
+ * can be supplied on the same command line as the accept; a domain cannot, since
+ * it had to be declared when the review was performed. Refusing the accept would
+ * make the strongest governance acts in the workflow — the approval, the evidence
+ * acceptance, the whole-change sign-off — contingent on a gate ADR-006 permits
+ * waiving, and would strand a change whose reviews are otherwise clean.
+ */
+export function requiresDomainReview(tasks: readonly TaskContract[]): boolean {
+  return tasks.some((task) =>
+    deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "architecture_or_security_review"
+    )
+  );
+}
+
 /** How the manifest's owners read back to an operator who has to pick one. */
 export function describeDecisionOwners(owners: readonly Actor[]): string {
   if (owners.length === 0) return "none";

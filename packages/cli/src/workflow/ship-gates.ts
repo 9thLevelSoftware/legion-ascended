@@ -17,6 +17,8 @@ import type {
   AttestationKind,
   Oracle,
   Release,
+  ReviewDecision,
+  ReviewFinding,
   TaskContract,
   TaskRun,
   UtcTimestamp,
@@ -59,14 +61,15 @@ import type { VerifyPinnedReference } from "./pinned-references.js";
  * verification surface and a whole-change sign-off reports `ready` end to end —
  * the first tier above R0 for which that is true.
  *
- * **R3 still cannot, and this release does not try to make it.** Seven of its ten
+ * **R3 still cannot, and this release does not try to make it.** Eight of its ten
  * gates now have producers — `protected_oracle` and `deterministic_verification`
  * from the evidence items, `explicit_human_approval` from the approval plane,
- * `approved_spec_and_oracle` from the approval plane's ordering, and
+ * `approved_spec_and_oracle` from the approval plane's ordering,
  * `independent_baseline`, `security_or_e2e_evaluator` and
- * `rollback_or_forward_fix_evidence` from this release's attestation plane — and
- * three do not: architecture and security review, protected acceptance tests and
- * release observation. The report names exactly which, and
+ * `rollback_or_forward_fix_evidence` from the attestation plane, and
+ * `architecture_or_security_review` from this release's review *domains* — and
+ * two do not: protected acceptance tests and release observation. The report
+ * names exactly which, and
  * `tests/change-r3-ordering` derives that set from `evaluateGate`'s own
  * `default:` reason string so each later release reddens it as it closes one.
  * Lowering the tier through an audited `risk.override` is the supported way to
@@ -136,6 +139,11 @@ export interface ShipGateResult {
    * be the quietest thing in the payload.
    */
   readonly waived?: ShipGateWaiver;
+  /**
+   * The recorded human judgement this gate was satisfied by, when it was
+   * satisfied by one. `waived`'s rule, for the other evidence-free arm.
+   */
+  readonly judgement?: ShipGateHumanJudgement;
 }
 
 export interface ShipGateReport {
@@ -222,6 +230,32 @@ export interface ShipGateChangeFacts {
    * kept would answer from a record that had been withdrawn.
    */
   readonly attestations: readonly Attestation[] | undefined;
+  /**
+   * Every review recorded for this change, or `undefined` when the set could not
+   * be established.
+   *
+   * The same three values and the same all-or-nothing rule as `approvals`, and a
+   * *second* reviews channel beside `deriveShipGates`' top-level `reviews`
+   * parameter. That deliberate duplication is the whole reason this key exists.
+   *
+   * The top-level parameter is the raw listing, and until this release
+   * `listReviewDecisionsForChange` dropped what it could not read and said
+   * nothing. Three gates read that parameter —
+   * `lightweight_independent_review`, `task_level_independent_review` and
+   * `explicit_human_approval` — and all three ask questions a dropped file can
+   * only make *more* conservative, so a short listing was harmless there.
+   *
+   * `architecture_or_security_review` is the first gate with an `unsatisfied` arm
+   * that reads a review: a rejected or blocking-finding domain review, made
+   * unparseable, would simply vanish and the gate would answer from the accepted
+   * one beside it. So this gate reads the complete set or nothing.
+   *
+   * The three legacy gates are deliberately left on the raw parameter. Routing
+   * them through the complete set would move R1 and R2 verdicts in a diff whose
+   * subject is an R3 gate, with the R2 milestone downstream; that residual is
+   * named in this release's commit body rather than hidden.
+   */
+  readonly reviews: readonly ReviewDecisionSuccess[] | undefined;
   /** `bundle.deltas`. Undefined when the bundle did not load. */
   readonly deltas: readonly ChangeBundleDeltaEntry[] | undefined;
   /**
@@ -316,8 +350,18 @@ export interface ShipGateChangeFacts {
  * gate default silently to task scope, which silently disables both the
  * diagnostic collapse below and, once gates read facts, the absence guard.
  *
- * Seven `"change"` entries as of this release. Each later gate flips exactly its
+ * Eight `"change"` entries as of this release. Each later gate flips exactly its
  * own line, next to the gate it implements.
+ *
+ * `architecture_or_security_review` is the newest, and its entry was already
+ * here — as `"task"` — before it had a producer, so nothing failed to compile
+ * when it was wrong. Both of its producers answer for the change: an
+ * `architecture-review` attestation is keyed by `(changeId, kind)`, and the
+ * review half quantifies over *every* deriving task, so a `subjectId` naming one
+ * task would be false about the sentence beside it. Left `"task"` it printed the
+ * identical sentence once per criterion-task — the altitude defect
+ * `integration_or_real_interface_checks` paid for once and
+ * `approved_spec_and_oracle` paid for twice.
  *
  * `independent_baseline`, `security_or_e2e_evaluator` and
  * `rollback_or_forward_fix_evidence` are the three newest, and all three flipped
@@ -388,7 +432,7 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   whole_change_acceptance_evidence: "change",
   independent_baseline: "change",
   approved_spec_and_oracle: "change",
-  architecture_or_security_review: "task",
+  architecture_or_security_review: "change",
   protected_acceptance_tests: "task",
   security_or_e2e_evaluator: "change",
   explicit_human_approval: "task",
@@ -1302,6 +1346,33 @@ interface GateOutcome {
   readonly recovery?: ShipGateRecovery;
   /** Set only by the attestation gates, on their audited-waiver arm. */
   readonly waived?: ShipGateWaiver;
+  /** Set only on the human-judgement arm of a kind that has no report shape. */
+  readonly judgement?: ShipGateHumanJudgement;
+  /**
+   * **This `unevaluable` may be hiding a recorded negative, rather than standing
+   * for the absence of a claim.**
+   *
+   * The two are the same status and they are not the same fact, and until a gate
+   * combined *two producers* nothing needed to tell them apart: a single
+   * producer's `unevaluable` blocks either way. `architecture_or_security_review`
+   * reads the review plane OR the attestation plane, and an OR reduced by verdict
+   * makes one producer's `satisfied` answer for the other producer's silence —
+   * so a `.DS_Store` under `attestations/` collapses that plane to `unevaluable`
+   * and a clean domain review then satisfies the gate, discarding the `fail`
+   * attestation the dropped listing may have held. That is the
+   * favourable-hides-unfavourable fail-open `completeReviews` and the `skipped`
+   * field were added one layer down to close, reintroduced by the combination.
+   *
+   * Set by exactly the arms where the plane itself is in doubt — a listing that
+   * came back short, and two hand-filed records of one kind — and never by an arm
+   * that read the plane whole and found no claim in it. `combineDomainReviewOutcomes`
+   * refuses to let a `satisfied` past one of these; a plain `unevaluable` it still
+   * treats as the absence of a claim, because that is what it is.
+   *
+   * Internal to the combination. `deriveShipGates` drops it before the row is
+   * built, so it is never a field of the payload.
+   */
+  readonly concealsNegative?: true;
 }
 
 /**
@@ -1576,6 +1647,7 @@ export function isLiveSurfaceReaffirmation(input: {
       acceptance: undefined,
       approvals: [input.approval],
       attestations: undefined,
+      reviews: undefined,
       deltas: undefined,
       oracles: undefined,
       taskRuns: undefined,
@@ -3281,14 +3353,16 @@ export function isLiveOracleGrant(input: {
  *
  * Exported because `legion attest` warns when it has just written a kind that no
  * gate reads, and the honest way to compute that warning is to ask the reader
- * rather than to keep a second list beside it. PR 7 adds
- * `architecture_or_security_review` and PR 9 `release_observation_plan`; each
- * adds one line here and the warning disappears with no message anywhere going
- * stale.
+ * rather than to keep a second list beside it. This release adds
+ * `architecture_or_security_review` — one line, and the
+ * `attestation_kind_has_no_reader` warning for `architecture-review` disappears
+ * with no message anywhere going stale. PR 9 adds `release_observation_plan` the
+ * same way, and `release-observation` is the one kind that still has no reader.
  */
 export const ATTESTATION_GATE_KINDS: Readonly<Partial<Record<RiskGateId, readonly AttestationKind[]>>> = {
   independent_baseline: ["independent-baseline"],
   security_or_e2e_evaluator: ["security-evaluation", "e2e-evaluation"],
+  architecture_or_security_review: ["architecture-review"],
   rollback_or_forward_fix_evidence: ["rollback-evidence", "forward-fix-evidence"]
 };
 
@@ -3298,17 +3372,43 @@ export const GATE_READ_ATTESTATION_KINDS: ReadonlySet<AttestationKind> = new Set
 );
 
 /**
- * Which recognised report shapes can carry a `pass` for each attestation kind.
+ * What can carry a `pass` for each attestation kind. **Three states, and the
+ * third is new in this release.**
  *
- * A per-kind list rather than one global "any clean report will do", because
- * without it `legion attest rollback-evidence --source threat-model.json` would
- * satisfy the rollback gate off a security report. The matrix is what makes a
- * source *admissible* as well as clean.
+ *  - `shapes` — a pass must cite a report of one of these shapes, read and green.
+ *    The strongest arm and the only machine-checkable one. A per-kind list rather
+ *    than one global "any clean report will do", because without it `legion
+ *    attest rollback-evidence --source threat-model.json` would satisfy the
+ *    rollback gate off a security report.
+ *  - `none` — nothing in this repository can evidence a pass, and nothing is
+ *    expected to until somebody writes a producer. `pass` is refused at the
+ *    writer and `unsatisfied` at the reader, positively, never a default.
+ *  - `human-judgement` — the question has no report shape and never will, because
+ *    what it asks for is a competent person's opinion rather than a program's
+ *    output.
  *
- * **Five of seven kinds have an empty list, and that is the honest state of this
- * repository rather than an oversight.** An empty list means `verdict: "pass"`
- * cannot be recorded for that kind at all — a positive check with nothing to
- * fall through to, never a default. Concretely:
+ * A total record of a three-arm union rather than a list whose emptiness means
+ * two different things. Under the previous encoding `architecture-review` was
+ * spelled `[]`, and both ends read `admissible.length === 0` as a positive
+ * refusal — so `legion attest architecture-review --verdict pass` exited 1 while
+ * `--verdict not_applicable --waiver-reason <text>` **satisfied the same gate**.
+ * An operator who genuinely held an architecture review was told to record that
+ * no architecture review applied. That is the defect `GATE_SCOPE`'s comment names
+ * one file over: a gate that punishes an accurate answer teaches operators to
+ * give an inaccurate one.
+ *
+ * **What `human-judgement` gives up is stated rather than implied.** Nothing
+ * machine-checkable is read, so it is the *second* `satisfied` verdict in this
+ * module with no falsifiable evidence behind it — and it carries the audited
+ * waiver's machinery for exactly that reason: a human attester is re-checked
+ * positively, an authored `--statement` is required at the writer, the pins are
+ * re-hashed, no cited source may be a report that is red by its own rule, and
+ * ship echoes it as `risk_gate_human_judgement` on the same surfaces the waiver
+ * uses. It is strictly *stronger* than the waiver it sits beside: same named
+ * human, same recorded instant, same pinned bytes, plus a positive claim instead
+ * of a disclaimer.
+ *
+ * The rest of the table is unchanged and still honest about this repository:
  *
  *  - `e2e-evaluation` — no end-to-end report shape exists here. `apps/cli-e2e`
  *    runs against the change's own built code and writes a log, and recognising
@@ -3316,7 +3416,10 @@ export const GATE_READ_ATTESTATION_KINDS: ReadonlySet<AttestationKind> = new Set
  *    sealed corpus scenario is not that, and pretending otherwise would be the
  *    naming-convention inference this entity exists to replace.
  *  - `forward-fix-evidence` — nothing in the tree produces one.
- *  - `architecture-review`, `release-observation` — no gate here reads them.
+ *  - `release-observation` — `none` rather than `human-judgement`, deliberately.
+ *    A release observation *plan* is a checkable document with required health
+ *    criteria and a rollback plan, and PR 9 is where that reader is decided; it
+ *    is not this release's call to make on its behalf.
  *
  * `security_or_e2e_evaluator` is therefore satisfiable by evidence only through
  * `security-evaluation`, and `rollback_or_forward_fix_evidence` only through
@@ -3336,18 +3439,23 @@ export const GATE_READ_ATTESTATION_KINDS: ReadonlySet<AttestationKind> = new Set
  * is the point — a gate satisfied by another checkout's audit is worse than one
  * nobody can satisfy.
  */
-const ADMISSIBLE_SOURCE_SHAPES: Readonly<Record<AttestationKind, readonly EvidenceSourceShape[]>> = {
-  "independent-baseline": ["ab-comparison"],
-  "security-evaluation": ["threat-model"],
-  "e2e-evaluation": [],
-  "architecture-review": [],
-  "rollback-evidence": ["rollback-policy"],
-  "forward-fix-evidence": [],
-  "release-observation": []
+export type AttestationEvidenceRule =
+  | { readonly kind: "shapes"; readonly shapes: readonly EvidenceSourceShape[] }
+  | { readonly kind: "none" }
+  | { readonly kind: "human-judgement" };
+
+const ATTESTATION_EVIDENCE_RULES: Readonly<Record<AttestationKind, AttestationEvidenceRule>> = {
+  "independent-baseline": { kind: "shapes", shapes: ["ab-comparison"] },
+  "security-evaluation": { kind: "shapes", shapes: ["threat-model"] },
+  "e2e-evaluation": { kind: "none" },
+  "architecture-review": { kind: "human-judgement" },
+  "rollback-evidence": { kind: "shapes", shapes: ["rollback-policy"] },
+  "forward-fix-evidence": { kind: "none" },
+  "release-observation": { kind: "none" }
 };
 
-export function admissibleSourceShapes(attests: AttestationKind): readonly EvidenceSourceShape[] {
-  return ADMISSIBLE_SOURCE_SHAPES[attests];
+export function attestationEvidenceRule(attests: AttestationKind): AttestationEvidenceRule {
+  return ATTESTATION_EVIDENCE_RULES[attests];
 }
 
 /** The verb that records the first attestation of a kind for a change. */
@@ -3447,6 +3555,29 @@ export interface ShipGateWaiver {
 }
 
 /**
+ * A human judgement a gate accepted in place of a machine-checkable report.
+ *
+ * `ShipGateWaiver`'s machinery for `ShipGateWaiver`'s reason: a satisfied gate
+ * emits no diagnostic at all, so without a machine-readable field this arm —
+ * the second `satisfied` verdict in this module with nothing falsifiable behind
+ * it — would be the quietest thing in the payload.
+ *
+ * A separate type rather than a reuse of `ShipGateWaiver`, because
+ * `risk_gate_waived`'s sentence says "was satisfied by an audited waiver rather
+ * than by evidence", and a recorded judgement is a different and stronger claim:
+ * a named human says the check applied and passed. One sentence answering two
+ * different facts is how a payload stops being readable.
+ */
+export interface ShipGateHumanJudgement {
+  readonly gate: RiskGateId;
+  readonly attests: AttestationKind;
+  readonly attestedBy: string;
+  readonly attestedAt: string;
+  readonly statement: string;
+  readonly sources: readonly string[];
+}
+
+/**
  * The tasks whose risk tier actually derived this gate.
  *
  * The denominator `covers` is checked against. `deriveShipGates` emits one row
@@ -3463,11 +3594,14 @@ function tasksDeriving(gate: RiskGateId, tasks: readonly TaskContract[]): readon
 }
 
 /**
- * Is a human attester equal to a human executor this change records?
+ * Is a named human equal to a human executor this change records?
  *
- * **The only surviving half of the "attester distinct from the executor" rule,
- * and the half that was measured rather than assumed.** The specification asked
- * for a distinctness check against the executor recorded in the task runs.
+ * **The only surviving half of the "distinct from the executor" rule, and the
+ * half that was measured rather than assumed.** The specification asked
+ * `independent_baseline` for a distinctness check between the attester and the
+ * executor recorded in the task runs, and asked
+ * `architecture_or_security_review` for the same between the reviewer and the
+ * implementer. Both were measured and both reduce to this.
  * `legion build` writes the hard-coded literal `{kind: "tool", id: "legion-cli",
  * displayName: "Legion CLI"}` as `claimedBy` on every run of every change —
  * `--executor fake` lands in `manifest.model.id`, not there — and
@@ -3477,36 +3611,51 @@ function tasksDeriving(gate: RiskGateId, tasks: readonly TaskContract[]): readon
  * with no reachable negative, wearing the name of an independence guarantee.
  * Shipping it as specified would have been lesson 4 and lesson 5 in one place.
  *
+ * The review side is worse rather than better. `review.reviewer` is
+ * `legion-${executor}-reviewer` — a deterministic function of a flag, naming a
+ * model family and not a person — so `reviewer.id !== claimedBy.id` is
+ * `"legion-fake-reviewer" !== "legion-cli"` on every honest change by
+ * construction. The only human identity anywhere in the flow is `--approver`,
+ * which lands in `review.acceptedBy`, `approval.decidedBy` and
+ * `change.acceptance.acceptedBy`, and one person supplies all of them.
+ *
  * What is kept is the falsifier alone, and its bound is stated the way
  * `approvedOraclePin` states `verifyPin`'s. It can only ever *refuse*, never
- * satisfy, so its vacuity is harmless: the load-bearing clause is the ordering
- * one, and the ordering clause is never vacuous. It is unreachable through the
- * CLI today and reachable through a hand-written or host-written run, which is
- * the same threat model `humanApprovalStatus` already states.
+ * satisfy, so its vacuity is harmless. It is unreachable through the CLI today
+ * and reachable through a hand-written or host-written run, which is the same
+ * threat model `humanApprovalStatus` already states.
  *
- * Independence itself is carried by the ordering comparison, and the gate says
- * so in its own verdict. The residual is that a baseline attested by the same
- * person who later ran the build is indistinguishable from an independent one;
- * closing that needs an executor identity the CLI does not record.
+ * One implementation taking an actor id, called by both gates, rather than two
+ * copies differing in a parameter name: the second copy is the one that gets the
+ * `kind` check wrong.
+ *
+ * For `independent_baseline`, independence is carried by the ordering comparison
+ * and the gate says so in its own verdict; the residual is that a baseline
+ * attested by the same person who later ran the build is indistinguishable from
+ * an independent one. For `architecture_or_security_review` there is no ordering
+ * comparison and **independence is not established at all** — what that gate
+ * carries is the recorded *domain*: not who looked, but with what competence.
+ * Closing either needs an implementer identity the CLI does not record.
  */
-function humanExecutorMatchingAttester(
+function humanExecutorMatching(
   taskRuns: readonly TaskRun[] | undefined,
-  attesterId: string
+  actorId: string
 ): TaskRun | undefined {
   for (const run of taskRuns ?? []) {
     const claimedBy = run.claimedBy;
     if (claimedBy === undefined) continue;
     if (claimedBy.kind !== "human") continue;
-    if (claimedBy.id === attesterId) return run;
+    if (claimedBy.id === actorId) return run;
   }
   return undefined;
 }
 
 /**
- * The shared shape of `independent_baseline`, `security_or_e2e_evaluator` and
- * `rollback_or_forward_fix_evidence`.
+ * The shared shape of `independent_baseline`, `security_or_e2e_evaluator`,
+ * `rollback_or_forward_fix_evidence` and — as one half of its verdict —
+ * `architecture_or_security_review`.
  *
- * All three ask the same question of the same plane — is there a record of the
+ * All of them ask the same question of the same plane — is there a record of the
  * right kind for this change, does it say yes, and is what it cites still there
  * and still green — so they share one implementation and differ only in which
  * kinds they accept and in whether they carry an ordering rule. Three copies
@@ -3525,8 +3674,10 @@ function humanExecutorMatchingAttester(
  *  - **`covers` empty, or no task derives the gate** — `unevaluable`. "This
  *    attestation covers every deriving task" over an empty denominator is the
  *    same vacuous truth in the other direction.
- *  - **`admissible` empty for the attested kind** — `unsatisfied`, positively:
- *    the record claims a pass that no report in this repository can evidence.
+ *  - **The kind's evidence rule is `none`** — `unsatisfied`, positively: the
+ *    record claims a pass that no report in this repository can evidence. A kind
+ *    whose rule is `human-judgement` takes the arm named there instead, which is
+ *    a third state rather than an overload of this one.
  *
  * **Two of these gates accept two kinds, and two records is the normal state
  * rather than a corruption.** `attestationIdForKind` derives an id from
@@ -3548,10 +3699,21 @@ function attestationGateStatus(input: {
   readonly taskIdFor: (task: TaskContract) => string;
   /** Only `independent_baseline` passes this. */
   readonly requireBeforeExecution?: boolean;
+  /**
+   * The unmet cure, when the gate has a better route out than "attest this".
+   *
+   * Only `architecture_or_security_review` passes it, and it is a parameter
+   * rather than a widening of `attestRecovery` because it is the only gate here
+   * whose evidence a *command in the workflow* can produce. `attestRecovery`'s
+   * sentence says "no build produces one: the gate reads the attestation plane",
+   * which is true of the other three and false of that one — a review recorded
+   * with `--domain architecture` satisfies it without anybody attesting anything.
+   */
+  readonly absenceRecovery?: ShipGateRecovery;
 }): GateOutcome {
   const change = input.change;
   const attestations = change?.attestations;
-  const absence = attestRecovery(input.gate, input.kinds);
+  const absence = input.absenceRecovery ?? attestRecovery(input.gate, input.kinds);
   const named = input.kinds.join(" or ");
 
   if (change === undefined || attestations === undefined) {
@@ -3560,7 +3722,11 @@ function attestationGateStatus(input: {
       reason:
         `The attestations recorded for this change could not be read as a complete set, so whether anyone asserted ` +
         `${named} for it is unestablished.`,
-      recovery: UNREADABLE_PLANE_RECOVERY
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The dropped file may be a `fail`. See `GateOutcome.concealsNegative`:
+      // this is not the absence of a claim, and the one gate that reads this
+      // plane beside another must not answer from the other one.
+      concealsNegative: true
     };
   }
 
@@ -3615,7 +3781,12 @@ function attestationGateStatus(input: {
           `Change ${change.changeId} carries ${ofKind.length} attestations of kind ${kind} (${ids.join(", ")}). ` +
           "Legion writes exactly one per change per kind, so these were filed by hand, and answering from either " +
           "would let a favourable record hide an unfavourable one. Remove the ones that are not the record.",
-        recovery: MISFILED_ATTESTATION_RECOVERY
+        recovery: MISFILED_ATTESTATION_RECOVERY,
+        // And it dominates the *other producer* too, not only the other kinds.
+        // One of these documents may be the `fail`, so a domain review beside it
+        // would answer the question this arm exists to refuse to answer. See
+        // `GateOutcome.concealsNegative`.
+        concealsNegative: true
       };
     }
   }
@@ -3819,8 +3990,8 @@ function attestationRecordStatus(input: {
   // `pass`. Positive from here down: the record has to point at something this
   // report can read a green verdict out of, and a shape nobody recognises is not
   // a shape that passed.
-  const admissible = ADMISSIBLE_SOURCE_SHAPES[record.attests];
-  if (admissible.length === 0) {
+  const rule = ATTESTATION_EVIDENCE_RULES[record.attests];
+  if (rule.kind === "none") {
     return {
       status: "unsatisfied",
       reason:
@@ -3830,6 +4001,43 @@ function attestationRecordStatus(input: {
       recovery: cure
     };
   }
+  if (rule.kind === "human-judgement") {
+    // Positive on the attester, exactly as the waiver arm above is positive on
+    // both of its conditions and for the identical reason: this is the one
+    // `satisfied` verdict on this path with nothing falsifiable behind it, so a
+    // record that is not what it claims must fall *out* of the arm rather than
+    // into it. The schema is not trusted to have done it — a gate must not
+    // inherit its central truth claim from another module's invariant.
+    if (record.attestedBy.kind !== "human") {
+      return {
+        status: "unsatisfied",
+        reason:
+          `${describe} as passed, and ${record.attests} is a human judgement no report in this repository states — ` +
+          `so a pass for it is somebody's opinion or it is nothing, and this one was recorded by ` +
+          `${record.attestedBy.kind} ${record.attestedBy.id}.`,
+        recovery: cure
+      };
+    }
+    return {
+      status: "satisfied",
+      reason:
+        `${describe} as passed at ${record.attestedAt}, against ${record.sources.length} hash-clean source` +
+        `${record.sources.length === 1 ? "" : "s"} (${record.sources.map((source) => source.path).join(", ")}): ` +
+        `"${record.statement}". No report shape in this repository states a ${record.attests} verdict, so nothing ` +
+        "machine-checkable was read. What was checked is that the cited bytes are still the bytes the attester " +
+        "looked at, and that none of them is a report that is red by its own rule.",
+      judgement: {
+        gate: input.gate,
+        attests: record.attests,
+        attestedBy: record.attestedBy.id,
+        attestedAt: record.attestedAt,
+        statement: record.statement,
+        sources: record.sources.map((source) => source.path)
+      }
+    };
+  }
+
+  const admissible = rule.shapes;
   const admitted = new Set<string>(admissible);
   const evidencing = record.sources.filter((source) => {
     const classified = change.classifySource(source);
@@ -3891,7 +4099,7 @@ function attestationRecordStatus(input: {
     };
   }
 
-  const collision = humanExecutorMatchingAttester(change.taskRuns, record.attestedBy.id);
+  const collision = humanExecutorMatching(change.taskRuns, record.attestedBy.id);
   if (collision !== undefined) {
     return {
       status: "unsatisfied",
@@ -3986,6 +4194,7 @@ export function isSatisfyingAttestation(input: {
       acceptance: undefined,
       approvals: undefined,
       attestations: [input.attestation],
+      reviews: undefined,
       deltas: undefined,
       oracles: undefined,
       taskRuns: undefined,
@@ -4012,6 +4221,683 @@ export function shipGateWaivers(gates: readonly ShipGateResult[]): readonly Ship
   return waivers;
 }
 
+/**
+ * Every recorded human judgement the gates in this report were satisfied by.
+ *
+ * `shipGateWaivers`' shape, deduplicated by gate id for its reason: a
+ * change-scoped gate is still emitted once per deriving task, so the same
+ * judgement appears once per criterion and the operator should read it once.
+ */
+export function shipGateHumanJudgements(
+  gates: readonly ShipGateResult[]
+): readonly ShipGateHumanJudgement[] {
+  const seen = new Set<string>();
+  const judgements: ShipGateHumanJudgement[] = [];
+  for (const gate of gates) {
+    const judgement = gate.judgement;
+    if (judgement === undefined) continue;
+    if (seen.has(judgement.gate)) continue;
+    seen.add(judgement.gate);
+    judgements.push(judgement);
+  }
+  return judgements;
+}
+
+// --- architecture and security review ---------------------------------------
+
+/**
+ * The domains that answer ADR-006's architecture-and-security question.
+ *
+ * Exported so `legion review`'s warning names them from the reader rather than
+ * restating them, and so a test asserting "an `implementation` review does not
+ * satisfy this gate" is asserting against the list the gate actually reads.
+ */
+export const DOMAIN_REVIEW_GATE_DOMAINS: readonly string[] = ["architecture", "security"];
+
+/**
+ * The cure when no review of this change says which domain it examined.
+ *
+ * The state every change written before this release is in, and the only one a
+ * caller holding just a gate id can be answered for — so it is also
+ * `GATE_RECOVERY`'s entry. It names the *submit* as the command and the accept in
+ * the sentence, because the domain is recorded at submit and the gate reads an
+ * accepted review: naming only the accept would advise a command that cannot
+ * record a domain, and naming only the submit would leave the operator with a
+ * submitted review the gate still does not read.
+ */
+const DOMAIN_REVIEW_RECOVERY: ShipGateRecovery = {
+  command: "legion review --domain architecture",
+  reason:
+    "No review of this change records the domain it was performed in, and no build produces that: this gate reads " +
+    "the review plane. An accepted review says something other than the implementer looked at the work; this gate " +
+    "asks whether an architecture or security competence did, and a review that does not say cannot answer it. Run a " +
+    "review that declares its domain — --domain architecture, --domain security, or both — and then legion review " +
+    "--accept --approver <id>, which is the step that turns a submitted review into the accepted one this gate reads. " +
+    "The domain is declared when the review is performed: legion review --accept refuses --domain, because a label " +
+    "applied afterwards records a signature rather than a competence. If no architecture or security question applies " +
+    "to this change, record that as an audited waiver with legion attest architecture-review --verdict " +
+    "not_applicable --waiver-reason <text> --attested-by <id> --source <path>, which ADR-006 permits and which legion " +
+    "ship echoes as a warning on every payload that carries one."
+};
+
+/**
+ * The cure when a domain review recorded a defect.
+ *
+ * Deliberately **not** `legion review --domain`. That command writes a fresh
+ * review over the same evidence, exits 0, and records the same finding — the
+ * exits-0-and-still-blocked loop this series exists to close, and the shape PR 6
+ * had to correct across seven arms. What moves this is fixing what the finding
+ * names and rebuilding so the evidence is about the fixed code.
+ */
+const DOMAIN_REVIEW_REWORK_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "An architecture or security review of this change recorded a defect, and re-running the review is deliberately " +
+    "not offered: legion review --domain writes a fresh review over the same evidence, exits 0, and records the same " +
+    "finding. Fix what the verdict above names, rebuild so the evidence is about the fixed code, then review with the " +
+    "domain again and accept. Attesting cannot move this either — an architecture-review attestation is combined with " +
+    "this verdict rather than replacing it, and a recorded negative is not unmade by a later record of another kind."
+};
+
+/**
+ * The cure when the person who ran the work is the person who signed off on it.
+ *
+ * Neither `DOMAIN_REVIEW_REWORK_RECOVERY` nor `DOMAIN_REVIEW_RECOVERY` describes
+ * this state — the first says "fix what the verdict names and rebuild", and there
+ * is nothing wrong with the code; the second says "no review records a domain",
+ * and one does. Lesson 1: the recovery has to repair *this* state, and what
+ * repairs it is a different signature, not a different build and not another
+ * record under the same name.
+ *
+ * Named once and used by both routes, because both refuse for the same reason and
+ * an operator refused at one of them must not read advice that points at the
+ * other as a way through.
+ */
+const SELF_REVIEWED_DOMAIN_RECOVERY: ShipGateRecovery = {
+  command: "legion review --domain architecture",
+  reason:
+    "This change's architecture or security sign-off carries the name its run plane records as the executor of the " +
+    "work, and no rebuild and no second record under that name moves it: a review of the work by whoever ran it is " +
+    "not a review of it by anybody else. Have somebody who did not claim a run of this change perform the review — " +
+    "legion review --domain architecture or --domain security — and accept it with legion review --accept --approver " +
+    "<their id>. Attesting instead cannot substitute: legion attest architecture-review reads the same run plane and " +
+    "this gate refuses that record for the same reason."
+};
+
+/** The cure when a domain review exists and nobody has accepted it. */
+const DOMAIN_REVIEW_ACCEPT_RECOVERY: ShipGateRecovery = {
+  command: "legion review --accept --approver <id>",
+  reason:
+    "A review of this change was performed in an architecture or security domain and nobody has accepted it. This " +
+    "gate reads accepted reviews, because an unaccepted one is a verdict nobody has stood behind. Accepting it names " +
+    "a human decision owner from the project manifest and records the domain review as the change's own."
+};
+
+/** `findings`, read as the possibly-absent array a hand-written document can carry. */
+function reviewFindingsOf(document: ReviewDecision): readonly ReviewFinding[] {
+  return (document.findings as readonly ReviewFinding[] | undefined) ?? [];
+}
+
+/** `domains`, read as the possibly-absent array every review on disk today carries. */
+function reviewDomainsOf(document: ReviewDecision): readonly string[] {
+  return (document.domains as readonly string[] | undefined) ?? [];
+}
+
+/** `verdicts`, read as the possibly-absent record a hand-written document can carry. */
+function reviewVerdictsOf(document: ReviewDecision): Record<string, string | undefined> {
+  return (document.verdicts as Record<string, string | undefined> | undefined) ?? {};
+}
+
+function hasBlockingReviewFinding(document: ReviewDecision): boolean {
+  return reviewFindingsOf(document).some((finding) => finding.severity === "blocking");
+}
+
+/** The verdict axis this review recorded as `fail`, if any. */
+function failingVerdictAxis(document: ReviewDecision): string | undefined {
+  const verdicts = reviewVerdictsOf(document);
+  return ["specification", "integration", "evidence"].find((axis) => verdicts[axis] === "fail");
+}
+
+/**
+ * Every axis this review did **not** record as `pass`, with what it did record.
+ *
+ * The positive form, and the reason it is written this way rather than as "no
+ * axis is fail" is lesson 4 in the one place it would have been easiest to get
+ * wrong. `reviewVerdictSchema` admits `unknown`, `not_verified` and
+ * `not_applicable` besides `pass` and `fail`, so a satisfied arm phrased as "no
+ * axis failed" is satisfied by a review that verified nothing at all.
+ */
+function nonPassingVerdictAxes(document: ReviewDecision): readonly { readonly axis: string; readonly verdict: string }[] {
+  const verdicts = reviewVerdictsOf(document);
+  return ["specification", "integration", "evidence"]
+    .map((axis) => ({ axis, verdict: verdicts[axis] ?? "unrecorded" }))
+    .filter((entry) => entry.verdict !== "pass");
+}
+
+/** Reviews in a stable order, so a sentence's subject never depends on read order. */
+function byReviewId(
+  left: ReviewDecisionSuccess,
+  right: ReviewDecisionSuccess
+): number {
+  return (left.document.id as string).localeCompare(right.document.id as string);
+}
+
+function describeDomains(document: ReviewDecision): string {
+  return reviewDomainsOf(document).join(", ");
+}
+
+/**
+ * Did an architecture or security competence look at this change?
+ *
+ * ADR-006 asks a question `reviewDecisionBaseSchema` could not answer until this
+ * release: it records three fixed verdict axes and which tool produced the
+ * review, and nothing at all about domain. So "an accepted review exists" was the
+ * only available reading — which every change has, and which is the exact
+ * fail-open `explicit_human_approval` closed one gate over. `domains` is the
+ * field that makes the question answerable, and its absence is `unevaluable`.
+ *
+ * **Every quantifier here is checked against its empty case**, because this
+ * series has paid for one that was not six times:
+ *
+ *  - **The reviews plane could not be read as a complete set** — `unevaluable`,
+ *    before anything else, and carrying `concealsNegative` so that the attestation
+ *    producer beside it cannot answer the question instead. This gate has real
+ *    `unsatisfied` arms that read a review, so a listing that dropped a file may
+ *    have dropped the rejection, and a `pass` attestation is not an answer to
+ *    "what was in the file I could not read".
+ *  - **No task derives the gate** — `unevaluable`. The coverage quantifier below
+ *    is vacuously true over an empty denominator, and unreachable from
+ *    `deriveShipGates` is not the same as unreachable.
+ *  - **No review carries `domains` at all** — `unevaluable`, never `satisfied`.
+ *    That is the arm every review written before this release lands in, and it is
+ *    what makes a plain accepted review *not* satisfy this gate.
+ *  - **`domains` present but naming no architecture or security competence** —
+ *    `unevaluable`, in its own sentence. `[].some(...)` is `false`, so the domain
+ *    filter fails closed by construction, and the schema's `.min(1)` keeps a
+ *    present-but-empty array from reaching it at all.
+ *  - **A satisfying review for some deriving tasks and not others** —
+ *    `unevaluable`, naming the uncovered tasks. Deliberately *not* `unsatisfied`,
+ *    which is where `attestationRecordStatus`' `covers` arm puts the same shape:
+ *    there an attester made a positive claim that provably fails to reach every
+ *    deriving task, and here nobody claimed anything about the uncovered task.
+ *    Both block; only one of them is a claim.
+ *
+ * **The negatives are scanned before the positives and over the whole in-domain
+ * set**, so one clean architecture review of task c1 cannot bury a blocking one
+ * of task c2. And the `satisfied` arm is positive on all four of its conditions:
+ * accepted, all three verdict axes literally `"pass"`, no blocking finding, and a
+ * `domains` array naming architecture or security.
+ */
+function domainReviewOutcome(input: {
+  readonly gate: RiskGateId;
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): GateOutcome {
+  const change = input.change;
+  const reviews = change?.reviews;
+  if (change === undefined || reviews === undefined) {
+    return {
+      status: "unevaluable",
+      reason:
+        "The reviews recorded for this change could not be read as a complete set, so whether an architecture or " +
+        "security review exists for it is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The dropped file may be the rejection. See `GateOutcome.concealsNegative`
+      // — this arm is the reason that field exists, and an attestation beside it
+      // must not answer for it.
+      concealsNegative: true
+    };
+  }
+
+  const deriving = tasksDeriving(input.gate, input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No task of this change derives ${input.gate}, so there is nothing for a domain review to be about.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  const derivingIds = deriving.map(input.taskIdFor);
+
+  // Strict equality against a possibly-absent change id, on the approvals
+  // plane's rule: a record too degraded to name its own change matches nothing
+  // rather than everything.
+  const scoped = reviews
+    .filter((review) => review.document.changeId === change.changeId)
+    .slice()
+    .sort(byReviewId);
+
+  // A review superseded by a later one is not this change's current verdict.
+  // `supersedes` is a recorded link written by the review gate itself, not a
+  // timestamp comparison — the same mechanism `approvedReviewLink` reads. Without
+  // it, an architecture review accepted at attempt 1 keeps satisfying this gate
+  // after the work was re-reviewed by a review that examined no domain.
+  //
+  // **The link is honoured only between reviews of the same task**, because that
+  // is the only link `legion review` can write: `latestSubmittedReviewIdForTask`
+  // resolves the superseded id within one task. Read loosely, a single
+  // cross-task `supersedes` entry erases a rejected architecture review of
+  // another task and flips this gate from `unsatisfied` to `satisfied` with no
+  // mention of the rejection — a hand-written or host-written document deleting a
+  // recorded negative, which is the same threat model the blocking-finding arm
+  // below refuses an *accepted* review for.
+  const scopedById = new Map(scoped.map((review) => [review.document.id as string, review]));
+  const supersededIds = new Set(
+    scoped.flatMap((review) =>
+      ((review.document.supersedes as readonly string[] | undefined) ?? []).filter((id) => {
+        if (id === (review.document.id as string)) return false;
+        const superseded = scopedById.get(id);
+        // Not a review of this change at all. Nothing filters against the id
+        // either way — `current` only asks about ids in `scoped` — and it is
+        // dropped so the set means exactly what it is named: reviews of this
+        // change that a later review of the same task replaced.
+        if (superseded === undefined) return false;
+        return superseded.document.taskId === review.document.taskId;
+      })
+    )
+  );
+  const current = scoped.filter((review) => !supersededIds.has(review.document.id as string));
+
+  // A review of a task no longer deriving this gate is dropped rather than
+  // counted: a finding about a task the change no longer carries cannot block it,
+  // and counting one would make a re-plan permanently unshippable with no repair.
+  // A review naming *no* task stays in — it names this change, so it can refuse;
+  // it names no task, so it can never satisfy the coverage quantifier below.
+  const relevant = current.filter((review) => {
+    const taskId = review.document.taskId as string | undefined;
+    return taskId === undefined || derivingIds.includes(taskId);
+  });
+  const inDomain = relevant.filter((review) =>
+    reviewDomainsOf(review.document).some((domain) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain))
+  );
+
+  const rejected = inDomain.find((review) => review.document.status === "rejected");
+  if (rejected !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `Review ${rejected.document.id} of change ${change.changeId} was performed in ` +
+        `${describeDomains(rejected.document)} and was rejected.`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+
+  // A blocking finding refuses even on an *accepted* review, which is the one
+  // shape nothing else in this tree checks: `legion review --accept` refuses a
+  // review that is not clean, but a host or a hand can write one, and an accepted
+  // review carrying a blocking finding is a recorded defect either way.
+  const blocking = inDomain.find((review) => hasBlockingReviewFinding(review.document));
+  if (blocking !== undefined) {
+    const finding = reviewFindingsOf(blocking.document).find((entry) => entry.severity === "blocking");
+    return {
+      status: "unsatisfied",
+      reason:
+        `Review ${blocking.document.id} of change ${change.changeId} was performed in ` +
+        `${describeDomains(blocking.document)} and records a blocking finding: ${finding?.id} — "${finding?.title}".`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+
+  const failing = inDomain.find((review) => failingVerdictAxis(review.document) !== undefined);
+  if (failing !== undefined) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `Review ${failing.document.id} of change ${change.changeId} was performed in ` +
+        `${describeDomains(failing.document)} and records its ${failingVerdictAxis(failing.document)} verdict as fail.`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+
+  const satisfying = inDomain.filter((review) => {
+    const document = review.document;
+    if (document.status !== "accepted") return false;
+    const taskId = document.taskId as string | undefined;
+    if (taskId === undefined || !derivingIds.includes(taskId)) return false;
+    if (nonPassingVerdictAxes(document).length > 0) return false;
+    return !hasBlockingReviewFinding(document);
+  });
+
+  if (satisfying.length === 0) {
+    if (inDomain.length === 0) {
+      const supersededDomainReview = scoped.find(
+        (review) =>
+          supersededIds.has(review.document.id as string) &&
+          reviewDomainsOf(review.document).some((domain) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain))
+      );
+      if (supersededDomainReview !== undefined) {
+        const superseder = scoped.find((candidate) =>
+          ((candidate.document.supersedes as readonly string[] | undefined) ?? []).includes(
+            supersededDomainReview.document.id as string
+          )
+        );
+        return {
+          status: "unevaluable",
+          reason:
+            `Review ${supersededDomainReview.document.id} of change ${change.changeId} was performed in ` +
+            `${describeDomains(supersededDomainReview.document)}, and review ${superseder?.document.id} has since ` +
+            "superseded it without recording a domain of its own. The change's current review says nothing about " +
+            "which competence looked at it.",
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      // A current architecture or security review the *task* filter dropped, not
+      // the domain filter. Its own sentence, because the two absence sentences
+      // below are both false about this change: a review does record the domain,
+      // and it does name architecture or security. Reached after a re-plan, where
+      // the review is about a task id the change no longer carries — and the
+      // sentence has to say that, or the operator is told to record a domain they
+      // already recorded.
+      const strandedInDomain = current.find(
+        (review) =>
+          !relevant.includes(review) &&
+          reviewDomainsOf(review.document).some((domain) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain))
+      );
+      if (strandedInDomain !== undefined) {
+        return {
+          status: "unevaluable",
+          reason:
+            `Review ${strandedInDomain.document.id} of change ${change.changeId} was performed in ` +
+            `${describeDomains(strandedInDomain.document)}, and is about task ` +
+            `${strandedInDomain.document.taskId as string}, which is not one of the ${deriving.length} task` +
+            `${deriving.length === 1 ? "" : "s"} deriving ${input.gate} for this change — a re-plan replaced it, or ` +
+            `its tier does not derive this gate. The task${deriving.length === 1 ? "" : "s"} being shipped carry no ` +
+            "domain review of their own.",
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      // Computed over `current` rather than `relevant`: this sentence is a claim
+      // about the *change*, and made from the post-task-filter set it states as
+      // fact that no review records a domain while one of them does.
+      const declaring = current.filter((review) => reviewDomainsOf(review.document).length > 0);
+      if (declaring.length === 0) {
+        return {
+          status: "unevaluable",
+          reason:
+            `No review of change ${change.changeId} records the domain it was performed in. An accepted review says ` +
+            "that something other than the implementer looked at the work; this gate asks whether an architecture or " +
+            "security competence did, and a review that does not say cannot answer it. Legion recorded no domain on " +
+            "any review written before this release.",
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const declared = [...new Set(declaring.flatMap((review) => reviewDomainsOf(review.document)))].sort();
+      return {
+        status: "unevaluable",
+        reason:
+          `${declaring.length} review${declaring.length === 1 ? "" : "s"} of change ${change.changeId} record the ` +
+          `domain they were performed in (${declared.join(", ")}), and none of them is architecture or security.`,
+        recovery: DOMAIN_REVIEW_RECOVERY
+      };
+    }
+
+    const unaccepted = inDomain.find((review) => review.document.status !== "accepted");
+    if (unaccepted !== undefined) {
+      return {
+        status: "unevaluable",
+        reason:
+          `Review ${unaccepted.document.id} of change ${change.changeId} was performed in ` +
+          `${describeDomains(unaccepted.document)} and is still ${unaccepted.document.status}: nobody has accepted it.`,
+        recovery: DOMAIN_REVIEW_ACCEPT_RECOVERY
+      };
+    }
+
+    const unverified = inDomain.find((review) => nonPassingVerdictAxes(review.document).length > 0);
+    if (unverified !== undefined) {
+      const axes = nonPassingVerdictAxes(unverified.document)
+        .map((entry) => `${entry.axis} is "${entry.verdict}"`)
+        .join(", ");
+      return {
+        status: "unevaluable",
+        reason:
+          `Review ${unverified.document.id} of change ${change.changeId} was performed in ` +
+          `${describeDomains(unverified.document)} and was accepted, and ${axes}. This gate is satisfied by a review ` +
+          'that says every axis passed; "unknown", "not_verified" and "not_applicable" are not that, and are not ' +
+          "failures either.",
+        recovery: DOMAIN_REVIEW_RECOVERY
+      };
+    }
+
+    return {
+      status: "unevaluable",
+      reason:
+        `Change ${change.changeId} carries ${inDomain.length} architecture or security review` +
+        `${inDomain.length === 1 ? "" : "s"}, and none of them names a task this gate is derived by, so none speaks ` +
+        "for any of the work being shipped.",
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+
+  const covered = new Set(satisfying.map((review) => review.document.taskId as string));
+  const uncovered = derivingIds.filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unevaluable",
+      reason:
+        `${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} derive ` +
+        `${input.gate} and ${covered.size} carr${covered.size === 1 ? "ies" : "y"} an accepted architecture or ` +
+        `security review, leaving ${uncovered.join(", ")} with none.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+
+  // The falsifier, and the whole of what this gate can say about independence.
+  // See `humanExecutorMatching`: nothing in this repository records an
+  // implementer identity that varies, so reviewer-versus-implementer
+  // independence cannot be established here and is not claimed. This clause can
+  // only ever refuse, never satisfy, so its vacuity is harmless.
+  for (const review of satisfying) {
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === undefined || acceptedBy.kind !== "human") continue;
+    const collision = humanExecutorMatching(change.taskRuns, acceptedBy.id);
+    if (collision === undefined) continue;
+    return {
+      status: "unsatisfied",
+      reason:
+        `Review ${review.document.id} of change ${change.changeId} was accepted by ${acceptedBy.id}, and run ` +
+        `${collision.id as string} of this change records the same person as the executor who claimed it. A domain ` +
+        "review signed off by whoever ran the work is not a review of it by anybody else.",
+      recovery: SELF_REVIEWED_DOMAIN_RECOVERY
+    };
+  }
+
+  const domains = [...new Set(satisfying.flatMap((review) => reviewDomainsOf(review.document)))].sort();
+  return {
+    status: "satisfied",
+    reason:
+      `Every one of the ${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} ` +
+      `deriving ${input.gate} carries an accepted review performed in ${domains.join(", ")}, with all three verdict ` +
+      `axes pass and no blocking finding (${satisfying.map((review) => review.document.id).join(", ")}). What is ` +
+      "established is the competence recorded, not the reviewer's independence of the implementer: Legion records no " +
+      "implementer identity that varies."
+  };
+}
+
+/**
+ * The two producers, reduced.
+ *
+ * `combineAttestationOutcomes`' rule — `unsatisfied` beats `satisfied` beats
+ * `unevaluable` — written out here rather than reused, because that function's
+ * overridden-record sentence says "an attestation of another kind this gate
+ * reads", which would be false of a review. The ordering is the substance in both
+ * places: an OR over two *producers* must not become an OR over verdicts, or a
+ * `pass` attestation buries a rejected architecture review.
+ *
+ * **And `unevaluable` is two facts, which is the correction this function needed
+ * before it was right.** Reduced by verdict alone — `unsatisfied`, then
+ * `satisfied`, then whatever is left — one producer's `satisfied` answers for the
+ * other producer's *silence*, and the silence of a plane that came back short is
+ * not the absence of a claim. A single `.DS_Store` under `attestations/` collapses
+ * that plane, a clean `--domain architecture` review then satisfies the gate, and
+ * the recorded `fail` the dropped listing may have held is gone — while the same
+ * payload prints "Every gate that reads the attestation plane reports unevaluable
+ * while this is true, because a listing that dropped a file may have dropped a
+ * withdrawal". The gate would be contradicting its own diagnostic, and the
+ * fail-open would be exactly the one `completeReviews` and `skipped` were added
+ * one layer down to close, put back by the OR above them.
+ *
+ * So the order is: `unsatisfied`, then a `concealsNegative` `unevaluable`, then
+ * `satisfied`, then a plain `unevaluable`. A recorded negative still outranks
+ * everything — an unreadable plane *may* hold one, and a verdict somebody wrote
+ * down does hold one. Below that, a plane in doubt outranks the other producer's
+ * yes, because answering yes from the half that could be read is answering around
+ * the half that could not.
+ *
+ * A `concealsNegative` outcome also wins the tie against a plain `unevaluable`,
+ * for lesson 1 rather than for soundness: `shipGateRecovery` promotes the reason
+ * attached to the verdict, and the plain arm's cure is `legion review --domain
+ * architecture` — advice that exits 0, satisfies the review producer, and leaves
+ * this gate blocked by the plane nobody was told to repair. The doubtful plane's
+ * cure names the file.
+ *
+ * On a tie between two outcomes of the same kind the **review** outcome wins.
+ * Both are true sentences and only one of them names a route an operator can take
+ * without leaving Legion.
+ */
+function combineDomainReviewOutcomes(review: GateOutcome, attested: GateOutcome): GateOutcome {
+  const overridden = (primary: GateOutcome, other: GateOutcome, describeOther: string): GateOutcome =>
+    other.status === "satisfied"
+      ? {
+          ...primary,
+          reason:
+            `${primary.reason} This change also carries a favourable ${describeOther}, and it does not override the ` +
+            "verdict above: a record made about this change is a statement somebody made about it, and a record of " +
+            "another kind does not unmake it."
+        }
+      : primary;
+
+  const doubted = (primary: GateOutcome, other: GateOutcome, describeOther: string): GateOutcome =>
+    other.status === "satisfied"
+      ? {
+          ...primary,
+          reason:
+            `${primary.reason} This change also carries a favourable ${describeOther}, and it does not settle the ` +
+            "question above: the records this report could not read may be the ones that refuse, and a gate answered " +
+            "from the half it could read is a gate answered around the half it could not."
+        }
+      : primary;
+
+  if (review.status === "unsatisfied") return overridden(review, attested, "architecture-review attestation");
+  if (attested.status === "unsatisfied") return overridden(attested, review, "architecture or security review");
+  if (review.concealsNegative === true) return doubted(review, attested, "architecture-review attestation");
+  if (attested.concealsNegative === true) return doubted(attested, review, "architecture or security review");
+  if (review.status === "satisfied") return review;
+  if (attested.status === "satisfied") return attested;
+  return review;
+}
+
+/**
+ * The executor falsifier, applied to the attestation route as well as the review
+ * one.
+ *
+ * `domainReviewOutcome` refuses a domain review accepted by a human the run plane
+ * also records as an executor of this change. The attestation route reaches
+ * `satisfied` through `attestationRecordStatus`' human-judgement arm, which does
+ * not run that check: the collision test there sits behind `requireBeforeExecution`,
+ * which only `independent_baseline` passes. So the *weakest* route through this
+ * gate — a pass with nothing machine-checkable behind it, where the attester's
+ * word is the whole of the evidence — was the one route that skipped it, and an
+ * operator refused at the review route could satisfy the same gate by asserting
+ * the same thing under their own name. A refusal one producer enforces and the
+ * other does not is not a refusal.
+ *
+ * **The judgement arm only.** A waiver — `--verdict not_applicable` — claims that
+ * no architecture or security question applies to this change at all, which is a
+ * scope decision ADR-006 lets a named human make about their own work and which
+ * `legion ship` echoes on every payload that carries one. This arm claims that a
+ * review *happened*, and that is the claim whoever ran the work cannot make about
+ * themselves.
+ */
+function refuseSelfJudgedDomainAttestation(
+  outcome: GateOutcome,
+  change: ShipGateChangeFacts | undefined
+): GateOutcome {
+  const judgement = outcome.judgement;
+  if (outcome.status !== "satisfied" || judgement === undefined || change === undefined) return outcome;
+  const collision = humanExecutorMatching(change.taskRuns, judgement.attestedBy);
+  if (collision === undefined) return outcome;
+  return {
+    status: "unsatisfied",
+    reason:
+      `Attestation of ${judgement.attests} for change ${change.changeId} records ${judgement.attestedBy} asserting ` +
+      `it passed, and run ${collision.id as string} of this change records the same person as the executor who ` +
+      "claimed it. An architecture review asserted by whoever ran the work is not a review of it by anybody else — " +
+      "and this is the arm with nothing machine-checkable behind it, so the attester's word is the whole of what " +
+      "would be established.",
+    recovery: SELF_REVIEWED_DOMAIN_RECOVERY
+  };
+}
+
+function domainReviewGateStatus(input: {
+  readonly gate: RiskGateId;
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): GateOutcome {
+  return combineDomainReviewOutcomes(
+    domainReviewOutcome(input),
+    refuseSelfJudgedDomainAttestation(
+      attestationGateStatus({
+        gate: input.gate,
+        kinds: ATTESTATION_GATE_KINDS[input.gate] as readonly AttestationKind[],
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        absenceRecovery: DOMAIN_REVIEW_RECOVERY
+      }),
+      input.change
+    )
+  );
+}
+
+/**
+ * Would these reviews, alone, satisfy `architecture_or_security_review`?
+ *
+ * Exported for `legion review`, on `isLiveOracleGrant`'s and
+ * `isSatisfyingAttestation`'s rule: a writer whose idea of "done" is weaker than
+ * the reader's idea of "satisfied" reports success, writes nothing, and leaves
+ * the change permanently blocked with no flag anywhere that would make it write.
+ * So this is not a second implementation — it calls `domainReviewOutcome` against
+ * a one-plane fact set and asks whether the verdict is `satisfied`.
+ *
+ * **Two deliberate narrowings, both of which can only make it more generous**, so
+ * the warning built on it can only ever under-warn:
+ *
+ *  - `attestations` is not consulted. This answers about the review route alone;
+ *    an unfavourable attestation elsewhere is ship's to report.
+ *  - `taskRuns` is `undefined`, so the executor falsifier is vacuous here. It can
+ *    only refuse at the gate, never satisfy, so leaving it out cannot make this
+ *    predicate say yes where the gate says no.
+ */
+export function isDomainReviewSatisfying(input: {
+  readonly reviews: readonly ReviewDecisionSuccess[];
+  readonly changeId: string;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): boolean {
+  const outcome = domainReviewOutcome({
+    gate: "architecture_or_security_review",
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: undefined,
+      approvals: undefined,
+      attestations: undefined,
+      reviews: input.reviews,
+      deltas: undefined,
+      oracles: undefined,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: undefined,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return outcome.status === "satisfied";
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -4035,12 +4921,14 @@ function evaluateGate(input: {
    * function with plain literals and no facts at all. Making absence a type
    * makes the guard structural instead of a thing to remember once per gate.
    *
-   * Five arms read it now — `explicit_human_approval` the approvals plane,
+   * Seven arms read it now — `explicit_human_approval` the approvals plane,
    * `approved_delta_spec` the deltas, `integration_or_real_interface_checks` the
    * oracles and the pin verifier, `whole_change_acceptance_evidence` the
-   * acceptance and the clock, and `approved_spec_and_oracle` all of those plus
-   * the run plane — so the signature is doing the job it was landed for: each
-   * gate's diff touches its own `case` rather than this one.
+   * acceptance and the clock, `approved_spec_and_oracle` all of those plus the
+   * run plane, the three attestation gates the attestation plane, and
+   * `architecture_or_security_review` the reviews plane beside it — so the
+   * signature is doing the job it was landed for: each gate's diff touches its
+   * own `case` rather than this one.
    */
   readonly change: ShipGateChangeFacts | undefined;
   /**
@@ -4179,12 +5067,27 @@ function evaluateGate(input: {
       });
     }
 
+    case "architecture_or_security_review":
+      // No `taskId`, no `reviews`, no `entries`, on `approved_delta_spec`'s
+      // rule: a change-scoped gate must not be able to answer per task even by
+      // accident, so it is not handed anything per task to answer with. It reads
+      // the reviews off `change` rather than off the top-level `reviews`
+      // parameter, and that is not a stylistic preference: this is the first gate
+      // with an `unsatisfied` arm that reads a review, and the top-level
+      // parameter is a listing that silently drops what it cannot parse. `tasks`
+      // and `taskIdFor` are the *denominator* the coverage quantifier runs over.
+      return domainReviewGateStatus({
+        gate: gate.id,
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+
     default:
-      // Architecture and security review, protected acceptance tests and release
-      // observation have no producer in the workflow yet. Those three are
-      // exactly what this arm answers for, and `tests/change-r3-ordering`
-      // derives that set from this very reason string so each later release
-      // reddens it as it closes one.
+      // Protected acceptance tests and release observation have no producer in
+      // the workflow yet. Those two are exactly what this arm answers for, and
+      // `tests/change-r3-ordering` derives that set from this very reason string
+      // so each later release reddens it as it closes one.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -4337,7 +5240,12 @@ export function deriveShipGates(input: {
     });
 
     for (const gate of derived) {
-      const outcome = evaluateGate({
+      // `concealsNegative` is how one producer's doubt outranks another's yes
+      // inside `combineDomainReviewOutcomes`; it is not a fact about the gate an
+      // operator or a host reads. Dropped here, at the one place a `GateOutcome`
+      // becomes a `ShipGate`, so that the payload's shape stays the declared
+      // interface rather than whatever the last combination happened to set.
+      const { concealsNegative: _combinationOnly, ...outcome } = evaluateGate({
         gate,
         task,
         taskId,
@@ -4523,7 +5431,19 @@ const GATE_RECOVERY: Readonly<
   // one is reachable only after a build, and a table entry that assumed it would
   // tell an operator who has approved nothing to re-plan.
   approved_spec_and_oracle: ORACLE_APPROVE_RECOVERY,
-  architecture_or_security_review: undefined,
+  // Seven unmet states with four cures — no domain recorded anywhere, a domain
+  // that is not architecture or security, a domain review nobody accepted, one
+  // whose axes reached no verdict, a superseded one, a rejected or
+  // blocking-finding or failing one, and a coverage gap — so the verdict carries
+  // its own and `shipGateRecovery` prefers that. What stays here is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // written before this release is in: no review says which domain it examined,
+  // because nothing could record it.
+  //
+  // Deliberately **not** the rework cure. That one is reachable only after a
+  // domain review has recorded a defect, and a table entry assuming it would tell
+  // an operator who has reviewed nothing to go and build.
+  architecture_or_security_review: DOMAIN_REVIEW_RECOVERY,
   protected_acceptance_tests: undefined,
   // Five unmet states with four cures, so the verdict carries its own. The table
   // holds the absence, which is where every change written before this release

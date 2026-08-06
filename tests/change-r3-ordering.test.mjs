@@ -19,11 +19,12 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
  * unshippable for a reason no command could move.
  *
  * **This file does not claim R3 ships, and asserting that it does not is half its
- * point.** Seven of R3's ten gates now have producers — `protected_oracle` and
+ * point.** Eight of R3's ten gates now have producers — `protected_oracle` and
  * `deterministic_verification` from the evidence items, `explicit_human_approval`
- * from the approval plane, `approved_spec_and_oracle` from its ordering, and
+ * from the approval plane, `approved_spec_and_oracle` from its ordering,
  * `independent_baseline`, `security_or_e2e_evaluator` and
- * `rollback_or_forward_fix_evidence` from the attestation plane — and three do
+ * `rollback_or_forward_fix_evidence` from the attestation plane, and
+ * `architecture_or_security_review` from review domains — and two do
  * not. That set is **derived from the compiled gate module** rather than typed
  * out here, for a reason the previous release's hand-written array could not
  * serve: a list edited by hand stays true when a gate silently regresses to
@@ -71,22 +72,20 @@ function producerlessR3Gates() {
 }
 
 /**
- * The three expected to survive this release, each carrying the release that is
+ * The two expected to survive this release, each carrying the release that is
  * expected to close it, so the failure message a later author sees points at
  * their own work rather than at this file.
  */
 const PRODUCERLESS_R3_GATES = [
-  // PR 7.
-  "architecture_or_security_review",
   // PR 8.
   "protected_acceptance_tests",
   // PR 9.
   "release_observation_plan"
 ];
 
-test("the R3 gates with no producer are exactly the three later releases still owe", () => {
+test("the R3 gates with no producer are exactly the two later releases still owe", () => {
   // Both directions, and derived on one side. Give one of these a producer and
-  // this assertion is the thing to edit; let one of the seven that *has* a
+  // this assertion is the thing to edit; let one of the eight that *has* a
   // producer fall back to the `default:` arm and this reddens without anybody
   // having touched it, which the array it replaces could not do.
   assert.deepEqual(producerlessR3Gates(), PRODUCERLESS_R3_GATES);
@@ -258,13 +257,14 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
     0,
     `expected no failing gate: ${JSON.stringify(payload.diagnostics.map((entry) => entry.gate))}`
   );
-  // Six gate ids are still unmet, and the set did not shrink in this release —
-  // which is the honest report and is worth stating plainly. Three of the six
-  // gained a producer here; what a producer gives them is the ability to be
-  // *satisfied*, and this change attests nothing, so all three answer the absence
-  // arm. The difference is in the reason, asserted immediately below: three of
-  // these rows now say what is missing and name a command that produces it, and
-  // three still say Legion produces no evidence for them at all.
+  // Six gate ids are still unmet, and the set did not shrink in this release
+  // either — which is the honest report and is worth stating plainly. This
+  // release gave `architecture_or_security_review` a producer, and what a
+  // producer gives a gate is the ability to be *satisfied*: this fixture reviews
+  // without `--domain`, so the gate answers its absence arm and stays in the list.
+  // The difference is in the reason, asserted immediately below: four of these
+  // rows now say what is missing and name a command that produces it, and two
+  // still say Legion produces no evidence for them at all.
   const unmet = [...new Set(payload.diagnostics.map((entry) => entry.gate))].sort();
   assert.deepEqual(unmet, [
     "architecture_or_security_review",
@@ -284,8 +284,8 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
     PRODUCERLESS_R3_GATES,
     "the true remaining set, read off the real command. Give one of these a producer and this is the thing to edit"
   );
-  // And the three this release closed no longer answer from that arm: each names
-  // the attestation plane it looked at and what it did not find there.
+  // And the ones earlier releases closed no longer answer from that arm: each
+  // names the plane it looked at and what it did not find there.
   for (const gate of ["independent_baseline", "security_or_e2e_evaluator", "rollback_or_forward_fix_evidence"]) {
     const row = payload.diagnostics.find((entry) => entry.gate === gate);
     assert.notEqual(row, undefined, gate);
@@ -294,6 +294,15 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
     // Change-scoped, so one row for the change rather than one per task.
     assert.match(row.message, /is not satisfied for chg_/, gate);
   }
+
+  // This release's gate is the fourth, and its sentence is about the reviews
+  // plane rather than the attestation one: a review was accepted here, and it
+  // records no domain, which is a different fact from "nobody reviewed this".
+  const domainRow = payload.diagnostics.find((entry) => entry.gate === "architecture_or_security_review");
+  assert.notEqual(domainRow, undefined);
+  assert.doesNotMatch(domainRow.message, /does not yet produce/);
+  assert.match(domainRow.message, /records the domain it was performed in/);
+  assert.match(domainRow.message, /is not satisfied for chg_/);
 
   // The payload's aggregate advice moved as a side effect of those three gaining
   // recoveries, and it moved in the right direction. Before this release the
@@ -585,4 +594,273 @@ test("deleting a run directory does not turn a late approval into an early one",
   const plane = after.diagnostics.find((entry) => entry.code === "task_run_plane_contradicted");
   assert.notEqual(plane, undefined, "the operator has no other way to learn a run record is gone");
   assert.match(plane.message, new RegExp(starts[0].name));
+});
+
+/** The same R3 fixture, approved and built, one command short of any review. */
+async function builtR3(t) {
+  const fixture = await plannedR3(t);
+  const { root, run } = fixture;
+
+  const approvedSpec = await run("approve", "spec", "--approver", "dasbl", "--json");
+  assert.equal(approvedSpec.exitCode, 0, approvedSpec.stdout + approvedSpec.stderr);
+  const approvedOracle = await run("approve", "oracle", "--approver", "dasbl", "--json");
+  assert.equal(approvedOracle.exitCode, 0, approvedOracle.stdout + approvedOracle.stderr);
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "approve spec and oracle"]);
+  const built = await run("build", "--executor", "fake", "--json");
+  assert.equal(built.exitCode, 0, built.stdout + built.stderr);
+  return fixture;
+}
+
+test("a review that declares its domain satisfies the architecture gate, end to end through the real CLI", async (t) => {
+  // **The only thing that proves the writer and the reader agree.** Every unit
+  // assertion in tests/domain-review-gate hands the gate a fact set built by hand;
+  // this drives `legion review --domain architecture` through the real command,
+  // lets it write a real review artifact, and asks `legion ship` — which re-reads
+  // that artifact off disk through `listReviewDecisionsForChange` — whether the
+  // gate moved. A writer that recorded something the reader will not accept passes
+  // every unit test in the tree and fails here.
+  const { run, changeDir } = await builtR3(t);
+
+  const reviewed = await run(
+    "review",
+    "--executor",
+    "fake",
+    "--domain",
+    "architecture",
+    "--domain",
+    "security",
+    "--json"
+  );
+  assert.equal(reviewed.exitCode, 0, reviewed.stdout + reviewed.stderr);
+  const reviewPayload = parseJsonOutput(reviewed);
+  // Repeated flags, not a comma list: `parseCliArgs` already records every
+  // occurrence, so both reached the document rather than the last one winning.
+  assert.deepEqual(reviewPayload.review.domains, ["architecture", "security"]);
+  // The change derives the gate and this review answers it, so no warning is due.
+  assert.equal(reviewPayload.warnings, undefined);
+
+  const accepted = await run("review", "--accept", "--approver", "dasbl", "--json");
+  assert.equal(accepted.exitCode, 0, accepted.stdout + accepted.stderr);
+  const acceptPayload = parseJsonOutput(accepted);
+  assert.equal(acceptPayload.warnings, undefined);
+  // The accept spreads `...review.document`, so the domains stamped at submit
+  // survive the transition. Asserted against the artifact on disk rather than
+  // against the payload, because the gate reads the file.
+  const reviewFiles = (await readdir(path.join(changeDir, "reviews"))).filter((name) => name.endsWith(".json"));
+  const accepted0 = JSON.parse(await readFile(path.join(changeDir, "reviews", reviewFiles[0]), "utf8"));
+  assert.equal(accepted0.status, "accepted");
+  assert.deepEqual(accepted0.domains, ["architecture", "security"]);
+
+  const shipped = await run("ship", "--json");
+  assert.equal(shipped.exitCode, 1, "R3 still does not ship: two of its ten gates have no producer");
+  const payload = parseJsonOutput(shipped);
+  assert.equal(
+    payload.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
+    false,
+    `the gate this release closed must be satisfied: ${JSON.stringify(payload.diagnostics.map((e) => e.gate))}`
+  );
+  // And exactly two remain producerless, which is the honest remaining set read
+  // off the real command.
+  const stillProducerless = payload.diagnostics
+    .filter((entry) => entry.message.includes(NO_PRODUCER_REASON))
+    .map((entry) => entry.gate)
+    .sort();
+  assert.deepEqual(stillProducerless, PRODUCERLESS_R3_GATES);
+});
+
+test("legion review refuses --domain on a run that accepts, and warns when an R3 review records none", async (t) => {
+  // Two halves of one rule, and neither is cosmetic.
+  //
+  // The refusal: the accept path spreads `...review.document`, so it *could* stamp
+  // a domain onto a review performed with no domain knowledge at all — a label
+  // applied after the looking, which is what "a domain competence looked at this
+  // change" is not. Accepted-and-ignored is the silent class `declared-options.ts`
+  // exists to close, so it is refused by name.
+  //
+  // The warning: without it `legion review --accept` exits 0 on an R3 change and
+  // `legion ship` blocks forever with nothing anywhere naming the flag that would
+  // have fixed it. It calls the gate's own exported predicate rather than
+  // paraphrasing it, which is this series' third lesson.
+  const { run } = await builtR3(t);
+
+  const refused = await run("review", "--accept", "--approver", "dasbl", "--domain", "architecture", "--json");
+  assert.equal(refused.exitCode, 1);
+  const refusedPayload = parseJsonOutput(refused);
+  assert.equal(refusedPayload.status, "usage_error");
+  assert.match(refusedPayload.diagnostics[0].message, /reads --domain only on a run that performs a review/);
+
+  // A bare `--domain` at the end of argv is not recorded as a repeated value at
+  // all — it binds `true` — so without its own guard the operator's flag would
+  // read as absent and the command would record nothing while exiting 0.
+  const bare = await run("review", "--executor", "fake", "--json", "--domain");
+  assert.equal(bare.exitCode, 1);
+  assert.match(parseJsonOutput(bare).diagnostics[0].message, /Missing required value for --domain/);
+
+  const unknown = await run("review", "--executor", "fake", "--domain", "architecure", "--json");
+  assert.equal(unknown.exitCode, 1);
+  assert.match(parseJsonOutput(unknown).diagnostics[0].message, /Unknown review domain: --domain architecure/);
+
+  const reviewed = await run("review", "--executor", "fake", "--json");
+  assert.equal(reviewed.exitCode, 0, reviewed.stdout + reviewed.stderr);
+  const submitWarning = parseJsonOutput(reviewed).warnings.find(
+    (entry) => entry.code === "review_domain_not_recorded"
+  );
+  assert.notEqual(submitWarning, undefined, "the flag is cheap here and expensive after the accept");
+  assert.match(submitWarning.message, /legion review --accept does not take --domain/);
+
+  const accepted = await run("review", "--accept", "--approver", "dasbl", "--json");
+  // Warned, never refused: the approval, the evidence acceptance and the
+  // whole-change sign-off are real governance acts, and a gate ADR-006 permits
+  // waiving must not make them unrecordable.
+  assert.equal(accepted.exitCode, 0, accepted.stdout + accepted.stderr);
+  const acceptWarning = parseJsonOutput(accepted).warnings.find(
+    (entry) => entry.code === "review_domain_not_recorded"
+  );
+  assert.notEqual(acceptWarning, undefined);
+  assert.match(acceptWarning.message, /nothing was rolled back/);
+});
+
+test("the accept-time domain warning names a repair that actually repairs the state", async (t) => {
+  // **This series' first lesson, run rather than reasoned about.** The warning
+  // this release adds says "run legion review --domain architecture and accept
+  // again", and the accept path has a documented trap around exactly that
+  // sentence: `cleanSubmittedReviewCoverage` selects only reviews still in
+  // `submitted`, which is why `RE_ACCEPT_RECOVERY` exists one gate over and why a
+  // second `legion review --accept` on some states exits 1 with
+  // `review_not_clean`. So the sequence is driven verbatim, from the state the
+  // warning is emitted in, and the gate is asked afterwards whether it moved.
+  const { run } = await builtR3(t);
+
+  assert.equal((await run("review", "--executor", "fake", "--json")).exitCode, 0);
+  const accepted = await run("review", "--accept", "--approver", "dasbl", "--json");
+  assert.equal(accepted.exitCode, 0);
+  const warning = parseJsonOutput(accepted).warnings.find((entry) => entry.code === "review_domain_not_recorded");
+  assert.notEqual(warning, undefined, "the fixture must start from the state the warning is about");
+  assert.match(warning.message, /Run legion review --domain architecture/);
+
+  const before = parseJsonOutput(await run("ship", "--json"));
+  assert.equal(
+    before.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
+    true
+  );
+
+  // The advice, verbatim and in order.
+  const reReviewed = await run("review", "--domain", "architecture", "--executor", "fake", "--json");
+  assert.equal(reReviewed.exitCode, 0, reReviewed.stdout + reReviewed.stderr);
+  const reAccepted = await run("review", "--accept", "--approver", "dasbl", "--json");
+  assert.equal(reAccepted.exitCode, 0, reAccepted.stdout + reAccepted.stderr);
+  // And the warning clears, which is the writer agreeing with the reader: the
+  // predicate that emitted it is the gate's own.
+  assert.equal(parseJsonOutput(reAccepted).warnings, undefined);
+
+  const after = parseJsonOutput(await run("ship", "--json"));
+  assert.equal(
+    after.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
+    false,
+    "advice that exits 0 and leaves the gate blocked is the loop this series exists to close"
+  );
+
+  // The supersession the gate reads is the one the real flow writes: the second
+  // review supersedes the first, and it is the *later* record that carries the
+  // domain, so the arm that drops a superseded domain review does not fire here.
+  const domainRow = after.diagnostics.find((entry) => entry.gate === "architecture_or_security_review");
+  assert.equal(domainRow, undefined);
+});
+
+test("a review file that will not parse blocks the gate rather than being answered around", async (t) => {
+  // The fail-open this release closed one layer down, driven end to end.
+  //
+  // `listReviewDecisionsForChange` used to drop what it could not read and report
+  // nothing, and `legion ship` applied no completeness wrapper — so on a change
+  // whose architecture review said *no*, corrupting that one file made the
+  // rejection vanish and left the gate answering from whatever survived. Measured
+  // here in the direction that matters: the plane comes back short, ship names the
+  // file, and the gate declines to answer.
+  const { run, changeDir } = await builtR3(t);
+
+  assert.equal((await run("review", "--executor", "fake", "--domain", "architecture", "--json")).exitCode, 0);
+  assert.equal((await run("review", "--accept", "--approver", "dasbl", "--json")).exitCode, 0);
+
+  const before = parseJsonOutput(await run("ship", "--json"));
+  assert.equal(
+    before.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
+    false,
+    "the fixture must start from a satisfied gate"
+  );
+
+  // A schema-valid review id whose contents are not a review. Platform-neutral:
+  // no permission bits, no symlinks — just bytes nothing can parse as a review.
+  //
+  // **The id is short on purpose, and the length is the whole of what this test
+  // measures.** `reviewIdSchema` is `^rev_[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$`, so
+  // 68 characters at most; the name this test used first was 71, failed the id
+  // parse, and was skipped by the branch above the one the release depends on.
+  // Deleting `skipped.push(entry.name)` from the `!read.ok` arm of
+  // `listReviewDecisionsForChange` — the arm that catches a file whose *contents*
+  // will not load — left the whole suite green, because nothing anywhere reached
+  // it. Measured again with this name: the mutant reddens here.
+  const corrupt = "rev_domain-review-corrupt-1.json";
+  assert.equal(corrupt.length - ".json".length <= 68, true, "the id must parse, or a different branch is measured");
+  await writeFile(path.join(changeDir, "reviews", corrupt), "{\n", "utf8");
+
+  const after = parseJsonOutput(await run("ship", "--json"));
+  const gate = after.diagnostics.find((entry) => entry.gate === "architecture_or_security_review");
+  assert.notEqual(gate, undefined, "a dropped review file must never leave this gate satisfied");
+  assert.equal(gate.code, "risk_gate_unevaluable");
+  assert.match(gate.message, /could not be read as a complete set/);
+
+  // And the payload names the file, because "the reviews could not be read" with
+  // no filename is the unactionable diagnostic `ShipGatePlaneSkip` exists to stop
+  // being.
+  const plane = after.diagnostics.find((entry) => entry.code === "artifact_plane_incomplete");
+  assert.notEqual(plane, undefined);
+  assert.match(plane.message, new RegExp(corrupt));
+  assert.match(plane.message, /could not be read as review/);
+});
+
+test("a junk file under attestations blocks the gate a clean domain review would satisfy", async (t) => {
+  // **The same fail-open through the other plane, and the one an operator reaches
+  // without touching a review at all.** This gate has two producers, and reducing
+  // them by verdict made one producer's `satisfied` answer for the other's
+  // silence — so a `.DS_Store` under `attestations/`, the exact junk-file class
+  // `planeSkipDiagnostics` was written to name, collapsed that plane and the
+  // clean architecture review beside it turned the gate green. The dropped
+  // listing may have held an `architecture-review` attestation whose verdict is
+  // `fail`, which the neighbouring unit test proves would otherwise block the
+  // ship: a junk file must not discard a named human's recorded refusal.
+  //
+  // Driven end to end because the contradiction is between two halves of one
+  // payload: `legion ship` printed "Every gate that reads the attestation plane
+  // reports unevaluable while this is true" and then reported this gate
+  // satisfied.
+  const { run, changeDir } = await builtR3(t);
+
+  assert.equal((await run("review", "--executor", "fake", "--domain", "architecture", "--json")).exitCode, 0);
+  assert.equal((await run("review", "--accept", "--approver", "dasbl", "--json")).exitCode, 0);
+
+  const before = parseJsonOutput(await run("ship", "--json"));
+  assert.equal(
+    before.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
+    false,
+    "the fixture must start from a satisfied gate, or this measures nothing"
+  );
+
+  // Platform-neutral: an ordinary file with an ordinary name, in a directory the
+  // change owns. No permission bits and no symlinks.
+  await mkdir(path.join(changeDir, "attestations"), { recursive: true });
+  await writeFile(path.join(changeDir, "attestations", ".DS_Store"), "junk\n", "utf8");
+
+  const after = parseJsonOutput(await run("ship", "--json"));
+  const gate = after.diagnostics.find((entry) => entry.gate === "architecture_or_security_review");
+  assert.notEqual(gate, undefined, "a collapsed attestation plane must not be answered around");
+  assert.equal(gate.code, "risk_gate_unevaluable");
+  assert.match(gate.message, /attestations recorded for this change could not be read as a complete set/);
+
+  const plane = after.diagnostics.find((entry) => entry.code === "artifact_plane_incomplete");
+  assert.notEqual(plane, undefined);
+  assert.match(plane.message, /\.DS_Store/);
+  // And the payload no longer contradicts itself: the sentence that says every
+  // gate reading this plane reports unevaluable is now true of this gate too.
+  assert.match(plane.message, /Every gate that reads the attestation plane reports unevaluable/);
 });

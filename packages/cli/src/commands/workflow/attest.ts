@@ -45,7 +45,7 @@ import { mintPinnedReferences, resolvePinnedReferenceReader } from "../../workfl
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
 import { attestationIdForKind, taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
-  admissibleSourceShapes,
+  attestationEvidenceRule,
   earliestExecutionRun,
   isSatisfyingAttestation,
   ATTESTATION_GATE_KINDS,
@@ -83,6 +83,9 @@ legion attest <kind> --attested-by <id> --verdict <verdict> --source <path>...
   --covers <taskId>     Repeatable. Which of this change's tasks the assertion
                         speaks for. Omitted, every task of the change.
   --statement <text>    What is being asserted, in the attester's own words.
+                        Required for --verdict pass on architecture-review, which
+                        no report in this repository can evidence: there, the
+                        sentence is the whole record.
   --waiver-reason <t>   Required for --verdict not_applicable, and refused for
                         every other verdict. At least 24 characters and more than
                         one word: a waiver is a reason a reviewer can disagree
@@ -97,6 +100,13 @@ shape Legion does not recognise cannot carry a pass either: a verdict it cannot
 check is a rubber stamp. A rollback-policy report additionally has to be about
 *this* repository: it records the tree it audited, and one taken in another
 checkout is refused however green it is.
+
+architecture-review is the one kind whose pass rests on a person rather than on a
+report, because an architecture review is a competent judgement and no program
+here emits one. Its pass therefore needs a human attester, hash-pinned sources
+that are still what they were, none of them a red report, and an authored
+--statement — and legion ship echoes every one of them as a
+risk_gate_human_judgement warning, because nothing machine-checkable was read.
 
 Examples:
   legion attest security-evaluation --attested-by dasbl --verdict pass \\
@@ -368,7 +378,8 @@ export async function handleAttestWorkflow(context: CliContext): Promise<CliResu
     source,
     verdict: classifyEvidenceSource(pinned.contentOf(source), { repositoryRoot: context.repositoryRoot })
   }));
-  const refusal = sourceRefusal({ attests, verdict, classified });
+  const authoredStatement = stringOption(context, "statement")?.trim();
+  const refusal = sourceRefusal({ attests, verdict, classified, authoredStatement });
   if (refusal !== undefined) {
     return blockedAttest(refusal.diagnostics, refusal.action, { change: { changeId: latestChange.changeId } });
   }
@@ -394,7 +405,7 @@ export async function handleAttestWorkflow(context: CliContext): Promise<CliResu
   }
 
   const statement =
-    stringOption(context, "statement")?.trim() ||
+    authoredStatement ||
     `${attester.attester.id} attests ${attests} for ${latestChange.changeId} as ${verdict} against ${sources.length} source${
       sources.length === 1 ? "" : "s"
     }: ${sources.map((source) => source.path).join(", ")}.`;
@@ -580,6 +591,14 @@ function sourceRefusal(input: {
   readonly attests: AttestationKind;
   readonly verdict: AttestationVerdict;
   readonly classified: readonly { readonly source: ArtifactReference; readonly verdict: EvidenceSourceVerdict }[];
+  /**
+   * `--statement` as the operator typed it, before the synthesised fallback.
+   *
+   * Passed in rather than re-read here, because the distinction this refusal
+   * turns on — did a person write this sentence — is destroyed by the `||`
+   * fallback and is only visible on the raw option.
+   */
+  readonly authoredStatement: string | undefined;
 }):
   | { readonly diagnostics: readonly unknown[]; readonly action: ReturnType<typeof nextAction> }
   | undefined {
@@ -622,8 +641,41 @@ function sourceRefusal(input: {
 
   if (input.verdict === "not_applicable") return undefined;
 
-  const admissible = admissibleSourceShapes(input.attests);
-  if (admissible.length === 0) {
+  const rule = attestationEvidenceRule(input.attests);
+  if (rule.kind === "human-judgement") {
+    // The one refusal this arm keeps, and it is a **writer-only floor**. A pass
+    // on a kind no report in this repository can evidence is a sentence somebody
+    // wrote, so there has to be a sentence somebody wrote: `--statement` is
+    // synthesised when it is omitted, and the synthesised one is long enough and
+    // wordy enough that a substantiveness check at the *reader* would be
+    // vacuously satisfied by it. So the floor lives here, where the difference is
+    // still visible, and the residual is stated rather than described as a check:
+    // a hand-written attestation file bypasses it, exactly as a hand-written
+    // waiver bypasses `--waiver-reason`'s.
+    if (input.authoredStatement === undefined || !isSubstantiveWaiverReason(input.authoredStatement)) {
+      return {
+        diagnostics: [
+          {
+            code: "judgement_requires_statement",
+            message:
+              `--verdict pass for ${input.attests} requires --statement <text> of at least ` +
+              `${WAIVER_REASON_MIN_LENGTH} characters and more than one word. No report shape in this repository ` +
+              "states a verdict for this question and none is expected to — it asks for a competent person's " +
+              "judgement rather than a program's output — so the record's whole content is what the attester says " +
+              "about it. A pass carrying a statement Legion wrote for you asserts nothing anybody said. The floor is " +
+              "the audited waiver's, for the audited waiver's reason.",
+            path: input.classified[0]?.source.path ?? PROJECT_MANIFEST_PATH
+          }
+        ],
+        action: nextAction(
+          `legion attest ${input.attests} --verdict pass --attested-by <id> --statement <text> --source <path>`,
+          "Say what was reviewed and what it concluded, in a sentence somebody could disagree with."
+        )
+      };
+    }
+    return undefined;
+  }
+  if (rule.kind === "none") {
     return {
       diagnostics: [
         {
@@ -644,6 +696,7 @@ function sourceRefusal(input: {
     };
   }
 
+  const admissible = rule.shapes;
   const admitted = new Set<string>(admissible);
   const evidencing = input.classified.filter(
     (entry) => entry.verdict.kind === "clean" && admitted.has(entry.verdict.shape)

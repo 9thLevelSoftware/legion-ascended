@@ -156,16 +156,17 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
 test("gates with no producer are unevaluable, not silently satisfied", () => {
   const report = derive({ tier: "R3", ...PASSING_R2 });
 
-  // Re-pointed at `architecture_or_security_review`, which is R3-only and
-  // genuinely has no producer. It has now been re-pointed three times:
-  // `protected_oracle` lost the job when oracle results became their own
-  // evidence item, `whole_change_acceptance_evidence` lost it when acceptance
-  // gained a producer, and `independent_baseline` lost it in this release, when
-  // the attestation plane gave all three of its gates producers. The point of
-  // this test is the `default:` arm of `evaluateGate` — a gate Legion cannot
-  // answer at all must say so rather than pass — so it has to name a gate that
-  // still falls through that arm, not one that merely used to.
-  const unproduced = report.gates.find((entry) => entry.gate === "architecture_or_security_review");
+  // Re-pointed at `protected_acceptance_tests`, which is R3-only and genuinely
+  // has no producer. It has now been re-pointed four times: `protected_oracle`
+  // lost the job when oracle results became their own evidence item,
+  // `whole_change_acceptance_evidence` lost it when acceptance gained a producer,
+  // `independent_baseline` lost it when the attestation plane gave all three of
+  // its gates producers, and `architecture_or_security_review` loses it in this
+  // release, when review domains gave it one. The point of this test is the
+  // `default:` arm of `evaluateGate` — a gate Legion cannot answer at all must
+  // say so rather than pass — so it has to name a gate that still falls through
+  // that arm, not one that merely used to.
+  const unproduced = report.gates.find((entry) => entry.gate === "protected_acceptance_tests");
   assert.equal(unproduced.status, "unevaluable");
   assert.match(unproduced.reason, /does not yet produce/);
 
@@ -402,6 +403,59 @@ function attestationRecord({
     covers,
     statement: `${attestedBy.id} attests ${attests} as ${verdict}.`,
     ...(waiverReason === undefined ? {} : { waiverReason })
+  };
+}
+
+// --- the review domain plane ------------------------------------------------
+//
+// `acceptedReview()` above is deliberately left alone: it carries no `changeId`
+// and no `domains`, which is precisely what every review on disk today looks
+// like, and every existing scenario's `architecture_or_security_review` cell
+// staying `unevaluable` is the proof that a plain accepted review does not
+// satisfy this gate.
+//
+// These fixtures go on `change.reviews`, never on `scenario.reviews`. The
+// top-level parameter feeds the two independent-review gates at R1 and R2, so a
+// domain review placed there would move cells this release must not touch.
+const ALL_AXES_PASS = { specification: "pass", integration: "pass", evidence: "pass" };
+
+function domainReview({
+  id = "rev_transcript-domain",
+  status = "accepted",
+  domains = ["architecture"],
+  verdicts = ALL_AXES_PASS,
+  findings = []
+} = {}) {
+  return {
+    document: {
+      id,
+      changeId: CHANGE_ID,
+      taskId: TASK_ID,
+      status,
+      domains,
+      verdicts,
+      findings,
+      supersedes: []
+    }
+  };
+}
+
+/** A change whose only planes are the two `architecture_or_security_review` reads. */
+function reviewedChange(reviews) {
+  return {
+    changeId: CHANGE_ID,
+    reviews,
+    // Present and empty rather than absent, and that is a requirement rather than
+    // tidiness: the gate refuses to answer from a reviews plane it can read while
+    // an attestation plane it *cannot* read might hold a `fail`, so a fixture
+    // reaching the satisfied arm has to load both planes. The crossing itself —
+    // one producer satisfied, the other's plane in doubt — is held in
+    // tests/domain-review-gate, which is where a transcript of statuses cannot
+    // go: what distinguishes the two `unevaluable`s is the sentence.
+    attestations: [],
+    evaluatedAt: "2026-08-10T00:00:00.000Z",
+    verifyPin: () => "match",
+    classifySource: classifier()
   };
 }
 
@@ -726,6 +780,55 @@ const SCENARIOS = [
         waiverReason: "This change ships no migration and touches no persisted state, so there is nothing to roll back."
       })
     })
+  },
+  {
+    // The eighteenth, added with `architecture_or_security_review`'s producer,
+    // and the first row this transcript has ever produced from `change.reviews`.
+    // An accepted review that says which competence performed it, with all three
+    // verdict axes pass and no blocking finding.
+    name: "an accepted architecture review",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: reviewedChange([domainReview()])
+  },
+  {
+    // The nineteenth, and the pair's other half. Identical to the row above in
+    // every field but one: `status`.
+    //
+    // `unsatisfied` rather than `unevaluable`, and that distinction is the arm's
+    // whole point: a rejected architecture review is not an absence of evidence,
+    // it is evidence that the architecture review said no.
+    name: "a rejected architecture review",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: reviewedChange([domainReview({ status: "rejected" })])
+  },
+  {
+    // The twentieth. Accepted, clean, and performed in a domain this gate does
+    // not read — which is the hard requirement of the specification stated as a
+    // transcript cell: recording *a* domain is not recording *this* one, and the
+    // difference from the eighteenth row is one string.
+    name: "an accepted implementation-only review",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: reviewedChange([domainReview({ domains: ["implementation"] })])
+  },
+  {
+    // The twenty-first. Accepted, performed in the architecture domain, no
+    // finding of any severity — and one verdict axis that reached no verdict.
+    //
+    // This is the cell that fails if the satisfied arm is ever written as "no
+    // axis is fail". `reviewVerdictSchema` admits `unknown`, `not_verified` and
+    // `not_applicable`, so the negative phrasing satisfies this gate off a review
+    // that verified nothing, and the positive phrasing — all three axes literally
+    // `"pass"` — is what puts this row at `unevaluable`. It is neither a pass nor
+    // a failure, so it is neither `satisfied` nor `unsatisfied`.
+    name: "an architecture review that reached no verdict on one axis",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: reviewedChange([
+      domainReview({ verdicts: { specification: "pass", integration: "unknown", evidence: "pass" } })
+    ])
   }
 ];
 
@@ -744,7 +847,60 @@ const SCENARIOS = [
  * behaviour change, stated in one place, and reviewing it is reviewing the
  * central claim of the change that makes it.
  *
- * **Three gate ids changed behaviour in this release, and exactly three:
+ * **One gate id changed behaviour in this release, and exactly one:
+ * `architecture_or_security_review`.** ADR-006 asks whether a domain competence
+ * looked at this change, and `reviewDecisionBaseSchema` carried three fixed
+ * verdict axes and no notion of domain at all — so the only available reading was
+ * "an accepted review exists", which every change has and which is the exact
+ * fail-open `explicit_human_approval` closed one gate over. `domains` is the
+ * field that makes the question answerable.
+ *
+ *  - `satisfied` — every deriving task carries an *accepted* review whose
+ *    `domains` name architecture or security, with all three verdict axes
+ *    literally `"pass"` and no blocking finding; **or** a pin-clean `pass`
+ *    `architecture-review` attestation by a named human, which ship echoes as a
+ *    `risk_gate_human_judgement` warning because nothing machine-checkable was
+ *    read; **or** an audited waiver.
+ *  - `unsatisfied` — such a review is rejected, carries a blocking finding, or
+ *    records a `fail` on any axis; or the attestation says `fail`.
+ *  - `unevaluable` — no review records a domain at all (every review written
+ *    before this release), a domain that is not architecture or security, a
+ *    domain review nobody accepted, one whose axes reached no verdict, one a
+ *    later domainless review superseded, or a deriving task no domain review
+ *    covers.
+ *
+ * It is **change-scoped**, the eighth entry in `GATE_SCOPE` that is not
+ * `"task"`, and that flip is part of this release's behaviour change: the entry
+ * was already there reading `"task"`, so nothing failed to compile. Both
+ * producers answer for the change — an attestation is keyed by `(changeId,
+ * kind)`, and the review half quantifies over every deriving task.
+ *
+ * **No cell in the seventeen earlier scenarios moved**, which is what a transcript
+ * is for: a gate that gained a producer must not move a verdict it was not asked
+ * about.
+ *
+ * **What those seventeen frozen cells are not is the proof that a plain accepted
+ * review fails to satisfy this gate**, and an earlier version of this paragraph
+ * said they were. Measured: they leave `change.reviews` unset — most pass no
+ * `change` at all — so `domainReviewOutcome` returns from its first guard, "the
+ * reviews recorded for this change could not be read as a complete set", and
+ * never reaches the `domains` filter, the status check or the verdict check. Those
+ * cells would read `unevaluable` with the entire domain logic deleted. The
+ * specification's hard requirement is held by the first test in
+ * tests/domain-review-gate, which asserts the *sentence*, and by the new
+ * `an accepted implementation-only review` row below — a mutant widening
+ * `DOMAIN_REVIEW_GATE_DOMAINS` to include `implementation` reddens exactly those
+ * two and none of the seventeen.
+ *
+ * The movement is in four new scenarios, and it takes four because three of them
+ * are the near misses. They differ from each other in one field: `status`,
+ * `domains`, one verdict axis. An accepted architecture review with three passing
+ * axes is `satisfied`; the same review rejected is `unsatisfied`; the same review
+ * performed in `implementation` is `unevaluable`; and the same review with
+ * `integration: "unknown"` is `unevaluable`, which is the cell that fails if the
+ * satisfied arm is ever written as "no axis is fail".
+ *
+ * **The three gate ids that changed behaviour in the release before this one were
  * `independent_baseline`, `security_or_e2e_evaluator` and
  * `rollback_or_forward_fix_evidence`.** All three gained a producer at once
  * because all three had the same problem — the verdict they want already exists
@@ -1531,6 +1687,146 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "satisfied"
     }
+  },
+  "an accepted architecture review": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "satisfied",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a rejected architecture review": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unsatisfied",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "an accepted implementation-only review": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "an architecture review that reached no verdict on one axis": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
 };
 
@@ -1581,7 +1877,14 @@ const BASELINE_READY = {
   "a security evaluation attested over a failing threat model": { R0: true, R1: true, R2: false, R3: false },
   "a baseline attested before execution began": { R0: true, R1: true, R2: false, R3: false },
   "a baseline attested in the instant execution began": { R0: true, R1: true, R2: false, R3: false },
-  "a rollback gate waived by a named human": { R0: true, R1: true, R2: false, R3: false }
+  "a rollback gate waived by a named human": { R0: true, R1: true, R2: false, R3: false },
+  // R3 stays blocked in the four review-domain rows too, and for the same reason:
+  // two of R3's ten gates still have no producer, and these fixtures move exactly
+  // one gate each.
+  "an accepted architecture review": { R0: true, R1: true, R2: false, R3: false },
+  "a rejected architecture review": { R0: true, R1: true, R2: false, R3: false },
+  "an accepted implementation-only review": { R0: true, R1: true, R2: false, R3: false },
+  "an architecture review that reached no verdict on one axis": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -1606,7 +1909,7 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
   }
 });
 
-test("the only change facts any gate reads are acceptance, deltas, approvals, oracles, taskRuns, changeId and the clock", () => {
+test("the only change facts any gate reads are acceptance, deltas, approvals, attestations, reviews, oracles, taskRuns, changeId and the clock", () => {
   // The predecessor of this test asserted that no gate read any change fact,
   // by throwing on every property access. Its comment named the honest edit for
   // the day a gate started reading one: replace it with an assertion naming the
@@ -1678,10 +1981,26 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   // witnesses the read. An admission with no populated witness is an admission
   // nothing witnesses.
   //
+  // `reviews` joins the allow-list with `architecture_or_security_review`'s
+  // producer, and it is admitted with a stated reason rather than by widening the
+  // trap. It is a *second* reviews channel beside `deriveShipGates`' top-level
+  // `reviews` parameter, deliberately: that parameter is the raw listing, which
+  // drops what it cannot parse and says nothing, and this is the first gate with
+  // an `unsatisfied` arm that reads a review — so a rejected domain review made
+  // unparseable would vanish and the gate would answer from the accepted one
+  // beside it. The three gates on the raw parameter ask a question a dropped file
+  // can only make more conservative, so they stay there.
+  //
+  // Unlike `oracles` and `taskRuns`, this read happens on the absent-plane path
+  // too — an unreadable reviews plane is one of the gate's distinct sentences —
+  // so it moves `ABSENT_PLANE_READS.R3` rather than needing a populated pass to
+  // witness it. A populated pass is added below anyway, because the absent path
+  // returns before the domain filter and the coverage quantifier run.
+  //
   // `release` still has no reader, and it is still a fail-open waiting for one.
   function tripwire(
     reads,
-    { acceptance, approvals, attestations, deltas, oracles, taskRuns, classifySource } = {}
+    { acceptance, approvals, attestations, reviews, deltas, oracles, taskRuns, classifySource } = {}
   ) {
     return new Proxy(
       // `verifyPin` and `classifySource` are the two true exemptions: the guard
@@ -1695,6 +2014,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
         acceptance,
         approvals,
         attestations,
+        reviews,
         deltas,
         oracles,
         taskRuns,
@@ -1709,6 +2029,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
             property === "acceptance" ||
             property === "approvals" ||
             property === "attestations" ||
+            property === "reviews" ||
             property === "deltas" ||
             property === "oracles" ||
             property === "taskRuns" ||
@@ -1736,12 +2057,14 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
     // the first gate in R3's order and the attestation plane is the first thing
     // it asks about; `changeId` follows immediately, because that gate is now
     // change-scoped and `deriveShipGates` reads the id to name its subject.
-    // `deltas` is `approved_spec_and_oracle`'s first read and `approvals` is
-    // `explicit_human_approval`'s. `oracles` and `taskRuns` are deliberately
-    // absent — no gate reaches them on a degraded change — which is the guard
-    // ordering asserted rather than assumed, and the order of this list is the
-    // gate order asserted rather than assumed too.
-    R3: ["attestations", "changeId", "deltas", "approvals"]
+    // `deltas` is `approved_spec_and_oracle`'s first read, `reviews` is
+    // `architecture_or_security_review`'s — fifth in R3's order, which is where
+    // it lands in this list — and `approvals` is `explicit_human_approval`'s.
+    // `oracles` and `taskRuns` are deliberately absent — no gate reaches them on
+    // a degraded change — which is the guard ordering asserted rather than
+    // assumed, and the order of this list is the gate order asserted rather than
+    // assumed too.
+    R3: ["attestations", "changeId", "deltas", "reviews", "approvals"]
   };
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
@@ -1822,7 +2145,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   // start consulting planes nobody loaded.
   assert.deepEqual(
     [...new Set(populatedReviewReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas"]
+    ["approvals", "attestations", "changeId", "deltas", "reviews"]
   );
 
   const populatedDeltaReads = [];
@@ -1938,7 +2261,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   });
   assert.deepEqual(
     [...new Set(populatedOrderingReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "evaluatedAt", "oracles", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "evaluatedAt", "oracles", "reviews", "taskRuns"]
   );
   // The planes are genuinely read to a decision, not merely touched: this is the
   // gate's `satisfied` arm, which no other assertion in this file reaches.
@@ -1987,7 +2310,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   });
   assert.deepEqual(
     [...new Set(populatedAttestationReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "reviews", "taskRuns"]
   );
   // Read to a decision rather than merely touched: the baseline gate reaches its
   // ordering clause, which no other assertion in this file does, and the
@@ -2006,6 +2329,39 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, or
   assert.equal(
     attestationReport.gates.find((gate) => gate.gate === "rollback_or_forward_fix_evidence").status,
     "unevaluable"
+  );
+
+  // And once more against a populated *reviews* plane. The absent-plane loop
+  // above reaches `reviews` and returns immediately, so without this pass nothing
+  // would show the plane being read to a decision — and this file's standard is
+  // that an admission with no populated witness is an admission nothing
+  // witnesses. `taskRuns` is the guarded read past it: the executor falsifier
+  // runs only once a satisfying review has been found, which is why it appears
+  // here and not in the absent-plane list.
+  const populatedDomainReviewReads = [];
+  const domainReviewReport = deriveShipGates({
+    tasks: [task("R3")],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedDomainReviewReads, {
+      // `chg_tripwire`, because the scoping predicate matches on strict change-id
+      // equality: a record too degraded to name its own change must match nothing
+      // rather than everything.
+      reviews: [{ document: { ...domainReview().document, changeId: "chg_tripwire" } }],
+      attestations: [],
+      taskRuns: [{ id: "run_tripwire-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  });
+  assert.deepEqual(
+    [...new Set(populatedDomainReviewReads)].sort(),
+    ["approvals", "attestations", "changeId", "deltas", "reviews", "taskRuns"]
+  );
+  // Read to a decision rather than merely touched: this is the gate's `satisfied`
+  // arm, which no absent-plane pass can reach.
+  assert.equal(
+    domainReviewReport.gates.find((gate) => gate.gate === "architecture_or_security_review").status,
+    "satisfied"
   );
 });
 
@@ -2035,7 +2391,13 @@ const CHANGE_SCOPED_GATES = new Set([
   // under a `subjectId` naming a task the sentence is not about.
   "independent_baseline",
   "security_or_e2e_evaluator",
-  "rollback_or_forward_fix_evidence"
+  "rollback_or_forward_fix_evidence",
+  // Added with the review-domain producer, and the flip is again the claim: both
+  // of this gate's producers answer for the change — an attestation keyed by
+  // `(changeId, kind)`, and a review verdict quantified over every deriving task
+  // — so left `"task"` it would repeat one change-level sentence per
+  // criterion-task under a `subjectId` naming a task the sentence is not about.
+  "architecture_or_security_review"
 ]);
 
 test("every gate names its scope and the subject that scope refers to", () => {

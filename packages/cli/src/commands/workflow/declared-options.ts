@@ -46,7 +46,13 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   // valueless declaration would make `--approver dasbl` bind nothing and read as
   // absent, which for this flag means an R3 accept refusing an approver the
   // operator did name.
-  review: ["accept", "approver", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  //
+  // `--domain` takes a value too, and is additionally *repeatable* — `--domain
+  // architecture --domain security` — which `parseCliArgs` records in `repeated`.
+  // See the comment there for why comma-splitting was refused. It must not go in
+  // VALUELESS_OPTIONS for the same reason `--approver` must not, and nothing may
+  // read it with `hasFlag`.
+  review: ["accept", "approver", "auto", "domain", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   // One list for every `legion approve <subject>`, because
   // `undeclaredOptionError` runs on the stripped context before the handler and
   // cannot see which subject was named. The boundary between subjects is

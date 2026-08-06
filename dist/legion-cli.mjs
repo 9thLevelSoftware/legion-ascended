@@ -15356,6 +15356,13 @@ var releaseSchema = discriminatedUnion("status", [
 // packages/protocol/dist/entities/review.js
 var reviewStatusSchema = _enum2(["requested", "submitted", "accepted", "rejected", "superseded", "unknown"]);
 var reviewVerdictSchema = _enum2(["pass", "fail", "unknown", "not_verified", "not_applicable"]);
+var reviewDomainSchema = _enum2([
+  "implementation",
+  "architecture",
+  "security",
+  "performance",
+  "operability"
+]);
 var reviewFindingSeveritySchema = _enum2(["minor", "major", "blocking"]);
 var reviewVerdictsSchema = strictObject({
   specification: reviewVerdictSchema,
@@ -15395,6 +15402,29 @@ var reviewDecisionBaseSchema = schemaMetadataSchema.extend({
   supersedes: array(reviewIdSchema),
   evidenceRefs: array(evidenceIdSchema).optional(),
   traceRefs: array(traceReferenceSchema).optional(),
+  /**
+   * Which domain competences performed this review.
+   *
+   * On the base schema rather than on the `accepted` member, on `acceptedBy`'s
+   * rule below: `z.strictObject` would reject it everywhere else, and a review
+   * that is later rejected or superseded must keep the record — the
+   * architecture-and-security gate's `unsatisfied` arm reads a *rejected* domain
+   * review, and it cannot read one that lost its domain on the way to being
+   * rejected.
+   *
+   * Optional because every review artifact already on disk lacks it. A required
+   * field would make `readReviewDecision` fail to parse an older review, and
+   * `legion ship` would report a broken change rather than an older one — the
+   * worst failure mode for a command whose job is honest reporting. Absent means
+   * a legacy undifferentiated review, which the gate reports `unevaluable`,
+   * never `satisfied`.
+   *
+   * `.min(1)` because `domains: []` is a present field asserting nothing: a
+   * claim-shaped absence, over which every `some` is false and every `every` is
+   * vacuously true. This tree has paid for a quantifier over a possibly-empty set
+   * six times.
+   */
+  domains: array(reviewDomainSchema).min(1).optional(),
   /**
    * Who performed the *accept* transition, and when.
    *
@@ -15455,6 +15485,19 @@ var reviewDecisionSchema = discriminatedUnion("status", [
       message: "submittedAt cannot be before createdAt.",
       path: ["submittedAt"]
     });
+  }
+  if (reviewDecision.domains !== void 0) {
+    const seenDomains = /* @__PURE__ */ new Set();
+    for (const [index, domain2] of reviewDecision.domains.entries()) {
+      if (seenDomains.has(domain2)) {
+        context.addIssue({
+          code: "custom",
+          message: `domains lists ${domain2} more than once.`,
+          path: ["domains", index]
+        });
+      }
+      seenDomains.add(domain2);
+    }
   }
   if (reviewDecision.acceptedBy === void 0 !== (reviewDecision.acceptedAt === void 0)) {
     context.addIssue({
@@ -31830,7 +31873,7 @@ async function listReviewDecisionsForChange(input) {
     entries = await readdir6(reviewsRoot, { withFileTypes: true });
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return { ok: true, status: "read", reviews: [], diagnostics: [] };
+      return { ok: true, status: "read", reviews: [], skipped: [], diagnostics: [] };
     }
     const message = error51 instanceof Error ? error51.message : String(error51);
     return failure9("invalid", [
@@ -31842,19 +31885,26 @@ async function listReviewDecisionsForChange(input) {
     ]);
   }
   const reviews = [];
+  const skipped = [];
   for (const entry of entries.filter((candidate) => candidate.isFile()).sort((left, right) => left.name.localeCompare(right.name))) {
-    if (!entry.name.endsWith(".json"))
+    if (!entry.name.endsWith(".json")) {
+      skipped.push(entry.name);
       continue;
+    }
     const reviewId = reviewIdSchema.safeParse(entry.name.slice(0, -".json".length));
-    if (!reviewId.success)
+    if (!reviewId.success) {
+      skipped.push(entry.name);
       continue;
+    }
     const read = await readReviewDecision({
       repositoryRoot: input.repositoryRoot,
       changeId,
       reviewId: reviewId.data
     });
-    if (!read.ok)
+    if (!read.ok) {
+      skipped.push(entry.name);
       continue;
+    }
     reviews.push(read);
   }
   reviews.sort((left, right) => {
@@ -31863,7 +31913,7 @@ async function listReviewDecisionsForChange(input) {
       return byCreatedAt;
     return left.document.id.localeCompare(right.document.id);
   });
-  return { ok: true, status: "read", reviews, diagnostics: [] };
+  return { ok: true, status: "read", reviews, skipped, diagnostics: [] };
 }
 
 // packages/artifacts/dist/approvals/service.js
@@ -41868,7 +41918,7 @@ var GATE_SCOPE = {
   whole_change_acceptance_evidence: "change",
   independent_baseline: "change",
   approved_spec_and_oracle: "change",
-  architecture_or_security_review: "task",
+  architecture_or_security_review: "change",
   protected_acceptance_tests: "task",
   security_or_e2e_evaluator: "change",
   explicit_human_approval: "task",
@@ -42370,6 +42420,7 @@ function isLiveSurfaceReaffirmation(input) {
       acceptance: void 0,
       approvals: [input.approval],
       attestations: void 0,
+      reviews: void 0,
       deltas: void 0,
       oracles: void 0,
       taskRuns: void 0,
@@ -43074,22 +43125,23 @@ function isLiveOracleGrant(input) {
 var ATTESTATION_GATE_KINDS = {
   independent_baseline: ["independent-baseline"],
   security_or_e2e_evaluator: ["security-evaluation", "e2e-evaluation"],
+  architecture_or_security_review: ["architecture-review"],
   rollback_or_forward_fix_evidence: ["rollback-evidence", "forward-fix-evidence"]
 };
 var GATE_READ_ATTESTATION_KINDS = new Set(
   Object.values(ATTESTATION_GATE_KINDS).flatMap((kinds) => kinds ?? [])
 );
-var ADMISSIBLE_SOURCE_SHAPES = {
-  "independent-baseline": ["ab-comparison"],
-  "security-evaluation": ["threat-model"],
-  "e2e-evaluation": [],
-  "architecture-review": [],
-  "rollback-evidence": ["rollback-policy"],
-  "forward-fix-evidence": [],
-  "release-observation": []
+var ATTESTATION_EVIDENCE_RULES = {
+  "independent-baseline": { kind: "shapes", shapes: ["ab-comparison"] },
+  "security-evaluation": { kind: "shapes", shapes: ["threat-model"] },
+  "e2e-evaluation": { kind: "none" },
+  "architecture-review": { kind: "human-judgement" },
+  "rollback-evidence": { kind: "shapes", shapes: ["rollback-policy"] },
+  "forward-fix-evidence": { kind: "none" },
+  "release-observation": { kind: "none" }
 };
-function admissibleSourceShapes(attests) {
-  return ADMISSIBLE_SOURCE_SHAPES[attests];
+function attestationEvidenceRule(attests) {
+  return ATTESTATION_EVIDENCE_RULES[attests];
 }
 function attestCommand(kinds) {
   return `legion attest ${kinds[0]} --attested-by <id> --source <path>`;
@@ -43124,25 +43176,29 @@ function tasksDeriving(gate, tasks) {
     )
   );
 }
-function humanExecutorMatchingAttester(taskRuns, attesterId) {
+function humanExecutorMatching(taskRuns, actorId) {
   for (const run of taskRuns ?? []) {
     const claimedBy = run.claimedBy;
     if (claimedBy === void 0) continue;
     if (claimedBy.kind !== "human") continue;
-    if (claimedBy.id === attesterId) return run;
+    if (claimedBy.id === actorId) return run;
   }
   return void 0;
 }
 function attestationGateStatus(input) {
   const change = input.change;
   const attestations = change?.attestations;
-  const absence = attestRecovery(input.gate, input.kinds);
+  const absence = input.absenceRecovery ?? attestRecovery(input.gate, input.kinds);
   const named = input.kinds.join(" or ");
   if (change === void 0 || attestations === void 0) {
     return {
       status: "unevaluable",
       reason: `The attestations recorded for this change could not be read as a complete set, so whether anyone asserted ${named} for it is unestablished.`,
-      recovery: UNREADABLE_PLANE_RECOVERY
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The dropped file may be a `fail`. See `GateOutcome.concealsNegative`:
+      // this is not the absence of a claim, and the one gate that reads this
+      // plane beside another must not answer from the other one.
+      concealsNegative: true
     };
   }
   const cure = input.requireBeforeExecution === true ? orderingAwareBaselineRecovery(absence, executionOrdering(change.taskRuns)) : absence;
@@ -43169,7 +43225,12 @@ function attestationGateStatus(input) {
       return {
         status: "unevaluable",
         reason: `Change ${change.changeId} carries ${ofKind.length} attestations of kind ${kind} (${ids.join(", ")}). Legion writes exactly one per change per kind, so these were filed by hand, and answering from either would let a favourable record hide an unfavourable one. Remove the ones that are not the record.`,
-        recovery: MISFILED_ATTESTATION_RECOVERY
+        recovery: MISFILED_ATTESTATION_RECOVERY,
+        // And it dominates the *other producer* too, not only the other kinds.
+        // One of these documents may be the `fail`, so a domain review beside it
+        // would answer the question this arm exists to refuse to answer. See
+        // `GateOutcome.concealsNegative`.
+        concealsNegative: true
       };
     }
   }
@@ -43299,14 +43360,36 @@ function attestationRecordStatus(input) {
       }
     };
   }
-  const admissible = ADMISSIBLE_SOURCE_SHAPES[record2.attests];
-  if (admissible.length === 0) {
+  const rule = ATTESTATION_EVIDENCE_RULES[record2.attests];
+  if (rule.kind === "none") {
     return {
       status: "unsatisfied",
       reason: `${describe3} as passed, and no report shape in this repository can evidence a ${record2.attests} pass. ${UNRECOGNISED_SOURCE_HINT} Record what is actually established with --verdict unknown, or, if the check does not apply to this change, as an audited waiver with --verdict not_applicable.`,
       recovery: cure
     };
   }
+  if (rule.kind === "human-judgement") {
+    if (record2.attestedBy.kind !== "human") {
+      return {
+        status: "unsatisfied",
+        reason: `${describe3} as passed, and ${record2.attests} is a human judgement no report in this repository states \u2014 so a pass for it is somebody's opinion or it is nothing, and this one was recorded by ${record2.attestedBy.kind} ${record2.attestedBy.id}.`,
+        recovery: cure
+      };
+    }
+    return {
+      status: "satisfied",
+      reason: `${describe3} as passed at ${record2.attestedAt}, against ${record2.sources.length} hash-clean source${record2.sources.length === 1 ? "" : "s"} (${record2.sources.map((source) => source.path).join(", ")}): "${record2.statement}". No report shape in this repository states a ${record2.attests} verdict, so nothing machine-checkable was read. What was checked is that the cited bytes are still the bytes the attester looked at, and that none of them is a report that is red by its own rule.`,
+      judgement: {
+        gate: input.gate,
+        attests: record2.attests,
+        attestedBy: record2.attestedBy.id,
+        attestedAt: record2.attestedAt,
+        statement: record2.statement,
+        sources: record2.sources.map((source) => source.path)
+      }
+    };
+  }
+  const admissible = rule.shapes;
   const admitted = new Set(admissible);
   const evidencing = record2.sources.filter((source) => {
     const classified = change.classifySource(source);
@@ -43347,7 +43430,7 @@ function attestationRecordStatus(input) {
       recovery: BASELINE_AFTER_EXECUTION_RECOVERY
     };
   }
-  const collision = humanExecutorMatchingAttester(change.taskRuns, record2.attestedBy.id);
+  const collision = humanExecutorMatching(change.taskRuns, record2.attestedBy.id);
   if (collision !== void 0) {
     return {
       status: "unsatisfied",
@@ -43380,6 +43463,7 @@ function isSatisfyingAttestation(input) {
       acceptance: void 0,
       approvals: void 0,
       attestations: [input.attestation],
+      reviews: void 0,
       deltas: void 0,
       oracles: void 0,
       taskRuns: void 0,
@@ -43402,6 +43486,294 @@ function shipGateWaivers(gates) {
     waivers.push(waived);
   }
   return waivers;
+}
+function shipGateHumanJudgements(gates) {
+  const seen = /* @__PURE__ */ new Set();
+  const judgements = [];
+  for (const gate of gates) {
+    const judgement = gate.judgement;
+    if (judgement === void 0) continue;
+    if (seen.has(judgement.gate)) continue;
+    seen.add(judgement.gate);
+    judgements.push(judgement);
+  }
+  return judgements;
+}
+var DOMAIN_REVIEW_GATE_DOMAINS = ["architecture", "security"];
+var DOMAIN_REVIEW_RECOVERY = {
+  command: "legion review --domain architecture",
+  reason: "No review of this change records the domain it was performed in, and no build produces that: this gate reads the review plane. An accepted review says something other than the implementer looked at the work; this gate asks whether an architecture or security competence did, and a review that does not say cannot answer it. Run a review that declares its domain \u2014 --domain architecture, --domain security, or both \u2014 and then legion review --accept --approver <id>, which is the step that turns a submitted review into the accepted one this gate reads. The domain is declared when the review is performed: legion review --accept refuses --domain, because a label applied afterwards records a signature rather than a competence. If no architecture or security question applies to this change, record that as an audited waiver with legion attest architecture-review --verdict not_applicable --waiver-reason <text> --attested-by <id> --source <path>, which ADR-006 permits and which legion ship echoes as a warning on every payload that carries one."
+};
+var DOMAIN_REVIEW_REWORK_RECOVERY = {
+  command: "legion build",
+  reason: "An architecture or security review of this change recorded a defect, and re-running the review is deliberately not offered: legion review --domain writes a fresh review over the same evidence, exits 0, and records the same finding. Fix what the verdict above names, rebuild so the evidence is about the fixed code, then review with the domain again and accept. Attesting cannot move this either \u2014 an architecture-review attestation is combined with this verdict rather than replacing it, and a recorded negative is not unmade by a later record of another kind."
+};
+var SELF_REVIEWED_DOMAIN_RECOVERY = {
+  command: "legion review --domain architecture",
+  reason: "This change's architecture or security sign-off carries the name its run plane records as the executor of the work, and no rebuild and no second record under that name moves it: a review of the work by whoever ran it is not a review of it by anybody else. Have somebody who did not claim a run of this change perform the review \u2014 legion review --domain architecture or --domain security \u2014 and accept it with legion review --accept --approver <their id>. Attesting instead cannot substitute: legion attest architecture-review reads the same run plane and this gate refuses that record for the same reason."
+};
+var DOMAIN_REVIEW_ACCEPT_RECOVERY = {
+  command: "legion review --accept --approver <id>",
+  reason: "A review of this change was performed in an architecture or security domain and nobody has accepted it. This gate reads accepted reviews, because an unaccepted one is a verdict nobody has stood behind. Accepting it names a human decision owner from the project manifest and records the domain review as the change's own."
+};
+function reviewFindingsOf(document) {
+  return document.findings ?? [];
+}
+function reviewDomainsOf(document) {
+  return document.domains ?? [];
+}
+function reviewVerdictsOf(document) {
+  return document.verdicts ?? {};
+}
+function hasBlockingReviewFinding(document) {
+  return reviewFindingsOf(document).some((finding) => finding.severity === "blocking");
+}
+function failingVerdictAxis(document) {
+  const verdicts = reviewVerdictsOf(document);
+  return ["specification", "integration", "evidence"].find((axis) => verdicts[axis] === "fail");
+}
+function nonPassingVerdictAxes(document) {
+  const verdicts = reviewVerdictsOf(document);
+  return ["specification", "integration", "evidence"].map((axis) => ({ axis, verdict: verdicts[axis] ?? "unrecorded" })).filter((entry) => entry.verdict !== "pass");
+}
+function byReviewId(left, right) {
+  return left.document.id.localeCompare(right.document.id);
+}
+function describeDomains(document) {
+  return reviewDomainsOf(document).join(", ");
+}
+function domainReviewOutcome(input) {
+  const change = input.change;
+  const reviews = change?.reviews;
+  if (change === void 0 || reviews === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The reviews recorded for this change could not be read as a complete set, so whether an architecture or security review exists for it is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The dropped file may be the rejection. See `GateOutcome.concealsNegative`
+      // — this arm is the reason that field exists, and an attestation beside it
+      // must not answer for it.
+      concealsNegative: true
+    };
+  }
+  const deriving = tasksDeriving(input.gate, input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `No task of this change derives ${input.gate}, so there is nothing for a domain review to be about.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  const derivingIds = deriving.map(input.taskIdFor);
+  const scoped = reviews.filter((review) => review.document.changeId === change.changeId).slice().sort(byReviewId);
+  const scopedById = new Map(scoped.map((review) => [review.document.id, review]));
+  const supersededIds = new Set(
+    scoped.flatMap(
+      (review) => (review.document.supersedes ?? []).filter((id) => {
+        if (id === review.document.id) return false;
+        const superseded = scopedById.get(id);
+        if (superseded === void 0) return false;
+        return superseded.document.taskId === review.document.taskId;
+      })
+    )
+  );
+  const current = scoped.filter((review) => !supersededIds.has(review.document.id));
+  const relevant = current.filter((review) => {
+    const taskId = review.document.taskId;
+    return taskId === void 0 || derivingIds.includes(taskId);
+  });
+  const inDomain = relevant.filter(
+    (review) => reviewDomainsOf(review.document).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+  );
+  const rejected = inDomain.find((review) => review.document.status === "rejected");
+  if (rejected !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Review ${rejected.document.id} of change ${change.changeId} was performed in ${describeDomains(rejected.document)} and was rejected.`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+  const blocking = inDomain.find((review) => hasBlockingReviewFinding(review.document));
+  if (blocking !== void 0) {
+    const finding = reviewFindingsOf(blocking.document).find((entry) => entry.severity === "blocking");
+    return {
+      status: "unsatisfied",
+      reason: `Review ${blocking.document.id} of change ${change.changeId} was performed in ${describeDomains(blocking.document)} and records a blocking finding: ${finding?.id} \u2014 "${finding?.title}".`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+  const failing = inDomain.find((review) => failingVerdictAxis(review.document) !== void 0);
+  if (failing !== void 0) {
+    return {
+      status: "unsatisfied",
+      reason: `Review ${failing.document.id} of change ${change.changeId} was performed in ${describeDomains(failing.document)} and records its ${failingVerdictAxis(failing.document)} verdict as fail.`,
+      recovery: DOMAIN_REVIEW_REWORK_RECOVERY
+    };
+  }
+  const satisfying = inDomain.filter((review) => {
+    const document = review.document;
+    if (document.status !== "accepted") return false;
+    const taskId = document.taskId;
+    if (taskId === void 0 || !derivingIds.includes(taskId)) return false;
+    if (nonPassingVerdictAxes(document).length > 0) return false;
+    return !hasBlockingReviewFinding(document);
+  });
+  if (satisfying.length === 0) {
+    if (inDomain.length === 0) {
+      const supersededDomainReview = scoped.find(
+        (review) => supersededIds.has(review.document.id) && reviewDomainsOf(review.document).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+      );
+      if (supersededDomainReview !== void 0) {
+        const superseder = scoped.find(
+          (candidate) => (candidate.document.supersedes ?? []).includes(
+            supersededDomainReview.document.id
+          )
+        );
+        return {
+          status: "unevaluable",
+          reason: `Review ${supersededDomainReview.document.id} of change ${change.changeId} was performed in ${describeDomains(supersededDomainReview.document)}, and review ${superseder?.document.id} has since superseded it without recording a domain of its own. The change's current review says nothing about which competence looked at it.`,
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const strandedInDomain = current.find(
+        (review) => !relevant.includes(review) && reviewDomainsOf(review.document).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+      );
+      if (strandedInDomain !== void 0) {
+        return {
+          status: "unevaluable",
+          reason: `Review ${strandedInDomain.document.id} of change ${change.changeId} was performed in ${describeDomains(strandedInDomain.document)}, and is about task ${strandedInDomain.document.taskId}, which is not one of the ${deriving.length} task${deriving.length === 1 ? "" : "s"} deriving ${input.gate} for this change \u2014 a re-plan replaced it, or its tier does not derive this gate. The task${deriving.length === 1 ? "" : "s"} being shipped carry no domain review of their own.`,
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const declaring = current.filter((review) => reviewDomainsOf(review.document).length > 0);
+      if (declaring.length === 0) {
+        return {
+          status: "unevaluable",
+          reason: `No review of change ${change.changeId} records the domain it was performed in. An accepted review says that something other than the implementer looked at the work; this gate asks whether an architecture or security competence did, and a review that does not say cannot answer it. Legion recorded no domain on any review written before this release.`,
+          recovery: DOMAIN_REVIEW_RECOVERY
+        };
+      }
+      const declared = [...new Set(declaring.flatMap((review) => reviewDomainsOf(review.document)))].sort();
+      return {
+        status: "unevaluable",
+        reason: `${declaring.length} review${declaring.length === 1 ? "" : "s"} of change ${change.changeId} record the domain they were performed in (${declared.join(", ")}), and none of them is architecture or security.`,
+        recovery: DOMAIN_REVIEW_RECOVERY
+      };
+    }
+    const unaccepted = inDomain.find((review) => review.document.status !== "accepted");
+    if (unaccepted !== void 0) {
+      return {
+        status: "unevaluable",
+        reason: `Review ${unaccepted.document.id} of change ${change.changeId} was performed in ${describeDomains(unaccepted.document)} and is still ${unaccepted.document.status}: nobody has accepted it.`,
+        recovery: DOMAIN_REVIEW_ACCEPT_RECOVERY
+      };
+    }
+    const unverified = inDomain.find((review) => nonPassingVerdictAxes(review.document).length > 0);
+    if (unverified !== void 0) {
+      const axes = nonPassingVerdictAxes(unverified.document).map((entry) => `${entry.axis} is "${entry.verdict}"`).join(", ");
+      return {
+        status: "unevaluable",
+        reason: `Review ${unverified.document.id} of change ${change.changeId} was performed in ${describeDomains(unverified.document)} and was accepted, and ${axes}. This gate is satisfied by a review that says every axis passed; "unknown", "not_verified" and "not_applicable" are not that, and are not failures either.`,
+        recovery: DOMAIN_REVIEW_RECOVERY
+      };
+    }
+    return {
+      status: "unevaluable",
+      reason: `Change ${change.changeId} carries ${inDomain.length} architecture or security review${inDomain.length === 1 ? "" : "s"}, and none of them names a task this gate is derived by, so none speaks for any of the work being shipped.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  const covered = new Set(satisfying.map((review) => review.document.taskId));
+  const uncovered = derivingIds.filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unevaluable",
+      reason: `${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} derive ${input.gate} and ${covered.size} carr${covered.size === 1 ? "ies" : "y"} an accepted architecture or security review, leaving ${uncovered.join(", ")} with none.`,
+      recovery: DOMAIN_REVIEW_RECOVERY
+    };
+  }
+  for (const review of satisfying) {
+    const acceptedBy = review.document.acceptedBy;
+    if (acceptedBy === void 0 || acceptedBy.kind !== "human") continue;
+    const collision = humanExecutorMatching(change.taskRuns, acceptedBy.id);
+    if (collision === void 0) continue;
+    return {
+      status: "unsatisfied",
+      reason: `Review ${review.document.id} of change ${change.changeId} was accepted by ${acceptedBy.id}, and run ${collision.id} of this change records the same person as the executor who claimed it. A domain review signed off by whoever ran the work is not a review of it by anybody else.`,
+      recovery: SELF_REVIEWED_DOMAIN_RECOVERY
+    };
+  }
+  const domains = [...new Set(satisfying.flatMap((review) => reviewDomainsOf(review.document)))].sort();
+  return {
+    status: "satisfied",
+    reason: `Every one of the ${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} deriving ${input.gate} carries an accepted review performed in ${domains.join(", ")}, with all three verdict axes pass and no blocking finding (${satisfying.map((review) => review.document.id).join(", ")}). What is established is the competence recorded, not the reviewer's independence of the implementer: Legion records no implementer identity that varies.`
+  };
+}
+function combineDomainReviewOutcomes(review, attested) {
+  const overridden = (primary, other, describeOther) => other.status === "satisfied" ? {
+    ...primary,
+    reason: `${primary.reason} This change also carries a favourable ${describeOther}, and it does not override the verdict above: a record made about this change is a statement somebody made about it, and a record of another kind does not unmake it.`
+  } : primary;
+  const doubted = (primary, other, describeOther) => other.status === "satisfied" ? {
+    ...primary,
+    reason: `${primary.reason} This change also carries a favourable ${describeOther}, and it does not settle the question above: the records this report could not read may be the ones that refuse, and a gate answered from the half it could read is a gate answered around the half it could not.`
+  } : primary;
+  if (review.status === "unsatisfied") return overridden(review, attested, "architecture-review attestation");
+  if (attested.status === "unsatisfied") return overridden(attested, review, "architecture or security review");
+  if (review.concealsNegative === true) return doubted(review, attested, "architecture-review attestation");
+  if (attested.concealsNegative === true) return doubted(attested, review, "architecture or security review");
+  if (review.status === "satisfied") return review;
+  if (attested.status === "satisfied") return attested;
+  return review;
+}
+function refuseSelfJudgedDomainAttestation(outcome, change) {
+  const judgement = outcome.judgement;
+  if (outcome.status !== "satisfied" || judgement === void 0 || change === void 0) return outcome;
+  const collision = humanExecutorMatching(change.taskRuns, judgement.attestedBy);
+  if (collision === void 0) return outcome;
+  return {
+    status: "unsatisfied",
+    reason: `Attestation of ${judgement.attests} for change ${change.changeId} records ${judgement.attestedBy} asserting it passed, and run ${collision.id} of this change records the same person as the executor who claimed it. An architecture review asserted by whoever ran the work is not a review of it by anybody else \u2014 and this is the arm with nothing machine-checkable behind it, so the attester's word is the whole of what would be established.`,
+    recovery: SELF_REVIEWED_DOMAIN_RECOVERY
+  };
+}
+function domainReviewGateStatus(input) {
+  return combineDomainReviewOutcomes(
+    domainReviewOutcome(input),
+    refuseSelfJudgedDomainAttestation(
+      attestationGateStatus({
+        gate: input.gate,
+        kinds: ATTESTATION_GATE_KINDS[input.gate],
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        absenceRecovery: DOMAIN_REVIEW_RECOVERY
+      }),
+      input.change
+    )
+  );
+}
+function isDomainReviewSatisfying(input) {
+  const outcome = domainReviewOutcome({
+    gate: "architecture_or_security_review",
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: input.reviews,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return outcome.status === "satisfied";
 }
 function fromVerdict(verdict, itemId) {
   if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
@@ -43467,6 +43839,13 @@ function evaluateGate(input) {
         ...gate.id === "independent_baseline" ? { requireBeforeExecution: true } : {}
       });
     }
+    case "architecture_or_security_review":
+      return domainReviewGateStatus({
+        gate: gate.id,
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
     default:
       return {
         status: "unevaluable",
@@ -43528,7 +43907,7 @@ function deriveShipGates(input) {
       gatesByTier: DEFAULT_RISK_POLICY.gatesByTier
     });
     for (const gate of derived) {
-      const outcome = evaluateGate({
+      const { concealsNegative: _combinationOnly, ...outcome } = evaluateGate({
         gate,
         task,
         taskId,
@@ -43620,7 +43999,19 @@ var GATE_RECOVERY = {
   // one is reachable only after a build, and a table entry that assumed it would
   // tell an operator who has approved nothing to re-plan.
   approved_spec_and_oracle: ORACLE_APPROVE_RECOVERY,
-  architecture_or_security_review: void 0,
+  // Seven unmet states with four cures — no domain recorded anywhere, a domain
+  // that is not architecture or security, a domain review nobody accepted, one
+  // whose axes reached no verdict, a superseded one, a rejected or
+  // blocking-finding or failing one, and a coverage gap — so the verdict carries
+  // its own and `shipGateRecovery` prefers that. What stays here is the state a
+  // caller holding only a gate id can be answered for, and the one every change
+  // written before this release is in: no review says which domain it examined,
+  // because nothing could record it.
+  //
+  // Deliberately **not** the rework cure. That one is reachable only after a
+  // domain review has recorded a defect, and a table entry assuming it would tell
+  // an operator who has reviewed nothing to go and build.
+  architecture_or_security_review: DOMAIN_REVIEW_RECOVERY,
   protected_acceptance_tests: void 0,
   // Five unmet states with four cures, so the verdict carries its own. The table
   // holds the absence, which is where every change written before this release
@@ -46760,6 +47151,13 @@ function requiresHumanApproval(tasks) {
     )
   );
 }
+function requiresDomainReview(tasks) {
+  return tasks.some(
+    (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
+      (gate) => gate.id === "architecture_or_security_review"
+    )
+  );
+}
 function describeDecisionOwners(owners) {
   if (owners.length === 0) return "none";
   return owners.map((owner) => `${owner.displayName ?? owner.id} (${owner.kind})`).join(", ");
@@ -46809,12 +47207,19 @@ function resolveApprover(input) {
 }
 
 // packages/cli/src/commands/workflow/review.ts
-var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
+var REVIEW_HELP = `legion review [--executor codex|manual|fake] [--dry-run] [--domain <d>]... [--accept] [--approver <id>] [--reject-reason <text>] [--auto] [--max-cycles <n>]
 
 Review collected build evidence. A submitted passing review still requires explicit human acceptance.
 
 --approver names a human decision owner recorded in .legion/project/project.json. It is
 required when a task in the change derives the explicit_human_approval risk gate.
+
+--domain names the competence this review was performed in: implementation,
+architecture, security, performance or operability. Repeat it for more than one. It is
+read only on a run that performs a review \u2014 legion review --accept refuses it, because a
+domain is declared when the review happens rather than when it is signed. legion ship's
+architecture_or_security_review gate reads architecture and security, and reports
+unevaluable for a review that records no domain at all.
 
 --accept also records the change's whole-change acceptance, which legion ship reads:
 "accepted" with an approver and clean traceability, "ready" without an approver, and
@@ -46822,6 +47227,7 @@ required when a task in the change derives the explicit_human_approval risk gate
 
 Examples:
   legion review --executor fake
+  legion review --domain architecture --domain security --executor fake
   legion review --accept
   legion review --accept --approver dasbl
   legion review --auto --max-cycles 3 --executor codex`;
@@ -46864,6 +47270,10 @@ async function handleReviewWorkflow(context) {
     phase: phaseOption
   });
   if (!approver.ok) return approver.result;
+  const domains = resolveReviewDomains(context, {
+    submitting: !hasFlag(context, "accept") && stringOption(context, "reject-reason") === void 0
+  });
+  if (!domains.ok) return domains.result;
   const taskCount = taskgraph.document.tasks.length;
   if (hasFlag(context, "dry-run")) {
     const action2 = nextAction(
@@ -46906,7 +47316,7 @@ async function handleReviewWorkflow(context) {
     );
   }
   if (hasFlag(context, "accept")) {
-    return acceptLatestReview(context, evidence, approver.approver);
+    return acceptLatestReview(context, evidence, approver.approver, taskgraph.document.tasks);
   }
   const rejectReason = stringOption(context, "reject-reason");
   if (rejectReason !== void 0) {
@@ -46922,13 +47332,15 @@ async function handleReviewWorkflow(context) {
       taskgraph,
       evidence,
       ...approver.approver === void 0 ? {} : { approver: approver.approver },
+      ...domains.domains.length === 0 ? {} : { domains: domains.domains },
       ...phaseOption === void 0 ? {} : { phase: phaseOption }
     });
   }
   const submitted = await submitReview(context, {
     executor: selectedExecutor,
     taskgraph,
-    evidence
+    evidence,
+    ...domains.domains.length === 0 ? {} : { domains: domains.domains }
   });
   if (!submitted.ok) {
     return blockedReview(submitted.diagnostics, nextAction("legion build", "Review could not be submitted until build evidence is usable."));
@@ -46940,6 +47352,12 @@ async function handleReviewWorkflow(context) {
     scopedCommand("legion review --accept", phaseOption),
     "A passing review was submitted and needs human acceptance."
   ) : nextAction("legion build", "Address review findings and collect new evidence.");
+  const warnings = domainReviewWarnings({
+    tasks: taskgraph.document.tasks,
+    changeId: taskgraph.document.changeId,
+    reviews: submitted.reviews,
+    accepting: false
+  });
   return success2(
     {
       ok: true,
@@ -46948,6 +47366,7 @@ async function handleReviewWorkflow(context) {
         review: reviewSummary(firstReview)
       },
       reviews: submitted.reviews.map(reviewSummary),
+      ...warnings.length === 0 ? {} : { warnings },
       evidenceIndex: evidence.artifactPath,
       nextAction: action,
       diagnostics: []
@@ -46956,6 +47375,7 @@ async function handleReviewWorkflow(context) {
       "Review submitted.",
       `Reviews: ${submitted.reviews.length}.`,
       clean ? "Verdict: pass." : `Findings: ${findingCount}.`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -46963,6 +47383,59 @@ async function handleReviewWorkflow(context) {
 function scopedCommand(command, phase) {
   if (phase === void 0) return command;
   return `${command} --phase ${phase}`;
+}
+function resolveReviewDomains(context, input) {
+  const supported = reviewDomainSchema.options.join(", ");
+  if (context.args.options.get("domain") === true) {
+    return {
+      ok: false,
+      result: usageError(
+        `Missing required value for --domain. Supported domains: ${supported}. Example: legion review --domain architecture.`
+      )
+    };
+  }
+  const raw = [...new Set(repeatedStringOptions(context, "domain").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (raw.length === 0) return { ok: true, domains: [] };
+  if (!input.submitting) {
+    return {
+      ok: false,
+      result: usageError(
+        "legion review reads --domain only on a run that performs a review. --accept records who accepted a review that already exists and --reject-reason records a rejection; a domain stamped on either would say a competence looked at the work when what happened was a signature. Run legion review --domain architecture first, then legion review --accept --approver <id>."
+      )
+    };
+  }
+  const domains = [];
+  for (const value of raw) {
+    const parsed = reviewDomainSchema.safeParse(value);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        result: usageError(`Unknown review domain: --domain ${value}. Supported domains: ${supported}.`)
+      };
+    }
+    domains.push(parsed.data);
+  }
+  return { ok: true, domains };
+}
+function domainReviewWarnings(input) {
+  if (!requiresDomainReview(input.tasks)) return [];
+  const satisfied = input.accepting ? isDomainReviewSatisfying({
+    reviews: input.reviews,
+    changeId: input.changeId,
+    tasks: input.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id)
+  }) : input.reviews.some(
+    (review) => (review.document.domains ?? []).some((domain2) => DOMAIN_REVIEW_GATE_DOMAINS.includes(domain2))
+  );
+  if (satisfied) return [];
+  return [
+    {
+      code: "review_domain_not_recorded",
+      message: input.accepting ? "A task in this change derives the architecture_or_security_review risk gate, and no review this accept recorded was performed in the architecture or security domain \u2014 so legion ship still reports that gate unevaluable and the change cannot ship. Nothing here is wrong and nothing was rolled back: the approval and the acceptance are real. Run legion review --domain architecture (or --domain security, or both) and accept again, or record an audited waiver with legion attest architecture-review --verdict not_applicable --waiver-reason <text> --attested-by <id> --source <path>." : "A task in this change derives the architecture_or_security_review risk gate, and this review records no domain \u2014 so legion ship reports that gate unevaluable and the change cannot ship. Re-run as legion review --domain architecture (or --domain security, or both) before accepting. A domain is declared when the review is performed: legion review --accept does not take --domain and cannot add one afterwards."
+    }
+  ];
 }
 async function resolveReviewApprover(context, input) {
   const raw = stringOption(context, "approver")?.trim();
@@ -47130,7 +47603,8 @@ async function submitReview(context, input) {
       evidenceIndexPath: input.evidence.artifactPath,
       createdAt,
       executor: input.executor,
-      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId)
+      supersedes: latestSubmittedReviewIdForTask(reviews.reviews, taskId),
+      ...input.domains === void 0 || input.domains.length === 0 ? {} : { domains: input.domains }
     });
     const write = await writeReviewDecision({
       repositoryRoot: context.repositoryRoot,
@@ -47159,7 +47633,7 @@ function failedObservations(evidence) {
   }
   return diagnostics;
 }
-async function acceptLatestReview(context, evidence, approver) {
+async function acceptLatestReview(context, evidence, approver, tasks) {
   const failed = failedObservations(evidence);
   if (failed.length > 0) {
     return blockedReview(
@@ -47263,12 +47737,19 @@ async function acceptLatestReview(context, evidence, approver) {
     );
   }
   const action = nextAction("legion ship", "Accepted review and evidence are ready for the ship readiness gate.");
+  const warnings = domainReviewWarnings({
+    tasks,
+    changeId: evidence.document.changeId,
+    reviews: acceptedReviews,
+    accepting: true
+  });
   return success2(
     {
       ok: true,
       status: "accepted",
       ...acceptedReviews[0] === void 0 ? {} : { review: reviewSummary(acceptedReviews[0]) },
       reviews: acceptedReviews.map(reviewSummary),
+      ...warnings.length === 0 ? {} : { warnings },
       // Spread conditionally so a run that recorded no approver produces the
       // payload it produced before this release, key for key.
       ...approvals.approvals.length === 0 ? {} : { approvals: approvals.approvals.map(approvalSummary) },
@@ -47284,6 +47765,10 @@ async function acceptLatestReview(context, evidence, approver) {
       "Review accepted.",
       `Evidence accepted: ${evidenceWrite.artifactPath}.`,
       `Change acceptance: ${promotion.result.acceptance.status}.`,
+      // Shown, not only recorded: `writeResult` prints `human` for a terminal
+      // run, so a warning that lived solely in the payload would be invisible to
+      // exactly the operator who has to act on it.
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
       renderNextAction(action)
     ].join("\n")
   );
@@ -47567,11 +48052,14 @@ async function runAutoReview(context, input) {
       if (!refreshedEvidence.ok) {
         return blockedReview(refreshedEvidence.diagnostics, nextAction("legion validate", "Evidence index could not be reloaded for acceptance."));
       }
-      return withCycleState(await acceptLatestReview(context, refreshedEvidence, input.approver), {
-        cycle,
-        maxCycles,
-        outcome: "clean"
-      });
+      return withCycleState(
+        await acceptLatestReview(context, refreshedEvidence, input.approver, input.taskgraph.document.tasks),
+        {
+          cycle,
+          maxCycles,
+          outcome: "clean"
+        }
+      );
     }
     if (cycle < maxCycles) {
       const tasksByTaskId = taskByTaskId(input.taskgraph.document.tasks);
@@ -47718,6 +48206,7 @@ function reviewDecisionForExecution(input) {
     confidence: input.executor === "fake" ? "high" : "medium",
     findings,
     supersedes: [...input.supersedes],
+    ...input.domains === void 0 || input.domains.length === 0 ? {} : { domains: [...input.domains] },
     evidenceRefs: [...evidenceRefs],
     traceRefs: [
       {
@@ -47862,6 +48351,10 @@ function reviewSummary(review) {
     // it produced before this release; without that, every R0 caller's payload
     // would gain two keys holding nothing.
     ...review.document.acceptedBy === void 0 ? {} : { acceptedBy: review.document.acceptedBy, acceptedAt: review.document.acceptedAt },
+    // The competences this review was performed in, spread conditionally on the
+    // rule above so a review that declared none produces the payload it produced
+    // before this release, key for key.
+    ...review.document.domains === void 0 ? {} : { domains: review.document.domains },
     // The revision chain. A review that supersedes nothing is a first attempt,
     // which is what the first-pass rate in `legion retro` counts.
     supersedes: review.document.supersedes,
@@ -48130,6 +48623,11 @@ function completeAttestations(listing) {
   if (listing.skipped.length > 0) return void 0;
   return listing.attestations.map((attestation) => attestation.document);
 }
+function completeReviews(listing) {
+  if (listing === void 0 || !listing.ok) return void 0;
+  if (listing.skipped.length > 0) return void 0;
+  return listing.reviews;
+}
 function planeSkipDiagnostics(skips) {
   return skips.map((skip) => ({
     code: "artifact_plane_incomplete",
@@ -48167,6 +48665,7 @@ async function loadShipGateChangeFacts(input) {
     () => listAttestationsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
   const attestations = completeAttestations(attestationsResult);
+  const reviews = completeReviews(input.reviews);
   const pinned = await resolvePinnedReferenceReader({
     repositoryRoot: input.repositoryRoot,
     references: shipGatePinnedReferences({
@@ -48193,12 +48692,16 @@ async function loadShipGateChangeFacts(input) {
       entries: attestationsResult.skipped
     });
   }
+  if (input.reviews.ok && input.reviews.skipped.length > 0) {
+    skips.push({ plane: "review", directory: `${changeRoot}/reviews`, entries: input.reviews.skipped });
+  }
   return {
     facts: {
       changeId: input.changeId,
       acceptance: bundle?.change.acceptance,
       approvals,
       attestations,
+      reviews,
       deltas: bundle?.deltas,
       oracles,
       taskRuns,
@@ -48308,7 +48811,8 @@ async function handleShipWorkflow(context) {
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId,
     tasks: taskgraph.document.tasks,
-    entries: evidence.document.entries
+    entries: evidence.document.entries,
+    reviews
   });
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
@@ -48317,10 +48821,22 @@ async function handleShipWorkflow(context) {
     reviews: reviews.reviews,
     change: changeFacts.facts
   });
-  const waiverWarnings = shipGateWaivers(gateReport.gates).map((waiver) => ({
-    code: "risk_gate_waived",
-    message: `${waiver.gate} was satisfied by an audited waiver rather than by evidence: ${waiver.attestedBy} recorded it as not applicable at ${waiver.attestedAt} (attests: ${waiver.attests}), because "${waiver.reason}". Nothing was checked for this gate. ADR-006 permits this and requires it to be visible.`
-  }));
+  const waiverWarnings = [
+    ...shipGateWaivers(gateReport.gates).map((waiver) => ({
+      code: "risk_gate_waived",
+      message: `${waiver.gate} was satisfied by an audited waiver rather than by evidence: ${waiver.attestedBy} recorded it as not applicable at ${waiver.attestedAt} (attests: ${waiver.attests}), because "${waiver.reason}". Nothing was checked for this gate. ADR-006 permits this and requires it to be visible.`
+    })),
+    // The other evidence-free `satisfied` arm, on all five of the waiver's
+    // surfaces and for the identical reason: a satisfied gate emits no diagnostic
+    // at all, so a gate passed on a person's sentence would otherwise be the
+    // quietest thing in the payload. A distinct code, because "somebody says this
+    // does not apply" and "somebody competent says it applied and passed" are
+    // different claims and one message answering both is one nobody can read.
+    ...shipGateHumanJudgements(gateReport.gates).map((judgement) => ({
+      code: "risk_gate_human_judgement",
+      message: `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository states a verdict for this question, so what legion ship checked is that those bytes have not moved and that none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be visible.`
+    }))
+  ];
   const planeSkips = [
     ...planeSkipDiagnostics(changeFacts.skips),
     ...runPlaneContradictionDiagnostics({
@@ -48376,7 +48892,13 @@ async function handleShipWorkflow(context) {
         // other satisfied gate is that nothing was checked, and a ready payload
         // that did not say which gates those were would be a ready payload
         // claiming more than it established.
-        waivedGates: shipGateWaivers(gateReport.gates).map((waiver) => waiver.gate)
+        waivedGates: shipGateWaivers(gateReport.gates).map((waiver) => waiver.gate),
+        // Beside `waivedGates` rather than folded into it, on that field's own
+        // rule: both were answered `satisfied` with nothing machine-checkable
+        // behind them, and they are two different claims. A ready payload that
+        // collapsed them would say a gate had been waived when a named human had
+        // in fact said it applied and passed.
+        humanJudgementGates: shipGateHumanJudgements(gateReport.gates).map((judgement) => judgement.gate)
       },
       diagnostics: []
     },
@@ -49086,6 +49608,7 @@ async function approveOracles(context) {
       acceptance: void 0,
       approvals: void 0,
       attestations: void 0,
+      reviews: void 0,
       deltas: void 0,
       oracles,
       taskRuns: void 0,
@@ -49502,6 +50025,7 @@ async function approveVerificationSurfaces(context) {
       acceptance: void 0,
       approvals: void 0,
       attestations: void 0,
+      reviews: void 0,
       deltas: void 0,
       oracles,
       taskRuns: void 0,
@@ -49864,6 +50388,9 @@ legion attest <kind> --attested-by <id> --verdict <verdict> --source <path>...
   --covers <taskId>     Repeatable. Which of this change's tasks the assertion
                         speaks for. Omitted, every task of the change.
   --statement <text>    What is being asserted, in the attester's own words.
+                        Required for --verdict pass on architecture-review, which
+                        no report in this repository can evidence: there, the
+                        sentence is the whole record.
   --waiver-reason <t>   Required for --verdict not_applicable, and refused for
                         every other verdict. At least 24 characters and more than
                         one word: a waiver is a reason a reviewer can disagree
@@ -49878,6 +50405,13 @@ shape Legion does not recognise cannot carry a pass either: a verdict it cannot
 check is a rubber stamp. A rollback-policy report additionally has to be about
 *this* repository: it records the tree it audited, and one taken in another
 checkout is refused however green it is.
+
+architecture-review is the one kind whose pass rests on a person rather than on a
+report, because an architecture review is a competent judgement and no program
+here emits one. Its pass therefore needs a human attester, hash-pinned sources
+that are still what they were, none of them a red report, and an authored
+--statement \u2014 and legion ship echoes every one of them as a
+risk_gate_human_judgement warning, because nothing machine-checkable was read.
 
 Examples:
   legion attest security-evaluation --attested-by dasbl --verdict pass \\
@@ -50078,7 +50612,8 @@ async function handleAttestWorkflow(context) {
     source,
     verdict: classifyEvidenceSource(pinned.contentOf(source), { repositoryRoot: context.repositoryRoot })
   }));
-  const refusal = sourceRefusal({ attests, verdict, classified });
+  const authoredStatement = stringOption(context, "statement")?.trim();
+  const refusal = sourceRefusal({ attests, verdict, classified, authoredStatement });
   if (refusal !== void 0) {
     return blockedAttest(refusal.diagnostics, refusal.action, { change: { changeId: latestChange.changeId } });
   }
@@ -50099,7 +50634,7 @@ async function handleAttestWorkflow(context) {
       { change: { changeId: latestChange.changeId } }
     );
   }
-  const statement = stringOption(context, "statement")?.trim() || `${attester.attester.id} attests ${attests} for ${latestChange.changeId} as ${verdict} against ${sources.length} source${sources.length === 1 ? "" : "s"}: ${sources.map((source) => source.path).join(", ")}.`;
+  const statement = authoredStatement || `${attester.attester.id} attests ${attests} for ${latestChange.changeId} as ${verdict} against ${sources.length} source${sources.length === 1 ? "" : "s"}: ${sources.map((source) => source.path).join(", ")}.`;
   const document = attestationDocument({
     attestationId,
     attests,
@@ -50258,8 +50793,26 @@ function sourceRefusal(input) {
     };
   }
   if (input.verdict === "not_applicable") return void 0;
-  const admissible = admissibleSourceShapes(input.attests);
-  if (admissible.length === 0) {
+  const rule = attestationEvidenceRule(input.attests);
+  if (rule.kind === "human-judgement") {
+    if (input.authoredStatement === void 0 || !isSubstantiveWaiverReason(input.authoredStatement)) {
+      return {
+        diagnostics: [
+          {
+            code: "judgement_requires_statement",
+            message: `--verdict pass for ${input.attests} requires --statement <text> of at least ${WAIVER_REASON_MIN_LENGTH} characters and more than one word. No report shape in this repository states a verdict for this question and none is expected to \u2014 it asks for a competent person's judgement rather than a program's output \u2014 so the record's whole content is what the attester says about it. A pass carrying a statement Legion wrote for you asserts nothing anybody said. The floor is the audited waiver's, for the audited waiver's reason.`,
+            path: input.classified[0]?.source.path ?? PROJECT_MANIFEST_PATH2
+          }
+        ],
+        action: nextAction(
+          `legion attest ${input.attests} --verdict pass --attested-by <id> --statement <text> --source <path>`,
+          "Say what was reviewed and what it concluded, in a sentence somebody could disagree with."
+        )
+      };
+    }
+    return void 0;
+  }
+  if (rule.kind === "none") {
     return {
       diagnostics: [
         {
@@ -50274,6 +50827,7 @@ function sourceRefusal(input) {
       )
     };
   }
+  const admissible = rule.shapes;
   const admitted = new Set(admissible);
   const evidencing = input.classified.filter(
     (entry) => entry.verdict.kind === "clean" && admitted.has(entry.verdict.shape)
@@ -52738,7 +53292,13 @@ var DECLARED = Object.freeze({
   // valueless declaration would make `--approver dasbl` bind nothing and read as
   // absent, which for this flag means an R3 accept refusing an approver the
   // operator did name.
-  review: ["accept", "approver", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
+  //
+  // `--domain` takes a value too, and is additionally *repeatable* — `--domain
+  // architecture --domain security` — which `parseCliArgs` records in `repeated`.
+  // See the comment there for why comma-splitting was refused. It must not go in
+  // VALUELESS_OPTIONS for the same reason `--approver` must not, and nothing may
+  // read it with `hasFlag`.
+  review: ["accept", "approver", "auto", "domain", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   // One list for every `legion approve <subject>`, because
   // `undeclaredOptionError` runs on the stripped context before the handler and
   // cannot see which subject was named. The boundary between subjects is

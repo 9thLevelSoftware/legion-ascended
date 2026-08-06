@@ -11,6 +11,8 @@ import {
   type ApprovalListResult,
   type AttestationListResult,
   type EvidenceIndexEntry,
+  type ReviewDecisionListResult,
+  type ReviewDecisionSuccess,
   type TaskRunListResult
 } from "@legion/artifacts";
 import type { Approval, Attestation, TaskContract, TaskRun } from "@legion/protocol";
@@ -29,6 +31,7 @@ import {
   shipGateDiagnostics,
   shipGatePinnedReferences,
   shipGateRecovery,
+  shipGateHumanJudgements,
   shipGateSourcePaths,
   shipGateWaivers,
   type ShipGateChangeFacts,
@@ -312,6 +315,35 @@ export function completeAttestations(
 }
 
 /**
+ * Every review recorded for this change, or `undefined` when the listing dropped
+ * any of them.
+ *
+ * `completeApprovals`' rule, applied to the last plane a ship gate reads that did
+ * not have it. A review file holds a *verdict* — accepted, rejected, a blocking
+ * finding — and `architecture_or_security_review` reads both polarities off this
+ * plane, so a dropped file is as likely to be the negative as the positive. A
+ * gate answering from what the listing kept would certify a domain review while
+ * the rejection that supersedes it sat unparsed beside it.
+ *
+ * The top-level `reviews` argument to `deriveShipGates` deliberately stays the
+ * raw listing: the three gates reading it ask whether an accepted review exists,
+ * which a dropped file can only make *more* conservative, and routing them
+ * through this would move R1 and R2 verdicts from a diff whose subject is an R3
+ * gate.
+ *
+ * Exported and pure so a direct test can falsify it: collapsing this to
+ * `listing.reviews` leaves every end-to-end assertion green, because a healthy
+ * change has nothing to skip.
+ */
+export function completeReviews(
+  listing: ReviewDecisionListResult | undefined
+): readonly ReviewDecisionSuccess[] | undefined {
+  if (listing === undefined || !listing.ok) return undefined;
+  if (listing.skipped.length > 0) return undefined;
+  return listing.reviews;
+}
+
+/**
  * A directory entry that made a whole plane absent, and where it is.
  *
  * `completeApprovals` and `completeTaskRuns` refuse to answer from a partial
@@ -384,14 +416,16 @@ function runPlaneContradictionDiagnostics(input: {
 /**
  * The change-scoped planes `legion ship` can read, and what it could not read.
  *
- * Eight gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * Nine gates consume them: `explicit_human_approval` and `approved_delta_spec`
  * read `approvals`, the second also reads `deltas`,
  * `integration_or_real_interface_checks` reads `oracles` and the pin verifier,
  * `whole_change_acceptance_evidence` reads `acceptance` and the clock,
- * `approved_spec_and_oracle` reads all of those plus `taskRuns`, and
+ * `approved_spec_and_oracle` reads all of those plus `taskRuns`,
  * `independent_baseline`, `security_or_e2e_evaluator` and
  * `rollback_or_forward_fix_evidence` read `attestations`, the pin verifier and
- * the source classifier — the first also `taskRuns`.
+ * the source classifier — the first also `taskRuns` — and
+ * `architecture_or_security_review` reads `reviews` beside `attestations`, plus
+ * `taskRuns` for its executor falsifier.
  *
  * A previous version of this paragraph claimed the release that added
  * `approved_spec_and_oracle` was "the last one that collects on" loading planes
@@ -421,6 +455,14 @@ async function loadShipGateChangeFacts(input: {
    * corroborate the run plane against a state that never coexisted with it.
    */
   readonly entries: readonly EvidenceIndexEntry[];
+  /**
+   * The reviews listing the caller already read, for `completeReviews`.
+   *
+   * Passed rather than re-read, on the same one-epoch rule as `entries`: the
+   * command has already read this plane to find the accepted review it refuses
+   * without, and a second read could give the report two states of one directory.
+   */
+  readonly reviews: ReviewDecisionListResult;
 }): Promise<{
   readonly facts: ShipGateChangeFacts;
   readonly skips: readonly ShipGatePlaneSkip[];
@@ -455,6 +497,8 @@ async function loadShipGateChangeFacts(input: {
     listAttestationsForChange({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
   );
   const attestations = completeAttestations(attestationsResult);
+
+  const reviews = completeReviews(input.reviews);
 
   // The pins a gate can ask about are hashed here, once, because the evaluator
   // is synchronous. A reference nobody collects answers `unverified`, which
@@ -501,6 +545,9 @@ async function loadShipGateChangeFacts(input: {
       entries: attestationsResult.skipped
     });
   }
+  if (input.reviews.ok && input.reviews.skipped.length > 0) {
+    skips.push({ plane: "review", directory: `${changeRoot}/reviews`, entries: input.reviews.skipped });
+  }
 
   return {
     facts: {
@@ -508,6 +555,7 @@ async function loadShipGateChangeFacts(input: {
       acceptance: bundle?.change.acceptance,
       approvals,
       attestations,
+      reviews,
       deltas: bundle?.deltas,
       oracles,
       taskRuns,
@@ -679,7 +727,8 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId,
     tasks: taskgraph.document.tasks,
-    entries: evidence.document.entries
+    entries: evidence.document.entries,
+    reviews
   });
 
   // The waivers, hoisted before the readiness fork because both arms owe the
@@ -695,7 +744,10 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   // names. So a waiver reaches the operator through the gate's own `reason`, a
   // machine-readable `waived` field on the result, a `risk_gate_waived` warning
   // code distinct from every other, the `human` render on both the ready and the
-  // blocked path, and `riskGates.waivedGates` on the ready payload.
+  // blocked path, and `riskGates.waivedGates` on the ready payload. The
+  // human-judgement arm this release adds — an `architecture-review` attestation
+  // whose kind has no report shape and never will — rides all five, under its own
+  // code, for exactly the same argument.
   const gateReport = deriveShipGates({
     tasks: taskgraph.document.tasks,
     taskIdFor: (task) => taskIdForContractId(task.id),
@@ -703,13 +755,30 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
     reviews: reviews.reviews,
     change: changeFacts.facts
   });
-  const waiverWarnings = shipGateWaivers(gateReport.gates).map((waiver) => ({
-    code: "risk_gate_waived",
-    message:
-      `${waiver.gate} was satisfied by an audited waiver rather than by evidence: ${waiver.attestedBy} recorded it ` +
-      `as not applicable at ${waiver.attestedAt} (attests: ${waiver.attests}), because "${waiver.reason}". ` +
-      "Nothing was checked for this gate. ADR-006 permits this and requires it to be visible."
-  }));
+  const waiverWarnings = [
+    ...shipGateWaivers(gateReport.gates).map((waiver) => ({
+      code: "risk_gate_waived",
+      message:
+        `${waiver.gate} was satisfied by an audited waiver rather than by evidence: ${waiver.attestedBy} recorded it ` +
+        `as not applicable at ${waiver.attestedAt} (attests: ${waiver.attests}), because "${waiver.reason}". ` +
+        "Nothing was checked for this gate. ADR-006 permits this and requires it to be visible."
+    })),
+    // The other evidence-free `satisfied` arm, on all five of the waiver's
+    // surfaces and for the identical reason: a satisfied gate emits no diagnostic
+    // at all, so a gate passed on a person's sentence would otherwise be the
+    // quietest thing in the payload. A distinct code, because "somebody says this
+    // does not apply" and "somebody competent says it applied and passed" are
+    // different claims and one message answering both is one nobody can read.
+    ...shipGateHumanJudgements(gateReport.gates).map((judgement) => ({
+      code: "risk_gate_human_judgement",
+      message:
+        `${judgement.gate} was satisfied by a recorded human judgement rather than by a machine-checkable report: ` +
+        `${judgement.attestedBy} attested ${judgement.attests} as passed at ${judgement.attestedAt}, citing ` +
+        `${judgement.sources.join(", ")}, because "${judgement.statement}". No report shape in this repository ` +
+        "states a verdict for this question, so what legion ship checked is that those bytes have not moved and that " +
+        "none of them is a report that is red by its own rule. ADR-006 permits this and requires it to be visible."
+    }))
+  ];
   const planeSkips = [
     ...planeSkipDiagnostics(changeFacts.skips),
     ...runPlaneContradictionDiagnostics({
@@ -785,7 +854,13 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
         // other satisfied gate is that nothing was checked, and a ready payload
         // that did not say which gates those were would be a ready payload
         // claiming more than it established.
-        waivedGates: shipGateWaivers(gateReport.gates).map((waiver) => waiver.gate)
+        waivedGates: shipGateWaivers(gateReport.gates).map((waiver) => waiver.gate),
+        // Beside `waivedGates` rather than folded into it, on that field's own
+        // rule: both were answered `satisfied` with nothing machine-checkable
+        // behind them, and they are two different claims. A ready payload that
+        // collapsed them would say a gate had been waived when a named human had
+        // in fact said it applied and passed.
+        humanJudgementGates: shipGateHumanJudgements(gateReport.gates).map((judgement) => judgement.gate)
       },
       diagnostics: []
     },

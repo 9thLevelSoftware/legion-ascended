@@ -44,6 +44,28 @@ not a human approval, and the ship gate reads it as one.
 running it reports the same refusal rather than a green answer the accept will
 later reject.
 
+`--domain <d>` records which competence the review was performed in:
+`implementation`, `architecture`, `security`, `performance` or `operability`.
+Repeat the flag for more than one — `--domain architecture --domain security` —
+rather than passing a comma-separated value, which the CLI does not split. This
+is the CLI's own flag and it is unrelated to the domain vocabulary the host-side
+review panel uses further down this file.
+
+`legion ship`'s `architecture_or_security_review` gate reads `architecture` and
+`security`, and reports `unevaluable` for a change whose reviews record no domain
+at all — an accepted review says something other than the implementer looked at
+the work, and this gate asks whether an architecture or security competence did.
+When a task derives that gate, a submit or an accept that records no such domain
+carries a `review_domain_not_recorded` warning naming the flag; the accept is
+warned rather than refused, because the approval and the acceptance it records are
+real governance facts either way.
+
+`--domain` is read **only on a run that performs a review**. `legion review
+--accept --domain architecture` and `--reject-reason ... --domain ...` are usage
+errors, not silently ignored: a domain stamped at accept time would record a
+signature rather than a competence. Declare it when the review runs, then accept.
+Do not supply a domain the operator did not give you.
+
 `--accept` also records the change's **whole-change acceptance** — the field
 `legion ship` reads for the `whole_change_acceptance_evidence` gate — and the
 value depends on what the run could establish. With `--approver` and clean

@@ -1293,6 +1293,20 @@
             "additionalProperties": false
           }
         },
+        "domains": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "architecture",
+              "security",
+              "performance",
+              "operability"
+            ]
+          }
+        },
         "acceptedBy": {
           "type": "object",
           "properties": {
@@ -2641,6 +2655,20 @@
               "relation"
             ],
             "additionalProperties": false
+          }
+        },
+        "domains": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "architecture",
+              "security",
+              "performance",
+              "operability"
+            ]
           }
         },
         "acceptedBy": {
@@ -3994,6 +4022,20 @@
             "additionalProperties": false
           }
         },
+        "domains": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "architecture",
+              "security",
+              "performance",
+              "operability"
+            ]
+          }
+        },
         "acceptedBy": {
           "type": "object",
           "properties": {
@@ -5343,6 +5385,20 @@
               "relation"
             ],
             "additionalProperties": false
+          }
+        },
+        "domains": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "architecture",
+              "security",
+              "performance",
+              "operability"
+            ]
           }
         },
         "acceptedBy": {
@@ -6696,6 +6752,20 @@
             "additionalProperties": false
           }
         },
+        "domains": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "architecture",
+              "security",
+              "performance",
+              "operability"
+            ]
+          }
+        },
         "acceptedBy": {
           "type": "object",
           "properties": {
@@ -8045,6 +8115,20 @@
               "relation"
             ],
             "additionalProperties": false
+          }
+        },
+        "domains": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "architecture",
+              "security",
+              "performance",
+              "operability"
+            ]
           }
         },
         "acceptedBy": {
