@@ -26,7 +26,7 @@ import type { IntakeAnswer, IntakeInjectedNode } from "@legion/protocol";
  * the version they started under so a graph change cannot silently rewrite the
  * meaning of answers already given.
  */
-export const INTAKE_GRAPH_VERSION = "1.0.0";
+export const INTAKE_GRAPH_VERSION = "1.1.0";
 
 export const INTAKE_SECTIONS = [
   "identity",
@@ -115,6 +115,39 @@ const PROOF_OPTIONS: readonly IntakeOption[] = [
     value: "manual",
     label: "A human decides it",
     description: "No command can decide it. You will be asked why, and the gap stays visible."
+  }
+];
+
+/**
+ * What a criterion's command reaches.
+ *
+ * Mirrors `verificationSurfaceKindSchema`. The descriptions carry the
+ * consequence rather than only the definition, because the consequence is what
+ * an operator needs at the moment of answering: `unit` is a real answer that a
+ * risk-tier-R2 change's integration gate reads as a recorded "no", and finding
+ * that out two commands later at `legion ship` is finding it out too late.
+ */
+const SURFACE_OPTIONS: readonly IntakeOption[] = [
+  {
+    value: "unit",
+    label: "Unit — nothing outside this codebase",
+    description:
+      "Exercises code in this repository only. At risk tier R2 this is a recorded negative: the integration check reports unsatisfied, not unproven."
+  },
+  {
+    value: "integration",
+    label: "Integration — two of our own parts, really connected",
+    description: "Crosses a boundary inside the system: a real database, a real queue, two services in one process."
+  },
+  {
+    value: "real-interface",
+    label: "Real interface — the actual thing production talks to",
+    description: "No stub, no mock, no recorded fixture: the live protocol, API or driver."
+  },
+  {
+    value: "end-to-end",
+    label: "End to end — the whole path a user takes",
+    description: "Entry point to observable outcome, through everything in between."
   }
 ];
 
@@ -347,6 +380,64 @@ function criterionNodes(
       kind: "free-text",
       required: true,
       dependsOn: notWont
+    },
+    // The verification surface, asked once per *executable* criterion and opted
+    // into rather than demanded.
+    //
+    // `dependsOn` names the proof node and nothing else, and one condition
+    // buys both exclusions this needs. `IntakeCondition` permits exactly one
+    // clause per node, and `isNodeApplicable` treats an unanswered dependency as
+    // not applicable — so a `manual` criterion answers `manual` and fails the
+    // `equals`, while a `wont` requirement never answers `-proof` at all and
+    // fails it transitively. Expressing the wont-skip structurally instead would
+    // be the second conditionality mechanism `materializeNodes` warns against.
+    //
+    // Only the kind is optional. The three follow-ups hang off it having been
+    // answered, so declining once removes all four, and answering commits to the
+    // rest — a surface with a kind and no pin is a claim nothing can falsify,
+    // which is strictly worse than the absence a gate reports honestly as
+    // unevaluable. `notEquals: ""` is false both when the kind is unanswered and
+    // when it was declined, since a skip records `SKIPPED_VALUE`.
+    {
+      id: `${prefix}-surface-kind`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.kind`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: what does this command reach?`,
+      help: "Optional. Skip it to leave the surface undeclared, and legion ship reports the integration check as unproven rather than as answered. Answering commits you to three short follow-ups.",
+      kind: "single",
+      options: SURFACE_OPTIONS,
+      required: false,
+      dependsOn: { nodeId: `${prefix}-proof`, equals: "executable" }
+    },
+    {
+      id: `${prefix}-surface-interface`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.interface`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: name the interface it reaches.`,
+      help: "The thing on the other side of the boundary, as you would say it out loud: 'postgres:5432', 'POST /v1/orders', 'PricingEngine.quote()'. Quoted back to a reviewer; nothing parses it.",
+      kind: "free-text",
+      required: true,
+      dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
+    },
+    {
+      id: `${prefix}-surface-rationale`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.rationale`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: what does reaching it catch that a smaller check would miss?`,
+      help: "One sentence a reviewer can disagree with. Nothing verifies this claim; it is recorded so a human can refuse it.",
+      kind: "free-text",
+      required: true,
+      dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
+    },
+    {
+      id: `${prefix}-surface-pins`,
+      section: "requirements",
+      slot: `${slotPrefix}.surface.pins`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: which files make that true?`,
+      help: "Repository-relative paths, one per line or comma separated — the compose file that stands the real service up, the schema it is checked against, the harness that connects to it. Legion hashes them now and re-checks them at ship time, so the declaration stops being believed if they change. Name what makes the check real, not the file you are about to write.",
+      kind: "free-text",
+      required: true,
+      dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
     },
     ...(askForAnother
       ? [

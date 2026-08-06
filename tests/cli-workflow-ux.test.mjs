@@ -1531,6 +1531,33 @@ test("legion review submits, accepts, advances status, and unlocks ship readines
     assert.equal(deltaSpecGate[0].code, "risk_gate_unevaluable");
     assert.match(deltaSpecGate[0].message, /No approval records anyone approving the delta spec for req_/);
 
+    // The integration gate now has a producer too, and this fixture's interview
+    // declares no verification surface — so it must report the *absent* answer
+    // and not the negative one. That distinction is the whole point of the gate:
+    // `unevaluable` says nobody declared anything, `unsatisfied` would say
+    // somebody declared that nothing crosses a boundary. It also proves the
+    // absent-declaration path is a verdict rather than a crash, which is the
+    // failure mode a gate reading `task.verification` invites.
+    //
+    // Change-scoped, like `approved_delta_spec` above: ADR-006 asks whether
+    // verification reaches the relevant interface *for the change*, and
+    // `legion plan` materializes one task per executable criterion — so a
+    // task-scoped version would let one honestly-declared `unit` criterion block
+    // a change that does reach a real interface. One task here, so this passes
+    // with or without the collapse; the witness is in
+    // tests/verification-surface-gate against a three-task list.
+    const integrationGate = shipPayload.diagnostics.filter(
+      (entry) => entry.gate === "integration_or_real_interface_checks"
+    );
+    assert.equal(integrationGate.length, 1, "the integration gate should be named once, for the change");
+    assert.equal(integrationGate[0].code, "risk_gate_unevaluable");
+    assert.match(integrationGate[0].message, /declares a verification surface/);
+    assert.match(
+      integrationGate[0].message,
+      /is not satisfied for chg_/,
+      "a change-scoped verdict names the change as its subject, not the task"
+    );
+
     // The block has a route out, and this is the assertion that could not be
     // made before: `legion build` cannot produce an approval, so a blocked ship
     // that advised only a build sent the operator round a loop. Four gates are

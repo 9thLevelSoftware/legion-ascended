@@ -151,6 +151,12 @@ function executableOracles(
       owner,
       protectedPaths: [options.change.artifactPath],
       sourceArtifacts: [options.change.reference],
+      // The criterion's own declaration, copied whole. Read off the same
+      // `ExecutableCriterion` object `taskgraph-input.ts` reads it from — one
+      // `resolvePhaseRequirement` call produces both — so the contract's copy and
+      // the oracle's copy cannot disagree. That is the rule the comment above
+      // `oracleIdsFor` records the cost of breaking, applied to a second field.
+      ...(criterion.proof.surface === undefined ? {} : { surface: criterion.proof.surface }),
       expected: {
         preconditions: ["The phase change bundle exists and validates."],
         postconditions: [description],

@@ -8,7 +8,7 @@ import {
   requirementIdSchema
 } from "../primitives/ids.js";
 import { artifactPathSchema, artifactReferenceSchema, type ArtifactReference } from "../primitives/values.js";
-import { riskProfileSchema, schemaMetadataSchema } from "./common.js";
+import { riskProfileSchema, schemaMetadataSchema, verificationSurfaceSchema } from "./common.js";
 
 const taskContractAgentIdSchema = z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/, "Invalid agent ID");
 const taskContractWaveIdSchema = z.string().regex(/^[A-Z][A-Z0-9_-]{0,31}$/, "Invalid wave ID");
@@ -78,7 +78,13 @@ export const taskContractVerificationSchema = z.strictObject({
   command: z.string().min(1).max(256),
   args: z.array(z.string().max(256)).max(64),
   expectedExitCode: z.number().int().min(0).max(255),
-  timeoutMs: z.number().int().positive().max(3_600_000).optional()
+  timeoutMs: z.number().int().positive().max(3_600_000).optional(),
+  /**
+   * What this command reaches, copied from the acceptance criterion that
+   * authored it. Never derived here, and absent on the project-wide regression
+   * command the planner appends, which nobody declared anything about.
+   */
+  surface: verificationSurfaceSchema.optional()
 });
 
 export type TaskContractVerification = z.infer<typeof taskContractVerificationSchema>;

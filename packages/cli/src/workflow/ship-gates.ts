@@ -17,7 +17,8 @@ import type {
   Release,
   TaskContract,
   TaskRun,
-  UtcTimestamp
+  UtcTimestamp,
+  VerificationSurface
 } from "@legion/protocol";
 
 import { latestEvidencePerTask } from "./evidence-selection.js";
@@ -88,6 +89,18 @@ export interface ShipGateResult {
   readonly scope: ShipGateScope;
   /** `taskId` when task-scoped; the change id when change-scoped. */
   readonly subjectId: string;
+  /**
+   * The command that repairs *this* verdict, when the gate can say it more
+   * precisely than `GATE_RECOVERY` can.
+   *
+   * Set by one gate today. `integration_or_real_interface_checks` has four unmet
+   * states with four different repairs — re-affirm a drifted pin, run a build,
+   * declare a surface at intake, fix a failing command — and a table holding one
+   * command per gate id would have to name one of them and misroute the rest.
+   * `shipGateRecovery` prefers this over the table, so the gate that knows which
+   * state it is in is the one that answers.
+   */
+  readonly recovery?: ShipGateRecovery;
 }
 
 export interface ShipGateReport {
@@ -233,8 +246,20 @@ export interface ShipGateChangeFacts {
  * gate default silently to task scope, which silently disables both the
  * diagnostic collapse below and, once gates read facts, the absence guard.
  *
- * `approved_delta_spec` is the one `"change"` entry. Each later gate flips
- * exactly its own line, next to the gate it implements.
+ * `approved_delta_spec` and `integration_or_real_interface_checks` are the
+ * `"change"` entries. Each later gate flips exactly its own line, next to the
+ * gate it implements.
+ *
+ * `integration_or_real_interface_checks` is change-scoped because ADR-006's
+ * wording is "verification reaches the relevant integration or real interface
+ * **for the change**", and because `legion plan` materializes one task per
+ * executable criterion. Task-scoped, its "everything declared here is a unit
+ * surface" branch fired per *criterion*: a change whose first criterion reaches
+ * a real interface and whose second is an honest pure-arithmetic unit check was
+ * blocked by the second, forever, with no answer available but to delete the
+ * honest criterion or to mislabel it. A gate that punishes an accurate answer
+ * teaches operators to give an inaccurate one, which costs more than the gate
+ * was ever worth.
  *
  * Task scoping was available for it and is refused for a concrete reason rather
  * than a stylistic one. A task-scoped version would intersect
@@ -257,7 +282,7 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   approved_delta_spec: "change",
   protected_oracle: "task",
   task_level_independent_review: "task",
-  integration_or_real_interface_checks: "task",
+  integration_or_real_interface_checks: "change",
   whole_change_acceptance_evidence: "task",
   independent_baseline: "task",
   approved_spec_and_oracle: "task",
@@ -1039,6 +1064,585 @@ function deltaSpecApprovalGateStatus(input: {
   };
 }
 
+/** The evidence item `legion build` writes about declared verification surfaces. */
+const INTEGRATION_SURFACE_ITEM = "integration-surface-check";
+
+/**
+ * The three cures this gate can name, and why it names them itself.
+ *
+ * `GATE_RECOVERY` holds one command per gate id, which is right for every gate
+ * whose unmet states share a repair. This one's do not: a pin that drifted needs
+ * a human to re-affirm the declaration, a declaration nothing exercised needs a
+ * build, and a change that declared nothing needs an interview and a re-plan.
+ * Naming one of the three in the table would send two thirds of blocked
+ * operators to a command that cannot help them — which is the no-route-out loop
+ * this whole series exists to close, in a new costume. So the verdict carries
+ * the cure, and `GATE_RECOVERY` keeps the re-affirmation as this gate's table
+ * entry for a caller that has only a status.
+ */
+const SURFACE_REAFFIRM_RECOVERY: ShipGateRecovery = {
+  command: "legion approve surface --approver <id>",
+  reason:
+    "A file a verification surface pins has been edited since the declaration was made, so the declaration no longer " +
+    "describes what is on disk. If the edit was intended, re-affirm the declaration against the current bytes: that " +
+    "records a named human saying it still describes what they meant, and re-mints the pin. No command re-mints it " +
+    "silently, because that would launder an out-of-band edit into a declaration."
+};
+
+const SURFACE_BUILD_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "This change declares a verification surface beyond unit, and no evidence records it being exercised. " +
+    "Run the build that executes it, then rerun legion ship."
+};
+
+const SURFACE_DECLARE_RECOVERY: ShipGateRecovery = {
+  command: "legion start --intake",
+  reason:
+    "Nothing in this change declares a verification surface that reaches an integration or real interface. " +
+    "Declare one on an executable acceptance criterion and re-plan, or lower the risk tier through an audited " +
+    "risk.override if this change genuinely crosses no boundary."
+};
+
+/**
+ * A gate's verdict, and — when the gate knows better than `GATE_RECOVERY` can —
+ * the command that repairs *this particular* verdict.
+ *
+ * `recovery` is optional and unset by every gate but one. A gate whose unmet
+ * states share a cure declares it once in the table; a gate whose unmet states
+ * have different cures answers on the verdict, because that is the only place
+ * the distinction exists.
+ */
+interface GateOutcome {
+  readonly status: ShipGateStatus;
+  readonly reason: string;
+  readonly recovery?: ShipGateRecovery;
+}
+
+/**
+ * The `integration-surface-check` verdict recorded by this task's latest attempt.
+ *
+ * Deliberately not `evidenceItemVerdict`, which collapses everything that is not
+ * `pass` or `fail` to `undefined` and therefore makes `unknown` — "the run did
+ * not reach every declared surface" — indistinguishable from "no such item was
+ * written". Those are different facts with different sentences, and this gate is
+ * the first that needs to tell them apart.
+ *
+ * Still read through `latestEvidencePerTask`, for that helper's own reason: a
+ * passing item from attempt 1 must not survive an attempt 2 that emitted none.
+ */
+function surfaceCheckVerdict(
+  entries: readonly EvidenceIndexEntry[],
+  taskId: string
+): string | undefined {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === undefined) return undefined;
+  return entry.evidence.items.find((item) => item.id === INTEGRATION_SURFACE_ITEM)?.verdict;
+}
+
+/**
+ * The action a verification-surface re-affirmation carries.
+ *
+ * The same literal `legion approve surface` writes, spelled out in both places
+ * rather than shared through a constant, on `DELTA_SPEC_APPROVE_ACTION`'s rule:
+ * the gate and the writer are two sides of a contract, and a shared symbol would
+ * let a rename move both at once and leave every approval already on disk
+ * unreadable by the gate that reads them.
+ */
+const SURFACE_REAFFIRM_ACTION = "verification.surface.reaffirm";
+
+/** One declared verification surface, where it was declared, and by which task. */
+export interface DeclaredSurface {
+  /**
+   * Every place this one declaration was found, in the operator's terms.
+   *
+   * A list rather than a string because `legion plan` copies one authored
+   * criterion onto both the task contract's verification entry and the oracle
+   * that criterion produces, so the overwhelmingly common case is one fact read
+   * twice — see `dedupeSurfaces`.
+   */
+  readonly origins: readonly string[];
+  /** Whose evidence answers for it. */
+  readonly taskId: string;
+  readonly surface: VerificationSurface;
+}
+
+/**
+ * Two readings of the same authored declaration, or two different declarations?
+ *
+ * Identity is `kind`, `interface` and the pinned `{path, sha256}` set, sorted —
+ * every field an operator authored — and deliberately excludes where the copy
+ * was found. `legion plan` writes one criterion's surface onto the task
+ * contract's verification entry *and* onto the oracle that criterion produces,
+ * so reading both planes finds the same fact twice. Unioning them without this
+ * counted one declaration as two: the drift diagnostic read "2 of this task's
+ * declared surfaces are unmet" over one file, the satisfied reason read
+ * "reached 2 declared surfaces (POST /v1/quote, POST /v1/quote)", and every
+ * pinned file was hashed and compared twice.
+ *
+ * Sorted, because the two copies are `deepStrictEqual` today and a future writer
+ * that emits the same pins in a different order would otherwise reintroduce the
+ * doubling silently.
+ */
+function surfaceIdentity(surface: VerificationSurface): string {
+  const pins = surface.pinned
+    .map((pin) => `${pin.path}@${pin.sha256}`)
+    .slice()
+    .sort();
+  return JSON.stringify([surface.kind, surface.interface, pins]);
+}
+
+/**
+ * Collapse the copies of one authored surface, keeping every place it was found.
+ *
+ * Scoped to one task by the caller, and that scope is the whole point. Two
+ * *tasks* declaring an identical surface are two criteria that happen to describe
+ * the same boundary, and each has its own evidence entry answering for it — so
+ * merging across tasks would drop one task's verdict and answer for it with
+ * another's. Within a task, the contract copy and the oracle copy are the same
+ * authored fact by construction.
+ */
+function dedupeSurfaces(surfaces: readonly DeclaredSurface[]): readonly DeclaredSurface[] {
+  const byIdentity = new Map<string, { origins: string[]; declared: DeclaredSurface }>();
+  for (const declared of surfaces) {
+    const key = surfaceIdentity(declared.surface);
+    const existing = byIdentity.get(key);
+    if (existing === undefined) {
+      byIdentity.set(key, { origins: [...declared.origins], declared });
+      continue;
+    }
+    existing.origins.push(...declared.origins);
+  }
+  return [...byIdentity.values()].map((entry) => ({ ...entry.declared, origins: entry.origins }));
+}
+
+/**
+ * Every verification surface one task declares, across both places one can live.
+ *
+ * The declaration set spans the task contract's verification entries and the
+ * oracles that contract names, because `legion plan` copies one authored
+ * criterion into both. Reading only the contract would miss a surface on an
+ * oracle whose command the contract never duplicated; reading only the oracles
+ * would miss the project's own declared commands. What comes back is deduped by
+ * authored identity, so reading both planes reports one declaration once.
+ *
+ * `unestablished` is not the same as "no surfaces". A task naming an oracle this
+ * report could not read has an unknown declaration set, and concluding "nothing
+ * declares a surface" from a plane that failed to load is the fail-open every
+ * all-or-nothing plane in `ShipGateChangeFacts` exists to prevent — one
+ * unreadable oracle would otherwise turn a declared boundary check into silence.
+ *
+ * `?? []` on both contract fields is load-bearing rather than defensive: the unit
+ * fixtures in three suites build a task as `{id, risk}`, and a bare
+ * `task.verification.some(...)` would throw a `TypeError` out of
+ * `deriveShipGates` — from the reporting command, on the degraded input it exists
+ * to describe.
+ *
+ * The oracle plane is consulted only when the task actually names an oracle. That
+ * ordering is deliberate and asserted from outside: it keeps a task with no
+ * oracle refs from touching `change.oracles` at all, so the change-fact tripwire
+ * in tests/ship-risk-gates keeps its boundary claim over the planes nothing
+ * reads yet.
+ */
+function declaredVerificationSurfaces(input: {
+  readonly task: TaskContract;
+  readonly taskId: string;
+  /**
+   * Whole, rather than `change.oracles` pre-read by the caller. Reading the
+   * plane at the call site would touch it for every task, including the ones
+   * that name no oracle — and "this gate consults the oracle plane only when the
+   * contract names an oracle" is a claim the change-fact tripwire holds by
+   * throwing on the access itself.
+   */
+  readonly change: ShipGateChangeFacts | undefined;
+}): { readonly surfaces: readonly DeclaredSurface[]; readonly unestablished: string | undefined } {
+  const surfaces: DeclaredSurface[] = [];
+
+  for (const [index, entry] of (input.task.verification ?? []).entries()) {
+    if (entry?.surface === undefined) continue;
+    surfaces.push({
+      origins: [`verification entry ${index + 1} of ${input.taskId}`],
+      taskId: input.taskId,
+      surface: entry.surface
+    });
+  }
+
+  const oracleRefs = input.task.oracleRefs ?? [];
+  let unestablished: string | undefined;
+  if (oracleRefs.length > 0) {
+    const oracles = input.change?.oracles;
+    for (const oracleId of oracleRefs) {
+      const fact = oracles?.find((entry) => entry.document.id === oracleId);
+      if (fact === undefined) {
+        unestablished ??= oracleId;
+        continue;
+      }
+      if (fact.document.surface === undefined) continue;
+      surfaces.push({ origins: [`oracle ${oracleId}`], taskId: input.taskId, surface: fact.document.surface });
+    }
+  }
+
+  return { surfaces: dedupeSurfaces(surfaces), unestablished };
+}
+
+/**
+ * Has a named human re-affirmed the bytes now at this path?
+ *
+ * A verification-surface pin is minted once, at `legion start --finalize`, and
+ * the whole point of it is that editing the pinned file stops the declaration
+ * being believed. Without a way back, though, that made the *honest* operator
+ * action unrecoverable: editing the compose file that stands the real service up
+ * is exactly the maintenance a live integration check needs, and the first byte
+ * of it permanently unsatisfied this gate for every change tracing that
+ * requirement, with no command anywhere able to re-mint the pin. A gate with no
+ * route out is the defect #77 was written about.
+ *
+ * Re-affirming a declaration after a legitimate edit is the same *kind* of act
+ * as approving a delta spec — a named human saying "yes, this still describes
+ * what I meant" — so it is the same artifact and the same rules, read here the
+ * way `deltaSpecApprovalStatus` reads its own: scope the plane, let a standing
+ * negative beat a grant unless a strictly later grant supersedes it, check
+ * expiry against the injected clock, require a human decider, and then require
+ * the grant's own pin to still match disk.
+ *
+ * That last step is what stops this from being a laundering mechanism. The
+ * approval pins the bytes the approver looked at; ship re-hashes them; so a
+ * re-affirmation covers exactly one revision of the file and the next edit
+ * drifts again. It cannot be performed silently either — `legion approve
+ * surface` demands `--approver` and resolves it against the project's decision
+ * owners, which is what PR 2 refused to skip for delta specs.
+ *
+ * Keyed by path rather than by surface. The approval re-affirms *bytes*, and two
+ * surfaces pinning the same file are asking about the same bytes, so one
+ * decision honestly answers for both.
+ */
+function surfacePinReaffirmation(input: {
+  readonly path: string;
+  readonly change: ShipGateChangeFacts;
+}): { readonly by: string; readonly at: UtcTimestamp } | undefined {
+  const approvals = input.change.approvals;
+  if (approvals === undefined) return undefined;
+
+  const relevant = approvals.filter(
+    (approval) =>
+      approval.changeId === input.change.changeId &&
+      approval.scope.action === SURFACE_REAFFIRM_ACTION &&
+      (approval.artifacts ?? []).some((reference) => reference.path === input.path)
+  );
+  if (relevant.length === 0) return undefined;
+
+  const live: GrantedApproval[] = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") continue;
+    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
+    live.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  if (newestGrant === undefined) return undefined;
+
+  // A standing negative beats the grant unless the grant is strictly later, and
+  // a negative with no decision instant can never be shown to be superseded.
+  // PR 1's rule, applied unchanged: a revocation of a re-affirmation has to be
+  // able to put the drift back.
+  const standing = relevant.some(
+    (approval) =>
+      (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") &&
+      (approval.decidedAt === undefined || approval.decidedAt >= newestGrant.decidedAt)
+  );
+  if (standing) return undefined;
+
+  const reaffirmed = (newestGrant.artifacts ?? []).find((reference) => reference.path === input.path);
+  if (reaffirmed === undefined) return undefined;
+  if (input.change.verifyPin(reaffirmed) !== "match") return undefined;
+
+  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
+}
+
+/**
+ * Would this one document, alone, make the gate accept a drifted pin at this
+ * path against these exact bytes?
+ *
+ * Exported for `legion approve surface`, which has to answer "is there anything
+ * left to decide here" and must not answer it with its own weaker rule. PR 2
+ * recorded what that costs: a writer whose idea of "done" is weaker than the
+ * reader's idea of "satisfied" reports success, writes nothing, and leaves the
+ * change permanently blocked with no flag anywhere that would make it write. So
+ * this is not a second implementation — it *calls* `surfacePinReaffirmation`
+ * against a one-document plane and asks whether it answers.
+ *
+ * The one substitution is `verifyPin`, which answers `match` for exactly
+ * `currentSha256` and `drift` for anything else. That is not a weakening: it is
+ * the same question the ship-time verifier asks, with the digest the caller has
+ * just hashed off disk standing in for the hash ship will take later.
+ */
+export function isLiveSurfaceReaffirmation(input: {
+  readonly approval: Approval;
+  readonly changeId: string;
+  readonly path: string;
+  readonly currentSha256: string;
+  readonly evaluatedAt: UtcTimestamp | undefined;
+}): boolean {
+  const reaffirmed = surfacePinReaffirmation({
+    path: input.path,
+    change: {
+      changeId: input.changeId,
+      acceptance: undefined,
+      approvals: [input.approval],
+      deltas: undefined,
+      oracles: undefined,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: input.evaluatedAt,
+      verifyPin: (reference) => (reference.sha256 === input.currentSha256 ? "match" : "drift")
+    }
+  });
+  return reaffirmed !== undefined;
+}
+
+/**
+ * Is every pinned reference of one declared surface still what it was declared
+ * against — or, failing that, what a human has since re-affirmed?
+ *
+ * The mapping is `approvedDeltaSpecPin`'s and is not re-argued here: `drift` and
+ * `missing` are evidence that exists and is negative, so `unsatisfied`;
+ * `unverified` means nobody hashed it, so `unevaluable`. The one thing worth
+ * repeating is why the check runs at ship time at all — the evidence item was
+ * written when the pins were clean and stays `pass` forever, so a gate reading
+ * only the verdict is a fail-open against every edit made after the build.
+ *
+ * `drift` is the one verdict a re-affirmation can answer, and `missing` is
+ * deliberately not: `legion approve surface` mints its pin by hashing the file,
+ * so there is no document it could ever produce for a path that is not there.
+ * Offering the cure for a state it cannot reach would be advice that fails.
+ */
+function surfacePinStatus(input: {
+  readonly declared: DeclaredSurface;
+  readonly change: ShipGateChangeFacts | undefined;
+}): GateOutcome | undefined {
+  const { origins, surface } = input.declared;
+  const describe = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+
+  if (surface.pinned.length === 0) {
+    // Unreachable from a parsed document — `verificationSurfaceSchema` marks
+    // `pinned` `.min(1)` — but this function's parameter type admits it, and an
+    // empty list passes every pin check vacuously.
+    return { status: "unevaluable", reason: `${describe} pins no reference, so there is nothing to check it against.` };
+  }
+
+  const change = input.change;
+  const verifyPin = change?.verifyPin;
+  if (change === undefined || verifyPin === undefined) {
+    return {
+      status: "unevaluable",
+      reason: `${describe} pins ${surface.pinned[0]?.path}, and this report carries no way to re-hash it, so what was declared cannot be compared against what is on disk.`
+    };
+  }
+
+  for (const pin of surface.pinned) {
+    const verdict = verifyPin(pin);
+    if (verdict === "match") continue;
+    if (verdict === "drift") {
+      const reaffirmed = surfacePinReaffirmation({ path: pin.path, change });
+      if (reaffirmed !== undefined) continue;
+      return {
+        status: "unsatisfied",
+        reason:
+          `${describe} pins ${pin.path}, whose bytes have changed since the declaration was made. ` +
+          "If that edit was intended, re-affirm the declaration against the current bytes with legion approve surface --approver <id>.",
+        recovery: SURFACE_REAFFIRM_RECOVERY
+      };
+    }
+    if (verdict === "missing") {
+      return { status: "unsatisfied", reason: `${describe} pins ${pin.path}, which is no longer present.` };
+    }
+    return {
+      status: "unevaluable",
+      reason: `${describe} pins ${pin.path}, which this report did not hash, so what was declared cannot be compared against what is on disk.`
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * Every verification surface the whole change declares, and which oracles this
+ * report could not read.
+ *
+ * Exported because `legion approve surface` has to walk the same set the gate
+ * quantifies over. If it walked its own, the command that exists to unblock this
+ * gate could re-affirm a pin the gate does not read, or miss one it does — which
+ * is the writer/reader drift PR 2 closed by making the writer call the reader.
+ * Here the shared thing is the *subject* rather than the predicate, so it is
+ * shared as a function rather than restated.
+ */
+export function changeVerificationSurfaces(input: {
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  readonly change: ShipGateChangeFacts | undefined;
+}): { readonly surfaces: readonly DeclaredSurface[]; readonly unreadableOracles: readonly string[] } {
+  const surfaces: DeclaredSurface[] = [];
+  const unreadableOracles: string[] = [];
+  for (const task of input.tasks) {
+    const taskId = input.taskIdFor(task);
+    const declared = declaredVerificationSurfaces({ task, taskId, change: input.change });
+    surfaces.push(...declared.surfaces);
+    if (declared.unestablished !== undefined) unreadableOracles.push(declared.unestablished);
+  }
+  return { surfaces, unreadableOracles };
+}
+
+/** What one declared non-unit surface's own evidence and pins say about it. */
+function nonUnitSurfaceOutcome(input: {
+  readonly declared: DeclaredSurface;
+  readonly entries: readonly EvidenceIndexEntry[];
+  readonly change: ShipGateChangeFacts | undefined;
+}): GateOutcome {
+  const { origins, surface } = input.declared;
+  const describe = `The ${surface.kind} surface declared by ${origins.join(" and ")} for ${surface.interface}`;
+
+  // Pins first, and this ordering is the gate's whole defence against a stale
+  // pass: the evidence item was written when the pins were clean and stays
+  // `pass` forever, so a verdict read that ran first would let an edit made
+  // after the build be masked by the build's own answer.
+  const pin = surfacePinStatus({ declared: input.declared, change: input.change });
+  if (pin !== undefined) return pin;
+
+  const verdict = surfaceCheckVerdict(input.entries, input.declared.taskId);
+  if (verdict === "pass") {
+    return { status: "satisfied", reason: `${describe} was exercised, and every pinned reference still matches.` };
+  }
+  if (verdict === "fail") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe} is covered by a failed integration-surface-check: a declared non-unit verification command did not pass.`
+    };
+  }
+  if (verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${describe} is covered by an integration-surface-check that did not reach every declared non-unit surface, so it may never have been exercised.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `${describe} has no integration-surface-check in ${input.declared.taskId}'s latest evidence, so nothing says it was exercised.`,
+    recovery: SURFACE_BUILD_RECOVERY
+  };
+}
+
+/**
+ * Did verification reach the relevant integration or real interface **for the
+ * change**?
+ *
+ * ADR-006's wording is "for the change", and getting the altitude wrong here was
+ * a specification defect rather than a coding slip. `legion plan` materializes
+ * one task per executable criterion, so a task-scoped version of this gate fired
+ * the all-unit branch per *criterion*: a change with one criterion reaching a
+ * real interface and one honest `unit` criterion was blocked by the honest one.
+ * That punishes truthfulness, and an operator who learns that `unit` blocks the
+ * ship learns to write `integration` instead — turning the one question this
+ * gate asks into a question nobody answers honestly. So the determination is
+ * made once, over every task in the change.
+ *
+ * Three answers:
+ *
+ *  - **Nothing in the change declares a surface** — `unevaluable`. Every task
+ *    contract written before this release is that shape, as is every project
+ *    planned without an interview. Nobody said, so nothing is known.
+ *  - **Every surface the change declares is `unit`** — `unsatisfied`. A whole
+ *    change stating that nothing in it crosses a boundary has *answered* R2's
+ *    question, and the answer is no. Reporting that as `unevaluable` would tell
+ *    the operator nobody said, which is false and invites the repair of saying it
+ *    again.
+ *  - **Something crosses a boundary** — at least one declared non-unit surface
+ *    must have run, passed, and still pin bytes that match the working tree.
+ *
+ * The first two are decided from the declarations rather than from the evidence
+ * item, and that is not a stylistic choice. `evidenceItemVerdict` maps every
+ * verdict that is not `pass`/`fail` to absence, so an all-unit answer expressed
+ * as a verdict would arrive here spelled exactly like silence; and the item is
+ * written at build time while a replan can change the declarations afterwards.
+ *
+ * **Aggregation is `some`, not `every`, and that is the deliberate half of the
+ * altitude change.** One surface reaching the real interface answers the
+ * question the gate asks about the change. A *second* surface that failed is not
+ * waved through by that — a failing declared command is already
+ * `declared-verification: fail` and `oracle-verification: fail`, both of which
+ * block, so folding it in here would make this gate a second copy of those. What
+ * this gate uniquely holds is the pin re-check, and a change with no clean
+ * passing surface still falls to the negative-then-unknown ordering below.
+ */
+function integrationSurfaceGateStatus(input: {
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+  readonly entries: readonly EvidenceIndexEntry[];
+  readonly change: ShipGateChangeFacts | undefined;
+}): GateOutcome {
+  const { surfaces, unreadableOracles } = changeVerificationSurfaces(input);
+
+  const unreadableOracle =
+    unreadableOracles.length === 0
+      ? undefined
+      : `This change names oracle ${unreadableOracles[0]}, which this report could not read, so whether it declares a verification surface is unestablished.`;
+
+  if (surfaces.length === 0) {
+    if (unreadableOracle !== undefined) return { status: "unevaluable", reason: unreadableOracle };
+    return {
+      status: "unevaluable",
+      reason:
+        "No task contract or oracle in this change declares a verification surface, so whether verification reached an integration or real interface is unestablished. Declare it on an acceptance criterion at intake and re-plan.",
+      recovery: SURFACE_DECLARE_RECOVERY
+    };
+  }
+
+  const nonUnit = surfaces.filter((declared) => declared.surface.kind !== "unit");
+  if (nonUnit.length === 0 && unreadableOracle === undefined) {
+    // Only sound over a complete declaration set: with an oracle unread, "all of
+    // them are unit" is not established, and that case falls through to the
+    // aggregation below where the unreadable oracle is one unevaluable outcome.
+    return {
+      status: "unsatisfied",
+      reason: `Every verification surface this change declares is a unit surface (${surfaces
+        .map((declared) => declared.origins.join(" and "))
+        .join(", ")}), so nothing in this change reaches an integration or real interface. That is a recorded answer, not a missing one.`,
+      recovery: SURFACE_DECLARE_RECOVERY
+    };
+  }
+
+  const outcomes: GateOutcome[] = nonUnit.map((declared) =>
+    nonUnitSurfaceOutcome({ declared, entries: input.entries, change: input.change })
+  );
+  if (unreadableOracle !== undefined) outcomes.push({ status: "unevaluable", reason: unreadableOracle });
+
+  const met = outcomes.find((outcome) => outcome.status === "satisfied");
+  if (met !== undefined) {
+    // The unmet ones are *named*, not summarised away and not credited to another
+    // gate. A failing declared command is indeed `declared-verification: fail`
+    // elsewhere, but a drifted pin on a second surface is this gate's fact and
+    // nothing else reports it — so a sentence claiming another gate has it
+    // covered would be false in the one case an operator most needs to see.
+    const unmet = outcomes.filter((outcome) => outcome.status !== "satisfied");
+    const remainder =
+      unmet.length === 0
+        ? ""
+        : ` ${unmet.length} other declared surface${unmet.length === 1 ? " is" : "s are"} unmet, and this gate is satisfied by the one above rather than by them: ${unmet
+            .map((outcome) => outcome.reason)
+            .join(" ")}`;
+    return { status: "satisfied", reason: `${met.reason}${remainder}` };
+  }
+
+  // Nothing reached a boundary cleanly. Any `unsatisfied` wins over any
+  // `unevaluable`: the negative is the more actionable fact and the one an
+  // operator has to answer.
+  const negative = outcomes.find((outcome) => outcome.status === "unsatisfied");
+  const chosen = negative ?? (outcomes[0] as GateOutcome);
+  const remainder =
+    outcomes.length > 1 ? ` ${outcomes.length} of this change's declared surfaces are unmet.` : "";
+  return { ...chosen, reason: `${chosen.reason}${remainder}` };
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -1062,12 +1666,25 @@ function evaluateGate(input: {
    * function with plain literals and no facts at all. Making absence a type
    * makes the guard structural instead of a thing to remember once per gate.
    *
-   * No arm reads it in this release. That is the point of landing it here: the
-   * change that adds the first change-scoped gate touches its own `case`, not
-   * this signature.
+   * Three arms read it now — `explicit_human_approval` the approvals plane,
+   * `approved_delta_spec` the deltas, and `integration_or_real_interface_checks`
+   * the oracles and the pin verifier — so the signature is doing the job it was
+   * landed for: each gate's diff touches its own `case` rather than this one.
    */
   readonly change: ShipGateChangeFacts | undefined;
-}): { readonly status: ShipGateStatus; readonly reason: string } {
+  /**
+   * Every task of the change, for the one gate whose question is about the
+   * change rather than about the task it was derived from.
+   *
+   * `approved_delta_spec` needed no such thing: `bundle.deltas` is already a
+   * whole-change fact. `integration_or_real_interface_checks` asks about the
+   * verification surfaces the change declares, and those live on the task
+   * contracts — so the change-scoped question genuinely needs every contract,
+   * not just the one whose tier derived the gate.
+   */
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): GateOutcome {
   const { gate, taskId, entries, reviews } = input;
 
   switch (gate.id) {
@@ -1124,6 +1741,19 @@ function evaluateGate(input: {
       // that held.
       return fromVerdict(evidenceItemVerdict(entries, taskId, "oracle-verification"), "oracle-verification");
 
+    case "integration_or_real_interface_checks":
+      // The first arm to read a task contract at all, and the first to read
+      // *every* task contract. The declaration this gate is about lives on the
+      // contracts' verification entries and on the oracles those contracts name;
+      // the question ADR-006 asks is about the change; so the answer is derived
+      // once over the whole task list rather than once per task from one of them.
+      return integrationSurfaceGateStatus({
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor,
+        entries,
+        change: input.change
+      });
+
     default:
       // `approved_spec_and_oracle` asks whether the spec and oracle were
       // approved *before* gated execution. A passing post-execution verdict does
@@ -1131,9 +1761,9 @@ function evaluateGate(input: {
       // timestamp to check, so satisfying it from the oracle result would claim
       // a governance gate was met when no such approval exists.
       //
-      // Integration checks, whole-change acceptance, independent baselines,
-      // security/e2e evaluation, release observation and rollback evidence have
-      // no producer in the workflow yet.
+      // Whole-change acceptance, independent baselines, security/e2e evaluation,
+      // release observation and rollback evidence have no producer in the
+      // workflow yet.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -1171,6 +1801,58 @@ const UNRESOLVED_PINS: VerifyPinnedReference = () => "unverified";
  * and a granted, pin-clean approval but no verifier, which nothing in the tree
  * produces; a direct test stands in for it rather than a gate happening to.
  */
+/**
+ * Every reference a gate in this module can ask `verifyPin` about.
+ *
+ * Extracted from `legion ship` and exported for one reason: **forgetting a
+ * family here fails silently, permanently, and in the direction of looking
+ * correct.** A reference nobody collects answers `unverified`, every gate reports
+ * `unverified` as `unevaluable`, and `unevaluable` is indistinguishable at the
+ * readiness arithmetic from "nothing declared this" — so a ship that re-checks no
+ * pin at all looks exactly like a conservative one.
+ *
+ * It lived inline in `ship.ts` behind a comment claiming an end-to-end drift test
+ * would catch a dropped family. Mutation testing disproved that, and the reason
+ * is worth recording because it will recur: `oracle-input.ts` copies the
+ * criterion's surface — the identical `pinned` array — onto the oracle the
+ * criterion produces, and `resolvePinnedReferences` dedupes by path, so *either*
+ * of the two verification-surface collectors alone resolved every path the other
+ * would have. Deleting one reddened nothing. Only deleting both reddened
+ * anything. The claimed tripwire could not trip, and a comment that tells the
+ * next reader an edit is covered when it is not is worse than no comment.
+ *
+ * So the families are separated here and asserted one at a time, against a
+ * fixture where contract and oracle deliberately pin *different* paths — the
+ * shape parity does not produce today and any of PR 8's oracle work could.
+ *
+ * `approvals` is the fourth family and the newest. A re-affirmation approval
+ * pins the bytes a human looked at when they said the declaration still held;
+ * without re-hashing them, `surfacePinReaffirmation` could never confirm one, and
+ * the cure this release adds would be a command that writes a record nothing
+ * reads.
+ */
+export function shipGatePinnedReferences(input: {
+  readonly deltas: readonly ChangeBundleDeltaEntry[] | undefined;
+  readonly oracles: readonly ShipGateOracleFact[] | undefined;
+  readonly approvals: readonly Approval[] | undefined;
+  readonly tasks: readonly TaskContract[];
+}): readonly ArtifactReference[] {
+  return [
+    // The delta spec bytes `approved_delta_spec` compares an approval against.
+    ...(input.deltas?.map((delta) => delta.delta) ?? []),
+    // The oracle documents themselves, for PR 5's ordering gate.
+    ...(input.oracles?.map((oracle) => oracle.reference) ?? []),
+    // The files an oracle's declared verification surface pins.
+    ...(input.oracles?.flatMap((oracle) => oracle.document.surface?.pinned ?? []) ?? []),
+    // The files a task contract's declared verification surface pins. Ordinary
+    // repository files rather than project artifacts, which is the case
+    // `pinned-references.ts` resolves paths for itself.
+    ...input.tasks.flatMap((task) => (task.verification ?? []).flatMap((entry) => entry.surface?.pinned ?? [])),
+    // The bytes any approval was decided against.
+    ...(input.approvals?.flatMap((approval) => approval.artifacts ?? []) ?? [])
+  ];
+}
+
 export function normalizeChangeFacts(change: unknown): ShipGateChangeFacts | undefined {
   if (change === null || typeof change !== "object") return undefined;
   const facts = change as ShipGateChangeFacts;
@@ -1205,7 +1887,9 @@ export function deriveShipGates(input: {
         taskId,
         entries: input.entries,
         reviews: input.reviews,
-        change
+        change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
       });
       const scope = GATE_SCOPE[gate.id];
       // `...outcome` spreads FIRST, where it used to spread last. Every gate
@@ -1349,7 +2033,14 @@ const GATE_RECOVERY: Readonly<
   },
   protected_oracle: undefined,
   task_level_independent_review: undefined,
-  integration_or_real_interface_checks: undefined,
+  // This gate has four unmet states with four different cures, so its verdict
+  // carries its own `recovery` and `shipGateRecovery` prefers that over this
+  // entry. What stays here is the state a table *can* answer for and the one an
+  // operator is most likely to be in: a pinned file legitimately edited after the
+  // declaration was made. Leaving it `undefined` would mean a caller holding only
+  // a gate id — a payload renderer, a future summary — had no route out of the
+  // one state where a route out is the whole point of this release's fix.
+  integration_or_real_interface_checks: SURFACE_REAFFIRM_RECOVERY,
   whole_change_acceptance_evidence: undefined,
   independent_baseline: undefined,
   approved_spec_and_oracle: undefined,
@@ -1380,6 +2071,14 @@ export interface ShipGateRecovery {
  *    unblocks the ship, and it still hands the operator the thread. It is also
  *    the arm every R2 change reaches today.
  *  - Nothing has a recovery: the fallback, unchanged, byte for byte.
+ *
+ * A gate's own `result.recovery` beats the table. The table is keyed by gate id
+ * and therefore cannot distinguish two unmet states of the same gate, which is
+ * exactly what `integration_or_real_interface_checks` needs: a drifted pin, an
+ * unexercised declaration and an undeclared change each have a different repair.
+ * The first unmet result for an id decides, which is precise for a change-scoped
+ * gate — one verdict, repeated once per task — and for a task-scoped gate is the
+ * same choice the table made before, taken from a result instead of a constant.
  */
 export function shipGateRecovery(input: {
   readonly gates: readonly ShipGateResult[];
@@ -1389,7 +2088,7 @@ export function shipGateRecovery(input: {
   if (unmet.length === 0) return input.fallback;
 
   const recoveries = [...new Set(unmet.map((gate) => gate.gate))]
-    .map((id) => GATE_RECOVERY[id])
+    .map((id) => unmet.find((gate) => gate.gate === id)?.recovery ?? GATE_RECOVERY[id])
     .filter((entry): entry is ShipGateRecovery => entry !== undefined);
   if (recoveries.length === 0) return input.fallback;
 

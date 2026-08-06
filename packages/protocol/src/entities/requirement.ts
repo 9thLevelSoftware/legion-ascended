@@ -1,7 +1,7 @@
 import * as z from "zod";
 
 import { oracleIdSchema, projectIdSchema, requirementIdSchema } from "../primitives/ids.js";
-import { schemaMetadataSchema, traceReferenceSchema } from "./common.js";
+import { schemaMetadataSchema, traceReferenceSchema, verificationSurfaceSchema } from "./common.js";
 
 export const requirementCategorySchema = z.enum([
   "behavior",
@@ -31,6 +31,16 @@ export type RequirementStatus = z.infer<typeof requirementStatusSchema>;
  * exists because some criteria genuinely cannot be scripted, but it must say
  * why, so that unscriptable criteria are a visible, countable choice rather
  * than the silent default.
+ *
+ * `surface` is the authored copy of the verification surface, and this is the
+ * only place an operator writes one. `legion plan` copies it onto the task
+ * contract's verification entry and onto the oracle this criterion produces;
+ * neither re-derives it. Optional, because every requirement on disk predates
+ * it, and an absent declaration must report `unevaluable` at ship rather than
+ * defaulting to `unit` — a default would manufacture a negative answer nobody
+ * gave. It lives on the executable arm only: a criterion a human decides has no
+ * command, so there is no surface a command reached, and putting it on the union
+ * rather than on one arm would make that a convention instead of a type.
  */
 export const requirementCriterionProofSchema = z.discriminatedUnion("mode", [
   z.strictObject({
@@ -38,7 +48,8 @@ export const requirementCriterionProofSchema = z.discriminatedUnion("mode", [
     command: z.string().min(1).max(256),
     args: z.array(z.string().max(256)).max(64),
     expectedExitCode: z.number().int().min(0).max(255),
-    timeoutMs: z.number().int().positive().max(3_600_000).optional()
+    timeoutMs: z.number().int().positive().max(3_600_000).optional(),
+    surface: verificationSurfaceSchema.optional()
   }),
   z.strictObject({
     mode: z.literal("manual"),

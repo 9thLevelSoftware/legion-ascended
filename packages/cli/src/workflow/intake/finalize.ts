@@ -15,17 +15,27 @@ import {
 } from "@legion/artifacts";
 import {
   requirementSchema,
+  type ArtifactReference,
   type IntakeSession,
   type ProjectId,
   type RiskTier,
   type Requirement,
   type RequirementCriterion,
-  type UtcTimestamp
+  type UtcTimestamp,
+  type VerificationSurface,
+  type VerificationSurfaceKind
 } from "@legion/protocol";
 
 import { criterionIdFor } from "../criteria.js";
+import type { MintPinnedReference } from "../pinned-references.js";
 import { INTAKE_GRAPH_VERSION } from "./graph.js";
-import { parseCommandLine, requirementDrafts, slugFromText, type RequirementDraft } from "./validators.js";
+import {
+  parseCommandLine,
+  parseSurfacePins,
+  requirementDrafts,
+  slugFromText,
+  type RequirementDraft
+} from "./validators.js";
 import type { IntakeAnswer } from "@legion/protocol";
 
 const MAX_REQUIREMENT_SLUG = 48;
@@ -56,16 +66,61 @@ export interface BuildRequirementsInput {
   readonly createdAt: UtcTimestamp;
   readonly schemaVersion: string;
   readonly intakeSessionPath: string;
+  /**
+   * How a declared surface path becomes a pin.
+   *
+   * Required rather than optional so the one production caller cannot forget it
+   * and silently write requirements with every surface dropped. Injected because
+   * hashing is I/O and this function is pure and synchronous, which is what lets
+   * the whole intake test suite build requirements with no filesystem.
+   */
+  readonly mintPin: MintPinnedReference;
+}
+
+/**
+ * The declared surface of one criterion, or `undefined` if none was declared.
+ *
+ * Returns `undefined` for an unpinnable path rather than a partial surface.
+ * That is unreachable through `--finalize`, which resolves every declared pin
+ * before it writes anything and refuses by name when one will not resolve — a
+ * partial surface here would be a claim with nothing behind it, which is the one
+ * thing worse than no claim.
+ */
+function surfaceFor(
+  criterion: RequirementDraft["criteria"][number],
+  mintPin: MintPinnedReference
+): VerificationSurface | undefined {
+  const kind = criterion.surfaceKind.trim();
+  if (kind.length === 0) return undefined;
+
+  const paths = parseSurfacePins(criterion.surfacePins);
+  if (paths.length === 0) return undefined;
+
+  const pinned: ArtifactReference[] = [];
+  for (const artifactPath of paths) {
+    const reference = mintPin(artifactPath);
+    if (reference === undefined) return undefined;
+    pinned.push(reference);
+  }
+
+  return {
+    kind: kind as VerificationSurfaceKind,
+    interface: criterion.surfaceInterface.trim(),
+    rationale: criterion.surfaceRationale.trim(),
+    pinned
+  };
 }
 
 function criterionFor(
   criterion: RequirementDraft["criteria"][number],
-  index: number
+  index: number,
+  mintPin: MintPinnedReference
 ): RequirementCriterion {
   const id = criterionIdFor(criterion.statement, index);
 
   if (criterion.proof === "executable") {
     const parsed = parseCommandLine(criterion.detail);
+    const surface = surfaceFor(criterion, mintPin);
     if (!("error" in parsed)) {
       return {
         id,
@@ -77,7 +132,8 @@ function criterionFor(
           // The interview states this contract explicitly: exit zero means the
           // criterion holds. Asking for an expected code per criterion invites
           // a non-zero answer chosen to make a failing command look fine.
-          expectedExitCode: 0
+          expectedExitCode: 0,
+          ...(surface === undefined ? {} : { surface })
         }
       };
     }
@@ -90,7 +146,14 @@ function criterionFor(
       statement: criterion.statement,
       proof: {
         mode: "manual",
-        reason: `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.`
+        // The manual arm has nowhere to put a surface, so a declaration made
+        // against a command that will not parse is lost here. Said out loud in
+        // the artifact rather than dropped in silence: the criterion is already
+        // being downgraded, and losing the declaration with it is the part a
+        // reader would otherwise have no way to notice.
+        reason:
+          `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.` +
+          (surface === undefined ? "" : " Its declared verification surface was dropped with it.")
       }
     };
   }
@@ -131,7 +194,7 @@ export function buildRequirements(input: BuildRequirementsInput): readonly Requi
             proof: { mode: "manual", reason: WONT_CRITERION_REASON }
           }
         ]
-      : draft.criteria.map((criterion, index) => criterionFor(criterion, index));
+      : draft.criteria.map((criterion, index) => criterionFor(criterion, index, input.mintPin));
 
     requirements.push(
       requirementSchema.parse({
@@ -166,6 +229,41 @@ export function buildRequirements(input: BuildRequirementsInput): readonly Requi
   }
 
   return requirements;
+}
+
+/** One declared surface path, with the criterion that declared it. */
+export interface DeclaredSurfacePath {
+  readonly requirementIndex: number;
+  readonly criterionIndex: number;
+  readonly path: string;
+}
+
+/**
+ * Every path a recorded interview declared a verification surface against.
+ *
+ * Read from the same `requirementDrafts` reconstruction `buildRequirements`
+ * uses, so the set of paths finalize resolves is exactly the set the requirement
+ * writer will ask for a pin for. A second traversal here is how a path gets
+ * declared, never resolved, and then silently dropped.
+ *
+ * `wont` requirements are excluded because their criteria are synthesized rather
+ * than authored, and a `wont` requirement never answers the proof question the
+ * surface nodes depend on.
+ */
+export function declaredSurfacePaths(
+  answers: readonly IntakeAnswer[]
+): readonly DeclaredSurfacePath[] {
+  const declared: DeclaredSurfacePath[] = [];
+  for (const draft of requirementDrafts(answers)) {
+    if (draft.priority === "wont") continue;
+    for (const criterion of draft.criteria) {
+      if (criterion.surfaceKind.trim().length === 0) continue;
+      for (const path of parseSurfacePins(criterion.surfacePins)) {
+        declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path });
+      }
+    }
+  }
+  return declared;
 }
 
 /** Requirements that become roadmap phases: everything actually being built. */

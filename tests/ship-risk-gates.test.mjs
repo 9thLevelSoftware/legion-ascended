@@ -31,8 +31,19 @@ const TASK_ID = "tsk_phase-1";
 // reader that an edit is covered when it is not. The guard is held by the tests
 // at the end of this file, which call it directly.
 
-function task(tier) {
-  return { id: "ctr_phase-1", risk: { tier, reasons: ["test"] } };
+// `contract` carries the parts of a task contract a gate reads beyond its risk
+// tier. It exists because `integration_or_real_interface_checks` is the first
+// gate to read the task at all: its question is about the verification surfaces
+// the contract and the contract's oracles declare, so a scenario that cannot
+// change the contract cannot move its cell.
+//
+// The default is still `{id, risk}` and deliberately stays that way. That is the
+// shape every other fixture here and in tests/ship-delta-spec-approval and
+// tests/ship-human-approval-gate builds, and the gate has to tolerate it —
+// `task.verification.some(...)` on it throws a TypeError out of
+// `deriveShipGates`, from the one command whose job is reporting what is broken.
+function task(tier, contract = {}) {
+  return { id: "ctr_phase-1", risk: { tier, reasons: ["test"] }, ...contract };
 }
 
 function entry(items) {
@@ -47,9 +58,9 @@ function acceptedReview() {
   return { document: { id: "rev_1", status: "accepted", taskId: TASK_ID } };
 }
 
-function derive({ tier = "R2", items = [], reviews = [], change } = {}) {
+function derive({ tier = "R2", items = [], reviews = [], change, contract } = {}) {
   return deriveShipGates({
-    tasks: [task(tier)],
+    tasks: [task(tier, contract)],
     taskIdFor: () => TASK_ID,
     entries: [entry(items)],
     reviews,
@@ -229,6 +240,24 @@ const REQUIREMENT_ID = "req_transcript";
 const DELTA_SPEC_PATH = `.legion/project/changes/${CHANGE_ID}/delta-specs/${REQUIREMENT_ID}.md`;
 const DELTA_SPEC_PIN = { path: DELTA_SPEC_PATH, sha256: `sha256:${"a".repeat(64)}` };
 
+// Verification surfaces pin ordinary repository files rather than project
+// artifacts, which is why `pinned-references.ts` resolves paths itself.
+const SURFACE_PIN = { path: "ops/compose.integration.yml", sha256: `sha256:${"b".repeat(64)}` };
+
+const REAL_INTERFACE_SURFACE = {
+  kind: "real-interface",
+  interface: "POST /v1/orders",
+  rationale: "The suite posts a real order through the running API rather than a mocked client.",
+  pinned: [SURFACE_PIN]
+};
+
+const UNIT_SURFACE = {
+  kind: "unit",
+  interface: "PricingEngine.quote()",
+  rationale: "Exercises the pricing module in process; nothing outside this repository is reached.",
+  pinned: [{ path: "packages/pricing/src/engine.ts", sha256: `sha256:${"c".repeat(64)}` }]
+};
+
 const SCENARIOS = [
   {
     name: "passing verification and an accepted review",
@@ -296,6 +325,49 @@ const SCENARIOS = [
       evaluatedAt: "2026-08-10T00:00:00.000Z",
       verifyPin: () => "match"
     }
+  },
+  {
+    // The seventh scenario, added with `integration_or_real_interface_checks`'s
+    // producer, and the first row in this transcript produced from the *task
+    // contract* rather than from evidence or from a change plane.
+    //
+    // Everything the gate needs is here: a declared non-unit surface on the
+    // contract's verification entry, a pin that still matches, and the evidence
+    // item `legion build` writes when a non-unit surface was exercised. Removing
+    // any one of the three moves this cell, which is what makes it a transcript
+    // row rather than a restatement.
+    name: "a verified real-interface surface",
+    contract: {
+      verification: [
+        {
+          command: "pnpm",
+          args: ["test", "--filter", "orders"],
+          expectedExitCode: 0,
+          surface: REAL_INTERFACE_SURFACE
+        }
+      ]
+    },
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      item("integration-surface-check", "pass")
+    ],
+    reviews: [acceptedReview()],
+    change: { changeId: CHANGE_ID, verifyPin: () => "match" }
+  },
+  {
+    // The eighth, and the first `unsatisfied` this gate has ever produced. It
+    // carries no change facts at all, deliberately: "every surface this change
+    // declares is a unit surface" is decided from the declarations on the
+    // contracts, so the negative must be reachable without any plane loading.
+    name: "only unit surfaces declared",
+    contract: {
+      verification: [
+        { command: "pnpm", args: ["test"], expectedExitCode: 0, surface: UNIT_SURFACE }
+      ]
+    },
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()]
   }
 ];
 
@@ -315,26 +387,63 @@ const SCENARIOS = [
  * central claim of the change that makes it.
  *
  * **One gate id has changed behaviour since the last release, and exactly one:
- * `approved_delta_spec`.** It gained a producer — it reads the approval plane
- * for a granted, pin-clean approval of every one of the change's delta specs —
- * and it became the first change-scoped gate in `GATE_SCOPE`.
+ * `integration_or_real_interface_checks`.** It gained a producer — it reads the
+ * verification surfaces the change's task contracts and their oracles declare,
+ * re-checks every non-unit surface's pins against the working tree, and reads the
+ * `integration-surface-check` item `legion build` now writes. It is
+ * **change-scoped**, the second entry in `GATE_SCOPE` that is not `"task"`.
  *
- * **No cell in the five original scenarios moved, and that is the honest
- * report rather than a weaker one.** Those five derive with no `change` facts,
- * so the delta specs are absent; the gate's absent-fact answer is `unevaluable`,
- * which is exactly what the `default:` arm answered before it had a producer.
- * Writing "one gate moved" over cells that did not move would be the defect this
- * file's own header warns about. What the unchanged cells assert is worth
- * keeping: they are PR 0's invariant — an absent fact yields `unevaluable`,
- * never `satisfied` — checked from outside the gate that has to hold it.
+ * The three statuses, stated once here because the release's whole verdict move
+ * is in them:
  *
- * The movement is in the sixth scenario, which is new. "an approved delta spec"
- * carries real change facts, and its R2 row records `approved_delta_spec:
- * "satisfied"` — a cell no earlier build of this file could produce, because no
- * gate read a change fact at all. Its other three tier rows are cell-for-cell
- * identical to "passing verification and an accepted review", which is the
- * second half of the claim: supplying change facts moved this gate and nothing
- * else.
+ *  - `satisfied` — at least one declared non-unit surface ran, passed, and still
+ *    pins bytes that match the working tree.
+ *  - `unsatisfied` — the change declares surfaces and **every** one of them is
+ *    `unit`; or no surface reached a boundary cleanly and one of them failed or
+ *    drifted.
+ *  - `unevaluable` — nothing in the change declares a surface at all.
+ *
+ * The altitude is the point. ADR-006 asks whether verification reaches the
+ * relevant integration or real interface **for the change**, and `legion plan`
+ * materializes one task per executable criterion — so a task-scoped all-unit rule
+ * fires per *criterion*, and a change whose first criterion reaches a real
+ * interface is blocked forever by a second criterion that honestly says it does
+ * not. Punishing an accurate answer teaches operators to give an inaccurate one.
+ *
+ * **No cell in the six earlier scenarios moved, and that is the honest report
+ * rather than a weaker one.** None of those six builds a task contract carrying
+ * a verification entry at all, so nothing declares a surface; the gate's
+ * absent-declaration answer is `unevaluable`, which is exactly what the
+ * `default:` arm answered before it had a producer. Writing "one gate moved" over
+ * cells that did not move would be the defect this file's own header warns about.
+ * What the unchanged cells assert is worth keeping: they are PR 0's invariant —
+ * an absent fact yields `unevaluable`, never `satisfied` — checked from outside
+ * the gate that has to hold it, and here checked against a gate that has three
+ * different ways to be unmet.
+ *
+ * The movement is in two new scenarios, and it takes two because this gate is the
+ * first whose *negative* is not a failure:
+ *
+ *  - "a verified real-interface surface" records
+ *    `integration_or_real_interface_checks: "satisfied"` at R2 — a declared
+ *    non-unit surface, a pin that still matches, and a passing
+ *    `integration-surface-check`.
+ *  - "only unit surfaces declared" records it `"unsatisfied"` at R2, with no
+ *    change facts at all. A change that declared a surface for every executable
+ *    criterion and wrote `unit` each time has answered R2's question, and the
+ *    answer is no. That is decided from the declarations rather than from any
+ *    verdict, which is why it needs no plane loaded and cannot go stale.
+ *
+ * Both scenarios' other three tier rows are cell-for-cell identical to "passing
+ * verification and an accepted review", which is the second half of the claim:
+ * declaring a surface moved this gate at the one tier that derives it, and
+ * nothing else.
+ *
+ * The gate id that moved in the release before this one was `approved_delta_spec`
+ * — it reads the approval plane for a granted, pin-clean approval of every one of
+ * the change's delta specs, and it was the first change-scoped entry in
+ * `GATE_SCOPE`. Its cells are recorded below as they now stand, including the
+ * sixth scenario that was added to move them.
  *
  * **Readiness is transcribed separately, in `BASELINE_READY`, and it is not
  * uniformly false.** A draft of this paragraph asserted that `ready` was false
@@ -567,11 +676,86 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  "a verified real-interface surface": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      // One of the two cells this release adds. The only one in this row that
+      // differs from "passing verification and an accepted review".
+      integration_or_real_interface_checks: "satisfied",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "only unit surfaces declared": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      // The other. `unsatisfied` rather than `unevaluable`, and that distinction
+      // is the whole point of this scenario: the operator answered, and the
+      // answer was that nothing here crosses a boundary.
+      integration_or_real_interface_checks: "unsatisfied",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
 };
 
 /**
- * `report.ready` for the same six scenarios at the same four tiers.
+ * `report.ready` for the same eight scenarios at the same four tiers.
  *
  * Written out as literals rather than derived from the table above, which would
  * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
@@ -580,9 +764,12 @@ const BASELINE_GATE_STATUSES = {
  * quietly blocked a tier Legion can already satisfy would fail here rather than
  * in whatever suite happened to notice months later.
  *
- * `an approved delta spec` is R2-blocked with `approved_delta_spec: satisfied`,
- * which is the honest shape of this release: one of the R2 gates now has a
- * producer and three still do not.
+ * No readiness cell moves in this release, and that is a claim rather than a
+ * shrug. `a verified real-interface surface` is still R2-blocked *with*
+ * `integration_or_real_interface_checks: satisfied`, because three of the R2
+ * gates still have no producer — so a scenario satisfying the new gate proves the
+ * gate moved without proving the tier became reachable, which is the honest shape
+ * of this release: two of the R2 gates now have producers and three do not.
  */
 const BASELINE_READY = {
   "passing verification and an accepted review": { R0: true, R1: true, R2: false, R3: false },
@@ -590,7 +777,9 @@ const BASELINE_READY = {
   "failed declared-verification": { R0: false, R1: false, R2: false, R3: false },
   "passing oracle verification": { R0: true, R1: true, R2: false, R3: false },
   "failed oracle verification": { R0: true, R1: true, R2: false, R3: false },
-  "an approved delta spec": { R0: true, R1: true, R2: false, R3: false }
+  "an approved delta spec": { R0: true, R1: true, R2: false, R3: false },
+  "a verified real-interface surface": { R0: true, R1: true, R2: false, R3: false },
+  "only unit surfaces declared": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -600,6 +789,7 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
         tier,
         items: scenario.items,
         reviews: scenario.reviews,
+        ...(scenario.contract === undefined ? {} : { contract: scenario.contract }),
         ...(scenario.change === undefined ? {} : { change: scenario.change })
       });
       const actual = Object.fromEntries(report.gates.map((gate) => [gate.gate, gate.status]));
@@ -614,7 +804,7 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
   }
 });
 
-test("the only change facts any gate reads are deltas, approvals, changeId and the clock", () => {
+test("the only change facts any gate reads are deltas, approvals, oracles, changeId and the clock", () => {
   // The predecessor of this test asserted that no gate read any change fact,
   // by throwing on every property access. Its comment named the honest edit for
   // the day a gate started reading one: replace it with an assertion naming the
@@ -641,13 +831,36 @@ test("the only change facts any gate reads are deltas, approvals, changeId and t
   // only widens the boundary the test exists to pin. It is now true — this
   // release adds the first change-scoped gate — and `changeId` is still recorded
   // like any other read rather than exempted for it.
-  function tripwire(reads, { approvals, deltas } = {}) {
+  //
+  // `oracles` joins the allow-list with `integration_or_real_interface_checks`'s
+  // producer, and it is admitted with a stated reason rather than by widening the
+  // trap. `legion plan` copies one authored verification surface onto both the
+  // task contract's verification entry and the oracle that criterion produces, so
+  // the declaration set that gate quantifies over spans the contract and the
+  // oracles the contract names. Reading only one half would make an oracle-side
+  // declaration invisible, which is absence — the fail-open this gate closes.
+  //
+  // The per-tier expectation below is what keeps that from becoming a blanket
+  // admission, and it is sharper than it looks: the gate reads `oracles` only
+  // when the task contract actually names one, and the tripwire's task names
+  // none. So `ABSENT_PLANE_READS` does not move at all, and the third populated
+  // pass at the bottom is what witnesses the read. Ordering the gate's guard that
+  // way is deliberate — `acceptance`, `taskRuns` and `release` still have no
+  // reader, and each is a fail-open waiting for one.
+  function tripwire(reads, { approvals, deltas, oracles } = {}) {
     return new Proxy(
       // `verifyPin` is the one true exemption: the guard inside
       // `deriveShipGates` inspects it on every call, to substitute a verifier
       // when a caller supplied something that is not one, so recording it would
       // say nothing about which gate read what.
-      { verifyPin: () => "match", changeId: "chg_tripwire", approvals, deltas, evaluatedAt: undefined },
+      {
+        verifyPin: () => "match",
+        changeId: "chg_tripwire",
+        approvals,
+        deltas,
+        oracles,
+        evaluatedAt: undefined
+      },
       {
         get(target, property) {
           if (property === "verifyPin") return target.verifyPin;
@@ -655,6 +868,7 @@ test("the only change facts any gate reads are deltas, approvals, changeId and t
             property === "changeId" ||
             property === "approvals" ||
             property === "deltas" ||
+            property === "oracles" ||
             property === "evaluatedAt"
           ) {
             reads.push(property);
@@ -771,6 +985,34 @@ test("the only change facts any gate reads are deltas, approvals, changeId and t
     [...new Set(populatedDeltaReads)].sort(),
     ["approvals", "changeId", "deltas", "evaluatedAt"]
   );
+
+  // And once more with a task that names an oracle, which is the only shape that
+  // makes `integration_or_real_interface_checks` consult the oracle plane. Both
+  // passes above leave `oracles` untouched — deliberately, so the gate's guard
+  // ordering is asserted rather than assumed — which means without this pass the
+  // admission above would be a widening nothing witnesses.
+  const populatedOracleReads = [];
+  const oracleReport = deriveShipGates({
+    tasks: [task("R2", { oracleRefs: ["orc_transcript-c1"] })],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedOracleReads, {
+      oracles: [
+        {
+          document: { id: "orc_transcript-c1", surface: UNIT_SURFACE },
+          reference: SURFACE_PIN
+        }
+      ]
+    })
+  });
+  assert.deepEqual([...new Set(populatedOracleReads)].sort(), ["changeId", "deltas", "oracles"]);
+  // The oracle's declaration is genuinely read, not merely touched: a unit-only
+  // declaration set is the gate's recorded negative.
+  assert.equal(
+    oracleReport.gates.find((gate) => gate.gate === "integration_or_real_interface_checks").status,
+    "unsatisfied"
+  );
 });
 
 /**
@@ -783,7 +1025,7 @@ test("the only change facts any gate reads are deltas, approvals, changeId and t
  * refactor. It changes which subject the operator's diagnostic names and whether
  * that diagnostic is collapsed to one per change.
  */
-const CHANGE_SCOPED_GATES = new Set(["approved_delta_spec"]);
+const CHANGE_SCOPED_GATES = new Set(["approved_delta_spec", "integration_or_real_interface_checks"]);
 
 test("every gate names its scope and the subject that scope refers to", () => {
   // The ship command's blocked diagnostic interpolates `subjectId`, and nothing
@@ -795,8 +1037,16 @@ test("every gate names its scope and the subject that scope refers to", () => {
   // wrongly marked task-scoped repeats one sentence once per task; a gate
   // wrongly marked change-scoped reports a verdict about one task under the
   // change's name and swallows the other tasks' diagnostics entirely.
+  // Looked up by name, not by position. It used to read `SCENARIOS.at(-1)`, and
+  // the day a scenario was appended for a different gate — this release —
+  // `derive` would have spread facts with no `changeId` and `approved_delta_spec`
+  // would have fallen back to naming the task, failing this test with a message
+  // about the delta-spec gate and no visible connection to the scenario that
+  // broke it.
+  const approvedDeltaSpec = SCENARIOS.find((scenario) => scenario.name === "an approved delta spec");
+
   for (const tier of ["R0", "R1", "R2", "R3"]) {
-    const report = derive({ tier, ...PASSING_R2, change: SCENARIOS.at(-1).change });
+    const report = derive({ tier, ...PASSING_R2, change: approvedDeltaSpec.change });
     assert.ok(report.gates.length > 0);
     for (const gate of report.gates) {
       const expected = CHANGE_SCOPED_GATES.has(gate.gate) ? "change" : "task";

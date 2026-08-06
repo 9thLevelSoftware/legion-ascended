@@ -2,7 +2,7 @@ import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { hashContent } from "@legion/artifacts";
-import type { ArtifactReference } from "@legion/protocol";
+import { artifactReferenceSchema, type ArtifactReference } from "@legion/protocol";
 
 /**
  * Re-verifying the artifacts a governance record pinned.
@@ -213,5 +213,56 @@ export async function resolvePinnedReferences(
     if (entry.kind === "missing") return "missing";
     if (entry.kind === "unverified") return "unverified";
     return entry.sha256 === reference.sha256 ? "match" : "drift";
+  };
+}
+
+/** A pin for a declared path, or `undefined` when no pin can be minted for it. */
+export type MintPinnedReference = (artifactPath: string) => ArtifactReference | undefined;
+
+/**
+ * Mint the pins a record is about to declare, through the resolver that will
+ * later check them.
+ *
+ * An operator cannot type a pin: `artifactReferenceSchema.sha256` is required and
+ * must be the `sha256:<hex>` form, so a verification surface captures paths and
+ * the digests are minted here, once, when the declaration is recorded.
+ *
+ * It shares `resolveOne` with `resolvePinnedReferences` and that sharing is
+ * load-bearing rather than tidiness. That function refuses an NTFS
+ * alternate-data-stream path, a path that leaves the repository after `realpath`,
+ * and a case-folded alias — each by answering `unverified`, which every consuming
+ * gate reports as `unevaluable`. A pin minted through any other route (a bare
+ * `readFile` plus `hashContent`) can therefore be minted for a path the verifier
+ * will never answer for: the operator declares a surface, finalize succeeds,
+ * planning succeeds, and `legion ship` reports the declaration as absent forever
+ * with nothing anywhere naming the cause. Mint and verify must agree about which
+ * paths exist, or they disagree silently in the direction of absence.
+ *
+ * `undefined` is every failure — absent, unreadable, refused — because the caller
+ * has exactly one thing to do about all of them: refuse the declaration and say
+ * which path could not be pinned.
+ */
+export async function mintPinnedReferences(input: {
+  readonly repositoryRoot: string;
+  readonly paths: Iterable<string>;
+}): Promise<MintPinnedReference> {
+  const resolved = new Map<string, ResolvedPath>();
+
+  for (const artifactPath of input.paths) {
+    if (resolved.has(artifactPath)) continue;
+    resolved.set(artifactPath, await resolveOne(input.repositoryRoot, artifactPath));
+  }
+
+  return (artifactPath: string): ArtifactReference | undefined => {
+    const entry = resolved.get(artifactPath);
+    if (entry === undefined || entry.kind !== "hashed") return undefined;
+    // Parsed rather than cast: `artifactPathSchema` refuses backslashes, drive
+    // letters, absolute paths and `..`, and a path an operator pasted from a
+    // Windows shell hits every one of those. A reference that failed to parse
+    // here would otherwise throw out of `requirementSchema.parse` during
+    // `--finalize`, where the operator gets a stack trace instead of the
+    // question back.
+    const reference = artifactReferenceSchema.safeParse({ path: artifactPath, sha256: entry.sha256 });
+    return reference.success ? reference.data : undefined;
   };
 }

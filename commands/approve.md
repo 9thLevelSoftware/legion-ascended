@@ -1,14 +1,17 @@
 ---
 name: legion:approve
-description: Record a human's decision about the change's delta specs
-argument-hint: "spec [--requirement <id>] --approver <id> [--dry-run]"
+description: Record a human's decision about the change's delta specs or verification surfaces
+argument-hint: "spec [--requirement <id>] | surface [--path <file>] --approver <id> [--dry-run]"
 allowed-tools: [Bash, Read]
 ---
 
 <objective>
-Record that a named human approved the delta specs of the current change, pinning the exact bytes they approved. This writes one governance artifact per requirement and nothing else — it does not plan, build, review or ship.
+Record that a named human decided something about the current change, pinning the exact bytes they decided about. This writes governance artifacts and nothing else — it does not plan, build, review or ship.
 
-It runs between `legion plan` and `legion build`. `legion ship` reads what it writes: the `approved_delta_spec` risk gate is satisfied only when every delta spec in the change carries a granted approval whose pinned hash still matches the file on disk.
+Two subjects:
+
+- **`spec`** — approve the change's delta specs. Runs between `legion plan` and `legion build`. `legion ship` reads what it writes: the `approved_delta_spec` risk gate is satisfied only when every delta spec in the change carries a granted approval whose pinned hash still matches the file on disk.
+- **`surface`** — re-affirm a verification surface whose pinned file has been edited. A surface declares what a verification command reaches and pins the files that make that true: the compose file standing the real service up, the schema it is checked against. `legion ship` re-hashes them, so editing one stops the declaration being believed and `integration_or_real_interface_checks` reports unsatisfied. That is the gate working. This is the way back, and it is a decision rather than a rewrite: nothing re-mints a pin silently, because a silent re-mint would launder an out-of-band edit into a declaration.
 </objective>
 
 <authority>
@@ -16,7 +19,7 @@ You are not the approver. The human named by `--approver` is.
 
 Never invent an approver id, never pick the project's only decision owner because it is the only one, and never read one out of git config or the environment. The CLI refuses all three, and the reason it refuses them is the whole point of the artifact: an approval recorded against a defaulted identity is not a human approval, and a gate that reads one is a gate that cannot fail.
 
-If the user has not named an approver, ask. Do not guess, and do not offer the owner you can see in the manifest as a default.
+If the user has not named an approver, ask. Do not guess, and do not offer the owner you can see in the manifest as a default. This is true of both subjects: re-affirming a surface is a claim that a declaration still describes what somebody meant, which only that somebody can make.
 
 There is also a limit worth being honest about. Approving a delta spec records that a named person said yes to a specific set of bytes at a specific moment. It does not establish that they read them. The pin makes the claim falsifiable afterwards — anyone can check which text was approved — but it does not make it true. Do not present this step as a formality.
 </authority>
@@ -62,12 +65,44 @@ Change state comes from the CLI, not from files read directly.
 4. ROUTE
 
    Show `nextAction.command` and `nextAction.reason`. Present it as a recommendation. Do not run it.
+
+## Re-affirming a verification surface
+
+Reach for this only when `legion ship` reports `integration_or_real_interface_checks` as `risk_gate_unsatisfied` with a message about bytes that have changed. It is not a step in the normal flow, and it has nothing to say about a gate that is unsatisfied for any other reason.
+
+1. SHOW WHAT DRIFTED
+
+   ```
+   legion approve surface --dry-run --approver <id> --json
+   ```
+
+   `drifted` lists the pinned files whose bytes no longer match what was declared or last re-affirmed. Per entry in `reaffirmations`, show `path`, the `interfaces` that pin it, `declaredSha256` and `currentSha256`.
+
+   **Show the user what actually changed in that file.** A diff is the whole substance of this decision: the question being asked is "does this file still make the integration check real", and it cannot be answered from two hashes. If the change replaced a live service with a stub, a fake or a recorded fixture, the honest answer is no — say so, and do not record the re-affirmation.
+
+2. RECORD THE DECISION
+
+   ```
+   legion approve surface --approver <id> --json
+   ```
+
+   Add `--path <file>` only when the user asked to re-affirm one file rather than every drifted pin. It is not repeatable.
+
+3. REPORT WHAT IS STILL OPEN
+
+   `drifted` in the result names pins this run left alone. The gate stays unsatisfied until it is empty.
+
+4. ROUTE
+
+   `nextAction` is `legion ship`, because re-affirming changes no evidence — it changes whether the gate believes a declaration it already had.
 </process>
 
 <inspection>
-- `legion approve spec --dry-run --json` is read-only and safe to run at any time.
+- `legion approve spec --dry-run --json` and `legion approve surface --dry-run --json` are read-only and safe to run at any time.
 - Re-running after a successful approval reports `unchanged` and rewrites nothing. It is not an error and does not need a flag.
 - Re-granting over a withdrawn approval copies the withdrawal to its own file before the grant is written, so the negative decision, its reason and its author survive. Nothing here deletes a decision.
+- A re-affirmation covers exactly one revision of the pinned file. Edit it again and the gate blocks again; there is no way to exempt a path permanently, which is deliberate.
+- `legion approve surface` re-affirms only pins that have actually drifted. It never rewrites the requirement, the task graph or the oracles.
 - Nothing here writes outside `.legion/project/changes/<id>/approvals/`.
 </inspection>
 
@@ -84,5 +119,9 @@ Change state comes from the CLI, not from files read directly.
 | `status` is `unchanged` | Say nothing was written and why — the same approver already granted these exact bytes, in a document the ship gate accepts |
 | `withdrawal_not_superseded` | A recorded revocation or denial is dated at or after now, so no grant taken now can supersede it. Nothing was written. This is a clock problem on whatever wrote the withdrawal, not something to work around |
 | `action` is `regrant` with `previousStatus` `revoked` or `denied` | Say whose decision is being overruled and where it was preserved. Do not present it as a routine rerun |
-| A write failed partway | `approvals` in the failure payload names what landed. Rerunning is safe: an already-approved requirement reports `unchanged` |
+| A write failed partway | `approvals` (or `reaffirmations`) in the failure payload names what landed. Rerunning is safe: an already-decided subject reports `unchanged` |
+| `no_declared_surface` | Nothing in this change declares a verification surface beyond unit, so there is no pin to re-affirm. The gate is unmet for a different reason; read what `legion ship` actually said |
+| `path_not_pinned` | The named file is not pinned by any surface here. Show the pinned files from the diagnostic and ask which was meant |
+| `unreadable_surface_pin` | The pinned file is gone. A re-affirmation records the digest of a file that is there, so there is nothing to record. Restore the file |
+| `drifted` is non-empty after a write | Say the gate is still unsatisfied and name the files left |
 </decision_matrix>

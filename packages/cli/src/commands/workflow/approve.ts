@@ -1,12 +1,14 @@
 import {
   loadChangeBundle,
   readApproval,
+  readTaskGraph,
   writeApproval,
   type ApprovalSuccess,
   type ChangeBundleDeltaEntry
 } from "@legion/artifacts";
 import {
   LEGION_PROTOCOL_VERSION,
+  artifactReferenceSchema,
   buildChangeIdempotencyKey,
   type Actor,
   type Approval
@@ -28,10 +30,16 @@ import {
   PROJECT_MANIFEST_PATH
 } from "../../workflow/approver.js";
 import { currentUtcTimestamp, resolveBaseGitSha } from "../../workflow/change-input.js";
+import { loadOracleFacts } from "../../workflow/change-planes.js";
 import { loadWorkflowProject } from "../../workflow/context.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
-import { approvalIdForSubject } from "../../workflow/run-artifacts.js";
-import { isLiveDeltaSpecGrant } from "../../workflow/ship-gates.js";
+import { mintPinnedReferences } from "../../workflow/pinned-references.js";
+import { approvalIdForSubject, taskIdForContractId } from "../../workflow/run-artifacts.js";
+import {
+  changeVerificationSurfaces,
+  isLiveDeltaSpecGrant,
+  isLiveSurfaceReaffirmation
+} from "../../workflow/ship-gates.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
 const APPROVE_HELP = `legion approve <subject>
@@ -40,7 +48,8 @@ Record a human decision about part of the latest change. This writes a governanc
 artifact and nothing else: it does not plan, build, review or ship.
 
 Subjects:
-  spec    Approve the change's delta specs.
+  spec     Approve the change's delta specs.
+  surface  Re-affirm a verification surface whose pinned file has been edited.
 
 legion approve spec [--requirement <id>] --approver <id> [--dry-run]
 
@@ -55,10 +64,30 @@ legion approve spec [--requirement <id>] --approver <id> [--dry-run]
   --dry-run           Resolve the approver and the delta specs, report what would
                       be written, and write nothing.
 
+legion approve surface [--path <file>] --approver <id> [--dry-run]
+
+  A verification surface pins the files that make it real — the compose file
+  standing the service up, the schema it is checked against. legion ship
+  re-hashes them, so editing one stops the declaration being believed and
+  integration_or_real_interface_checks reports unsatisfied. That is the point,
+  and it is also why there has to be a way back: maintaining the integration
+  harness is the honest thing to do, and nothing else re-mints a pin.
+
+  This records a named human saying the declaration still describes what they
+  meant, against the bytes on disk now. It re-affirms nothing that has not
+  drifted, and nothing whose file cannot be read.
+
+  --approver <id>     Required, same rule as above.
+  --path <file>       Re-affirm only this pinned file. Omitted, every drifted pin
+                      in the change is re-affirmed. Not repeatable.
+  --dry-run           Report what would be re-affirmed and write nothing.
+
 Examples:
   legion approve spec --approver dasbl
   legion approve spec --approver dasbl --dry-run
-  legion approve spec --requirement req_editor-saves-metadata --approver dasbl`;
+  legion approve spec --requirement req_editor-saves-metadata --approver dasbl
+  legion approve surface --approver dasbl
+  legion approve surface --path ops/compose.integration.yml --approver dasbl`;
 
 /**
  * The action a delta-spec approval carries.
@@ -88,15 +117,33 @@ export async function handleApproveWorkflow(context: CliContext): Promise<CliRes
   }
   if (subject === undefined) {
     return usageError(
-      "legion approve requires a subject. Supported subjects: spec. Example: legion approve spec --approver <id>."
+      "legion approve requires a subject. Supported subjects: spec, surface. Example: legion approve spec --approver <id>."
     );
   }
-  if (subject !== "spec") {
+  if (subject !== "spec" && subject !== "surface") {
     return usageError(
-      `Unknown approval subject: legion approve ${subject}. Supported subjects: spec.`
+      `Unknown approval subject: legion approve ${subject}. Supported subjects: spec, surface.`
     );
   }
 
+  // `declared-options.ts` holds one list for every subject, because
+  // `undeclaredOptionError` runs before this handler and cannot see which subject
+  // was named. So the per-subject boundary is here, and it is a refusal rather
+  // than a silent ignore: `legion approve surface --requirement req_x` typed by
+  // an operator who meant `spec` would otherwise re-affirm every drifted pin in
+  // the change and report success, having quietly discarded the one word that
+  // said what they wanted.
+  const foreign = subject === "spec" ? "path" : "requirement";
+  if (context.args.options.has(foreign)) {
+    return usageError(
+      `--${foreign} is not an option of legion approve ${subject}. ` +
+        (subject === "spec"
+          ? "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
+          : "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>.")
+    );
+  }
+
+  if (subject === "surface") return approveVerificationSurfaces(context);
   return approveDeltaSpecs(context);
 }
 
@@ -304,7 +351,11 @@ async function approveDeltaSpecs(context: CliContext): Promise<CliResult> {
     // holding the negative fact.
     const archived = await archiveWithdrawnDecision({
       repositoryRoot: context.repositoryRoot,
-      entry,
+      existing: entry.existing,
+      subject: entry.delta.requirementId,
+      action: DELTA_SPEC_APPROVE_ACTION,
+      target: { kind: "requirement", id: entry.delta.requirementId },
+      command: "legion approve spec",
       decidedAt
     });
     if (!archived.ok) {
@@ -520,13 +571,20 @@ function plannedActionFor(
  */
 async function archiveWithdrawnDecision(input: {
   readonly repositoryRoot: string;
-  readonly entry: PlannedApproval;
+  readonly existing: ApprovalSuccess | undefined;
+  /** What the decision was about, in the operator's terms. */
+  readonly subject: string;
+  /** The action and target the archive's derived id is minted under. */
+  readonly action: string;
+  readonly target: { readonly kind: string; readonly id: string };
+  /** The verb to advise if the archive refuses. */
+  readonly command: string;
   readonly decidedAt: ReturnType<typeof currentUtcTimestamp>;
 }): Promise<
   | { readonly ok: true; readonly record?: ApprovalSuccess }
   | { readonly ok: false; readonly diagnostics: readonly unknown[]; readonly action: ReturnType<typeof nextAction> }
 > {
-  const existing = input.entry.existing;
+  const existing = input.existing;
   if (existing === undefined) return { ok: true };
   const document = existing.document;
   if (document.status !== "denied" && document.status !== "revoked") return { ok: true };
@@ -538,14 +596,14 @@ async function archiveWithdrawnDecision(input: {
         {
           code: "withdrawal_not_superseded",
           message:
-            `Approval ${document.id} for ${input.entry.delta.requirementId} was ${document.status} at ${document.decidedAt}, ` +
+            `Approval ${document.id} for ${input.subject} was ${document.status} at ${document.decidedAt}, ` +
             `which is not before this run's decision instant ${input.decidedAt}. A grant only supersedes a withdrawal when it is ` +
             "strictly later, so writing one now would leave the withdrawal standing and the change unshippable. Nothing was written.",
           path: existing.artifactPath
         }
       ],
       action: nextAction(
-        "legion approve spec",
+        input.command,
         "The recorded withdrawal is dated at or after now, so no grant taken now can supersede it. Check the clock on the machine that wrote it, then run this again."
       )
     };
@@ -555,11 +613,11 @@ async function archiveWithdrawnDecision(input: {
     changeId: document.changeId,
     // The subject of the archive is "the decision that stood at revision N",
     // which is what makes the id distinct and stable: a second withdrawal of the
-    // same requirement is a different revision and lands beside this one rather
+    // same subject is a different revision and lands beside this one rather
     // than on it. Colliding ids would fail the write, which is a refusal — never
     // an overwrite.
-    action: `${DELTA_SPEC_APPROVE_ACTION}.superseded.r${existing.revision.revision}`,
-    subject: { kind: "requirement", id: input.entry.delta.requirementId }
+    action: `${input.action}.superseded.r${existing.revision.revision}`,
+    subject: input.target
   });
 
   const write = await writeApproval({
@@ -585,8 +643,8 @@ async function archiveWithdrawnDecision(input: {
       ok: false,
       diagnostics: write.diagnostics,
       action: nextAction(
-        "legion approve spec",
-        `The ${document.status} approval for ${input.entry.delta.requirementId} could not be copied aside, so nothing was overwritten. ` +
+        input.command,
+        `The ${document.status} approval for ${input.subject} could not be copied aside, so nothing was overwritten. ` +
           "A grant is not written over a withdrawal that cannot first be preserved."
       )
     };
@@ -788,12 +846,18 @@ type SpecApproverDecision =
  * identity rule would be a second thing to get wrong, and the first one already
  * refuses an unknown id, an ambiguous one and a non-human owner by name.
  */
-async function resolveSpecApprover(context: CliContext): Promise<SpecApproverDecision> {
+async function resolveSpecApprover(
+  context: CliContext,
+  subject: { readonly command: string; readonly decision: string } = {
+    command: "legion approve spec",
+    decision: "a delta spec"
+  }
+): Promise<SpecApproverDecision> {
   const raw = stringOption(context, "approver")?.trim();
   if (context.args.options.get("approver") === true || raw === "") {
     return {
       ok: false,
-      result: usageError("Missing required value for --approver. Example: legion approve spec --approver dasbl.")
+      result: usageError(`Missing required value for --approver. Example: ${subject.command} --approver dasbl.`)
     };
   }
 
@@ -805,14 +869,14 @@ async function resolveSpecApprover(context: CliContext): Promise<SpecApproverDec
           {
             code: "approver_required",
             message:
-              "legion approve spec records a human's decision about a delta spec, so it requires --approver <id> " +
+              `${subject.command} records a human's decision about ${subject.decision}, so it requires --approver <id> ` +
               `naming a human decision owner recorded in ${PROJECT_MANIFEST_PATH}. ` +
               "No approver is inferred from the environment, from git config, or from a project having only one owner — " +
               "an approval recorded against a defaulted identity is not a human approval.",
             path: PROJECT_MANIFEST_PATH
           }
         ],
-        nextAction("legion approve spec --approver <id>", "A delta-spec approval requires a named human approver.")
+        nextAction(`${subject.command} --approver <id>`, `Recording a decision about ${subject.decision} requires a named human approver.`)
       )
     };
   }
@@ -836,7 +900,7 @@ async function resolveSpecApprover(context: CliContext): Promise<SpecApproverDec
       result: blockedApprove(
         resolved.diagnostics,
         nextAction(
-          "legion approve spec --approver <id>",
+          `${subject.command} --approver <id>`,
           `Name a human decision owner recorded in ${PROJECT_MANIFEST_PATH}. Recorded owners: ${describeDecisionOwners(owners)}.`
         )
       )
@@ -873,5 +937,599 @@ function blockedApprove(
       nextAction: action
     },
     ["Approve blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+
+/**
+ * The action a verification-surface re-affirmation carries.
+ *
+ * Spelled out here and in `ship-gates.ts` rather than shared, on
+ * `DELTA_SPEC_APPROVE_ACTION`'s rule: the gate and the writer are two sides of a
+ * contract, and a shared symbol would let a rename move both at once and leave
+ * every approval already on disk unreadable by the gate that reads them.
+ */
+const SURFACE_REAFFIRM_ACTION = "verification.surface.reaffirm";
+
+/** One pinned file of the change's declared verification surfaces. */
+interface SurfacePinState {
+  readonly path: string;
+  /** The digests the declarations record for it, in declaration order. */
+  readonly declared: readonly string[];
+  /** Which surfaces pin it, for the sentence the operator reads. */
+  readonly interfaces: readonly string[];
+  /** What the file hashes to now, or `undefined` when it cannot be read. */
+  readonly current?: string;
+  readonly approvalId: ReturnType<typeof approvalIdForSubject>;
+  readonly existing?: ApprovalSuccess;
+  /**
+   * Would the gate accept this pin as it stands?
+   *
+   * True when the bytes still match a declared digest, or when a live
+   * re-affirmation already covers the bytes that are there. The second half is
+   * computed through the gate's own predicate — see `isLiveSurfaceReaffirmation`
+   * — rather than through a rule of this command's own.
+   */
+  readonly settled: boolean;
+}
+
+interface PlannedReaffirmation extends SurfacePinState {
+  readonly action: "grant" | "regrant" | "unchanged";
+  readonly previousStatus?: Approval["status"];
+}
+
+/**
+ * `legion approve surface` — the way back from a legitimately edited pin.
+ *
+ * A verification surface pins the files that make it real, and `legion ship`
+ * re-hashes them: edit one and `integration_or_real_interface_checks` reports
+ * `unsatisfied`, which is exactly what the gate is for. What made that a defect
+ * rather than a feature is that there was no way back. `surface.pinned` is
+ * written once, by `buildRequirements`, whose only caller is `legion start
+ * --finalize`; a second interview cannot finalize over the first
+ * (`requirement_set_conflict`) and a finalized session cannot be aborted. So the
+ * first byte changed in an integration harness — the honest maintenance the
+ * whole declaration exists to encourage — permanently blocked every R2 change
+ * tracing that requirement, with no command anywhere able to repair it.
+ *
+ * The repair is a decision, not a rewrite. Re-affirming a declaration after a
+ * legitimate edit is the same kind of act as approving a delta spec: a named
+ * human saying "yes, this still describes what I meant". So it writes the same
+ * artifact under a different action, resolves `--approver` through the same
+ * `resolveApprover`, and leaves the requirement, the task graph and the oracles
+ * untouched — nothing is re-minted in place, and no command performs this
+ * silently. A silent re-mint would launder an out-of-band edit into a
+ * declaration, which is what PR 2 refused to do for delta specs.
+ *
+ * It is deliberately narrow. Only a pin that has actually drifted is offered:
+ * re-affirming an unchanged file would write a governance record for a decision
+ * nobody had to make, and `decidedAt` is what PR 5's ordering gate compares
+ * against a run's start.
+ */
+async function approveVerificationSurfaces(context: CliContext): Promise<CliResult> {
+  const pathRaw = stringOption(context, "path")?.trim();
+  if (context.args.options.get("path") === true || pathRaw === "") {
+    return usageError(
+      "Missing required value for --path. Example: legion approve surface --path ops/compose.integration.yml."
+    );
+  }
+
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction(
+        "legion plan 1",
+        "A verification surface is declared on a task contract, and the task graph could not be read."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  // The same set `integration_or_real_interface_checks` quantifies over,
+  // computed by the gate's own function rather than re-walked here. A writer
+  // walking its own smaller set could re-affirm a pin the gate does not read, or
+  // miss one it does — the writer/reader drift PR 2 closed for delta specs.
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  //
+  // `unreadableOracles` is deliberately not consumed. An operator reaches this
+  // command because `legion ship` reported a pin as drifted, and ship cannot
+  // report drift over a plane it could not read — an unreadable oracle makes that
+  // gate `unevaluable`, which routes somewhere else entirely. Refusing here on a
+  // fact that cannot coexist with the state this command repairs would add a
+  // branch no operator can be in.
+  const { surfaces } = changeVerificationSurfaces({
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id),
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: undefined,
+      approvals: undefined,
+      deltas: undefined,
+      oracles,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: undefined,
+      // Never consulted: nothing below asks whether a *declared* pin still
+      // matches through this verifier, because this command hashes the files
+      // itself and compares against the declaration. Supplied because the facts
+      // shape requires it, and answering `unverified` is the value that cannot
+      // be mistaken for a check that passed.
+      verifyPin: () => "unverified"
+    }
+  });
+
+  // Unit surfaces carry pins too, and the gate never checks them: its all-unit
+  // branch is decided from the declarations rather than from disk. Offering to
+  // re-affirm one would write a record no gate reads.
+  const nonUnit = surfaces.filter((declared) => declared.surface.kind !== "unit");
+
+  const declaredByPath = new Map<string, { declared: string[]; interfaces: string[] }>();
+  for (const entry of nonUnit) {
+    for (const pin of entry.surface.pinned) {
+      const record = declaredByPath.get(pin.path) ?? { declared: [], interfaces: [] };
+      if (!record.declared.includes(pin.sha256)) record.declared.push(pin.sha256);
+      if (!record.interfaces.includes(entry.surface.interface)) record.interfaces.push(entry.surface.interface);
+      declaredByPath.set(pin.path, record);
+    }
+  }
+
+  if (declaredByPath.size === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_declared_surface",
+          message:
+            `No task contract or oracle in ${latestChange.changeId} declares a verification surface beyond unit, so there is ` +
+            "no pin to re-affirm. A surface is authored on an executable acceptance criterion at legion start --intake and " +
+            "copied onto the plan; a change planned before this release, or from an interview that declined the question, " +
+            "declares none.",
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be re-affirmed. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  if (pathRaw !== undefined && !declaredByPath.has(pathRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "path_not_pinned",
+          message:
+            `--path ${pathRaw} is not pinned by any verification surface in this change. ` +
+            `The pinned files are: ${[...declaredByPath.keys()].join(", ")}. ` +
+            "Re-affirming a file no declaration names would record a decision nothing reads.",
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion approve surface --approver <id>", "Name a file one of this change's surfaces actually pins."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  // Resolved before the dry run returns. A dry run exists to answer "will this
+  // command line work", and one that resolved nothing answers yes to
+  // `--approver dasbi`.
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve surface",
+    decision: "a verification surface declaration"
+  });
+  if (!approver.ok) return approver.result;
+
+  // One instant for the whole run: the clock a live grant's expiry is judged
+  // against *and* the decision instant written into every approval this run
+  // records. Two reads would let a grant be judged live at one moment and dated
+  // at another.
+  const decidedAt = currentUtcTimestamp();
+
+  // Hashed once, through the resolver that minted the declaration and the one
+  // that re-checks it at ship time. A bare readFile plus hashContent would mint
+  // a pin for a path `resolvePinnedReferences` refuses — an NTFS
+  // alternate-data-stream path, a case-folded alias, a symlink out of the
+  // repository — and the gate would then answer `unverified` forever against a
+  // record this command reported as written.
+  const mintPin = await mintPinnedReferences({
+    repositoryRoot: context.repositoryRoot,
+    paths: [...declaredByPath.keys()]
+  });
+
+  const states: SurfacePinState[] = [];
+  for (const [pinPath, record] of declaredByPath) {
+    const minted = mintPin(pinPath);
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: SURFACE_REAFFIRM_ACTION,
+      subject: { kind: "surface", id: pinPath }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      // Blocking only for a path this run would write. Creating over an unread
+      // existing approval is the one way to silently replace a revocation with a
+      // fresh grant, which is exactly what an audit trail must not permit.
+      if (pathRaw === undefined || pathRaw === pinPath) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve surface",
+            `A re-affirmation already exists for ${pinPath} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({
+        path: pinPath,
+        declared: record.declared,
+        interfaces: record.interfaces,
+        ...(minted === undefined ? {} : { current: minted.sha256 }),
+        approvalId,
+        settled: false
+      });
+      continue;
+    }
+
+    const current = minted?.sha256;
+    const settled =
+      current !== undefined &&
+      (record.declared.includes(current) ||
+        (existing.ok &&
+          isLiveSurfaceReaffirmation({
+            approval: existing.document,
+            changeId: bundle.bundle.change.id,
+            path: pinPath,
+            currentSha256: current,
+            evaluatedAt: decidedAt
+          })));
+
+    states.push({
+      path: pinPath,
+      declared: record.declared,
+      interfaces: record.interfaces,
+      ...(current === undefined ? {} : { current }),
+      approvalId,
+      settled,
+      ...(existing.ok ? { existing } : {})
+    });
+  }
+
+  const selected = states.filter((state) => pathRaw === undefined || state.path === pathRaw);
+
+  // A file that cannot be hashed cannot be re-affirmed, and saying so beats
+  // writing a record that pins nothing. It is also the one drift state the gate
+  // deliberately does not offer this cure for: a `missing` pin is `unsatisfied`
+  // with no re-affirmation branch, because no document this command could write
+  // would answer it.
+  const unreadable = selected.filter((state) => state.current === undefined);
+  if (unreadable.length > 0) {
+    return blockedApprove(
+      unreadable.map((state) => ({
+        code: "unreadable_surface_pin",
+        message:
+          `${state.path} is pinned by the ${state.interfaces.join(", ")} surface and no readable file is there, so there ` +
+          "are no bytes to re-affirm. Restore the file, or re-plan the change from an interview that pins one that exists.",
+        path: state.path
+      })),
+      nextAction(
+        "legion approve surface --approver <id>",
+        "A re-affirmation records the digest of the file on disk. A file that is not there has no digest."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  const planned: PlannedReaffirmation[] = selected
+    .filter((state) => !state.settled)
+    .map((state) => ({ ...state, ...plannedReaffirmationFor(state, approver.approver) }));
+
+  // Two different questions, and answering both with one number is how the spec
+  // path's dry run came to advise a build on a change where nothing was
+  // approved. A dry run writes nothing, so it reports the state as it stands;
+  // the write path reports the state this run leaves behind.
+  const driftedNow = states.filter((state) => !state.settled).map((state) => state.path);
+  const driftedAfter = states
+    .filter((state) => !state.settled && !(pathRaw === undefined || state.path === pathRaw))
+    .map((state) => state.path);
+
+  if (hasFlag(context, "dry-run")) {
+    const action = dryRunSurfaceNextAction(driftedNow);
+    return success(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        // No `status` and no `decidedAt`: nothing was decided, and a dry-run
+        // payload carrying them would read as a record of a decision to anything
+        // parsing it.
+        reaffirmations: planned.map((entry) => ({
+          path: entry.path,
+          interfaces: entry.interfaces,
+          declaredSha256: entry.declared,
+          currentSha256: entry.current,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...(entry.previousStatus === undefined ? {} : { previousStatus: entry.previousStatus })
+        })),
+        drifted: driftedNow,
+        nextAction: action,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} verification surface pin${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.path}  ${entry.interfaces.join(", ")}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        "No approval was written.",
+        renderNextAction(action)
+      ].join("\n")
+    );
+  }
+
+  const written: ApprovalSuccess[] = [];
+  const superseded: ApprovalSuccess[] = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: entry.path,
+      action: SURFACE_REAFFIRM_ACTION,
+      target: { kind: "surface", id: entry.path },
+      command: "legion approve surface",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        reaffirmations: written.map(approvalSummary)
+      });
+    }
+    if (archived.record !== undefined) superseded.push(archived.record);
+
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === undefined ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: surfaceReaffirmation({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...(archived.record === undefined ? {} : { superseding: archived.record })
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve surface",
+          "Some pins were re-affirmed and one write failed. Rerunning re-decides only what is still drifted."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          reaffirmations: written.map(approvalSummary)
+        }
+      );
+    }
+    written.push(write);
+  }
+
+  const action = surfaceNextAction(driftedAfter);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = superseded.map((record) => ({
+    code: "withdrawn_approval_superseded",
+    message:
+      `${record.document.decidedBy?.id ?? "someone"} had recorded this re-affirmation as ${record.document.status}` +
+      `${record.document.decisionReason === undefined ? "" : ` ("${record.document.decisionReason}")`}` +
+      `, and this grant supersedes that decision. The withdrawal is preserved at ${record.artifactPath} ` +
+      "and is the standing record of it; nothing was deleted.",
+    path: record.artifactPath
+  }));
+
+  return success(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...(warnings.length === 0 ? {} : { warnings }),
+      ...(superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary) }),
+      reaffirmations: planned.map((entry) => {
+        const record = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          path: entry.path,
+          interfaces: entry.interfaces,
+          declaredSha256: entry.declared,
+          currentSha256: entry.current,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...(entry.previousStatus === undefined ? {} : { previousStatus: entry.previousStatus }),
+          artifactPath: record?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // Pins this run leaves drifted, for the same reason `unapproved` exists on
+      // the spec path: the gate reads every declaration in the change, so
+      // re-affirming one of three leaves ship blocked over two the operator
+      // never saw.
+      drifted: driftedAfter,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0
+        ? `Nothing to re-affirm: every verification surface pin in ${latestChange.changeId} still matches what was declared or re-affirmed.`
+        : `Re-affirmed ${decided} verification surface pin${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.path}  ${entry.interfaces.join(", ")}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+/**
+ * What this run would do to one pinned file's re-affirmation.
+ *
+ * `plannedActionFor`'s rule, over a different subject. `state.settled` is the
+ * gate's own predicate — `isLiveSurfaceReaffirmation` — rather than a paraphrase
+ * of it, so this command cannot report "already re-affirmed" over a document the
+ * gate rejects. That failure mode has a name in this file's history: a writer
+ * whose idea of done is weaker than the reader's idea of satisfied leaves the
+ * change permanently blocked with a command that exits 0.
+ */
+function plannedReaffirmationFor(
+  state: SurfacePinState,
+  approver: Actor
+): { readonly action: PlannedReaffirmation["action"]; readonly previousStatus?: Approval["status"] } {
+  const existing = state.existing;
+  if (existing === undefined) return { action: "grant" };
+  if (state.settled && existing.document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: existing.document.status };
+  }
+  return { action: "regrant", previousStatus: existing.document.status };
+}
+
+/**
+ * The re-affirmation document, pinning the bytes the approver looked at.
+ *
+ * `artifacts` is the digest hashed off disk during *this* run, and that is what
+ * stops the record being a blanket exemption. `legion ship` re-hashes it, so the
+ * approval covers exactly one revision of the file: the next edit drifts again
+ * and needs its own decision. An approval that named only the path would
+ * permanently disable the pin check for that file, which is the fail-open the
+ * whole declaration exists to prevent.
+ *
+ * `scope.targets` names the change rather than the file, because
+ * `approvalTargetReferenceSchema` has no `surface` or `path` member and
+ * inventing one would be a protocol change inside a diff about a gate. The path
+ * is carried in `artifacts`, which is where the gate reads it and where it
+ * belongs: `targets` names *what* was decided about by id, `artifacts` names the
+ * content that was in front of the approver.
+ *
+ * No `taskId` and no `runId`. A pinned file is shared by every task whose
+ * criterion declares it, so naming one would assert a pairing this decision does
+ * not make.
+ */
+function surfaceReaffirmation(input: {
+  readonly entry: PlannedReaffirmation;
+  readonly projectId: Parameters<typeof buildChangeIdempotencyKey>[0]["projectId"];
+  readonly changeId: Parameters<typeof buildChangeIdempotencyKey>[0]["changeId"];
+  readonly approver: Actor;
+  readonly decidedAt: ReturnType<typeof currentUtcTimestamp>;
+  /** The withdrawal this grant overrules, once it has been safely copied aside. */
+  readonly superseding?: ApprovalSuccess;
+}): Approval {
+  const existing = input.entry.existing;
+  // Non-optional by the time this runs: every state with no digest was refused
+  // by the `unreadable` branch above, which exists so this cast is a statement
+  // about a checked precondition rather than a hope.
+  const current = input.entry.current as string;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === undefined ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === undefined ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: SURFACE_REAFFIRM_ACTION,
+      targets: [{ kind: "change", id: input.changeId }]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: SURFACE_REAFFIRM_ACTION,
+      targetHash: current as Parameters<typeof buildChangeIdempotencyKey>[0]["targetHash"]
+    }),
+    artifacts: [artifactReferenceSchema.parse({ path: input.entry.path, sha256: current })],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason:
+      `${input.approver.id} re-affirmed the ${input.entry.interfaces.join(", ")} verification surface against ` +
+      `${input.entry.path} at ${current} via legion approve surface. It was declared at ` +
+      `${input.entry.declared.join(", ")}.` +
+      (input.superseding === undefined
+        ? ""
+        : ` This supersedes the ${input.superseding.document.status} decision recorded by ` +
+          `${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+
+/**
+ * Where the operator goes after a run that re-affirmed what it could.
+ *
+ * `legion ship`, not `legion build`. Re-affirming changes no evidence: it
+ * changes whether the gate believes a declaration it already had, and ship is
+ * what re-reads it. Advising a build would be the "successful command routes you
+ * past the thing you still have to do" defect the spec path recorded.
+ */
+function surfaceNextAction(drifted: readonly string[]): ReturnType<typeof nextAction> {
+  if (drifted.length > 0) {
+    return nextAction(
+      "legion approve surface --approver <id>",
+      `${drifted.length} pinned file${drifted.length === 1 ? "" : "s"} in this change ${drifted.length === 1 ? "is" : "are"} ` +
+        `still drifted (${drifted.join(", ")}); integration_or_real_interface_checks stays unsatisfied until every one of ` +
+        "them either matches its declaration or carries a re-affirmation."
+    );
+  }
+  return nextAction(
+    "legion ship",
+    "Every verification surface pin in this change now matches what a human declared or re-affirmed; rerun the readiness gate."
+  );
+}
+
+function dryRunSurfaceNextAction(drifted: readonly string[]): ReturnType<typeof nextAction> {
+  if (drifted.length === 0) {
+    return nextAction(
+      "legion ship",
+      "Every verification surface pin in this change already matches what was declared or re-affirmed, and this dry run found nothing to decide."
+    );
+  }
+  return nextAction(
+    "legion approve surface --approver <id>",
+    `This was a dry run and no approval was written. ${drifted.length} pinned file${drifted.length === 1 ? "" : "s"} ` +
+      `(${drifted.join(", ")}) ${drifted.length === 1 ? "is" : "are"} drifted; the gate stays unsatisfied until this command ` +
+      "is run without --dry-run."
   );
 }

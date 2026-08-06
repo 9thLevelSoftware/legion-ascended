@@ -1,27 +1,27 @@
 import {
-  deriveOracleManifest,
   listApprovalsForChange,
   listReviewDecisionsForChange,
   listTaskRunsForChange,
   loadChangeBundle,
   readEvidenceIndex,
-  readOracleArtifact,
   partitionTraceabilityDiagnostics,
   readTaskGraph,
   validateChangeTraceability,
   type ApprovalListResult,
   type TaskRunListResult
 } from "@legion/artifacts";
-import type { Approval, ArtifactReference, TaskRun } from "@legion/protocol";
+import type { Approval, TaskContract, TaskRun } from "@legion/protocol";
 
 import { failure, hasFlag, helpResult, type CliContext, type CliResult } from "../../runtime.js";
 import { currentUtcTimestamp } from "../../workflow/change-input.js";
+import { absentOnFailure, loadOracleFacts } from "../../workflow/change-planes.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { resolvePinnedReferences } from "../../workflow/pinned-references.js";
 import { taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
   deriveShipGates,
   shipGateDiagnostics,
+  shipGatePinnedReferences,
   shipGateRecovery,
   type ShipGateChangeFacts,
   type ShipGateOracleFact
@@ -104,72 +104,6 @@ function recoveryFor(diagnostics: readonly TraceabilityFailure[]) {
 
 function isPath(value: string | undefined): value is string {
   return value !== undefined && value.length > 0;
-}
-
-/**
- * A read whose failure makes a fact absent, never a ship blocked.
- *
- * Every early return above this point is a gate the operator can act on, and
- * each one is pinned by name. The change-scoped facts are different: they feed
- * gates whose contract is that an absent fact yields `unevaluable`, so a read
- * that fails has to arrive as absence and not as a new blocking branch. The
- * oracle manifest in particular fails on any malformed oracle in the change
- * directory, and a change with one already fails earlier, for its own reason,
- * with its own recovery command — turning it into a second failure here would
- * change which defect the operator is told about.
- *
- * This does not itself distinguish "nothing there" from "something there I could
- * not read", which the traceability checker in this package does. The
- * distinction is made one level up instead: a listing that reports `skipped`
- * entries produces a `ShipGatePlaneSkip`, which reaches the payload by name. A
- * thrown read still arrives as bare absence, which is the weaker answer and the
- * one worth improving next; what it is not is the common case, which is a file
- * the listing declined to parse.
- */
-async function absentOnFailure<T>(read: () => Promise<T>): Promise<T | undefined> {
-  try {
-    return await read();
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Every oracle of the change, or `undefined` if the set could not be
- * established.
- *
- * All-or-nothing on purpose. A partial list is worse than no list for the gates
- * this feeds: "every oracle is approved" is trivially true of a list that lost
- * the unapproved one. The manifest is derived first because it is the only
- * public route to the change's oracle ids, then each is read for its document
- * and reference — the gates that will consume these need `protectedPaths` from
- * the one and the content hash from the other.
- */
-async function loadOracleFacts(input: {
-  readonly repositoryRoot: string;
-  readonly changeId: string;
-}): Promise<readonly ShipGateOracleFact[] | undefined> {
-  const manifest = await absentOnFailure(() =>
-    deriveOracleManifest({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
-  );
-  if (manifest === undefined || !manifest.ok) return undefined;
-
-  const oracles: ShipGateOracleFact[] = [];
-  for (const revision of manifest.manifest.oracles) {
-    const fileName = revision.artifact.path.split("/").at(-1);
-    if (fileName === undefined || !fileName.endsWith(".yaml")) return undefined;
-    const oracle = await absentOnFailure(() =>
-      readOracleArtifact({
-        repositoryRoot: input.repositoryRoot,
-        changeId: input.changeId,
-        oracleId: fileName.slice(0, -".yaml".length)
-      })
-    );
-    if (oracle === undefined || !oracle.ok) return undefined;
-    oracles.push({ document: oracle.document, reference: oracle.reference });
-  }
-
-  return oracles;
 }
 
 /**
@@ -263,18 +197,25 @@ function planeSkipDiagnostics(skips: readonly ShipGatePlaneSkip[]) {
 /**
  * The change-scoped planes `legion ship` can read, and what it could not read.
  *
- * Two gates consume them: `explicit_human_approval` and `approved_delta_spec`
- * read `approvals`, and the second also reads `deltas`. Everything else here is
- * still loaded ahead of its reader, so that the change adding each gate is a
- * diff about that gate rather than about the plumbing.
+ * Three gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * read `approvals`, the second also reads `deltas`, and
+ * `integration_or_real_interface_checks` reads `oracles` and the pin verifier.
+ * Everything else here is still loaded ahead of its reader, so that the change
+ * adding each gate is a diff about that gate rather than about the plumbing.
  *
  * The release plane is still passed as `undefined` rather than as an empty
  * value. Its schema exists but nothing reads or writes it, so "consulted and
  * empty" would be a claim this command cannot make.
+ *
+ * `tasks` is a parameter rather than a read. The taskgraph has already been
+ * loaded by the caller and a verification surface's pins live on it, so
+ * re-reading here would give the report two epochs — the property every comment
+ * in this function defends by hashing and clocking exactly once.
  */
 async function loadShipGateChangeFacts(input: {
   readonly repositoryRoot: string;
   readonly changeId: string;
+  readonly tasks: readonly TaskContract[];
 }): Promise<{ readonly facts: ShipGateChangeFacts; readonly skips: readonly ShipGatePlaneSkip[] }> {
   const bundleResult = await absentOnFailure(() =>
     loadChangeBundle({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
@@ -297,13 +238,21 @@ async function loadShipGateChangeFacts(input: {
   // is synchronous. A reference nobody collects answers `unverified`, which
   // reads as "not checked" rather than as "clean" — so a gate whose collector
   // is missing reports unevaluable instead of passing on an unchecked pin.
-  const pinned: ArtifactReference[] = [
-    ...(bundle?.deltas.map((delta) => delta.delta) ?? []),
-    ...(oracles?.map((oracle) => oracle.reference) ?? [])
-  ];
+  //
+  // Which families those are is `shipGatePinnedReferences`' to say, and it lives
+  // beside the gates that ask rather than here. The reason it moved is recorded
+  // there: the comment that used to sit on this line claimed an end-to-end drift
+  // test could falsify a dropped family, and mutation testing showed it could
+  // not — either verification-surface collector alone resolved every path the
+  // other would have, so deleting one reddened nothing anywhere in the tree.
   const verifyPin = await resolvePinnedReferences({
     repositoryRoot: input.repositoryRoot,
-    references: pinned
+    references: shipGatePinnedReferences({
+      deltas: bundle?.deltas,
+      oracles,
+      approvals,
+      tasks: input.tasks
+    })
   });
 
   const changeRoot = `.legion/project/changes/${input.changeId}`;
@@ -442,7 +391,8 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   // could only change which defect an already-broken change reports first.
   const changeFacts = await loadShipGateChangeFacts({
     repositoryRoot: context.repositoryRoot,
-    changeId: latestChange.changeId
+    changeId: latestChange.changeId,
+    tasks: taskgraph.document.tasks
   });
 
   const gateReport = deriveShipGates({

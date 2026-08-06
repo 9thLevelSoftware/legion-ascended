@@ -14,7 +14,8 @@ import {
   type GitSha,
   type Project,
   type TaskContractScopeBudget,
-  type UtcTimestamp
+  type UtcTimestamp,
+  type VerificationSurface
 } from "@legion/protocol";
 
 import type { RequirementSetEnforcement } from "./intake/finalize.js";
@@ -75,6 +76,13 @@ export interface TaskVerification {
   readonly args: readonly string[];
   readonly expectedExitCode: number;
   readonly timeoutMs: number;
+  /**
+   * Copied whole from the criterion that authored it, never re-derived and never
+   * defaulted. `oracle-input.ts` reads the same field off the same
+   * `ExecutableCriterion` object, so the two copies cannot disagree unless one
+   * of them reshapes it — which is why neither does.
+   */
+  readonly surface?: VerificationSurface;
 }
 
 export function phaseVerification(
@@ -94,7 +102,8 @@ export function phaseVerification(
     // criterion could produce an oracle and a task contract that disagree about
     // the timeout for the identical command — invisible only because intake
     // never sets timeoutMs, and observable the moment both are executed.
-    timeoutMs: Math.min(criterion.proof.timeoutMs ?? 600_000, MAX_VERIFICATION_TIMEOUT_MS)
+    timeoutMs: Math.min(criterion.proof.timeoutMs ?? 600_000, MAX_VERIFICATION_TIMEOUT_MS),
+    ...(criterion.proof.surface === undefined ? {} : { surface: criterion.proof.surface })
   }));
 
   const project =
@@ -119,10 +128,24 @@ export function phaseVerification(
   // This key has now been wrong three times: it ignored the expected exit code,
   // then flattened argument boundaries, then ignored the timeout — each a field
   // the runner acts on that the identity had quietly excluded. Every fix added
-  // one more field and left the next one out. Two verification entries are the
-  // same proof exactly when they are the same entry, so that is what it compares.
+  // one more field and left the next one out.
+  //
+  // The fourth was the fix itself. "The same entry" was spelled
+  // `JSON.stringify({...entry}, Object.keys(entry).sort())`, whose second
+  // argument is a *replacer array* — and a replacer array filters property names
+  // at every nesting level, not just the top. The moment a verification entry
+  // gained a nested `surface`, that object serialized as `{}` and its key list
+  // gained a member the project entry's did not, so a criterion whose command is
+  // also the project verification command stopped colliding with it and the same
+  // command was planned twice under two entries. Exactly the duplication this key
+  // exists to prevent, reintroduced by the shape of the fix.
+  //
+  // So it is written positionally, over the fields the *runner* acts on and
+  // nothing else. `surface` is deliberately excluded: it is a declaration about
+  // a command rather than part of one, and including it would make one command
+  // run twice because two criteria described it differently.
   const key = (entry: TaskVerification) =>
-    JSON.stringify({ ...entry, args: [...entry.args] }, Object.keys(entry).sort());
+    JSON.stringify([entry.command, [...entry.args], entry.expectedExitCode, entry.timeoutMs]);
   const seen = new Set(criteria.map(key));
   return seen.has(key(project)) ? criteria : [...criteria, project];
 }

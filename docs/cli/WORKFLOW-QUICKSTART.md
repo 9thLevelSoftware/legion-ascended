@@ -62,6 +62,23 @@ The approval records the delta spec's content hash, and `legion ship` re-hashes 
 
 Re-running after a successful approval reports `unchanged` and rewrites nothing. If the approval on disk is anything the gate would not accept — withdrawn, expired, or edited so it no longer pins the spec — the rerun re-grants it instead; a withdrawn decision is copied to its own file first, so re-approving supersedes it rather than erasing it. Changes built by `legion plan` carry a single requirement today; on a change with more than one, `legion approve spec --requirement <id>` approves just that one and the payload's `unapproved` list names the requirements still without a grant.
 
+## Declaring And Maintaining A Verification Surface
+
+At `legion start --intake`, each executable acceptance criterion can declare what its command actually reaches — `unit`, `integration`, `real-interface` or `end-to-end` — the interface it reaches, why reaching it catches something a smaller check would miss, and the repository files that make that true. The surface is **declared, never inferred from the command string**: `pnpm test --filter integration` may be a pure unit suite and `node scripts/smoke.mjs` may drive a live database, so inference misclassifies in both directions and does so silently.
+
+The declaration is optional. Skipping it leaves `integration_or_real_interface_checks` reporting `unevaluable` at R2 — nobody said, so nothing is known. Declaring `unit` on every criterion of a change is a *recorded negative* and reports `unsatisfied`: a change that states it crosses no boundary has answered the question, and the answer is no. The determination is made for the change as a whole, so one honest `unit` criterion alongside one that reaches a real interface does not block anything.
+
+The pinned files are hashed three times: when the declaration is authored, while the verification command runs, and again at `legion ship`. The middle one is what makes the claim mean something — without it, a passing check established only that the declared bytes are on disk *now*, so swapping the compose file for one naming an in-memory fake, building, and reverting the swap would go unnoticed.
+
+When you legitimately edit a pinned file — bumping the image tag on the service the integration check stands up — the gate stops believing the declaration, and that is the gate working. The way back is a decision, not a rewrite:
+
+```powershell
+legion approve surface --dry-run --approver dasbl --json
+legion approve surface --approver dasbl
+```
+
+This records a named human saying the declaration still describes what they meant, against the bytes on disk now. It re-affirms only pins that have actually drifted, covers exactly one revision of each file — edit it again and the gate blocks again — and refuses a pinned file that is not there. No command re-mints a pin silently: that would launder an out-of-band edit into a declaration.
+
 ## Guided Build And Review
 
 ```powershell

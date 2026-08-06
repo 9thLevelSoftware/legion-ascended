@@ -576,3 +576,49 @@ test("legion approve refuses an unknown subject and a bare invocation", async (t
   assert.equal(help.exitCode, 0);
   assert.match(help.stdout, /legion approve spec/);
 });
+
+test("each subject refuses the other's narrowing flag rather than ignoring it", async (t) => {
+  // `declared-options.ts` holds one list for every `legion approve <subject>`,
+  // because `undeclaredOptionError` runs before the handler and cannot see which
+  // subject was named — so the per-subject boundary has to be the handler's. It
+  // is a refusal rather than a silent ignore: `legion approve surface
+  // --requirement req_x`, typed by someone who meant `spec`, would otherwise
+  // re-affirm every drifted pin in the change and report success, having quietly
+  // discarded the one word that said what they wanted.
+  //
+  // The comment on that options list predicted this exact hazard when a second
+  // subject arrived. This is the second subject.
+  const root = await planPhaseOne(t);
+
+  const specWithPath = await runCliCapture([
+    "--repository-root",
+    root,
+    "approve",
+    "spec",
+    "--path",
+    "ops/compose.yml",
+    "--approver",
+    "dasbl",
+    "--json"
+  ]);
+  assert.equal(specWithPath.exitCode, 1);
+  assert.equal(parseJsonOutput(specWithPath).status, "usage_error");
+  assert.match(parseJsonOutput(specWithPath).diagnostics[0].message, /--path is not an option of legion approve spec/);
+
+  const surfaceWithRequirement = await runCliCapture([
+    "--repository-root",
+    root,
+    "approve",
+    "surface",
+    "--requirement",
+    "req_anything",
+    "--approver",
+    "dasbl",
+    "--json"
+  ]);
+  assert.equal(surfaceWithRequirement.exitCode, 1);
+  assert.match(
+    parseJsonOutput(surfaceWithRequirement).diagnostics[0].message,
+    /--requirement is not an option of legion approve surface/
+  );
+});

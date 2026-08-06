@@ -3,7 +3,7 @@ import * as z from "zod";
 import { actorSchema } from "../primitives/common.js";
 import { oracleIdSchema, projectIdSchema, requirementIdSchema } from "../primitives/ids.js";
 import { artifactPathSchema, artifactReferenceSchema } from "../primitives/values.js";
-import { schemaMetadataSchema, traceReferenceSchema } from "./common.js";
+import { schemaMetadataSchema, traceReferenceSchema, verificationSurfaceSchema } from "./common.js";
 
 export const oracleTypeSchema = z.enum(["executable", "inspectable", "hybrid"]);
 
@@ -75,7 +75,17 @@ const oracleBaseSchema = schemaMetadataSchema.extend({
   sourceArtifacts: z.array(artifactReferenceSchema).min(1),
   expected: oracleExpectedConditionsSchema,
   requirementCoverage: z.array(oracleRequirementCoverageSchema).min(1),
-  traceRefs: z.array(traceReferenceSchema).min(1)
+  traceRefs: z.array(traceReferenceSchema).min(1),
+  /**
+   * What the command that decides this oracle reaches, copied from the
+   * acceptance criterion that authored it.
+   *
+   * Structurally available on all three oracle types because it lives on the
+   * shared base, and deliberately never written on an `inspectable` one: its
+   * criteria are precisely those no command decides, so a surface there would
+   * claim a command reached something when there is no command.
+   */
+  surface: verificationSurfaceSchema.optional()
 });
 
 export const oracleSchema = z.discriminatedUnion("type", [

@@ -82,6 +82,71 @@ export const traceReferenceSchema = z.strictObject({
 
 export type TraceReference = z.infer<typeof traceReferenceSchema>;
 
+/**
+ * How far a verification command actually reaches.
+ *
+ * Four values, ordered by how much of the real system a passing run touched.
+ * `unit` is a first-class answer and not a shrug: it records that this check
+ * crosses no boundary, which is a *negative* answer to "did verification reach
+ * the relevant integration or real interface" rather than an absent one.
+ */
+export const verificationSurfaceKindSchema = z.enum([
+  "unit",
+  "integration",
+  "real-interface",
+  "end-to-end"
+]);
+
+export type VerificationSurfaceKind = z.infer<typeof verificationSurfaceKindSchema>;
+
+/**
+ * What a verification command reaches, declared rather than inferred.
+ *
+ * The surface is authored once, at plan time, on the requirement's executable
+ * acceptance criterion, and copied down mechanically onto the task contract's
+ * verification entry and onto the oracle that criterion produces. It is never
+ * derived from the command string: `pnpm test --filter integration` may be a
+ * pure unit suite and `node scripts/smoke.mjs` may drive a live database, so
+ * inference misclassifies in both directions and does so silently.
+ *
+ * `pinned` is what makes the declaration falsifiable. A claim that a check
+ * reaches a real interface is unreviewable on its own; a claim that names the
+ * compose file standing the service up, or the schema it is checked against, can
+ * be re-hashed at ship time and stops being believed the moment those bytes
+ * change. `.min(1)` for the reason `approvalBaseSchema.artifacts` carries it: an
+ * empty array passes every pin check vacuously, which is a fail-open produced by
+ * a shape rather than by a mistake.
+ *
+ * A path may be pinned only once. Nothing downstream takes the first match — the
+ * consuming gate checks every pin — but a document pinning one path at two
+ * digests asserts two different truths about the same bytes, and the honest place
+ * to refuse that is here rather than in each reader.
+ */
+export const verificationSurfaceSchema = z
+  .strictObject({
+    kind: verificationSurfaceKindSchema,
+    /** The boundary, as a design document would name it: "POST /v1/orders". */
+    interface: z.string().min(1).max(256),
+    /** Why reaching it catches something a smaller check would miss. */
+    rationale: z.string().min(1).max(1_024),
+    pinned: z.array(artifactReferenceSchema).min(1).max(8)
+  })
+  .superRefine((surface, context) => {
+    const seen = new Set<string>();
+    for (const [index, reference] of surface.pinned.entries()) {
+      if (seen.has(reference.path)) {
+        context.addIssue({
+          code: "custom",
+          message: "A verification surface may pin a path only once.",
+          path: ["pinned", index, "path"]
+        });
+      }
+      seen.add(reference.path);
+    }
+  });
+
+export type VerificationSurface = z.infer<typeof verificationSurfaceSchema>;
+
 export const artifactRoleSchema = z.enum([
   "project-manifest",
   "constitution",

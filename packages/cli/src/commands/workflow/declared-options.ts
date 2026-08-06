@@ -49,12 +49,14 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   review: ["accept", "approver", "auto", "dry-run", "executor", "max-cycles", "phase", "reject-reason"],
   // One list for every `legion approve <subject>`, because
   // `undeclaredOptionError` runs on the stripped context before the handler and
-  // cannot see which subject was named. With one subject there is nothing that
-  // could observe a per-subject boundary, so none is built. The verb that adds a
-  // second subject owns refusing another subject's flags inside the handler —
-  // `--requirement` is meaningless to an oracle approval and would otherwise be
-  // accepted here in silence.
-  approve: ["approver", "dry-run", "requirement"],
+  // cannot see which subject was named. The boundary between subjects is
+  // therefore the handler's, and `handleApproveWorkflow` now enforces it: this
+  // release adds `surface` and its `--path`, so `--requirement` is meaningless
+  // to a surface re-affirmation and `--path` is meaningless to a delta-spec
+  // approval. Accepted here and refused there, by name — the alternative is a
+  // flag the operator typed being ignored in silence, which is how a command
+  // reports success for a thing it did not do.
+  approve: ["approver", "dry-run", "path", "requirement"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
