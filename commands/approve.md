@@ -1,17 +1,18 @@
 ---
 name: legion:approve
-description: Record a human's decision about the change's delta specs, oracles or verification surfaces
-argument-hint: "spec [--requirement <id>] | oracle [--oracle <id>] | surface [--path <file>] --approver <id> [--dry-run]"
+description: Record a human's decision about the change's delta specs, oracles, verification surfaces or protected acceptance paths
+argument-hint: "spec [--requirement <id>] | oracle [--oracle <id>] | surface [--path <file>] | protected-paths [--oracle <id>] --approver <id> [--dry-run]"
 allowed-tools: [Bash, Read]
 ---
 
 <objective>
 Record that a named human decided something about the current change, pinning the exact bytes they decided about. This writes governance artifacts and nothing else — it does not plan, build, review or ship.
 
-Three subjects:
+Four subjects:
 
 - **`spec`** — approve the change's delta specs. Runs between `legion plan` and `legion build`. `legion ship` reads what it writes: the `approved_delta_spec` risk gate is satisfied only when every delta spec in the change carries a granted approval whose pinned hash still matches the file on disk.
 - **`oracle`** — approve the oracles the change's work will be judged against. Runs in the same window, beside `spec`. At R3 the `approved_spec_and_oracle` gate asks whether the spec and the oracle were approved **before** gated execution proceeded, and compares the last of those decisions against the instant the first task run started.
+- **`protected-paths`** — permit this change's work to modify an acceptance test its own oracle protects. An executable acceptance criterion can name the tests its work must not weaken; `legion build` hashes them immediately before and after every run and records what moved. At R3 `protected_acceptance_tests` refuses a run that changed one unless a named human decided it could **before that run started**. That ordering is the whole meaning of "cannot be weakened by the implementer": only the approval plane blesses it, and only in advance.
 - **`surface`** — re-affirm a verification surface whose pinned file has been edited. A surface declares what a verification command reaches and pins the files that make that true: the compose file standing the real service up, the schema it is checked against. `legion ship` re-hashes them, so editing one stops the declaration being believed and `integration_or_real_interface_checks` reports unsatisfied. That is the gate working. This is the way back, and it is a decision rather than a rewrite: nothing re-mints a pin silently, because a silent re-mint would launder an out-of-band edit into a declaration.
 </objective>
 
@@ -101,6 +102,36 @@ Do this in the same window as `legion approve spec` — after `legion plan`, bef
 
    `nextAction` is `legion build` once nothing is unapproved and nothing has run. If `warnings` carries `approval_after_execution`, say plainly that the decision was recorded but is dated after the work it claims to gate, and that no command re-orders it.
 
+## Permitting a change to a protected acceptance test
+
+Do this in the same window as `legion approve spec` and `legion approve oracle` — after `legion plan`, before `legion build` — and only when the work genuinely has to modify a test its own oracle protects. Order is the whole meaning of this gate: the decision must predate the run it permits, nothing rewinds a run, and re-deciding only writes a later instant. A decision recorded after the build can never satisfy `protected_acceptance_tests`, and the route out then is to restore the test file and build again, not to approve.
+
+1. SHOW WHAT WOULD BE DECIDED
+
+   ```
+   legion approve protected-paths --dry-run --approver <id> --json
+   ```
+
+   Per entry in `decisions`, show `oracleId` and `paths` — the test files that oracle says this change's work must not weaken.
+
+   **Ask what the work is going to do to those files, and why the change cannot be made without it.** This is the decision, and it cannot be answered from a list of paths. A test that is being extended is not the same act as a test whose assertion is being deleted or whose expected value is being moved to match the code; the second is the implementer marking their own work, which is exactly what this gate exists to catch. If that is what is being proposed, say so and do not record the decision.
+
+2. RECORD THE DECISION
+
+   ```
+   legion approve protected-paths --approver <id> --json
+   ```
+
+   Add `--oracle <id>` only when the user asked to decide one oracle rather than every oracle in the change that declares protected paths. It is not repeatable.
+
+3. REPORT WHAT IS STILL OPEN
+
+   `undecided` lists oracles declaring a protected acceptance path that carry no live decision. The gate reads every one of them when a run has changed a protected path.
+
+4. ROUTE
+
+   `nextAction` is `legion build` while nothing has run, because that is what the decision has to precede. If `warnings` carries `approval_after_execution`, say plainly that the decision was recorded but is dated after the work it claims to gate, and that restoring the file is the only repair that does not need a re-plan.
+
 ## Re-affirming a verification surface
 
 Reach for this only when `legion ship` reports `integration_or_real_interface_checks` as `risk_gate_unsatisfied` with a message about bytes that have changed. It is not a step in the normal flow, and it has nothing to say about a gate that is unsatisfied for any other reason.
@@ -133,7 +164,7 @@ Reach for this only when `legion ship` reports `integration_or_real_interface_ch
 </process>
 
 <inspection>
-- `legion approve spec --dry-run --json`, `legion approve oracle --dry-run --json` and `legion approve surface --dry-run --json` are read-only and safe to run at any time.
+- `legion approve spec --dry-run --json`, `legion approve oracle --dry-run --json`, `legion approve surface --dry-run --json` and `legion approve protected-paths --dry-run --json` are read-only and safe to run at any time.
 - Re-running after a successful approval reports `unchanged` and rewrites nothing. It is not an error and does not need a flag.
 - Re-granting over a withdrawn approval copies the withdrawal to its own file before the grant is written, so the negative decision, its reason and its author survive. Nothing here deletes a decision.
 - A re-affirmation covers exactly one revision of the pinned file. Edit it again and the gate blocks again; there is no way to exempt a path permanently, which is deliberate.
@@ -164,4 +195,7 @@ Reach for this only when `legion ship` reports `integration_or_real_interface_ch
 | `path_not_pinned` | The named file is not pinned by any surface here. Show the pinned files from the diagnostic and ask which was meant |
 | `unreadable_surface_pin` | The pinned file is gone. A re-affirmation records the digest of a file that is there, so there is nothing to record. Restore the file |
 | `drifted` is non-empty after a write | Say the gate is still unsatisfied and name the files left |
+| `no_declared_acceptance_paths` | No oracle here names a test the work must not weaken, so there is nothing to decide. `protected_acceptance_tests` reports that as unprovable rather than met; declaring the tests happens at `legion start --intake`, not here |
+| `oracle_not_declaring_acceptance_paths` | The named oracle protects no test. Show the oracles the diagnostic lists and ask which was meant |
+| `undecided` is non-empty after a write | Say the gate still reads those oracles and name them |
 </decision_matrix>

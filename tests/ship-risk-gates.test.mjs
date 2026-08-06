@@ -156,17 +156,20 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
 test("gates with no producer are unevaluable, not silently satisfied", () => {
   const report = derive({ tier: "R3", ...PASSING_R2 });
 
-  // Re-pointed at `protected_acceptance_tests`, which is R3-only and genuinely
-  // has no producer. It has now been re-pointed four times: `protected_oracle`
-  // lost the job when oracle results became their own evidence item,
+  // Re-pointed at `release_observation_plan`, which is R3-only and genuinely has
+  // no producer. It has now been re-pointed five times: `protected_oracle` lost
+  // the job when oracle results became their own evidence item,
   // `whole_change_acceptance_evidence` lost it when acceptance gained a producer,
   // `independent_baseline` lost it when the attestation plane gave all three of
-  // its gates producers, and `architecture_or_security_review` loses it in this
-  // release, when review domains gave it one. The point of this test is the
-  // `default:` arm of `evaluateGate` — a gate Legion cannot answer at all must
-  // say so rather than pass — so it has to name a gate that still falls through
-  // that arm, not one that merely used to.
-  const unproduced = report.gates.find((entry) => entry.gate === "protected_acceptance_tests");
+  // its gates producers, `architecture_or_security_review` lost it when review
+  // domains gave it one, and `protected_acceptance_tests` loses it in this
+  // release, when the guarded harness began observing declared acceptance paths.
+  // The point of this test is the `default:` arm of `evaluateGate` — a gate
+  // Legion cannot answer at all must say so rather than pass — so it has to name
+  // a gate that still falls through that arm, not one that merely used to.
+  // `release_observation_plan` is the last one left, so the next release retires
+  // this test rather than re-pointing it a sixth time.
+  const unproduced = report.gates.find((entry) => entry.gate === "release_observation_plan");
   assert.equal(unproduced.status, "unevaluable");
   assert.match(unproduced.reason, /does not yet produce/);
 
@@ -453,6 +456,61 @@ function reviewedChange(reviews) {
     // tests/domain-review-gate, which is where a transcript of statuses cannot
     // go: what distinguishes the two `unevaluable`s is the sentence.
     attestations: [],
+    evaluatedAt: "2026-08-10T00:00:00.000Z",
+    verifyPin: () => "match",
+    classifySource: classifier()
+  };
+}
+
+// --- the protected acceptance path plane ------------------------------------
+//
+// The declaration lives on the oracle, and the observation lives on the run's
+// evidence item. Both halves are needed for a cell to move: an oracle declaring
+// a path with no item is the "nothing was observed" arm, and an item with no
+// declaration is the "nobody said" arm — which is where every scenario above
+// sits and is why none of their cells move.
+const ACCEPTANCE_TEST_PATH = "tests/pricing.test.mjs";
+
+function protectedOracle(acceptancePaths = [ACCEPTANCE_TEST_PATH]) {
+  return { document: { id: ORACLE_ID, acceptancePaths }, reference: ORACLE_PIN };
+}
+
+/**
+ * The item `legion build` writes, with the trace references that say which
+ * declarations the run actually snapshotted.
+ *
+ * The references are not decoration: without them the gate cannot tell a
+ * declaration the run covered from one a replan added afterwards, and a `pass`
+ * written before the replan would answer for a path nothing ever hashed.
+ */
+function acceptancePathItem(verdict, paths = [ACCEPTANCE_TEST_PATH]) {
+  return {
+    id: "protected-acceptance-paths",
+    verdict,
+    traceRefs: paths.map((entry) => ({ path: entry, entity: { kind: "oracle", id: ORACLE_ID } }))
+  };
+}
+
+/** The decision `legion approve protected-paths` writes, pinning the oracle. */
+function protectedPathsApproval(decidedAt = APPROVED_BEFORE_AT) {
+  return {
+    id: "apv_transcript-protected-paths",
+    changeId: CHANGE_ID,
+    status: "granted",
+    scope: { action: "oracle.protected-paths.modify", targets: [{ kind: "oracle", id: ORACLE_ID }] },
+    artifacts: [ORACLE_PIN],
+    decidedBy: { kind: "human", id: "dasbl" },
+    decidedAt
+  };
+}
+
+/** A change whose oracles protect an acceptance test, and what was decided about it. */
+function protectedPathsChange({ approvals, taskRuns } = {}) {
+  return {
+    changeId: CHANGE_ID,
+    oracles: [protectedOracle()],
+    ...(approvals === undefined ? {} : { approvals }),
+    ...(taskRuns === undefined ? {} : { taskRuns }),
     evaluatedAt: "2026-08-10T00:00:00.000Z",
     verifyPin: () => "match",
     classifySource: classifier()
@@ -829,6 +887,81 @@ const SCENARIOS = [
     change: reviewedChange([
       domainReview({ verdicts: { specification: "pass", integration: "unknown", evidence: "pass" } })
     ])
+  },
+  {
+    // The twenty-second, added with `protected_acceptance_tests`' producer, and
+    // the first row this transcript has ever produced from an oracle's declared
+    // acceptance paths. An oracle naming a test the work must not weaken, and a
+    // run whose observation says it was byte-identical on both sides.
+    name: "a run that left its protected acceptance test alone",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      acceptancePathItem("pass")
+    ],
+    reviews: [acceptedReview()],
+    change: protectedPathsChange()
+  },
+  {
+    // The twenty-third, and the pair's other half. Identical to the row above in
+    // every field but one: the item's verdict.
+    //
+    // `unsatisfied` rather than `unevaluable`, and that is the arm's whole point:
+    // a run that edited the test it is judged by is not an absence of evidence,
+    // it is evidence that the implementer moved their own bar. No approval plane
+    // is loaded here at all, which is the honest shape of the common case —
+    // nobody decided anything, so there is nothing to have decided it.
+    name: "a run that changed a protected acceptance test",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      acceptancePathItem("fail")
+    ],
+    reviews: [acceptedReview()],
+    change: protectedPathsChange({
+      approvals: [],
+      taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  },
+  {
+    // The twenty-fourth. The same `fail` observation, with a named human's
+    // decision recorded *before* the run started. This is the only route to
+    // `satisfied` over a changed acceptance test, and it is what "cannot be
+    // weakened by the implementer" means: the approval plane blesses it, and only
+    // in advance.
+    name: "a protected acceptance test changed under a decision taken first",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      acceptancePathItem("fail")
+    ],
+    reviews: [acceptedReview()],
+    change: protectedPathsChange({
+      approvals: [protectedPathsApproval(APPROVED_BEFORE_AT)],
+      taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  },
+  {
+    // The twenty-fifth, and the pair's other half. Identical to the row above in
+    // every field but one: the decision instant, moved to the run's own
+    // millisecond.
+    //
+    // This is the cell that fails if the comparison is ever written `<=` instead
+    // of `<`. Both stamps are millisecond wall-clock and no honest writer produces
+    // the equal pair — `legion approve protected-paths` writes no runs and
+    // `legion build` writes no approvals — so strictness costs nothing honest and
+    // an unorderable pair is not evidence that the decision came first.
+    name: "a protected acceptance test changed under a decision taken too late",
+    items: [
+      item("declared-verification", "pass"),
+      item("diff-reconciliation", "pass"),
+      acceptancePathItem("fail")
+    ],
+    reviews: [acceptedReview()],
+    change: protectedPathsChange({
+      approvals: [protectedPathsApproval(EXECUTION_STARTED_AT)],
+      taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
   }
 ];
 
@@ -848,7 +981,34 @@ const SCENARIOS = [
  * central claim of the change that makes it.
  *
  * **One gate id changed behaviour in this release, and exactly one:
- * `architecture_or_security_review`.** ADR-006 asks whether a domain competence
+ * `protected_acceptance_tests`.** ADR-006 asks whether the acceptance tests can
+ * be weakened by the implementer, and until now nothing anywhere recorded which
+ * tests those were: `oracle.protectedPaths` named the change artifact and was
+ * read by nobody. An oracle now carries `acceptancePaths`, the guarded harness
+ * hashes them on both sides of every dispatch, and the run's evidence records
+ * what moved.
+ *
+ * **Twenty-one existing R3 rows kept `protected_acceptance_tests` at
+ * `unevaluable`, and that is the load-bearing half.** They now flow through a
+ * real gate rather than through `evaluateGate`'s `default:` arm. Which arm they
+ * land on is *not* uniform, and an earlier version of this paragraph said it was:
+ * only the two scenarios built by `orderedChange` — the one pre-existing fixture
+ * that sets `oracles` — reach the branch that says nothing in the change declares
+ * a protected acceptance path. The other nineteen pass no oracle plane at all and
+ * land on the `unestablished` branch beside it. Both are `unevaluable`, so no cell
+ * moves either way; but the transcript is therefore not a witness for the
+ * nothing-was-declared arm — that arm is witnessed by the unit suite and by
+ * change-r3-ordering, and a reader who trusts this file to redden when it is
+ * refactored will be disappointed. The reason string moved and the status did
+ * not; a cell that moves here is a defect rather than an edit.
+ *
+ * The movement is in four new scenarios, and it takes four because the pairs are
+ * the claim. Both pairs differ in exactly one field: an observation that says
+ * `pass` against one that says `fail`, and a decision instant before the run
+ * against one in the run's own millisecond.
+ *
+ * The gate id that moved in the release before this one was
+ * `architecture_or_security_review`. ADR-006 asks whether a domain competence
  * looked at this change, and `reviewDecisionBaseSchema` carried three fixed
  * verdict axes and no notion of domain at all — so the only available reading was
  * "an accepted review exists", which every change has and which is the exact
@@ -1827,11 +1987,151 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  "a run that left its protected acceptance test alone": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "satisfied",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a run that changed a protected acceptance test": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unsatisfied",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a protected acceptance test changed under a decision taken first": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "satisfied",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  "a protected acceptance test changed under a decision taken too late": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unsatisfied",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unevaluable",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
 };
 
 /**
- * `report.ready` for the same seventeen scenarios at the same four tiers.
+ * `report.ready` for the same twenty-five scenarios at the same four tiers.
  *
  * Written out as literals rather than derived from the table above, which would
  * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
@@ -1884,7 +2184,15 @@ const BASELINE_READY = {
   "an accepted architecture review": { R0: true, R1: true, R2: false, R3: false },
   "a rejected architecture review": { R0: true, R1: true, R2: false, R3: false },
   "an accepted implementation-only review": { R0: true, R1: true, R2: false, R3: false },
-  "an architecture review that reached no verdict on one axis": { R0: true, R1: true, R2: false, R3: false }
+  "an architecture review that reached no verdict on one axis": { R0: true, R1: true, R2: false, R3: false },
+  // The four `protected_acceptance_tests` rows. Every R3 cell stays `false` —
+  // satisfying one gate does not make a tier ready while nine others are unmet —
+  // and every R0 and R1 cell stays `true`, which is the second half of the pair's
+  // claim: the new plane moved exactly one gate at exactly one tier.
+  "a run that left its protected acceptance test alone": { R0: true, R1: true, R2: false, R3: false },
+  "a run that changed a protected acceptance test": { R0: true, R1: true, R2: false, R3: false },
+  "a protected acceptance test changed under a decision taken first": { R0: true, R1: true, R2: false, R3: false },
+  "a protected acceptance test changed under a decision taken too late": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -2060,11 +2368,25 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
     // `deltas` is `approved_spec_and_oracle`'s first read, `reviews` is
     // `architecture_or_security_review`'s — fifth in R3's order, which is where
     // it lands in this list — and `approvals` is `explicit_human_approval`'s.
-    // `oracles` and `taskRuns` are deliberately absent — no gate reaches them on
-    // a degraded change — which is the guard ordering asserted rather than
-    // assumed, and the order of this list is the gate order asserted rather than
-    // assumed too.
-    R3: ["attestations", "changeId", "deltas", "reviews", "approvals"]
+    // `oracles` joins this list in the release that gave
+    // `protected_acceptance_tests` a producer, and it is admitted with a stated
+    // reason rather than by widening the trap. That gate's subject set *is* the
+    // acceptance paths the change's oracles declare — a change-wide set, because
+    // `legion plan` makes one task per criterion and a per-task set would let one
+    // task's run weaken a test another task's oracle protects — and there is
+    // nowhere else it could be read from. Unlike
+    // `integration_or_real_interface_checks`, which consults the plane only when a
+    // task contract names an oracle, this gate has no contract-side half to guard
+    // behind, so the read happens on the degraded path too and moves this list
+    // rather than needing a populated pass to witness it. A populated pass is
+    // added below anyway, because the absent path returns before the coverage
+    // quantifier, the approval scoping and the ordering comparison.
+    //
+    // Its position — sixth in R3's order, between `reviews` and `approvals` — is
+    // the gate order asserted rather than assumed. `taskRuns` is deliberately
+    // still absent: this gate reaches it only once an item records a `fail`, so
+    // no gate touches it on a degraded change.
+    R3: ["attestations", "changeId", "deltas", "reviews", "oracles", "approvals"]
   };
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
@@ -2145,7 +2467,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   // start consulting planes nobody loaded.
   assert.deepEqual(
     [...new Set(populatedReviewReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "reviews"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews"]
   );
 
   const populatedDeltaReads = [];
@@ -2310,7 +2632,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   });
   assert.deepEqual(
     [...new Set(populatedAttestationReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "reviews", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews", "taskRuns"]
   );
   // Read to a decision rather than merely touched: the baseline gate reaches its
   // ordering clause, which no other assertion in this file does, and the
@@ -2355,12 +2677,57 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   });
   assert.deepEqual(
     [...new Set(populatedDomainReviewReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "reviews", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews", "taskRuns"]
   );
   // Read to a decision rather than merely touched: this is the gate's `satisfied`
   // arm, which no absent-plane pass can reach.
   assert.equal(
     domainReviewReport.gates.find((gate) => gate.gate === "architecture_or_security_review").status,
+    "satisfied"
+  );
+
+  // And once more against an oracle plane that actually declares a protected
+  // acceptance path. `oracles` is admitted to the R3 absent-plane list above, and
+  // that admission proves only that the plane is *touched*; this proves it is read
+  // to a decision, past the coverage quantifier that compares the declaration set
+  // against the trace references of the item the run wrote. Without it the
+  // admission would be a widening nothing witnesses, which is the failure mode
+  // this file's own comments warn about.
+  const populatedAcceptancePathReads = [];
+  const acceptancePathReport = deriveShipGates({
+    tasks: [task("R3")],
+    taskIdFor: () => TASK_ID,
+    entries: [
+      entry([
+        ...PASSING_R2.items,
+        {
+          id: "protected-acceptance-paths",
+          verdict: "pass",
+          traceRefs: [{ path: "tests/pricing.test.mjs", entity: { kind: "oracle", id: ORACLE_ID } }]
+        }
+      ])
+    ],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedAcceptancePathReads, {
+      oracles: [
+        {
+          document: { id: ORACLE_ID, acceptancePaths: ["tests/pricing.test.mjs"] },
+          reference: ORACLE_PIN
+        }
+      ]
+    })
+  });
+  assert.deepEqual(
+    [...new Set(populatedAcceptancePathReads)].sort(),
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews"]
+  );
+  // `taskRuns` is absent from that list, and its absence is this gate's guard
+  // ordering asserted rather than assumed: a `pass` needs no decision behind it,
+  // so the gate never reaches the approval scoping or the ordering comparison.
+  // (`approvals` is there because `explicit_human_approval` reads it at R3
+  // whatever this gate does.)
+  assert.equal(
+    acceptancePathReport.gates.find((gate) => gate.gate === "protected_acceptance_tests").status,
     "satisfied"
   );
 });

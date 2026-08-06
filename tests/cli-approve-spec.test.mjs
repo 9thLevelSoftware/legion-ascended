@@ -608,10 +608,19 @@ test("each subject refuses the other's narrowing flag rather than ignoring it", 
   const root = await planPhaseOne(t);
 
   // subject → the flags it does *not* own, and the subject each belongs to.
+  //
+  // The fourth subject is where the mechanism changed again. `protected-paths`
+  // narrows by oracle id — the honest flag for a decision about the criteria one
+  // oracle states — so `--oracle` is now owned by two subjects and `owns` is a
+  // list rather than a string. The membership test that replaces it must still
+  // refuse positively, so the loop drives every ordered pair, and the shared flag
+  // is asserted *accepted* on both owners immediately after: a list-valued `owns`
+  // with the test inverted is exactly how the silent-accept comes back.
   const FOREIGN = {
     spec: [["path", "surface"], ["oracle", "oracle"]],
     oracle: [["path", "surface"], ["requirement", "spec"]],
-    surface: [["oracle", "oracle"], ["requirement", "spec"]]
+    surface: [["oracle", "oracle"], ["requirement", "spec"]],
+    "protected-paths": [["path", "surface"], ["requirement", "spec"]]
   };
 
   for (const [subject, foreigners] of Object.entries(FOREIGN)) {
@@ -655,6 +664,26 @@ test("each subject refuses the other's narrowing flag rather than ignoring it", 
   assert.equal(specWithPath.exitCode, 1);
   assert.equal(parseJsonOutput(specWithPath).status, "usage_error");
   assert.match(parseJsonOutput(specWithPath).diagnostics[0].message, /--path is not an option of legion approve spec/);
+
+  // The shared flag, in the direction the refusal loop cannot check: `--oracle`
+  // belongs to two subjects now, and both must take it. A refusal here would mean
+  // the fourth subject could never be narrowed at all, and the operator's only
+  // route would be to decide every declaring oracle at once.
+  for (const subject of ["oracle", "protected-paths"]) {
+    const accepted = await runCliCapture([
+      "--repository-root",
+      root,
+      "approve",
+      subject,
+      "--oracle",
+      "orc_phase-1",
+      "--approver",
+      "dasbl",
+      "--json"
+    ]);
+    const payload = parseJsonOutput(accepted);
+    assert.notEqual(payload.status, "usage_error", `${subject} --oracle was refused`);
+  }
 
   const surfaceWithRequirement = await runCliCapture([
     "--repository-root",

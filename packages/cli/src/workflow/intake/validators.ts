@@ -17,7 +17,12 @@
  * is a thing you have to look at and choose.
  */
 
-import { artifactPathSchema, verificationSurfaceKindSchema, type IntakeAnswer } from "@legion/protocol";
+import {
+  MAX_ACCEPTANCE_PATHS,
+  artifactPathSchema,
+  verificationSurfaceKindSchema,
+  type IntakeAnswer
+} from "@legion/protocol";
 
 import type { IntakeNode } from "./graph.js";
 import { SKIPPED_VALUE } from "./graph.js";
@@ -35,15 +40,40 @@ export const MAX_BUDGET_LINES = 1_000_000;
 /** `verificationSurfaceSchema.pinned` caps the array at eight references. */
 export const MAX_SURFACE_PINS = 8;
 
+/** The control plane, which a protected acceptance path may never name. */
+const CONTROL_PLANE_ROOT = ".legion/project";
+
 /**
- * The repository-relative paths a surface-pins answer names.
+ * Whether an answer names the control plane, **case-folded**.
+ *
+ * `.Legion/project/project.json` passed the exact-string form of this check at
+ * the node, at the answer set, in `acceptancePathsSchema` and in the harness, and
+ * on a case-insensitive filesystem resolves to a control artifact the harness
+ * restores *before* it compares — so the run records `pass` for a declaration
+ * that protects nothing, and the same document answers `unevaluable` on a
+ * case-sensitive CI. Refused here as well as in the schema because an intake
+ * refusal names the node and the slot, and being told at the schema is being told
+ * far too late. See `namesControlPlane` in @legion/protocol for the full argument.
+ */
+function namesControlPlane(entry: string): boolean {
+  const folded = entry.toLowerCase();
+  const root = CONTROL_PLANE_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+
+/**
+ * The repository-relative paths a multi-path answer names.
  *
  * One answer, several paths, so the operator can write them on separate lines or
  * separated by commas without being told which. Blank entries are dropped rather
  * than reported: a trailing newline is not a mistake worth a diagnostic, and the
  * empty case is caught by there being no paths left.
+ *
+ * Shared by the surface pins and the protected acceptance paths rather than
+ * copied. Two splitters would be two chances for "a, b" and "a\nb" to stop
+ * meaning the same thing in one of them.
  */
-export function parseSurfacePins(value: string): readonly string[] {
+export function parsePathList(value: string): readonly string[] {
   return value
     .split(/[\n,]/)
     .map((entry) => entry.trim())
@@ -375,7 +405,7 @@ function validateSlotText(node: IntakeNode, value: string): IntakeDiagnostic | u
     return fail("too_long", "Keep the rationale to 1024 characters or fewer.");
   }
   if (/^requirements\.\d+\.criteria\.\d+\.surface\.pins$/.test(node.slot)) {
-    const paths = parseSurfacePins(value);
+    const paths = parsePathList(value);
     if (paths.length === 0) {
       return fail(
         "empty_surface_pins",
@@ -408,6 +438,45 @@ function validateSlotText(node: IntakeNode, value: string): IntakeDiagnostic | u
       return fail(
         "duplicate_surface_path",
         `"${repeated}" is named twice. Pin each file once: two pins on one path assert two different truths about the same bytes.`
+      );
+    }
+    return undefined;
+  }
+
+  // The protected acceptance paths, checked at the node for the same reason the
+  // surface pins are: a bad path can still be corrected here for the price of
+  // retyping one line, and `buildRequirements` parses rather than safe-parses, so
+  // anything that reaches `--finalize` arrives as a raw zod issue array with no
+  // nodeId and no recovery.
+  if (/^requirements\.\d+\.criteria\.\d+\.acceptance-paths$/.test(node.slot)) {
+    const paths = parsePathList(value);
+    // An empty answer is not an error here: the node is optional, and a skip
+    // records `SKIPPED_VALUE` rather than an empty string. Reaching this with
+    // nothing in it means the operator typed whitespace, which is the same
+    // undeclared set and is the honest reading of it.
+    if (paths.length === 0) return undefined;
+    if (paths.length > MAX_ACCEPTANCE_PATHS) {
+      return fail("too_many_acceptance_paths", `Name at most ${MAX_ACCEPTANCE_PATHS} files.`);
+    }
+    const invalid = paths.find((entry) => !artifactPathSchema.safeParse(entry).success);
+    if (invalid !== undefined) {
+      return fail(
+        "invalid_acceptance_path",
+        `"${invalid}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`
+      );
+    }
+    const control = paths.find((entry) => namesControlPlane(entry));
+    if (control !== undefined) {
+      return fail(
+        "control_plane_acceptance_path",
+        `"${control}" is inside ${CONTROL_PLANE_ROOT}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`
+      );
+    }
+    const repeated = firstRepeated(paths);
+    if (repeated !== undefined) {
+      return fail(
+        "duplicate_acceptance_path",
+        `"${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`
       );
     }
     return undefined;
@@ -450,6 +519,13 @@ export interface CriterionDraft {
   readonly surfaceInterface: string;
   readonly surfaceRationale: string;
   readonly surfacePins: string;
+  /**
+   * The protected acceptance paths as the operator typed them, empty when the
+   * question was declined or never applicable. Kept raw for `surfacePins`'
+   * reason and one more: nothing hashes these at any point, so there is nothing
+   * a filesystem read would add.
+   */
+  readonly acceptancePaths: string;
 }
 
 function answerText(answers: ReadonlyMap<string, IntakeAnswer["value"]>, nodeId: string): string | undefined {
@@ -481,7 +557,8 @@ export function requirementDrafts(answers: readonly IntakeAnswer[]): readonly Re
         surfaceKind: answerText(map, `req-${index}-ac-${criterion}-surface-kind`) ?? "",
         surfaceInterface: answerText(map, `req-${index}-ac-${criterion}-surface-interface`) ?? "",
         surfaceRationale: answerText(map, `req-${index}-ac-${criterion}-surface-rationale`) ?? "",
-        surfacePins: answerText(map, `req-${index}-ac-${criterion}-surface-pins`) ?? ""
+        surfacePins: answerText(map, `req-${index}-ac-${criterion}-surface-pins`) ?? "",
+        acceptancePaths: answerText(map, `req-${index}-ac-${criterion}-acceptance-paths`) ?? ""
       });
     }
 
@@ -558,7 +635,7 @@ function surfaceDiagnostics(
     });
   }
 
-  const pins = parseSurfacePins(criterion.surfacePins);
+  const pins = parsePathList(criterion.surfacePins);
   if (pins.length === 0) {
     diagnostics.push({
       code: "surface_without_pins",
@@ -602,6 +679,84 @@ function surfaceDiagnostics(
     }
   }
 
+  return diagnostics;
+}
+
+/**
+ * Everything wrong with one criterion's declared protected acceptance paths.
+ *
+ * `surfaceDiagnostics`' argument, over a different subject, and the manual arm is
+ * the one that has to be here rather than in the node rule. The declaration lives
+ * on the executable proof arm alone, so `criterionFor` has nowhere to put it on a
+ * criterion a human decides — and without this it would be dropped in silence,
+ * turning "these tests must not be weakened" into the same answer as "nobody
+ * said", which is the fail-open family this whole series closes, arriving through
+ * the authoring path before a gate ever runs.
+ *
+ * Every rule the node checks is checked again, because the graph's `required`
+ * flag is one line away from being wrong and a hand-edited session file reaches
+ * every one of them.
+ */
+function acceptancePathDiagnostics(
+  requirementIndex: number,
+  criterion: CriterionDraft
+): readonly IntakeDiagnostic[] {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return [];
+
+  const where = `Requirement ${requirementIndex}, criterion ${criterion.index}`;
+  const nodeId = `req-${requirementIndex}-ac-${criterion.index}-acceptance-paths`;
+  const slot = `requirements.${requirementIndex}.criteria.${criterion.index}.acceptance-paths`;
+
+  if (criterion.proof !== "executable") {
+    return [
+      {
+        code: "acceptance_paths_on_manual_criterion",
+        message: `${where}: a protected acceptance path constrains what an implementer's run may weaken, and this criterion is decided by a human, so no run is constrained by it. Remove the paths, or change the proof to a command.`,
+        nodeId,
+        slot
+      }
+    ];
+  }
+
+  const diagnostics: IntakeDiagnostic[] = [];
+  if (paths.length > MAX_ACCEPTANCE_PATHS) {
+    diagnostics.push({
+      code: "too_many_acceptance_paths",
+      message: `${where}: name at most ${MAX_ACCEPTANCE_PATHS} files.`,
+      nodeId,
+      slot
+    });
+    return diagnostics;
+  }
+  for (const entry of paths) {
+    if (!artifactPathSchema.safeParse(entry).success) {
+      diagnostics.push({
+        code: "invalid_acceptance_path",
+        message: `${where}: "${entry}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`,
+        nodeId,
+        slot
+      });
+      continue;
+    }
+    if (namesControlPlane(entry)) {
+      diagnostics.push({
+        code: "control_plane_acceptance_path",
+        message: `${where}: "${entry}" is inside ${CONTROL_PLANE_ROOT}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`,
+        nodeId,
+        slot
+      });
+    }
+  }
+  const repeated = firstRepeated(paths);
+  if (repeated !== undefined) {
+    diagnostics.push({
+      code: "duplicate_acceptance_path",
+      message: `${where}: "${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`,
+      nodeId,
+      slot
+    });
+  }
   return diagnostics;
 }
 
@@ -655,6 +810,7 @@ export function validateAnswerSet(input: ValidateAnswerSetInput): readonly Intak
       const slot = `requirements.${draft.index}.criteria.${criterion.index}.detail`;
 
       diagnostics.push(...surfaceDiagnostics(draft.index, criterion));
+      diagnostics.push(...acceptancePathDiagnostics(draft.index, criterion));
 
       if (criterion.proof === "executable") {
         const parsed = parseCommandLine(criterion.detail);

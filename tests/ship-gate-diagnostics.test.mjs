@@ -180,10 +180,13 @@ test("a block mixing gates with a route and gates without advises the route, not
   const recovery = shipGateRecovery({
     gates: [
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
-      // Re-pointed from `independent_baseline`, which gained a recovery with the
-      // attestation plane and is therefore no longer an example of a gate with
-      // none. `protected_acceptance_tests` is one of the three that still is.
-      gateResult({ gate: "protected_acceptance_tests" })
+      // Re-pointed a second time. It was `independent_baseline`, which gained a
+      // recovery with the attestation plane; then `protected_acceptance_tests`,
+      // which gained one with the acceptance-path observation. Both re-points are
+      // the same event — a gate stops being an example of "no route out" the
+      // release it gets one — and `release_observation_plan` is the last R3 gate
+      // that still is.
+      gateResult({ gate: "release_observation_plan" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
@@ -204,7 +207,7 @@ test("a block with several distinct routes advises one of them and names them al
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
       gateResult({ gate: "whole_change_acceptance_evidence", scope: "change", subjectId: "chg_x" }),
       // Re-pointed for the same reason as the test above.
-      gateResult({ gate: "protected_acceptance_tests" })
+      gateResult({ gate: "release_observation_plan" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });

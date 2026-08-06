@@ -3,7 +3,12 @@ import * as z from "zod";
 import { actorSchema } from "../primitives/common.js";
 import { oracleIdSchema, projectIdSchema, requirementIdSchema } from "../primitives/ids.js";
 import { artifactPathSchema, artifactReferenceSchema } from "../primitives/values.js";
-import { schemaMetadataSchema, traceReferenceSchema, verificationSurfaceSchema } from "./common.js";
+import {
+  acceptancePathsSchema,
+  schemaMetadataSchema,
+  traceReferenceSchema,
+  verificationSurfaceSchema
+} from "./common.js";
 
 export const oracleTypeSchema = z.enum(["executable", "inspectable", "hybrid"]);
 
@@ -85,7 +90,25 @@ const oracleBaseSchema = schemaMetadataSchema.extend({
    * criteria are precisely those no command decides, so a surface there would
    * claim a command reached something when there is no command.
    */
-  surface: verificationSurfaceSchema.optional()
+  surface: verificationSurfaceSchema.optional(),
+  /**
+   * The tests an implementer's run must not weaken, copied from the acceptance
+   * criterion that authored it.
+   *
+   * `protectedPaths` above and this are opposites and must never be read as one
+   * population. A `protectedPath` is a control artifact: the guarded harness
+   * restores it and the run is out of contract. An acceptance path is hashed
+   * before dispatch, reported afterwards, and restored by nothing — because a
+   * task may legitimately *add* an acceptance test, and the decision about a
+   * modification belongs to the approval plane rather than to the harness.
+   *
+   * `.optional()` where `protectedPaths` is `.min(1)`, and that asymmetry is
+   * load-bearing: absence has to be a state a gate can check, or "the
+   * declarations are empty" is indistinguishable from "everything declared is
+   * fine". Structurally on the shared base and never written on an `inspectable`
+   * oracle, on `surface`'s rule: its criteria are the ones no command decides.
+   */
+  acceptancePaths: acceptancePathsSchema.optional()
 });
 
 export const oracleSchema = z.discriminatedUnion("type", [

@@ -15,6 +15,7 @@ import type {
   ArtifactReference,
   Attestation,
   AttestationKind,
+  EvidenceItem,
   Oracle,
   Release,
   ReviewDecision,
@@ -378,6 +379,19 @@ export interface ShipGateChangeFacts {
  * the record is total, so an entry that is merely *wrong* still compiles, and
  * `CHANGE_SCOPED_GATES` in `tests/ship-risk-gates.test.mjs` is a deliberate
  * hand-written duplicate that has to move with them.
+ *
+ * `protected_acceptance_tests` is the newest, and it is the first entry in this
+ * record that was already right when its producer arrived. It stays `"task"`, by
+ * argument rather than by inertia. The gate's *subject set* is change-wide — the
+ * acceptance paths every oracle of the change declares — but its *verdict* is one
+ * task's run evidence, because the harness observes a dispatch and a dispatch
+ * belongs to a task. Two tasks of one change therefore have two genuinely
+ * different answers: one whose run edited a declared test and one whose did not,
+ * and collapsing them would name a change as the subject of a sentence about a
+ * run. That is the mirror image of the altitude defect below rather than a repeat
+ * of it — `integration_or_real_interface_checks` was wrong at `"task"` because
+ * its all-unit branch was a property of the whole *plan* fired once per criterion,
+ * and this gate's per-task branch is a property of a *run*.
  *
  * `approved_spec_and_oracle` is the newest of the four, and the one whose entry
  * was already here — as `"task"` — before it had a producer. Nothing forces this
@@ -2484,14 +2498,29 @@ export const APPROVE_BEFORE_BUILD_RECOVERY: ShipGateRecovery = {
     "Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that. R3 " +
     "also derives independent_baseline, which compares an attestation's instant against the same run start: capture " +
     "and attest a baseline before building if this change is to satisfy that gate on evidence rather than on an " +
-    "audited waiver."
+    "audited waiver. R3 further derives protected_acceptance_tests: if this work has to modify an acceptance test its " +
+    "own oracles protect, record that with legion approve protected-paths --approver <id> before building, because " +
+    "that decision has to predate the run too."
 };
 
 /** Does any task of this change derive the ordering gate? */
 export function derivesApprovalOrderingGate(tasks: readonly TaskContract[]): boolean {
+  return derivesShipGate(tasks, "approved_spec_and_oracle");
+}
+
+/**
+ * Does any task of this change derive a named gate?
+ *
+ * Generalised from the function above rather than copied beside it: a second
+ * approve subject with a pre-run ordering rule needs exactly the same question
+ * about a different gate id, and two loops would be two chances for one of them
+ * to consult a different policy. `derivesApprovalOrderingGate` is kept as a
+ * one-line call so no existing call site moves.
+ */
+export function derivesShipGate(tasks: readonly TaskContract[], gateId: RiskGateId): boolean {
   return tasks.some((task) =>
     deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
-      (gate) => gate.id === "approved_spec_and_oracle"
+      (gate) => gate.id === gateId
     )
   );
 }
@@ -4898,6 +4927,454 @@ export function isDomainReviewSatisfying(input: {
   return outcome.status === "satisfied";
 }
 
+/** The evidence item `legion build` writes about declared acceptance paths. */
+const PROTECTED_ACCEPTANCE_ITEM = "protected-acceptance-paths";
+
+/**
+ * The action an approval carries when it blesses a modification to a protected
+ * acceptance path.
+ *
+ * The same literal `legion approve protected-paths` writes, spelled out in both
+ * places rather than shared through a constant, on `DELTA_SPEC_APPROVE_ACTION`'s
+ * rule: the gate and the writer are two sides of a contract, and a shared symbol
+ * would let a rename move both at once and leave every approval already on disk
+ * unreadable by the gate that reads them.
+ */
+const PROTECTED_PATHS_MODIFY_ACTION = "oracle.protected-paths.modify";
+
+const ACCEPTANCE_PATHS_DECLARE_RECOVERY: ShipGateRecovery = {
+  command: "legion start --intake",
+  reason:
+    "No oracle in this change names a test the work must not weaken, so there is nothing for the harness to watch and " +
+    "nothing this gate can be satisfied by. Declare the acceptance tests on an executable acceptance criterion at " +
+    "intake and re-plan, or lower the risk tier through an audited risk.override if this change genuinely has no " +
+    "acceptance test to protect."
+};
+
+const ACCEPTANCE_PATHS_BUILD_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "This change declares protected acceptance paths and this task's latest evidence does not record what its run did " +
+    "to them. The observation is taken across a dispatch, so only a run can produce it: build, then rerun legion ship."
+};
+
+/**
+ * The cure for a run that could not compare a declared path on both sides.
+ *
+ * Its own recovery rather than `ACCEPTANCE_PATHS_BUILD_RECOVERY`, because that
+ * one's sentence — "this task's latest evidence does not record what its run did"
+ * — is false here: the run did record, and what it recorded is that it could not
+ * tell. And because `legion build` alone is a cure for only one of the two ways
+ * to reach this arm. The other is a pre-run state this change already recorded
+ * that can no longer be read back, and rebuilding re-reads the same missing
+ * report and answers `unknown` again. Lesson 1 is that a recovery has to repair
+ * the state it is offered for, so both routes are named and the cited report says
+ * which one applies.
+ */
+const ACCEPTANCE_PATHS_UNKNOWN_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "A declared acceptance path could not be compared on both sides of the run. The cited " +
+    "runs/<runId>/protected-paths.json names which and why. If a declaration points at a file that is not there, " +
+    "correct the path on the criterion and re-plan — a rebuild will report the same thing. If the report of an " +
+    "earlier run of this change is missing or no longer matches the digest its evidence cites, restore it from " +
+    "version control first: what this change's first run saw is what a later run is judged against, and a build " +
+    "cannot reconstruct a record that was deleted."
+};
+
+/**
+ * The cure for a run that changed a protected acceptance path without a decision
+ * behind it — and the one post-execution cure in this file that genuinely repairs
+ * the state it is offered for.
+ *
+ * **Deliberately not `legion approve protected-paths`.** That approval must
+ * predate the run, and this arm is reachable only after one; approving now writes
+ * a strictly later `decidedAt`, exits 0, and leaves the gate blocked forever —
+ * `BASELINE_AFTER_EXECUTION_RECOVERY`'s rule, and the defect `orderingAwareRecovery`
+ * exists to stop this file reproducing for a third verb.
+ *
+ * Restoring the bytes re-dates nothing, which is exactly why `ORACLE_BYTES_RECOVERY`
+ * is preserved through `orderingAwareRecovery` rather than collapsed into
+ * "re-plan": the tampering case is the one post-execution state that is genuinely
+ * repairable, and the run artifact this gate cites records what each path was
+ * before the run so the operator has something to restore *to*.
+ */
+const ACCEPTANCE_PATHS_RESTORE_RECOVERY: ShipGateRecovery = {
+  command: "legion build",
+  reason:
+    "A run changed an acceptance test this change's oracles say it must not weaken, and no human decided that before " +
+    "the run started. Restore the path to the pre-run state recorded in this task's runs/<runId>/protected-paths.json " +
+    "and build again; the next run's observation then records pass. Building again *without* restoring records the same " +
+    "fail, because a run is compared against the state this change's first run saw rather than against whatever the " +
+    "last attempt left. Approving now cannot help — this gate requires the decision to predate the run, and legion " +
+    "approve protected-paths writes a later instant, which makes this strictly worse. If the modification was intended, " +
+    "plan the remaining work as a new change and approve it before building."
+};
+
+/**
+ * The `protected-acceptance-paths` item recorded by this task's latest attempt.
+ *
+ * **Latest attempt, and the soundness of that lives in the harness rather than
+ * here.** Four reviewers drove the same sequence against the compiled build:
+ * attempt 1 guts the test and records `fail`, the operator runs the recovery this
+ * gate names without restoring anything, and attempt 2 — whose pre-dispatch
+ * snapshot hashed the already-gutted file — records `pass`. Reading the latest
+ * attempt then reported `satisfied` over bytes nobody put back.
+ *
+ * The fix is not "fold every attempt and let a `fail` stand forever". That would
+ * close this hole by opening `evidence-selection.ts`'s: the operator restores the
+ * file, rebuilds, and stays blocked on a record no command can clear, so the
+ * recovery named below would repair nothing — lesson 1, inverted. It is instead
+ * that a run's `before` is anchored to the earliest state *this change* recorded
+ * for the path, so attempt 2 without a restore records `fail` again and attempt 3
+ * after one records `pass`. See guarantee 7 of `guarded-execution.ts` and
+ * `acceptance-baseline.ts`. Latest-attempt-only is correct here for the same
+ * reason it is correct everywhere else — once the thing being reported is a fact
+ * about the change rather than about the attempt.
+ *
+ * `surfaceCheckVerdict`'s sibling and deliberately not `evidenceItemVerdict`,
+ * which collapses everything that is not `pass`/`fail` to `undefined`. This gate
+ * has three verdicts and the third — `unknown`, "a declared path neither side of
+ * the run could resolve" — must reach the gate spelled differently from "no such
+ * item was written", because one means a build is needed and the other means a
+ * declaration names something that is not there.
+ *
+ * The whole item is returned rather than the verdict alone: the trace references
+ * are what say which declarations the run that wrote it actually snapshotted.
+ */
+function protectedAcceptanceItem(
+  entries: readonly EvidenceIndexEntry[],
+  taskId: string
+): EvidenceItem | undefined {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === undefined) return undefined;
+  return entry.evidence.items.find((item) => item.id === PROTECTED_ACCEPTANCE_ITEM);
+}
+
+/** One oracle's declared protected acceptance paths. */
+export interface DeclaredAcceptancePaths {
+  readonly oracleId: string;
+  readonly oracle: ShipGateOracleFact;
+  readonly paths: readonly string[];
+}
+
+/**
+ * Every protected acceptance path this change's oracles declare.
+ *
+ * Change-wide rather than per task, matching what `legion build` hands the
+ * harness. `legion plan` materialises one task per executable criterion, so a
+ * per-task declaration set would let task B's run weaken a test task A's oracle
+ * protects and be invisible to both — B never snapshotted it, and A's item
+ * predates it. The gate is still evaluated per task, because the *run* whose
+ * evidence answers is that task's own.
+ *
+ * Exported so `legion approve protected-paths` walks the gate's own subject set,
+ * on `changeVerificationSurfaces`' recorded argument: a writer walking its own
+ * smaller set could bless an oracle the gate does not read, or miss one it does.
+ *
+ * `unestablished` is not "no declarations". The oracle plane is all-or-nothing at
+ * the boundary, and concluding that nothing is protected from a plane that failed
+ * to load is the fail-open every all-or-nothing fact in `ShipGateChangeFacts`
+ * exists to prevent: "every declared path is unchanged" is trivially true of a
+ * list that lost the oracle protecting the touched one.
+ */
+export function changeAcceptancePathDeclarations(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+}): {
+  readonly declarations: readonly DeclaredAcceptancePaths[];
+  readonly unestablished: boolean;
+} {
+  const oracles = input.change?.oracles;
+  if (oracles === undefined) return { declarations: [], unestablished: true };
+  const declarations: DeclaredAcceptancePaths[] = [];
+  for (const oracle of oracles) {
+    // Positive check on the declaration being present, before any quantifier
+    // touches it. `acceptancePaths` is `.optional()` precisely so that "nobody
+    // declared one" is a state rather than an empty array every `every` passes.
+    const paths = oracle.document.acceptancePaths;
+    if (paths === undefined || paths.length === 0) continue;
+    declarations.push({ oracleId: oracle.document.id, oracle, paths: [...paths] });
+  }
+  return {
+    declarations: declarations.slice().sort((left, right) => left.oracleId.localeCompare(right.oracleId)),
+    unestablished: false
+  };
+}
+
+/**
+ * Has a named human blessed modifying the acceptance paths this oracle declares?
+ *
+ * `surfacePinReaffirmation`'s rules, reused verbatim rather than re-argued: scope
+ * the plane to this change and this action, require a `granted` document with a
+ * human decider, judge expiry against the injected clock, and let a standing
+ * negative beat the grant unless a *strictly later* grant supersedes it.
+ *
+ * The one addition is the pin, and it is what stops the grant becoming a blanket
+ * exemption. The approval pins the oracle document the approver read, so
+ * re-planning that oracle to protect *different* paths invalidates the decision
+ * rather than silently extending it to a set nobody looked at.
+ *
+ * **The ordering rule is deliberately not here.** `isLiveOracleGrant` records
+ * why: a writer that included it would report "already decided" as false for a
+ * harmless rerun, write a fresh `decidedAt`, and turn a valid ordering into an
+ * invalid one. The gate applies ordering on top of this.
+ */
+function protectedPathsModifyGrant(input: {
+  readonly oracle: ShipGateOracleFact;
+  readonly change: ShipGateChangeFacts;
+}): { readonly by: string; readonly at: UtcTimestamp } | undefined {
+  const approvals = input.change.approvals;
+  if (approvals === undefined) return undefined;
+  const oracleId = input.oracle.document.id;
+
+  const relevant = approvals.filter(
+    (approval) =>
+      approval.changeId === input.change.changeId &&
+      approval.scope.action === PROTECTED_PATHS_MODIFY_ACTION &&
+      approval.scope.targets.some((target) => target.kind === "oracle" && target.id === oracleId)
+  );
+  if (relevant.length === 0) return undefined;
+
+  const live: GrantedApproval[] = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") continue;
+    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
+    live.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  if (newestGrant === undefined) return undefined;
+
+  const standing = relevant.some(
+    (approval) =>
+      (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") &&
+      (approval.decidedAt === undefined || approval.decidedAt >= newestGrant.decidedAt)
+  );
+  if (standing) return undefined;
+
+  const oraclePath = input.oracle.reference.path;
+  const pins = (newestGrant.artifacts ?? []).filter((reference) => reference.path === oraclePath);
+  // Exactly one, on `approvedOraclePin`'s rule: `artifacts` carries no uniqueness
+  // constraint, so a `find` would take whichever duplicate came first and a
+  // document pinning both the right digest and a wrong one would sail through.
+  if (pins.length !== 1) return undefined;
+  const pin = pins[0] as ArtifactReference;
+  if (pin.sha256 !== input.oracle.reference.sha256) return undefined;
+
+  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
+}
+
+/**
+ * Would this one document, alone, let the gate accept a modification to the paths
+ * this oracle declares?
+ *
+ * Exported for `legion approve protected-paths`, which has to answer "is there
+ * anything left to decide here" and must not answer it with its own weaker rule.
+ * PR 2 recorded what that costs: a writer whose idea of "done" is weaker than the
+ * reader's idea of "satisfied" reports success, writes nothing, and leaves the
+ * change permanently blocked. So this is not a second implementation — it *calls*
+ * `protectedPathsModifyGrant` against a one-document plane.
+ */
+export function isLiveProtectedPathsModifyGrant(input: {
+  readonly approval: Approval;
+  readonly changeId: string;
+  readonly oracle: ShipGateOracleFact;
+  readonly evaluatedAt: UtcTimestamp | undefined;
+}): boolean {
+  const granted = protectedPathsModifyGrant({
+    oracle: input.oracle,
+    change: {
+      changeId: input.changeId,
+      acceptance: undefined,
+      approvals: [input.approval],
+      attestations: undefined,
+      reviews: undefined,
+      deltas: undefined,
+      oracles: undefined,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: input.evaluatedAt,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return granted !== undefined;
+}
+
+/**
+ * Can the implementer's run weaken the tests it is judged by?
+ *
+ * The subject set is the change's oracles' declared acceptance paths; the verdict
+ * is this task's own run evidence, because a run is what the harness observed.
+ *
+ * **The arms run declarations → coverage → negatives → positives, and that order
+ * is the gate's defence against a stale pass.** The evidence item is written at
+ * build time and stays `pass` forever, while the oracles can be replanned and an
+ * approval revoked afterwards; a verdict read first would let the build's own
+ * answer mask both. `nonUnitSurfaceOutcome` orders pins before verdict for the
+ * same reason and this gate needs it more sharply, because the *declaration set
+ * itself* can grow after the run.
+ *
+ * Every quantifier is checked against the empty case, positively:
+ *
+ *  - The oracle plane unread is `unestablished`, never "nothing is protected".
+ *  - No oracle declaring a path is `unevaluable` with its own sentence, decided
+ *    from the declarations rather than from a verdict. **This is the branch every
+ *    change on disk today is in, and saying so is the honest answer.** It is not
+ *    computed as "the non-control-plane subset of `protectedPaths` is empty",
+ *    which would be `[].every(...)` and therefore true everywhere;
+ *    `acceptancePaths` is a separate `.optional()` field precisely so absence is
+ *    a state rather than a vacuum.
+ *  - A declaration the run never snapshotted is `unevaluable`, not folded into
+ *    the pass beside it.
+ *
+ * There is no arm that returns `satisfied` by falling through.
+ */
+function protectedAcceptancePathsStatus(input: {
+  readonly taskId: string;
+  readonly entries: readonly EvidenceIndexEntry[];
+  readonly change: ShipGateChangeFacts | undefined;
+}): GateOutcome {
+  const { declarations, unestablished } = changeAcceptancePathDeclarations({ change: input.change });
+  if (unestablished) {
+    return {
+      status: "unevaluable",
+      reason:
+        "The oracles recorded for this change could not be read as a complete set, so which acceptance tests its runs must not weaken is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (declarations.length === 0) {
+    return {
+      status: "unevaluable",
+      reason:
+        "No oracle in this change declares a protected acceptance path, so nothing says which tests its runs must not weaken. Nobody said, so nothing is known.",
+      recovery: ACCEPTANCE_PATHS_DECLARE_RECOVERY
+    };
+  }
+
+  const declaredPaths = declarations.flatMap((declaration) => declaration.paths);
+  const item = protectedAcceptanceItem(input.entries, input.taskId);
+  if (item === undefined) {
+    return {
+      status: "unevaluable",
+      reason: `${input.taskId}'s latest evidence records no ${PROTECTED_ACCEPTANCE_ITEM} item, so nothing says whether its run changed the ${declaredPaths.length} acceptance path(s) this change's oracles declare (${declaredPaths.join(", ")}).`,
+      recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+    };
+  }
+
+  // Which declarations the run that wrote this item actually snapshotted. A
+  // declaration added by a replan afterwards is covered by no pre-run snapshot,
+  // and folding it into the item's own verdict would certify a path nothing ever
+  // hashed.
+  const covered = new Set(
+    (item.traceRefs ?? [])
+      .filter((reference) => reference.entity?.kind === "oracle")
+      .map((reference) => `${reference.entity?.id ?? ""}\n${reference.path}`)
+  );
+  for (const declaration of declarations) {
+    for (const declaredPath of declaration.paths) {
+      if (covered.has(`${declaration.oracleId}\n${declaredPath}`)) continue;
+      return {
+        status: "unevaluable",
+        reason: `${declaredPath}, declared by oracle ${declaration.oracleId}, is covered by no pre-run snapshot in ${input.taskId}'s latest evidence: it was declared after the run that produced it.`,
+        recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+      };
+    }
+  }
+
+  const artifactPath = item.artifact?.path;
+  const cites = artifactPath === undefined ? "" : ` ${artifactPath} records what each path was before and after.`;
+
+  if (item.verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${input.taskId}'s run could not compare every protected acceptance path this change's oracles declare on both sides of the dispatch, so whether one was weakened is unestablished.${cites}`,
+      recovery: ACCEPTANCE_PATHS_UNKNOWN_RECOVERY
+    };
+  }
+
+  if (item.verdict === "fail") {
+    const change = input.change;
+    if (change === undefined || change.approvals === undefined) {
+      return {
+        status: "unevaluable",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and the approvals recorded for this change could not be read, so whether a human decided that beforehand is unestablished.`,
+        recovery: UNREADABLE_PLANE_RECOVERY
+      };
+    }
+    const execution = executionOrdering(change.taskRuns);
+    if (execution.kind !== "started") {
+      return {
+        status: "unevaluable",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and this change's task runs do not establish when execution began, so whether any decision predates it is unknown.`,
+        recovery: ORDERING_UNREADABLE_RECOVERY
+      };
+    }
+
+    // Blanket authorisation, and the coarseness is deliberate. `evidenceItemSchema`
+    // has no field in which the *touched* path set could reach a gate, so a check
+    // of the form "some grant names some oracle" would bless the weakening of a
+    // path nobody approved. Every declaring oracle must therefore carry a live
+    // pre-run grant; the sentence names each one that does not, and the cited
+    // report says which path actually moved.
+    const unapproved: string[] = [];
+    const late: string[] = [];
+    const granted: { readonly by: string; readonly at: UtcTimestamp }[] = [];
+    for (const declaration of declarations) {
+      const grant = protectedPathsModifyGrant({ oracle: declaration.oracle, change });
+      if (grant === undefined) {
+        unapproved.push(`${declaration.oracleId} (${declaration.paths.join(", ")})`);
+        continue;
+      }
+      // Strict, on `approvedSpecAndOracleStatus`' rule: both stamps are
+      // millisecond wall-clock, no honest writer produces the equal pair, and an
+      // unorderable pair is not evidence that the decision came first.
+      if (grant.at >= execution.startedAt) {
+        late.push(`${declaration.oracleId} (decided ${grant.at} by ${grant.by})`);
+        continue;
+      }
+      granted.push(grant);
+    }
+
+    if (unapproved.length > 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${input.taskId}'s run changed at least one of the ${declaredPaths.length} protected acceptance path(s) this change's oracles declare, and no granted ${PROTECTED_PATHS_MODIFY_ACTION} approval decided before run ${execution.runId} started at ${execution.startedAt} permits it for ${unapproved.join("; ")}.${cites}`,
+        recovery: ACCEPTANCE_PATHS_RESTORE_RECOVERY
+      };
+    }
+    if (late.length > 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and the decision permitting it was taken at or after run ${execution.runId} of ${execution.taskId} started at ${execution.startedAt}: ${late.join("; ")}. A decision taken after the work is not a decision the work was done under, and nothing re-orders one already taken.${cites}`,
+        recovery: ACCEPTANCE_PATHS_RESTORE_RECOVERY
+      };
+    }
+    const first = granted[0] as { readonly by: string; readonly at: UtcTimestamp };
+    return {
+      status: "satisfied",
+      reason: `${input.taskId}'s run changed a protected acceptance path, and ${first.by} approved modifying the paths every declaring oracle protects at ${first.at}, before run ${execution.runId} started at ${execution.startedAt}, against the oracle bytes this change still carries.${cites}`
+    };
+  }
+
+  if (item.verdict === "pass") {
+    return {
+      status: "satisfied",
+      reason: `Every protected acceptance path this change's oracles declare (${declaredPaths.join(", ")}) still matches the state this change's first run recorded for it, as of ${input.taskId}'s latest run: nothing that run did, and nothing done between this change's runs, weakened them.`
+    };
+  }
+
+  // Any other verdict is a shape this gate does not recognise, and an
+  // unrecognised state is unestablished rather than acceptable.
+  return {
+    status: "unevaluable",
+    reason: `${input.taskId}'s ${PROTECTED_ACCEPTANCE_ITEM} item records the verdict "${String(item.verdict)}", which this gate cannot read as an answer about whether a protected acceptance path was weakened.`,
+    recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+  };
+}
+
 function fromVerdict(
   verdict: "pass" | "fail" | undefined,
   itemId: string
@@ -4921,12 +5398,14 @@ function evaluateGate(input: {
    * function with plain literals and no facts at all. Making absence a type
    * makes the guard structural instead of a thing to remember once per gate.
    *
-   * Seven arms read it now — `explicit_human_approval` the approvals plane,
+   * Eight arms read it now — `explicit_human_approval` the approvals plane,
    * `approved_delta_spec` the deltas, `integration_or_real_interface_checks` the
    * oracles and the pin verifier, `whole_change_acceptance_evidence` the
    * acceptance and the clock, `approved_spec_and_oracle` all of those plus the
    * run plane, the three attestation gates the attestation plane, and
-   * `architecture_or_security_review` the reviews plane beside it — so the
+   * `architecture_or_security_review` the reviews plane beside it, and
+   * `protected_acceptance_tests` the oracles for its declaration set plus the
+   * approvals and the run plane for the decision that may permit a change — so the
    * signature is doing the job it was landed for: each gate's diff touches its
    * own `case` rather than this one.
    */
@@ -5083,11 +5562,21 @@ function evaluateGate(input: {
         taskIdFor: input.taskIdFor
       });
 
+    case "protected_acceptance_tests":
+      // No `reviews`, on `approved_delta_spec`'s rule. `taskId` and `entries` are
+      // kept, and that is the deliberate half: the *subject set* is change-wide —
+      // the acceptance paths every oracle of the change declares, which is what
+      // `legion build` hands the harness — while the *verdict* is this task's own
+      // run, because a run is the thing the harness observed. A task whose run
+      // weakened a test another task's oracle protects is caught under its own
+      // task id, which is where the operator can act on it.
+      return protectedAcceptancePathsStatus({ taskId, entries, change: input.change });
+
     default:
-      // Protected acceptance tests and release observation have no producer in
-      // the workflow yet. Those two are exactly what this arm answers for, and
-      // `tests/change-r3-ordering` derives that set from this very reason string
-      // so each later release reddens it as it closes one.
+      // Release observation has no producer in the workflow yet. It is now the
+      // only gate this arm answers for, and `tests/change-r3-ordering` derives
+      // that set from this very reason string so the next release reddens it as
+      // it closes the last one.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -5198,6 +5687,16 @@ export function shipGatePinnedReferences(input: {
     // is indistinguishable at the readiness arithmetic from nobody having
     // attested anything.
     ...(input.attestations?.flatMap((attestation) => attestation.sources) ?? [])
+    // **No family for protected acceptance paths, deliberately.** The
+    // `oracle.protected-paths.modify` approval pins the *oracle document* the
+    // approver read, and that reference is already collected twice over — as an
+    // oracle reference and as an approval artifact. The acceptance test files
+    // themselves are not pinned by anything and must not be: this gate certifies
+    // what a run did across one dispatch, and the digests that answer that live in
+    // the run artifact rather than in a declaration. Stated rather than omitted,
+    // because a dropped family fails silently and in the direction of looking
+    // correct, and the next reader would otherwise have to guess whether the
+    // omission was a decision.
   ];
 }
 
@@ -5444,7 +5943,21 @@ const GATE_RECOVERY: Readonly<
   // domain review has recorded a defect, and a table entry assuming it would tell
   // an operator who has reviewed nothing to go and build.
   architecture_or_security_review: DOMAIN_REVIEW_RECOVERY,
-  protected_acceptance_tests: undefined,
+  // Eight unmet states with four cures — an unreadable oracle plane, no
+  // declaration anywhere, no item in this task's evidence, a declaration made
+  // after the run, an `unknown` observation, an unreadable approvals plane, an
+  // unestablished ordering, and a change with no decision behind it — so the
+  // verdict carries its own and `shipGateRecovery` prefers that. What stays here
+  // is the state a caller holding only a gate id can be answered for, and the one
+  // every change on disk today is in: no oracle declares a protected acceptance
+  // path, because until this release nothing could.
+  //
+  // Deliberately **not** `legion approve protected-paths`. That decision must
+  // predate the run, so a table entry naming it would tell an operator who has
+  // already built to run a command that exits 0, writes a later instant, and
+  // converts a repairable `unevaluable` into a permanent `unsatisfied` — the
+  // exact one-way door `orderingAwareRecovery` exists to keep this file out of.
+  protected_acceptance_tests: ACCEPTANCE_PATHS_DECLARE_RECOVERY,
   // Five unmet states with four cures, so the verdict carries its own. The table
   // holds the absence, which is where every change written before this release
   // is. There is no ordering rule on this gate: evaluating the implemented

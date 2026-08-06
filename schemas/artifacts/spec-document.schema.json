@@ -1130,6 +1130,18 @@
                                     "pinned"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "acceptancePaths": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512,
+                                    "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                                    "description": "Relative POSIX artifact path inside an approved artifact root."
+                                  }
                                 }
                               },
                               "required": [
@@ -2426,6 +2438,18 @@
                                     "pinned"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "acceptancePaths": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512,
+                                    "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                                    "description": "Relative POSIX artifact path inside an approved artifact root."
+                                  }
                                 }
                               },
                               "required": [
@@ -3722,6 +3746,18 @@
                                     "pinned"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "acceptancePaths": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512,
+                                    "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                                    "description": "Relative POSIX artifact path inside an approved artifact root."
+                                  }
                                 }
                               },
                               "required": [
@@ -5018,6 +5054,18 @@
                                     "pinned"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "acceptancePaths": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512,
+                                    "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                                    "description": "Relative POSIX artifact path inside an approved artifact root."
+                                  }
                                 }
                               },
                               "required": [
@@ -6315,6 +6363,18 @@
                                     "pinned"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "acceptancePaths": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512,
+                                    "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                                    "description": "Relative POSIX artifact path inside an approved artifact root."
+                                  }
                                 }
                               },
                               "required": [
@@ -7611,6 +7671,18 @@
                                     "pinned"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "acceptancePaths": {
+                                  "minItems": 1,
+                                  "maxItems": 8,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512,
+                                    "pattern": "^(?!\\/)(?![A-Za-z]:)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[A-Za-z0-9._@+=:,~-]+(?:\\/[A-Za-z0-9._@+=:,~-]+)*$",
+                                    "description": "Relative POSIX artifact path inside an approved artifact root."
+                                  }
                                 }
                               },
                               "required": [

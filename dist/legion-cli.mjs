@@ -15221,6 +15221,33 @@ var verificationSurfaceSchema = strictObject({
     seen.add(reference.path);
   }
 });
+var CONTROL_PLANE_ROOT = ".legion/project";
+function namesControlPlane(entry) {
+  const folded = entry.toLowerCase();
+  const root = CONTROL_PLANE_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+var MAX_ACCEPTANCE_PATHS = 8;
+var acceptancePathsSchema = array(artifactPathSchema).min(1).max(MAX_ACCEPTANCE_PATHS).superRefine((paths, context) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, entry] of paths.entries()) {
+    if (seen.has(entry)) {
+      context.addIssue({
+        code: "custom",
+        message: "A protected acceptance path may be named only once.",
+        path: [index]
+      });
+    }
+    seen.add(entry);
+    if (namesControlPlane(entry)) {
+      context.addIssue({
+        code: "custom",
+        message: `${CONTROL_PLANE_ROOT} is the control plane, which the guarded harness restores rather than reports. A protected acceptance path names a test the implementer must not weaken, which lives in the repository.`,
+        path: [index]
+      });
+    }
+  }
+});
 var artifactRoleSchema = _enum2([
   "project-manifest",
   "constitution",
@@ -17300,7 +17327,25 @@ var oracleBaseSchema = schemaMetadataSchema.extend({
    * criteria are precisely those no command decides, so a surface there would
    * claim a command reached something when there is no command.
    */
-  surface: verificationSurfaceSchema.optional()
+  surface: verificationSurfaceSchema.optional(),
+  /**
+   * The tests an implementer's run must not weaken, copied from the acceptance
+   * criterion that authored it.
+   *
+   * `protectedPaths` above and this are opposites and must never be read as one
+   * population. A `protectedPath` is a control artifact: the guarded harness
+   * restores it and the run is out of contract. An acceptance path is hashed
+   * before dispatch, reported afterwards, and restored by nothing — because a
+   * task may legitimately *add* an acceptance test, and the decision about a
+   * modification belongs to the approval plane rather than to the harness.
+   *
+   * `.optional()` where `protectedPaths` is `.min(1)`, and that asymmetry is
+   * load-bearing: absence has to be a state a gate can check, or "the
+   * declarations are empty" is indistinguishable from "everything declared is
+   * fine". Structurally on the shared base and never written on an `inspectable`
+   * oracle, on `surface`'s rule: its criteria are the ones no command decides.
+   */
+  acceptancePaths: acceptancePathsSchema.optional()
 });
 var oracleSchema = discriminatedUnion("type", [
   oracleBaseSchema.extend({
@@ -17369,7 +17414,8 @@ var requirementCriterionProofSchema = discriminatedUnion("mode", [
     args: array(string2().max(256)).max(64),
     expectedExitCode: number2().int().min(0).max(255),
     timeoutMs: number2().int().positive().max(36e5).optional(),
-    surface: verificationSurfaceSchema.optional()
+    surface: verificationSurfaceSchema.optional(),
+    acceptancePaths: acceptancePathsSchema.optional()
   }),
   strictObject({
     mode: literal("manual"),
@@ -37491,7 +37537,7 @@ async function mintPinnedReferences(input) {
 }
 
 // packages/cli/src/workflow/intake/graph.ts
-var INTAKE_GRAPH_VERSION = "1.1.0";
+var INTAKE_GRAPH_VERSION = "1.2.0";
 var MAX_NODE_ID_LENGTH = 64;
 var MAX_REQUIREMENTS = 40;
 var MAX_CRITERIA_PER_REQUIREMENT = 20;
@@ -37811,6 +37857,29 @@ function criterionNodes(requirementIndex, criterionIndex, askForAnother = true) 
       required: true,
       dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
     },
+    // The tests this criterion's work must not weaken, asked once per
+    // *executable* criterion and opted into rather than demanded.
+    //
+    // One node rather than the surface's four, and the difference is structural
+    // rather than economical: a surface carries a kind, an interface, a rationale
+    // and a pin set, so declining the kind has to remove the follow-ups. This is a
+    // single multi-valued answer with nothing hanging off it, so the node is its
+    // own opt-in and an empty answer is simply an undeclared set.
+    //
+    // `dependsOn` names the proof node alone, buying both exclusions the same way
+    // the surface nodes do: a `manual` criterion answers `manual` and fails the
+    // `equals`, and a `wont` requirement never answers `-proof` at all and fails
+    // it transitively.
+    {
+      id: `${prefix}-acceptance-paths`,
+      section: "requirements",
+      slot: `${slotPrefix}.acceptance-paths`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: which existing test files must this work not weaken?`,
+      help: "Optional. Repository-relative paths, one per line or comma separated \u2014 the acceptance tests that decide this criterion. Legion hashes them before every run and reports any that changed; changing one needs a named human's approval recorded *before* the run. Name tests that already exist: a path that is not there when a run starts is reported as unknown, never as unchanged. Not under .legion/project, which the harness restores rather than reports.",
+      kind: "free-text",
+      required: false,
+      dependsOn: { nodeId: `${prefix}-proof`, equals: "executable" }
+    },
     ...askForAnother ? [
       {
         id: `${prefix}-more`,
@@ -37929,7 +37998,13 @@ function applicableNodes(input) {
 var MAX_BUDGET_FILES = 1e4;
 var MAX_BUDGET_LINES = 1e6;
 var MAX_SURFACE_PINS = 8;
-function parseSurfacePins(value) {
+var CONTROL_PLANE_ROOT2 = ".legion/project";
+function namesControlPlane2(entry) {
+  const folded = entry.toLowerCase();
+  const root = CONTROL_PLANE_ROOT2.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
+function parsePathList(value) {
   return value.split(/[\n,]/).map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 }
 function firstRepeated(values) {
@@ -38148,7 +38223,7 @@ function validateSlotText(node, value) {
     return fail("too_long", "Keep the rationale to 1024 characters or fewer.");
   }
   if (/^requirements\.\d+\.criteria\.\d+\.surface\.pins$/.test(node.slot)) {
-    const paths = parseSurfacePins(value);
+    const paths = parsePathList(value);
     if (paths.length === 0) {
       return fail(
         "empty_surface_pins",
@@ -38170,6 +38245,35 @@ function validateSlotText(node, value) {
       return fail(
         "duplicate_surface_path",
         `"${repeated}" is named twice. Pin each file once: two pins on one path assert two different truths about the same bytes.`
+      );
+    }
+    return void 0;
+  }
+  if (/^requirements\.\d+\.criteria\.\d+\.acceptance-paths$/.test(node.slot)) {
+    const paths = parsePathList(value);
+    if (paths.length === 0) return void 0;
+    if (paths.length > MAX_ACCEPTANCE_PATHS) {
+      return fail("too_many_acceptance_paths", `Name at most ${MAX_ACCEPTANCE_PATHS} files.`);
+    }
+    const invalid = paths.find((entry) => !artifactPathSchema.safeParse(entry).success);
+    if (invalid !== void 0) {
+      return fail(
+        "invalid_acceptance_path",
+        `"${invalid}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`
+      );
+    }
+    const control = paths.find((entry) => namesControlPlane2(entry));
+    if (control !== void 0) {
+      return fail(
+        "control_plane_acceptance_path",
+        `"${control}" is inside ${CONTROL_PLANE_ROOT2}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`
+      );
+    }
+    const repeated = firstRepeated(paths);
+    if (repeated !== void 0) {
+      return fail(
+        "duplicate_acceptance_path",
+        `"${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`
       );
     }
     return void 0;
@@ -38204,7 +38308,8 @@ function requirementDrafts(answers) {
         surfaceKind: answerText(map2, `req-${index}-ac-${criterion}-surface-kind`) ?? "",
         surfaceInterface: answerText(map2, `req-${index}-ac-${criterion}-surface-interface`) ?? "",
         surfaceRationale: answerText(map2, `req-${index}-ac-${criterion}-surface-rationale`) ?? "",
-        surfacePins: answerText(map2, `req-${index}-ac-${criterion}-surface-pins`) ?? ""
+        surfacePins: answerText(map2, `req-${index}-ac-${criterion}-surface-pins`) ?? "",
+        acceptancePaths: answerText(map2, `req-${index}-ac-${criterion}-acceptance-paths`) ?? ""
       });
     }
     drafts.push({ index, statement, priority, category, criteria });
@@ -38252,7 +38357,7 @@ function surfaceDiagnostics(requirementIndex, criterion) {
       slot: `${slotPrefix}.rationale`
     });
   }
-  const pins = parseSurfacePins(criterion.surfacePins);
+  const pins = parsePathList(criterion.surfacePins);
   if (pins.length === 0) {
     diagnostics.push({
       code: "surface_without_pins",
@@ -38289,6 +38394,62 @@ function surfaceDiagnostics(requirementIndex, criterion) {
   }
   return diagnostics;
 }
+function acceptancePathDiagnostics(requirementIndex, criterion) {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return [];
+  const where = `Requirement ${requirementIndex}, criterion ${criterion.index}`;
+  const nodeId2 = `req-${requirementIndex}-ac-${criterion.index}-acceptance-paths`;
+  const slot = `requirements.${requirementIndex}.criteria.${criterion.index}.acceptance-paths`;
+  if (criterion.proof !== "executable") {
+    return [
+      {
+        code: "acceptance_paths_on_manual_criterion",
+        message: `${where}: a protected acceptance path constrains what an implementer's run may weaken, and this criterion is decided by a human, so no run is constrained by it. Remove the paths, or change the proof to a command.`,
+        nodeId: nodeId2,
+        slot
+      }
+    ];
+  }
+  const diagnostics = [];
+  if (paths.length > MAX_ACCEPTANCE_PATHS) {
+    diagnostics.push({
+      code: "too_many_acceptance_paths",
+      message: `${where}: name at most ${MAX_ACCEPTANCE_PATHS} files.`,
+      nodeId: nodeId2,
+      slot
+    });
+    return diagnostics;
+  }
+  for (const entry of paths) {
+    if (!artifactPathSchema.safeParse(entry).success) {
+      diagnostics.push({
+        code: "invalid_acceptance_path",
+        message: `${where}: "${entry}" is not a repository-relative path. Use forward slashes relative to the repository root: no drive letters, no leading slash, no "..", no spaces.`,
+        nodeId: nodeId2,
+        slot
+      });
+      continue;
+    }
+    if (namesControlPlane2(entry)) {
+      diagnostics.push({
+        code: "control_plane_acceptance_path",
+        message: `${where}: "${entry}" is inside ${CONTROL_PLANE_ROOT2}, which the guarded harness restores on every run rather than reporting. Name the test file the work must not weaken.`,
+        nodeId: nodeId2,
+        slot
+      });
+    }
+  }
+  const repeated = firstRepeated(paths);
+  if (repeated !== void 0) {
+    diagnostics.push({
+      code: "duplicate_acceptance_path",
+      message: `${where}: "${repeated}" is named twice. Name each file once: the harness hashes them, and two entries for one path are one fact counted twice.`,
+      nodeId: nodeId2,
+      slot
+    });
+  }
+  return diagnostics;
+}
 function validateAnswerSet(input) {
   const diagnostics = [];
   const map2 = /* @__PURE__ */ new Map();
@@ -38318,6 +38479,7 @@ function validateAnswerSet(input) {
       const criterionNode = `req-${draft.index}-ac-${criterion.index}-detail`;
       const slot = `requirements.${draft.index}.criteria.${criterion.index}.detail`;
       diagnostics.push(...surfaceDiagnostics(draft.index, criterion));
+      diagnostics.push(...acceptancePathDiagnostics(draft.index, criterion));
       if (criterion.proof === "executable") {
         const parsed = parseCommandLine(criterion.detail);
         if ("error" in parsed) {
@@ -38380,7 +38542,7 @@ function answerText2(answers, nodeId2) {
 function surfaceFor(criterion, mintPin) {
   const kind = criterion.surfaceKind.trim();
   if (kind.length === 0) return void 0;
-  const paths = parseSurfacePins(criterion.surfacePins);
+  const paths = parsePathList(criterion.surfacePins);
   if (paths.length === 0) return void 0;
   const pinned = [];
   for (const artifactPath of paths) {
@@ -38395,11 +38557,17 @@ function surfaceFor(criterion, mintPin) {
     pinned
   };
 }
+function acceptancePathsFor(criterion) {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return void 0;
+  return paths.map((entry) => artifactPathSchema.parse(entry));
+}
 function criterionFor(criterion, index, mintPin) {
   const id = criterionIdFor(criterion.statement, index);
   if (criterion.proof === "executable") {
     const parsed = parseCommandLine(criterion.detail);
     const surface = surfaceFor(criterion, mintPin);
+    const acceptancePaths = acceptancePathsFor(criterion);
     if (!("error" in parsed)) {
       return {
         id,
@@ -38412,7 +38580,8 @@ function criterionFor(criterion, index, mintPin) {
           // criterion holds. Asking for an expected code per criterion invites
           // a non-zero answer chosen to make a failing command look fine.
           expectedExitCode: 0,
-          ...surface === void 0 ? {} : { surface }
+          ...surface === void 0 ? {} : { surface },
+          ...acceptancePaths === void 0 ? {} : { acceptancePaths }
         }
       };
     }
@@ -38426,7 +38595,7 @@ function criterionFor(criterion, index, mintPin) {
         // the artifact rather than dropped in silence: the criterion is already
         // being downgraded, and losing the declaration with it is the part a
         // reader would otherwise have no way to notice.
-        reason: `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.` + (surface === void 0 ? "" : " Its declared verification surface was dropped with it.")
+        reason: `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.` + (surface === void 0 ? "" : " Its declared verification surface was dropped with it.") + (acceptancePaths === void 0 ? "" : " Its declared protected acceptance paths were dropped with it.")
       }
     };
   }
@@ -38498,7 +38667,7 @@ function declaredSurfacePaths(answers) {
     if (draft.priority === "wont") continue;
     for (const criterion of draft.criteria) {
       if (criterion.surfaceKind.trim().length === 0) continue;
-      for (const path51 of parseSurfacePins(criterion.surfacePins)) {
+      for (const path51 of parsePathList(criterion.surfacePins)) {
         declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path: path51 });
       }
     }
@@ -42371,20 +42540,20 @@ function declaredVerificationSurfaces(input) {
     });
   }
   const oracleRefs = input.task.oracleRefs ?? [];
-  let unestablished;
+  let unestablished2;
   if (oracleRefs.length > 0) {
     const oracles = input.change?.oracles;
     for (const oracleId of oracleRefs) {
       const fact = oracles?.find((entry) => entry.document.id === oracleId);
       if (fact === void 0) {
-        unestablished ??= oracleId;
+        unestablished2 ??= oracleId;
         continue;
       }
       if (fact.document.surface === void 0) continue;
       surfaces.push({ origins: [`oracle ${oracleId}`], taskId: input.taskId, surface: fact.document.surface });
     }
   }
-  return { surfaces: dedupeSurfaces(surfaces), unestablished };
+  return { surfaces: dedupeSurfaces(surfaces), unestablished: unestablished2 };
 }
 function surfacePinReaffirmation(input) {
   const approvals = input.change.approvals;
@@ -42759,12 +42928,15 @@ var ORDERING_REPLAN_RECOVERY = {
 };
 var APPROVE_BEFORE_BUILD_RECOVERY = {
   command: "legion approve spec --approver <id>",
-  reason: "This change carries R3 work, and R3 derives approved_spec_and_oracle: the gate compares the last approval of its delta specs and oracles against the instant its first task run started. legion build is a one-way door here \u2014 nothing re-orders a decision already taken, so a change built before it is approved can never satisfy that gate. Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that. R3 also derives independent_baseline, which compares an attestation's instant against the same run start: capture and attest a baseline before building if this change is to satisfy that gate on evidence rather than on an audited waiver."
+  reason: "This change carries R3 work, and R3 derives approved_spec_and_oracle: the gate compares the last approval of its delta specs and oracles against the instant its first task run started. legion build is a one-way door here \u2014 nothing re-orders a decision already taken, so a change built before it is approved can never satisfy that gate. Approve the delta specs, then the oracles with legion approve oracle --approver <id>, and build after that. R3 also derives independent_baseline, which compares an attestation's instant against the same run start: capture and attest a baseline before building if this change is to satisfy that gate on evidence rather than on an audited waiver. R3 further derives protected_acceptance_tests: if this work has to modify an acceptance test its own oracles protect, record that with legion approve protected-paths --approver <id> before building, because that decision has to predate the run too."
 };
 function derivesApprovalOrderingGate(tasks) {
+  return derivesShipGate(tasks, "approved_spec_and_oracle");
+}
+function derivesShipGate(tasks, gateId) {
   return tasks.some(
     (task) => deriveGateSet({ tier: task.risk.tier, gatesByTier: DEFAULT_RISK_POLICY.gatesByTier }).some(
-      (gate) => gate.id === "approved_spec_and_oracle"
+      (gate) => gate.id === gateId
     )
   );
 }
@@ -43775,6 +43947,205 @@ function isDomainReviewSatisfying(input) {
   });
   return outcome.status === "satisfied";
 }
+var PROTECTED_ACCEPTANCE_ITEM = "protected-acceptance-paths";
+var PROTECTED_PATHS_MODIFY_ACTION = "oracle.protected-paths.modify";
+var ACCEPTANCE_PATHS_DECLARE_RECOVERY = {
+  command: "legion start --intake",
+  reason: "No oracle in this change names a test the work must not weaken, so there is nothing for the harness to watch and nothing this gate can be satisfied by. Declare the acceptance tests on an executable acceptance criterion at intake and re-plan, or lower the risk tier through an audited risk.override if this change genuinely has no acceptance test to protect."
+};
+var ACCEPTANCE_PATHS_BUILD_RECOVERY = {
+  command: "legion build",
+  reason: "This change declares protected acceptance paths and this task's latest evidence does not record what its run did to them. The observation is taken across a dispatch, so only a run can produce it: build, then rerun legion ship."
+};
+var ACCEPTANCE_PATHS_UNKNOWN_RECOVERY = {
+  command: "legion build",
+  reason: "A declared acceptance path could not be compared on both sides of the run. The cited runs/<runId>/protected-paths.json names which and why. If a declaration points at a file that is not there, correct the path on the criterion and re-plan \u2014 a rebuild will report the same thing. If the report of an earlier run of this change is missing or no longer matches the digest its evidence cites, restore it from version control first: what this change's first run saw is what a later run is judged against, and a build cannot reconstruct a record that was deleted."
+};
+var ACCEPTANCE_PATHS_RESTORE_RECOVERY = {
+  command: "legion build",
+  reason: "A run changed an acceptance test this change's oracles say it must not weaken, and no human decided that before the run started. Restore the path to the pre-run state recorded in this task's runs/<runId>/protected-paths.json and build again; the next run's observation then records pass. Building again *without* restoring records the same fail, because a run is compared against the state this change's first run saw rather than against whatever the last attempt left. Approving now cannot help \u2014 this gate requires the decision to predate the run, and legion approve protected-paths writes a later instant, which makes this strictly worse. If the modification was intended, plan the remaining work as a new change and approve it before building."
+};
+function protectedAcceptanceItem(entries, taskId) {
+  const entry = latestEvidencePerTask(entries).get(taskId);
+  if (entry === void 0) return void 0;
+  return entry.evidence.items.find((item) => item.id === PROTECTED_ACCEPTANCE_ITEM);
+}
+function changeAcceptancePathDeclarations(input) {
+  const oracles = input.change?.oracles;
+  if (oracles === void 0) return { declarations: [], unestablished: true };
+  const declarations = [];
+  for (const oracle of oracles) {
+    const paths = oracle.document.acceptancePaths;
+    if (paths === void 0 || paths.length === 0) continue;
+    declarations.push({ oracleId: oracle.document.id, oracle, paths: [...paths] });
+  }
+  return {
+    declarations: declarations.slice().sort((left, right) => left.oracleId.localeCompare(right.oracleId)),
+    unestablished: false
+  };
+}
+function protectedPathsModifyGrant(input) {
+  const approvals = input.change.approvals;
+  if (approvals === void 0) return void 0;
+  const oracleId = input.oracle.document.id;
+  const relevant = approvals.filter(
+    (approval) => approval.changeId === input.change.changeId && approval.scope.action === PROTECTED_PATHS_MODIFY_ACTION && approval.scope.targets.some((target) => target.kind === "oracle" && target.id === oracleId)
+  );
+  if (relevant.length === 0) return void 0;
+  const live = [];
+  for (const approval of relevant) {
+    if (approval.status !== "granted") continue;
+    if (approval.decidedBy.kind !== "human") continue;
+    if (grantExpiry(approval, input.change.evaluatedAt) !== "live") continue;
+    live.push(approval);
+  }
+  live.sort(byDecisionInstant);
+  const newestGrant = live.at(-1);
+  if (newestGrant === void 0) return void 0;
+  const standing = relevant.some(
+    (approval) => (approval.status === "denied" || approval.status === "revoked" || approval.status === "expired") && (approval.decidedAt === void 0 || approval.decidedAt >= newestGrant.decidedAt)
+  );
+  if (standing) return void 0;
+  const oraclePath2 = input.oracle.reference.path;
+  const pins = (newestGrant.artifacts ?? []).filter((reference) => reference.path === oraclePath2);
+  if (pins.length !== 1) return void 0;
+  const pin = pins[0];
+  if (pin.sha256 !== input.oracle.reference.sha256) return void 0;
+  return { by: newestGrant.decidedBy.id, at: newestGrant.decidedAt };
+}
+function isLiveProtectedPathsModifyGrant(input) {
+  const granted = protectedPathsModifyGrant({
+    oracle: input.oracle,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: [input.approval],
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: input.evaluatedAt,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return granted !== void 0;
+}
+function protectedAcceptancePathsStatus(input) {
+  const { declarations, unestablished: unestablished2 } = changeAcceptancePathDeclarations({ change: input.change });
+  if (unestablished2) {
+    return {
+      status: "unevaluable",
+      reason: "The oracles recorded for this change could not be read as a complete set, so which acceptance tests its runs must not weaken is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY
+    };
+  }
+  if (declarations.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: "No oracle in this change declares a protected acceptance path, so nothing says which tests its runs must not weaken. Nobody said, so nothing is known.",
+      recovery: ACCEPTANCE_PATHS_DECLARE_RECOVERY
+    };
+  }
+  const declaredPaths = declarations.flatMap((declaration) => declaration.paths);
+  const item = protectedAcceptanceItem(input.entries, input.taskId);
+  if (item === void 0) {
+    return {
+      status: "unevaluable",
+      reason: `${input.taskId}'s latest evidence records no ${PROTECTED_ACCEPTANCE_ITEM} item, so nothing says whether its run changed the ${declaredPaths.length} acceptance path(s) this change's oracles declare (${declaredPaths.join(", ")}).`,
+      recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+    };
+  }
+  const covered = new Set(
+    (item.traceRefs ?? []).filter((reference) => reference.entity?.kind === "oracle").map((reference) => `${reference.entity?.id ?? ""}
+${reference.path}`)
+  );
+  for (const declaration of declarations) {
+    for (const declaredPath of declaration.paths) {
+      if (covered.has(`${declaration.oracleId}
+${declaredPath}`)) continue;
+      return {
+        status: "unevaluable",
+        reason: `${declaredPath}, declared by oracle ${declaration.oracleId}, is covered by no pre-run snapshot in ${input.taskId}'s latest evidence: it was declared after the run that produced it.`,
+        recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+      };
+    }
+  }
+  const artifactPath = item.artifact?.path;
+  const cites = artifactPath === void 0 ? "" : ` ${artifactPath} records what each path was before and after.`;
+  if (item.verdict === "unknown") {
+    return {
+      status: "unevaluable",
+      reason: `${input.taskId}'s run could not compare every protected acceptance path this change's oracles declare on both sides of the dispatch, so whether one was weakened is unestablished.${cites}`,
+      recovery: ACCEPTANCE_PATHS_UNKNOWN_RECOVERY
+    };
+  }
+  if (item.verdict === "fail") {
+    const change = input.change;
+    if (change === void 0 || change.approvals === void 0) {
+      return {
+        status: "unevaluable",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and the approvals recorded for this change could not be read, so whether a human decided that beforehand is unestablished.`,
+        recovery: UNREADABLE_PLANE_RECOVERY
+      };
+    }
+    const execution = executionOrdering(change.taskRuns);
+    if (execution.kind !== "started") {
+      return {
+        status: "unevaluable",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and this change's task runs do not establish when execution began, so whether any decision predates it is unknown.`,
+        recovery: ORDERING_UNREADABLE_RECOVERY
+      };
+    }
+    const unapproved = [];
+    const late = [];
+    const granted = [];
+    for (const declaration of declarations) {
+      const grant = protectedPathsModifyGrant({ oracle: declaration.oracle, change });
+      if (grant === void 0) {
+        unapproved.push(`${declaration.oracleId} (${declaration.paths.join(", ")})`);
+        continue;
+      }
+      if (grant.at >= execution.startedAt) {
+        late.push(`${declaration.oracleId} (decided ${grant.at} by ${grant.by})`);
+        continue;
+      }
+      granted.push(grant);
+    }
+    if (unapproved.length > 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${input.taskId}'s run changed at least one of the ${declaredPaths.length} protected acceptance path(s) this change's oracles declare, and no granted ${PROTECTED_PATHS_MODIFY_ACTION} approval decided before run ${execution.runId} started at ${execution.startedAt} permits it for ${unapproved.join("; ")}.${cites}`,
+        recovery: ACCEPTANCE_PATHS_RESTORE_RECOVERY
+      };
+    }
+    if (late.length > 0) {
+      return {
+        status: "unsatisfied",
+        reason: `${input.taskId}'s run changed a protected acceptance path, and the decision permitting it was taken at or after run ${execution.runId} of ${execution.taskId} started at ${execution.startedAt}: ${late.join("; ")}. A decision taken after the work is not a decision the work was done under, and nothing re-orders one already taken.${cites}`,
+        recovery: ACCEPTANCE_PATHS_RESTORE_RECOVERY
+      };
+    }
+    const first = granted[0];
+    return {
+      status: "satisfied",
+      reason: `${input.taskId}'s run changed a protected acceptance path, and ${first.by} approved modifying the paths every declaring oracle protects at ${first.at}, before run ${execution.runId} started at ${execution.startedAt}, against the oracle bytes this change still carries.${cites}`
+    };
+  }
+  if (item.verdict === "pass") {
+    return {
+      status: "satisfied",
+      reason: `Every protected acceptance path this change's oracles declare (${declaredPaths.join(", ")}) still matches the state this change's first run recorded for it, as of ${input.taskId}'s latest run: nothing that run did, and nothing done between this change's runs, weakened them.`
+    };
+  }
+  return {
+    status: "unevaluable",
+    reason: `${input.taskId}'s ${PROTECTED_ACCEPTANCE_ITEM} item records the verdict "${String(item.verdict)}", which this gate cannot read as an answer about whether a protected acceptance path was weakened.`,
+    recovery: ACCEPTANCE_PATHS_BUILD_RECOVERY
+  };
+}
 function fromVerdict(verdict, itemId) {
   if (verdict === "pass") return { status: "satisfied", reason: `Evidence records a passing ${itemId}.` };
   if (verdict === "fail") return { status: "unsatisfied", reason: `Evidence records a failed ${itemId}.` };
@@ -43846,6 +44217,8 @@ function evaluateGate(input) {
         tasks: input.tasks,
         taskIdFor: input.taskIdFor
       });
+    case "protected_acceptance_tests":
+      return protectedAcceptancePathsStatus({ taskId, entries, change: input.change });
     default:
       return {
         status: "unevaluable",
@@ -43882,6 +44255,16 @@ function shipGatePinnedReferences(input) {
     // is indistinguishable at the readiness arithmetic from nobody having
     // attested anything.
     ...input.attestations?.flatMap((attestation) => attestation.sources) ?? []
+    // **No family for protected acceptance paths, deliberately.** The
+    // `oracle.protected-paths.modify` approval pins the *oracle document* the
+    // approver read, and that reference is already collected twice over — as an
+    // oracle reference and as an approval artifact. The acceptance test files
+    // themselves are not pinned by anything and must not be: this gate certifies
+    // what a run did across one dispatch, and the digests that answer that live in
+    // the run artifact rather than in a declaration. Stated rather than omitted,
+    // because a dropped family fails silently and in the direction of looking
+    // correct, and the next reader would otherwise have to guess whether the
+    // omission was a decision.
   ];
 }
 function shipGateSourcePaths(attestations) {
@@ -44012,7 +44395,21 @@ var GATE_RECOVERY = {
   // domain review has recorded a defect, and a table entry assuming it would tell
   // an operator who has reviewed nothing to go and build.
   architecture_or_security_review: DOMAIN_REVIEW_RECOVERY,
-  protected_acceptance_tests: void 0,
+  // Eight unmet states with four cures — an unreadable oracle plane, no
+  // declaration anywhere, no item in this task's evidence, a declaration made
+  // after the run, an `unknown` observation, an unreadable approvals plane, an
+  // unestablished ordering, and a change with no decision behind it — so the
+  // verdict carries its own and `shipGateRecovery` prefers that. What stays here
+  // is the state a caller holding only a gate id can be answered for, and the one
+  // every change on disk today is in: no oracle declares a protected acceptance
+  // path, because until this release nothing could.
+  //
+  // Deliberately **not** `legion approve protected-paths`. That decision must
+  // predate the run, so a table entry naming it would tell an operator who has
+  // already built to run a command that exits 0, writes a later instant, and
+  // converts a repairable `unevaluable` into a permanent `unsatisfied` — the
+  // exact one-way door `orderingAwareRecovery` exists to keep this file out of.
+  protected_acceptance_tests: ACCEPTANCE_PATHS_DECLARE_RECOVERY,
   // Five unmet states with four cures, so the verdict carries its own. The table
   // holds the absence, which is where every change written before this release
   // is. There is no ordering rule on this gate: evaluating the implemented
@@ -44430,6 +44827,13 @@ function executableOracles(options, criteria) {
       // the oracle's copy cannot disagree. That is the rule the comment above
       // `oracleIdsFor` records the cost of breaking, applied to a second field.
       ...criterion.proof.surface === void 0 ? {} : { surface: criterion.proof.surface },
+      // The criterion's declared protected acceptance paths, copied the same way
+      // and off the same object, for the same reason. `protectedPaths` above is
+      // untouched: it names the control artifacts the guarded harness *restores*,
+      // and widening it to hold acceptance tests would make every path in it
+      // eligible for rollback. The two arrays are opposite disciplines and are
+      // kept as two fields so no reader can union them by accident.
+      ...criterion.proof.acceptancePaths === void 0 ? {} : { acceptancePaths: [...criterion.proof.acceptancePaths] },
       expected: {
         preconditions: ["The phase change bundle exists and validates."],
         postconditions: [description],
@@ -45589,10 +45993,156 @@ function createWorkerBundleRegistry(options) {
   };
 }
 
+// packages/cli/src/workflow/change-planes.ts
+async function absentOnFailure(read) {
+  try {
+    return await read();
+  } catch {
+    return void 0;
+  }
+}
+async function loadOracleFacts(input) {
+  const manifest = await absentOnFailure(
+    () => deriveOracleManifest({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  if (manifest === void 0 || !manifest.ok) return void 0;
+  const oracles = [];
+  for (const revision of manifest.manifest.oracles) {
+    const fileName = revision.artifact.path.split("/").at(-1);
+    if (fileName === void 0 || !fileName.endsWith(".yaml")) return void 0;
+    const oracle = await absentOnFailure(
+      () => readOracleArtifact({
+        repositoryRoot: input.repositoryRoot,
+        changeId: input.changeId,
+        oracleId: fileName.slice(0, -".yaml".length)
+      })
+    );
+    if (oracle === void 0 || !oracle.ok) return void 0;
+    oracles.push({ document: oracle.document, reference: oracle.reference });
+  }
+  return oracles;
+}
+
+// packages/cli/src/workflow/acceptance-baseline.ts
+var PROTECTED_ACCEPTANCE_ITEM2 = "protected-acceptance-paths";
+var PROTECTED_PATHS_REPORT_KIND = "protected_paths";
+var PROTECTED_PATHS_REPORT_SCHEMA_VERSION = 1;
+function unestablished(reason) {
+  return { status: "unestablished", reason, states: /* @__PURE__ */ new Map() };
+}
+function readState(value) {
+  if (value === null || typeof value !== "object") return void 0;
+  const record2 = value;
+  const kind = record2["kind"];
+  if (kind === "absent") return { kind: "absent" };
+  if (kind === "directory") return { kind: "directory" };
+  if (kind === "file") {
+    const sha2563 = record2["sha256"];
+    return typeof sha2563 === "string" && sha2563.length > 0 ? { kind: "file", sha256: sha2563 } : void 0;
+  }
+  if (kind === "symlink") {
+    const target = record2["target"];
+    if (target === void 0) return { kind: "symlink", target: void 0 };
+    return typeof target === "string" ? { kind: "symlink", target } : void 0;
+  }
+  if (kind === "unreadable") {
+    const reason = record2["reason"];
+    return typeof reason === "string" ? { kind: "unreadable", reason } : void 0;
+  }
+  return void 0;
+}
+function readReport3(text, at) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return `${at} is not readable JSON`;
+  }
+  if (parsed === null || typeof parsed !== "object") return `${at} is not a JSON object`;
+  const record2 = parsed;
+  if (record2["kind"] !== PROTECTED_PATHS_REPORT_KIND) {
+    return `${at} does not declare itself a ${PROTECTED_PATHS_REPORT_KIND} report`;
+  }
+  if (record2["schemaVersion"] !== PROTECTED_PATHS_REPORT_SCHEMA_VERSION) {
+    return `${at} records schema version ${String(record2["schemaVersion"])}, which this reader cannot read a pre-run state out of`;
+  }
+  const observations = record2["observations"];
+  if (!Array.isArray(observations)) return `${at} records no observation list`;
+  const pairs = [];
+  for (const observation of observations) {
+    if (observation === null || typeof observation !== "object") return `${at} records an observation that is not an object`;
+    const entry = observation;
+    const observedPath = entry["path"];
+    if (typeof observedPath !== "string" || observedPath.length === 0) {
+      return `${at} records an observation with no path`;
+    }
+    const before = readState(entry["before"]);
+    if (before === void 0) return `${at} records a pre-run state for ${observedPath} that this reader cannot read`;
+    pairs.push({ path: observedPath, before });
+  }
+  return pairs;
+}
+function sameState(left, right) {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "file" && right.kind === "file") return left.sha256 === right.sha256;
+  if (left.kind === "symlink" && right.kind === "symlink") return left.target === right.target;
+  return true;
+}
+async function acceptanceBaselineFromEvidence(input) {
+  const cited = [];
+  for (const entry of input.entries) {
+    const item = entry.evidence.items.find((candidate) => candidate.id === PROTECTED_ACCEPTANCE_ITEM2);
+    if (item === void 0) continue;
+    const reference = item.artifact;
+    if (reference === void 0) {
+      return unestablished(
+        `${entry.evidence.id} records a ${PROTECTED_ACCEPTANCE_ITEM2} item citing no report, so what its run saw before dispatch cannot be read back.`
+      );
+    }
+    cited.push({ at: `${reference.path} (cited by ${entry.evidence.id})`, reference });
+  }
+  if (cited.length === 0) return { status: "established", states: /* @__PURE__ */ new Map() };
+  const reader = await resolvePinnedReferenceReader({
+    repositoryRoot: input.repositoryRoot,
+    references: cited.map((entry) => entry.reference),
+    retainContentFor: cited.map((entry) => entry.reference.path)
+  });
+  const states = /* @__PURE__ */ new Map();
+  const contradicted = /* @__PURE__ */ new Set();
+  for (const { at, reference } of cited) {
+    const verdict = reader.verifyPin(reference);
+    if (verdict !== "match") {
+      return unestablished(
+        `${at} ${verdict === "missing" ? "is no longer there" : verdict === "drift" ? "no longer hashes to the digest its evidence cites" : "could not be verified"}, so the pre-run state of this change's acceptance paths cannot be read back.`
+      );
+    }
+    const text = reader.contentOf(reference);
+    if (text === void 0) return unestablished(`${at} could not be read.`);
+    const pairs = readReport3(text, at);
+    if (typeof pairs === "string") return unestablished(`${pairs}, so the pre-run state of this change's acceptance paths cannot be read back.`);
+    for (const pair of pairs) {
+      if (pair.before.kind === "unreadable") continue;
+      const held = states.get(pair.path);
+      if (held === void 0) {
+        states.set(pair.path, pair.before);
+        continue;
+      }
+      if (!sameState(held, pair.before)) contradicted.add(pair.path);
+    }
+  }
+  for (const contradictedPath of contradicted) {
+    states.set(contradictedPath, {
+      kind: "unreadable",
+      reason: "prior runs of this change recorded different pre-run states for it, so which one this run must be judged against is unestablished"
+    });
+  }
+  return { status: "established", states };
+}
+
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash24 } from "node:crypto";
-import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import path44 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
@@ -45857,6 +46407,11 @@ var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 function isHarnessPath(relative, harnessPaths) {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
 }
+function isInsideControlPlane(relative) {
+  const folded = relative.toLowerCase();
+  const root = LEGION_PROJECT_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
+}
 function digestOf(absolute) {
   try {
     return createHash24("sha256").update(readFileSync3(absolute)).digest("hex");
@@ -45905,6 +46460,92 @@ function snapshotProtectedState(input) {
     }
   }
   return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
+}
+function classifyAcceptancePath(repositoryRoot, relative, harnessPaths) {
+  if (!artifactPathSchema.safeParse(relative).success) {
+    return { kind: "unreadable", reason: "is not a repository-relative path" };
+  }
+  if (relative.includes(":")) {
+    return { kind: "unreadable", reason: "names a Windows alternate data stream" };
+  }
+  if (isInsideControlPlane(relative)) {
+    return { kind: "unreadable", reason: `is inside ${LEGION_PROJECT_ROOT}, which is restored rather than reported` };
+  }
+  if (isHarnessPath(relative, harnessPaths)) {
+    return { kind: "unreadable", reason: "is written by the harness for this run" };
+  }
+  const absolute = path44.join(repositoryRoot, relative);
+  const contained = path44.relative(repositoryRoot, absolute);
+  if (contained.startsWith("..") || path44.isAbsolute(contained)) {
+    return { kind: "unreadable", reason: "resolves outside the repository" };
+  }
+  let stat10;
+  try {
+    stat10 = lstatSync2(absolute);
+  } catch (error51) {
+    const code = error51.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
+    return { kind: "unreadable", reason: `could not be inspected (${code ?? "unknown error"})` };
+  }
+  if (stat10.isSymbolicLink()) return { kind: "symlink", target: readTarget(absolute) };
+  if (stat10.isDirectory()) return { kind: "directory" };
+  if (!stat10.isFile()) return { kind: "unreadable", reason: "is not a regular file" };
+  const sha2563 = digestOf(absolute);
+  if (sha2563 === void 0) return { kind: "unreadable", reason: "could not be read" };
+  return { kind: "file", sha256: sha2563 };
+}
+function snapshotAcceptancePaths(input) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const relative of input.paths) {
+    if (entries.has(relative)) continue;
+    const anchored = input.anchors.get(relative);
+    entries.set(
+      relative,
+      anchored ?? classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths)
+    );
+  }
+  return entries;
+}
+function sameAcceptanceState(before, after) {
+  if (before.kind === "file" && after.kind === "file") return before.sha256 === after.sha256;
+  if (before.kind === "symlink" && after.kind === "symlink") {
+    return before.target !== void 0 && before.target === after.target;
+  }
+  return before.kind === "directory" && after.kind === "directory";
+}
+function acceptanceNote(before, after) {
+  if (before.kind === "absent") return "created";
+  if (after.kind === "absent") return "deleted";
+  if (before.kind !== after.kind) return "kind-changed";
+  if (before.kind === "symlink") return "retargeted";
+  return "modified";
+}
+function observeAcceptancePaths(input) {
+  const observations = [];
+  for (const [relative, before] of input.before) {
+    const after = classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths);
+    if (before.kind === "absent" && after.kind === "absent") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (before.kind === "unreadable" || after.kind === "unreadable" || before.kind === "directory" || after.kind === "directory") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (sameAcceptanceState(before, after)) {
+      observations.push({ path: relative, before, after, verdict: "unchanged" });
+      continue;
+    }
+    const note = acceptanceNote(before, after);
+    observations.push({
+      path: relative,
+      before,
+      after,
+      verdict: "changed",
+      ...note === void 0 ? {} : { note }
+    });
+  }
+  return observations.sort((left, right) => left.path.localeCompare(right.path));
 }
 function protectedPathsTouched(input) {
   const touched = /* @__PURE__ */ new Set();
@@ -46043,6 +46684,11 @@ function restoreProtectedFiles(input) {
     unrestored: [...unrestored, ...indexFailures]
   };
 }
+function acceptanceUnestablishedReason(input) {
+  if (input.acceptancePaths === void 0 || input.acceptancePaths.length === 0) return void 0;
+  if (input.acceptanceBaseline.status === "established") return void 0;
+  return input.acceptanceBaseline.reason ?? "What this change's earlier runs recorded about its protected acceptance paths could not be read back, so this run has nothing established to compare against.";
+}
 async function runGuardedExecution(input) {
   const before = observeWorkingTreeDiff({
     repositoryRoot: input.repositoryRoot,
@@ -46051,6 +46697,13 @@ async function runGuardedExecution(input) {
   const state = snapshotProtectedState({
     repositoryRoot: input.repositoryRoot,
     harnessPaths: input.harnessPaths
+  });
+  const acceptanceUnestablished = acceptanceUnestablishedReason(input);
+  const acceptanceBefore = input.acceptancePaths === void 0 || acceptanceUnestablished !== void 0 ? void 0 : snapshotAcceptancePaths({
+    repositoryRoot: input.repositoryRoot,
+    paths: input.acceptancePaths,
+    harnessPaths: input.harnessPaths,
+    anchors: input.acceptanceBaseline.states
   });
   let result;
   let thrown;
@@ -46108,6 +46761,18 @@ async function runGuardedExecution(input) {
     reasons.push(...reconciliation.violations.map((violation) => violation.message));
   }
   const inContract = reasons.length === 0;
+  const acceptancePaths = acceptanceBefore === void 0 ? {
+    status: "unestablished",
+    observations: [],
+    reason: acceptanceUnestablished ?? "The oracles of this change would not read as a complete set, so which acceptance tests its runs must not weaken is unestablished."
+  } : {
+    status: "established",
+    observations: observeAcceptancePaths({
+      repositoryRoot: input.repositoryRoot,
+      harnessPaths: input.harnessPaths,
+      before: acceptanceBefore
+    })
+  };
   if (result === void 0) {
     result = {
       ok: false,
@@ -46124,7 +46789,8 @@ async function runGuardedExecution(input) {
     inContract,
     restored: containment.restored,
     unrestored: containment.unrestored,
-    ...inContract ? {} : { blockedReason: reasons.join(" ") }
+    ...inContract ? {} : { blockedReason: reasons.join(" ") },
+    acceptancePaths
   };
 }
 
@@ -46218,12 +46884,25 @@ async function handleBuildWorkflow(context, changeId) {
     repositoryRoot: context.repositoryRoot,
     changeId: latestChange.changeId
   });
+  const changeOracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const acceptancePaths = changeOracles === void 0 ? void 0 : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+  const acceptancePathOracles = changeOracles === void 0 ? void 0 : changeOracles.filter((oracle) => (oracle.document.acceptancePaths ?? []).length > 0).map((oracle) => ({
+    oracleId: oracle.document.id,
+    paths: [...oracle.document.acceptancePaths ?? []]
+  }));
   const nextAttempts = nextAttemptMap(existingTaskRuns.taskRuns);
   const taskRuns = [];
   for (const task of taskgraph.document.tasks) {
     const taskId = taskIdForContractId(task.id);
     const attempt = nextAttempts.get(taskId) ?? 1;
     nextAttempts.set(taskId, attempt + 1);
+    const acceptanceBaseline = await acceptanceBaselineFromEvidence({
+      repositoryRoot: context.repositoryRoot,
+      entries: producedEntries
+    });
     const run = await executeTask({
       context,
       executor: selectedExecutor,
@@ -46231,7 +46910,10 @@ async function handleBuildWorkflow(context, changeId) {
       attempt,
       taskgraph,
       priorEntries: producedEntries,
-      reaffirmedPin
+      reaffirmedPin,
+      acceptancePaths,
+      acceptancePathOracles,
+      acceptanceBaseline
     });
     if (!run.ok) {
       if (run.taskRun !== void 0) taskRuns.push(run.taskRun);
@@ -46376,6 +47058,8 @@ async function executeTask(input) {
     // reconciliation all describe one revision.
     baseGitSha,
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+    acceptancePaths: input.acceptancePaths,
+    acceptanceBaseline: input.acceptanceBaseline,
     run: () => adapter.run({
       repositoryRoot: input.context.repositoryRoot,
       changeId: input.task.changeId,
@@ -46428,6 +47112,35 @@ async function executeTask(input) {
         taskId,
         status: reconciliation.status,
         ...reconciliation.observation
+      })
+    });
+  }
+  const acceptanceReport = guarded2.acceptancePaths;
+  const acceptanceVerdict = protectedAcceptanceVerdict(acceptanceReport);
+  let acceptancePathsArtifactPath;
+  if (acceptanceVerdict !== void 0) {
+    acceptancePathsArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "protected-paths.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: acceptancePathsArtifactPath,
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: acceptanceReport.status,
+        verdict: acceptanceVerdict,
+        // The one thing an operator staring at an `unknown` has to be told, and
+        // the gate's sentence cannot hold it: *which* half was unestablished —
+        // the oracle plane, or the record of what an earlier run of this change
+        // saw. The cures are different and neither is `legion build`.
+        ...acceptanceReport.reason === void 0 ? {} : { reason: acceptanceReport.reason },
+        declaredBy: input.acceptancePathOracles ?? [],
+        observations: acceptanceReport.observations
       })
     });
   }
@@ -46489,7 +47202,10 @@ async function executeTask(input) {
     surfaceChecks,
     inContract,
     ...reconciliation === void 0 ? {} : { reconciliation },
-    ...observationArtifactPath === void 0 ? {} : { observationArtifactPath }
+    ...observationArtifactPath === void 0 ? {} : { observationArtifactPath },
+    ...acceptanceVerdict === void 0 ? {} : { acceptanceVerdict },
+    ...acceptancePathsArtifactPath === void 0 ? {} : { acceptancePathsArtifactPath },
+    ...input.acceptancePathOracles === void 0 ? {} : { acceptancePathOracles: input.acceptancePathOracles }
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
@@ -46665,6 +47381,13 @@ function taskRunDocument(input) {
     manifest
   });
 }
+function protectedAcceptanceVerdict(report) {
+  if (report.status === "unestablished") return "unknown";
+  if (report.observations.length === 0) return void 0;
+  if (report.observations.some((entry) => entry.verdict === "unknown")) return "unknown";
+  if (report.observations.some((entry) => entry.verdict === "changed")) return "fail";
+  return "pass";
+}
 async function evidenceEntryForExecution(input) {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
@@ -46751,6 +47474,23 @@ async function evidenceEntryForExecution(input) {
       verdict: surfaceVerdict,
       artifact: input.verificationArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.verificationArtifactPath),
       traceRefs
+    });
+  }
+  if (input.acceptanceVerdict !== void 0) {
+    const coverageRefs = (input.acceptancePathOracles ?? []).flatMap(
+      (declaration) => declaration.paths.map((declaredPath) => ({
+        path: declaredPath,
+        anchor: declaration.oracleId,
+        relation: "verifies",
+        entity: { kind: "oracle", id: declaration.oracleId }
+      }))
+    );
+    items.push({
+      id: "protected-acceptance-paths",
+      classification: "trace",
+      verdict: input.acceptanceVerdict,
+      artifact: input.acceptancePathsArtifactPath === void 0 ? resultReference : await referenceForFile(input.repositoryRoot, input.acceptancePathsArtifactPath),
+      traceRefs: [...traceRefs, ...coverageRefs]
     });
   }
   if (reconciliation !== void 0) {
@@ -48141,11 +48881,24 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
     artifactPath: promptArtifactPath,
     text: prompt
   });
+  const changeOracles = await loadOracleFacts({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptancePaths = changeOracles === void 0 ? void 0 : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+  const evidence = await readEvidenceIndex({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptanceBaseline = evidence.ok ? await acceptanceBaselineFromEvidence({
+    repositoryRoot: context.repositoryRoot,
+    entries: evidence.document.entries
+  }) : {
+    status: "unestablished",
+    reason: `The evidence index of ${changeId} would not read, so what earlier runs recorded about its protected acceptance paths is unestablished.`,
+    states: /* @__PURE__ */ new Map()
+  };
   const guarded2 = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
     task,
     baseGitSha: resolveBaseGitSha(context.repositoryRoot),
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    acceptancePaths,
+    acceptanceBaseline,
     run: () => adapterForKind(executor).run({
       repositoryRoot: context.repositoryRoot,
       changeId,
@@ -48167,6 +48920,22 @@ async function runAutoFixCycle(context, executor, changeId, task, cycle) {
       redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
     })
   });
+  const touched = guarded2.acceptancePaths.observations.filter((entry) => entry.verdict !== "unchanged");
+  if (guarded2.acceptancePaths.status === "unestablished" || touched.length > 0) {
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: runArtifactPath({ changeId, runId, fileName: "protected-paths.json" }),
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: guarded2.acceptancePaths.status,
+        ...guarded2.acceptancePaths.reason === void 0 ? {} : { reason: guarded2.acceptancePaths.reason },
+        observations: guarded2.acceptancePaths.observations
+      })
+    });
+  }
   if (!guarded2.inContract) {
     throw new AutoFixScopeError(
       guarded2.blockedReason ?? "The auto-fix run left the task contract."
@@ -48496,36 +49265,6 @@ async function resolvePhaseChange(repositoryRoot, phase) {
     };
   }
   return { ok: true, changeId: matched.changeId, diagnostics: [] };
-}
-
-// packages/cli/src/workflow/change-planes.ts
-async function absentOnFailure(read) {
-  try {
-    return await read();
-  } catch {
-    return void 0;
-  }
-}
-async function loadOracleFacts(input) {
-  const manifest = await absentOnFailure(
-    () => deriveOracleManifest({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
-  );
-  if (manifest === void 0 || !manifest.ok) return void 0;
-  const oracles = [];
-  for (const revision of manifest.manifest.oracles) {
-    const fileName = revision.artifact.path.split("/").at(-1);
-    if (fileName === void 0 || !fileName.endsWith(".yaml")) return void 0;
-    const oracle = await absentOnFailure(
-      () => readOracleArtifact({
-        repositoryRoot: input.repositoryRoot,
-        changeId: input.changeId,
-        oracleId: fileName.slice(0, -".yaml".length)
-      })
-    );
-    if (oracle === void 0 || !oracle.ok) return void 0;
-    oracles.push({ document: oracle.document, reference: oracle.reference });
-  }
-  return oracles;
 }
 
 // packages/cli/src/commands/workflow/ship.ts
@@ -48946,9 +49685,10 @@ Record a human decision about part of the latest change. This writes a governanc
 artifact and nothing else: it does not plan, build, review or ship.
 
 Subjects:
-  spec     Approve the change's delta specs.
-  oracle   Approve the oracles the change's work will be judged against.
-  surface  Re-affirm a verification surface whose pinned file has been edited.
+  spec             Approve the change's delta specs.
+  oracle           Approve the oracles the change's work will be judged against.
+  surface          Re-affirm a verification surface whose pinned file has been edited.
+  protected-paths  Permit the work to modify an acceptance test its oracle protects.
 
 legion approve spec [--requirement <id>] --approver <id> [--dry-run]
 
@@ -48998,6 +49738,24 @@ legion approve surface [--path <file>] --approver <id> [--dry-run]
                       in the change is re-affirmed. Not repeatable.
   --dry-run           Report what would be re-affirmed and write nothing.
 
+legion approve protected-paths [--oracle <id>] --approver <id> [--dry-run]
+
+  An acceptance criterion can name the tests its work must not weaken. legion
+  build hashes them immediately before and after every run and records what
+  moved, and protected_acceptance_tests at R3 refuses a run that changed one
+  unless a named human decided it could \u2014 before the run started.
+
+  That is what "cannot be weakened by the implementer" means here: only the
+  approval plane blesses it, and only in advance. Run this after a build and the
+  gate reports unsatisfied for good; the way out then is to restore the file and
+  build again, not to approve.
+
+  --approver <id>     Required, same rule as above.
+  --oracle <id>       Decide only this oracle's protected acceptance paths.
+                      Omitted, every oracle in the change that declares any is
+                      decided, which is what the gate asks about. Not repeatable.
+  --dry-run           Report what would be decided and write nothing.
+
 Examples:
   legion approve spec --approver dasbl
   legion approve spec --approver dasbl --dry-run
@@ -49005,24 +49763,26 @@ Examples:
   legion approve oracle --approver dasbl
   legion approve oracle --oracle orc_phase-1-c1 --approver dasbl
   legion approve surface --approver dasbl
-  legion approve surface --path ops/compose.integration.yml --approver dasbl`;
+  legion approve surface --path ops/compose.integration.yml --approver dasbl
+  legion approve protected-paths --approver dasbl
+  legion approve protected-paths --oracle orc_phase-1-c1 --approver dasbl`;
 var DELTA_SPEC_APPROVE_ACTION2 = "spec.delta.approve";
 var ORACLE_APPROVE_ACTION2 = "oracle.approve";
+var OPTION_HINT = {
+  requirement: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>.",
+  oracle: "It narrows an oracle approval, or a protected-paths decision, to one oracle: legion approve oracle --oracle <id>.",
+  path: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
+};
 var SUBJECT_OPTIONS = {
-  spec: {
-    owns: "requirement",
-    hint: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>."
-  },
-  oracle: {
-    owns: "oracle",
-    hint: "It narrows an oracle approval to one oracle: legion approve oracle --oracle <id>."
-  },
-  surface: {
-    owns: "path",
-    hint: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
-  }
+  spec: { owns: ["requirement"] },
+  oracle: { owns: ["oracle"] },
+  surface: { owns: ["path"] },
+  "protected-paths": { owns: ["oracle"] }
 };
 var APPROVAL_SUBJECTS = Object.keys(SUBJECT_OPTIONS);
+var NARROWING_OPTIONS = [
+  ...new Set(APPROVAL_SUBJECTS.flatMap((subject) => SUBJECT_OPTIONS[subject].owns))
+];
 async function handleApproveWorkflow(context) {
   const subject = context.args.positionals[0];
   if (hasFlag(context, "help") || subject === "help") {
@@ -49038,16 +49798,17 @@ async function handleApproveWorkflow(context) {
     return usageError(`Unknown approval subject: legion approve ${subject}. Supported subjects: ${supported}.`);
   }
   const named = subject;
-  for (const other of APPROVAL_SUBJECTS) {
-    if (other === named) continue;
-    const foreign = SUBJECT_OPTIONS[other].owns;
+  const owned = SUBJECT_OPTIONS[named].owns;
+  for (const foreign of NARROWING_OPTIONS) {
+    if (owned.includes(foreign)) continue;
     if (!context.args.options.has(foreign)) continue;
     return usageError(
-      `--${foreign} is not an option of legion approve ${named}. ${SUBJECT_OPTIONS[other].hint}`
+      `--${foreign} is not an option of legion approve ${named}. ${OPTION_HINT[foreign] ?? ""}`.trim()
     );
   }
   if (named === "surface") return approveVerificationSurfaces(context);
   if (named === "oracle") return approveOracles(context);
+  if (named === "protected-paths") return approveProtectedPaths(context);
   return approveDeltaSpecs(context);
 }
 async function approveDeltaSpecs(context) {
@@ -49885,12 +50646,13 @@ async function executionAlreadyStarted(repositoryRoot, changeId) {
 }
 function orderingWarnings(input) {
   if (!input.ordered) return [];
+  const gate = input.gate ?? "approved_spec_and_oracle";
   const runs = `.legion/project/changes/${input.changeId}/runs`;
   if (input.execution.kind === "started") {
     return [
       {
         code: "approval_after_execution",
-        message: `Gated execution for ${input.changeId} began at ${input.execution.startedAt} (run ${input.execution.runId} of ${input.execution.taskId}). A decision recorded now is dated after it, and approved_spec_and_oracle compares those two instants: at R3 this change cannot satisfy that gate, and no command re-orders a decision that has already been taken. Approving is still recorded \u2014 the governance fact is real \u2014 but plan the remaining work as a new change if the gate has to pass.`,
+        message: `Gated execution for ${input.changeId} began at ${input.execution.startedAt} (run ${input.execution.runId} of ${input.execution.taskId}). A decision recorded now is dated after it, and ${gate} compares those two instants: at R3 this change cannot satisfy that gate, and no command re-orders a decision that has already been taken. Approving is still recorded \u2014 the governance fact is real \u2014 but plan the remaining work as a new change if the gate has to pass.`,
         path: runs
       }
     ];
@@ -49899,7 +50661,7 @@ function orderingWarnings(input) {
     return [
       {
         code: "execution_record_incomplete",
-        message: `${input.execution.detail} So this change's run directory cannot say when gated execution began, and approved_spec_and_oracle compares the last of these decisions against exactly that instant: it will report unevaluable until the run records are restored, and a decision recorded now may already be later than the work it claims to gate. Approving is still recorded \u2014 the governance fact is real.`,
+        message: `${input.execution.detail} So this change's run directory cannot say when gated execution began, and ${gate} compares the last of these decisions against exactly that instant: it will report unevaluable until the run records are restored, and a decision recorded now may already be later than the work it claims to gate. Approving is still recorded \u2014 the governance fact is real.`,
         path: runs
       }
     ];
@@ -50354,6 +51116,373 @@ function dryRunSurfaceNextAction(drifted) {
   return nextAction(
     "legion approve surface --approver <id>",
     `This was a dry run and no approval was written. ${drifted.length} pinned file${drifted.length === 1 ? "" : "s"} (${drifted.join(", ")}) ${drifted.length === 1 ? "is" : "are"} drifted; the gate stays unsatisfied until this command is run without --dry-run.`
+  );
+}
+var PROTECTED_PATHS_MODIFY_ACTION2 = "oracle.protected-paths.modify";
+async function approveProtectedPaths(context) {
+  const oracleRaw = stringOption(context, "oracle")?.trim();
+  if (context.args.options.get("oracle") === true || oracleRaw === "") {
+    return usageError(
+      "Missing required value for --oracle. Example: legion approve protected-paths --oracle orc_phase-1-c1."
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction("legion plan 1", "The task graph decides whether this change derives the gate this decision feeds."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const { declarations, unestablished: unestablished2 } = changeAcceptancePathDeclarations({
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles,
+      taskRuns: void 0,
+      release: void 0,
+      evaluatedAt: void 0,
+      // Never consulted: nothing below asks this facts object to re-hash
+      // anything, because the pin comparison happens against `fact.reference`,
+      // which `readOracleArtifact` established off disk in this same command.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
+    }
+  });
+  if (unestablished2) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_plane_unreadable",
+          message: `The oracles of ${latestChange.changeId} could not be read as a complete set, so which acceptance tests are protected is unestablished. Deciding against a partial list would bless one oracle while another the listing dropped stays unread \u2014 and the gate refuses a partial list for the same reason.`,
+          path: `.legion/project/changes/${latestChange.changeId}/oracle`
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "legion ship names the artifact that would not read. Correct or remove it, then run this again."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (declarations.length === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_declared_acceptance_paths",
+          message: `No oracle in ${latestChange.changeId} declares a protected acceptance path, so there is nothing to decide about. Protected acceptance paths are authored on an executable acceptance criterion at legion start --intake and copied onto the plan; a change planned before this release, or from an interview that declined the question, declares none.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be decided. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (oracleRaw !== void 0 && !declarations.some((entry) => entry.oracleId === oracleRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_declaring_acceptance_paths",
+          message: `--oracle ${oracleRaw} declares no protected acceptance path in this change. The oracles that do are: ${declarations.map((entry) => entry.oracleId).join(", ")}. Deciding about an oracle that protects nothing would record a decision nothing reads.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion approve protected-paths --approver <id>",
+        "Name an oracle that actually declares a protected acceptance path."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve protected-paths",
+    decision: "modifying an acceptance test the work is judged by"
+  });
+  if (!approver.ok) return approver.result;
+  const decidedAt = currentUtcTimestamp();
+  const states = [];
+  for (const declaration of declarations) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: PROTECTED_PATHS_MODIFY_ACTION2,
+      subject: { kind: "oracle", id: declaration.oracleId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      if (oracleRaw === void 0 || oracleRaw === declaration.oracleId) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve protected-paths",
+            `A decision already exists for ${declaration.oracleId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({
+        oracleId: declaration.oracleId,
+        paths: declaration.paths,
+        fact: declaration.oracle,
+        approvalId,
+        settled: false
+      });
+      continue;
+    }
+    const settled = existing.ok && isLiveProtectedPathsModifyGrant({
+      approval: existing.document,
+      changeId: bundle.bundle.change.id,
+      oracle: declaration.oracle,
+      evaluatedAt: decidedAt
+    });
+    states.push({
+      oracleId: declaration.oracleId,
+      paths: declaration.paths,
+      fact: declaration.oracle,
+      approvalId,
+      settled,
+      ...existing.ok ? { existing } : {}
+    });
+  }
+  const selected = states.filter((state) => oracleRaw === void 0 || state.oracleId === oracleRaw);
+  const planned = selected.map((state) => ({
+    ...state,
+    ...plannedProtectedPathsFor(state, approver.approver)
+  }));
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const ordered = derivesShipGate(taskgraph.document.tasks, "protected_acceptance_tests");
+  const executionWarnings = orderingWarnings({
+    changeId: latestChange.changeId,
+    execution,
+    ordered,
+    gate: "protected_acceptance_tests"
+  });
+  const undecidedNow = states.filter((state) => !state.settled).map((state) => state.oracleId);
+  const undecidedAfter = states.filter((state) => !state.settled && !(oracleRaw === void 0 || state.oracleId === oracleRaw)).map((state) => state.oracleId);
+  if (hasFlag(context, "dry-run")) {
+    const action2 = protectedPathsNextAction(undecidedNow, execution.kind === "started", true);
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...executionWarnings.length === 0 ? {} : { warnings: executionWarnings },
+        decisions: planned.map((entry) => ({
+          oracleId: entry.oracleId,
+          paths: entry.paths,
+          oraclePath: entry.fact.reference.path,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus }
+        })),
+        undecided: undecidedNow,
+        nextAction: action2,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.paths.join(", ")}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action2)
+      ].join("\n")
+    );
+  }
+  const written = [];
+  const superseded = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: `the protected acceptance paths of ${entry.oracleId}`,
+      action: PROTECTED_PATHS_MODIFY_ACTION2,
+      target: { kind: "oracle", id: entry.oracleId },
+      command: "legion approve protected-paths",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        decisions: written.map(approvalSummary2)
+      });
+    }
+    if (archived.record !== void 0) superseded.push(archived.record);
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === void 0 ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: protectedPathsApproval({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...archived.record === void 0 ? {} : { superseding: archived.record }
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve protected-paths",
+          "Some oracles were decided and one write failed. Rerunning re-decides only what is still undecided."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          decisions: written.map(approvalSummary2)
+        }
+      );
+    }
+    written.push(write);
+  }
+  const action = protectedPathsNextAction(undecidedAfter, execution.kind === "started", false);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record2) => ({
+      code: "withdrawn_approval_superseded",
+      message: `${record2.document.decidedBy?.id ?? "someone"} had recorded this decision as ${record2.document.status}${record2.document.decisionReason === void 0 ? "" : ` ("${record2.document.decisionReason}")`}, and this grant supersedes that decision. The withdrawal is preserved at ${record2.artifactPath} and is the standing record of it; nothing was deleted.`,
+      path: record2.artifactPath
+    }))
+  ];
+  return success2(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...warnings.length === 0 ? {} : { warnings },
+      ...superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary2) },
+      decisions: planned.map((entry) => {
+        const record2 = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          oracleId: entry.oracleId,
+          paths: entry.paths,
+          oraclePath: entry.fact.reference.path,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...entry.previousStatus === void 0 ? {} : { previousStatus: entry.previousStatus },
+          artifactPath: record2?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record2?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record2?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // Oracles this run leaves undecided, for the same reason `unapproved` exists
+      // on the spec path: the gate reads every declaring oracle in the change, so
+      // deciding one of three leaves ship blocked over two the operator never saw.
+      undecided: undecidedAfter,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0 ? `Nothing to decide: every oracle in ${latestChange.changeId} that declares a protected acceptance path already carries a live decision.` : `Recorded ${decided} protected-paths decision${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.paths.join(", ")}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+function plannedProtectedPathsFor(state, approver) {
+  const existing = state.existing;
+  if (existing === void 0) return { action: "grant" };
+  if (state.settled && existing.document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: existing.document.status };
+  }
+  return { action: "regrant", previousStatus: existing.document.status };
+}
+function protectedPathsApproval(input) {
+  const existing = input.entry.existing;
+  const reference = input.entry.fact.reference;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === void 0 ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === void 0 ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: PROTECTED_PATHS_MODIFY_ACTION2,
+      targets: [
+        // Re-parsed rather than cast, on `oracleApproval`'s rule: `ship-gates.ts`
+        // keeps protocol brands out of its fact shapes, and the gate's exact-target
+        // filter is the only thing that stops one decision answering for another.
+        { kind: "oracle", id: oracleIdSchema.parse(input.entry.oracleId) },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: PROTECTED_PATHS_MODIFY_ACTION2,
+      targetHash: reference.sha256
+    }),
+    artifacts: [reference],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason: `${input.approver.id} permitted this change's work to modify the acceptance path(s) oracle ${input.entry.oracleId} protects (${input.entry.paths.join(", ")}) via legion approve protected-paths, against the oracle at ${reference.sha256}.` + (input.superseding === void 0 ? "" : ` This supersedes the ${input.superseding.document.status} decision recorded by ${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+function protectedPathsNextAction(undecided, executionStarted, dryRun) {
+  if (undecided.length > 0) {
+    return nextAction(
+      "legion approve protected-paths --approver <id>",
+      `${undecided.length} oracle${undecided.length === 1 ? "" : "s"} declaring a protected acceptance path ${undecided.length === 1 ? "is" : "are"} still undecided (${undecided.join(", ")}); protected_acceptance_tests reads every one of them when a run has changed a protected path` + (dryRun ? ", and this dry run wrote nothing." : ".")
+    );
+  }
+  if (executionStarted) {
+    return nextAction(
+      "legion ship",
+      "Every declaring oracle carries a decision, and this change has already run. protected_acceptance_tests compares each decision instant against the start of execution; legion ship reports what that ordering leaves unmet."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every oracle declaring a protected acceptance path carries a decision permitting this change's work to modify it. Build after this: the decision has to precede the run it permits."
   );
 }
 

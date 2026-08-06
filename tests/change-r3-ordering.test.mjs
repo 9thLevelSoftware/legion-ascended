@@ -19,13 +19,14 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
  * unshippable for a reason no command could move.
  *
  * **This file does not claim R3 ships, and asserting that it does not is half its
- * point.** Eight of R3's ten gates now have producers — `protected_oracle` and
+ * point.** Nine of R3's ten gates now have producers — `protected_oracle` and
  * `deterministic_verification` from the evidence items, `explicit_human_approval`
  * from the approval plane, `approved_spec_and_oracle` from its ordering,
  * `independent_baseline`, `security_or_e2e_evaluator` and
- * `rollback_or_forward_fix_evidence` from the attestation plane, and
- * `architecture_or_security_review` from review domains — and two do
- * not. That set is **derived from the compiled gate module** rather than typed
+ * `rollback_or_forward_fix_evidence` from the attestation plane,
+ * `architecture_or_security_review` from review domains, and
+ * `protected_acceptance_tests` from the guarded harness's acceptance-path
+ * observation — and one does not. That set is **derived from the compiled gate module** rather than typed
  * out here, for a reason the previous release's hand-written array could not
  * serve: a list edited by hand stays true when a gate silently regresses to
  * `evaluateGate`'s `default:` arm, and the derivation reddens when it does.
@@ -72,22 +73,20 @@ function producerlessR3Gates() {
 }
 
 /**
- * The two expected to survive this release, each carrying the release that is
+ * The one expected to survive this release, carrying the release that is
  * expected to close it, so the failure message a later author sees points at
  * their own work rather than at this file.
  */
 const PRODUCERLESS_R3_GATES = [
-  // PR 8.
-  "protected_acceptance_tests",
   // PR 9.
   "release_observation_plan"
 ];
 
-test("the R3 gates with no producer are exactly the two later releases still owe", () => {
-  // Both directions, and derived on one side. Give one of these a producer and
-  // this assertion is the thing to edit; let one of the eight that *has* a
-  // producer fall back to the `default:` arm and this reddens without anybody
-  // having touched it, which the array it replaces could not do.
+test("the R3 gates with no producer are exactly the one a later release still owes", () => {
+  // Both directions, and derived on one side. Give this one a producer and this
+  // assertion is the thing to edit; let one of the nine that *has* a producer
+  // fall back to the `default:` arm and this reddens without anybody having
+  // touched it, which the array it replaces could not do.
   assert.deepEqual(producerlessR3Gates(), PRODUCERLESS_R3_GATES);
 });
 
@@ -259,12 +258,13 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
   );
   // Six gate ids are still unmet, and the set did not shrink in this release
   // either — which is the honest report and is worth stating plainly. This
-  // release gave `architecture_or_security_review` a producer, and what a
-  // producer gives a gate is the ability to be *satisfied*: this fixture reviews
-  // without `--domain`, so the gate answers its absence arm and stays in the list.
-  // The difference is in the reason, asserted immediately below: four of these
-  // rows now say what is missing and name a command that produces it, and two
-  // still say Legion produces no evidence for them at all.
+  // release gave `protected_acceptance_tests` a producer, and what a producer
+  // gives a gate is the ability to be *satisfied*: this fixture's interview
+  // declares no protected acceptance path, so the gate answers its
+  // nothing-was-declared arm and stays in the list. The difference is in the
+  // reason, asserted immediately below: five of these rows now say what is
+  // missing and name a command that produces it, and one still says Legion
+  // produces no evidence for it at all.
   const unmet = [...new Set(payload.diagnostics.map((entry) => entry.gate))].sort();
   assert.deepEqual(unmet, [
     "architecture_or_security_review",
@@ -284,6 +284,17 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
     PRODUCERLESS_R3_GATES,
     "the true remaining set, read off the real command. Give one of these a producer and this is the thing to edit"
   );
+  // This release's gate is the fifth, and its sentence is about the *plan*
+  // rather than about any run: nothing in this change names a test the work must
+  // not weaken, which is a different fact from "the run weakened one" and from
+  // "Legion produces no evidence for this". Task-scoped, so the row names the
+  // task whose run would have answered.
+  const acceptanceRow = payload.diagnostics.find((entry) => entry.gate === "protected_acceptance_tests");
+  assert.notEqual(acceptanceRow, undefined);
+  assert.doesNotMatch(acceptanceRow.message, /does not yet produce/);
+  assert.match(acceptanceRow.message, /No oracle in this change declares a protected acceptance path/);
+  assert.match(acceptanceRow.message, /is not satisfied for tsk_/);
+
   // And the ones earlier releases closed no longer answer from that arm: each
   // names the plane it looked at and what it did not find there.
   for (const gate of ["independent_baseline", "security_or_e2e_evaluator", "rollback_or_forward_fix_evidence"]) {
@@ -653,14 +664,14 @@ test("a review that declares its domain satisfies the architecture gate, end to 
   assert.deepEqual(accepted0.domains, ["architecture", "security"]);
 
   const shipped = await run("ship", "--json");
-  assert.equal(shipped.exitCode, 1, "R3 still does not ship: two of its ten gates have no producer");
+  assert.equal(shipped.exitCode, 1, "R3 still does not ship: one of its ten gates has no producer");
   const payload = parseJsonOutput(shipped);
   assert.equal(
     payload.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
     false,
     `the gate this release closed must be satisfied: ${JSON.stringify(payload.diagnostics.map((e) => e.gate))}`
   );
-  // And exactly two remain producerless, which is the honest remaining set read
+  // And exactly one remains producerless, which is the honest remaining set read
   // off the real command.
   const stillProducerless = payload.diagnostics
     .filter((entry) => entry.message.includes(NO_PRODUCER_REASON))

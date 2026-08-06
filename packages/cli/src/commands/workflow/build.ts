@@ -49,7 +49,9 @@ import type { ReconciliationResult } from "../../workflow/diff-reconciliation.js
 import { adapterForKind, selectExecutionAdapterKind, writeProjectTextFile, type ExecutionAdapterKind, type ExecutionResult } from "../../workflow/executor/index.js";
 import { createVerificationRunner } from "../../workflow/executor/verification-runner.js";
 import { createWorkerBundleRegistry } from "../../workflow/executor/worker-bundles.js";
-import { runGuardedExecution } from "../../workflow/guarded-execution.js";
+import { loadOracleFacts } from "../../workflow/change-planes.js";
+import { acceptanceBaselineFromEvidence } from "../../workflow/acceptance-baseline.js";
+import { runGuardedExecution, type AcceptanceBaseline, type AcceptancePathReport } from "../../workflow/guarded-execution.js";
 import { mintPinnedReferences, type MintPinnedReference } from "../../workflow/pinned-references.js";
 import { isLiveSurfaceReaffirmation } from "../../workflow/ship-gates.js";
 import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/render.js";
@@ -179,12 +181,52 @@ export async function handleBuildWorkflow(context: CliContext, changeId?: string
     changeId: latestChange.changeId
   });
 
+  // The acceptance paths every oracle of this change declares, read once before
+  // any task runs and threaded into each dispatch.
+  //
+  // Change-wide rather than per task, and loaded through the gate's own
+  // all-or-nothing plane loader rather than through `oraclesForTask`. Both halves
+  // are load-bearing. `legion plan` materialises one task per executable
+  // criterion, so a task-scoped snapshot leaves task B free to weaken a test task
+  // A's oracle protects — invisible to both tasks' evidence. And `loadOracleFacts`
+  // answers `undefined` for a plane it could not read whole, which reaches the
+  // harness as "unestablished" rather than as the empty set: a partial list is
+  // worse than no list here, because "nothing I snapshotted changed" is trivially
+  // true of a list that lost the oracle protecting the touched file.
+  const changeOracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const acceptancePaths =
+    changeOracles === undefined
+      ? undefined
+      : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+  const acceptancePathOracles =
+    changeOracles === undefined
+      ? undefined
+      : changeOracles
+          .filter((oracle) => (oracle.document.acceptancePaths ?? []).length > 0)
+          .map((oracle) => ({
+            oracleId: oracle.document.id,
+            paths: [...(oracle.document.acceptancePaths ?? [])]
+          }));
+
   const nextAttempts = nextAttemptMap(existingTaskRuns.taskRuns);
   const taskRuns: unknown[] = [];
   for (const task of taskgraph.document.tasks) {
     const taskId = taskIdForContractId(task.id);
     const attempt = nextAttempts.get(taskId) ?? 1;
     nextAttempts.set(taskId, attempt + 1);
+    // Recomputed per task, from `producedEntries` rather than from the index on
+    // disk. Both halves matter. Per task, because task A's run can weaken a test
+    // task B is about to snapshot, and B must inherit A's `before` rather than
+    // hash what A left. From `producedEntries`, because the evidence index is
+    // written once at the end of the build, so a reader going to disk inside the
+    // loop would see the previous build's entries and miss this one's.
+    const acceptanceBaseline = await acceptanceBaselineFromEvidence({
+      repositoryRoot: context.repositoryRoot,
+      entries: producedEntries
+    });
     const run = await executeTask({
       context,
       executor: selectedExecutor,
@@ -192,7 +234,10 @@ export async function handleBuildWorkflow(context: CliContext, changeId?: string
       attempt,
       taskgraph,
       priorEntries: producedEntries,
-      reaffirmedPin
+      reaffirmedPin,
+      acceptancePaths,
+      acceptancePathOracles,
+      acceptanceBaseline
     });
     if (!run.ok) {
       if (run.taskRun !== undefined) taskRuns.push(run.taskRun);
@@ -281,6 +326,34 @@ interface ExecuteTaskInput {
    * differently for the same file within one build.
    */
   readonly reaffirmedPin: ReaffirmedPin;
+  /**
+   * The union of every oracle's declared acceptance paths for this change, or
+   * `undefined` when the oracle plane would not read as a complete set. Passed
+   * straight through to the guarded harness, whose input field carries the
+   * argument for the shape.
+   */
+  readonly acceptancePaths: readonly string[] | undefined;
+  /**
+   * Which oracle declares which of those paths.
+   *
+   * Carried beside the union rather than derived from it because the approval
+   * that blesses a modification names an *oracle*, so the persisted report has to
+   * let an auditor walk approval → oracle → path without reading the taskgraph.
+   */
+  readonly acceptancePathOracles: readonly AcceptancePathDeclaration[] | undefined;
+  /**
+   * What earlier runs of this change already recorded as the pre-run state of
+   * those paths. Threaded through rather than derived inside the harness: the
+   * harness reads the working tree, and reading the evidence plane is the
+   * caller's job in every other guarantee it holds.
+   */
+  readonly acceptanceBaseline: AcceptanceBaseline;
+}
+
+/** Which oracle declares which protected acceptance paths. */
+interface AcceptancePathDeclaration {
+  readonly oracleId: Oracle["id"];
+  readonly paths: readonly ArtifactPath[];
 }
 
 interface ExecuteTaskSuccess {
@@ -392,6 +465,8 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     // reconciliation all describe one revision.
     baseGitSha,
     harnessPaths: [`.legion/project/changes/${input.task.changeId}/runs/${runId}`],
+    acceptancePaths: input.acceptancePaths,
+    acceptanceBaseline: input.acceptanceBaseline,
     run: () =>
       adapter.run({
         repositoryRoot: input.context.repositoryRoot,
@@ -452,6 +527,48 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
         taskId,
         status: reconciliation.status,
         ...reconciliation.observation
+      })
+    });
+  }
+
+  // What the run did to the acceptance paths this change's oracles declare,
+  // persisted as a file rather than left as a verdict.
+  //
+  // `diff-observation.json`'s precedent, and the same argument: a verdict alone
+  // leaves an auditor with nothing but the claim the item exists to check. This
+  // records the declaration set, which oracle declares each path, and the
+  // before/after state of every one — so the gate's `unsatisfied` sentence can
+  // point at something that substantiates it, and an operator can see what the
+  // file was before the run in order to put it back.
+  //
+  // The run directory is already in `harnessPaths`, so writing here cannot be
+  // attributed as a touch by either population.
+  const acceptanceReport = guarded.acceptancePaths;
+  const acceptanceVerdict = protectedAcceptanceVerdict(acceptanceReport);
+  let acceptancePathsArtifactPath: ArtifactPath | undefined;
+  if (acceptanceVerdict !== undefined) {
+    acceptancePathsArtifactPath = runArtifactPath({
+      changeId: input.task.changeId,
+      runId,
+      fileName: "protected-paths.json"
+    });
+    await writeProjectTextFile({
+      repositoryRoot: input.context.repositoryRoot,
+      artifactPath: acceptancePathsArtifactPath,
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: acceptanceReport.status,
+        verdict: acceptanceVerdict,
+        // The one thing an operator staring at an `unknown` has to be told, and
+        // the gate's sentence cannot hold it: *which* half was unestablished —
+        // the oracle plane, or the record of what an earlier run of this change
+        // saw. The cures are different and neither is `legion build`.
+        ...(acceptanceReport.reason === undefined ? {} : { reason: acceptanceReport.reason }),
+        declaredBy: input.acceptancePathOracles ?? [],
+        observations: acceptanceReport.observations
       })
     });
   }
@@ -534,7 +651,10 @@ async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskSuccess 
     surfaceChecks,
     inContract,
     ...(reconciliation === undefined ? {} : { reconciliation }),
-    ...(observationArtifactPath === undefined ? {} : { observationArtifactPath })
+    ...(observationArtifactPath === undefined ? {} : { observationArtifactPath }),
+    ...(acceptanceVerdict === undefined ? {} : { acceptanceVerdict }),
+    ...(acceptancePathsArtifactPath === undefined ? {} : { acceptancePathsArtifactPath }),
+    ...(input.acceptancePathOracles === undefined ? {} : { acceptancePathOracles: input.acceptancePathOracles })
   });
   const completed = await writeTaskRun({
     repositoryRoot: input.context.repositoryRoot,
@@ -748,6 +868,39 @@ function taskRunDocument(input: {
   });
 }
 
+/**
+ * The `protected-acceptance-paths` verdict for one run, or `undefined` when the
+ * item must not be written at all.
+ *
+ * `undefined` is the answer for exactly one state: the declaration set was read
+ * whole and nothing in this change declares a protected acceptance path. That is
+ * a property of the **plan**, not of the run, and the gate decides it at ship
+ * time from the oracles — `integration-surface-check` records the same lesson one
+ * item over, and it transfers verbatim: `evidenceItemVerdict` collapses every
+ * verdict that is not `pass`/`fail` to absence, so spelling "nothing was
+ * declared" as a verdict would arrive at the gate indistinguishable from silence.
+ * It would also go stale, because a replan can declare one after the item is
+ * written.
+ *
+ * A set that could not be established is *not* that state. It is written as
+ * `unknown`, because "the oracle plane would not read" must never be reported as
+ * "nothing is protected".
+ *
+ * A positive fold, and the order matters: any `unknown` dominates, because a path
+ * neither side could resolve is a path this run cannot say anything about, and
+ * folding it into `pass` would certify an acceptance test the run may have
+ * created and immediately weakened.
+ */
+function protectedAcceptanceVerdict(
+  report: AcceptancePathReport
+): "pass" | "fail" | "unknown" | undefined {
+  if (report.status === "unestablished") return "unknown";
+  if (report.observations.length === 0) return undefined;
+  if (report.observations.some((entry) => entry.verdict === "unknown")) return "unknown";
+  if (report.observations.some((entry) => entry.verdict === "changed")) return "fail";
+  return "pass";
+}
+
 async function evidenceEntryForExecution(input: {
   readonly repositoryRoot: string;
   readonly task: TaskContract;
@@ -772,6 +925,10 @@ async function evidenceEntryForExecution(input: {
   readonly inContract: boolean;
   readonly reconciliation?: ReconciliationResult;
   readonly observationArtifactPath?: ArtifactPath;
+  /** Absent when nothing in the change declares a protected acceptance path. */
+  readonly acceptanceVerdict?: "pass" | "fail" | "unknown";
+  readonly acceptancePathsArtifactPath?: ArtifactPath;
+  readonly acceptancePathOracles?: readonly AcceptancePathDeclaration[];
 }): Promise<EvidenceIndexEntry> {
   const resultReference = await referenceForFile(input.repositoryRoot, input.resultArtifactPath);
   const logReference = await referenceForFile(input.repositoryRoot, input.redactedLogArtifactPath);
@@ -908,6 +1065,39 @@ async function evidenceEntryForExecution(input: {
           ? resultReference
           : await referenceForFile(input.repositoryRoot, input.verificationArtifactPath),
       traceRefs
+    });
+  }
+
+  // Whether the run weakened any acceptance test the change's oracles say it
+  // must not. Its own item for `integration-surface-check`'s reason: "did the
+  // contract's commands pass" and "did the run edit the tests that decide it" are
+  // different questions, and until now nothing anywhere asked the second.
+  //
+  // `classification: "trace"` rather than `test-report`: this is an observation
+  // of the working tree across a dispatch, not the result of running anything.
+  //
+  // The per-path trace references are what let the gate tell a covered
+  // declaration from one made *after* the run that produced this item. Without
+  // them a `pass` written before a replan would answer for paths no snapshot ever
+  // contained — the stale-pass family this file has already paid for twice.
+  if (input.acceptanceVerdict !== undefined) {
+    const coverageRefs = (input.acceptancePathOracles ?? []).flatMap((declaration) =>
+      declaration.paths.map((declaredPath) => ({
+        path: declaredPath,
+        anchor: declaration.oracleId,
+        relation: "verifies" as const,
+        entity: { kind: "oracle" as const, id: declaration.oracleId }
+      }))
+    );
+    items.push({
+      id: "protected-acceptance-paths",
+      classification: "trace",
+      verdict: input.acceptanceVerdict,
+      artifact:
+        input.acceptancePathsArtifactPath === undefined
+          ? resultReference
+          : await referenceForFile(input.repositoryRoot, input.acceptancePathsArtifactPath),
+      traceRefs: [...traceRefs, ...coverageRefs]
     });
   }
 

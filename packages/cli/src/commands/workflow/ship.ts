@@ -416,7 +416,7 @@ function runPlaneContradictionDiagnostics(input: {
 /**
  * The change-scoped planes `legion ship` can read, and what it could not read.
  *
- * Nine gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * Ten gates consume them: `explicit_human_approval` and `approved_delta_spec`
  * read `approvals`, the second also reads `deltas`,
  * `integration_or_real_interface_checks` reads `oracles` and the pin verifier,
  * `whole_change_acceptance_evidence` reads `acceptance` and the clock,
@@ -425,7 +425,16 @@ function runPlaneContradictionDiagnostics(input: {
  * `rollback_or_forward_fix_evidence` read `attestations`, the pin verifier and
  * the source classifier — the first also `taskRuns` — and
  * `architecture_or_security_review` reads `reviews` beside `attestations`, plus
- * `taskRuns` for its executor falsifier.
+ * `taskRuns` for its executor falsifier, and `protected_acceptance_tests` reads
+ * `oracles` for the declaration set it quantifies over, then `approvals` and
+ * `taskRuns` for the decision that may permit a change and the instant it has to
+ * predate.
+ *
+ * No new plane, and none is needed. That is worth saying rather than leaving to
+ * inference: the run artifact recording which acceptance path moved is deliberately
+ * *not* a plane this command loads — the gate reads the evidence item's verdict and
+ * its trace references, and citing the artifact rather than parsing it is the same
+ * choice `diff-reconciliation` made for the same reason.
  *
  * A previous version of this paragraph claimed the release that added
  * `approved_spec_and_oracle` was "the last one that collects on" loading planes

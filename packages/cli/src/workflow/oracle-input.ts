@@ -157,6 +157,15 @@ function executableOracles(
       // the oracle's copy cannot disagree. That is the rule the comment above
       // `oracleIdsFor` records the cost of breaking, applied to a second field.
       ...(criterion.proof.surface === undefined ? {} : { surface: criterion.proof.surface }),
+      // The criterion's declared protected acceptance paths, copied the same way
+      // and off the same object, for the same reason. `protectedPaths` above is
+      // untouched: it names the control artifacts the guarded harness *restores*,
+      // and widening it to hold acceptance tests would make every path in it
+      // eligible for rollback. The two arrays are opposite disciplines and are
+      // kept as two fields so no reader can union them by accident.
+      ...(criterion.proof.acceptancePaths === undefined
+        ? {}
+        : { acceptancePaths: [...criterion.proof.acceptancePaths] }),
       expected: {
         preconditions: ["The phase change bundle exists and validates."],
         postconditions: [description],

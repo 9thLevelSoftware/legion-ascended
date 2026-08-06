@@ -1,7 +1,12 @@
 import * as z from "zod";
 
 import { oracleIdSchema, projectIdSchema, requirementIdSchema } from "../primitives/ids.js";
-import { schemaMetadataSchema, traceReferenceSchema, verificationSurfaceSchema } from "./common.js";
+import {
+  acceptancePathsSchema,
+  schemaMetadataSchema,
+  traceReferenceSchema,
+  verificationSurfaceSchema
+} from "./common.js";
 
 export const requirementCategorySchema = z.enum([
   "behavior",
@@ -41,6 +46,16 @@ export type RequirementStatus = z.infer<typeof requirementStatusSchema>;
  * gave. It lives on the executable arm only: a criterion a human decides has no
  * command, so there is no surface a command reached, and putting it on the union
  * rather than on one arm would make that a convention instead of a type.
+ *
+ * `acceptancePaths` is the authored copy of the tests this criterion's work must
+ * not weaken, and this is likewise the only place an operator writes one.
+ * `legion plan` copies it onto the oracle this criterion produces and nowhere
+ * else — deliberately one authored home and one derived home, because the
+ * contract/oracle parity `surface` carries is what made deleting either of
+ * `shipGatePinnedReferences`' two surface collectors redden nothing under
+ * mutation. It lives on the executable arm for `surface`'s reason and one degree
+ * more sharply: a criterion a human decides has no run whose writes could weaken
+ * anything, so there is nothing for the harness to snapshot.
  */
 export const requirementCriterionProofSchema = z.discriminatedUnion("mode", [
   z.strictObject({
@@ -49,7 +64,8 @@ export const requirementCriterionProofSchema = z.discriminatedUnion("mode", [
     args: z.array(z.string().max(256)).max(64),
     expectedExitCode: z.number().int().min(0).max(255),
     timeoutMs: z.number().int().positive().max(3_600_000).optional(),
-    surface: verificationSurfaceSchema.optional()
+    surface: verificationSurfaceSchema.optional(),
+    acceptancePaths: acceptancePathsSchema.optional()
   }),
   z.strictObject({
     mode: z.literal("manual"),

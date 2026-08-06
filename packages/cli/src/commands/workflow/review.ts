@@ -6,6 +6,7 @@ import {
   readEvidenceIndex,
   readTaskGraph,
   repairChangeProposalPins,
+  stableProtocolJson,
   updateChangeAcceptance,
   validateChangeTraceability,
   writeApproval,
@@ -70,6 +71,8 @@ import {
   taskIdForContractId
 } from "../../workflow/run-artifacts.js";
 import { latestEvidenceEntries } from "../../workflow/evidence-selection.js";
+import { acceptanceBaselineFromEvidence } from "../../workflow/acceptance-baseline.js";
+import { loadOracleFacts } from "../../workflow/change-planes.js";
 import { runGuardedExecution } from "../../workflow/guarded-execution.js";
 import { phaseChangeIdPrefix } from "../../workflow/phase-compat.js";
 import { findLatestWorkflowChangeId, listWorkflowChanges } from "../../workflow/state.js";
@@ -1603,11 +1606,47 @@ async function runAutoFixCycle(
   // follows snapshots the tree *before* its own dispatch — so the tampering is
   // already present, gets attributed to no one, and review and ship then load
   // the altered contract.
+  // The same declaration set the build path snapshots, loaded the same way.
+  //
+  // Passing `[]` here was available and is refused: the refresh build that
+  // follows a fix takes its own pre-dispatch snapshot *after* the fix has run, so
+  // an acceptance test this cycle gutted is already in that snapshot's `before`
+  // state and reads as unchanged. That is precisely the unguarded-door shape this
+  // file's docblock was written about, one population over.
+  //
+  // The observation is warned about here and does **not** join the
+  // `AutoFixScopeError` arm below: an auto-fix that touches an acceptance test is
+  // reported by the harness and decided by the ship gate, never blocked here.
+  const changeOracles = await loadOracleFacts({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptancePaths =
+    changeOracles === undefined
+      ? undefined
+      : [...new Set(changeOracles.flatMap((oracle) => oracle.document.acceptancePaths ?? []))].sort();
+
+  // Guarantee 7's input on this path too, and read from disk because the build
+  // that produced these entries has already written the index. A fix cycle that
+  // hashed the tree as it stands would report `unchanged` about a test the build
+  // it is fixing already weakened — the same re-baselining the build path was
+  // just corrected for, reached through a different verb.
+  const evidence = await readEvidenceIndex({ repositoryRoot: context.repositoryRoot, changeId });
+  const acceptanceBaseline = evidence.ok
+    ? await acceptanceBaselineFromEvidence({
+        repositoryRoot: context.repositoryRoot,
+        entries: evidence.document.entries
+      })
+    : {
+        status: "unestablished" as const,
+        reason: `The evidence index of ${changeId} would not read, so what earlier runs recorded about its protected acceptance paths is unestablished.`,
+        states: new Map()
+      };
+
   const guarded = await runGuardedExecution({
     repositoryRoot: context.repositoryRoot,
     task,
     baseGitSha: resolveBaseGitSha(context.repositoryRoot),
     harnessPaths: [`.legion/project/changes/${changeId}/runs/${runId}`],
+    acceptancePaths,
+    acceptanceBaseline,
     run: () =>
       adapterForKind(executor).run({
         repositoryRoot: context.repositoryRoot,
@@ -1630,6 +1669,28 @@ async function runAutoFixCycle(
         redactedLogAbsolutePath: absoluteArtifactPath(context.repositoryRoot, redactedLogArtifactPath)
       })
   });
+
+  // Persisted so the observation is not lost with the process. The gate reads the
+  // *build* path's item, so this file is for the operator and for an auditor
+  // reconstructing what happened between two builds; the residual — that a fix
+  // cycle's observation does not itself reach `legion ship` — is stated in this
+  // release's commit body rather than left to be discovered.
+  const touched = guarded.acceptancePaths.observations.filter((entry) => entry.verdict !== "unchanged");
+  if (guarded.acceptancePaths.status === "unestablished" || touched.length > 0) {
+    await writeProjectTextFile({
+      repositoryRoot: context.repositoryRoot,
+      artifactPath: runArtifactPath({ changeId, runId, fileName: "protected-paths.json" }),
+      text: stableProtocolJson({
+        kind: "protected_paths",
+        schemaVersion: 1,
+        runId,
+        taskId,
+        status: guarded.acceptancePaths.status,
+        ...(guarded.acceptancePaths.reason === undefined ? {} : { reason: guarded.acceptancePaths.reason }),
+        observations: guarded.acceptancePaths.observations
+      })
+    });
+  }
 
   if (!guarded.inContract) {
     throw new AutoFixScopeError(

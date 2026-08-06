@@ -14,7 +14,9 @@ import {
   type RequirementSet
 } from "@legion/artifacts";
 import {
+  artifactPathSchema,
   requirementSchema,
+  type ArtifactPath,
   type ArtifactReference,
   type IntakeSession,
   type ProjectId,
@@ -31,7 +33,7 @@ import type { MintPinnedReference } from "../pinned-references.js";
 import { INTAKE_GRAPH_VERSION } from "./graph.js";
 import {
   parseCommandLine,
-  parseSurfacePins,
+  parsePathList,
   requirementDrafts,
   slugFromText,
   type RequirementDraft
@@ -93,7 +95,7 @@ function surfaceFor(
   const kind = criterion.surfaceKind.trim();
   if (kind.length === 0) return undefined;
 
-  const paths = parseSurfacePins(criterion.surfacePins);
+  const paths = parsePathList(criterion.surfacePins);
   if (paths.length === 0) return undefined;
 
   const pinned: ArtifactReference[] = [];
@@ -111,6 +113,33 @@ function surfaceFor(
   };
 }
 
+/**
+ * The protected acceptance paths of one criterion, or `undefined` if none.
+ *
+ * **No pin is minted, and that is the difference from `surfaceFor` above.** A
+ * surface pin is a claim about *bytes*, so it is hashed at declaration time and
+ * re-hashed at ship time. A protected acceptance path is a claim about
+ * *identity* — this file is the test, whatever it currently says — and the
+ * harness hashes it immediately before and after each run. Minting a reference
+ * here would make a test legitimately edited between intake and build read as
+ * drifted before it had ever been protected, and would need a re-affirmation verb
+ * for a state nothing had caused.
+ *
+ * Consequently there is no `unpinnable_*` failure for these and
+ * `declaredSurfacePaths` does not grow: nothing on this path can fail to resolve,
+ * because nothing on this path touches the filesystem.
+ */
+function acceptancePathsFor(
+  criterion: RequirementDraft["criteria"][number]
+): ArtifactPath[] | undefined {
+  const paths = parsePathList(criterion.acceptancePaths);
+  if (paths.length === 0) return undefined;
+  // Parsed rather than cast. `validateAnswerSet` has already refused every path
+  // this would throw on, and a cast here would put an unvalidated string into a
+  // document `requirementSchema.parse` is about to accept structurally.
+  return paths.map((entry) => artifactPathSchema.parse(entry));
+}
+
 function criterionFor(
   criterion: RequirementDraft["criteria"][number],
   index: number,
@@ -121,6 +150,7 @@ function criterionFor(
   if (criterion.proof === "executable") {
     const parsed = parseCommandLine(criterion.detail);
     const surface = surfaceFor(criterion, mintPin);
+    const acceptancePaths = acceptancePathsFor(criterion);
     if (!("error" in parsed)) {
       return {
         id,
@@ -133,7 +163,8 @@ function criterionFor(
           // criterion holds. Asking for an expected code per criterion invites
           // a non-zero answer chosen to make a failing command look fine.
           expectedExitCode: 0,
-          ...(surface === undefined ? {} : { surface })
+          ...(surface === undefined ? {} : { surface }),
+          ...(acceptancePaths === undefined ? {} : { acceptancePaths })
         }
       };
     }
@@ -153,7 +184,10 @@ function criterionFor(
         // reader would otherwise have no way to notice.
         reason:
           `The recorded command could not be parsed (${parsed.error}) so this criterion is unproven.` +
-          (surface === undefined ? "" : " Its declared verification surface was dropped with it.")
+          (surface === undefined ? "" : " Its declared verification surface was dropped with it.") +
+          (acceptancePaths === undefined
+            ? ""
+            : " Its declared protected acceptance paths were dropped with it.")
       }
     };
   }
@@ -258,7 +292,7 @@ export function declaredSurfacePaths(
     if (draft.priority === "wont") continue;
     for (const criterion of draft.criteria) {
       if (criterion.surfaceKind.trim().length === 0) continue;
-      for (const path of parseSurfacePins(criterion.surfacePins)) {
+      for (const path of parsePathList(criterion.surfacePins)) {
         declared.push({ requirementIndex: draft.index, criterionIndex: criterion.index, path });
       }
     }

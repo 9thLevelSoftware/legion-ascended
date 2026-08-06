@@ -39,12 +39,15 @@ import { nextAction, renderDiagnostics, renderNextAction } from "../../workflow/
 import { mintPinnedReferences } from "../../workflow/pinned-references.js";
 import { approvalIdForSubject, taskIdForContractId } from "../../workflow/run-artifacts.js";
 import {
+  changeAcceptancePathDeclarations,
   changeOracleDemand,
   changeVerificationSurfaces,
   derivesApprovalOrderingGate,
+  derivesShipGate,
   earliestExecutionRun,
   isLiveDeltaSpecGrant,
   isLiveOracleGrant,
+  isLiveProtectedPathsModifyGrant,
   isLiveSurfaceReaffirmation,
   type ShipGateOracleFact
 } from "../../workflow/ship-gates.js";
@@ -57,9 +60,10 @@ Record a human decision about part of the latest change. This writes a governanc
 artifact and nothing else: it does not plan, build, review or ship.
 
 Subjects:
-  spec     Approve the change's delta specs.
-  oracle   Approve the oracles the change's work will be judged against.
-  surface  Re-affirm a verification surface whose pinned file has been edited.
+  spec             Approve the change's delta specs.
+  oracle           Approve the oracles the change's work will be judged against.
+  surface          Re-affirm a verification surface whose pinned file has been edited.
+  protected-paths  Permit the work to modify an acceptance test its oracle protects.
 
 legion approve spec [--requirement <id>] --approver <id> [--dry-run]
 
@@ -109,6 +113,24 @@ legion approve surface [--path <file>] --approver <id> [--dry-run]
                       in the change is re-affirmed. Not repeatable.
   --dry-run           Report what would be re-affirmed and write nothing.
 
+legion approve protected-paths [--oracle <id>] --approver <id> [--dry-run]
+
+  An acceptance criterion can name the tests its work must not weaken. legion
+  build hashes them immediately before and after every run and records what
+  moved, and protected_acceptance_tests at R3 refuses a run that changed one
+  unless a named human decided it could — before the run started.
+
+  That is what "cannot be weakened by the implementer" means here: only the
+  approval plane blesses it, and only in advance. Run this after a build and the
+  gate reports unsatisfied for good; the way out then is to restore the file and
+  build again, not to approve.
+
+  --approver <id>     Required, same rule as above.
+  --oracle <id>       Decide only this oracle's protected acceptance paths.
+                      Omitted, every oracle in the change that declares any is
+                      decided, which is what the gate asks about. Not repeatable.
+  --dry-run           Report what would be decided and write nothing.
+
 Examples:
   legion approve spec --approver dasbl
   legion approve spec --approver dasbl --dry-run
@@ -116,7 +138,9 @@ Examples:
   legion approve oracle --approver dasbl
   legion approve oracle --oracle orc_phase-1-c1 --approver dasbl
   legion approve surface --approver dasbl
-  legion approve surface --path ops/compose.integration.yml --approver dasbl`;
+  legion approve surface --path ops/compose.integration.yml --approver dasbl
+  legion approve protected-paths --approver dasbl
+  legion approve protected-paths --oracle orc_phase-1-c1 --approver dasbl`;
 
 /**
  * The action a delta-spec approval carries.
@@ -156,24 +180,47 @@ const ORACLE_APPROVE_ACTION = "oracle.approve";
  * was named. So the per-subject boundary has to be here, and it has to refuse
  * every option owned by another subject rather than one of them.
  */
+const OPTION_HINT: Readonly<Record<string, string>> = {
+  requirement: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>.",
+  oracle:
+    "It narrows an oracle approval, or a protected-paths decision, to one oracle: legion approve oracle --oracle <id>.",
+  path: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
+};
+
+/**
+ * `owns` is a **list**, and widening it from a single string is this release's
+ * change to this table.
+ *
+ * A fourth subject arrived that narrows by oracle id, which is the honest flag
+ * for it — the decision is about the criteria one oracle states. Under the
+ * one-flag-per-subject form that collides: `--oracle` belongs to `oracle`, so
+ * `legion approve protected-paths --oracle orc_x` would be refused by name for a
+ * flag it legitimately takes, and the alternative was to mint a synonym to
+ * satisfy the shape of a table.
+ *
+ * The refusal stays **positive and by name**, which is the property the docblock
+ * above records the old ternary failing open on. The test is now "is this flag
+ * owned by some subject, and not by this one", so a flag owned by nobody is still
+ * refused before the handler and a flag two subjects legitimately share is
+ * accepted by both. Inverting that membership test is the one way to reintroduce
+ * the silent-accept, which is why it is spelled as a set difference rather than
+ * as a loop over other subjects.
+ */
 const SUBJECT_OPTIONS = {
-  spec: {
-    owns: "requirement",
-    hint: "It narrows a delta-spec approval to one requirement: legion approve spec --requirement <id>."
-  },
-  oracle: {
-    owns: "oracle",
-    hint: "It narrows an oracle approval to one oracle: legion approve oracle --oracle <id>."
-  },
-  surface: {
-    owns: "path",
-    hint: "It narrows a surface re-affirmation to one pinned file: legion approve surface --path <file>."
-  }
-} as const;
+  spec: { owns: ["requirement"] },
+  oracle: { owns: ["oracle"] },
+  surface: { owns: ["path"] },
+  "protected-paths": { owns: ["oracle"] }
+} as const satisfies Readonly<Record<string, { readonly owns: readonly string[] }>>;
 
 type ApprovalSubject = keyof typeof SUBJECT_OPTIONS;
 
 const APPROVAL_SUBJECTS = Object.keys(SUBJECT_OPTIONS) as readonly ApprovalSubject[];
+
+/** Every flag some subject owns, so a flag owned by nobody is still refused. */
+const NARROWING_OPTIONS: readonly string[] = [
+  ...new Set(APPROVAL_SUBJECTS.flatMap((subject) => SUBJECT_OPTIONS[subject].owns as readonly string[]))
+];
 
 /**
  * `legion approve <subject>`, a subject positional rather than `--spec`.
@@ -204,17 +251,18 @@ export async function handleApproveWorkflow(context: CliContext): Promise<CliRes
   // Every option another subject owns is refused by name, with the sentence that
   // says what it would have done there. A silent ignore here is how a command
   // reports success for a thing it did not do.
-  for (const other of APPROVAL_SUBJECTS) {
-    if (other === named) continue;
-    const foreign = SUBJECT_OPTIONS[other].owns;
+  const owned = SUBJECT_OPTIONS[named].owns as readonly string[];
+  for (const foreign of NARROWING_OPTIONS) {
+    if (owned.includes(foreign)) continue;
     if (!context.args.options.has(foreign)) continue;
     return usageError(
-      `--${foreign} is not an option of legion approve ${named}. ${SUBJECT_OPTIONS[other].hint}`
+      `--${foreign} is not an option of legion approve ${named}. ${OPTION_HINT[foreign] ?? ""}`.trim()
     );
   }
 
   if (named === "surface") return approveVerificationSurfaces(context);
   if (named === "oracle") return approveOracles(context);
+  if (named === "protected-paths") return approveProtectedPaths(context);
   return approveDeltaSpecs(context);
 }
 
@@ -1619,8 +1667,17 @@ function orderingWarnings(input: {
   readonly changeId: string;
   readonly execution: ExecutionEvidence;
   readonly ordered: boolean;
+  /**
+   * The gate whose ordering rule this warning is about.
+   *
+   * Parameterised rather than duplicated when a third subject with the same
+   * pre-run rule arrived: two copies of this sentence would be two chances for
+   * one of them to name a gate that no longer has an ordering clause.
+   */
+  readonly gate?: string;
 }) {
   if (!input.ordered) return [];
+  const gate = input.gate ?? "approved_spec_and_oracle";
   const runs = `.legion/project/changes/${input.changeId}/runs`;
   if (input.execution.kind === "started") {
     return [
@@ -1628,7 +1685,7 @@ function orderingWarnings(input: {
         code: "approval_after_execution",
         message:
           `Gated execution for ${input.changeId} began at ${input.execution.startedAt} (run ${input.execution.runId} of ` +
-          `${input.execution.taskId}). A decision recorded now is dated after it, and approved_spec_and_oracle compares ` +
+          `${input.execution.taskId}). A decision recorded now is dated after it, and ${gate} compares ` +
           "those two instants: at R3 this change cannot satisfy that gate, and no command re-orders a decision " +
           "that has already been taken. Approving is still recorded — the governance fact is real — but plan the " +
           "remaining work as a new change if the gate has to pass.",
@@ -1642,7 +1699,7 @@ function orderingWarnings(input: {
         code: "execution_record_incomplete",
         message:
           `${input.execution.detail} So this change's run directory cannot say when gated execution began, and ` +
-          "approved_spec_and_oracle compares the last of these decisions against exactly that instant: it will report " +
+          `${gate} compares the last of these decisions against exactly that instant: it will report ` +
           "unevaluable until the run records are restored, and a decision recorded now may already be later than the " +
           "work it claims to gate. Approving is still recorded — the governance fact is real.",
         path: runs
@@ -2381,5 +2438,533 @@ function dryRunSurfaceNextAction(drifted: readonly string[]): ReturnType<typeof 
     `This was a dry run and no approval was written. ${drifted.length} pinned file${drifted.length === 1 ? "" : "s"} ` +
       `(${drifted.join(", ")}) ${drifted.length === 1 ? "is" : "are"} drifted; the gate stays unsatisfied until this command ` +
       "is run without --dry-run."
+  );
+}
+
+/**
+ * The action a protected-acceptance-paths decision carries.
+ *
+ * Spelled out here and in `ship-gates.ts` rather than shared, on
+ * `DELTA_SPEC_APPROVE_ACTION`'s rule: the gate and the writer are two sides of a
+ * contract, and a shared symbol would let a rename move both at once and leave
+ * every approval already on disk unreadable by the gate that reads them.
+ */
+const PROTECTED_PATHS_MODIFY_ACTION = "oracle.protected-paths.modify";
+
+/** One oracle's declared protected acceptance paths, and what is recorded about them. */
+interface ProtectedPathsState {
+  readonly oracleId: string;
+  readonly paths: readonly string[];
+  readonly fact: ShipGateOracleFact;
+  readonly approvalId: ReturnType<typeof approvalIdForSubject>;
+  readonly existing?: ApprovalSuccess;
+  /**
+   * Would `protected_acceptance_tests` already accept a modification here?
+   *
+   * Computed through the gate's own exported predicate rather than a rule of this
+   * command's own — the writer/reader divergence PR 2 closed, applied to a fourth
+   * subject. The ordering clause is deliberately not part of it: it lives on the
+   * gate, and a writer that included it would report "not yet decided" for a
+   * harmless rerun, write a fresh `decidedAt`, and turn a valid ordering invalid.
+   */
+  readonly settled: boolean;
+}
+
+interface PlannedProtectedPaths extends ProtectedPathsState {
+  readonly action: "grant" | "regrant" | "unchanged";
+  readonly previousStatus?: Approval["status"];
+}
+
+/**
+ * `legion approve protected-paths` — the only thing that can bless weakening a
+ * test the work is judged by, and only in advance.
+ *
+ * An executable acceptance criterion can name the tests its work must not weaken.
+ * `legion build` hashes them on both sides of every dispatch and records what
+ * moved; the harness restores nothing, because a task may legitimately *add* an
+ * acceptance test and only a human can say whether a modification was intended.
+ * `protected_acceptance_tests` is where that is decided, and this verb is the one
+ * writer of the record it reads.
+ *
+ * **Before the run, and the command says so rather than letting it be
+ * discovered.** The gate requires `decidedAt < min(startedAt)`, so a decision
+ * taken after a build cannot satisfy it however many times it is retaken. This
+ * warns rather than refuses, on `executionAlreadyStarted`'s recorded rule: the
+ * record is still a true governance fact, and refusing would leave no way to
+ * record one at all.
+ */
+async function approveProtectedPaths(context: CliContext): Promise<CliResult> {
+  const oracleRaw = stringOption(context, "oracle")?.trim();
+  if (context.args.options.get("oracle") === true || oracleRaw === "") {
+    return usageError(
+      "Missing required value for --oracle. Example: legion approve protected-paths --oracle orc_phase-1-c1."
+    );
+  }
+
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedApprove(latestChange.diagnostics, recoveryForDiscovery(latestChange.diagnostics));
+  }
+
+  const bundle = await loadChangeBundle({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!bundle.ok) {
+    return blockedApprove(bundle.diagnostics, recoveryForDiscovery(bundle.diagnostics), {
+      change: { changeId: latestChange.changeId }
+    });
+  }
+
+  const taskgraph = await readTaskGraph({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  if (!taskgraph.ok) {
+    return blockedApprove(
+      taskgraph.diagnostics,
+      nextAction("legion plan 1", "The task graph decides whether this change derives the gate this decision feeds."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  // The gate's own subject set, computed by the gate's own function. A writer
+  // walking its own smaller set could bless an oracle the gate does not read, or
+  // miss one it does.
+  const oracles = await loadOracleFacts({
+    repositoryRoot: context.repositoryRoot,
+    changeId: latestChange.changeId
+  });
+  const { declarations, unestablished } = changeAcceptancePathDeclarations({
+    change: {
+      changeId: latestChange.changeId,
+      acceptance: undefined,
+      approvals: undefined,
+      attestations: undefined,
+      reviews: undefined,
+      deltas: undefined,
+      oracles,
+      taskRuns: undefined,
+      release: undefined,
+      evaluatedAt: undefined,
+      // Never consulted: nothing below asks this facts object to re-hash
+      // anything, because the pin comparison happens against `fact.reference`,
+      // which `readOracleArtifact` established off disk in this same command.
+      verifyPin: () => "unverified",
+      classifySource: () => ({ kind: "unread", reason: "this command reads no attestation source" })
+    }
+  });
+
+  if (unestablished) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_plane_unreadable",
+          message:
+            `The oracles of ${latestChange.changeId} could not be read as a complete set, so which acceptance tests are ` +
+            "protected is unestablished. Deciding against a partial list would bless one oracle while another the " +
+            "listing dropped stays unread — and the gate refuses a partial list for the same reason.",
+          path: `.legion/project/changes/${latestChange.changeId}/oracle`
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "legion ship names the artifact that would not read. Correct or remove it, then run this again."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  if (declarations.length === 0) {
+    return blockedApprove(
+      [
+        {
+          code: "no_declared_acceptance_paths",
+          message:
+            `No oracle in ${latestChange.changeId} declares a protected acceptance path, so there is nothing to decide ` +
+            "about. Protected acceptance paths are authored on an executable acceptance criterion at legion start " +
+            "--intake and copied onto the plan; a change planned before this release, or from an interview that " +
+            "declined the question, declares none.",
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion ship",
+        "Nothing here can be decided. legion ship names which gate is unmet and why, which is a different repair from this one."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  if (oracleRaw !== undefined && !declarations.some((entry) => entry.oracleId === oracleRaw)) {
+    return blockedApprove(
+      [
+        {
+          code: "oracle_not_declaring_acceptance_paths",
+          message:
+            `--oracle ${oracleRaw} declares no protected acceptance path in this change. The oracles that do are: ` +
+            `${declarations.map((entry) => entry.oracleId).join(", ")}. Deciding about an oracle that protects nothing ` +
+            "would record a decision nothing reads.",
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction(
+        "legion approve protected-paths --approver <id>",
+        "Name an oracle that actually declares a protected acceptance path."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+
+  // Resolved before the dry run returns. A dry run exists to answer "will this
+  // command line work", and one that resolved nothing answers yes to
+  // `--approver dasbi`.
+  const approver = await resolveSpecApprover(context, {
+    command: "legion approve protected-paths",
+    decision: "modifying an acceptance test the work is judged by"
+  });
+  if (!approver.ok) return approver.result;
+
+  // One instant for the whole run: the clock a live grant's expiry is judged
+  // against *and* the decision instant written into every approval this run
+  // records.
+  const decidedAt = currentUtcTimestamp();
+
+  const states: ProtectedPathsState[] = [];
+  for (const declaration of declarations) {
+    const approvalId = approvalIdForSubject({
+      changeId: bundle.bundle.change.id,
+      action: PROTECTED_PATHS_MODIFY_ACTION,
+      subject: { kind: "oracle", id: declaration.oracleId }
+    });
+    const existing = await readApproval({
+      repositoryRoot: context.repositoryRoot,
+      changeId: bundle.bundle.change.id,
+      approvalId
+    });
+    if (!existing.ok && existing.status !== "not_found") {
+      // Blocking only for an oracle this run would write. Creating over an unread
+      // existing approval is the one way to silently replace a revocation with a
+      // fresh grant.
+      if (oracleRaw === undefined || oracleRaw === declaration.oracleId) {
+        return blockedApprove(
+          existing.diagnostics,
+          nextAction(
+            "legion approve protected-paths",
+            `A decision already exists for ${declaration.oracleId} and could not be read. Correct it by hand, then run this again.`
+          ),
+          { change: { changeId: latestChange.changeId } }
+        );
+      }
+      states.push({
+        oracleId: declaration.oracleId,
+        paths: declaration.paths,
+        fact: declaration.oracle,
+        approvalId,
+        settled: false
+      });
+      continue;
+    }
+
+    const settled =
+      existing.ok &&
+      isLiveProtectedPathsModifyGrant({
+        approval: existing.document,
+        changeId: bundle.bundle.change.id,
+        oracle: declaration.oracle,
+        evaluatedAt: decidedAt
+      });
+    states.push({
+      oracleId: declaration.oracleId,
+      paths: declaration.paths,
+      fact: declaration.oracle,
+      approvalId,
+      settled,
+      ...(existing.ok ? { existing } : {})
+    });
+  }
+
+  const selected = states.filter((state) => oracleRaw === undefined || state.oracleId === oracleRaw);
+  const planned: PlannedProtectedPaths[] = selected.map((state) => ({
+    ...state,
+    ...plannedProtectedPathsFor(state, approver.approver)
+  }));
+
+  const execution = await executionAlreadyStarted(context.repositoryRoot, latestChange.changeId);
+  const ordered = derivesShipGate(taskgraph.document.tasks, "protected_acceptance_tests");
+  const executionWarnings = orderingWarnings({
+    changeId: latestChange.changeId,
+    execution,
+    ordered,
+    gate: "protected_acceptance_tests"
+  });
+  const undecidedNow = states.filter((state) => !state.settled).map((state) => state.oracleId);
+  const undecidedAfter = states
+    .filter((state) => !state.settled && !(oracleRaw === undefined || state.oracleId === oracleRaw))
+    .map((state) => state.oracleId);
+
+  if (hasFlag(context, "dry-run")) {
+    const action = protectedPathsNextAction(undecidedNow, execution.kind === "started", true);
+    return success(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        approver: approver.approver,
+        ...(executionWarnings.length === 0 ? {} : { warnings: executionWarnings }),
+        decisions: planned.map((entry) => ({
+          oracleId: entry.oracleId,
+          paths: entry.paths,
+          oraclePath: entry.fact.reference.path,
+          approvalId: entry.approvalId,
+          action: entry.action,
+          ...(entry.previousStatus === undefined ? {} : { previousStatus: entry.previousStatus })
+        })),
+        undecided: undecidedNow,
+        nextAction: action,
+        diagnostics: []
+      },
+      [
+        "Approve ready.",
+        `Dry run: ${planned.length} oracle${planned.length === 1 ? "" : "s"} of ${latestChange.changeId}.`,
+        ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.paths.join(", ")}`),
+        `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+        ...executionWarnings.map((warning) => `Warning: ${warning.message}`),
+        "No approval was written.",
+        renderNextAction(action)
+      ].join("\n")
+    );
+  }
+
+  const written: ApprovalSuccess[] = [];
+  const superseded: ApprovalSuccess[] = [];
+  for (const entry of planned) {
+    if (entry.action === "unchanged") continue;
+
+    const archived = await archiveWithdrawnDecision({
+      repositoryRoot: context.repositoryRoot,
+      existing: entry.existing,
+      subject: `the protected acceptance paths of ${entry.oracleId}`,
+      action: PROTECTED_PATHS_MODIFY_ACTION,
+      target: { kind: "oracle", id: entry.oracleId },
+      command: "legion approve protected-paths",
+      decidedAt
+    });
+    if (!archived.ok) {
+      return blockedApprove(archived.diagnostics, archived.action, {
+        change: { changeId: latestChange.changeId },
+        decisions: written.map(approvalSummary)
+      });
+    }
+    if (archived.record !== undefined) superseded.push(archived.record);
+
+    const write = await writeApproval({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: entry.existing === undefined ? 0 : entry.existing.revision.revision,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document: protectedPathsApproval({
+        entry,
+        projectId: bundle.bundle.change.projectId,
+        changeId: bundle.bundle.change.id,
+        approver: approver.approver,
+        decidedAt,
+        ...(archived.record === undefined ? {} : { superseding: archived.record })
+      })
+    });
+    if (!write.ok) {
+      return blockedApprove(
+        write.diagnostics,
+        nextAction(
+          "legion approve protected-paths",
+          "Some oracles were decided and one write failed. Rerunning re-decides only what is still undecided."
+        ),
+        {
+          change: { changeId: latestChange.changeId },
+          decisions: written.map(approvalSummary)
+        }
+      );
+    }
+    written.push(write);
+  }
+
+  const action = protectedPathsNextAction(undecidedAfter, execution.kind === "started", false);
+  const decided = planned.filter((entry) => entry.action !== "unchanged").length;
+  const warnings = [
+    ...executionWarnings,
+    ...superseded.map((record) => ({
+      code: "withdrawn_approval_superseded",
+      message:
+        `${record.document.decidedBy?.id ?? "someone"} had recorded this decision as ${record.document.status}` +
+        `${record.document.decisionReason === undefined ? "" : ` ("${record.document.decisionReason}")`}` +
+        `, and this grant supersedes that decision. The withdrawal is preserved at ${record.artifactPath} ` +
+        "and is the standing record of it; nothing was deleted.",
+      path: record.artifactPath
+    }))
+  ];
+
+  return success(
+    {
+      ok: true,
+      status: decided === 0 ? "unchanged" : "approved",
+      change: { changeId: latestChange.changeId },
+      approver: approver.approver,
+      ...(warnings.length === 0 ? {} : { warnings }),
+      ...(superseded.length === 0 ? {} : { supersededDecisions: superseded.map(approvalSummary) }),
+      decisions: planned.map((entry) => {
+        const record = written.find((candidate) => candidate.document.id === entry.approvalId);
+        return {
+          oracleId: entry.oracleId,
+          paths: entry.paths,
+          oraclePath: entry.fact.reference.path,
+          approvalId: entry.approvalId,
+          pinned: entry.fact.reference,
+          action: entry.action,
+          ...(entry.previousStatus === undefined ? {} : { previousStatus: entry.previousStatus }),
+          artifactPath: record?.artifactPath ?? entry.existing?.artifactPath,
+          status: "granted",
+          decidedBy: record?.document.decidedBy ?? entry.existing?.document.decidedBy,
+          decidedAt: record?.document.decidedAt ?? entry.existing?.document.decidedAt
+        };
+      }),
+      // Oracles this run leaves undecided, for the same reason `unapproved` exists
+      // on the spec path: the gate reads every declaring oracle in the change, so
+      // deciding one of three leaves ship blocked over two the operator never saw.
+      undecided: undecidedAfter,
+      nextAction: action,
+      diagnostics: []
+    },
+    [
+      decided === 0
+        ? `Nothing to decide: every oracle in ${latestChange.changeId} that declares a protected acceptance path already carries a live decision.`
+        : `Recorded ${decided} protected-paths decision${decided === 1 ? "" : "s"} for ${latestChange.changeId}.`,
+      ...planned.map((entry) => `  ${entry.action.padEnd(9)} ${entry.oracleId}  ${entry.paths.join(", ")}`),
+      `Approver: ${approver.approver.id} (${approver.approver.kind}).`,
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(action)
+    ].join("\n")
+  );
+}
+
+/** `plannedReaffirmationFor`'s rule, over a fourth subject. */
+function plannedProtectedPathsFor(
+  state: ProtectedPathsState,
+  approver: Actor
+): { readonly action: PlannedProtectedPaths["action"]; readonly previousStatus?: Approval["status"] } {
+  const existing = state.existing;
+  if (existing === undefined) return { action: "grant" };
+  if (state.settled && existing.document.decidedBy?.id === approver.id) {
+    return { action: "unchanged", previousStatus: existing.document.status };
+  }
+  return { action: "regrant", previousStatus: existing.document.status };
+}
+
+/**
+ * The protected-paths decision document, pinning the oracle it is about.
+ *
+ * `artifacts` is `fact.reference` copied whole, on `oracleApproval`'s argument:
+ * `readOracleArtifact` hashed the file in the same read that produced the
+ * declaration this decision is about, and it is the reference
+ * `shipGatePinnedReferences` already pre-resolves.
+ *
+ * **The pin is what stops the decision becoming a blanket exemption.** It covers
+ * the oracle document as it stood, so re-planning that oracle to protect a
+ * *different* set of tests invalidates the grant rather than silently extending
+ * it to paths nobody looked at.
+ *
+ * `scope.targets` names the oracle, which `approvalTargetReferenceSchema` has
+ * carried since the protocol was written — so unlike `legion approve surface`
+ * there is no `{kind: "change"}` fallback and the gate filters on an exact
+ * target. No `taskId` and no `runId`: the decision is about which tests may be
+ * modified, not about one execution, and a document claiming a task would assert
+ * a pairing this act does not make.
+ */
+function protectedPathsApproval(input: {
+  readonly entry: PlannedProtectedPaths;
+  readonly projectId: Parameters<typeof buildChangeIdempotencyKey>[0]["projectId"];
+  readonly changeId: Parameters<typeof buildChangeIdempotencyKey>[0]["changeId"];
+  readonly approver: Actor;
+  readonly decidedAt: ReturnType<typeof currentUtcTimestamp>;
+  readonly superseding?: ApprovalSuccess;
+}): Approval {
+  const existing = input.entry.existing;
+  const reference = input.entry.fact.reference;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    createdAt: existing === undefined ? input.decidedAt : existing.document.createdAt,
+    updatedAt: input.decidedAt,
+    kind: "approval",
+    id: input.entry.approvalId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    requestedBy: input.approver,
+    requestedAt: existing === undefined ? input.decidedAt : existing.document.requestedAt,
+    scope: {
+      // S1: a local idempotent write of one of Legion's own governance
+      // artifacts. Nothing here deploys, deletes or rotates anything.
+      effectClass: "S1",
+      action: PROTECTED_PATHS_MODIFY_ACTION,
+      targets: [
+        // Re-parsed rather than cast, on `oracleApproval`'s rule: `ship-gates.ts`
+        // keeps protocol brands out of its fact shapes, and the gate's exact-target
+        // filter is the only thing that stops one decision answering for another.
+        { kind: "oracle", id: oracleIdSchema.parse(input.entry.oracleId) },
+        { kind: "change", id: input.changeId }
+      ]
+    },
+    idempotencyKey: buildChangeIdempotencyKey({
+      projectId: input.projectId,
+      changeId: input.changeId,
+      effectKind: PROTECTED_PATHS_MODIFY_ACTION,
+      targetHash: reference.sha256
+    }),
+    artifacts: [reference],
+    status: "granted",
+    decidedBy: input.approver,
+    decidedAt: input.decidedAt,
+    decisionReason:
+      `${input.approver.id} permitted this change's work to modify the acceptance path(s) oracle ` +
+      `${input.entry.oracleId} protects (${input.entry.paths.join(", ")}) via legion approve protected-paths, against ` +
+      `the oracle at ${reference.sha256}.` +
+      (input.superseding === undefined
+        ? ""
+        : ` This supersedes the ${input.superseding.document.status} decision recorded by ` +
+          `${input.superseding.document.decidedBy?.id ?? "an unnamed decider"} at ${input.superseding.document.decidedAt}, preserved at ${input.superseding.artifactPath}.`)
+  };
+}
+
+/**
+ * Where the operator goes after a protected-paths decision.
+ *
+ * `legion build` while nothing has run, because that is what the decision has to
+ * precede. Once a run exists the decision cannot help this change's gate, and
+ * routing to a build would send the operator past the only thing still worth
+ * saying about it.
+ */
+function protectedPathsNextAction(
+  undecided: readonly string[],
+  executionStarted: boolean,
+  dryRun: boolean
+): ReturnType<typeof nextAction> {
+  if (undecided.length > 0) {
+    return nextAction(
+      "legion approve protected-paths --approver <id>",
+      `${undecided.length} oracle${undecided.length === 1 ? "" : "s"} declaring a protected acceptance path ` +
+        `${undecided.length === 1 ? "is" : "are"} still undecided (${undecided.join(", ")}); ` +
+        "protected_acceptance_tests reads every one of them when a run has changed a protected path" +
+        (dryRun ? ", and this dry run wrote nothing." : ".")
+    );
+  }
+  if (executionStarted) {
+    return nextAction(
+      "legion ship",
+      "Every declaring oracle carries a decision, and this change has already run. protected_acceptance_tests " +
+        "compares each decision instant against the start of execution; legion ship reports what that ordering leaves unmet."
+    );
+  }
+  return nextAction(
+    "legion build",
+    "Every oracle declaring a protected acceptance path carries a decision permitting this change's work to modify it. " +
+      "Build after this: the decision has to precede the run it permits."
   );
 }

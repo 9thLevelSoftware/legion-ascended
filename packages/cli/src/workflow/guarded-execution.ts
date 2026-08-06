@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { LEGION_PROJECT_ROOT } from "@legion/artifacts";
-import type { GitSha, TaskContract } from "@legion/protocol";
+import { artifactPathSchema, type GitSha, type TaskContract } from "@legion/protocol";
 
 import {
   observeWorkingTreeDiff,
@@ -41,6 +41,26 @@ import type { ExecutionResult } from "./executor/types.js";
  *     able to switch it off with a flag would not be constrained by it.
  *  5. Containment covers the index as well as the working tree, and never
  *     writes through a symlink an executor may have left behind.
+ *  6. Declared **acceptance paths** are captured by content before dispatch and
+ *     compared after, and that observation is *reported only*. It restores
+ *     nothing, it contributes no reason, and it cannot make `inContract` false.
+ *     This is deliberately not guarantee 4 and the distinction is the whole point
+ *     of the separation: a control artifact may never be touched, so the harness
+ *     rolls it back; an acceptance test may legitimately be *added* by the task
+ *     it belongs to, so the harness reports and the `protected_acceptance_tests`
+ *     ship gate — which can read the approval plane, and this cannot — decides.
+ *     The two populations share no snapshot map, no entry type, no comparison
+ *     function and no `reasons` entry, because the only durable way to hold "this
+ *     one is never restored" is for there to be no code path by which it could
+ *     be.
+ *  7. That pre-dispatch capture is **anchored to the change, not to the
+ *     attempt**. A declared path this change has already recorded a pre-run
+ *     state for keeps that state as its `before`; only a path with no prior
+ *     record is hashed off disk. Without it, guarantee 6 reports honestly and
+ *     means nothing: the operator is told to restore and rebuild, rebuilds
+ *     without restoring, and the second run's snapshot baselines the weakened
+ *     bytes it was supposed to catch. `acceptance-baseline.ts` holds the full
+ *     argument and the end-to-end sequence four reviewers drove to find it.
  */
 
 export interface GuardedExecutionInput {
@@ -50,8 +70,109 @@ export interface GuardedExecutionInput {
   readonly baseGitSha: GitSha;
   /** Harness-written paths for this run; excluded from attribution. */
   readonly harnessPaths: readonly string[];
+  /**
+   * The acceptance paths this change's oracles declare, or `undefined` when the
+   * caller could not establish the set.
+   *
+   * A **required key typed `| undefined`**, on `ShipGateChangeFacts`' rule one
+   * layer down: required, so a second dispatch path cannot silently omit it and
+   * have the harness report "nothing changed" over a population nobody supplied;
+   * `| undefined` rather than optional, so "the oracle plane would not read" is a
+   * value with its own meaning rather than the absence of an argument. `[]` means
+   * the plane was read and nothing is declared, which is a different fact and one
+   * the gate answers differently.
+   *
+   * Change-wide rather than the dispatched task's own oracles. `legion plan`
+   * materialises one task per executable criterion, so a task-scoped snapshot
+   * would leave task B's run free to weaken a test task A's oracle protects: B's
+   * snapshot never contained it, and A's item was written by an earlier run. That
+   * hole is reachable through the ordinary CLI with two criteria and no
+   * hand-written artifact.
+   */
+  readonly acceptancePaths: readonly string[] | undefined;
+  /**
+   * What this change's earlier runs already recorded as the pre-run state of
+   * those paths — guarantee 7's input.
+   *
+   * Required rather than optional for the reason the field above is: a second
+   * dispatch path that omitted it would silently re-baseline every declared path
+   * against the tree as it stands, which is the laundering this exists to close,
+   * and it would do so while every test of *this* file stayed green.
+   *
+   * `status: "unestablished"` is not the empty anchor set. It means a prior run's
+   * record could not be read back, and the honest answer to "did this run weaken
+   * a test" when the record of what the test was is unreadable is `unknown` — not
+   * "nothing changed since I last looked at it".
+   */
+  readonly acceptanceBaseline: AcceptanceBaseline;
   readonly run: () => Promise<ExecutionResult>;
   readonly afterRun?: () => Promise<void>;
+}
+
+/**
+ * What one declared acceptance path was, on one side of the run.
+ *
+ * A discriminated state rather than an optional digest. `protectedPathsTouched`
+ * already records why a bare hash is not enough — "a file swapped for a link, or
+ * the reverse, is a change even when the bytes behind it happen to match" — and
+ * `MAX_SNAPSHOT_BYTES` records the other half: conflating "too large or unreadable
+ * to capture" with "absent" is how this file deleted large pre-existing artifacts
+ * once already. `unreadable` is therefore its own value and never collapses into
+ * `absent`, because the two produce opposite verdicts.
+ */
+export type AcceptancePathState =
+  | { readonly kind: "absent" }
+  | { readonly kind: "file"; readonly sha256: string }
+  /** Never followed. The target is recorded so a retarget is detectable. */
+  | { readonly kind: "symlink"; readonly target: string | undefined }
+  | { readonly kind: "directory" }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+export interface AcceptancePathObservation {
+  readonly path: string;
+  readonly before: AcceptancePathState;
+  readonly after: AcceptancePathState;
+  /**
+   * `unchanged` only when both sides are the same kind *and* the same bytes or
+   * the same link target. Everything else is `changed`, and anything either side
+   * could not determine is `unknown` — never `unchanged`.
+   */
+  readonly verdict: "unchanged" | "changed" | "unknown";
+  /** For the sentence a reader gets. Never consulted for the verdict. */
+  readonly note?: "created" | "deleted" | "modified" | "retargeted" | "kind-changed";
+}
+
+/**
+ * The pre-run states this change already established for its declared paths.
+ *
+ * Built by `acceptanceBaselineFromEvidence` and consumed here. Declared in this
+ * module rather than beside its builder so the dependency runs one way: the
+ * harness owns `AcceptancePathState`, and a reader that reconstructs those states
+ * from a persisted report depends on the harness rather than the reverse.
+ */
+export interface AcceptanceBaseline {
+  readonly status: "established" | "unestablished";
+  /** Why nothing could be established. Present only on `unestablished`. */
+  readonly reason?: string;
+  /**
+   * Per declared path, the state to compare this run's result against. A path
+   * absent from the map has no prior record and is hashed off disk.
+   */
+  readonly states: ReadonlyMap<string, AcceptancePathState>;
+}
+
+export interface AcceptancePathReport {
+  /**
+   * `unestablished` when the caller could not read the declaration set, or could
+   * not read back what this change's earlier runs recorded about it. It must not
+   * be spelled as an empty observation list: "I looked at nothing" and "nothing
+   * was declared" are different facts and the second is the only one that can
+   * honestly answer "nothing changed".
+   */
+  readonly status: "established" | "unestablished";
+  /** Which of those it was, in a sentence, for the persisted report. */
+  readonly reason?: string;
+  readonly observations: readonly AcceptancePathObservation[];
 }
 
 export interface GuardedExecutionOutcome {
@@ -61,6 +182,13 @@ export interface GuardedExecutionOutcome {
   readonly restored: readonly string[];
   readonly unrestored: readonly string[];
   readonly blockedReason?: string;
+  /**
+   * What the run did to the declared acceptance paths.
+   *
+   * Reported, never acted on. Nothing in this module reads it back, which is the
+   * mechanical form of guarantee 6.
+   */
+  readonly acceptancePaths: AcceptancePathReport;
 }
 
 const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
@@ -90,6 +218,31 @@ interface ProtectedState {
 
 function isHarnessPath(relative: string, harnessPaths: readonly string[]): boolean {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
+}
+
+/**
+ * Whether a declared path names the control plane, **case-folded**.
+ *
+ * `.Legion/project/change.yaml` passed every exact-string refusal in the tree and
+ * resolved, on Windows and macOS, to the very control artifact the other
+ * population restores. The consequence was not a near miss: `restoreProtectedFiles`
+ * runs before `observeAcceptancePaths`, so the file is put back before it is
+ * compared, `before === after` unconditionally, and the run records `pass` for a
+ * declaration protecting no test at all. The same artifacts on a case-sensitive
+ * Linux CI answer absent/absent, so the gate's verdict depended on the
+ * filesystem rather than on the record.
+ *
+ * Refused on every platform rather than under a `process.platform` test, on
+ * `isWindowsStreamPath`'s recorded rule: a declaration is authored once and
+ * judged on whatever machine ships the change, and a rule that holds on Linux and
+ * fails open on Windows is worse than no rule. `toLowerCase` and not
+ * `toLocaleLowerCase`, which would fold the `i` of `.legion` differently under a
+ * Turkish locale.
+ */
+function isInsideControlPlane(relative: string): boolean {
+  const folded = relative.toLowerCase();
+  const root = LEGION_PROJECT_ROOT.toLowerCase();
+  return folded === root || folded.startsWith(`${root}/`);
 }
 
 function digestOf(absolute: string): string | undefined {
@@ -154,6 +307,191 @@ function snapshotProtectedState(input: {
   }
 
   return { entries, staged: stagedProtectedPaths(input.repositoryRoot) };
+}
+
+/**
+ * What one declared acceptance path is right now, without following anything.
+ *
+ * Positive checks throughout, each refusal naming itself. There is no arm that
+ * returns a determinate state for something this function did not understand:
+ * a `catch` that answered `absent` would make an unreadable file read as
+ * "deleted" on one side and "unchanged" on both, and a fifo or a device answering
+ * `file` would hash something that is not a test.
+ *
+ * The containment checks are the ones `pinned-references.ts` reinstated as
+ * verdicts rather than exceptions, applied to the same class of path — an
+ * ordinary repository file rather than a project artifact. They are belt and
+ * braces over `acceptancePathsSchema`, which already refuses a control-plane
+ * path and anything `artifactPathSchema` refuses; a hand-written oracle reaches
+ * here regardless, and the harness must never be the layer that assumed the
+ * schema ran.
+ */
+function classifyAcceptancePath(
+  repositoryRoot: string,
+  relative: string,
+  harnessPaths: readonly string[]
+): AcceptancePathState {
+  if (!artifactPathSchema.safeParse(relative).success) {
+    return { kind: "unreadable", reason: "is not a repository-relative path" };
+  }
+  if (relative.includes(":")) {
+    return { kind: "unreadable", reason: "names a Windows alternate data stream" };
+  }
+  if (isInsideControlPlane(relative)) {
+    // The control plane is the *other* population: it is restored, and a path
+    // seen by both walkers would be reported as an observation and rolled back
+    // as a violation. Refused here so the two can never overlap on disk.
+    return { kind: "unreadable", reason: `is inside ${LEGION_PROJECT_ROOT}, which is restored rather than reported` };
+  }
+  if (isHarnessPath(relative, harnessPaths)) {
+    return { kind: "unreadable", reason: "is written by the harness for this run" };
+  }
+
+  const absolute = path.join(repositoryRoot, relative);
+  const contained = path.relative(repositoryRoot, absolute);
+  if (contained.startsWith("..") || path.isAbsolute(contained)) {
+    return { kind: "unreadable", reason: "resolves outside the repository" };
+  }
+
+  let stat;
+  try {
+    stat = lstatSync(absolute);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
+    return { kind: "unreadable", reason: `could not be inspected (${code ?? "unknown error"})` };
+  }
+
+  if (stat.isSymbolicLink()) return { kind: "symlink", target: readTarget(absolute) };
+  if (stat.isDirectory()) return { kind: "directory" };
+  if (!stat.isFile()) return { kind: "unreadable", reason: "is not a regular file" };
+
+  const sha256 = digestOf(absolute);
+  if (sha256 === undefined) return { kind: "unreadable", reason: "could not be read" };
+  return { kind: "file", sha256 };
+}
+
+/**
+ * The pre-dispatch state of every declared acceptance path, deduped.
+ *
+ * Deliberately **not** `snapshotProtectedState`, and deliberately structurally
+ * incompatible with it: `ProtectedState` is what `restoreProtectedFiles` and
+ * `restoreProtectedIndex` take, so a map of this type cannot be handed to either
+ * without the compiler objecting. That is the guarantee, not the comment.
+ *
+ * Guarantee 7 lives in the one line that consults `anchors`: a path this change
+ * has already recorded a pre-run state for is compared against *that* state, and
+ * only a path with no prior record is hashed here. The disk is therefore read
+ * once per path per change rather than once per attempt, which is what stops a
+ * rebuild re-baselining what the previous run did.
+ *
+ * Taking an anchor does **not** skip a containment check, and that is worth
+ * saying because it looks as though it might. `classifyAcceptancePath` still runs
+ * on the *after* side of every path, so a forged anchor for a control-plane path
+ * or one that leaves the repository meets an `unreadable` after and falls to
+ * `unknown`. There is no anchor that produces a determinate comparison for a path
+ * this module would otherwise refuse.
+ */
+function snapshotAcceptancePaths(input: {
+  readonly repositoryRoot: string;
+  readonly paths: readonly string[];
+  readonly harnessPaths: readonly string[];
+  readonly anchors: ReadonlyMap<string, AcceptancePathState>;
+}): ReadonlyMap<string, AcceptancePathState> {
+  const entries = new Map<string, AcceptancePathState>();
+  for (const relative of input.paths) {
+    if (entries.has(relative)) continue;
+    const anchored = input.anchors.get(relative);
+    entries.set(
+      relative,
+      anchored ?? classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths)
+    );
+  }
+  return entries;
+}
+
+function sameAcceptanceState(before: AcceptancePathState, after: AcceptancePathState): boolean {
+  if (before.kind === "file" && after.kind === "file") return before.sha256 === after.sha256;
+  if (before.kind === "symlink" && after.kind === "symlink") {
+    // Two links whose targets could not be read are not established to be the
+    // same link, so this is `false` and the pair falls to `changed`. Saying
+    // "unchanged" about two things nobody could compare is the fail-open.
+    return before.target !== undefined && before.target === after.target;
+  }
+  return before.kind === "directory" && after.kind === "directory";
+}
+
+function acceptanceNote(
+  before: AcceptancePathState,
+  after: AcceptancePathState
+): AcceptancePathObservation["note"] {
+  if (before.kind === "absent") return "created";
+  if (after.kind === "absent") return "deleted";
+  if (before.kind !== after.kind) return "kind-changed";
+  if (before.kind === "symlink") return "retargeted";
+  return "modified";
+}
+
+/**
+ * What the run did to each declared acceptance path.
+ *
+ * A module-level function taking exactly what it needs, and `reasons` is not in
+ * its scope. That is not tidiness: `inContract` is `reasons.length === 0`, so a
+ * single accidental push here would turn a legitimately added acceptance test
+ * into a blocked, rolled-back run on every tier — R2 milestone included.
+ *
+ * The arms, in order and all positive:
+ *
+ *  1. **Absent before and absent after is `unknown`, not `unchanged`.** An oracle
+ *     protecting a path that is not there declares something nothing can falsify,
+ *     and reporting it as clean would certify it. It is also the case-fold hole
+ *     on Linux: a declaration of `tests/Foo.test.mjs` against a disk carrying
+ *     `tests/foo.test.mjs` is absent on both sides, and `pass` there would be a
+ *     gate satisfied by a typo.
+ *  2. Anything either side could not determine — unreadable, or a directory,
+ *     which has no single content to compare — is `unknown`.
+ *  3. Structurally equal is `unchanged`.
+ *  4. Everything else is `changed`. **A file the run created counts**: writing
+ *     the bar you are judged against is the same self-grading act as lowering it,
+ *     and the harness's job is to report it rather than to decide whether it was
+ *     legitimate. It costs nothing honest, because a declaration names the tests
+ *     that already exist.
+ */
+function observeAcceptancePaths(input: {
+  readonly repositoryRoot: string;
+  readonly harnessPaths: readonly string[];
+  readonly before: ReadonlyMap<string, AcceptancePathState>;
+}): readonly AcceptancePathObservation[] {
+  const observations: AcceptancePathObservation[] = [];
+  for (const [relative, before] of input.before) {
+    const after = classifyAcceptancePath(input.repositoryRoot, relative, input.harnessPaths);
+    if (before.kind === "absent" && after.kind === "absent") {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (
+      before.kind === "unreadable" ||
+      after.kind === "unreadable" ||
+      before.kind === "directory" ||
+      after.kind === "directory"
+    ) {
+      observations.push({ path: relative, before, after, verdict: "unknown" });
+      continue;
+    }
+    if (sameAcceptanceState(before, after)) {
+      observations.push({ path: relative, before, after, verdict: "unchanged" });
+      continue;
+    }
+    const note = acceptanceNote(before, after);
+    observations.push({
+      path: relative,
+      before,
+      after,
+      verdict: "changed",
+      ...(note === undefined ? {} : { note })
+    });
+  }
+  return observations.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 /** Protected paths that differ from the snapshot: modified, deleted, retargeted or created. */
@@ -388,6 +726,26 @@ function restoreProtectedFiles(input: {
   };
 }
 
+/**
+ * Why this run cannot answer about acceptance paths at all, or `undefined` when
+ * it can.
+ *
+ * Only the baseline arm is decided here; an unreadable *declaration set* is
+ * already `undefined` at the call site and carries its own sentence. The
+ * declaration set is consulted first and positively: a change that declares
+ * nothing has nothing to be judged against, so an unreadable baseline over an
+ * empty declaration set must not manufacture an `unknown` item for a gate that
+ * would otherwise answer "nobody declared one" from the plan.
+ */
+function acceptanceUnestablishedReason(input: GuardedExecutionInput): string | undefined {
+  if (input.acceptancePaths === undefined || input.acceptancePaths.length === 0) return undefined;
+  if (input.acceptanceBaseline.status === "established") return undefined;
+  return (
+    input.acceptanceBaseline.reason ??
+    "What this change's earlier runs recorded about its protected acceptance paths could not be read back, so this run has nothing established to compare against."
+  );
+}
+
 export async function runGuardedExecution(
   input: GuardedExecutionInput
 ): Promise<GuardedExecutionOutcome> {
@@ -400,6 +758,22 @@ export async function runGuardedExecution(
     repositoryRoot: input.repositoryRoot,
     harnessPaths: input.harnessPaths
   });
+
+  // The second population, captured in the same pre-dispatch instant and kept in
+  // a type neither restore function accepts. `undefined` means the caller could
+  // not establish either half of what this needs — the declaration set, or what
+  // this change's earlier runs already recorded about it — and both are reported
+  // as such rather than silently walked as the empty set.
+  const acceptanceUnestablished = acceptanceUnestablishedReason(input);
+  const acceptanceBefore =
+    input.acceptancePaths === undefined || acceptanceUnestablished !== undefined
+      ? undefined
+      : snapshotAcceptancePaths({
+          repositoryRoot: input.repositoryRoot,
+          paths: input.acceptancePaths,
+          harnessPaths: input.harnessPaths,
+          anchors: input.acceptanceBaseline.states
+        });
 
   let result: ExecutionResult | undefined;
   let thrown: unknown;
@@ -475,6 +849,28 @@ export async function runGuardedExecution(
   }
 
   const inContract = reasons.length === 0;
+
+  // Computed *after* `inContract` is fixed, so that even an edit made here later
+  // cannot reach `reasons`. The value is returned and read by nothing in this
+  // module.
+  const acceptancePaths: AcceptancePathReport =
+    acceptanceBefore === undefined
+      ? {
+          status: "unestablished",
+          observations: [],
+          reason:
+            acceptanceUnestablished ??
+            "The oracles of this change would not read as a complete set, so which acceptance tests its runs must not weaken is unestablished."
+        }
+      : {
+          status: "established",
+          observations: observeAcceptancePaths({
+            repositoryRoot: input.repositoryRoot,
+            harnessPaths: input.harnessPaths,
+            before: acceptanceBefore
+          })
+        };
+
   if (result === undefined) {
     result = {
       ok: false,
@@ -492,6 +888,7 @@ export async function runGuardedExecution(
     inContract,
     restored: containment.restored,
     unrestored: containment.unrestored,
-    ...(inContract ? {} : { blockedReason: reasons.join(" ") })
+    ...(inContract ? {} : { blockedReason: reasons.join(" ") }),
+    acceptancePaths
   };
 }

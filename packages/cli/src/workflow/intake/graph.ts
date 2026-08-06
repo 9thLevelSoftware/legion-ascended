@@ -26,7 +26,7 @@ import type { IntakeAnswer, IntakeInjectedNode } from "@legion/protocol";
  * the version they started under so a graph change cannot silently rewrite the
  * meaning of answers already given.
  */
-export const INTAKE_GRAPH_VERSION = "1.1.0";
+export const INTAKE_GRAPH_VERSION = "1.2.0";
 
 export const INTAKE_SECTIONS = [
   "identity",
@@ -438,6 +438,29 @@ function criterionNodes(
       kind: "free-text",
       required: true,
       dependsOn: { nodeId: `${prefix}-surface-kind`, notEquals: "" }
+    },
+    // The tests this criterion's work must not weaken, asked once per
+    // *executable* criterion and opted into rather than demanded.
+    //
+    // One node rather than the surface's four, and the difference is structural
+    // rather than economical: a surface carries a kind, an interface, a rationale
+    // and a pin set, so declining the kind has to remove the follow-ups. This is a
+    // single multi-valued answer with nothing hanging off it, so the node is its
+    // own opt-in and an empty answer is simply an undeclared set.
+    //
+    // `dependsOn` names the proof node alone, buying both exclusions the same way
+    // the surface nodes do: a `manual` criterion answers `manual` and fails the
+    // `equals`, and a `wont` requirement never answers `-proof` at all and fails
+    // it transitively.
+    {
+      id: `${prefix}-acceptance-paths`,
+      section: "requirements",
+      slot: `${slotPrefix}.acceptance-paths`,
+      prompt: `Requirement ${requirementIndex}, criterion ${criterionIndex}: which existing test files must this work not weaken?`,
+      help: "Optional. Repository-relative paths, one per line or comma separated — the acceptance tests that decide this criterion. Legion hashes them before every run and reports any that changed; changing one needs a named human's approval recorded *before* the run. Name tests that already exist: a path that is not there when a run starts is reported as unknown, never as unchanged. Not under .legion/project, which the harness restores rather than reports.",
+      kind: "free-text",
+      required: false,
+      dependsOn: { nodeId: `${prefix}-proof`, equals: "executable" }
     },
     ...(askForAnother
       ? [
