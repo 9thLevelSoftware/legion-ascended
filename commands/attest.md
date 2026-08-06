@@ -10,7 +10,9 @@ Record that a named human asserts specific hash-pinned files are the current cha
 
 Seven kinds: `independent-baseline`, `security-evaluation`, `e2e-evaluation`, `architecture-review`, `rollback-evidence`, `forward-fix-evidence`, `release-observation`.
 
-Three risk gates read them today. `independent_baseline` reads `independent-baseline`, `security_or_e2e_evaluator` reads `security-evaluation` or `e2e-evaluation`, and `rollback_or_forward_fix_evidence` reads `rollback-evidence` or `forward-fix-evidence`. The other two kinds are recordable and no gate reads them yet; the CLI says so in a warning rather than leaving the user to assume otherwise.
+Five risk gates read them, and as of this release every kind is read by one. `independent_baseline` reads `independent-baseline`, `security_or_e2e_evaluator` reads `security-evaluation` or `e2e-evaluation`, `rollback_or_forward_fix_evidence` reads `rollback-evidence` or `forward-fix-evidence`, `architecture_or_security_review` reads `architecture-review`, and `release_observation_plan` reads `release-observation`. The CLI still warns when a kind has no reader; it is now a warning nothing in the current gate set can trigger, and it stays because a kind added upstream would trigger it again.
+
+Two of those gates have a second producer that is not an attestation, and for both of them the attestation is the weaker route. `architecture_or_security_review` is satisfied by a review recorded with `legion review --domain architecture`. `release_observation_plan` is satisfied by a plan recorded with `legion release plan` — and for that gate `legion attest release-observation --verdict pass` is refused outright, because the plan is the evidence and a sentence beside it would make the two operators indistinguishable. The only attestation route into it is `--verdict not_applicable`, for a change that deploys nothing.
 </objective>
 
 <authority>

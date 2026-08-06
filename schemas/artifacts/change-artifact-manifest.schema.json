@@ -41,6 +41,7 @@
               "review",
               "approval",
               "attestation",
+              "release",
               "archive"
             ]
           },

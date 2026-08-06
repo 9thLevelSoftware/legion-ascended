@@ -83,6 +83,25 @@ const DECLARED: Readonly<Record<string, readonly string[]>> = Object.freeze({
   // This release adds no VALUELESS_OPTIONS entry at all: `--dry-run` and
   // `--json` are already there, and the verb has no other boolean.
   attest: ["attested-by", "covers", "dry-run", "source", "statement", "verdict", "waiver-reason"],
+  // One list for every `legion release <subject>`, on `approve`'s rule:
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. With one subject there is no per-subject
+  // boundary to enforce yet — the second subject (`observe`, deferred) is where
+  // `legion approve`'s `SUBJECT_OPTIONS` cross-refusal arrives, and shipping that
+  // machinery now would ship it with nothing to own.
+  //
+  // Every flag but `--dry-run` takes a value, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--environment staging`
+  // bind nothing and read as absent, which here means a plan refused for an
+  // environment the operator did name. `--health-criterion`, `--rollback-criterion`
+  // and `--covers` are additionally repeatable, which `parseCliArgs` records in
+  // `repeated`.
+  //
+  // **This release adds no VALUELESS_OPTIONS entry at all**: `--dry-run` and
+  // `--json` are already there and this verb has no other boolean. Saying so is
+  // required rather than optional, because a boolean missing from that set binds
+  // the next argv token as its value.
+  release: ["covers", "dry-run", "environment", "health-criterion", "rollback-criterion", "rollback-strategy"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],

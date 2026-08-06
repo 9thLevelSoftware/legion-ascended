@@ -19,7 +19,7 @@ import type { Approval, Attestation, TaskContract, TaskRun } from "@legion/proto
 
 import { failure, hasFlag, helpResult, type CliContext, type CliResult } from "../../runtime.js";
 import { currentUtcTimestamp } from "../../workflow/change-input.js";
-import { absentOnFailure, loadOracleFacts } from "../../workflow/change-planes.js";
+import { absentOnFailure, loadOracleFacts, loadReleaseFact } from "../../workflow/change-planes.js";
 import { nextAction, renderNextAction } from "../../workflow/render.js";
 import { classifyEvidenceSource } from "../../workflow/evidence-sources.js";
 import { resolvePinnedReferenceReader } from "../../workflow/pinned-references.js";
@@ -35,20 +35,49 @@ import {
   shipGateSourcePaths,
   shipGateWaivers,
   type ShipGateChangeFacts,
-  type ShipGateOracleFact
+  type ShipGateOracleFact,
+  type ShipGateReleaseFact
 } from "../../workflow/ship-gates.js";
 import { findLatestWorkflowChangeId } from "../../workflow/state.js";
 
+// `--canary` is gone from this text, and the flag is *not* being declared to
+// replace it. It was advertised here and absent from `declared-options.ts`, so
+// `undeclaredOptionError` refused it — help that promised a flag the option
+// boundary rejects. Declaring it would be the worse repair: nothing in this
+// command reads it, and a flag nobody reads returns a confident answer to a
+// question that was not asked, which is the whole class `declared-options.ts`
+// exists to close. Observation planning is `legion release plan`; this command
+// reads that plan and writes none.
+//
+// `--dry-run` and `--review-accepted` are added, because help that omits a
+// declared flag is the mirror of help that advertises an undeclared one. **Both
+// lines say plainly that this command does not read them**, which a first draft
+// did not: "Reserved for callers that have already accepted" invites the belief
+// that `--review-accepted` short-circuits the accepted-review requirement, and an
+// operator who passes it gets identical behaviour with no signal that the flag
+// was inert. That is the same help-versus-behaviour gap the `--canary` removal
+// was made to close, in the milder direction. The only flag `hasFlag` reads in
+// this file is `allow-legacy-evidence`; `review-accepted` is read by
+// `commands/migrate/index.ts` alone.
 const SHIP_HELP = [
-  "legion ship [--canary] [--allow-legacy-evidence]",
+  "legion ship [--allow-legacy-evidence] [--dry-run] [--review-accepted]",
   "",
   "Run the ship readiness gate. This layer does not publish or release.",
   "",
   "Options:",
-  "  --canary                  Report canary readiness alongside the gate.",
   "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
   "                            linking. `legion dev change archive` applies the same",
-  "                            check, so pass it there too."
+  "                            check, so pass it there too.",
+  "  --dry-run                 Accepted and not read: this command writes nothing",
+  "                            either way, so there is nothing to rehearse.",
+  "  --review-accepted         Accepted and not read here. Whether a review was",
+  "                            accepted is derived from the artifacts; no flag can",
+  "                            assert it.",
+  "",
+  "Release observation is planned with `legion release plan`, which writes the",
+  "release.json this command's release_observation_plan gate reads. This command",
+  "does not run canary probes or health checks; `legion dev board",
+  "release-observation` is where a post-deployment report lands."
 ].join("\n");
 
 /** The shape `recoveryFor` needs: a code to classify by, and where the defect is. */
@@ -381,6 +410,38 @@ function planeSkipDiagnostics(skips: readonly ShipGatePlaneSkip[]) {
 }
 
 /**
+ * The diagnostic for a singular artifact that is present and will not read.
+ *
+ * A distinct code from `artifact_plane_incomplete`, on that code's own rule
+ * rather than by reusing its machinery. That sentence is "N files under this
+ * directory could not be read and were skipped", which is false about a plane
+ * holding exactly one document: there is no listing, no `skipped` array, and no
+ * other file to name. The fact and the repair are also different — the operator
+ * has to correct or remove one named file, and `legion release plan` deliberately
+ * refuses to overwrite it.
+ *
+ * Emitted as a diagnostic on a blocked ship and a warning on a ready one, which
+ * is `ShipGatePlaneSkip`'s rule: an R2 change does not derive
+ * `release_observation_plan`, so a broken `release.json` blocks nothing there and
+ * the operator still has to learn the file is unreadable before it blocks
+ * something.
+ */
+function unreadableDocumentDiagnostics(release: ShipGateReleaseFact) {
+  if (release.kind !== "unreadable") return [];
+  return [
+    {
+      code: "artifact_document_unreadable",
+      message:
+        `${release.path} is present and could not be read as a release plan. release_observation_plan reports ` +
+        "unevaluable while this is true, because a plan that will not parse may be the one recording a failed " +
+        "release. legion release plan refuses to write over an unread record, so correct or remove the file, then " +
+        "rerun this.",
+      path: release.path
+    }
+  ];
+}
+
+/**
  * The diagnostic for a run plane the listing kept whole and the records deny.
  *
  * A separate code from `artifact_plane_incomplete`, because it is a different
@@ -416,7 +477,7 @@ function runPlaneContradictionDiagnostics(input: {
 /**
  * The change-scoped planes `legion ship` can read, and what it could not read.
  *
- * Ten gates consume them: `explicit_human_approval` and `approved_delta_spec`
+ * Eleven gates consume them: `explicit_human_approval` and `approved_delta_spec`
  * read `approvals`, the second also reads `deltas`,
  * `integration_or_real_interface_checks` reads `oracles` and the pin verifier,
  * `whole_change_acceptance_evidence` reads `acceptance` and the clock,
@@ -428,24 +489,21 @@ function runPlaneContradictionDiagnostics(input: {
  * `taskRuns` for its executor falsifier, and `protected_acceptance_tests` reads
  * `oracles` for the declaration set it quantifies over, then `approvals` and
  * `taskRuns` for the decision that may permit a change and the instant it has to
- * predate.
+ * predate, and `release_observation_plan` reads `release` beside `attestations`.
  *
- * No new plane, and none is needed. That is worth saying rather than leaving to
- * inference: the run artifact recording which acceptance path moved is deliberately
- * *not* a plane this command loads — the gate reads the evidence item's verdict and
- * its trace references, and citing the artifact rather than parsing it is the same
- * choice `diff-reconciliation` made for the same reason.
+ * **The release plane gains its reader here, and with it the last plane this
+ * function loaded blind.** Every previous version of this paragraph had to say
+ * that `release` was passed as `undefined` because "consulted and empty" was a
+ * claim this command could not make. It can now: `loadReleaseFact` always
+ * consults the plane and returns which of the three states it found, so
+ * `undefined` in `ShipGateChangeFacts.release` means "nobody looked" and nothing
+ * else — which is what makes an unreadable `release.json` distinguishable from
+ * an absent one, in the payload and in the gate's recovery.
  *
- * A previous version of this paragraph claimed the release that added
- * `approved_spec_and_oracle` was "the last one that collects on" loading planes
- * ahead of their gates. That was wrong twice over: `release` still has no reader
- * at all, and this release added a plane rather than only a reader. What the
- * seam bought is real and is narrower than the claim — each gate's diff is about
- * that gate rather than about the plumbing.
- *
- * The release plane is still passed as `undefined` rather than as an empty
- * value. Its schema exists but nothing reads or writes it, so "consulted and
- * empty" would be a claim this command cannot make.
+ * The run artifact recording which acceptance path moved is still deliberately
+ * *not* a plane this command loads — the gate reads the evidence item's verdict
+ * and its trace references, and citing the artifact rather than parsing it is the
+ * same choice `diff-reconciliation` made for the same reason.
  *
  * `tasks` is a parameter rather than a read. The taskgraph has already been
  * loaded by the caller and a verification surface's pins live on it, so
@@ -509,6 +567,14 @@ async function loadShipGateChangeFacts(input: {
 
   const reviews = completeReviews(input.reviews);
 
+  // Always consulted, never conditionally. There is exactly one release document
+  // per change, so there is no listing to come back short and no `skipped` array
+  // — the "a file is there and would not read" case is a state of this fact
+  // rather than a plane skip, and it gets its own diagnostic below because a
+  // plane-skip sentence ("N files under <directory> could not be read") would be
+  // false about a single document.
+  const release = await loadReleaseFact({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
+
   // The pins a gate can ask about are hashed here, once, because the evaluator
   // is synchronous. A reference nobody collects answers `unverified`, which
   // reads as "not checked" rather than as "clean" — so a gate whose collector
@@ -568,7 +634,7 @@ async function loadShipGateChangeFacts(input: {
       deltas: bundle?.deltas,
       oracles,
       taskRuns,
-      release: undefined,
+      release,
       // Read once, here, for the same reason the pins are hashed once here: a
       // report is a snapshot of a moment. Gates that ask "is this still valid"
       // must all ask about the same instant, or a change could be reported
@@ -790,6 +856,7 @@ export async function handleShipWorkflow(context: CliContext): Promise<CliResult
   ];
   const planeSkips = [
     ...planeSkipDiagnostics(changeFacts.skips),
+    ...unreadableDocumentDiagnostics(changeFacts.facts.release ?? { kind: "absent" }),
     ...runPlaneContradictionDiagnostics({
       contradictions: changeFacts.runPlaneContradictions,
       directory: `.legion/project/changes/${latestChange.changeId}/runs`

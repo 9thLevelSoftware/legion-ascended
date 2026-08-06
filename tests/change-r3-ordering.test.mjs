@@ -9,8 +9,7 @@ import { deriveShipGates } from "../packages/cli/dist/workflow/ship-gates.js";
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 
 /**
- * An R3 change, driven as far as R3 goes, with `approved_spec_and_oracle`
- * satisfied and the true remaining set named.
+ * An R3 change, driven end to end, with every one of its ten gates satisfied.
  *
  * `approved_spec_and_oracle` is ADR-006's ordering gate: the spec and the oracle
  * are both approved **before** gated execution proceeds. Until this release
@@ -18,18 +17,20 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
  * `evaluateGate`'s `default:` arm and every R3 change was structurally
  * unshippable for a reason no command could move.
  *
- * **This file does not claim R3 ships, and asserting that it does not is half its
- * point.** Nine of R3's ten gates now have producers — `protected_oracle` and
- * `deterministic_verification` from the evidence items, `explicit_human_approval`
- * from the approval plane, `approved_spec_and_oracle` from its ordering,
- * `independent_baseline`, `security_or_e2e_evaluator` and
+ * **This file now claims R3 ships, and the last test in it is that claim driven
+ * through the real CLI.** All ten of R3's gates have producers: `protected_oracle`
+ * and `deterministic_verification` from the evidence items,
+ * `explicit_human_approval` from the approval plane, `approved_spec_and_oracle`
+ * from its ordering, `independent_baseline`, `security_or_e2e_evaluator` and
  * `rollback_or_forward_fix_evidence` from the attestation plane,
- * `architecture_or_security_review` from review domains, and
+ * `architecture_or_security_review` from review domains,
  * `protected_acceptance_tests` from the guarded harness's acceptance-path
- * observation — and one does not. That set is **derived from the compiled gate module** rather than typed
- * out here, for a reason the previous release's hand-written array could not
- * serve: a list edited by hand stays true when a gate silently regresses to
- * `evaluateGate`'s `default:` arm, and the derivation reddens when it does.
+ * observation, and `release_observation_plan` from the release plan this release
+ * adds. The producerless set is still **derived from the compiled gate module**
+ * rather than typed out here, for a reason that outlives its original job: a list
+ * edited by hand stays true when a gate silently regresses to `evaluateGate`'s
+ * `default:` arm, and the derivation reddens when it does. It is empty now, and
+ * it stays as the tripwire.
  *
  * The two things this file can prove that no unit test can: that the real
  * command sequence produces the ordering the gate needs, and that the verdict
@@ -39,6 +40,7 @@ import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
 
 const CREATED_AT = "2026-08-04T12:00:00.000Z";
 const COMPOSE_PATH = "ops/compose.integration.yml";
+const ACCEPTANCE_PATH = "acceptance.test.mjs";
 
 /** The sentence `evaluateGate`'s `default:` arm answers with, matched exactly. */
 const NO_PRODUCER_REASON = "Legion does not yet produce evidence for this gate.";
@@ -47,16 +49,16 @@ const NO_PRODUCER_REASON = "Legion does not yet produce evidence for this gate."
  * The R3 gates that still answer from `evaluateGate`'s `default:` arm, derived
  * from the compiled module rather than transcribed.
  *
- * The previous release named the six by hand and asserted the set in both
- * directions, on the argument that a count would stay true if one gate silently
- * regressed while another gained a producer. That argument was right and the
- * mechanism was not sufficient: a hand-written array is edited by whoever closes
- * a gate, and it stays green if the gate they closed quietly falls back to the
- * `default:` arm on the very next change. Deriving it from `deriveShipGates` over
- * an R3 task with **no change facts at all** closes that, because the only rows
- * this can select are rows that genuinely came from that arm.
+ * An earlier release named the set by hand and asserted it in both directions, on
+ * the argument that a count would stay true if one gate silently regressed while
+ * another gained a producer. That argument was right and the mechanism was not
+ * sufficient: a hand-written array is edited by whoever closes a gate, and it
+ * stays green if the gate they closed quietly falls back to the `default:` arm on
+ * the very next change. Deriving it from `deriveShipGates` over an R3 task with
+ * **no change facts at all** closes that, because the only rows this can select
+ * are rows that genuinely came from that arm.
  *
- * It is asserted against the expected three below rather than only used, so this
+ * It is asserted against the expected value below rather than only used, so this
  * is still a claim a later author has to edit rather than a tautology.
  */
 function producerlessR3Gates() {
@@ -73,20 +75,22 @@ function producerlessR3Gates() {
 }
 
 /**
- * The one expected to survive this release, carrying the release that is
- * expected to close it, so the failure message a later author sees points at
- * their own work rather than at this file.
+ * **Empty, as of this release, and that is the milestone this file now records.**
+ *
+ * `release_observation_plan` was the last entry and gains a producer here, so
+ * every one of R3's ten gates can be answered. The constant and the assertion
+ * stay rather than being deleted, and they change job: they are no longer "what
+ * a later release still owes" but "no gate regressed to `evaluateGate`'s
+ * `default:` arm". `evaluateGate` keeps that arm for exactly this reason — delete
+ * it and the derivation returns `[]` by construction, which is the tautology this
+ * file's own comment warns against.
  */
-const PRODUCERLESS_R3_GATES = [
-  // PR 9.
-  "release_observation_plan"
-];
+const PRODUCERLESS_R3_GATES = [];
 
-test("the R3 gates with no producer are exactly the one a later release still owes", () => {
-  // Both directions, and derived on one side. Give this one a producer and this
-  // assertion is the thing to edit; let one of the nine that *has* a producer
-  // fall back to the `default:` arm and this reddens without anybody having
-  // touched it, which the array it replaces could not do.
+test("no R3 gate answers from evaluateGate's producerless arm", () => {
+  // Both directions, and derived on one side. Let any of the ten fall back to the
+  // `default:` arm and this reddens without anybody having touched it, which the
+  // hand-written array this replaced could not do.
   assert.deepEqual(producerlessR3Gates(), PRODUCERLESS_R3_GATES);
 });
 
@@ -132,8 +136,16 @@ function git(root, args) {
   execFileSync("git", ["-C", root, ...args], { stdio: ["ignore", "pipe", "ignore"] });
 }
 
-/** An R3 change planned and committed, one command short of any approval. */
-async function plannedR3(t) {
+/**
+ * An R3 change planned and committed, one command short of any approval.
+ *
+ * `acceptancePaths` is opt-in rather than always on, and the split is the claim
+ * every test above depends on: without a declared acceptance path,
+ * `protected_acceptance_tests` answers its nothing-was-declared arm and stays in
+ * the unmet set, which is what those tests assert. The R3 milestone is the one
+ * fixture that declares one, because it is the one that has to satisfy all ten.
+ */
+async function plannedR3(t, { acceptancePaths = false } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-r3-ordering-"));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   git(root, ["init", "--initial-branch=main"]);
@@ -144,8 +156,19 @@ async function plannedR3(t) {
   await mkdir(path.join(root, "ops"), { recursive: true });
   await writeFile(path.join(root, COMPOSE_PATH), "services:\n  pricing:\n    image: pricing:latest\n", "utf8");
 
+  if (acceptancePaths) {
+    // A real file, because a declared path that is not there when a run starts is
+    // reported as unknown rather than as unchanged.
+    await writeFile(
+      path.join(root, ACCEPTANCE_PATH),
+      "// the check that decides this criterion\nexport const ok = true;\n",
+      "utf8"
+    );
+  }
+
   const run = (...args) => runCliCapture(["--repository-root", root, ...args]);
-  await writeFile(path.join(root, "intake.json"), JSON.stringify(ANSWERS), "utf8");
+  const answers = acceptancePaths ? { ...ANSWERS, "req-1-ac-1-acceptance-paths": ACCEPTANCE_PATH } : ANSWERS;
+  await writeFile(path.join(root, "intake.json"), JSON.stringify(answers), "utf8");
   assert.equal((await run("start", "--intake", "intake.json", "--created-at", CREATED_AT)).exitCode, 0);
   const finalized = await run("start", "--finalize", "--json", "--created-at", CREATED_AT);
   assert.equal(finalized.exitCode, 0, finalized.stdout + finalized.stderr);
@@ -258,12 +281,13 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
   );
   // Six gate ids are still unmet, and the set did not shrink in this release
   // either — which is the honest report and is worth stating plainly. This
-  // release gave `protected_acceptance_tests` a producer, and what a producer
-  // gives a gate is the ability to be *satisfied*: this fixture's interview
-  // declares no protected acceptance path, so the gate answers its
-  // nothing-was-declared arm and stays in the list. The difference is in the
-  // reason, asserted immediately below: five of these rows now say what is
-  // missing and name a command that produces it, and one still says Legion
+  // fixture attests nothing, declares no protected acceptance path, records no
+  // review domain and writes no release plan, so each of those gates answers its
+  // own nothing-was-recorded arm. What a producer gives a gate is the ability to
+  // be *satisfied*, and the change that does all six of those things is the R3
+  // milestone at the bottom of this file. The difference here is in the reasons,
+  // asserted immediately below: every one of these six rows now says what is
+  // missing and names a command that produces it, and none of them says Legion
   // produces no evidence for it at all.
   const unmet = [...new Set(payload.diagnostics.map((entry) => entry.gate))].sort();
   assert.deepEqual(unmet, [
@@ -282,9 +306,21 @@ test("an R3 change approved before it is built satisfies the ordering gate, and 
   assert.deepEqual(
     stillProducerless,
     PRODUCERLESS_R3_GATES,
-    "the true remaining set, read off the real command. Give one of these a producer and this is the thing to edit"
+    "no gate may answer from evaluateGate's producerless arm, read off the real command"
   );
-  // This release's gate is the fifth, and its sentence is about the *plan*
+
+  // This release's gate is the sixth, and its sentence is about the *release
+  // plane* rather than about any run or any attestation: nothing records how
+  // this change's release would be observed, which is a different fact from
+  // "Legion produces no evidence for this". Change-scoped, so one row for the
+  // change rather than one per task.
+  const releaseRow = payload.diagnostics.find((entry) => entry.gate === "release_observation_plan");
+  assert.notEqual(releaseRow, undefined);
+  assert.doesNotMatch(releaseRow.message, /does not yet produce/);
+  assert.match(releaseRow.message, /No release plan is recorded for change chg_/);
+  assert.match(releaseRow.message, /is not satisfied for chg_/);
+
+  // An earlier release's gate is the fifth, and its sentence is about the *plan*
   // rather than about any run: nothing in this change names a test the work must
   // not weaken, which is a different fact from "the run weakened one" and from
   // "Legion produces no evidence for this". Task-scoped, so the row names the
@@ -664,7 +700,11 @@ test("a review that declares its domain satisfies the architecture gate, end to 
   assert.deepEqual(accepted0.domains, ["architecture", "security"]);
 
   const shipped = await run("ship", "--json");
-  assert.equal(shipped.exitCode, 1, "R3 still does not ship: one of its ten gates has no producer");
+  assert.equal(
+    shipped.exitCode,
+    1,
+    "this fixture attests nothing and plans no release, so R3 is still blocked — on records, not on missing producers"
+  );
   const payload = parseJsonOutput(shipped);
   assert.equal(
     payload.diagnostics.some((entry) => entry.gate === "architecture_or_security_review"),
@@ -874,4 +914,282 @@ test("a junk file under attestations blocks the gate a clean domain review would
   // And the payload no longer contradicts itself: the sentence that says every
   // gate reading this plane reports unevaluable is now true of this gate too.
   assert.match(plane.message, /Every gate that reads the attestation plane reports unevaluable/);
+});
+
+// --- the R3 milestone -------------------------------------------------------
+
+/**
+ * The three evidence fixtures the out-of-band attestation kinds cite.
+ *
+ * Written into the temp workspace rather than pinned from `docs/next/evidence/`,
+ * on `tests/cli-attest`'s recorded rule: those files are stored LF and check out
+ * CRLF on Windows, `hashContent` hashes raw bytes, and a pin minted on one
+ * platform reads `drift` on the other — which is the gates' strongest negative
+ * arm. Bytes this test wrote are immune either way and need no chmod or attrib.
+ */
+function threatModel() {
+  return {
+    schema_version: 1,
+    generated_at: "2026-08-05T10:00:00.000Z",
+    run_dir: "evidence/runs/security-sensitive.v1-r1",
+    output_root: "evidence/runs",
+    ok: true,
+    checks: { sandbox: { ok: true, exit_code: 0 }, retention: { ok: true, exit_code: 0 }, redaction: { ok: true } },
+    findings: []
+  };
+}
+
+/**
+ * `repository_root` and `manifest.repositoryRoot` both fold to the temp root,
+ * because `rollbackPolicyVerdict` refuses a verdict taken in another checkout —
+ * which is why the repository's own committed `rollback-policy.json` cannot
+ * satisfy this gate here.
+ */
+function rollbackPolicy(root) {
+  return {
+    ok: true,
+    status: "restorable",
+    backup_manifest_path: path.join(root, "backup-manifest.json"),
+    repository_root: root,
+    source: "codex-legion",
+    kind: "codex-legion-migration-backup",
+    manifest: {
+      schemaVersion: "0.1.0",
+      kind: "codex-legion-migration-backup",
+      createdAt: "2026-08-04T12:00:00.000Z",
+      repositoryRoot: root,
+      backupPath: path.join(root, "backup"),
+      preMigrationHash: `sha256:${"b".repeat(64)}`,
+      sourceHash: `sha256:${"1".repeat(64)}`,
+      existingLegionRoot: true
+    },
+    findings: [],
+    checks: {
+      manifest: { name: "manifest", ok: true, findings: [] },
+      restore_target: { name: "restore_target", ok: true, findings: [] }
+    }
+  };
+}
+
+/**
+ * An A/B comparison with a **populated baseline side**, which no file in this
+ * repository has.
+ *
+ * `abComparisonVerdict` refuses the committed `ab-comparison.json` by name: its
+ * `v8_summary.run_count` is 0 and every scenario row reads `v8_present: false`,
+ * so it is a v9-only aggregate wearing an A/B filename and an
+ * `independent-baseline` attestation citing it would pin a document positively
+ * stating that the baseline is absent. This fixture is what a real one looks
+ * like, and writing it here is the only way the evidence arm of
+ * `independent_baseline` is reachable at all.
+ */
+function abComparison() {
+  return {
+    schema_version: 1,
+    generated_at: "2026-08-05T09:00:00.000Z",
+    inputs: { v8_dir: "evidence/runs/v8", v9_dir: "evidence/runs/v9" },
+    v8_summary: { run_count: 2, deterministic_mean: 0.71 },
+    v9_summary: { run_count: 2, deterministic_mean: 0.88 },
+    scenarios: [
+      {
+        scenario_id: "pricing-quote.v1",
+        v8_present: true,
+        v9_present: true,
+        v8_score_missing: false,
+        v9_score_missing: false,
+        v8_deterministic_total: 0.7,
+        v9_deterministic_total: 0.9
+      },
+      {
+        scenario_id: "pricing-reject.v1",
+        v8_present: true,
+        v9_present: true,
+        v8_score_missing: false,
+        v9_score_missing: false,
+        v8_deterministic_total: 0.72,
+        v9_deterministic_total: 0.86
+      }
+    ]
+  };
+}
+
+test("an R3 change carrying all ten gates ships ready, end to end through the real CLI", async (t) => {
+  // **The milestone this whole series was for.** Before this release no R3 change
+  // could report `ready`, whatever it carried: `release_observation_plan` had no
+  // producer and fell through `evaluateGate`'s `default:` arm, so the honest
+  // answer was always "unprovable". Measured immediately before this release on
+  // this exact sequence, `legion ship` reported 0 unsatisfied and 1 unevaluable,
+  // and advised `legion build` on a change that had already been built.
+  //
+  // The order below is load-bearing in two places and only two:
+  //
+  //  - `attest independent-baseline` must precede the build, because that gate
+  //    compares `attestedAt` against `min(startedAt)` over the run set and blocks
+  //    at equality.
+  //  - `approve spec` and `approve oracle` must precede the build, because
+  //    `approved_spec_and_oracle` compares the last decision against the same
+  //    instant and no command re-orders a decision already taken.
+  //
+  // `release plan` deliberately sits after the review and before the accept, to
+  // demonstrate the claim its own docblock makes: it carries no ordering rule, and
+  // a plan authored after the build is still a plan. It would satisfy the gate
+  // from anywhere after `legion plan`.
+  //
+  // **If this ever stops coming out ready, the repair is not to weaken a gate.**
+  // The assertions below name which gate blocked and why, so a failure says what
+  // it is rather than "R3 does not ship".
+  const { root, run, changeDir } = await plannedR3(t, { acceptancePaths: true });
+
+  await mkdir(path.join(root, "evidence"), { recursive: true });
+  await writeFile(path.join(root, "evidence/threat-model.json"), `${JSON.stringify(threatModel(), null, 2)}\n`, "utf8");
+  await writeFile(
+    path.join(root, "evidence/rollback-policy.json"),
+    `${JSON.stringify(rollbackPolicy(root), null, 2)}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(root, "evidence/ab-comparison.json"),
+    `${JSON.stringify(abComparison(), null, 2)}\n`,
+    "utf8"
+  );
+
+  const ok = async (...args) => {
+    const result = await run(...args);
+    assert.equal(result.exitCode, 0, `${args.join(" ")}\n${result.stdout}${result.stderr}`);
+    return parseJsonOutput(result);
+  };
+
+  await ok("approve", "spec", "--approver", "dasbl", "--json");
+  await ok("approve", "oracle", "--approver", "dasbl", "--json");
+  // Before the build. The pass arm of `independent_baseline` needs an A/B
+  // comparison with a populated baseline side *and* an instant strictly earlier
+  // than the first run start.
+  const baseline = await ok(
+    "attest", "independent-baseline", "--attested-by", "dasbl", "--verdict", "pass",
+    "--source", "evidence/ab-comparison.json", "--json"
+  );
+  assert.equal(baseline.attestation.verdict, "pass");
+  assert.deepEqual(baseline.attestation.sourceShapes, ["ab-comparison (clean)"]);
+
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-m", "approve and attest a baseline"]);
+
+  await ok("build", "--executor", "fake", "--json");
+  await ok(
+    "attest", "security-evaluation", "--attested-by", "dasbl", "--verdict", "pass",
+    "--source", "evidence/threat-model.json", "--json"
+  );
+  await ok(
+    "attest", "rollback-evidence", "--attested-by", "dasbl", "--verdict", "pass",
+    "--source", "evidence/rollback-policy.json", "--json"
+  );
+  await ok("review", "--executor", "fake", "--domain", "architecture", "--domain", "security", "--json");
+  const planned = await ok(
+    "release", "plan", "--environment", "staging", "--rollback-strategy", "revert",
+    "--health-criterion", "p99 quote latency stays under 400ms for 30 minutes after the cutover",
+    "--rollback-criterion", "quote error rate exceeds 1% over any 5 minute window",
+    "--json"
+  );
+  assert.equal(planned.status, "planned");
+  assert.equal(planned.warnings, undefined, "an R3 change that derives the gate and is fully covered warns about nothing");
+  await ok("review", "--accept", "--approver", "dasbl", "--json");
+
+  // The premises, read off disk rather than left to wall-clock luck. Both
+  // ordering gates block at millisecond equality, so a fast machine that collided
+  // would redden the readiness assertion below with a message about governance
+  // rather than about timing. This says which it was.
+  const decided = await decisionInstants(changeDir);
+  const starts = await runStarts(changeDir);
+  const attestationNames = await readdir(path.join(changeDir, "attestations"));
+  const baselineFile = attestationNames.find((name) => name.includes("independent-baseline"));
+  const attestedAt = JSON.parse(
+    await readFile(path.join(changeDir, "attestations", baselineFile), "utf8")
+  ).attestedAt;
+  const earliestStart = starts.slice().sort()[0];
+  assert.ok(
+    decided.slice().sort().at(-1) < earliestStart,
+    `every approval must precede the first run start: ${decided.join(", ")} vs ${earliestStart}`
+  );
+  assert.ok(
+    attestedAt < earliestStart,
+    `the baseline must precede the first run start: ${attestedAt} vs ${earliestStart}`
+  );
+
+  const shipped = await run("ship", "--json");
+  const payload = parseJsonOutput(shipped);
+  assert.equal(
+    shipped.exitCode,
+    0,
+    `R3 must ship ready. Unmet: ${JSON.stringify(payload.diagnostics?.map((entry) => ({ gate: entry.gate, message: entry.message })))}`
+  );
+  assert.equal(payload.status, "ready");
+  assert.equal(payload.riskGates.unsatisfied, 0);
+  assert.equal(payload.riskGates.unevaluable, 0);
+  assert.deepEqual(payload.riskGates.unevaluableGates, []);
+  // **On evidence, not on sentences.** An R3 milestone satisfied by three waivers
+  // and a human judgement is not the claim this test makes, and the payload
+  // reports both separately for exactly that reason.
+  assert.deepEqual(payload.riskGates.waivedGates, []);
+  assert.deepEqual(payload.riskGates.humanJudgementGates, []);
+  assert.equal(payload.riskGates.satisfied, 10, "R3 derives ten gates and every one of them is met");
+  assert.deepEqual(payload.diagnostics, []);
+  assert.equal(payload.warnings, undefined, "nothing was skipped, waived or judged");
+
+  // **The laundering route, measured on the only fixture where it can be: a change
+  // where `release_observation_plan` is the single unmet gate, so
+  // `shipGateRecovery` reports that gate's own recovery as `nextAction` rather
+  // than its mixed arm.**
+  //
+  // A review of this release drove exactly this: set `release.json` to
+  // `rolled_back` with the `rollbackEvidenceRefs` the schema requires for that
+  // status, and `legion ship` blocked with
+  // `nextAction.command = "legion release plan --environment <env>
+  // --health-criterion <text>"`. Running that command exited 0, wrote a fresh
+  // `status: "requested"` document, dropped the rollback evidence, and returned
+  // this payload to `ready` with ten satisfied gates and `waivedGates: []`. The
+  // cure the gate printed erased the fact it was printed about, and nothing in the
+  // ship payload recorded that a taken-back release had been replaced.
+  const releasePath = path.join(changeDir, "release.json");
+  const green = await readFile(releasePath, "utf8");
+  const takenBack = `${JSON.stringify(
+    { ...JSON.parse(green), status: "rolled_back", rollbackEvidenceRefs: ["evd_rollback-of-the-failed-cutover"] },
+    null,
+    2
+  )}\n`;
+  await writeFile(releasePath, takenBack, "utf8");
+
+  const blockedShip = await run("ship", "--json");
+  const blockedPayload = parseJsonOutput(blockedShip);
+  assert.equal(blockedShip.exitCode, 1);
+  assert.deepEqual(
+    blockedPayload.diagnostics.map((entry) => entry.gate),
+    ["release_observation_plan"],
+    "one edit, one unmet gate — which is what makes the nextAction below this gate's own"
+  );
+  assert.equal(blockedPayload.nextAction.command, "legion ship");
+  assert.doesNotMatch(
+    blockedPayload.nextAction.command,
+    /release plan/,
+    "the field hosts dispatch on must not name the command that overwrites this record"
+  );
+  assert.match(blockedPayload.nextAction.reason, /belongs in a new change/);
+
+  // And the command that used to be advertised refuses, so an operator who types
+  // it from memory is told the same thing rather than quietly succeeding.
+  const refused = await run(
+    "release", "plan", "--environment", "staging", "--rollback-strategy", "revert",
+    "--health-criterion", "p99 quote latency stays under 400ms for 30 minutes after the cutover",
+    "--rollback-criterion", "quote error rate exceeds 1% over any 5 minute window",
+    "--json"
+  );
+  assert.equal(refused.exitCode, 1);
+  assert.equal(parseJsonOutput(refused).diagnostics[0].code, "release_records_negative");
+  assert.equal(await readFile(releasePath, "utf8"), takenBack, "the refusal writes nothing");
+
+  // Restored, and ready again: proof that the one edit above is what blocked the
+  // ship, rather than anything the extra commands did to the change.
+  await writeFile(releasePath, green, "utf8");
+  const again = parseJsonOutput(await run("ship", "--json"));
+  assert.equal(again.status, "ready");
+  assert.equal(again.riskGates.satisfied, 10);
 });

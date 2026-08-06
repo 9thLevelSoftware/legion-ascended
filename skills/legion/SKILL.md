@@ -18,6 +18,7 @@ This repository can be loaded as a Codex plugin bundle. Use this bridge when the
 - `/legion:review` -> `commands/review.md`
 - `/legion:approve` -> `commands/approve.md`
 - `/legion:attest` -> `commands/attest.md`
+- `/legion:release` -> `commands/release.md`
 - `/legion:status` -> `commands/status.md`
 - `/legion:quick` -> `commands/quick.md`
 - `/legion:advise` -> `commands/advise.md`

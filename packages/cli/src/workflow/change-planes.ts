@@ -1,6 +1,6 @@
-import { deriveOracleManifest, readOracleArtifact } from "@legion/artifacts";
+import { artifactPathForRole, deriveOracleManifest, readOracleArtifact, readRelease } from "@legion/artifacts";
 
-import type { ShipGateOracleFact } from "./ship-gates.js";
+import type { ShipGateOracleFact, ShipGateReleaseFact } from "./ship-gates.js";
 
 /**
  * Reading the change-scoped planes a ship gate asks about.
@@ -78,4 +78,52 @@ export async function loadOracleFacts(input: {
   }
 
   return oracles;
+}
+
+/**
+ * The release plan this change records, and — separately — whether anybody
+ * looked.
+ *
+ * The return type deliberately excludes `undefined`: this function always
+ * consults the plane, so it cannot express "not consulted", and the only way a
+ * caller can pass `undefined` to `ShipGateChangeFacts.release` is by not calling
+ * it. That is the distinction `legion ship`'s docblock used to have to make in
+ * prose.
+ *
+ * `not_found` is `absent` and everything else is `unreadable`, including a throw
+ * caught by `absentOnFailure`. The two are different facts with different
+ * sentences and different recoveries — one is cured by `legion release plan` and
+ * the other by correcting a file — and only the second may conceal a negative,
+ * because a `release.json` that will not parse may be the one recording a failed
+ * release.
+ *
+ * It lives here rather than inline in `ship.ts` for this module's stated reason:
+ * `legion release plan` is the second reader of this plane, and a writer that
+ * walked a different document set from the gate is the writer/reader drift PR 2
+ * closed for delta specs.
+ */
+export async function loadReleaseFact(input: {
+  readonly repositoryRoot: string;
+  readonly changeId: string;
+}): Promise<ShipGateReleaseFact> {
+  const path = releaseArtifactPath(input.changeId);
+  const read = await absentOnFailure(() =>
+    readRelease({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  if (read === undefined) return { kind: "unreadable", path };
+  if (read.ok) return { kind: "document", document: read.document };
+  if (read.status === "not_found") return { kind: "absent" };
+  return { kind: "unreadable", path };
+}
+
+/** Where the release plan lives, for a diagnostic that has to name the file. */
+export function releaseArtifactPath(changeId: string): string {
+  try {
+    return artifactPathForRole({ role: "release", changeId }) as string;
+  } catch {
+    // A change id too degraded to derive a path from is already reported by an
+    // earlier refusal; naming the directory beats throwing out of a read whose
+    // whole contract is that failure arrives as a fact.
+    return ".legion/project/changes";
+  }
 }

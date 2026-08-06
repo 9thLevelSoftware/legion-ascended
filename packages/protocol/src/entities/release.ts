@@ -38,8 +38,21 @@ export const releaseDeploymentSchema = z.strictObject({
 
 export type ReleaseDeployment = z.infer<typeof releaseDeploymentSchema>;
 
+/**
+ * How a release is taken back.
+ *
+ * Extracted from the inline enum it used to be so that `legion release plan`
+ * validates `--rollback-strategy` against the protocol rather than against a
+ * hand-written list beside it. `attestationKindSchema.options` is the precedent:
+ * a CLI list that drifts from the schema refuses a value the artifact would
+ * accept, or accepts one it would not.
+ */
+export const releaseRollbackStrategySchema = z.enum(["revert", "disable", "restore", "manual"]);
+
+export type ReleaseRollbackStrategy = z.infer<typeof releaseRollbackStrategySchema>;
+
 export const releaseRollbackPlanSchema = z.strictObject({
-  strategy: z.enum(["revert", "disable", "restore", "manual"]),
+  strategy: releaseRollbackStrategySchema,
   criteria: z.array(z.string().min(1).max(1_024)).min(1),
   evidenceRefs: z.array(evidenceIdSchema)
 });
@@ -62,6 +75,15 @@ const releaseBaseSchema = schemaMetadataSchema.extend({
   environment: releaseEnvironmentSchema,
   releaseIntent: artifactReferenceSchema,
   deployment: releaseDeploymentSchema.optional(),
+  // **`taskRefs` and `healthCriteria` are deliberately not `.min(1)`, and the
+  // gate does not inherit its truth claim from that.** `release_observation_plan`
+  // requires at least one health criterion and coverage of every deriving task,
+  // and it checks both itself — `[].every(...)` is `true`, so a quantifier over
+  // either of these arrays is vacuous at zero length. Tightening the published
+  // schema would change the shape of an entity for a check the gate and
+  // `legion release plan` have to make anyway, and `attestationGateStatus` keeps
+  // its own `sources.length === 0` guard for exactly this reason even though
+  // `.min(1)` forbids it there.
   taskRefs: z.array(taskIdSchema),
   approvalRefs: z.array(approvalIdSchema),
   evidenceRefs: z.array(evidenceIdSchema),

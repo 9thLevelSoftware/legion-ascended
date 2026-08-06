@@ -4,6 +4,7 @@ import {
   type DerivedRiskGate,
   type RiskGateId
 } from "@legion/core";
+import { artifactPathForRole } from "@legion/artifacts";
 import type {
   ChangeBundleDeltaEntry,
   EvidenceIndexEntry,
@@ -18,6 +19,8 @@ import type {
   EvidenceItem,
   Oracle,
   Release,
+  ReleaseEnvironment,
+  ReleaseStatus,
   ReviewDecision,
   ReviewFinding,
   TaskContract,
@@ -62,19 +65,26 @@ import type { VerifyPinnedReference } from "./pinned-references.js";
  * verification surface and a whole-change sign-off reports `ready` end to end —
  * the first tier above R0 for which that is true.
  *
- * **R3 still cannot, and this release does not try to make it.** Eight of its ten
- * gates now have producers — `protected_oracle` and `deterministic_verification`
- * from the evidence items, `explicit_human_approval` from the approval plane,
- * `approved_spec_and_oracle` from the approval plane's ordering,
- * `independent_baseline`, `security_or_e2e_evaluator` and
- * `rollback_or_forward_fix_evidence` from the attestation plane, and
- * `architecture_or_security_review` from this release's review *domains* — and
- * two do not: protected acceptance tests and release observation. The report
- * names exactly which, and
- * `tests/change-r3-ordering` derives that set from `evaluateGate`'s own
- * `default:` reason string so each later release reddens it as it closes one.
- * Lowering the tier through an audited `risk.override` is the supported way to
- * ship work whose gates genuinely do not apply, and an audited waiver recorded
+ * **And as of this release every R3 gate has a producer too.** The last one was
+ * `release_observation_plan`, which reads a `release.json` written by
+ * `legion release plan` — or an audited `release-observation` waiver for a change
+ * that deploys nothing. The other nine arrived over the preceding releases:
+ * `protected_oracle` and `deterministic_verification` from the evidence items,
+ * `explicit_human_approval` from the approval plane, `approved_spec_and_oracle`
+ * from the approval plane's ordering, `independent_baseline`,
+ * `security_or_e2e_evaluator` and `rollback_or_forward_fix_evidence` from the
+ * attestation plane, `architecture_or_security_review` from review domains, and
+ * `protected_acceptance_tests` from the guarded harness's acceptance-path
+ * observation.
+ *
+ * So an R3 change carrying all of that reports `ready` end to end, and
+ * `tests/change-r3-ordering` drives exactly that sequence through the real CLI.
+ * That file also keeps deriving the producerless set from `evaluateGate`'s own
+ * `default:` reason string — the set is now empty, and the derivation stays as
+ * the tripwire that reddens if any gate regresses to that arm.
+ *
+ * Lowering the tier through an audited `risk.override` is still the supported way
+ * to ship work whose gates genuinely do not apply, and an audited waiver recorded
  * as a `not_applicable` attestation is the per-gate version of the same idea.
  */
 
@@ -154,6 +164,16 @@ export interface ShipGateReport {
   readonly unevaluable: number;
   readonly ready: boolean;
 }
+
+/**
+ * What `legion ship` found on the release plane. See
+ * `ShipGateChangeFacts.release` for why this is three states rather than an
+ * optional document.
+ */
+export type ShipGateReleaseFact =
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly path: string }
+  | { readonly kind: "document"; readonly document: Release };
 
 /** One oracle of the change, with the reference a pin check needs. */
 export interface ShipGateOracleFact {
@@ -289,8 +309,32 @@ export interface ShipGateChangeFacts {
    * prints.
    */
   readonly taskRuns: readonly TaskRun[] | undefined;
-  /** At most one release plan per change, so singular. No reader yet. */
-  readonly release: Release | undefined;
+  /**
+   * The release plan recorded for this change, and — separately — whether
+   * anybody looked.
+   *
+   * **Four states, and collapsing any two of them is a fail-open.** The field
+   * was `Release | undefined` while it had no reader, which cannot say the
+   * difference between "there is no plan" and "there is a document here that
+   * will not parse". Both are `unevaluable`, so no verdict moves either way —
+   * but they need different sentences, different recoveries, and only one of
+   * them may conceal a negative:
+   *
+   *  - `undefined` — this report did not consult the plane at all. Fixtures, and
+   *    the one-plane predicates below. Never a positive.
+   *  - `{kind: "absent"}` — consulted; this change has no `release.json`. The
+   *    state every change on disk is in, and the one `legion release plan` cures.
+   *  - `{kind: "unreadable"}` — consulted; a document is there and would not
+   *    read. It may be the one recording a `failed` release, so this
+   *    `unevaluable` **conceals a negative** and must not be answered around by
+   *    the other producer.
+   *  - `{kind: "document"}` — the record.
+   *
+   * Singular, so unlike `approvals`, `attestations`, `reviews` and `taskRuns`
+   * there is no all-or-nothing listing wrapper: a plane with one file has no
+   * partial read to refuse. The `unreadable` state is what stands in for it.
+   */
+  readonly release: ShipGateReleaseFact | undefined;
   /**
    * The instant this report is being derived, or `undefined` when the caller
    * has no clock.
@@ -380,7 +424,18 @@ export interface ShipGateChangeFacts {
  * `CHANGE_SCOPED_GATES` in `tests/ship-risk-gates.test.mjs` is a deliberate
  * hand-written duplicate that has to move with them.
  *
- * `protected_acceptance_tests` is the newest, and it is the first entry in this
+ * `release_observation_plan` is the newest, and its entry was here — as
+ * `"task"` — through every release since the vocabulary landed, so nothing
+ * failed to compile while it was wrong. It flips with its producer. Every reading
+ * of the gate is change-wide: there is exactly one `release.json` per change, its
+ * `taskRefs` are quantified over the whole set of tasks that derive the gate, and
+ * the alternative producer is an attestation keyed by `(changeId, kind)`. Left
+ * `"task"` it would print the identical sentence once per criterion-task under a
+ * `subjectId` naming a task the sentence is not about — the altitude defect
+ * `integration_or_real_interface_checks` paid for once and `approved_spec_and_oracle`
+ * paid for twice.
+ *
+ * `protected_acceptance_tests` is the first entry in this
  * record that was already right when its producer arrived. It stays `"task"`, by
  * argument rather than by inertia. The gate's *subject set* is change-wide — the
  * acceptance paths every oracle of the change declares — but its *verdict* is one
@@ -450,7 +505,7 @@ const GATE_SCOPE: Readonly<Record<RiskGateId, ShipGateScope>> = {
   protected_acceptance_tests: "task",
   security_or_e2e_evaluator: "change",
   explicit_human_approval: "task",
-  release_observation_plan: "task",
+  release_observation_plan: "change",
   rollback_or_forward_fix_evidence: "change"
 };
 
@@ -3382,16 +3437,22 @@ export function isLiveOracleGrant(input: {
  *
  * Exported because `legion attest` warns when it has just written a kind that no
  * gate reads, and the honest way to compute that warning is to ask the reader
- * rather than to keep a second list beside it. This release adds
- * `architecture_or_security_review` — one line, and the
- * `attestation_kind_has_no_reader` warning for `architecture-review` disappears
- * with no message anywhere going stale. PR 9 adds `release_observation_plan` the
- * same way, and `release-observation` is the one kind that still has no reader.
+ * rather than to keep a second list beside it.
+ *
+ * **This release adds `release_observation_plan`, and with it every one of
+ * `attestationKindSchema`'s seven options is read by some gate.** The
+ * `attestation_kind_has_no_reader` warning therefore has no reachable kind left
+ * through the CLI, which is the intended end state rather than a gap: the warning
+ * stays, because the set is computed from this map and a kind added upstream
+ * would reach it again the moment it exists, and `tests/cli-attest` asserts the
+ * unread set is empty by deriving it from this module rather than by naming a
+ * kind.
  */
 export const ATTESTATION_GATE_KINDS: Readonly<Partial<Record<RiskGateId, readonly AttestationKind[]>>> = {
   independent_baseline: ["independent-baseline"],
   security_or_e2e_evaluator: ["security-evaluation", "e2e-evaluation"],
   architecture_or_security_review: ["architecture-review"],
+  release_observation_plan: ["release-observation"],
   rollback_or_forward_fix_evidence: ["rollback-evidence", "forward-fix-evidence"]
 };
 
@@ -3445,10 +3506,18 @@ export const GATE_READ_ATTESTATION_KINDS: ReadonlySet<AttestationKind> = new Set
  *    sealed corpus scenario is not that, and pretending otherwise would be the
  *    naming-convention inference this entity exists to replace.
  *  - `forward-fix-evidence` — nothing in the tree produces one.
- *  - `release-observation` — `none` rather than `human-judgement`, deliberately.
- *    A release observation *plan* is a checkable document with required health
- *    criteria and a rollback plan, and PR 9 is where that reader is decided; it
- *    is not this release's call to make on its behalf.
+ *  - `release-observation` — `none`, and this release is where that was decided
+ *    rather than deferred. The gate that reads this kind now exists, and its
+ *    evidence route is `release.json`: a checkable document with health criteria,
+ *    a rollback strategy with criteria, and coverage of every deriving task.
+ *    Widening this entry to `human-judgement` would give that gate a second route
+ *    that is strictly weaker than the first and bypasses the artifact entirely —
+ *    the operator who authors a real observation plan and the operator who writes
+ *    a sentence would become indistinguishable. So `legion attest
+ *    release-observation --verdict pass` stays refused by `sourceRefusal`'s
+ *    `kind_has_no_evidence_shape` arm, and the attestation route into this gate is
+ *    **waiver-only**: `not_applicable`, a human attester and a recorded reason,
+ *    which is ADR-006's own escape for a change that deploys nothing.
  *
  * `security_or_e2e_evaluator` is therefore satisfiable by evidence only through
  * `security-evaluation`, and `rollback_or_forward_fix_evidence` only through
@@ -4744,7 +4813,16 @@ function domainReviewOutcome(input: {
 }
 
 /**
- * The two producers, reduced.
+ * Two producers of one gate, reduced.
+ *
+ * **Generic over the pair, and that generality is this release's edit.** It was
+ * `combineDomainReviewOutcomes`, hard-coded to the review/attestation pair,
+ * because there was one two-producer gate. `release_observation_plan` is the
+ * second — a release plan *or* an audited `release-observation` waiver — and a
+ * second copy of this ordering would be a second chance to get it wrong, on a
+ * rule whose first version cost a blocking review round. The two sentence
+ * templates are preserved byte for byte; only the phrases naming the producers
+ * are parameters now.
  *
  * `combineAttestationOutcomes`' rule — `unsatisfied` beats `satisfied` beats
  * `unevaluable` — written out here rather than reused, because that function's
@@ -4784,36 +4862,54 @@ function domainReviewOutcome(input: {
  * Both are true sentences and only one of them names a route an operator can take
  * without leaving Legion.
  */
-function combineDomainReviewOutcomes(review: GateOutcome, attested: GateOutcome): GateOutcome {
-  const overridden = (primary: GateOutcome, other: GateOutcome, describeOther: string): GateOutcome =>
+function combineProducerOutcomes(input: {
+  readonly primary: GateOutcome;
+  readonly secondary: GateOutcome;
+  /** How the *primary* is named when the secondary's verdict is the one reported. */
+  readonly describePrimary: string;
+  /** How the *secondary* is named when the primary's verdict is the one reported. */
+  readonly describeSecondary: string;
+}): GateOutcome {
+  const { primary, secondary, describePrimary, describeSecondary } = input;
+  const overridden = (reported: GateOutcome, other: GateOutcome, describeOther: string): GateOutcome =>
     other.status === "satisfied"
       ? {
-          ...primary,
+          ...reported,
           reason:
-            `${primary.reason} This change also carries a favourable ${describeOther}, and it does not override the ` +
+            `${reported.reason} This change also carries a favourable ${describeOther}, and it does not override the ` +
             "verdict above: a record made about this change is a statement somebody made about it, and a record of " +
             "another kind does not unmake it."
         }
-      : primary;
+      : reported;
 
-  const doubted = (primary: GateOutcome, other: GateOutcome, describeOther: string): GateOutcome =>
+  const doubted = (reported: GateOutcome, other: GateOutcome, describeOther: string): GateOutcome =>
     other.status === "satisfied"
       ? {
-          ...primary,
+          ...reported,
           reason:
-            `${primary.reason} This change also carries a favourable ${describeOther}, and it does not settle the ` +
+            `${reported.reason} This change also carries a favourable ${describeOther}, and it does not settle the ` +
             "question above: the records this report could not read may be the ones that refuse, and a gate answered " +
             "from the half it could read is a gate answered around the half it could not."
         }
-      : primary;
+      : reported;
 
-  if (review.status === "unsatisfied") return overridden(review, attested, "architecture-review attestation");
-  if (attested.status === "unsatisfied") return overridden(attested, review, "architecture or security review");
-  if (review.concealsNegative === true) return doubted(review, attested, "architecture-review attestation");
-  if (attested.concealsNegative === true) return doubted(attested, review, "architecture or security review");
-  if (review.status === "satisfied") return review;
-  if (attested.status === "satisfied") return attested;
-  return review;
+  if (primary.status === "unsatisfied") return overridden(primary, secondary, describeSecondary);
+  if (secondary.status === "unsatisfied") return overridden(secondary, primary, describePrimary);
+  if (primary.concealsNegative === true) return doubted(primary, secondary, describeSecondary);
+  if (secondary.concealsNegative === true) return doubted(secondary, primary, describePrimary);
+  if (primary.status === "satisfied") return primary;
+  if (secondary.status === "satisfied") return secondary;
+  return primary;
+}
+
+/** The domain-review pair, named. The ordering above is the substance. */
+function combineDomainReviewOutcomes(review: GateOutcome, attested: GateOutcome): GateOutcome {
+  return combineProducerOutcomes({
+    primary: review,
+    secondary: attested,
+    describePrimary: "architecture or security review",
+    describeSecondary: "architecture-review attestation"
+  });
 }
 
 /**
@@ -4925,6 +5021,555 @@ export function isDomainReviewSatisfying(input: {
     }
   });
   return outcome.status === "satisfied";
+}
+
+// --- release observation plan -----------------------------------------------
+
+/**
+ * What a recorded release `status` says about whether a *current* plan exists.
+ *
+ * A total `Record<ReleaseStatus, ...>` rather than a filter, on `GATE_SCOPE`'s
+ * rule and for lesson 4's reason. `releaseStatusSchema` has nine members and the
+ * specification named two of them as blocking; written as
+ * `status !== "failed" && status !== "rollback_required"`, the other three —
+ * `rolled_back`, `forward_fix_required` and `superseded` — would fall into the
+ * satisfied arm, which is a `default:` that ships an unknown state. Written as a
+ * total record, a tenth status added upstream stops this file compiling until
+ * somebody classifies it.
+ *
+ *  - `current` — the plan stands. Only this reaches `satisfied`.
+ *  - `failed` — the release failed or has to be rolled back. The gate is
+ *    `unsatisfied`: this is a recorded negative about the very thing being asked.
+ *  - `closed` — the release was taken back or needs a forward fix. Also
+ *    `unsatisfied`, and for the same reason: whatever plan this document held has
+ *    been overtaken by what happened, so it is not a plan for the release being
+ *    shipped now.
+ *  - `replaced` — the document says it is superseded, and it is the only
+ *    `release.json` this change has, so there is no current plan at all. That is
+ *    an absence rather than a negative, so `unevaluable`.
+ *
+ * The deferred `legion release observe` moves a plan along
+ * `requested → deployed → healthy` (all `current`, so a satisfied gate stays
+ * satisfied) or to `failed` (so it flips to `unsatisfied`). Both land in arms
+ * that are already correct.
+ *
+ * **What that verb needed here, and a review of this release found missing, is
+ * the other half: nothing may launder a `failed` or `closed` record back to
+ * `current`.** `legion release plan` writes `status: "requested"`, so the cure
+ * this gate printed for those two families used to be a command that overwrote
+ * the negative it was printed about — one run and a rolled-back release read as
+ * a fresh green plan. `releaseRecordsNegative` is the predicate that closed it,
+ * the writer refuses on it, and those arms now carry a recovery that does not
+ * name the writer at all.
+ */
+type ReleaseStanding = "current" | "failed" | "closed" | "replaced";
+
+const RELEASE_STANDING: Readonly<Record<ReleaseStatus, ReleaseStanding>> = {
+  requested: "current",
+  staging: "current",
+  deployed: "current",
+  healthy: "current",
+  failed: "failed",
+  rollback_required: "failed",
+  rolled_back: "closed",
+  forward_fix_required: "closed",
+  superseded: "replaced"
+};
+
+/**
+ * Does this document record a release that failed or was taken back?
+ *
+ * Exported for `legion release plan`, which refuses to overwrite one — and
+ * exported as *the gate's own classification* rather than as a status list beside
+ * the writer, because a list there is one enum member away from a verb that
+ * quietly replaces a rolled-back release with a fresh `requested` plan while the
+ * gate still calls that state a recorded negative.
+ *
+ * `replaced` is deliberately not included. A `superseded` document says of itself
+ * that it is not the current plan, the gate answers `unevaluable` for it, and
+ * writing the current plan over it is the repair rather than a laundering.
+ */
+export function releaseRecordsNegative(release: Release): boolean {
+  const standing = RELEASE_STANDING[release.status];
+  return standing === "failed" || standing === "closed";
+}
+
+/**
+ * Is this an environment a release *happens* in?
+ *
+ * **A total `Record<ReleaseEnvironment, ...>`, for exactly the reason
+ * `RELEASE_STANDING` is one, and added because a review of this release measured
+ * the asymmetry between them.** `environment` was read only to be quoted in the
+ * satisfied sentence: a plan naming `local` — "someone will probably notice" as
+ * its health criterion, "we change our minds" as its rollback trigger — reported
+ * R3 `ready` with ten satisfied gates, no waiver, no named human and no warning.
+ * That is a strictly weaker route into this gate than the audited
+ * `not_applicable` waiver the design made the only other way in, and it existed
+ * because the field was rendered rather than classified.
+ *
+ *  - `released` — `staging` and `production`. ADR-006 asks for a canary or
+ *    observation plan, and these are the two places a canary is watched.
+ *  - `prerelease` — `local` and `test`. A developer machine and the environment
+ *    the build's own checks run in. A plan naming one of these observes the work
+ *    rather than the release of it, so it answers a different question from the
+ *    one this gate asks.
+ *
+ * **This narrows the approved specification, which listed the satisfied
+ * conditions without mentioning the environment at all.** The narrowing is the
+ * honest reading of the two claims the code already made: `legion release plan`
+ * refuses to default `--environment` on the stated grounds that "a plan for local
+ * and a plan for production observe different things and are different plans",
+ * and the gate's own sentence tells the operator which environment it checked.
+ * Either the choice decides something or neither of those sentences is true.
+ */
+type ReleaseExposure = "released" | "prerelease";
+
+const RELEASE_EXPOSURE: Readonly<Record<ReleaseEnvironment, ReleaseExposure>> = {
+  local: "prerelease",
+  test: "prerelease",
+  staging: "released",
+  production: "released"
+};
+
+/**
+ * The cure when nothing in this change plans the release at all.
+ *
+ * The state every change on disk is in, so it is also `GATE_RECOVERY`'s entry.
+ * It names the waiver in the sentence rather than in the command, on
+ * `BASELINE_AFTER_EXECUTION_RECOVERY`'s rule: both are real routes out and only
+ * one leaves the change carrying a checkable document.
+ */
+const RELEASE_PLAN_RECOVERY: ShipGateRecovery = {
+  command: "legion release plan --environment <env>",
+  reason:
+    "Nothing in this change records how its release will be observed or taken back, and no build produces that: the " +
+    "gate reads the release plane. Record a plan naming the environment, at least one health criterion, and a " +
+    "rollback strategy with at least one criterion. A plan is checkable before the release, which is what makes this " +
+    "gate answerable at ship time, and it carries no ordering rule — a plan authored after the build is still a plan, " +
+    "because it constrains the release rather than the run. If this change deploys nothing at all, record that " +
+    "instead with legion attest release-observation --verdict not_applicable --waiver-reason <text> --attested-by " +
+    "<id>, which ADR-006 permits as an audited waiver and which legion ship echoes as a warning on every payload " +
+    "that carries one."
+};
+
+/**
+ * The cure when a plan exists and does not answer the question.
+ *
+ * Separate from the absence cure because the sentence differs, and separate from
+ * `legion ship` because a plan that observes half the change, or that carries no
+ * health criterion, is repaired by writing a better plan — which is exactly what
+ * the verb does. `legion release plan` rewrites the same document at the next
+ * revision, so this is advice that terminates.
+ */
+const RELEASE_REPLAN_RECOVERY: ShipGateRecovery = {
+  command: "legion release plan --environment <env> --health-criterion <text>",
+  reason:
+    "This change carries a release plan and it does not answer the question this gate asks. Re-plan it: legion " +
+    "release plan rewrites the same release.json at the next revision, and it applies the gate's own predicate before " +
+    "reporting that there is nothing to write, so a plan it accepts is a plan this gate accepts. It refuses to " +
+    "overwrite a release whose status records a failure or a rollback, so this route cannot turn one of those green — " +
+    "those arms of this gate print a different recovery for that reason."
+};
+
+/**
+ * The non-cure for a release this change already recorded as failed or taken back.
+ *
+ * **Its own recovery, and the defect it was written for was measured on the real
+ * CLI.** These four statuses used to print `RELEASE_REPLAN_RECOVERY`, which
+ * `shipGateRecovery` promotes to `nextAction.command` — and running exactly that
+ * command overwrote the negative with a fresh `status: "requested"` document,
+ * dropped the `rollbackEvidenceRefs` the schema had required for it, and turned
+ * the gate green with no warning, no waiver entry and nothing in the ship payload
+ * recording that a taken-back release had been replaced. A cure that erases the
+ * fact it was printed about is worse than no cure: lesson 1 asks that a recovery
+ * repair the state it is offered for, and this state is not repaired by anything
+ * that ships this change.
+ *
+ * So the command is `legion ship` — the confirmation step, on
+ * `UNREADABLE_RELEASE_RECOVERY`'s precedent — and the sentence names the two real
+ * routes: the follow-up work is a new change, or, if the record is wrong, the file
+ * is corrected by hand. `legion release plan` refuses this state, so the operator
+ * who tries the writer anyway is told the same thing rather than silently
+ * succeeding.
+ */
+const RELEASE_NEGATIVE_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "This change's release plane records a release that failed or was taken back, and nothing that ships this change " +
+    "repairs that. legion release plan refuses to overwrite a release at one of those statuses — writing a fresh " +
+    "requested plan over a recorded failure is how a negative gets laundered — so the follow-up work belongs in a new " +
+    "change. If the record itself is wrong, correct or remove the release.json under this change by hand and rerun " +
+    "this to confirm."
+};
+
+/**
+ * The cure for a plan that names an environment nothing is released into.
+ *
+ * Separate from `RELEASE_REPLAN_RECOVERY` because re-planning with the same
+ * `--environment` would exit 0 and leave the gate exactly where it was, which is
+ * the advice loop this series exists to close. The command names the two
+ * environments that satisfy, and the sentence names the waiver, because an
+ * operator whose change genuinely reaches no released environment has an audited
+ * route out and re-planning is not it.
+ */
+const RELEASE_ENVIRONMENT_RECOVERY: ShipGateRecovery = {
+  command: "legion release plan --environment <staging|production>",
+  reason:
+    "This change carries a release plan for an environment nothing is released into, so it plans the work rather than " +
+    "the release of it. Re-plan it against the environment this change is actually released to. If this change " +
+    "deploys nothing at all, that is the waiver rather than a local plan: legion attest release-observation --verdict " +
+    "not_applicable --waiver-reason <text> --attested-by <id>, which legion ship echoes as a warning on every payload " +
+    "that carries one."
+};
+
+/** The non-cure for a `release.json` that will not read. */
+const UNREADABLE_RELEASE_RECOVERY: ShipGateRecovery = {
+  command: "legion ship",
+  reason:
+    "A release plan is present for this change and could not be read, so whether it records a failed release is " +
+    "unknown and this gate reports unevaluable rather than absence. legion release plan deliberately refuses to " +
+    "overwrite an unread record — writing over one is the one way to silently replace a failed release with a fresh " +
+    "plan — so correct or remove the file by hand, then rerun this to confirm."
+};
+
+/**
+ * The reference a release plan is authored against, or `undefined` when the
+ * change id is too degraded to derive one.
+ *
+ * `artifactPathForRole` parses the change id and throws on a malformed one, and
+ * `deriveShipGates` must not throw at the change that is already broken — so the
+ * check it feeds is skipped rather than failed in that case, and the other arms
+ * of this gate say what is wrong.
+ */
+function taskgraphPathFor(changeId: string): string | undefined {
+  try {
+    return artifactPathForRole({ role: "taskgraph", changeId }) as string;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The release plan half of `release_observation_plan`.
+ *
+ * **Every quantifier is checked against its empty case**, because
+ * `releaseSchema` bounds neither of the two arrays this gate quantifies over —
+ * `taskRefs` and `healthCriteria` are plain `z.array(...)` with no `.min(1)`, so
+ * `[].every(...)` is `true` in both directions and a plan that observes nothing
+ * would parse and satisfy:
+ *
+ *  - **No plan** — `unevaluable`. The absence arm, and the state every change on
+ *    disk is in.
+ *  - **`healthCriteria` empty** — `unsatisfied`, positively. A plan with no
+ *    health criterion is a plan that observes nothing, which is a recorded
+ *    failure to answer rather than the absence of a record.
+ *  - **`rollbackPlan.criteria` empty** — `unsatisfied`. Unreachable from a parsed
+ *    document (`.min(1)`), and kept because this function's parameter type admits
+ *    it: a gate must not inherit its central truth claim from another module's
+ *    invariant.
+ *  - **No task derives the gate** — `unevaluable`. "The plan covers every
+ *    deriving task" over an empty denominator is vacuously true.
+ *  - **`taskRefs` empty** — `unsatisfied`. The specification's "a plan that
+ *    observes only part of the change", at its limit.
+ *  - **A pre-release `environment`** — `unsatisfied`. See `RELEASE_EXPOSURE`:
+ *    every other field on this document was classified and this one was only
+ *    rendered, which made `--environment local` a route to a green R3 gate that
+ *    needed no human, no waiver reason and no `waivedGates` entry.
+ *
+ * The denominator is `tasksDeriving`, not every task in the taskgraph, and that
+ * is a deliberate narrowing of the specification's wording — the same denominator
+ * `attestationRecordStatus` and `domainReviewOutcome` already use. Quantifying
+ * over non-deriving tasks would block a mixed-tier change over a task whose tier
+ * never asked for a release plan. `legion release plan`'s `--covers` default is
+ * still *every* task, which is a superset of the denominator, so the default can
+ * only satisfy and never over-refuse.
+ */
+function releasePlanOutcome(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): GateOutcome {
+  const change = input.change;
+  const fact = change?.release;
+
+  if (change === undefined || fact === undefined) {
+    return {
+      status: "unevaluable",
+      reason:
+        "The release plan recorded for this change was not read, so whether anything plans how its release will be " +
+        "observed is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The plane was not read whole, and what is in it may be a `failed`
+      // release. See `GateOutcome.concealsNegative`.
+      concealsNegative: true
+    };
+  }
+
+  if (fact.kind === "unreadable") {
+    return {
+      status: "unevaluable",
+      reason:
+        `${fact.path} is present for change ${change.changeId} and could not be read as a release plan, so whether ` +
+        "this change carries one — and whether the one it carries records a failed release — is unestablished.",
+      recovery: UNREADABLE_RELEASE_RECOVERY,
+      concealsNegative: true
+    };
+  }
+
+  if (fact.kind === "absent") {
+    return {
+      status: "unevaluable",
+      reason:
+        `No release plan is recorded for change ${change.changeId}, so nothing says how its release would be ` +
+        "observed or taken back.",
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+
+  const plan = fact.document;
+  const describe = `Release plan ${plan.id as string} for change ${change.changeId}`;
+
+  // Strict equality against a possibly-absent change id, on the approvals
+  // plane's rule: a record too degraded to name its own change answers for
+  // nothing rather than for everything. `readRelease` refuses this too; the
+  // parameter type admits it, so it is refused here as well.
+  if ((plan.changeId as string) !== change.changeId) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} names change ${plan.changeId as string} rather than ${change.changeId}, so it is a plan about ` +
+        "another change sitting at this change's path.",
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+
+  const standing = RELEASE_STANDING[plan.status];
+  if (standing === "failed") {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} records status "${plan.status}", which is a recorded negative about the release this gate asks ` +
+        "about: the plan exists and what happened under it is that the release failed or has to be taken back.",
+      recovery: RELEASE_NEGATIVE_RECOVERY
+    };
+  }
+  if (standing === "closed") {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} records status "${plan.status}", so the release it planned has already been taken back or needs ` +
+        "a forward fix. That is a record of what happened rather than a plan for what will, and this change carries " +
+        "no other release plan.",
+      recovery: RELEASE_NEGATIVE_RECOVERY
+    };
+  }
+  if (standing === "replaced") {
+    return {
+      status: "unevaluable",
+      reason:
+        `${describe} records status "superseded", and it is the only release plan this change has — so it says of ` +
+        "itself that it is not the current plan, and there is no current plan to read.",
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+
+  if (RELEASE_EXPOSURE[plan.environment] === "prerelease") {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} names ${plan.environment} as the environment it observes, and nothing is released into ` +
+        `${plan.environment}: it is where the work runs rather than where this change reaches anything. This gate ` +
+        "asks how the release is observed and taken back, so a plan for a pre-release environment is a recorded " +
+        "failure to answer it rather than an answer. A change that deploys nothing at all is waived through legion " +
+        "attest release-observation --verdict not_applicable, which is audited, names a human and is echoed on every " +
+        "ship payload that carries one.",
+      recovery: RELEASE_ENVIRONMENT_RECOVERY
+    };
+  }
+
+  if (plan.healthCriteria.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} names no health criterion, so it plans a release nothing would be observed against. ` +
+        "releaseSchema does not bound this array, so an empty one parses; this gate refuses it positively rather " +
+        "than quantifying over it and finding the quantifier vacuously true.",
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  if (plan.rollbackPlan.criteria.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} declares a ${plan.rollbackPlan.strategy} rollback strategy and no criterion that would trigger ` +
+        "it, so nothing says when the release would be taken back.",
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+
+  // The one reader `releaseIntent` has, and it is a *path* comparison rather
+  // than a byte pin. See `shipGatePinnedReferences` for why this plane
+  // deliberately gets no pinned-reference family: `legion review --accept`
+  // rewrites `taskgraph.json` through `repointChangeProposalInputs`, so a digest
+  // recorded before the accept drifts during it and the gate would report
+  // `unsatisfied` for a governance write that changed no task. What the plan has
+  // to be self-consistent about is *which document its taskRefs were drawn from*,
+  // and that is a path.
+  const taskgraphPath = taskgraphPathFor(change.changeId);
+  if (taskgraphPath !== undefined && (plan.releaseIntent.path as string) !== taskgraphPath) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} names ${plan.releaseIntent.path as string} as the release intent it was planned against, and a ` +
+        `plan's task coverage is drawn from this change's task graph at ${taskgraphPath}. A plan authored against ` +
+        "something else records coverage of a set this report cannot check it over.",
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+
+  const deriving = tasksDeriving("release_observation_plan", input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason:
+        `${describe} exists, and no task of this change derives release_observation_plan, so there is nothing for a ` +
+        "plan to observe.",
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+
+  const covered = new Set(plan.taskRefs.map((taskId) => taskId as string));
+  if (covered.size === 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} names no task at all, so it is a plan that observes none of this change. This gate is derived ` +
+        `by ${deriving.length} task${deriving.length === 1 ? "" : "s"} and is satisfied only when the plan speaks ` +
+        "for all of them.",
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const uncovered = deriving.map(input.taskIdFor).filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unsatisfied",
+      reason:
+        `${describe} names ${covered.size} task${covered.size === 1 ? "" : "s"}, leaving ${uncovered.join(", ")} ` +
+        `uncovered. This gate is derived by ${deriving.length} task${deriving.length === 1 ? "" : "s"} of this ` +
+        "change and is satisfied only when the plan observes all of them.",
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+
+  return {
+    status: "satisfied",
+    reason:
+      `${describe} observes it in ${plan.environment}, an environment this change is released into: ` +
+      `${plan.healthCriteria.length} health criteri` +
+      `${plan.healthCriteria.length === 1 ? "on" : "a"}, a ${plan.rollbackPlan.strategy} rollback plan with ` +
+      `${plan.rollbackPlan.criteria.length} criteri${plan.rollbackPlan.criteria.length === 1 ? "on" : "a"}, and ` +
+      `coverage of all ${deriving.length} task${deriving.length === 1 ? "" : "s"} that derive ` +
+      "release_observation_plan. This is a plan and not an observation: nothing here records that the release " +
+      "happened or that the criteria held. legion dev board release-observation is where a post-deployment report " +
+      "lands, and it is a different plane that no ship gate reads."
+  };
+}
+
+/**
+ * `release_observation_plan`, over its two producers.
+ *
+ * The release plan is the primary, and it wins the tie against an equally-ranked
+ * attestation outcome for `combineProducerOutcomes`' stated reason: both are true
+ * sentences and only one of them names a route that leaves the change carrying a
+ * checkable document. `absenceRecovery` is passed because `attestRecovery`'s
+ * sentence — "no build produces one: the gate reads the attestation plane" — is
+ * true of the attestation half and misleading about the gate, which `legion
+ * release plan` satisfies without anybody attesting anything.
+ */
+function releaseObservationPlanStatus(input: {
+  readonly change: ShipGateChangeFacts | undefined;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): GateOutcome {
+  return combineProducerOutcomes({
+    primary: releasePlanOutcome(input),
+    secondary: attestationGateStatus({
+      gate: "release_observation_plan",
+      kinds: ATTESTATION_GATE_KINDS.release_observation_plan as readonly AttestationKind[],
+      change: input.change,
+      tasks: input.tasks,
+      taskIdFor: input.taskIdFor,
+      absenceRecovery: RELEASE_PLAN_RECOVERY
+    }),
+    describePrimary: "release observation plan",
+    describeSecondary: "release-observation attestation"
+  });
+}
+
+/**
+ * Would this one document, alone, satisfy `release_observation_plan`?
+ *
+ * Exported for `legion release plan`, on `isLiveOracleGrant`'s,
+ * `isSatisfyingAttestation`'s and `isDomainReviewSatisfying`'s rule — this
+ * series' third lesson, which it has now paid for four times: a writer whose
+ * idea of "done" is weaker than the reader's idea of "satisfied" reports success,
+ * writes nothing, and leaves the change permanently blocked with no flag anywhere
+ * that would make it write. So this is not a second implementation. It calls
+ * `releasePlanOutcome` against a one-plane fact set and asks whether the verdict
+ * is `satisfied`.
+ *
+ * **One deliberate narrowing, and it can only make the predicate less generous
+ * about reporting "nothing to do".** The attestation plane is not consulted: an
+ * existing `not_applicable` waiver must never make this command report "already
+ * planned" and refuse to write the plan the operator asked for. It answers about
+ * the artifact route alone, which is the route this verb writes.
+ */
+export function isSatisfyingReleasePlan(input: {
+  readonly release: Release;
+  readonly changeId: string;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): boolean {
+  return releasePlanShortfall(input) === undefined;
+}
+
+/**
+ * The gate's own sentence about why this one document would not satisfy it, or
+ * `undefined` when it would.
+ *
+ * The same call `isSatisfyingReleasePlan` makes, returning the reason rather than
+ * only the bit — so `legion release plan` can warn in **the reader's words**
+ * instead of paraphrasing the reader. A paraphrase is what went wrong in the
+ * warning this replaces: `release_plan_partial_coverage` told the operator "ship
+ * will report it unsatisfied" over a set the gate does not quantify over, so the
+ * one sentence written to make the gate's verdict predictable could be wrong
+ * about it.
+ */
+export function releasePlanShortfall(input: {
+  readonly release: Release;
+  readonly changeId: string;
+  readonly tasks: readonly TaskContract[];
+  readonly taskIdFor: (task: TaskContract) => string;
+}): string | undefined {
+  const outcome = releasePlanOutcome({
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: undefined,
+      approvals: undefined,
+      attestations: undefined,
+      reviews: undefined,
+      deltas: undefined,
+      oracles: undefined,
+      taskRuns: undefined,
+      release: { kind: "document", document: input.release },
+      evaluatedAt: undefined,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return outcome.status === "satisfied" ? undefined : outcome.reason;
 }
 
 /** The evidence item `legion build` writes about declared acceptance paths. */
@@ -5398,16 +6043,17 @@ function evaluateGate(input: {
    * function with plain literals and no facts at all. Making absence a type
    * makes the guard structural instead of a thing to remember once per gate.
    *
-   * Eight arms read it now — `explicit_human_approval` the approvals plane,
+   * Nine arms read it now — `explicit_human_approval` the approvals plane,
    * `approved_delta_spec` the deltas, `integration_or_real_interface_checks` the
    * oracles and the pin verifier, `whole_change_acceptance_evidence` the
    * acceptance and the clock, `approved_spec_and_oracle` all of those plus the
    * run plane, the three attestation gates the attestation plane, and
    * `architecture_or_security_review` the reviews plane beside it, and
    * `protected_acceptance_tests` the oracles for its declaration set plus the
-   * approvals and the run plane for the decision that may permit a change — so the
-   * signature is doing the job it was landed for: each gate's diff touches its
-   * own `case` rather than this one.
+   * approvals and the run plane for the decision that may permit a change, and
+   * `release_observation_plan` the release plane beside the attestation one — so
+   * the signature is doing the job it was landed for: each gate's diff touches
+   * its own `case` rather than this one.
    */
   readonly change: ShipGateChangeFacts | undefined;
   /**
@@ -5572,11 +6218,30 @@ function evaluateGate(input: {
       // task id, which is where the operator can act on it.
       return protectedAcceptancePathsStatus({ taskId, entries, change: input.change });
 
+    case "release_observation_plan":
+      // No `taskId`, no `reviews`, no `entries`, on `approved_delta_spec`'s
+      // rule: a change-scoped gate must not be able to answer per task even by
+      // accident, so it is not handed anything per task to answer with. `tasks`
+      // and `taskIdFor` are the *denominator* the release plan's `taskRefs` are
+      // checked against.
+      return releaseObservationPlanStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
+
     default:
-      // Release observation has no producer in the workflow yet. It is now the
-      // only gate this arm answers for, and `tests/change-r3-ordering` derives
-      // that set from this very reason string so the next release reddens it as
-      // it closes the last one.
+      // **Every `RiskGateId` now has a `case`, so this arm answers for none of
+      // them.** It is kept rather than deleted, and the reason is that
+      // `tests/change-r3-ordering` derives its producerless set by matching this
+      // exact reason string: with the arm gone that derivation returns `[]` by
+      // construction and becomes a tautology that can never redden again, which
+      // is precisely what that file's own comment warns against. With the arm
+      // here it is a permanent tripwire instead — let one of the twenty gates
+      // regress to this reason and it reddens there without anybody having
+      // touched this file. `RiskGateId` is a closed union, so a gate added
+      // upstream lands here too, which is the runtime net `GATE_SCOPE` and
+      // `GATE_RECOVERY` make the same argument for being total records.
       return {
         status: "unevaluable",
         reason: "Legion does not yet produce evidence for this gate."
@@ -5697,6 +6362,24 @@ export function shipGatePinnedReferences(input: {
     // because a dropped family fails silently and in the direction of looking
     // correct, and the next reader would otherwise have to guess whether the
     // omission was a decision.
+    //
+    // **And no family for `releaseIntent`, deliberately, on a measurement rather
+    // than a preference.** `releaseBaseSchema.releaseIntent` is a required
+    // `artifactReferenceSchema`, so a seventh family is the obvious reading — and
+    // it would break the gate it was added for. `legion review --accept` calls
+    // `updateChangeAcceptance`, which writes `change.yaml` and then re-points
+    // `taskgraph.json` and `evidence-index.json` through
+    // `repointChangeProposalInputs`: every candidate referent of `releaseIntent`
+    // moves bytes during the accept. A digest recorded before it would answer
+    // `drift`, and `release_observation_plan` would report `unsatisfied` for a
+    // governance write that changed no task and no criterion. What replaces the
+    // pin is strictly stronger rather than weaker: the gate compares
+    // `releaseIntent.path` against the change's own task graph path and
+    // re-derives the coverage claim against the *live* taskgraph on every ship,
+    // which is a check a digest could not make at all.
+    //
+    // `shipGateSourcePaths` does not move either: a release plan cites no report,
+    // so there are no bytes for `classifyEvidenceSource` to read.
   ];
 }
 
@@ -5967,7 +6650,21 @@ const GATE_RECOVERY: Readonly<
     "e2e-evaluation"
   ]),
   explicit_human_approval: undefined,
-  release_observation_plan: undefined,
+  // Six unmet states with three cures — no plan, a plan whose status records a
+  // failed or taken-back release, a plan with no health criterion, one whose
+  // rollback plan has no criterion, one that covers only part of the change, and
+  // a `release.json` that will not read — so the verdict carries its own and
+  // `shipGateRecovery` prefers that. What stays here is the state a caller
+  // holding only a gate id can be answered for, and the one every change on disk
+  // is in: nothing plans the release, because until this release nothing could.
+  //
+  // Leaving this `undefined` was measurable, not theoretical. On an R3 change
+  // already built, reviewed and accepted, this was the *only* unmet gate — so
+  // `shipGateRecovery` found no recovery among the unmet set, fell back to ship's
+  // own `{command: "legion build"}`, and advised a build on a change that had
+  // already been built. That is the exits-0-and-still-blocked loop this series
+  // exists to close, emitted by the aggregator.
+  release_observation_plan: RELEASE_PLAN_RECOVERY,
   rollback_or_forward_fix_evidence: attestRecovery("rollback_or_forward_fix_evidence", [
     "rollback-evidence",
     "forward-fix-evidence"

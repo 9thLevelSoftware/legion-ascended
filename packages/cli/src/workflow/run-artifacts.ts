@@ -10,6 +10,7 @@ import {
   type ChangeId,
   type ContractId,
   type EvidenceId,
+  type ReleaseId,
   type ReviewId,
   type RunId,
   type TaskId
@@ -118,6 +119,31 @@ export function attestationIdForKind(input: {
     "attestation",
     derivedSuffix(input.changeId.slice("chg_".length), `-attestation-${input.attests}`)
   ) as AttestationId;
+}
+
+/**
+ * The release plan id for one change.
+ *
+ * Identity is `(changeId)` alone, because the artifact is singular per change at
+ * `release.json` — the path already says which change it is about, and the id is
+ * what a payload and a diagnostic can name it by. The two alternatives
+ * `attestationIdForKind` rejects are rejected here for the same reasons, one
+ * degree sharper:
+ *
+ *  - **Not a sequence tail.** `reviewIdForChange`'s idiom accumulates, which is
+ *    right for reviews. A release plan is *re-planned* rather than accumulated,
+ *    and the gate reads the document's `status` — so a superseded `failed` plan
+ *    sitting beside a fresh `requested` one is the favourable-hides-unfavourable
+ *    fail-open with the negative fact in the file that can go missing.
+ *  - **Not the environment and not the author.** Two plans for two environments
+ *    would be two files and the gate's existential would find whichever one was
+ *    favourable; the environment lives inside the document, where a reader sees
+ *    it.
+ *
+ * The tail is 8 characters, reserving 21 of 64, so `derivedSuffix` cannot throw.
+ */
+export function releaseIdForChange(input: { readonly changeId: ChangeId }): ReleaseId {
+  return formatEntityId("release", derivedSuffix(input.changeId.slice("chg_".length), "-release")) as ReleaseId;
 }
 
 function derivedSuffix(baseSuffix: string, tail: string): string {

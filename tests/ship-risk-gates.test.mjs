@@ -153,30 +153,40 @@ test("a missing accepted review leaves the independent review gate unsatisfied",
   assert.equal(report.ready, false);
 });
 
-test("gates with no producer are unevaluable, not silently satisfied", () => {
-  const report = derive({ tier: "R3", ...PASSING_R2 });
+test("no gate answers from evaluateGate's producerless arm, and the counts still add up", () => {
+  // **The retirement its predecessor's comment asked for.** That test named one
+  // gate that fell through `evaluateGate`'s `default:` arm and asserted it said
+  // so rather than passing, and it had been re-pointed five times as each gate
+  // gained a producer: `protected_oracle`, then
+  // `whole_change_acceptance_evidence`, then `independent_baseline`, then
+  // `architecture_or_security_review`, then `protected_acceptance_tests`.
+  // `release_observation_plan` was the last one left and gains a producer in this
+  // release, so there is no sixth gate to re-point at — and re-pointing at a gate
+  // that *has* a producer would make the assertion vacuous.
+  //
+  // What replaces it is the claim in the other direction, which is the one that
+  // can still fail: **no** gate at any tier answers from that arm. The reason
+  // string is matched exactly, as `tests/change-r3-ordering` matches it, so a
+  // gate that silently regresses to the arm reddens here without anybody having
+  // touched this file.
+  const producerless = [];
+  for (const tier of ["R0", "R1", "R2", "R3"]) {
+    const report = derive({ tier, ...PASSING_R2 });
+    for (const gate of report.gates) {
+      if (gate.reason === "Legion does not yet produce evidence for this gate.") producerless.push(gate.gate);
+    }
+    // The counting arithmetic, preserved from the retired test: every gate lands
+    // in exactly one bucket, so a gap is visible on every ship rather than
+    // absorbed into the satisfied total.
+    assert.equal(report.satisfied + report.unsatisfied + report.unevaluable, report.gates.length, tier);
+  }
+  assert.deepEqual([...new Set(producerless)], []);
 
-  // Re-pointed at `release_observation_plan`, which is R3-only and genuinely has
-  // no producer. It has now been re-pointed five times: `protected_oracle` lost
-  // the job when oracle results became their own evidence item,
-  // `whole_change_acceptance_evidence` lost it when acceptance gained a producer,
-  // `independent_baseline` lost it when the attestation plane gave all three of
-  // its gates producers, `architecture_or_security_review` lost it when review
-  // domains gave it one, and `protected_acceptance_tests` loses it in this
-  // release, when the guarded harness began observing declared acceptance paths.
-  // The point of this test is the `default:` arm of `evaluateGate` — a gate
-  // Legion cannot answer at all must say so rather than pass — so it has to name
-  // a gate that still falls through that arm, not one that merely used to.
-  // `release_observation_plan` is the last one left, so the next release retires
-  // this test rather than re-pointing it a sixth time.
-  const unproduced = report.gates.find((entry) => entry.gate === "release_observation_plan");
-  assert.equal(unproduced.status, "unevaluable");
-  assert.match(unproduced.reason, /does not yet produce/);
-
-  // They are counted so the gap is visible on every ship, never absorbed
-  // into the satisfied total.
-  assert.ok(report.unevaluable > 0);
-  assert.equal(report.satisfied + report.unsatisfied + report.unevaluable, report.gates.length);
+  // And an R3 change with no facts is still blocked — by gates that name what is
+  // missing, rather than by an arm that says Legion cannot answer at all.
+  const r3 = derive({ tier: "R3", ...PASSING_R2 });
+  assert.ok(r3.unevaluable > 0);
+  assert.equal(r3.ready, false);
 });
 
 test("oracle gates read the oracle evidence item, not declared-verification", () => {
@@ -440,6 +450,63 @@ function domainReview({
       findings,
       supersedes: []
     }
+  };
+}
+
+// --- the release plane ------------------------------------------------------
+
+/**
+ * A release plan the gate would accept, with the knobs each arm turns.
+ *
+ * `releaseIntent.path` is derived from the change id rather than written out,
+ * because the gate compares it against `artifactPathForRole({role: "taskgraph"})`
+ * — a fixture with a hard-coded path would silently start failing the
+ * release-intent arm if that layout ever moved, which is a different defect from
+ * the one any of these tests is about.
+ */
+function releasePlan({
+  changeId = CHANGE_ID,
+  status = "requested",
+  environment = "staging",
+  healthCriteria = ["p99 quote latency stays under 400ms for 30 minutes"],
+  rollbackStrategy = "revert",
+  rollbackCriteria = ["quote error rate exceeds 1% over any 5 minute window"],
+  taskRefs = [TASK_ID],
+  releaseIntentPath
+} = {}) {
+  return {
+    id: `rel_${changeId.slice("chg_".length)}-release`,
+    changeId,
+    status,
+    environment,
+    releaseIntent: {
+      path: releaseIntentPath ?? `.legion/project/changes/${changeId}/taskgraph.json`,
+      sha256: `sha256:${"e".repeat(64)}`
+    },
+    taskRefs,
+    approvalRefs: [],
+    evidenceRefs: [],
+    healthCriteria,
+    rollbackPlan: { strategy: rollbackStrategy, criteria: rollbackCriteria, evidenceRefs: [] }
+  };
+}
+
+/**
+ * A change whose only planes are the two `release_observation_plan` reads.
+ *
+ * `attestations` is present and empty rather than absent for the same reason
+ * `reviewedChange` does it: this gate refuses to answer from a release plane it
+ * can read while an attestation plane it *cannot* read might hold a record, so a
+ * fixture reaching the satisfied arm has to load both.
+ */
+function plannedRelease({ release, attestations = [] } = {}) {
+  return {
+    changeId: CHANGE_ID,
+    release,
+    attestations,
+    evaluatedAt: "2026-08-10T00:00:00.000Z",
+    verifyPin: () => "match",
+    classifySource: classifier()
   };
 }
 
@@ -961,6 +1028,65 @@ const SCENARIOS = [
     change: protectedPathsChange({
       approvals: [protectedPathsApproval(EXECUTION_STARTED_AT)],
       taskRuns: [{ id: "run_transcript-attempt-1", taskId: TASK_ID, startedAt: EXECUTION_STARTED_AT }]
+    })
+  },
+  {
+    // The twenty-sixth, and the first of this release's four. A release plan
+    // that observes the whole change: one health criterion, a revert strategy
+    // with one trigger, and coverage of the only task that derives the gate. The
+    // one R3 cell in this file that reaches `satisfied` on the artifact route.
+    name: "a release plan that observes the whole change",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: plannedRelease({ release: { kind: "document", document: releasePlan() } })
+  },
+  {
+    // The twenty-seventh, and the pair's other half. Identical in every field but
+    // one: `taskRefs` names a task this change does not have, so the plan
+    // observes none of what it claims to. `unsatisfied` rather than
+    // `unevaluable`, because somebody wrote a plan and it does not cover the
+    // change — which is a recorded failure to answer rather than the absence of a
+    // record.
+    name: "a release plan that observes a task this change does not have",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: plannedRelease({
+      release: { kind: "document", document: releasePlan({ taskRefs: ["tsk_phase-1-elsewhere"] }) }
+    })
+  },
+  {
+    // The twenty-eighth. Identical to the twenty-sixth in every field but
+    // `environment`, which is the field this gate was found reading only to quote
+    // back: a `local` plan satisfied it exactly as a `production` plan did, so
+    // `--environment local` was a route to a green R3 gate that needed no named
+    // human, no waiver reason and no `waivedGates` entry. `unsatisfied` — the
+    // document exists and plans the work rather than the release of it.
+    name: "a release plan for an environment nothing is released into",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: plannedRelease({
+      release: { kind: "document", document: releasePlan({ environment: "local" }) }
+    })
+  },
+  {
+    // The twenty-ninth. The other producer: no plan at all, and an audited
+    // `release-observation` waiver for a change that deploys nothing. It is the
+    // one arm of this gate that satisfies with nothing falsifiable behind it, and
+    // the transcript records that it satisfies — `shipGateWaivers` echoing it is
+    // asserted in tests/release-plan-gate, where the sentence can be read.
+    name: "a release waived as not applicable",
+    items: [item("declared-verification", "pass"), item("diff-reconciliation", "pass")],
+    reviews: [acceptedReview()],
+    change: plannedRelease({
+      release: { kind: "absent" },
+      attestations: [
+        attestationRecord({
+          attests: "release-observation",
+          verdict: "not_applicable",
+          sources: [WAIVER_BASIS_PIN],
+          waiverReason: "This change ships documentation only and deploys nothing."
+        })
+      ]
     })
   }
 ];
@@ -2127,11 +2253,169 @@ const BASELINE_GATE_STATUSES = {
       release_observation_plan: "unevaluable",
       rollback_or_forward_fix_evidence: "unevaluable"
     }
+  },
+  // This release's four, and each moves exactly one cell: the R3
+  // `release_observation_plan` entry. Every other cell in all sixteen blocks is
+  // identical to the rows above, which is the claim — a gate gaining a producer
+  // must not move a verdict belonging to another gate.
+  "a release plan that observes the whole change": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "satisfied",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  // The pair's other half. The only field that differs from the row above is
+  // `taskRefs`, and the cell goes from `satisfied` to `unsatisfied` rather than
+  // to `unevaluable`: a plan that names the wrong task is a record that fails to
+  // answer, not the absence of one.
+  "a release plan that observes a task this change does not have": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unsatisfied",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  // The same plan at `environment: "local"`. The one cell that differs from the
+  // scenario two above is `release_observation_plan` at R3, which is the whole
+  // claim: the environment is classified rather than rendered, so a plan for a
+  // place nothing is released into is a recorded failure to answer this gate
+  // rather than an answer to it.
+  "a release plan for an environment nothing is released into": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "unsatisfied",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
+  },
+  // The other producer, on the same gate. A plan that does not exist and an
+  // audited waiver that does — the one arm of this gate that satisfies with
+  // nothing falsifiable behind it, recorded here as satisfying so that a later
+  // change removing the waiver route reddens the transcript rather than only a
+  // unit test.
+  "a release waived as not applicable": {
+    R0: {
+      current_task_contract_or_small_change_record: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_note: "satisfied"
+    },
+    R1: {
+      task_contract: "satisfied",
+      scoped_implementer_run: "satisfied",
+      deterministic_verification: "satisfied",
+      evidence_bundle_or_log: "satisfied",
+      lightweight_independent_review: "satisfied"
+    },
+    R2: {
+      approved_delta_spec: "unevaluable",
+      protected_oracle: "unevaluable",
+      task_contract: "satisfied",
+      deterministic_verification: "satisfied",
+      task_level_independent_review: "satisfied",
+      integration_or_real_interface_checks: "unevaluable",
+      whole_change_acceptance_evidence: "unevaluable"
+    },
+    R3: {
+      independent_baseline: "unevaluable",
+      approved_spec_and_oracle: "unevaluable",
+      protected_oracle: "unevaluable",
+      deterministic_verification: "satisfied",
+      architecture_or_security_review: "unevaluable",
+      protected_acceptance_tests: "unevaluable",
+      security_or_e2e_evaluator: "unevaluable",
+      explicit_human_approval: "unevaluable",
+      release_observation_plan: "satisfied",
+      rollback_or_forward_fix_evidence: "unevaluable"
+    }
   }
 };
 
 /**
- * `report.ready` for the same twenty-five scenarios at the same four tiers.
+ * `report.ready` for the same twenty-nine scenarios at the same four tiers.
  *
  * Written out as literals rather than derived from the table above, which would
  * make the assertion a restatement of `ready = unsatisfied === 0 && unevaluable
@@ -2165,12 +2449,14 @@ const BASELINE_READY = {
   "an accepted change covering its evidence": { R0: true, R1: true, R2: false, R3: false },
   "a change rebuilt after its sign-off": { R0: true, R1: true, R2: false, R3: false },
   // R3 stays blocked in every one of these, and that is the honest report rather
-  // than a weaker one: three of R3's ten gates still have no producer — and even
-  // the five attestation scenarios below move exactly one gate each, leaving the
-  // other nine unmet — so no fixture in this file could make R3 ready and one
-  // that appeared to would be lying about the release.
-  // `tests/change-r3-ordering` derives the producerless set from `evaluateGate`'s
-  // own `default:` reason string and asserts it in both directions.
+  // than a weaker one: every fixture in this file moves at most one R3 gate,
+  // leaving the other nine unmet, so no row here could make R3 ready and one that
+  // appeared to would be lying about the release. As of this release every R3
+  // gate *does* have a producer, and the change that carries all ten really does
+  // report `ready` — that claim needs the whole CLI to make and is made end to
+  // end by the R3 milestone test in tests/change-r3-ordering, which also derives
+  // the producerless set from `evaluateGate`'s own `default:` reason string and
+  // asserts it is now empty.
   "a spec and oracle approved before execution": { R0: true, R1: true, R2: false, R3: false },
   "an oracle approved in the instant execution began": { R0: true, R1: true, R2: false, R3: false },
   "a security evaluation attested against a clean threat model": { R0: true, R1: true, R2: false, R3: false },
@@ -2192,7 +2478,14 @@ const BASELINE_READY = {
   "a run that left its protected acceptance test alone": { R0: true, R1: true, R2: false, R3: false },
   "a run that changed a protected acceptance test": { R0: true, R1: true, R2: false, R3: false },
   "a protected acceptance test changed under a decision taken first": { R0: true, R1: true, R2: false, R3: false },
-  "a protected acceptance test changed under a decision taken too late": { R0: true, R1: true, R2: false, R3: false }
+  "a protected acceptance test changed under a decision taken too late": { R0: true, R1: true, R2: false, R3: false },
+  // This release's four. R3 stays `false` in all of them for the reason above:
+  // each moves exactly one of R3's ten gates, and nine are unmet for want of a
+  // fixture rather than for want of a producer.
+  "a release plan that observes the whole change": { R0: true, R1: true, R2: false, R3: false },
+  "a release plan that observes a task this change does not have": { R0: true, R1: true, R2: false, R3: false },
+  "a release plan for an environment nothing is released into": { R0: true, R1: true, R2: false, R3: false },
+  "a release waived as not applicable": { R0: true, R1: true, R2: false, R3: false }
 };
 
 test("no gate verdict moved: every tier and gate, against a pre-change transcript", () => {
@@ -2217,7 +2510,7 @@ test("no gate verdict moved: every tier and gate, against a pre-change transcrip
   }
 });
 
-test("the only change facts any gate reads are acceptance, deltas, approvals, attestations, reviews, oracles, taskRuns, changeId and the clock", () => {
+test("the only change facts any gate reads are acceptance, deltas, approvals, attestations, reviews, oracles, taskRuns, release, changeId and the clock", () => {
   // The predecessor of this test asserted that no gate read any change fact,
   // by throwing on every property access. Its comment named the honest edit for
   // the day a gate started reading one: replace it with an assertion naming the
@@ -2305,10 +2598,23 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   // witness it. A populated pass is added below anyway, because the absent path
   // returns before the domain filter and the coverage quantifier run.
   //
-  // `release` still has no reader, and it is still a fail-open waiting for one.
+  // `release` joins the allow-list with `release_observation_plan`'s producer,
+  // and it is the last of the planes this trap was holding open. It is admitted
+  // with a stated reason: that gate's question *is* whether this change records
+  // a plan for how its release is observed and taken back, there is exactly one
+  // release.json per change, and there is nowhere else it could be read from.
+  //
+  // Unlike `oracles` and `taskRuns`, the read happens on the degraded path too —
+  // the gate asks the plane before anything else, and "nobody looked" is one of
+  // its distinct sentences — so it moves `ABSENT_PLANE_READS.R3` rather than
+  // needing a populated pass to witness it. A populated pass is added below
+  // anyway, driving the gate all the way to `satisfied`, because the absent arm
+  // returns before the status classification and the coverage quantifier ever
+  // run. An admission with no populated witness is an admission nothing
+  // witnesses.
   function tripwire(
     reads,
-    { acceptance, approvals, attestations, reviews, deltas, oracles, taskRuns, classifySource } = {}
+    { acceptance, approvals, attestations, reviews, deltas, oracles, taskRuns, release, classifySource } = {}
   ) {
     return new Proxy(
       // `verifyPin` and `classifySource` are the two true exemptions: the guard
@@ -2326,6 +2632,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
         deltas,
         oracles,
         taskRuns,
+        release,
         evaluatedAt: undefined
       },
       {
@@ -2341,6 +2648,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
             property === "deltas" ||
             property === "oracles" ||
             property === "taskRuns" ||
+            property === "release" ||
             property === "evaluatedAt"
           ) {
             reads.push(property);
@@ -2386,7 +2694,14 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
     // the gate order asserted rather than assumed. `taskRuns` is deliberately
     // still absent: this gate reaches it only once an item records a `fail`, so
     // no gate touches it on a degraded change.
-    R3: ["attestations", "changeId", "deltas", "reviews", "oracles", "approvals"]
+    //
+    // `release` is last, and the position is the gate order asserted rather than
+    // assumed: `release_observation_plan` is ninth of R3's ten gates, after
+    // `explicit_human_approval` which contributes `approvals`. It also depends on
+    // `releaseObservationPlanStatus` asking the release plane before the
+    // attestation one — reorder those two calls and this list moves without the
+    // gate's behaviour changing at all.
+    R3: ["attestations", "changeId", "deltas", "reviews", "oracles", "approvals", "release"]
   };
 
   for (const tier of ["R0", "R1", "R2", "R3"]) {
@@ -2467,7 +2782,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   // start consulting planes nobody loaded.
   assert.deepEqual(
     [...new Set(populatedReviewReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "release", "reviews"]
   );
 
   const populatedDeltaReads = [];
@@ -2583,7 +2898,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   });
   assert.deepEqual(
     [...new Set(populatedOrderingReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "evaluatedAt", "oracles", "reviews", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "evaluatedAt", "oracles", "release", "reviews", "taskRuns"]
   );
   // The planes are genuinely read to a decision, not merely touched: this is the
   // gate's `satisfied` arm, which no other assertion in this file reaches.
@@ -2632,7 +2947,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   });
   assert.deepEqual(
     [...new Set(populatedAttestationReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "release", "reviews", "taskRuns"]
   );
   // Read to a decision rather than merely touched: the baseline gate reaches its
   // ordering clause, which no other assertion in this file does, and the
@@ -2677,7 +2992,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   });
   assert.deepEqual(
     [...new Set(populatedDomainReviewReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews", "taskRuns"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "release", "reviews", "taskRuns"]
   );
   // Read to a decision rather than merely touched: this is the gate's `satisfied`
   // arm, which no absent-plane pass can reach.
@@ -2719,7 +3034,7 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
   });
   assert.deepEqual(
     [...new Set(populatedAcceptancePathReads)].sort(),
-    ["approvals", "attestations", "changeId", "deltas", "oracles", "reviews"]
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "release", "reviews"]
   );
   // `taskRuns` is absent from that list, and its absence is this gate's guard
   // ordering asserted rather than assumed: a `pass` needs no decision behind it,
@@ -2730,6 +3045,46 @@ test("the only change facts any gate reads are acceptance, deltas, approvals, at
     acceptancePathReport.gates.find((gate) => gate.gate === "protected_acceptance_tests").status,
     "satisfied"
   );
+
+  // And once more against a populated *release* plane, which is the last plane
+  // this trap was holding open. `release` is admitted to the R3 absent-plane list
+  // above, and that admission proves only that the plane is touched; this drives
+  // the gate all the way to `satisfied`, past the status classification, the two
+  // criteria guards, the release-intent comparison and the coverage quantifier —
+  // none of which any absent-plane pass can reach. An admission with no populated
+  // witness is an admission nothing witnesses.
+  const populatedReleaseReads = [];
+  const releaseReport = deriveShipGates({
+    tasks: [task("R3")],
+    taskIdFor: () => TASK_ID,
+    entries: [entry(PASSING_R2.items)],
+    reviews: PASSING_R2.reviews,
+    change: tripwire(populatedReleaseReads, {
+      // `chg_tripwire`, because the gate compares the plan's own `changeId`
+      // against the change being shipped: a plan too degraded to name its change
+      // must answer for nothing rather than for everything.
+      release: { kind: "document", document: releasePlan({ changeId: "chg_tripwire" }) },
+      attestations: []
+    })
+  });
+  // `taskRuns` is there for a reason that is not this gate: supplying
+  // `attestations: []` lets `independent_baseline` past its unreadable-plane arm,
+  // and that gate reads the run plane to decide whether attesting now could still
+  // help. Recorded rather than filtered, because a read this test hid would be a
+  // read nothing pins.
+  assert.deepEqual(
+    [...new Set(populatedReleaseReads)].sort(),
+    ["approvals", "attestations", "changeId", "deltas", "oracles", "release", "reviews", "taskRuns"]
+  );
+  const releaseGate = releaseReport.gates.find((gate) => gate.gate === "release_observation_plan");
+  assert.equal(releaseGate.status, "satisfied");
+  // The sentence, not only the status. Before this release the gate answered
+  // `unevaluable` for every input whatsoever, so a status-only assertion would
+  // pass against a build that checks nothing.
+  assert.match(releaseGate.reason, /observes it in staging/);
+  assert.match(releaseGate.reason, /a revert rollback plan with 1 criterion/);
+  // Change-scoped, so the subject is the change the sentence is about.
+  assert.equal(releaseGate.subjectId, "chg_tripwire");
 });
 
 /**
@@ -2764,7 +3119,14 @@ const CHANGE_SCOPED_GATES = new Set([
   // `(changeId, kind)`, and a review verdict quantified over every deriving task
   // — so left `"task"` it would repeat one change-level sentence per
   // criterion-task under a `subjectId` naming a task the sentence is not about.
-  "architecture_or_security_review"
+  "architecture_or_security_review",
+  // Added with the release plane, and the flip is again the claim rather than the
+  // consequence: there is exactly one release.json per change, its `taskRefs` are
+  // quantified over every deriving task, and the alternative producer is an
+  // attestation keyed by `(changeId, kind)`. Left `"task"` it would repeat one
+  // change-level sentence per criterion-task under a `subjectId` naming a task the
+  // sentence is not about.
+  "release_observation_plan"
 ]);
 
 test("every gate names its scope and the subject that scope refers to", () => {

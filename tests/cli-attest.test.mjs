@@ -485,21 +485,34 @@ test("a baseline attested after the build warns, cannot pass on evidence, and le
   assert.match(warning.message, /independent_baseline was satisfied by an audited waiver/);
 });
 
-test("an attestation for a kind no gate reads is written and says that it moves nothing", async (t) => {
-  // Accepted rather than refused, because refusing would make a true governance
-  // fact unrecordable and would force the release that adds the gate to ship the
-  // CLI plumbing alongside it. Succeeding in silence would be worse: the operator
-  // would see `status: "attested"` and believe a gate had moved.
+test("every attestation kind is read by some gate, so the no-reader warning has nothing left to fire on", async (t) => {
+  // **This test had no re-point target left, and that is what it now asserts.**
   //
-  // The warning is derived from the gate module's own exported set, so the release
-  // that adds the reader deletes this warning by adding one line there — there is
-  // no second list to go stale. This test has been re-pointed once for exactly
-  // that reason: it named `architecture-review` until the release that gave
-  // `architecture_or_security_review` a producer, and `release-observation` is now
-  // the one kind no gate in the module reads. Re-pointing it is the intended
-  // repair; deleting it would retire the only assertion that the warning fires.
-  const { run } = await acceptedR3(t);
+  // It was written to hold one claim: a kind no gate reads is *written* and says
+  // so, rather than being refused or succeeding in silence. It named
+  // `architecture-review` until that gate gained a producer, then
+  // `release-observation` — and this release gives that kind a reader too, so all
+  // seven `attestationKindSchema` options are now read by some gate and the
+  // warning is unreachable through the CLI.
+  //
+  // Deleting the test would retire the only assertion that the warning ever
+  // fires, and re-pointing it at a kind some gate reads would assert nothing. So
+  // the claim is derived from the compiled module instead: the unread set is
+  // computed from `GATE_READ_ATTESTATION_KINDS` and asserted empty. Add a kind
+  // upstream without a reader and this reddens, which is exactly when the warning
+  // becomes reachable again. The warning's own code path is covered directly by
+  // the unit assertion below rather than through a CLI run that can no longer
+  // produce it.
+  const { attestationKindSchema } = await import("../packages/protocol/dist/index.js");
+  const { GATE_READ_ATTESTATION_KINDS } = await import("../packages/cli/dist/workflow/ship-gates.js");
+  const unread = attestationKindSchema.options.filter((kind) => !GATE_READ_ATTESTATION_KINDS.has(kind));
+  assert.deepEqual(unread, [], "a kind with no reader is recordable and moves nothing; none is left");
+  assert.equal(GATE_READ_ATTESTATION_KINDS.size, attestationKindSchema.options.length);
 
+  // And the kind that was the stand-in until this release now moves the gate that
+  // reads it — through the artifact route, which is the one the gate prefers. The
+  // waiver route is asserted end to end in tests/cli-release-plan.
+  const { run } = await acceptedR3(t);
   const attested = await run(
     "attest",
     "release-observation",
@@ -514,16 +527,15 @@ test("an attestation for a kind no gate reads is written and says that it moves 
   assert.equal(attested.exitCode, 0, attested.stdout + attested.stderr);
   const payload = parseJsonOutput(attested);
   assert.equal(payload.status, "attested");
-  const warning = payload.warnings.find((entry) => entry.code === "attestation_kind_has_no_reader");
-  assert.notEqual(warning, undefined);
-  assert.match(warning.message, /does not move any gate/);
+  assert.equal(payload.warnings, undefined, "the kind has a reader now, so no no-reader warning is due");
 
-  // And the gate it looks like it should have moved is untouched, still answering
-  // from `evaluateGate`'s `default:` arm.
+  // An `unknown` verdict asserts nothing, so the gate stays unmet — and it says
+  // what is missing rather than that Legion cannot answer it.
   const shipPayload = parseJsonOutput(await run("ship", "--json"));
   const row = shipPayload.diagnostics.find((entry) => entry.gate === "release_observation_plan");
   assert.notEqual(row, undefined);
-  assert.match(row.message, /does not yet produce/);
+  assert.doesNotMatch(row.message, /does not yet produce/);
+  assert.match(row.message, /No release plan is recorded for change chg_/);
 });
 
 test("an architecture-review pass is recorded on a person's sentence, and refused without one", async (t) => {

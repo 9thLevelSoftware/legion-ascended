@@ -283,6 +283,14 @@ export function artifactPathForRole(input: ArtifactPathForRoleInput): ArtifactPa
       const attestationId = parseAttestationId(input.attestationId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/attestations/${attestationId}.json`);
     }
+    case "release": {
+      // Singular per change, like `taskgraph`, `evidence-index` and `archive`,
+      // so the path takes only a `changeId` and `ArtifactPathForRoleInput` gains
+      // no `releaseId` field. The document still carries a `rel_` id — the path
+      // is the identity, and the id is what a payload can name.
+      const changeId = parseChangeId(input.changeId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/release.json`);
+    }
     case "archive": {
       const changeId = parseChangeId(input.changeId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/archive.json`);

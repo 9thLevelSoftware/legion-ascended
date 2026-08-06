@@ -15263,6 +15263,11 @@ var artifactRoleSchema = _enum2([
   "review",
   "approval",
   "attestation",
+  // Widening a `z.enum` keeps every document already on disk valid, which is why
+  // each release that adds an artifact role adds it here rather than minting a
+  // parallel role vocabulary. `release` is the singular per-change release plan
+  // at `.legion/project/changes/<changeId>/release.json`.
+  "release",
   "archive"
 ]);
 var artifactRevisionSchema = strictObject({
@@ -15303,8 +15308,9 @@ var releaseDeploymentSchema = strictObject({
   deploymentId: string2().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/, "Invalid deployment ID"),
   deployedAt: utcTimestampSchema
 });
+var releaseRollbackStrategySchema = _enum2(["revert", "disable", "restore", "manual"]);
 var releaseRollbackPlanSchema = strictObject({
-  strategy: _enum2(["revert", "disable", "restore", "manual"]),
+  strategy: releaseRollbackStrategySchema,
   criteria: array(string2().min(1).max(1024)).min(1),
   evidenceRefs: array(evidenceIdSchema)
 });
@@ -15321,6 +15327,15 @@ var releaseBaseSchema = schemaMetadataSchema.extend({
   environment: releaseEnvironmentSchema,
   releaseIntent: artifactReferenceSchema,
   deployment: releaseDeploymentSchema.optional(),
+  // **`taskRefs` and `healthCriteria` are deliberately not `.min(1)`, and the
+  // gate does not inherit its truth claim from that.** `release_observation_plan`
+  // requires at least one health criterion and coverage of every deriving task,
+  // and it checks both itself — `[].every(...)` is `true`, so a quantifier over
+  // either of these arrays is vacuous at zero length. Tightening the published
+  // schema would change the shape of an entity for a check the gate and
+  // `legion release plan` have to make anyway, and `attestationGateStatus` keeps
+  // its own `sources.length === 0` guard for exactly this reason even though
+  // `.min(1)` forbids it there.
   taskRefs: array(taskIdSchema),
   approvalRefs: array(approvalIdSchema),
   evidenceRefs: array(evidenceIdSchema),
@@ -20092,14 +20107,14 @@ var ReleaseObservationBoardAggregator = class {
   aggregate(input) {
     const validated = validateInput(input);
     if (!validated.ok) {
-      const failure16 = deepFreeze4({
+      const failure17 = deepFreeze4({
         ok: false,
         schemaVersion: RELEASE_OBSERVATION_ADAPTER_SCHEMA_VERSION,
         kind: RELEASE_OBSERVATION_ADAPTER_KIND,
         changeId: input.changeId,
         issues: validated.issues
       });
-      return failure16;
+      return failure17;
     }
     const report = input.report;
     const eventType = validated.eventType;
@@ -26641,6 +26656,10 @@ function artifactPathForRole(input) {
       const attestationId = parseAttestationId(input.attestationId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/attestations/${attestationId}.json`);
     }
+    case "release": {
+      const changeId = parseChangeId(input.changeId);
+      return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/release.json`);
+    }
     case "archive": {
       const changeId = parseChangeId(input.changeId);
       return canonicalProjectArtifactPath(`${PROJECT_ARTIFACT_PATHS.changes}/${changeId}/archive.json`);
@@ -32528,6 +32547,203 @@ async function listAttestationsForChange(input) {
   return { ok: true, status: "read", attestations, skipped, diagnostics: [] };
 }
 
+// packages/artifacts/dist/releases/service.js
+var INVALID_RELEASE_PATH = ".legion/project/changes/invalid-change/release.json";
+var ARTIFACT_REVISION_METADATA_KEY5 = "artifact_revision";
+function failure12(status2, diagnostics) {
+  return { ok: false, status: status2, diagnostics };
+}
+function releaseDiagnostic(input) {
+  return diagnosticForPath({
+    code: input.code,
+    message: input.message,
+    path: input.path ?? INVALID_RELEASE_PATH
+  });
+}
+function schemaDiagnostics9(input) {
+  if (input.issues === void 0 || input.issues.length === 0) {
+    return [
+      releaseDiagnostic({
+        code: input.code,
+        message: "Release failed schema validation.",
+        path: input.path
+      })
+    ];
+  }
+  return input.issues.map((issue2) => releaseDiagnostic({
+    code: input.code,
+    message: `${issue2.message}${issue2.path && issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
+    path: input.path
+  }));
+}
+function parseChangeId10(input) {
+  const parsed = changeIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure12("invalid", parsed.error.issues.map((issue2) => releaseDiagnostic({ code: "invalid_change_id", message: issue2.message })));
+  }
+  return parsed.data;
+}
+function parseBaseGitSha9(input, artifactPath) {
+  if (input === void 0)
+    return void 0;
+  const parsed = gitShaSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure12("invalid", parsed.error.issues.map((issue2) => releaseDiagnostic({ code: "invalid_base_git_sha", message: issue2.message, path: artifactPath })));
+  }
+  return parsed.data;
+}
+function assertExpectedRevision7(value, artifactPath) {
+  if (!Number.isInteger(value) || value < 0) {
+    return failure12("invalid", [
+      releaseDiagnostic({
+        code: "invalid_expected_revision",
+        message: "Expected revision must be a non-negative integer.",
+        path: artifactPath
+      })
+    ]);
+  }
+  return void 0;
+}
+function releasePath(changeId) {
+  return artifactPathForRole({ role: "release", changeId });
+}
+function storeArtifactRevision5(document, revision) {
+  const parsed = releaseSchema.safeParse({
+    ...document,
+    metadata: {
+      ...document.metadata ?? {},
+      attributes: {
+        ...document.metadata?.attributes ?? {},
+        [ARTIFACT_REVISION_METADATA_KEY5]: revision
+      }
+    }
+  });
+  if (!parsed.success) {
+    return failure12("invalid", schemaDiagnostics9({
+      code: "invalid_release",
+      path: releasePath(document.changeId),
+      issues: parsed.error.issues
+    }));
+  }
+  return parsed.data;
+}
+function storedArtifactRevision5(document) {
+  const value = document.metadata?.attributes?.[ARTIFACT_REVISION_METADATA_KEY5];
+  if (typeof value === "number" && Number.isInteger(value) && value > 0)
+    return value;
+  return 1;
+}
+async function writeRelease(input) {
+  const parsed = releaseSchema.safeParse(input.document);
+  if (!parsed.success) {
+    return failure12("invalid", schemaDiagnostics9({
+      code: "invalid_release",
+      path: INVALID_RELEASE_PATH,
+      issues: parsed.error.issues
+    }));
+  }
+  const artifactPath = releasePath(parsed.data.changeId);
+  const expectedRevision = input.expectedRevision ?? 0;
+  const revisionError = assertExpectedRevision7(expectedRevision, artifactPath);
+  if (revisionError !== void 0)
+    return revisionError;
+  const baseGitSha = parseBaseGitSha9(input.baseGitSha, artifactPath);
+  if (baseGitSha !== void 0 && typeof baseGitSha !== "string")
+    return baseGitSha;
+  let supersedes;
+  if (expectedRevision > 0) {
+    const current = await readRelease({
+      repositoryRoot: input.repositoryRoot,
+      changeId: parsed.data.changeId
+    });
+    if (!current.ok)
+      return current;
+    if (current.revision.revision !== expectedRevision) {
+      return failure12("conflict", [
+        releaseDiagnostic({
+          code: "revision_conflict",
+          message: `stale artifact revision: expected ${expectedRevision}, current ${current.revision.revision}`,
+          path: artifactPath
+        })
+      ]);
+    }
+    supersedes = current.reference;
+  }
+  const document = storeArtifactRevision5(parsed.data, expectedRevision + 1);
+  if ("diagnostics" in document)
+    return document;
+  const content = stableProtocolJson(document);
+  try {
+    const write = await writeRevisionedArtifact({
+      repositoryRoot: input.repositoryRoot,
+      artifactPath,
+      role: "release",
+      content,
+      expectedRevision,
+      currentRevision: expectedRevision,
+      mediaType: "application/json",
+      ...baseGitSha === void 0 ? {} : { baseGitSha },
+      ...supersedes === void 0 ? {} : { supersedes }
+    });
+    return {
+      ok: true,
+      status: expectedRevision === 0 ? "created" : "updated",
+      document,
+      artifactPath: write.artifactPath,
+      reference: write.reference,
+      revision: write.revision,
+      diagnostics: []
+    };
+  } catch (error51) {
+    if (error51 instanceof ArtifactRevisionConflictError) {
+      return failure12("conflict", [
+        releaseDiagnostic({ code: "revision_conflict", message: error51.message, path: artifactPath })
+      ]);
+    }
+    throw error51;
+  }
+}
+async function readRelease(input) {
+  const changeId = parseChangeId10(input.changeId);
+  if (typeof changeId !== "string")
+    return changeId;
+  const artifactPath = releasePath(changeId);
+  const read = await readJsonArtifact({
+    repositoryRoot: input.repositoryRoot,
+    artifactPath,
+    schema: releaseSchema
+  });
+  if (!read.ok) {
+    const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
+    return failure12(status2, read.diagnostics);
+  }
+  if (read.value.changeId !== changeId) {
+    return failure12("invalid", [
+      releaseDiagnostic({
+        code: "release_change_mismatch",
+        message: `Release change ID ${read.value.changeId} does not match requested change ${changeId}.`,
+        path: artifactPath
+      })
+    ]);
+  }
+  const storedRevision = storedArtifactRevision5(read.value);
+  return {
+    ok: true,
+    status: "read",
+    document: read.value,
+    artifactPath,
+    reference: read.reference,
+    revision: artifactRevisionForContent({
+      role: "release",
+      path: artifactPath,
+      content: read.bytes,
+      revision: storedRevision,
+      mediaType: "application/json"
+    }),
+    diagnostics: []
+  };
+}
+
 // packages/artifacts/dist/traceability/service.js
 var INVALID_TRACEABILITY_PATH = ".legion/project/changes/invalid-change/traceability.json";
 var HIGH_RISK_TIERS = /* @__PURE__ */ new Set(["R2", "R3"]);
@@ -32563,7 +32779,7 @@ function traceabilityDiagnostic(input) {
     path: input.path ?? INVALID_TRACEABILITY_PATH
   });
 }
-function failure12(status2, diagnostics, report) {
+function failure13(status2, diagnostics, report) {
   return {
     ok: false,
     status: status2,
@@ -32571,10 +32787,10 @@ function failure12(status2, diagnostics, report) {
     ...report === void 0 ? {} : { report }
   };
 }
-function parseChangeId10(input) {
+function parseChangeId11(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure12("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
+    return failure13("invalid", parsed.error.issues.map((issue2) => traceabilityDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
@@ -33225,12 +33441,12 @@ function validateEvidenceTraceTargets(input) {
 async function loadOracles(input) {
   const manifest = await deriveOracleManifest(input);
   if (!manifest.ok)
-    return failure12(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
+    return failure13(manifest.status === "not_found" ? "not_found" : "invalid", manifest.diagnostics);
   const oracles = [];
   for (const revision of manifest.manifest.oracles) {
     const oracleId = oracleIdFromPath(revision.artifact.path);
     if (oracleId === void 0) {
-      return failure12("invalid", [
+      return failure13("invalid", [
         traceabilityDiagnostic({
           code: "invalid_oracle_manifest_path",
           message: `Oracle manifest contains a path that does not end in an oracle ID: ${revision.artifact.path}.`,
@@ -33244,7 +33460,7 @@ async function loadOracles(input) {
       oracleId
     });
     if (!oracle.ok)
-      return failure12(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
+      return failure13(oracle.status === "not_found" ? "not_found" : "invalid", oracle.diagnostics);
     oracles.push(oracle);
   }
   return oracles.sort((left, right) => compareStrings5(left.document.id, right.document.id));
@@ -33252,17 +33468,17 @@ async function loadOracles(input) {
 async function loadTraceabilityArtifacts(input) {
   const change = await loadChangeBundle(input);
   if (!change.ok)
-    return failure12(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
+    return failure13(change.status === "not_found" ? "not_found" : "invalid", change.diagnostics);
   const currentSpecs = await listCurrentSpecs({ repositoryRoot: input.repositoryRoot });
   if (!currentSpecs.ok)
-    return failure12(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
+    return failure13(currentSpecs.status === "not_found" ? "not_found" : "invalid", currentSpecs.diagnostics);
   const oracles = await loadOracles(input);
   if ("diagnostics" in oracles)
     return oracles;
   const taskGraph = await readTaskGraph(input);
   if (!taskGraph.ok) {
     if (taskGraph.status === "not_found") {
-      return failure12("invalid", [
+      return failure13("invalid", [
         traceabilityDiagnostic({
           code: "missing_taskgraph",
           message: `Change ${input.changeId} has no taskgraph artifact.`,
@@ -33270,12 +33486,12 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure12("invalid", taskGraph.diagnostics);
+    return failure13("invalid", taskGraph.diagnostics);
   }
   const evidenceIndex = await readEvidenceIndex(input);
   if (!evidenceIndex.ok) {
     if (evidenceIndex.status === "not_found") {
-      return failure12("invalid", [
+      return failure13("invalid", [
         traceabilityDiagnostic({
           code: "missing_evidence_index",
           message: `Change ${input.changeId} has no evidence-index artifact.`,
@@ -33283,7 +33499,7 @@ async function loadTraceabilityArtifacts(input) {
         })
       ]);
     }
-    return failure12("invalid", evidenceIndex.diagnostics);
+    return failure13("invalid", evidenceIndex.diagnostics);
   }
   return { currentSpecs, change, oracles, taskGraph, evidenceIndex };
 }
@@ -33299,7 +33515,7 @@ function partitionTraceabilityDiagnostics(diagnostics, options = {}) {
   };
 }
 async function validateChangeTraceability(input) {
-  const changeId = parseChangeId10(input.changeId);
+  const changeId = parseChangeId11(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const loaded = await loadTraceabilityArtifacts({
@@ -33310,7 +33526,7 @@ async function validateChangeTraceability(input) {
     return loaded;
   const report = buildGraph(loaded);
   if (report.diagnostics.length > 0)
-    return failure12("invalid", report.diagnostics, report);
+    return failure13("invalid", report.diagnostics, report);
   return {
     ok: true,
     status: "validated",
@@ -33394,7 +33610,7 @@ var INVALID_ARCHIVE_PATH = ".legion/project/changes/invalid-change/archive.json"
 function compareStrings6(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
-function failure13(status2, diagnostics) {
+function failure14(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function archiveDiagnostic(input) {
@@ -33404,10 +33620,10 @@ function archiveDiagnostic(input) {
     path: input.path ?? INVALID_ARCHIVE_PATH
   });
 }
-function parseChangeId11(input) {
+function parseChangeId12(input) {
   const parsed = changeIdSchema.safeParse(input);
   if (!parsed.success) {
-    return failure13("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_change_id",
       message: issue2.message
     })));
@@ -33417,7 +33633,7 @@ function parseChangeId11(input) {
 function parseArchivedAt(input, path51) {
   const parsed = utcTimestampSchema.safeParse(input);
   if (!parsed.success) {
-    return failure13("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archived_at",
       message: issue2.message,
       path: path51
@@ -33441,7 +33657,7 @@ function archiveRecordWithHash(input) {
     archiveHash: expectedArchiveHash(input)
   });
   if (!parsed.success) {
-    return failure13("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+    return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
       code: "invalid_archive_record",
       message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
       path: archivePath(input.changeId)
@@ -33471,7 +33687,7 @@ async function assertWorktreeTarget(input, path51) {
     });
     if (result.stdout.trim().length === 0)
       return void 0;
-    return failure13("conflict", [
+    return failure14("conflict", [
       archiveDiagnostic({
         code: "dirty_worktree",
         message: "Archive requires a clean worktree or an explicit outputBranch.",
@@ -33479,7 +33695,7 @@ async function assertWorktreeTarget(input, path51) {
       })
     ]);
   } catch (error51) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "worktree_status_unavailable",
         message: error51 instanceof Error ? error51.message : String(error51),
@@ -33489,13 +33705,13 @@ async function assertWorktreeTarget(input, path51) {
   }
 }
 function asArchiveFailure(status2, diagnostics) {
-  return failure13(status2, diagnostics);
+  return failure14(status2, diagnostics);
 }
 function findRevision2(input) {
   const revision = input.change.bundle.artifactRevisions.find((entry) => entry.role === input.role && entry.artifact.path === input.path);
   if (revision !== void 0)
     return revision;
-  return failure13("invalid", [
+  return failure14("invalid", [
     archiveDiagnostic({
       code: "missing_change_artifact_revision",
       message: `Change bundle is missing ${input.role} revision for ${input.path}.`,
@@ -33624,7 +33840,7 @@ function plannedIndex(entries) {
   });
   if (parsed.success)
     return parsed.data;
-  return failure13("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
+  return failure14("invalid", parsed.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_current_spec_index",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`
   })));
@@ -33636,7 +33852,7 @@ function validatePlannedDocument(path51, document) {
   });
   if (parsed.ok)
     return void 0;
-  return failure13(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
+  return failure14(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
 }
 function buildPlannedSpecs(input) {
   const docsByPath = documentByPath(input.currentSpecs);
@@ -33647,7 +33863,7 @@ function buildPlannedSpecs(input) {
   const deletedPaths = /* @__PURE__ */ new Set();
   const acceptedAt = input.change.bundle.change.acceptance?.status === "accepted" ? input.change.bundle.change.acceptance.acceptedAt : void 0;
   if (acceptedAt === void 0) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Change must carry accepted acceptance state before archive.",
@@ -33658,7 +33874,7 @@ function buildPlannedSpecs(input) {
   for (const delta of input.change.deltaSpecs) {
     if (delta.operation === "add") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure13("invalid", [
+        return failure14("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Add delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -33668,7 +33884,7 @@ function buildPlannedSpecs(input) {
       }
       const path51 = currentSpecPathForRequirement(delta.requirementId);
       if (plannedDocs.has(path51)) {
-        return failure13("conflict", [
+        return failure14("conflict", [
           archiveDiagnostic({
             code: "current_spec_already_exists",
             message: `Archive add target already exists: ${path51}.`,
@@ -33694,7 +33910,7 @@ function buildPlannedSpecs(input) {
     }
     const basePath = delta.baseCurrentSpec?.path ?? entriesByRequirement.get(delta.requirementId)?.path;
     if (basePath === void 0) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base for ${delta.requirementId} is missing from the archive plan.`,
@@ -33704,7 +33920,7 @@ function buildPlannedSpecs(input) {
     }
     const currentDocument = plannedDocs.get(basePath);
     if (currentDocument === void 0) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Current spec base ${basePath} for ${delta.requirementId} is not loaded.`,
@@ -33716,7 +33932,7 @@ function buildPlannedSpecs(input) {
     let targetPath = basePath;
     if (delta.operation === "modify") {
       if (delta.proposedRequirement === void 0 || delta.sections === void 0) {
-        return failure13("invalid", [
+        return failure14("invalid", [
           archiveDiagnostic({
             code: "ambiguous_delta",
             message: `Modify delta ${delta.requirementId} is missing proposed current-spec content.`,
@@ -33755,7 +33971,7 @@ function buildPlannedSpecs(input) {
   for (const deletePath of [...deletedPaths].sort(compareStrings6)) {
     const beforeEntry = input.currentSpecs.index.entries.find((entry) => entry.path === deletePath);
     if (beforeEntry === void 0) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_change_base",
           message: `Deleted current spec base ${deletePath} is not present in the current spec index.`,
@@ -33864,14 +34080,14 @@ function previewFromPlan(input) {
   });
   if (preview.success)
     return preview.data;
-  return failure13("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
+  return failure14("invalid", preview.error.issues.map((issue2) => archiveDiagnostic({
     code: "invalid_archive_preview",
     message: `${issue2.message}${issue2.path.length > 0 ? ` at ${issue2.path.join(".")}` : ""}`,
     path: archivePath(input.changeId)
   })));
 }
 async function buildArchivePlan(input) {
-  const changeId = parseChangeId11(input.changeId);
+  const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const path51 = archivePath(changeId);
@@ -33882,7 +34098,7 @@ async function buildArchivePlan(input) {
   if (!change.ok)
     return asArchiveFailure(change.status === "not_found" ? "not_found" : change.status, change.diagnostics);
   if (change.bundle.change.status !== "accepted" || change.bundle.change.acceptance?.status !== "accepted") {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "change_not_accepted",
         message: "Only accepted changes can be archived into current truth.",
@@ -33954,7 +34170,7 @@ async function backupFiles(input) {
         artifactPath
       });
     } catch (error51) {
-      return failure13("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "invalid_path",
           message: error51 instanceof Error ? error51.message : String(error51),
@@ -34016,7 +34232,7 @@ async function deletePlannedSpec(input) {
     bytes = await readFile8(resolved.absolutePath);
   } catch (error51) {
     if (error51 && typeof error51 === "object" && "code" in error51 && error51.code === "ENOENT") {
-      return failure13("invalid", [
+      return failure14("invalid", [
         archiveDiagnostic({
           code: "stale_spec_revision",
           message: `Expected current spec ${input.spec.path} to exist before archive removal.`,
@@ -34027,7 +34243,7 @@ async function deletePlannedSpec(input) {
     throw error51;
   }
   if (hashContent(bytes) !== input.spec.before.sha256) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Current spec ${input.spec.path} no longer matches the archived base content.`,
@@ -34042,7 +34258,7 @@ async function deletePlannedSpec(input) {
   if (!parsed.ok)
     return asArchiveFailure(parsed.status === "conflict" ? "conflict" : "invalid", parsed.diagnostics);
   if (parsed.document.revision !== input.spec.expectedRevision) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "stale_spec_revision",
         message: `Expected current spec revision ${input.spec.expectedRevision}, but current revision is ${parsed.document.revision}.`,
@@ -34104,7 +34320,7 @@ async function writeArchiveRecord(input) {
     };
   } catch (error51) {
     if (error51 instanceof ArtifactRevisionConflictError || error51 instanceof Error) {
-      return failure13("conflict", [
+      return failure14("conflict", [
         archiveDiagnostic({
           code: "archive_write_failed",
           message: error51.message,
@@ -34116,7 +34332,7 @@ async function writeArchiveRecord(input) {
   }
 }
 async function readArchiveRecord(input) {
-  const changeId = parseChangeId11(input.changeId);
+  const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const path51 = archivePath(changeId);
@@ -34127,10 +34343,10 @@ async function readArchiveRecord(input) {
   });
   if (!read.ok) {
     const status2 = read.diagnostics.some((diagnostic3) => diagnostic3.code === "not_found") ? "not_found" : "invalid";
-    return failure13(status2, read.diagnostics);
+    return failure14(status2, read.diagnostics);
   }
   if (read.value.changeId !== changeId) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "archive_change_mismatch",
         message: `Archive record change ID ${read.value.changeId} does not match requested change ${changeId}.`,
@@ -34140,7 +34356,7 @@ async function readArchiveRecord(input) {
   }
   const hashDiagnostics = archiveHashDiagnostics(read.value, path51);
   if (hashDiagnostics.length > 0)
-    return failure13("invalid", hashDiagnostics);
+    return failure14("invalid", hashDiagnostics);
   return {
     ok: true,
     status: "read",
@@ -34158,7 +34374,7 @@ async function readArchiveRecord(input) {
   };
 }
 async function archiveAcceptedChange(input) {
-  const changeId = parseChangeId11(input.changeId);
+  const changeId = parseChangeId12(input.changeId);
   if (typeof changeId !== "string")
     return changeId;
   const existing = await readArchiveRecord({
@@ -34170,7 +34386,7 @@ async function archiveAcceptedChange(input) {
     if (!current.ok)
       return asArchiveFailure(current.status, current.diagnostics);
     if (current.indexHash !== existing.record.preview.afterSpecHash) {
-      return failure13("conflict", [
+      return failure14("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Current truth hash ${current.indexHash} does not match archived target hash ${existing.record.preview.afterSpecHash}.`,
@@ -34194,7 +34410,7 @@ async function archiveAcceptedChange(input) {
   if (typeof archivedAt !== "string")
     return archivedAt;
   if (input.archivedBy.length === 0) {
-    return failure13("invalid", [
+    return failure14("invalid", [
       archiveDiagnostic({
         code: "invalid_archived_by",
         message: "Archive requires a non-empty archivedBy actor ID.",
@@ -34229,7 +34445,7 @@ async function archiveAcceptedChange(input) {
     }
     if (currentAfterWrites.indexHash !== plan.preview.afterSpecHash) {
       await rollbackFiles(backups, rollbackGuards);
-      return failure13("conflict", [
+      return failure14("conflict", [
         archiveDiagnostic({
           code: "archive_current_truth_mismatch",
           message: `Applied current truth hash ${currentAfterWrites.indexHash} does not match planned hash ${plan.preview.afterSpecHash}.`,
@@ -34274,7 +34490,7 @@ async function archiveAcceptedChange(input) {
     return write;
   } catch (error51) {
     await rollbackFiles(backups, rollbackGuards);
-    return failure13("conflict", [
+    return failure14("conflict", [
       archiveDiagnostic({
         code: "archive_write_failed",
         message: error51 instanceof Error ? error51.message : String(error51),
@@ -35177,7 +35393,7 @@ async function pathExists3(absolutePath) {
     throw error51;
   }
 }
-function failure14(status2, diagnostics) {
+function failure15(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic(input) {
@@ -35243,7 +35459,7 @@ async function validateNoSymbolicLinks(input) {
   const links = await listSymbolicLinks(input.root, input.displayedRoot);
   if (links.length === 0)
     return void 0;
-  return failure14("conflict", links.map((link) => diagnostic({
+  return failure15("conflict", links.map((link) => diagnostic({
     code: "unsupported_symbolic_link",
     message: "Codex .legion migration cannot preserve symbolic links safely; replace the link with a regular file or migrate it manually.",
     sourcePath: link
@@ -35283,7 +35499,7 @@ function safeResolvedStagingRoot(input) {
   const stagingRoot = path20.resolve(input.stagingRoot);
   const legacyRoot = path20.join(repositoryRoot, ".legion");
   if (pathsOverlap2(stagingRoot, repositoryRoot) || pathsOverlap2(stagingRoot, legacyRoot)) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .legion source.",
@@ -35298,7 +35514,7 @@ function safeResolvedBackupRoot(input) {
   const backupRoot = path20.resolve(input.backupRoot);
   const legacyRoot = path20.join(repositoryRoot, ".legion");
   if (pathsOverlap2(backupRoot, repositoryRoot) || pathsOverlap2(backupRoot, legacyRoot)) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root or .legion source.",
@@ -35313,7 +35529,7 @@ function parseUtcTimestamp(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error51) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: input.code,
         message: error51 instanceof Error ? error51.message : "Value is not a valid UTC timestamp.",
@@ -35559,7 +35775,7 @@ function validateReportMoves(report) {
   }
   if (matchesExpectedMoves)
     return void 0;
-  return failure14("invalid", [
+  return failure15("invalid", [
     diagnostic({
       code: "invalid_migration_moves",
       message: "Dry-run report moves no longer match the reviewed source inventory.",
@@ -35625,7 +35841,7 @@ async function createCodexLegionMigrationDryRun(input) {
   const repositoryRoot = path20.resolve(input.repositoryRoot);
   const legionRoot = path20.join(repositoryRoot, ".legion");
   if (!await pathExists3(legionRoot)) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "legacy_legion_root_missing",
         message: "Legacy .legion root does not exist.",
@@ -35681,7 +35897,7 @@ async function readReport(stagingRoot) {
   try {
     parsed = JSON.parse(await readFile10(reportPath, "utf8"));
   } catch (error51) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "missing_dry_run_report",
         message: error51 instanceof Error ? error51.message : "Dry-run report could not be read.",
@@ -35690,7 +35906,7 @@ async function readReport(stagingRoot) {
     ]);
   }
   if (!isCodexLegionMigrationReport(parsed)) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required Codex Legion migration fields.",
@@ -35717,7 +35933,7 @@ async function validateStagedTargetHash(input) {
   const actualHash = await hashTree(targetRoot);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure14("invalid", [
+  return failure15("invalid", [
     diagnostic({
       code: "staged_legacy_protocol_hash_mismatch",
       message: "Staged legacy protocol bytes no longer match the reviewed dry-run report.",
@@ -35729,7 +35945,7 @@ async function validateCurrentSourceHash(input) {
   const currentHash = await hashTree(path20.join(input.repositoryRoot, ".legion"));
   if (currentHash === input.report.source.treeHash)
     return void 0;
-  return failure14("invalid", [
+  return failure15("invalid", [
     diagnostic({
       code: "source_hash_mismatch",
       message: "Current .legion bytes differ from the reviewed dry-run report.",
@@ -35841,7 +36057,7 @@ async function applyCodexLegionMigration(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure14("blocked", [
+    return failure15("blocked", [
       diagnostic({
         code: "dry_run_review_required",
         message: "Codex .legion migrations require explicit reviewed apply after the dry-run report is inspected.",
@@ -35901,7 +36117,7 @@ async function applyCodexLegionMigration(input) {
       });
     } catch {
     }
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "apply_failed",
         message: error51 instanceof Error ? error51.message : "Codex .legion migration apply failed.",
@@ -35927,7 +36143,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     manifest = parsed;
   } catch (error51) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "invalid_backup_manifest",
         message: error51 instanceof Error ? error51.message : "Backup manifest could not be read.",
@@ -35938,7 +36154,7 @@ async function rollbackCodexLegionMigration(input) {
   const repositoryRoot = path20.resolve(input.repositoryRoot);
   const legionRoot = path20.join(repositoryRoot, ".legion");
   if (!sameResolvedPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure14("invalid", [
+    return failure15("invalid", [
       diagnostic({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -35948,7 +36164,7 @@ async function rollbackCodexLegionMigration(input) {
   }
   if (manifest.existingLegionRoot) {
     if (!path20.isAbsolute(manifest.backupPath)) {
-      return failure14("invalid", [
+      return failure15("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -35957,7 +36173,7 @@ async function rollbackCodexLegionMigration(input) {
       ]);
     }
     if (!await pathExists3(manifest.backupPath)) {
-      return failure14("invalid", [
+      return failure15("invalid", [
         diagnostic({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -35967,7 +36183,7 @@ async function rollbackCodexLegionMigration(input) {
     }
     const backupHash = await hashTree(manifest.backupPath);
     if (backupHash !== manifest.preMigrationHash) {
-      return failure14("invalid", [
+      return failure15("invalid", [
         diagnostic({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-migration hash.",
@@ -36000,7 +36216,7 @@ function compareStrings8(left, right) {
 function toPosixPath2(value) {
   return value.split(path21.sep).join("/");
 }
-function failure15(status2, diagnostics) {
+function failure16(status2, diagnostics) {
   return { ok: false, status: status2, diagnostics };
 }
 function diagnostic2(input) {
@@ -36095,7 +36311,7 @@ function classifyPlanningFile(relativePath) {
 }
 async function sourceInventory2(planningRoot) {
   if (!await pathExists4(planningRoot)) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "planning_root_missing",
         message: "Legacy .planning root does not exist.",
@@ -36142,7 +36358,7 @@ function extractRequirements(projectMarkdown) {
     const suffix = requirementSuffix(code);
     const id = requirementIdSchema.safeParse(`req_${suffix}`);
     if (!id.success) {
-      return failure15("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_requirement_id",
           message: `Legacy requirement code ${code} cannot be converted to a v9 requirement ID.`,
@@ -36411,7 +36627,7 @@ function safeResolvedStagingRoot2(input) {
   const planningRoot = path21.resolve(input.planningRoot);
   const stagingRoot = path21.resolve(input.stagingRoot);
   if (pathsOverlap3(stagingRoot, repositoryRoot) || pathsOverlap3(stagingRoot, planningRoot)) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "unsafe_staging_root",
         message: "Staging root must not overlap the repository root or .planning source."
@@ -36432,7 +36648,7 @@ async function safeResolvedBackupRoot2(input) {
   const realPlanningRoot = await resolveExistingPathComponents(planningRoot);
   const realStagingRoot = await resolveExistingPathComponents(stagingRoot);
   if (pathsOverlap3(backupRoot, repositoryRoot) || pathsOverlap3(backupRoot, legionRoot) || pathsOverlap3(backupRoot, planningRoot) || pathsOverlap3(backupRoot, stagingRoot) || pathsOverlap3(realBackupRoot, realRepositoryRoot) || pathsOverlap3(realBackupRoot, realLegionRoot) || pathsOverlap3(realBackupRoot, realPlanningRoot) || pathsOverlap3(realBackupRoot, realStagingRoot)) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "unsafe_backup_root",
         message: "Backup root must not overlap the repository root, .legion source, planning source, or staging root.",
@@ -36447,7 +36663,7 @@ function parseUtcTimestamp2(input) {
   try {
     return utcTimestampSchema.parse(value);
   } catch (error51) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: input.code,
         message: error51 instanceof Error ? error51.message : "Value is not a valid UTC timestamp.",
@@ -36473,7 +36689,7 @@ async function createPlanningImportDryRun(input) {
     return inventory;
   const projectMarkdown = await readUtf8IfExists(path21.join(planningRoot, "PROJECT.md"));
   if (projectMarkdown === void 0) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "missing_project",
         message: "Legacy .planning/PROJECT.md is required for planning import.",
@@ -36485,7 +36701,7 @@ async function createPlanningImportDryRun(input) {
   if ("diagnostics" in requirements)
     return requirements;
   if (requirements.length === 0) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "missing_requirements",
         message: "Legacy .planning/PROJECT.md does not contain importable requirement bullets.",
@@ -36504,7 +36720,7 @@ async function createPlanningImportDryRun(input) {
     createdAt
   });
   if (!initialized.ok) {
-    return failure15("invalid", initialized.diagnostics.map((entry) => diagnostic2({
+    return failure16("invalid", initialized.diagnostics.map((entry) => diagnostic2({
       code: entry.code,
       message: entry.message,
       sourcePath: entry.source.path
@@ -36535,7 +36751,7 @@ async function createPlanningImportDryRun(input) {
       document
     });
     if (!created.ok) {
-      return failure15("invalid", created.diagnostics.map((entry) => diagnostic2({
+      return failure16("invalid", created.diagnostics.map((entry) => diagnostic2({
         code: entry.code,
         message: entry.message,
         sourcePath: entry.source.path
@@ -36595,7 +36811,7 @@ async function readReport2(stagingRoot) {
   try {
     parsed = JSON.parse(await readFile11(reportPath, "utf8"));
   } catch (error51) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "missing_dry_run_report",
         message: error51 instanceof Error ? error51.message : "Dry-run report could not be read.",
@@ -36604,7 +36820,7 @@ async function readReport2(stagingRoot) {
     ]);
   }
   if (!isPlanningImportReport(parsed)) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "invalid_dry_run_report",
         message: "Dry-run report is missing required planning import fields.",
@@ -36678,7 +36894,7 @@ async function validateStagedProjectHash(input) {
   const actualHash = await hashTreeExcluding(stagedProject, ["migration/planning-import-report.json"]);
   if (actualHash === input.report.target.treeHash)
     return void 0;
-  return failure15("invalid", [
+  return failure16("invalid", [
     diagnostic2({
       code: "staged_project_hash_mismatch",
       message: "Staged project bytes no longer match the reviewed dry-run report.",
@@ -36691,7 +36907,7 @@ async function applyPlanningImport(input) {
   if ("diagnostics" in report)
     return report;
   if (!input.reviewAccepted) {
-    return failure15("blocked", [
+    return failure16("blocked", [
       diagnostic2({
         code: "dry_run_review_required",
         message: "Planning imports require explicit reviewed apply after the dry-run report is inspected.",
@@ -36707,7 +36923,7 @@ async function applyPlanningImport(input) {
     return stagedHashFailure;
   const destinationProject = path21.join(input.repositoryRoot, ".legion", "project");
   if (await pathExists4(destinationProject) && input.allowReplaceExistingProject !== true) {
-    return failure15("conflict", [
+    return failure16("conflict", [
       diagnostic2({
         code: "destination_contains_v9_project",
         message: "Destination already contains .legion/project; pass allowReplaceExistingProject only after review.",
@@ -36749,7 +36965,7 @@ async function applyPlanningImport(input) {
       });
     } catch {
     }
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "apply_failed",
         message: error51 instanceof Error ? error51.message : "Staged project installation failed.",
@@ -36775,7 +36991,7 @@ async function rollbackPlanningImport(input) {
     }
     manifest = parsed;
   } catch (error51) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: error51 instanceof Error ? error51.message : "Backup manifest could not be read.",
@@ -36786,7 +37002,7 @@ async function rollbackPlanningImport(input) {
   const repositoryRoot = path21.resolve(input.repositoryRoot);
   const legionRoot = path21.join(repositoryRoot, ".legion");
   if (!path21.isAbsolute(manifest.repositoryRoot)) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "invalid_backup_manifest",
         message: "Backup manifest repositoryRoot must be absolute.",
@@ -36795,7 +37011,7 @@ async function rollbackPlanningImport(input) {
     ]);
   }
   if (!await sameCanonicalPath(manifest.repositoryRoot, repositoryRoot)) {
-    return failure15("invalid", [
+    return failure16("invalid", [
       diagnostic2({
         code: "backup_repository_mismatch",
         message: "Backup manifest repositoryRoot does not match the requested repository root.",
@@ -36805,7 +37021,7 @@ async function rollbackPlanningImport(input) {
   }
   if (manifest.existingLegionRoot) {
     if (!path21.isAbsolute(manifest.backupPath)) {
-      return failure15("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must be absolute.",
@@ -36816,7 +37032,7 @@ async function rollbackPlanningImport(input) {
     const realBackupPath = await resolveExistingPathComponents(manifest.backupPath);
     const realLegionRoot = await resolveExistingPathComponents(legionRoot);
     if (pathsOverlap3(manifest.backupPath, legionRoot) || pathsOverlap3(realBackupPath, realLegionRoot)) {
-      return failure15("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest backupPath must not overlap the requested .legion directory.",
@@ -36825,7 +37041,7 @@ async function rollbackPlanningImport(input) {
       ]);
     }
     if (!await pathExists4(manifest.backupPath)) {
-      return failure15("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "invalid_backup_manifest",
           message: "Backup manifest references a missing .legion backup directory.",
@@ -36835,7 +37051,7 @@ async function rollbackPlanningImport(input) {
     }
     const backupHash = await hashTree2(manifest.backupPath);
     if (backupHash !== manifest.preImportHash) {
-      return failure15("invalid", [
+      return failure16("invalid", [
         diagnostic2({
           code: "backup_hash_mismatch",
           message: "Backup bytes no longer match the manifest pre-import hash.",
@@ -37311,6 +37527,7 @@ var WORKFLOW_COMMANDS = Object.freeze([
   { name: "approve", summary: "Record a human decision about the change's delta specs." },
   { name: "attest", summary: "Record a human assertion that pinned files are this change's evidence." },
   { name: "review", summary: "Review task outputs with verification and independent gates." },
+  { name: "release", summary: "Plan how this change's release is observed and taken back." },
   { name: "ship", summary: "Run release readiness, promotion, and observation gates." },
   { name: "retro", summary: "Record retrospective evidence for future planning." },
   { name: "status", summary: "Show workflow state and the next recommended action." },
@@ -37329,7 +37546,10 @@ var DEV_COMMANDS = Object.freeze([
   { name: "board", summary: "Direct operational Kanban, event, claim, and approval operations." },
   { name: "migrate", summary: "Direct legacy import, apply, and rollback operations." },
   { name: "evals", summary: "Release-grade sealed workflow eval operations." },
-  { name: "release", summary: "GA checklist and rollback-policy verifier operations." },
+  // Sharpened so the two `release` names are legible side by side: this one runs
+  // GA scripts against the packaged CLI's own source root and knows nothing about
+  // a change, and the workflow `legion release` writes a change's observation plan.
+  { name: "release", summary: "GA checklist and rollback-policy verifier operations for this repository." },
   { name: "worker", summary: "Validate and inspect worker bundles for extension authors." }
 ]);
 var WORKFLOW_COMMAND_NAMES = new Set(WORKFLOW_COMMANDS.map((entry) => entry.name));
@@ -41825,6 +42045,9 @@ function attestationIdForKind(input) {
     derivedSuffix(input.changeId.slice("chg_".length), `-attestation-${input.attests}`)
   );
 }
+function releaseIdForChange(input) {
+  return formatEntityId("release", derivedSuffix(input.changeId.slice("chg_".length), "-release"));
+}
 function derivedSuffix(baseSuffix, tail) {
   const full = `${baseSuffix}${tail}`;
   if (full.length <= ENTITY_SUFFIX_MAX_LENGTH) return full;
@@ -42091,7 +42314,7 @@ var GATE_SCOPE = {
   protected_acceptance_tests: "task",
   security_or_e2e_evaluator: "change",
   explicit_human_approval: "task",
-  release_observation_plan: "task",
+  release_observation_plan: "change",
   rollback_or_forward_fix_evidence: "change"
 };
 function earliestExecutionRun(taskRuns) {
@@ -43298,6 +43521,7 @@ var ATTESTATION_GATE_KINDS = {
   independent_baseline: ["independent-baseline"],
   security_or_e2e_evaluator: ["security-evaluation", "e2e-evaluation"],
   architecture_or_security_review: ["architecture-review"],
+  release_observation_plan: ["release-observation"],
   rollback_or_forward_fix_evidence: ["rollback-evidence", "forward-fix-evidence"]
 };
 var GATE_READ_ATTESTATION_KINDS = new Set(
@@ -43881,22 +44105,31 @@ function domainReviewOutcome(input) {
     reason: `Every one of the ${deriving.length} task${deriving.length === 1 ? "" : "s"} of change ${change.changeId} deriving ${input.gate} carries an accepted review performed in ${domains.join(", ")}, with all three verdict axes pass and no blocking finding (${satisfying.map((review) => review.document.id).join(", ")}). What is established is the competence recorded, not the reviewer's independence of the implementer: Legion records no implementer identity that varies.`
   };
 }
+function combineProducerOutcomes(input) {
+  const { primary, secondary, describePrimary, describeSecondary } = input;
+  const overridden = (reported, other, describeOther) => other.status === "satisfied" ? {
+    ...reported,
+    reason: `${reported.reason} This change also carries a favourable ${describeOther}, and it does not override the verdict above: a record made about this change is a statement somebody made about it, and a record of another kind does not unmake it.`
+  } : reported;
+  const doubted = (reported, other, describeOther) => other.status === "satisfied" ? {
+    ...reported,
+    reason: `${reported.reason} This change also carries a favourable ${describeOther}, and it does not settle the question above: the records this report could not read may be the ones that refuse, and a gate answered from the half it could read is a gate answered around the half it could not.`
+  } : reported;
+  if (primary.status === "unsatisfied") return overridden(primary, secondary, describeSecondary);
+  if (secondary.status === "unsatisfied") return overridden(secondary, primary, describePrimary);
+  if (primary.concealsNegative === true) return doubted(primary, secondary, describeSecondary);
+  if (secondary.concealsNegative === true) return doubted(secondary, primary, describePrimary);
+  if (primary.status === "satisfied") return primary;
+  if (secondary.status === "satisfied") return secondary;
+  return primary;
+}
 function combineDomainReviewOutcomes(review, attested) {
-  const overridden = (primary, other, describeOther) => other.status === "satisfied" ? {
-    ...primary,
-    reason: `${primary.reason} This change also carries a favourable ${describeOther}, and it does not override the verdict above: a record made about this change is a statement somebody made about it, and a record of another kind does not unmake it.`
-  } : primary;
-  const doubted = (primary, other, describeOther) => other.status === "satisfied" ? {
-    ...primary,
-    reason: `${primary.reason} This change also carries a favourable ${describeOther}, and it does not settle the question above: the records this report could not read may be the ones that refuse, and a gate answered from the half it could read is a gate answered around the half it could not.`
-  } : primary;
-  if (review.status === "unsatisfied") return overridden(review, attested, "architecture-review attestation");
-  if (attested.status === "unsatisfied") return overridden(attested, review, "architecture or security review");
-  if (review.concealsNegative === true) return doubted(review, attested, "architecture-review attestation");
-  if (attested.concealsNegative === true) return doubted(attested, review, "architecture or security review");
-  if (review.status === "satisfied") return review;
-  if (attested.status === "satisfied") return attested;
-  return review;
+  return combineProducerOutcomes({
+    primary: review,
+    secondary: attested,
+    describePrimary: "architecture or security review",
+    describeSecondary: "architecture-review attestation"
+  });
 }
 function refuseSelfJudgedDomainAttestation(outcome, change) {
   const judgement = outcome.judgement;
@@ -43946,6 +44179,210 @@ function isDomainReviewSatisfying(input) {
     }
   });
   return outcome.status === "satisfied";
+}
+var RELEASE_STANDING = {
+  requested: "current",
+  staging: "current",
+  deployed: "current",
+  healthy: "current",
+  failed: "failed",
+  rollback_required: "failed",
+  rolled_back: "closed",
+  forward_fix_required: "closed",
+  superseded: "replaced"
+};
+function releaseRecordsNegative(release) {
+  const standing = RELEASE_STANDING[release.status];
+  return standing === "failed" || standing === "closed";
+}
+var RELEASE_EXPOSURE = {
+  local: "prerelease",
+  test: "prerelease",
+  staging: "released",
+  production: "released"
+};
+var RELEASE_PLAN_RECOVERY = {
+  command: "legion release plan --environment <env>",
+  reason: "Nothing in this change records how its release will be observed or taken back, and no build produces that: the gate reads the release plane. Record a plan naming the environment, at least one health criterion, and a rollback strategy with at least one criterion. A plan is checkable before the release, which is what makes this gate answerable at ship time, and it carries no ordering rule \u2014 a plan authored after the build is still a plan, because it constrains the release rather than the run. If this change deploys nothing at all, record that instead with legion attest release-observation --verdict not_applicable --waiver-reason <text> --attested-by <id>, which ADR-006 permits as an audited waiver and which legion ship echoes as a warning on every payload that carries one."
+};
+var RELEASE_REPLAN_RECOVERY = {
+  command: "legion release plan --environment <env> --health-criterion <text>",
+  reason: "This change carries a release plan and it does not answer the question this gate asks. Re-plan it: legion release plan rewrites the same release.json at the next revision, and it applies the gate's own predicate before reporting that there is nothing to write, so a plan it accepts is a plan this gate accepts. It refuses to overwrite a release whose status records a failure or a rollback, so this route cannot turn one of those green \u2014 those arms of this gate print a different recovery for that reason."
+};
+var RELEASE_NEGATIVE_RECOVERY = {
+  command: "legion ship",
+  reason: "This change's release plane records a release that failed or was taken back, and nothing that ships this change repairs that. legion release plan refuses to overwrite a release at one of those statuses \u2014 writing a fresh requested plan over a recorded failure is how a negative gets laundered \u2014 so the follow-up work belongs in a new change. If the record itself is wrong, correct or remove the release.json under this change by hand and rerun this to confirm."
+};
+var RELEASE_ENVIRONMENT_RECOVERY = {
+  command: "legion release plan --environment <staging|production>",
+  reason: "This change carries a release plan for an environment nothing is released into, so it plans the work rather than the release of it. Re-plan it against the environment this change is actually released to. If this change deploys nothing at all, that is the waiver rather than a local plan: legion attest release-observation --verdict not_applicable --waiver-reason <text> --attested-by <id>, which legion ship echoes as a warning on every payload that carries one."
+};
+var UNREADABLE_RELEASE_RECOVERY = {
+  command: "legion ship",
+  reason: "A release plan is present for this change and could not be read, so whether it records a failed release is unknown and this gate reports unevaluable rather than absence. legion release plan deliberately refuses to overwrite an unread record \u2014 writing over one is the one way to silently replace a failed release with a fresh plan \u2014 so correct or remove the file by hand, then rerun this to confirm."
+};
+function taskgraphPathFor(changeId) {
+  try {
+    return artifactPathForRole({ role: "taskgraph", changeId });
+  } catch {
+    return void 0;
+  }
+}
+function releasePlanOutcome(input) {
+  const change = input.change;
+  const fact = change?.release;
+  if (change === void 0 || fact === void 0) {
+    return {
+      status: "unevaluable",
+      reason: "The release plan recorded for this change was not read, so whether anything plans how its release will be observed is unestablished.",
+      recovery: UNREADABLE_PLANE_RECOVERY,
+      // The plane was not read whole, and what is in it may be a `failed`
+      // release. See `GateOutcome.concealsNegative`.
+      concealsNegative: true
+    };
+  }
+  if (fact.kind === "unreadable") {
+    return {
+      status: "unevaluable",
+      reason: `${fact.path} is present for change ${change.changeId} and could not be read as a release plan, so whether this change carries one \u2014 and whether the one it carries records a failed release \u2014 is unestablished.`,
+      recovery: UNREADABLE_RELEASE_RECOVERY,
+      concealsNegative: true
+    };
+  }
+  if (fact.kind === "absent") {
+    return {
+      status: "unevaluable",
+      reason: `No release plan is recorded for change ${change.changeId}, so nothing says how its release would be observed or taken back.`,
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+  const plan = fact.document;
+  const describe3 = `Release plan ${plan.id} for change ${change.changeId}`;
+  if (plan.changeId !== change.changeId) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names change ${plan.changeId} rather than ${change.changeId}, so it is a plan about another change sitting at this change's path.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const standing = RELEASE_STANDING[plan.status];
+  if (standing === "failed") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} records status "${plan.status}", which is a recorded negative about the release this gate asks about: the plan exists and what happened under it is that the release failed or has to be taken back.`,
+      recovery: RELEASE_NEGATIVE_RECOVERY
+    };
+  }
+  if (standing === "closed") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} records status "${plan.status}", so the release it planned has already been taken back or needs a forward fix. That is a record of what happened rather than a plan for what will, and this change carries no other release plan.`,
+      recovery: RELEASE_NEGATIVE_RECOVERY
+    };
+  }
+  if (standing === "replaced") {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} records status "superseded", and it is the only release plan this change has \u2014 so it says of itself that it is not the current plan, and there is no current plan to read.`,
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+  if (RELEASE_EXPOSURE[plan.environment] === "prerelease") {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names ${plan.environment} as the environment it observes, and nothing is released into ${plan.environment}: it is where the work runs rather than where this change reaches anything. This gate asks how the release is observed and taken back, so a plan for a pre-release environment is a recorded failure to answer it rather than an answer. A change that deploys nothing at all is waived through legion attest release-observation --verdict not_applicable, which is audited, names a human and is echoed on every ship payload that carries one.`,
+      recovery: RELEASE_ENVIRONMENT_RECOVERY
+    };
+  }
+  if (plan.healthCriteria.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names no health criterion, so it plans a release nothing would be observed against. releaseSchema does not bound this array, so an empty one parses; this gate refuses it positively rather than quantifying over it and finding the quantifier vacuously true.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  if (plan.rollbackPlan.criteria.length === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} declares a ${plan.rollbackPlan.strategy} rollback strategy and no criterion that would trigger it, so nothing says when the release would be taken back.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const taskgraphPath2 = taskgraphPathFor(change.changeId);
+  if (taskgraphPath2 !== void 0 && plan.releaseIntent.path !== taskgraphPath2) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names ${plan.releaseIntent.path} as the release intent it was planned against, and a plan's task coverage is drawn from this change's task graph at ${taskgraphPath2}. A plan authored against something else records coverage of a set this report cannot check it over.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const deriving = tasksDeriving("release_observation_plan", input.tasks);
+  if (deriving.length === 0) {
+    return {
+      status: "unevaluable",
+      reason: `${describe3} exists, and no task of this change derives release_observation_plan, so there is nothing for a plan to observe.`,
+      recovery: RELEASE_PLAN_RECOVERY
+    };
+  }
+  const covered = new Set(plan.taskRefs.map((taskId) => taskId));
+  if (covered.size === 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names no task at all, so it is a plan that observes none of this change. This gate is derived by ${deriving.length} task${deriving.length === 1 ? "" : "s"} and is satisfied only when the plan speaks for all of them.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  const uncovered = deriving.map(input.taskIdFor).filter((taskId) => !covered.has(taskId));
+  if (uncovered.length > 0) {
+    return {
+      status: "unsatisfied",
+      reason: `${describe3} names ${covered.size} task${covered.size === 1 ? "" : "s"}, leaving ${uncovered.join(", ")} uncovered. This gate is derived by ${deriving.length} task${deriving.length === 1 ? "" : "s"} of this change and is satisfied only when the plan observes all of them.`,
+      recovery: RELEASE_REPLAN_RECOVERY
+    };
+  }
+  return {
+    status: "satisfied",
+    reason: `${describe3} observes it in ${plan.environment}, an environment this change is released into: ${plan.healthCriteria.length} health criteri${plan.healthCriteria.length === 1 ? "on" : "a"}, a ${plan.rollbackPlan.strategy} rollback plan with ${plan.rollbackPlan.criteria.length} criteri${plan.rollbackPlan.criteria.length === 1 ? "on" : "a"}, and coverage of all ${deriving.length} task${deriving.length === 1 ? "" : "s"} that derive release_observation_plan. This is a plan and not an observation: nothing here records that the release happened or that the criteria held. legion dev board release-observation is where a post-deployment report lands, and it is a different plane that no ship gate reads.`
+  };
+}
+function releaseObservationPlanStatus(input) {
+  return combineProducerOutcomes({
+    primary: releasePlanOutcome(input),
+    secondary: attestationGateStatus({
+      gate: "release_observation_plan",
+      kinds: ATTESTATION_GATE_KINDS.release_observation_plan,
+      change: input.change,
+      tasks: input.tasks,
+      taskIdFor: input.taskIdFor,
+      absenceRecovery: RELEASE_PLAN_RECOVERY
+    }),
+    describePrimary: "release observation plan",
+    describeSecondary: "release-observation attestation"
+  });
+}
+function isSatisfyingReleasePlan(input) {
+  return releasePlanShortfall(input) === void 0;
+}
+function releasePlanShortfall(input) {
+  const outcome = releasePlanOutcome({
+    tasks: input.tasks,
+    taskIdFor: input.taskIdFor,
+    change: {
+      changeId: input.changeId,
+      acceptance: void 0,
+      approvals: void 0,
+      attestations: void 0,
+      reviews: void 0,
+      deltas: void 0,
+      oracles: void 0,
+      taskRuns: void 0,
+      release: { kind: "document", document: input.release },
+      evaluatedAt: void 0,
+      verifyPin: UNRESOLVED_PINS,
+      classifySource: UNREAD_SOURCES
+    }
+  });
+  return outcome.status === "satisfied" ? void 0 : outcome.reason;
 }
 var PROTECTED_ACCEPTANCE_ITEM = "protected-acceptance-paths";
 var PROTECTED_PATHS_MODIFY_ACTION = "oracle.protected-paths.modify";
@@ -44219,6 +44656,12 @@ function evaluateGate(input) {
       });
     case "protected_acceptance_tests":
       return protectedAcceptancePathsStatus({ taskId, entries, change: input.change });
+    case "release_observation_plan":
+      return releaseObservationPlanStatus({
+        change: input.change,
+        tasks: input.tasks,
+        taskIdFor: input.taskIdFor
+      });
     default:
       return {
         status: "unevaluable",
@@ -44265,6 +44708,24 @@ function shipGatePinnedReferences(input) {
     // because a dropped family fails silently and in the direction of looking
     // correct, and the next reader would otherwise have to guess whether the
     // omission was a decision.
+    //
+    // **And no family for `releaseIntent`, deliberately, on a measurement rather
+    // than a preference.** `releaseBaseSchema.releaseIntent` is a required
+    // `artifactReferenceSchema`, so a seventh family is the obvious reading — and
+    // it would break the gate it was added for. `legion review --accept` calls
+    // `updateChangeAcceptance`, which writes `change.yaml` and then re-points
+    // `taskgraph.json` and `evidence-index.json` through
+    // `repointChangeProposalInputs`: every candidate referent of `releaseIntent`
+    // moves bytes during the accept. A digest recorded before it would answer
+    // `drift`, and `release_observation_plan` would report `unsatisfied` for a
+    // governance write that changed no task and no criterion. What replaces the
+    // pin is strictly stronger rather than weaker: the gate compares
+    // `releaseIntent.path` against the change's own task graph path and
+    // re-derives the coverage claim against the *live* taskgraph on every ship,
+    // which is a check a digest could not make at all.
+    //
+    // `shipGateSourcePaths` does not move either: a release plan cites no report,
+    // so there are no bytes for `classifyEvidenceSource` to read.
   ];
 }
 function shipGateSourcePaths(attestations) {
@@ -44419,7 +44880,21 @@ var GATE_RECOVERY = {
     "e2e-evaluation"
   ]),
   explicit_human_approval: void 0,
-  release_observation_plan: void 0,
+  // Six unmet states with three cures — no plan, a plan whose status records a
+  // failed or taken-back release, a plan with no health criterion, one whose
+  // rollback plan has no criterion, one that covers only part of the change, and
+  // a `release.json` that will not read — so the verdict carries its own and
+  // `shipGateRecovery` prefers that. What stays here is the state a caller
+  // holding only a gate id can be answered for, and the one every change on disk
+  // is in: nothing plans the release, because until this release nothing could.
+  //
+  // Leaving this `undefined` was measurable, not theoretical. On an R3 change
+  // already built, reviewed and accepted, this was the *only* unmet gate — so
+  // `shipGateRecovery` found no recovery among the unmet set, fell back to ship's
+  // own `{command: "legion build"}`, and advised a build on a change that had
+  // already been built. That is the exits-0-and-still-blocked loop this series
+  // exists to close, emitted by the aggregator.
+  release_observation_plan: RELEASE_PLAN_RECOVERY,
   rollback_or_forward_fix_evidence: attestRecovery("rollback_or_forward_fix_evidence", [
     "rollback-evidence",
     "forward-fix-evidence"
@@ -46021,6 +46496,23 @@ async function loadOracleFacts(input) {
     oracles.push({ document: oracle.document, reference: oracle.reference });
   }
   return oracles;
+}
+async function loadReleaseFact(input) {
+  const path51 = releaseArtifactPath(input.changeId);
+  const read = await absentOnFailure(
+    () => readRelease({ repositoryRoot: input.repositoryRoot, changeId: input.changeId })
+  );
+  if (read === void 0) return { kind: "unreadable", path: path51 };
+  if (read.ok) return { kind: "document", document: read.document };
+  if (read.status === "not_found") return { kind: "absent" };
+  return { kind: "unreadable", path: path51 };
+}
+function releaseArtifactPath(changeId) {
+  try {
+    return artifactPathForRole({ role: "release", changeId });
+  } catch {
+    return ".legion/project/changes";
+  }
 }
 
 // packages/cli/src/workflow/acceptance-baseline.ts
@@ -49269,15 +49761,24 @@ async function resolvePhaseChange(repositoryRoot, phase) {
 
 // packages/cli/src/commands/workflow/ship.ts
 var SHIP_HELP = [
-  "legion ship [--canary] [--allow-legacy-evidence]",
+  "legion ship [--allow-legacy-evidence] [--dry-run] [--review-accepted]",
   "",
   "Run the ship readiness gate. This layer does not publish or release.",
   "",
   "Options:",
-  "  --canary                  Report canary readiness alongside the gate.",
   "  --allow-legacy-evidence   Accept evidence written before requirement and oracle",
   "                            linking. `legion dev change archive` applies the same",
-  "                            check, so pass it there too."
+  "                            check, so pass it there too.",
+  "  --dry-run                 Accepted and not read: this command writes nothing",
+  "                            either way, so there is nothing to rehearse.",
+  "  --review-accepted         Accepted and not read here. Whether a review was",
+  "                            accepted is derived from the artifacts; no flag can",
+  "                            assert it.",
+  "",
+  "Release observation is planned with `legion release plan`, which writes the",
+  "release.json this command's release_observation_plan gate reads. This command",
+  "does not run canary probes or health checks; `legion dev board",
+  "release-observation` is where a post-deployment report lands."
 ].join("\n");
 var REBUILDABLE = /* @__PURE__ */ new Set(["missing_evidence_index", "missing_accepted_evidence"]);
 function recoveryFor(diagnostics) {
@@ -49374,6 +49875,16 @@ function planeSkipDiagnostics(skips) {
     path: skip.directory
   }));
 }
+function unreadableDocumentDiagnostics(release) {
+  if (release.kind !== "unreadable") return [];
+  return [
+    {
+      code: "artifact_document_unreadable",
+      message: `${release.path} is present and could not be read as a release plan. release_observation_plan reports unevaluable while this is true, because a plan that will not parse may be the one recording a failed release. legion release plan refuses to write over an unread record, so correct or remove the file, then rerun this.`,
+      path: release.path
+    }
+  ];
+}
 function runPlaneContradictionDiagnostics(input) {
   if (input.contradictions.length === 0) return [];
   return [
@@ -49405,6 +49916,7 @@ async function loadShipGateChangeFacts(input) {
   );
   const attestations = completeAttestations(attestationsResult);
   const reviews = completeReviews(input.reviews);
+  const release = await loadReleaseFact({ repositoryRoot: input.repositoryRoot, changeId: input.changeId });
   const pinned = await resolvePinnedReferenceReader({
     repositoryRoot: input.repositoryRoot,
     references: shipGatePinnedReferences({
@@ -49444,7 +49956,7 @@ async function loadShipGateChangeFacts(input) {
       deltas: bundle?.deltas,
       oracles,
       taskRuns,
-      release: void 0,
+      release,
       // Read once, here, for the same reason the pins are hashed once here: a
       // report is a snapshot of a moment. Gates that ask "is this still valid"
       // must all ask about the same instant, or a change could be reported
@@ -49578,6 +50090,7 @@ async function handleShipWorkflow(context) {
   ];
   const planeSkips = [
     ...planeSkipDiagnostics(changeFacts.skips),
+    ...unreadableDocumentDiagnostics(changeFacts.facts.release ?? { kind: "absent" }),
     ...runPlaneContradictionDiagnostics({
       contradictions: changeFacts.runPlaneContradictions,
       directory: `.legion/project/changes/${latestChange.changeId}/runs`
@@ -52122,6 +52635,505 @@ function blockedAttest(diagnostics, action, extras = {}) {
   );
 }
 
+// packages/cli/src/commands/workflow/release.ts
+var RELEASE_ENVIRONMENTS = releaseEnvironmentSchema.options;
+var ROLLBACK_STRATEGIES = releaseRollbackStrategySchema.options;
+var CRITERION_MAX_LENGTH = 1024;
+var RELEASE_HELP2 = `legion release <subject>
+
+Record how this change's release will be observed and taken back. This writes a
+governance artifact and nothing else: it does not deploy, publish, run a canary
+probe, or observe anything.
+
+Subjects:
+  plan   Record the release observation plan for the latest change.
+
+legion release plan --environment <env> --rollback-strategy <strategy>
+                    --health-criterion <text>... --rollback-criterion <text>...
+                    [--covers <taskId>...] [--dry-run]
+
+  --environment <env>        Required. ${RELEASE_ENVIRONMENTS.join(" | ")}. There is no
+                             default: a plan for local and a plan for production
+                             are different plans, and the gate reads the choice.
+                             Only staging and production satisfy
+                             release_observation_plan; nothing is released into
+                             local or test, so a plan naming one is recorded and
+                             warned about. A change that deploys nothing at all is
+                             waived instead, through legion attest
+                             release-observation --verdict not_applicable.
+  --rollback-strategy <s>    Required. ${ROLLBACK_STRATEGIES.join(" | ")}.
+  --health-criterion <text>  Required, repeatable. What the release is watched
+                             against. Authored, never derived: a criterion Legion
+                             wrote for you observes nothing anybody chose.
+  --rollback-criterion <t>   Required, repeatable. What would trigger the rollback.
+  --covers <taskId>          Repeatable. Which of this change's tasks the plan
+                             observes. Omitted, every task of the change.
+  --dry-run                  Report what would be recorded and write nothing.
+
+A plan is checkable *before* the release, which is what makes
+release_observation_plan answerable at ship time. It carries no ordering rule \u2014
+a plan authored after the build is still a plan, because it constrains the
+release rather than the run.
+
+Re-running rewrites the same release.json at the next revision, except over a
+release that failed or was taken back: those are refused rather than replaced,
+because a fresh plan written over one would report the gate satisfied about a
+release nobody repaired. That follow-up work belongs in a new change.
+
+This is not the post-deployment record. \`legion dev board release-observation\`
+aggregates a ReleaseObservationReport produced by an out-of-band monitor into the
+board's event log; that plane lives outside .legion/project and no ship gate
+reads it, which is exactly why this gate reads a plan instead.
+
+Example:
+  legion release plan --environment staging --rollback-strategy revert \\
+    --health-criterion "p99 quote latency stays under 400ms for 30 minutes" \\
+    --rollback-criterion "quote error rate exceeds 1% over any 5 minute window"`;
+async function handleReleaseWorkflow(context) {
+  const subject = context.args.positionals[0];
+  if (hasFlag(context, "help") || subject === "help") {
+    return helpResult(RELEASE_HELP2);
+  }
+  const supported = RELEASE_SUBJECTS.join(", ");
+  if (subject === void 0) {
+    return usageError(
+      `legion release requires a subject. Supported subjects: ${supported}. Example: legion release plan --environment staging --rollback-strategy revert --health-criterion <text> --rollback-criterion <text>.`
+    );
+  }
+  if (!RELEASE_SUBJECTS.includes(subject)) {
+    return usageError(`Unknown release subject: legion release ${subject}. Supported subjects: ${supported}.`);
+  }
+  return planRelease(context);
+}
+var RELEASE_SUBJECTS = ["plan"];
+function authoredList(context, option) {
+  if (context.args.options.get(option) === true) return "missing_value";
+  return [...new Set(repeatedStringOptions(context, option).map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+}
+async function planRelease(context) {
+  const environmentRaw = stringOption(context, "environment")?.trim();
+  if (context.args.options.get("environment") === true || environmentRaw === "") {
+    return usageError(
+      `Missing required value for --environment. Supported environments: ${RELEASE_ENVIRONMENTS.join(", ")}.`
+    );
+  }
+  if (environmentRaw === void 0) {
+    return blockedRelease(
+      [
+        {
+          code: "environment_required",
+          message: `legion release plan requires --environment. Supported environments: ${RELEASE_ENVIRONMENTS.join(", ")}. There is no default: a plan for local and a plan for production observe different things and are different plans, so one Legion chose would be a plan nobody wrote.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction("legion release plan --environment <env>", "Name the environment this release will be observed in.")
+    );
+  }
+  const parsedEnvironment = releaseEnvironmentSchema.safeParse(environmentRaw);
+  if (!parsedEnvironment.success) {
+    return usageError(
+      `Unknown release environment: --environment ${environmentRaw}. Supported environments: ${RELEASE_ENVIRONMENTS.join(", ")}.`
+    );
+  }
+  const environment = parsedEnvironment.data;
+  const strategyRaw = stringOption(context, "rollback-strategy")?.trim();
+  if (context.args.options.get("rollback-strategy") === true || strategyRaw === "") {
+    return usageError(
+      `Missing required value for --rollback-strategy. Supported strategies: ${ROLLBACK_STRATEGIES.join(", ")}.`
+    );
+  }
+  if (strategyRaw === void 0) {
+    return blockedRelease(
+      [
+        {
+          code: "rollback_strategy_required",
+          message: `legion release plan requires --rollback-strategy. Supported strategies: ${ROLLBACK_STRATEGIES.join(", ")}. ADR-006 asks for a canary or observation plan, and a plan that says how a release is watched without saying how it is taken back is half of one.`,
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        `legion release plan --rollback-strategy <${ROLLBACK_STRATEGIES.join("|")}>`,
+        "Say how this release would be taken back."
+      )
+    );
+  }
+  const parsedStrategy = releaseRollbackStrategySchema.safeParse(strategyRaw);
+  if (!parsedStrategy.success) {
+    return usageError(
+      `Unknown rollback strategy: --rollback-strategy ${strategyRaw}. Supported strategies: ${ROLLBACK_STRATEGIES.join(", ")}.`
+    );
+  }
+  const rollbackStrategy = parsedStrategy.data;
+  const healthCriteria = authoredList(context, "health-criterion");
+  if (healthCriteria === "missing_value") {
+    return usageError('Missing required value for --health-criterion. Example: --health-criterion "error rate < 1%".');
+  }
+  const rollbackCriteria = authoredList(context, "rollback-criterion");
+  if (rollbackCriteria === "missing_value") {
+    return usageError(
+      'Missing required value for --rollback-criterion. Example: --rollback-criterion "error rate > 1% for 5 minutes".'
+    );
+  }
+  if (healthCriteria.length === 0) {
+    return blockedRelease(
+      [
+        {
+          code: "health_criteria_required",
+          message: "legion release plan requires at least one --health-criterion <text>. A plan with no health criterion plans a release nothing would be observed against, and release_observation_plan reads that as unsatisfied rather than as absent \u2014 so writing one would exit 0 and leave ship blocked. The criteria are authored, never derived from the task graph: a criterion Legion wrote for you is not something anybody chose to watch.",
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        'legion release plan --health-criterion "<text>"',
+        "Say what this release will be watched against, in terms somebody could check."
+      )
+    );
+  }
+  if (rollbackCriteria.length === 0) {
+    return blockedRelease(
+      [
+        {
+          code: "rollback_criteria_required",
+          message: "legion release plan requires at least one --rollback-criterion <text>. releaseRollbackPlanSchema requires a non-empty criteria list, so a plan without one cannot even be written \u2014 and a rollback strategy with no trigger says how the release would be taken back without saying when.",
+          path: PROJECT_MANIFEST_PATH2
+        }
+      ],
+      nextAction(
+        'legion release plan --rollback-criterion "<text>"',
+        "Say what would make this release be taken back."
+      )
+    );
+  }
+  const overlong = [...healthCriteria, ...rollbackCriteria].find((value) => value.length > CRITERION_MAX_LENGTH);
+  if (overlong !== void 0) {
+    return usageError(
+      `A release criterion may be at most ${CRITERION_MAX_LENGTH} characters, and one of the criteria given is ${overlong.length}. releaseSchema bounds them, so a longer one would be refused at the write with a message naming a field rather than the text you typed.`
+    );
+  }
+  const latestChange = await findLatestWorkflowChangeId(context.repositoryRoot);
+  if (!latestChange.ok) {
+    return blockedRelease(latestChange.diagnostics, nextAction("legion plan 1", "Planning a release requires a planned change."));
+  }
+  const bundle = await loadChangeBundle({ repositoryRoot: context.repositoryRoot, changeId: latestChange.changeId });
+  if (!bundle.ok) {
+    return blockedRelease(
+      bundle.diagnostics,
+      nextAction("legion ship", "The change this plan would be about could not be read; legion ship names why."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskgraph = await readTaskGraph({ repositoryRoot: context.repositoryRoot, changeId: latestChange.changeId });
+  if (!taskgraph.ok) {
+    return blockedRelease(
+      taskgraph.diagnostics,
+      nextAction("legion plan 1", "A release plan names the tasks it observes, and the task graph could not be read."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskIds = taskgraph.document.tasks.map((task) => taskIdForContractId(task.id));
+  const coversRaw = [...new Set(repeatedStringOptions(context, "covers").map((value) => value.trim()))].filter(
+    (value) => value.length > 0
+  );
+  if (context.args.options.get("covers") === true) {
+    return usageError("Missing required value for --covers. Example: --covers tsk_phase-1-c1.");
+  }
+  const unknownTask = coversRaw.find((value) => !taskIds.includes(value));
+  if (unknownTask !== void 0) {
+    return blockedRelease(
+      [
+        {
+          // The same code `legion attest` raises for the same fact, deliberately
+          // rather than a synonym: one vocabulary across the verbs that name a
+          // change's tasks means one thing for a host to route on.
+          code: "task_not_in_change",
+          message: `--covers ${unknownTask} is not a task of ${latestChange.changeId}. Its tasks are: ${taskIds.join(", ")}. Claiming to observe a task Legion cannot show you observes nothing.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion release plan --covers <taskId>", "Name a task this change actually carries."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const covers = coversRaw.length > 0 ? coversRaw : taskIds;
+  if (covers.length === 0) {
+    return blockedRelease(
+      [
+        {
+          code: "change_has_no_tasks",
+          message: `${latestChange.changeId} carries no task contracts, so there is nothing for a release plan to observe. Plan the change first; a plan that covers nothing satisfies no gate.`,
+          path: taskgraph.artifactPath
+        }
+      ],
+      nextAction("legion plan 1", "A release plan names the tasks it observes, and this change has none."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const taskgraphPath2 = artifactPathForRole({ role: "taskgraph", changeId: bundle.bundle.change.id });
+  const mint = await mintPinnedReferences({ repositoryRoot: context.repositoryRoot, paths: [taskgraphPath2] });
+  const releaseIntent = mint(taskgraphPath2);
+  if (releaseIntent === void 0) {
+    return blockedRelease(
+      [
+        {
+          code: "release_intent_unpinnable",
+          message: `${taskgraphPath2} could not be pinned, so nothing was written. A release plan records which document its task coverage was drawn from, and this change's task graph is that document.`,
+          path: taskgraphPath2
+        }
+      ],
+      nextAction("legion plan 1", "The change's task graph could not be pinned."),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const releaseId = releaseIdForChange({ changeId: bundle.bundle.change.id });
+  const existing = await readRelease({ repositoryRoot: context.repositoryRoot, changeId: bundle.bundle.change.id });
+  if (!existing.ok && existing.status !== "not_found") {
+    return blockedRelease(
+      existing.diagnostics,
+      nextAction(
+        "legion release plan",
+        "A release plan already exists for this change and could not be read. Writing over an unread record is the one way to silently replace a failed release with a fresh plan, so nothing was written. Correct it by hand, then run this again."
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  if (existing.ok && releaseRecordsNegative(existing.document)) {
+    return blockedRelease(
+      [
+        {
+          code: "release_records_negative",
+          message: `${existing.artifactPath} records status "${existing.document.status}": a release of ${latestChange.changeId} that failed or was taken back. Re-planning would replace that record with a fresh plan at status "requested" and report release_observation_plan satisfied, which is how a recorded negative gets laundered \u2014 so nothing was written. The follow-up work belongs in a new change. If the record itself is wrong, correct or remove the file by hand and run this again.`,
+          path: existing.artifactPath
+        }
+      ],
+      nextAction(
+        "legion start --intake",
+        `${latestChange.changeId} records a release that failed or was taken back. Record the follow-up work as a new change; this one is not re-planned green.`
+      ),
+      { change: { changeId: latestChange.changeId } }
+    );
+  }
+  const plannedAt = currentUtcTimestamp();
+  const document = releaseDocument({
+    releaseId,
+    projectId: bundle.bundle.change.projectId,
+    changeId: bundle.bundle.change.id,
+    environment,
+    releaseIntent,
+    plannedAt,
+    covers,
+    healthCriteria,
+    rollbackStrategy,
+    rollbackCriteria,
+    ...existing.ok ? { existing } : {}
+  });
+  const alreadySatisfying = existing.ok && sameAuthoredPlan(existing.document, document) && isSatisfyingReleasePlan({
+    release: existing.document,
+    changeId: bundle.bundle.change.id,
+    tasks: taskgraph.document.tasks,
+    taskIdFor: (task) => taskIdForContractId(task.id)
+  });
+  const action = existing.ok ? alreadySatisfying ? "unchanged" : "re-record" : "record";
+  const warnings = releaseWarnings({
+    changeId: latestChange.changeId,
+    tasks: taskgraph.document.tasks,
+    covers,
+    taskIds,
+    taskgraphPath: taskgraph.artifactPath,
+    document,
+    action,
+    ...existing.ok ? { previous: existing } : {}
+  });
+  if (hasFlag(context, "dry-run")) {
+    const dryRunAction = nextAction(
+      action === "unchanged" ? "legion ship" : "legion release plan --environment <env>",
+      action === "unchanged" ? "This change already carries a release plan with these criteria that satisfies the gate reading it; this dry run found nothing to record." : "This was a dry run and no release plan was written. release_observation_plan stays unmet until this command is run without --dry-run."
+    );
+    return success2(
+      {
+        ok: true,
+        status: "ready",
+        dryRun: true,
+        change: { changeId: latestChange.changeId },
+        ...warnings.length === 0 ? {} : { warnings },
+        release: {
+          releaseId,
+          environment,
+          action,
+          covers,
+          healthCriteria,
+          rollbackPlan: { strategy: rollbackStrategy, criteria: rollbackCriteria },
+          releaseIntent
+        },
+        nextAction: dryRunAction,
+        diagnostics: []
+      },
+      [
+        "Release plan ready.",
+        `Dry run: ${action} a ${environment} release plan for ${latestChange.changeId}.`,
+        ...healthCriteria.map((value) => `  health    ${value}`),
+        `  rollback  ${rollbackStrategy}`,
+        ...rollbackCriteria.map((value) => `  trigger   ${value}`),
+        ...warnings.map((warning) => `Warning: ${warning.message}`),
+        "No release plan was written.",
+        renderNextAction(dryRunAction)
+      ].join("\n")
+    );
+  }
+  let written;
+  if (action !== "unchanged") {
+    const write = await writeRelease({
+      repositoryRoot: context.repositoryRoot,
+      expectedRevision: existing.ok ? existing.revision.revision : 0,
+      baseGitSha: resolveBaseGitSha(context.repositoryRoot),
+      document
+    });
+    if (!write.ok) {
+      return blockedRelease(
+        write.diagnostics,
+        nextAction("legion release plan", "The release plan could not be written. Correct the reported problem, then run this again."),
+        { change: { changeId: latestChange.changeId } }
+      );
+    }
+    written = write;
+  }
+  const record2 = written ?? (existing.ok ? existing : void 0);
+  const resultAction = nextAction(
+    "legion ship",
+    `The release plan for ${latestChange.changeId} is recorded. legion ship reads it back and reports whether release_observation_plan is satisfied.`
+  );
+  return success2(
+    {
+      ok: true,
+      status: action === "unchanged" ? "unchanged" : "planned",
+      change: { changeId: latestChange.changeId },
+      ...warnings.length === 0 ? {} : { warnings },
+      release: {
+        releaseId,
+        environment,
+        action,
+        covers,
+        healthCriteria,
+        rollbackPlan: { strategy: rollbackStrategy, criteria: rollbackCriteria },
+        releaseIntent,
+        artifactPath: record2?.artifactPath,
+        status: record2?.document.status
+      },
+      nextAction: resultAction,
+      diagnostics: []
+    },
+    [
+      action === "unchanged" ? `Already planned: a ${environment} release for ${latestChange.changeId}.` : `Planned a ${environment} release for ${latestChange.changeId}.`,
+      ...healthCriteria.map((value) => `  health    ${value}`),
+      `  rollback  ${rollbackStrategy}`,
+      ...rollbackCriteria.map((value) => `  trigger   ${value}`),
+      ...warnings.map((warning) => `Warning: ${warning.message}`),
+      renderNextAction(resultAction)
+    ].join("\n")
+  );
+}
+function sameAuthoredPlan(existing, next) {
+  const sameList = (left, right) => left.length === right.length && left.every((value, index) => value === right[index]);
+  return existing.environment === next.environment && existing.releaseIntent.path === next.releaseIntent.path && existing.rollbackPlan.strategy === next.rollbackPlan.strategy && sameList(existing.healthCriteria, next.healthCriteria) && sameList(existing.rollbackPlan.criteria, next.rollbackPlan.criteria) && sameList(
+    existing.taskRefs.map((taskId) => taskId),
+    next.taskRefs.map((taskId) => taskId)
+  );
+}
+function releaseWarnings(input) {
+  const warnings = [];
+  const derives = derivesShipGate(input.tasks, "release_observation_plan");
+  if (derives) {
+    const shortfall = releasePlanShortfall({
+      release: input.document,
+      changeId: input.changeId,
+      tasks: input.tasks,
+      taskIdFor: (task) => taskIdForContractId(task.id)
+    });
+    if (shortfall !== void 0) {
+      warnings.push({
+        code: "release_plan_gate_unmet",
+        message: `This plan is recorded and release_observation_plan will not be satisfied by it. legion ship reports: ${shortfall}`,
+        path: input.taskgraphPath
+      });
+    }
+  } else {
+    warnings.push({
+      code: "release_plan_gate_not_derived",
+      message: `No task of ${input.changeId} derives release_observation_plan, so this plan does not move any ship gate. It is a true governance fact and is preserved; the gate is derived by R3 work, and this change carries none.`,
+      path: input.taskgraphPath
+    });
+  }
+  const uncovered = input.taskIds.filter((taskId) => !input.covers.includes(taskId));
+  if (uncovered.length > 0) {
+    warnings.push({
+      code: "release_plan_partial_coverage",
+      message: `This plan observes ${input.covers.length} of ${input.taskIds.length} tasks and leaves ${uncovered.join(", ")} uncovered. release_observation_plan quantifies over the tasks of this change that derive it, which may be fewer than these; whether that leaves the gate unsatisfied is reported by release_plan_gate_unmet beside this, which is the gate's own answer about this exact plan rather than a prediction made here.`,
+      path: input.taskgraphPath
+    });
+  }
+  const previous = input.previous;
+  if (previous !== void 0 && previous.document.status !== "requested" && input.action !== "unchanged") {
+    warnings.push({
+      code: "release_plan_status_replaced",
+      message: `The release plan already on disk records status "${previous.document.status}". Recording this one replaces it with a fresh plan at status "requested": Legion keeps one release plan per change, so what that document recorded about the release already under way is superseded rather than kept beside it; its bytes remain in the artifact's revision chain. A release that failed or was taken back is refused here rather than warned about.`,
+      path: previous.artifactPath
+    });
+  }
+  return warnings;
+}
+function releaseDocument(input) {
+  const existing = input.existing;
+  return {
+    schemaVersion: LEGION_PROTOCOL_VERSION,
+    // `createdAt` is the instant the plan first existed and survives every
+    // re-plan, so nothing downstream reorders when a plan is rewritten.
+    createdAt: existing === void 0 ? input.plannedAt : existing.document.createdAt,
+    updatedAt: input.plannedAt,
+    kind: "release",
+    id: input.releaseId,
+    projectId: input.projectId,
+    changeId: input.changeId,
+    // `requested`, always. This verb plans; it does not deploy, and a status
+    // saying otherwise would be a claim about a release nobody performed. The
+    // deferred `legion release observe` is what moves it.
+    status: "requested",
+    environment: input.environment,
+    releaseIntent: input.releaseIntent,
+    // Re-parsed rather than cast: `taskIdForContractId` returns a branded id but
+    // `--covers` values come from argv, and a cast would put an unvalidated
+    // string where the gate's set comparison is the only thing that stops one
+    // plan answering for a task it never named.
+    taskRefs: input.covers.map((taskId) => taskIdSchema.parse(taskId)),
+    // Empty, deliberately, and read by nothing. These are the fields a
+    // post-deployment record populates: `approvalRefs` and `evidenceRefs` name
+    // what was decided and produced *during* the release, and
+    // `rollbackPlan.evidenceRefs` names what a rollback actually produced. A plan
+    // has none of that yet, and inventing values would put a claim in a
+    // governance artifact that nothing performed.
+    approvalRefs: [],
+    evidenceRefs: [],
+    healthCriteria: [...input.healthCriteria],
+    rollbackPlan: {
+      strategy: input.rollbackStrategy,
+      criteria: [...input.rollbackCriteria],
+      evidenceRefs: []
+    }
+  };
+}
+function blockedRelease(diagnostics, action, extras = {}) {
+  return failure(
+    {
+      ok: false,
+      status: "blocked",
+      ...extras,
+      diagnostics,
+      nextAction: action
+    },
+    ["Release plan blocked.", renderDiagnostics(diagnostics), renderNextAction(action)].join("\n")
+  );
+}
+
 // packages/cli/src/commands/workflow/ad-hoc.ts
 import { readFile as readFile23 } from "node:fs/promises";
 import path46 from "node:path";
@@ -54458,6 +55470,25 @@ var DECLARED = Object.freeze({
   // This release adds no VALUELESS_OPTIONS entry at all: `--dry-run` and
   // `--json` are already there, and the verb has no other boolean.
   attest: ["attested-by", "covers", "dry-run", "source", "statement", "verdict", "waiver-reason"],
+  // One list for every `legion release <subject>`, on `approve`'s rule:
+  // `undeclaredOptionError` runs on the stripped context before the handler and
+  // cannot see which subject was named. With one subject there is no per-subject
+  // boundary to enforce yet — the second subject (`observe`, deferred) is where
+  // `legion approve`'s `SUBJECT_OPTIONS` cross-refusal arrives, and shipping that
+  // machinery now would ship it with nothing to own.
+  //
+  // Every flag but `--dry-run` takes a value, so none of them may also appear in
+  // VALUELESS_OPTIONS: a valueless declaration would make `--environment staging`
+  // bind nothing and read as absent, which here means a plan refused for an
+  // environment the operator did name. `--health-criterion`, `--rollback-criterion`
+  // and `--covers` are additionally repeatable, which `parseCliArgs` records in
+  // `repeated`.
+  //
+  // **This release adds no VALUELESS_OPTIONS entry at all**: `--dry-run` and
+  // `--json` are already there and this verb has no other boolean. Saying so is
+  // required rather than optional, because a boolean missing from that set binds
+  // the next argv token as its value.
+  release: ["covers", "dry-run", "environment", "health-criterion", "rollback-criterion", "rollback-strategy"],
   ship: ["allow-legacy-evidence", "dry-run", "review-accepted"],
   validate: [],
   doctor: [],
@@ -54500,6 +55531,7 @@ var COMMAND_SPECIFIC_HELP = /* @__PURE__ */ new Set([
   "review",
   "approve",
   "attest",
+  "release",
   "validate",
   "doctor",
   "quick",
@@ -54539,6 +55571,8 @@ async function handleWorkflowCommand(context) {
       return handleApproveWorkflow(commandContext);
     case "attest":
       return handleAttestWorkflow(commandContext);
+    case "release":
+      return handleReleaseWorkflow(commandContext);
     case "ship":
       return handleShipWorkflow(commandContext);
     case "validate":

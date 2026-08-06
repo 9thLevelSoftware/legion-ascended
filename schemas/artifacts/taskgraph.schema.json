@@ -46,6 +46,7 @@
               "review",
               "approval",
               "attestation",
+              "release",
               "archive"
             ]
           },
@@ -1748,6 +1749,7 @@
                   "review",
                   "approval",
                   "attestation",
+                  "release",
                   "archive"
                 ]
               },

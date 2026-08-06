@@ -31,9 +31,13 @@ import { shipGateDiagnostics, shipGateRecovery } from "../packages/cli/dist/work
  * built lists below stay the thing that can falsify it.
  *
  * `release_observation_plan` is still used as the stand-in change-scoped gate
- * here, deliberately: these tests are about the rendering rule rather than about
- * any gate's verdict, and using the one gate that really is change-scoped would
- * couple them to a scope decision they do not assert.
+ * here, and the paragraph that used to justify it is now wrong in the other
+ * direction: it said the gate was *not* really change-scoped, and as of this
+ * release it is. The fixtures below are unaffected either way, because they are
+ * hand-built results and these tests are about the rendering rule rather than
+ * about any gate's verdict — `scope` and `subjectId` are supplied here, not read
+ * from `GATE_SCOPE`. The name is kept rather than replaced with a synthetic id
+ * so the diff stays about the one thing that moved.
  *
  * These fixtures are hand-built results rather than reports from
  * `deriveShipGates`. That is not a fixture in a shape that could never exist: a
@@ -180,13 +184,15 @@ test("a block mixing gates with a route and gates without advises the route, not
   const recovery = shipGateRecovery({
     gates: [
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
-      // Re-pointed a second time. It was `independent_baseline`, which gained a
-      // recovery with the attestation plane; then `protected_acceptance_tests`,
-      // which gained one with the acceptance-path observation. Both re-points are
-      // the same event — a gate stops being an example of "no route out" the
-      // release it gets one — and `release_observation_plan` is the last R3 gate
-      // that still is.
-      gateResult({ gate: "release_observation_plan" })
+      // Re-pointed a third time, and each re-point is the same event: a gate
+      // stops being an example of "no route out" the release it gets one. It was
+      // `independent_baseline`, which gained a recovery with the attestation
+      // plane; then `protected_acceptance_tests`, with the acceptance-path
+      // observation; then `release_observation_plan`, with the release plan.
+      // `explicit_human_approval` is the successor — R3, and still `undefined` in
+      // `GATE_RECOVERY` — and it is the last one, because every other gate id
+      // either carries a recovery or is below R2.
+      gateResult({ gate: "explicit_human_approval" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
@@ -207,7 +213,7 @@ test("a block with several distinct routes advises one of them and names them al
       gateResult({ gate: "approved_delta_spec", scope: "change", subjectId: "chg_x" }),
       gateResult({ gate: "whole_change_acceptance_evidence", scope: "change", subjectId: "chg_x" }),
       // Re-pointed for the same reason as the test above.
-      gateResult({ gate: "release_observation_plan" })
+      gateResult({ gate: "explicit_human_approval" })
     ],
     fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
   });
@@ -217,6 +223,26 @@ test("a block with several distinct routes advises one of them and names them al
   assert.match(recovery.reason, /2 have a command/);
   assert.match(recovery.reason, /legion review --accept --approver <id>/);
   assert.match(recovery.reason, /No single command unblocks this ship/);
+});
+
+test("a gate result carrying no recovery of its own falls back to the table", () => {
+  // **The only thing that can falsify a `GATE_RECOVERY` entry.** A gate whose
+  // verdict carries its own `recovery` is answered from the verdict, so every
+  // end-to-end assertion in the tree reads the arm's recovery rather than the
+  // table's — and replacing an entry with `undefined` reddens nothing. Measured:
+  // setting `GATE_RECOVERY.release_observation_plan` back to `undefined` left the
+  // whole gate suite green, which is exactly the state that made a blocked R3
+  // ship advise `legion build` on a change that had already been built.
+  //
+  // A result with no `recovery` is the caller this table exists for: a payload
+  // renderer or a summary holding only a gate id and a status.
+  const recovery = shipGateRecovery({
+    gates: [gateResult({ gate: "release_observation_plan", scope: "change", subjectId: "chg_x" })],
+    fallback: { command: "legion build", reason: "Required risk gates are not satisfied." }
+  });
+  assert.equal(recovery.command, "legion release plan --environment <env>");
+  assert.doesNotMatch(recovery.command, /legion build/);
+  assert.match(recovery.reason, /no build produces that/);
 });
 
 test("a block whose unmet gates have no recovery keeps the fallback unchanged", () => {

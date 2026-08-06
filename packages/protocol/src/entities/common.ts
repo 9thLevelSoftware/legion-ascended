@@ -260,6 +260,11 @@ export const artifactRoleSchema = z.enum([
   "review",
   "approval",
   "attestation",
+  // Widening a `z.enum` keeps every document already on disk valid, which is why
+  // each release that adds an artifact role adds it here rather than minting a
+  // parallel role vocabulary. `release` is the singular per-change release plan
+  // at `.legion/project/changes/<changeId>/release.json`.
+  "release",
   "archive"
 ]);
 

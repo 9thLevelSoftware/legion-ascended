@@ -583,6 +583,37 @@
       "cliGaps": []
     },
     {
+      "command": "release",
+      "verb": "release",
+      "handler": {
+        "file": "packages/cli/src/commands/workflow/release.ts",
+        "symbol": "handleReleaseWorkflow"
+      },
+      "executorBacked": false,
+      "sharedWith": [],
+      "class": "B",
+      "rationale": "The verb records one governance artifact - the change's release observation plan - and refuses the two states that would make it worthless: no health criterion, and no rollback criterion. It computes 'already planned' by calling the ship gate's own predicate rather than by checking that a file exists, so the CLI holds the whole of the mechanical floor. What stays in the host is the part no program can do: asking the person what would tell them this release had gone wrong and what they would do about it, in words somebody could check afterwards. Criteria the host composed would satisfy the gate by the act of running the command.",
+      "hostOnly": [
+        {
+          "capability": "Eliciting health and rollback criteria from the person rather than deriving them from the task graph or the diff",
+          "anchor": "The health criteria and the rollback criteria are authored, never derived."
+        },
+        {
+          "capability": "Refusing a criterion nobody could check afterwards, and asking for one they could disagree with now",
+          "anchor": "Ask for criteria somebody could check afterwards and disagree with now."
+        },
+        {
+          "capability": "Distinguishing the pre-release plan from the audited waiver and from the post-deployment board report, which share the words 'release observation'",
+          "anchor": "Three things in this repository carry the words \"release observation\""
+        },
+        {
+          "capability": "Saying plainly that a plan is not an observation, so a recorded plan does not establish that the release happened or that the criteria held",
+          "anchor": "it does not deploy, publish, run a canary probe, or observe anything"
+        }
+      ],
+      "cliGaps": []
+    },
+    {
       "command": "ship",
       "verb": "ship",
       "handler": {

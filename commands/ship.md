@@ -62,7 +62,11 @@ Project state comes from the CLI, not from files read directly.
               Run `/legion:review` before shipping, or specify a reviewed phase with `--phase N`."
      Exit — do not proceed
 
-   - Check for `--canary` flag: set CANARY_MODE=true if present, strip from arguments
+   - Check for `--canary` flag: set CANARY_MODE=true if present, strip from arguments.
+     `--canary` is a mode of THIS host command and is never passed through to the
+     `legion ship` CLI, which does not read it and refuses it at the option boundary.
+     Pre-release observation planning is `legion release plan`, which writes the
+     release.json the `release_observation_plan` gate reads before anything ships.
 
    Display: "Ship scope: Phase {N} — {phase_name}"
 
@@ -268,6 +272,10 @@ Project state comes from the CLI, not from files read directly.
        Run `/legion:status` to see updated project state."
 
 8. CANARY MODE (--canary flag)
+   A host-only post-ship mode. The CLI runs no canary probes and no health-check
+   subprocesses; this section is the host doing it. What the CLI checks *before*
+   the ship is the recorded plan — see `legion release plan` — and where a real
+   post-deployment report lands is `legion dev board release-observation`.
    If CANARY_MODE=true:
    a. Display:
       "Entering canary monitoring mode.
