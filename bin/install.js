@@ -115,13 +115,28 @@ function promptRuntimeSelection(scope, includeAll = false) {
   });
 }
 
+// `npx legion-ascended` runs from a throwaway cache and never puts `legion` on
+// PATH, so next-step hints must echo back the form the operator actually used.
+function isNpxInvocation() {
+  if (process.env.npm_command === 'exec') return true;
+  return __dirname.split(path.sep).includes('_npx');
+}
+
+function invocationPrefix() {
+  return isNpxInvocation() ? 'npx legion-ascended install' : 'legion install';
+}
+
 function printHelp() {
   console.log(`
 
 
 Usage:
-  npx legion-ascended [runtime] [options]
-  legion install --target <runtime> [options]
+  npx legion-ascended install --target <runtime> [options]   (no PATH setup needed)
+  legion install --target <runtime> [options]                (after npm i -g legion-ascended)
+
+  npx runs from a throwaway cache and does not put legion on PATH. Neither does
+  this installer -- it writes runtime adapter files, not a shell binary. Run
+  "npm i -g legion-ascended" if you want the bare legion command.
 
 Runtime (first-class targets are shown by default):
   --claude      Claude Code
@@ -204,8 +219,13 @@ function printTargetList(includeAll = false) {
     const scope = formatScopeSupport(runtime).padEnd(12, ' ');
     console.log(`${target}  ${tier}  ${scope}  ${formatEntrypoints(runtime)}`);
   }
-  console.log('\nInstall with: legion install --target <target> --local');
-  console.log('Explain a target with: legion install --target <target> --explain');
+  const prefix = invocationPrefix();
+  console.log(`\nInstall with: ${prefix} --target <target> --local`);
+  console.log(`Explain a target with: ${prefix} --target <target> --explain`);
+  if (isNpxInvocation()) {
+    console.log('\n`npx` does not put `legion` on PATH. Keep using the `npx legion-ascended` prefix,');
+    console.log('or run `npm i -g legion-ascended` once to get the `legion` command.');
+  }
   console.log();
 }
 

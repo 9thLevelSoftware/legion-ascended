@@ -35,22 +35,36 @@ is [docs/cli/WORKFLOW-QUICKSTART.md](docs/cli/WORKFLOW-QUICKSTART.md). Runtime s
 
 Requires Node.js `>=24 <26`.
 
-First-run bootstrap, before `legion` is on `PATH`:
+`legion install` writes adapter and command files into an AI runtime's config directory. It does
+**not** put a `legion` binary on your `PATH`, and neither does `npx` — so pick one of these two.
+
+**Option A — no install, `npx` prefix on every call.** Nothing lands on `PATH`; `npx` runs the
+package from a throwaway cache each time:
 
 ```powershell
 npx legion-ascended install --list-targets
 npx legion-ascended install --target codex --local
 ```
 
-After installation, use the installed `legion` command:
+**Option B — install globally once, then use the bare `legion` command.** This is the step that puts
+`legion` on `PATH`:
 
 ```powershell
+npm i -g legion-ascended
 legion install --list-targets
+```
+
+Either way, the full command surface is the same:
+
+```powershell
 legion install --list-targets --all-targets
 legion install --target codex --explain
 legion install --target codex --local --dry-run
 legion install --target codex --local
 ```
+
+Note that `--global` here means "install the adapter files into your home directory instead of the
+current project" — it is a Legion scope flag, unrelated to `npm i -g`.
 
 Recommended first-class targets:
 
