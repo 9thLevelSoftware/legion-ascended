@@ -146,6 +146,21 @@ And two in the guarded-execution path, both Windows-shaped:
   loops beside them, and both tests establish capability from a probe before
   asserting unconditionally.
 
+And two tests that could only ever have passed on Windows, both caught by the
+first CI run this branch got:
+
+- Two acceptance tests called `attrib`, a Windows binary, unconditionally, to
+  make a file read-only. On Linux and macOS that is `spawnSync attrib ENOENT`,
+  so both failed for a reason having nothing to do with what they assert. The
+  platform question is now asked once, in a helper that owns both the `chmod`
+  and the `attrib`, and each platform gets the mechanism that actually refuses
+  a write on it.
+- The new drive-letter fold test is Windows-only, because a POSIX runtime cannot
+  express its input: `path.isAbsolute("d:/repo")` is `false` off Windows, so the
+  pair under test stops being the pair under test. The half of that behaviour
+  which can go wrong on Linux — a segment case fold — is covered by a test that
+  runs everywhere.
+
 ### Unchanged
 - No v8 runtime behavior, skills, adapters, installers, or personas were changed
   by the P00-T01 governance charter or by the GA cut-over. The v8 maintenance
