@@ -153,8 +153,20 @@ first CI run this branch got:
   make a file read-only. On Linux and macOS that is `spawnSync attrib ENOENT`,
   so both failed for a reason having nothing to do with what they assert. The
   platform question is now asked once, in a helper that owns both the `chmod`
-  and the `attrib`, and each platform gets the mechanism that actually refuses
-  a write on it.
+  and the `attrib`.
+
+  That alone did not make them pass off Windows, and the reason is worth
+  recording rather than papering over: artifact writes here are atomic, and
+  POSIX `rename` consults the *directory's* permissions rather than the target
+  file's, so a read-only `taskgraph.json` does not refuse the write at all.
+  Making the directory read-only would refuse it — and would also block the
+  `change.yaml` write both tests need to land, that being the half they exist to
+  prove is not lost. Windows refuses to replace a read-only file even by rename,
+  which is the one-file granularity these tests need and POSIX does not offer.
+  So both are Windows-only, and the gap is stated in the file: on Linux and
+  macOS the `change_inputs_not_repointed` recovery path is exercised by no test
+  in that suite. Closing it portably needs a fault-injection seam in the
+  artifact writer.
 - The new drive-letter fold test is Windows-only, because a POSIX runtime cannot
   express its input: `path.isAbsolute("d:/repo")` is `false` off Windows, so the
   pair under test stops being the pair under test. The half of that behaviour
