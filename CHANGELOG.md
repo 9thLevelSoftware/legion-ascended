@@ -28,6 +28,14 @@ All notable Legion Next governance changes are documented here.
   so unprivileged Windows — what a contributor on a stock box actually runs — was
   the one configuration CI could never observe. That blind spot is what let the
   nine inline skips accumulate.
+- `check:symlink-coverage` also scans the test sources, because the run alone
+  cannot see the case it most needs to catch. `LEGION_FORCE_SYMLINK_UNAVAILABLE`
+  is read only by the shared helper — it does not make `symlink()` fail — so a new
+  test with its own inline creation would make a real link, pass, and leave the
+  skip count untouched. The first draft of that script claimed to catch exactly
+  that and did not. Every test file that creates a symlink must now import the
+  helper, with one stated exemption for the junction pin, which asserts what a
+  junction *is* rather than testing a guard.
 - `tests/windows-junction.test.mjs` pins that a Windows junction reports
   `isSymbolicLink() === true`, `isDirectory() === false`, and a readable
   `readlink` target. Six production modules refuse paths on exactly that answer,
@@ -141,6 +149,13 @@ And two in the guarded-execution path, both Windows-shaped:
   substituted with a junction: a junction is not the artifact that was
   snapshotted, and this function's contract is that whatever it cannot recreate
   faithfully is left alone and reported.
+- The symlink restore above resolved its `type` from the target at restore time,
+  which reads post-run state. A run that swapped the target from a file to a
+  directory (or the reverse) got the link back with the wrong reparse kind and
+  the path reported `restored` — a false restore, which is worse than the honest
+  failure the same function reports elsewhere, because nothing downstream
+  re-checks it. The kind is now captured in the pre-dispatch snapshot beside the
+  target and used verbatim.
 - The fake executor swallowed every error from planting a symlink, on the stated
   reasoning that a platform refusing symlink creation "simply does not exercise
   this case; the test that needs it skips". Two tests consequently inferred

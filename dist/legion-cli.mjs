@@ -46967,14 +46967,6 @@ function restoreFailureReason(error51, kind) {
   if (code !== void 0) return `${code} while ${action}`;
   return error51 instanceof Error ? `${error51.message} while ${action}` : `${action} failed`;
 }
-function symlinkTypeFor(linkPath, target) {
-  try {
-    const resolved = path44.isAbsolute(target) ? target : path44.resolve(path44.dirname(linkPath), target);
-    return statSync2(resolved).isDirectory() ? "dir" : "file";
-  } catch {
-    return "file";
-  }
-}
 var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 function isHarnessPath(relative, harnessPaths) {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
@@ -46994,6 +46986,15 @@ function digestOf(absolute) {
 function readTarget(absolute) {
   try {
     return readlinkSync(absolute);
+  } catch {
+    return void 0;
+  }
+}
+function readTargetKind(linkPath, target) {
+  if (target === void 0) return void 0;
+  try {
+    const resolved = path44.isAbsolute(target) ? target : path44.resolve(path44.dirname(linkPath), target);
+    return statSync2(resolved).isDirectory() ? "dir" : "file";
   } catch {
     return void 0;
   }
@@ -47018,7 +47019,12 @@ function snapshotProtectedState(input) {
     if (isHarnessPath(entry.path, input.harnessPaths)) continue;
     const absolute = path44.join(input.repositoryRoot, entry.path);
     if (entry.kind === "symlink") {
-      entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
+      const snapshotTarget = readTarget(absolute);
+      entries.set(entry.path, {
+        kind: "symlink",
+        target: snapshotTarget,
+        targetKind: readTargetKind(absolute, snapshotTarget)
+      });
       continue;
     }
     if (entry.size !== void 0 && entry.size > MAX_SNAPSHOT_BYTES) {
@@ -47235,7 +47241,7 @@ function restoreProtectedFiles(input) {
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
         mkdirSync3(path44.dirname(absolute), { recursive: true });
-        symlinkSync2(before.target, absolute, symlinkTypeFor(absolute, before.target));
+        symlinkSync2(before.target, absolute, before.targetKind ?? "file");
         restored.push(relative);
         continue;
       }

@@ -14,14 +14,25 @@
  * runs the files that own symlink tests, and asserts three things:
  *
  *  1. the run still passes — no test crashes when it cannot make a link;
- *  2. exactly EXPECTED_SKIPS tests skip — a new symlink test that bypasses the
- *     shared helper, or a deleted one, moves this number and reddens here;
- *  3. every skip carries a COVERAGE GAP diagnostic naming what did not run.
+ *  2. exactly EXPECTED_SKIPS tests skip, each reporting a COVERAGE GAP, so a
+ *     removed or newly-guarded test moves the number and has to be decided on.
  *
- * What it does not prove: that the guards themselves work. That is what the same
+ * Those two alone do **not** catch the case this check most needs to catch: a new
+ * symlink test that never calls the shared helper. `LEGION_FORCE_SYMLINK_UNAVAILABLE`
+ * is read only by the helper — it does not make `symlink()` fail in the subprocess —
+ * so a test with its own inline creation would create a real link, pass, and leave
+ * the count at EXPECTED_SKIPS. The first draft of this script claimed otherwise.
+ *
+ * So there is a third, independent check that does not depend on the run at all:
+ *
+ *  3. every test file that creates a symlink imports the capability helper.
+ *
+ * What none of it proves: that the guards themselves work. That is what the same
  * tests assert on Linux and macOS, where the links can actually be created.
  */
 import { spawnSync } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 /**
  * Tests that need a *file* symlink, and so cannot run unprivileged on Windows.
@@ -50,11 +61,59 @@ const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
 const gaps = output.match(/COVERAGE GAP:/gu)?.length ?? 0;
 const failures = Number(/^\s*(?:ℹ|#)\s*fail (\d+)/mu.exec(output)?.[1] ?? "0");
 
+/**
+  * Every test file that creates a symlink must route through the shared helper.
+  *
+  * This is a source scan rather than a run assertion, because the run cannot see
+  * a bypass: an inline `symlink()` succeeds on a privileged machine whatever the
+  * forcing env says, and the skip count stays put. Scanning is the only way to
+  * notice a guard test that quietly stopped participating.
+  */
+const HELPER = "helpers/symlink-capability.mjs";
+
+/**
+  * Files allowed to call `symlink` directly, each for a stated reason.
+  *
+  * Deliberately tiny and deliberately not a pattern: an allowlist that grows
+  * without argument is how the nine inline blocks happened in the first place.
+  */
+const EXEMPT = new Map([
+  [
+    "windows-junction.test.mjs",
+    "asserts what a junction *is* to lstat rather than testing a guard, and is already " +
+      "platform-gated; routing it through the capability helper would make it assert the helper"
+  ]
+]);
+
+function testFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return testFiles(full);
+    return /\.test\.(mjs|cjs)$/u.test(entry.name) ? [full] : [];
+  });
+}
+
+const bypasses = testFiles("tests")
+  .filter((file) => !EXEMPT.has(path.basename(file)))
+  .filter((file) => {
+    const source = readFileSync(file, "utf8");
+    // `symlink(`, `symlinkSync(` or a destructured `symlink` call. Comments
+    // mentioning the word are not calls, so the paren is required.
+    if (!/(?<![A-Za-z])symlink(Sync)?\s*\(/u.test(source)) return false;
+    return !source.includes(HELPER);
+  });
+
 const problems = [];
 if (result.status !== 0) {
   problems.push(`the suite exited ${result.status}; a missing symlink must skip a test, never break one`);
 }
 if (failures !== 0) problems.push(`${failures} test(s) failed under forced symlink unavailability`);
+for (const file of bypasses) {
+  problems.push(
+    `${file} creates a symlink without importing ${HELPER}. ` +
+      "Route it through requireFileSymlink/requireDirSymlink, or add it to EXEMPT with the reason."
+  );
+}
 if (gaps !== EXPECTED_SKIPS) {
   problems.push(
     `expected ${EXPECTED_SKIPS} COVERAGE GAP diagnostics, saw ${gaps}. ` +
@@ -71,4 +130,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`check-symlink-coverage PASS: ${gaps} skip(s), each reported as a coverage gap, no failures.`);
+console.log(
+  `check-symlink-coverage PASS: ${gaps} skip(s), each reported as a coverage gap, no failures; ` +
+    "every symlink-creating test file routes through the capability helper."
+);

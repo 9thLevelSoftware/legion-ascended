@@ -215,27 +215,6 @@ function restoreFailureReason(error: unknown, kind: ProtectedEntry["kind"] | und
   return error instanceof Error ? `${error.message} while ${action}` : `${action} failed`;
 }
 
-/**
- * The `type` argument `symlinkSync` needs on Windows, resolved from the target.
- *
- * POSIX ignores it. Windows does not: the default is `"file"`, so a directory
- * symlink recreated without this fails with `EPERM` even in a privileged
- * process — a failure that looks exactly like the unprivileged case and would
- * send the operator chasing the wrong fix.
- *
- * A target that cannot be stat'd (a dangling link, which is legitimate and is
- * itself something the guards are tested against) falls back to `"file"`,
- * matching Node's default rather than inventing a kind.
- */
-function symlinkTypeFor(linkPath: string, target: string): "file" | "dir" {
-  try {
-    const resolved = path.isAbsolute(target) ? target : path.resolve(path.dirname(linkPath), target);
-    return statSync(resolved).isDirectory() ? "dir" : "file";
-  } catch {
-    return "file";
-  }
-}
-
 export interface GuardedExecutionOutcome {
   readonly result: ExecutionResult;
   readonly reconciliation?: ReconciliationResult;
@@ -267,7 +246,22 @@ type ProtectedEntry =
   /** Too large to hold; identified by digest so a same-length rewrite is still caught. */
   | { readonly kind: "oversized"; readonly sha256: string | undefined }
   /** Never followed. The target is recorded so a retarget is detectable and reversible. */
-  | { readonly kind: "symlink"; readonly target: string | undefined };
+  | {
+      readonly kind: "symlink";
+      readonly target: string | undefined;
+      /**
+       * What the target *was* before dispatch, for `symlinkSync`'s Windows
+       * `type` argument.
+       *
+       * Captured here rather than resolved at restore time. The restore ran
+       * after the executor, so inspecting the target then reads mutable
+       * post-run state: a run that replaced the target with a directory
+       * (or the reverse) made the link come back with the wrong reparse
+       * kind, and the path was reported `restored` — a false restore, which
+       * is worse than the honest failure this module reports elsewhere.
+       */
+      readonly targetKind: "file" | "dir" | undefined;
+    };
 
 type ProtectedSnapshot = ReadonlyMap<string, ProtectedEntry>;
 
@@ -322,6 +316,23 @@ function readTarget(absolute: string): string | undefined {
   }
 }
 
+/**
+ * Whether a link's target is a directory, read *before* dispatch.
+ *
+ * `undefined` for a dangling link, which is legitimate and is itself something
+ * the guards are tested against; the restore falls back to Node's own default
+ * rather than inventing a kind.
+ */
+function readTargetKind(linkPath: string, target: string | undefined): "file" | "dir" | undefined {
+  if (target === undefined) return undefined;
+  try {
+    const resolved = path.isAbsolute(target) ? target : path.resolve(path.dirname(linkPath), target);
+    return statSync(resolved).isDirectory() ? "dir" : "file";
+  } catch {
+    return undefined;
+  }
+}
+
 function stagedProtectedPaths(repositoryRoot: string): ReadonlySet<string> {
   try {
     const output = execFileSync(
@@ -351,7 +362,12 @@ function snapshotProtectedState(input: {
     const absolute = path.join(input.repositoryRoot, entry.path);
 
     if (entry.kind === "symlink") {
-      entries.set(entry.path, { kind: "symlink", target: readTarget(absolute) });
+      const snapshotTarget = readTarget(absolute);
+      entries.set(entry.path, {
+        kind: "symlink",
+        target: snapshotTarget,
+        targetKind: readTargetKind(absolute, snapshotTarget)
+      });
       continue;
     }
     if (entry.size !== undefined && entry.size > MAX_SNAPSHOT_BYTES) {
@@ -765,13 +781,20 @@ function restoreProtectedFiles(input: {
         // Node defaults to `"file"`, so a directory symlink restored without it
         // fails there even when the process *does* hold symlink privilege.
         //
+        // Taken from the snapshot, never re-derived here. This code runs after
+        // the executor, so resolving the target now would read whatever the run
+        // left behind: a run that swapped the target from a file to a directory
+        // got its link back with the wrong reparse kind and the path reported
+        // `restored`. A false restore is worse than the honest failure below,
+        // because nothing downstream re-checks it.
+        //
         // Deliberately not falling back to `"junction"` for the directory case.
         // A junction would succeed unprivileged, but it is not the artifact that
         // was snapshotted, and this function's contract is that anything it
         // cannot recreate faithfully is left alone and reported. Substituting a
         // different reparse kind and calling the path restored would be the
         // quiet lie the reason string exists to prevent.
-        symlinkSync(before.target, absolute, symlinkTypeFor(absolute, before.target));
+        symlinkSync(before.target, absolute, before.targetKind ?? "file");
         restored.push(relative);
         continue;
       }
