@@ -118,6 +118,11 @@ where a check answered a narrower question than its name claimed.
   predicate, that being the point of them. Re-running with corrected wording
   therefore exited 0, reported `unchanged`, and wrote nothing. Satisfying the
   gate and carrying the authored text are now both required for `unchanged`.
+  `covers` is in that comparison too, and was missed in the first draft of this
+  fix: it looks like a gate input rather than authored text, but the gate reads
+  it from the *existing* document, so a corrected task list with unchanged prose
+  took the same branch and was dropped. It is compared as a set, so a reordered
+  `--covers` does not force a pointless rewrite.
 - `legion ship` prints its artifact-plane warnings. A change whose risk tier does
   not derive a gate can still hold an unreadable artifact for that plane — an R2
   change with a corrupt `release.json` — and the warning was assembled into the

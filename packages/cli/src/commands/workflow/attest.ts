@@ -454,10 +454,31 @@ export async function handleAttestWorkflow(context: CliContext): Promise<CliResu
   // question meant `legion attest ... --statement "corrected reason"` exited 0,
   // reported `unchanged`, and discarded the correction. Both questions are asked
   // now, and `unchanged` requires both to be yes.
+  //
+  // `covers` is in this comparison for the same reason and was missed in the
+  // first draft of this fix. It looks like a gate input rather than authored
+  // text, but the gate evaluates it from the *existing* document: a re-attest
+  // that corrects the task list, leaves the prose alone, and still satisfies on
+  // the old covers took the `unchanged` branch and dropped the new list. Order
+  // is not significant — the list is a set of subjects — so it is compared
+  // sorted rather than positionally, or a reordered `--covers` would force a
+  // pointless rewrite. `kind` is part of the key because a requirement and a
+  // task can carry the same id, and keying on the id alone would call two
+  // different coverage claims equal.
+  const coverKeys = (entries: readonly { readonly kind: string; readonly id: string }[]): string =>
+    entries
+      .map((entry) => `${entry.kind}:${entry.id}`)
+      .sort()
+      .join(" ");
+  const sameCovers = (
+    left: readonly { readonly kind: string; readonly id: string }[],
+    right: readonly { readonly kind: string; readonly id: string }[]
+  ): boolean => left.length === right.length && coverKeys(left) === coverKeys(right);
   const authoredUnchanged =
     existing.ok &&
     existing.document.statement === document.statement &&
-    existing.document.waiverReason === document.waiverReason;
+    existing.document.waiverReason === document.waiverReason &&
+    sameCovers(existing.document.covers, document.covers);
   const action: "record" | "re-record" | "unchanged" = existing.ok
     ? alreadySatisfying && authoredUnchanged
       ? "unchanged"
