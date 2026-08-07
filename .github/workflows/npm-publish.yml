@@ -135,6 +135,18 @@ jobs:
       - name: Run release validation
         run: pnpm run validate:next
 
+      # Blocking for the stable channel only. `release-checklist.mjs` is the one
+      # thing in the repository that reads the phase ledger, the kanban manifest
+      # and the independent review, and until now it ran in no workflow at all —
+      # the GA gate was real but nothing enforced it. A prerelease channel
+      # (`next`, `rc`, `alpha`) is exactly the place to publish before the
+      # sign-off exists, so this is scoped to `latest`.
+      - name: Verify GA release checklist (stable channel only)
+        if: steps.publish_metadata.outputs.dist_tag == 'latest'
+        env:
+          PACKAGE_VERSION: ${{ steps.publish_metadata.outputs.package_version }}
+        run: node scripts/release/release-checklist.mjs --release-version "$PACKAGE_VERSION"
+
       - name: Publish to npm with token
         if: steps.npm_auth.outputs.mode == 'token'
         env:

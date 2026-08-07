@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import { hashContent } from "../packages/artifacts/dist/revisions.js";
 import { resolvePinnedReferences } from "../packages/cli/dist/workflow/pinned-references.js";
+import { requireFileSymlink } from "./helpers/symlink-capability.mjs";
 
 async function workspace(t) {
   const root = await mkdtemp(path.join(tmpdir(), "legion-pins-"));
@@ -190,14 +191,8 @@ test("a pin whose path leaves the repository through a symlink is refused", asyn
 
   await mkdir(path.join(root, ".legion", "project", "changes", "chg_x", "delta"), { recursive: true });
   const link = path.join(root, ".legion", "project", "changes", "chg_x", "delta", "req.md");
-  try {
-    await symlink(path.join(outside, "secret.md"), link, "file");
-  } catch (error) {
-    // Creating a symlink needs a privilege Windows does not grant by default.
-    // Skipping is honest; asserting nothing would be a green test that never ran.
-    t.skip(`symlinks unavailable: ${error.code ?? error.message}`);
-    return;
-  }
+  if (!requireFileSymlink(t)) return;
+  await symlink(path.join(outside, "secret.md"), link, "file");
 
   const reference = {
     path: ".legion/project/changes/chg_x/delta/req.md",

@@ -54,6 +54,14 @@ Required v8 reference surfaces:
 
 ## Roadmap Rules
 
+**Scope.** These rules, the Gate Model, and the Evidence And Ledger Policy below
+govern the rewrite program — the phases enumerated in the Phase Index, 0 through
+13. Work after the Phase 13 cut line is governed by
+[ADR-012](next/adr/ADR-012-post-ga-governance.md), which states the review,
+changelog, ADR, and verification gates that apply there and why the per-phase
+ledger and independent phase review do not. Neither document weakens the other:
+phase 13 still requires its independent review to reach `PASS` before GA.
+
 1. Execute phases in numeric order unless the phase document and dependency map explicitly allow a bounded preparation task.
 2. Before editing code in any phase, read the selected phase document in full and reconcile every path/API assumption against the current `Legion Retooled` checkout.
 3. Use the original v8 repository as a reference and baseline source, not as the implementation workspace.
@@ -102,7 +110,9 @@ Use `C:/Users/dasbl/Documents/legion/docs/rebuild/CROSS-PHASE-DEPENDENCY-MAP.md`
 
 ## Gate Model
 
-Every phase follows this completion hierarchy from `AGENT-EXECUTION-GUIDE.md`:
+Every phase in the Phase Index follows this completion hierarchy from
+`AGENT-EXECUTION-GUIDE.md`. It is anchored to a per-phase source document, which
+is why it does not extend past the phases that have one — see ADR-012:
 
 ```text
 Task implementation
@@ -178,4 +188,4 @@ The Phase 0 plan should not attempt to implement later phases. It should establi
 - [ ] The top-level transformation-plan filename drift is understood.
 - [ ] Phase 0 is accepted as the only immediate implementation-planning target.
 - [ ] The original v8 repository is accepted as a reference/baseline input, not the new implementation workspace.
-- [ ] Evidence, ledger, and independent-review gates are accepted as non-optional.
+- [ ] Evidence, ledger, and independent-review gates are accepted as non-optional for phases 0-13. (Post-GA work: see ADR-012.)

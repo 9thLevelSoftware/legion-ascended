@@ -49,6 +49,15 @@ jobs:
       - name: Run Phase 1 local validation
         run: pnpm validate:next
 
+      # Informational. It reports `blocked` until the Phase 13 independent review
+      # is signed, which is a human act and not something a CI run should turn
+      # red for. Surfaced on every build so the distance to GA is visible rather
+      # than rediscovered; `npm-publish.yml` is where it blocks, for the stable
+      # channel only.
+      - name: Report GA release checklist status
+        continue-on-error: true
+        run: node scripts/release/release-checklist.mjs --release-version "$(node -p "require('./package.json').version")"
+
       - name: Upload failure evidence
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

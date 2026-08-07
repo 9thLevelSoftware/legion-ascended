@@ -25,6 +25,9 @@ const VALIDATE_NEXT_PLAN = [
   { id: "schema-doc-drift", command: "node scripts/validate-next.mjs --check-generated-drift" },
   { id: "package-contents", command: "pnpm run check:package-contents" },
   { id: "tests", command: "pnpm run test" },
+  // Runs after `tests` deliberately: it re-runs a subset under forced symlink
+  // unavailability, which is only meaningful once the normal run has passed.
+  { id: "symlink-coverage", command: "pnpm run check:symlink-coverage" },
   { id: "npm-pack", command: "npm pack --dry-run --json" },
   { id: "pnpm-pack", command: "pnpm pack --dry-run" }
 ];

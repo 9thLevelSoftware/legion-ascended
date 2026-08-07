@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { parseJsonOutput, runCliCapture } from "./helpers/cli-runner.mjs";
+import { requireFileSymlink } from "./helpers/symlink-capability.mjs";
 
 async function tempRepo() {
   return mkdtemp(path.join(tmpdir(), "legion-workflow-ux-"));
@@ -312,15 +313,8 @@ test("workflow executor text writes reject symlinked artifact paths", async (t) 
     const outsidePath = path.join(root, "..", `${path.basename(root)}-outside.txt`);
     await mkdir(path.dirname(targetPath), { recursive: true });
     await writeFile(outsidePath, "outside\n", "utf8");
-    try {
-      await symlink(outsidePath, targetPath, "file");
-    } catch (error) {
-      if (error && typeof error === "object" && ["EPERM", "EACCES", "ENOTSUP"].includes(String(error.code))) {
-        t.skip(`symlink creation unavailable: ${error.message}`);
-        return;
-      }
-      throw error;
-    }
+    if (!requireFileSymlink(t)) return;
+    await symlink(outsidePath, targetPath, "file");
 
     await assert.rejects(
       () => result.writeProjectTextFile({

@@ -39175,14 +39175,11 @@ function applyFakeExecutorPlan(input) {
   for (const entry of input.plan.symlinks ?? []) {
     const absolute = resolveInsideRepository(input.repositoryRoot, entry.path);
     if (absolute === void 0) continue;
-    try {
-      mkdirSync2(path26.dirname(absolute), { recursive: true });
-      rmSync(absolute, { force: true });
-      symlinkSync(entry.target, absolute);
-      written.push(entry.path);
-      staged.push(entry.path);
-    } catch {
-    }
+    mkdirSync2(path26.dirname(absolute), { recursive: true });
+    rmSync(absolute, { force: true });
+    symlinkSync(entry.target, absolute);
+    written.push(entry.path);
+    staged.push(entry.path);
   }
   if (input.plan.commit === true && staged.length > 0) {
     try {
@@ -46700,7 +46697,7 @@ async function acceptanceBaselineFromEvidence(input) {
 // packages/cli/src/workflow/guarded-execution.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
 import { createHash as createHash24 } from "node:crypto";
-import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readlinkSync, rmSync as rmSync3, statSync as statSync2, symlinkSync as symlinkSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import path44 from "node:path";
 
 // packages/cli/src/workflow/diff-reconciliation.ts
@@ -46961,6 +46958,23 @@ function listProjectFiles(repositoryRoot, relativeRoot) {
 }
 
 // packages/cli/src/workflow/guarded-execution.ts
+function restoreFailureReason(error51, kind) {
+  const code = error51?.code;
+  const action = kind === void 0 ? "removing the path the run created" : `restoring the ${kind} entry`;
+  if (kind === "symlink" && (code === "EPERM" || code === "EACCES")) {
+    return process.platform === "win32" ? `recreating the symlink requires symlink-creation privilege (${code}); enable Developer Mode or run elevated` : `recreating the symlink was refused by the filesystem (${code})`;
+  }
+  if (code !== void 0) return `${code} while ${action}`;
+  return error51 instanceof Error ? `${error51.message} while ${action}` : `${action} failed`;
+}
+function symlinkTypeFor(linkPath, target) {
+  try {
+    const resolved = path44.isAbsolute(target) ? target : path44.resolve(path44.dirname(linkPath), target);
+    return statSync2(resolved).isDirectory() ? "dir" : "file";
+  } catch {
+    return "file";
+  }
+}
 var MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 function isHarnessPath(relative, harnessPaths) {
   return harnessPaths.some((entry) => pathIsCoveredBy(relative, entry));
@@ -47221,13 +47235,16 @@ function restoreProtectedFiles(input) {
       if (before.kind === "symlink" && before.target !== void 0) {
         rmSync3(absolute, { force: true, recursive: true });
         mkdirSync3(path44.dirname(absolute), { recursive: true });
-        symlinkSync2(before.target, absolute);
+        symlinkSync2(before.target, absolute, symlinkTypeFor(absolute, before.target));
         restored.push(relative);
         continue;
       }
-      unrestored.push(relative);
-    } catch {
-      unrestored.push(relative);
+      unrestored.push({
+        path: relative,
+        reason: before.kind === "symlink" ? "the pre-run symlink target could not be read, so the link cannot be recreated" : `no restore is defined for a snapshotted ${before.kind} entry`
+      });
+    } catch (error51) {
+      unrestored.push({ path: relative, reason: restoreFailureReason(error51, before?.kind) });
     }
   }
   const indexFailures = restoreProtectedIndex({
@@ -47239,7 +47256,13 @@ function restoreProtectedFiles(input) {
   const stillStaged = new Set(indexFailures);
   return {
     restored: restored.filter((entry) => !stillStaged.has(entry)),
-    unrestored: [...unrestored, ...indexFailures]
+    unrestored: [
+      ...unrestored,
+      ...indexFailures.map((entry) => ({
+        path: entry,
+        reason: "the working tree was restored but the index entry could not be reset"
+      }))
+    ]
   };
 }
 function acceptanceUnestablishedReason(input) {
@@ -47295,7 +47318,7 @@ async function runGuardedExecution(input) {
     reasons.push(`The run failed: ${thrown instanceof Error ? thrown.message : String(thrown)}`);
   }
   if (touchedProtected.length > 0) {
-    const note = containment.unrestored.length === 0 ? `Restored ${containment.restored.length} protected path(s) to their pre-run state.` : `Could not restore ${containment.unrestored.join(", ")}; inspect the worktree before rerunning.`;
+    const note = containment.unrestored.length === 0 ? `Restored ${containment.restored.length} protected path(s) to their pre-run state.` : `Could not restore ${containment.unrestored.map((entry) => `${entry.path} (${entry.reason})`).join(", ")}; inspect the worktree before rerunning.`;
     reasons.push(
       `The run modified ${touchedProtected.length} protected control artifact(s): ${touchedProtected.join(", ")}. ${note}`
     );

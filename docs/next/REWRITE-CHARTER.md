@@ -66,6 +66,7 @@ The v8 line remains the shipped maintenance line until v9 reaches an approved GA
 ## Phase Gates
 - Phase 0 closes only after ADRs, v8 baseline, storage spike, Eve spike, premortem, backlog, go/no-go decision, integrated verification, independent review, and handoff pass.
 - Later phases cannot begin until the Phase 0 decision is GO or CONDITIONAL GO with assigned, testable conditions.
+- These gates run to the end of the rewrite program at phase 13. Work after that cut line is governed by [ADR-012](adr/ADR-012-post-ga-governance.md): PR review per `REVIEW.md`, a CHANGELOG entry per behavioural change, an ADR for protocol or gate-semantics changes, and `validate:next` green on all supported platforms. The phase coordinator role above owns ledger integrity for phases 0-13; it does not imply a ledger for phases that have no phase document.
 
 ## Branch, PR, Review, and Release Policy
 - Use `legion-next/phase-XX` for phase integration branches and `legion-next/PXX-TYY-short-name` for task branches when task isolation is needed.

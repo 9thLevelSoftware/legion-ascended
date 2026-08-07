@@ -74,6 +74,13 @@ Reproduce with `node scripts/release/release-checklist.mjs --release-version 9.0
 | `validate_next_log` | pass |
 | `open_ga_work` | **fail** — P13-T04 open; this review unsigned |
 
+Last reproduced 2026-08-07. `open_ga_work` reported three findings when this
+document was first assembled; one has since been cleared. `package.json` now
+reads `9.0.0`, matching the release identity. The two that remain —
+`ga_task_open` for P13-T04 and `phase_13_review_unsigned` for this file — are
+the two halves of the sign-off itself, and neither can be cleared by anyone but
+the reviewer. They are expected to be the last findings standing.
+
 `migration_policy` failed until the checklist was corrected: it demanded
 `legion next migrate`, the P12 compatibility alias, while the policy, ADR-009,
 `docs/next/cli/README.md`, and the command's own help text all use
@@ -84,25 +91,64 @@ Reproduce with `node scripts/release/release-checklist.mjs --release-version 9.0
 These are recorded so the reviewer does not have to rediscover them, and are not
 a substitute for the reviewer's own assessment.
 
-- **Eight ship gate families had no evidence producer.** `protected_oracle` now
-  reads a dedicated `oracle-verification` evidence item.
-  `approved_spec_and_oracle` remains unevaluable: it asks whether the spec and
-  oracle were approved *before* gated execution, and no approval record,
-  approver, or ordering timestamp exists to check.
-- **Whole-change acceptance has no transition.** `createChangeBundle` writes
-  `acceptance: "not_ready"` and nothing promotes it. An implementation was
-  attempted and reverted: the change bundle is content-hash pinned in both the
-  evidence index and the taskgraph, and recording acceptance in the taskgraph
-  would make the plan record mutable. A sibling acceptance artifact is the
-  proposed design and is an open decision.
-- **`workflow:dogfood` asserts `blocked` as success** because of the above. It
-  cannot honestly be flipped to `ready` while any R2+ change is structurally
-  unshippable.
-- **`package.json` reads `9.0.0-alpha.0`** against a `9.0.0` release identity.
+**The gaps listed when this document was first assembled have since been closed.**
+They are kept here, struck through, because the reviewer is judging a cut line
+that moved after the document was drafted, and a list that silently changed under
+them would be worse than one that shows its own history.
+
+- ~~**Eight ship gate families had no evidence producer.**~~ Closed. All twenty
+  gates now have one; ADR-011 records which command produces the evidence each
+  gate reads. `approved_spec_and_oracle` reads the approval plane's ordering,
+  which is the record that did not exist when this was written.
+- ~~**Whole-change acceptance has no transition.**~~ Closed. The sibling
+  acceptance artifact named here as "the proposed design and an open decision"
+  was implemented; `legion acceptance` decides the change as a whole and gives
+  every unmet verdict a way back, without making the taskgraph mutable.
+- ~~**`workflow:dogfood` asserts `blocked` as success.**~~ Closed. The harness
+  now drives a real R2 intake and asserts `legion ship` reports `ready` with
+  seven satisfied gates, then asserts the block and the recovery.
+- ~~**`package.json` reads `9.0.0-alpha.0`.**~~ Closed; it reads `9.0.0`.
+
+Open at this cut line:
+
+- **Phases 14-19 carry no phase ledger, evidence index, or independent review.**
+  This is now a recorded decision rather than a gap: ADR-012 scopes those gates
+  to phases 0-13 and states what governs work after them. The reviewer should
+  judge whether that scoping is acceptable, since it is the process under which
+  the gate-producer work above was delivered.
+- **Protocol 0.3.0 has no consumer outside this repository's own tests.** The
+  `attestation` and `release` entity kinds are exercised by the suite and the
+  dogfood harness only. Entity schemas are strict, so a reader on 0.2.0 refuses a
+  document using them — the compatibility story is designed but not field-tested.
+- **Seven security-boundary tests cannot run on Windows without Developer Mode.**
+  They require file symlinks, which need `SeCreateSymbolicLinkPrivilege`. The
+  suite now fails rather than skipping when that privilege is absent, and
+  `check:symlink-coverage` pins the count, but the assertions themselves are
+  proven on Linux and macOS rather than on an unprivileged Windows box.
+
+## Final Verdicts
+
+Six axes, each `PASS` or `FAIL`, matching the block every prior phase review
+carries. To be completed by the reviewer.
+
+| Axis | Verdict |
+|------|---------|
+| Requirement coverage | _to be recorded_ |
+| Architecture compliance | _to be recorded_ |
+| Implementation quality | _to be recorded_ |
+| Test and evidence sufficiency | _to be recorded_ |
+| Operational handoff readiness | _to be recorded_ |
+| Unresolved risk | _to be recorded_ |
 
 ## Reviewer Verdict
 
 _To be completed. Record PASS or FAIL, the reasoning, and any conditions._
+
+Recording `PASS` here means changing `## Status` at the top of this file from
+`PENDING` to `PASS`, and marking `P13-T04` as `DONE` in
+`docs/next/LEGION-ASCENDED-KANBAN-MANIFEST.md`. Those two edits are the whole
+sign-off; the release checklist reports `ready` once both are made and reports
+`blocked` while either is outstanding.
 
 ## Closeout Notes
 

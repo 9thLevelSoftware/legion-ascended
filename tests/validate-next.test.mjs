@@ -82,6 +82,7 @@ test("P01-T11 validate-next plan is the shared CI/local gate order", () => {
     "node scripts/validate-next.mjs --check-generated-drift",
     "pnpm run check:package-contents",
     "pnpm run test",
+    "pnpm run check:symlink-coverage",
     "npm pack --dry-run --json",
     "pnpm pack --dry-run"
   ]);

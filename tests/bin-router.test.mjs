@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -74,11 +74,16 @@ test("legacy installer flags still route to installer help", async () => {
 });
 
 test("legacy version flags route to installer version", async () => {
+  // Read the expected version rather than pinning the literal. The assertion
+  // that matters is "`--version` reports the version this package declares";
+  // a hardcoded string tests only that nobody has cut a release lately, and
+  // turns every legitimate bump into an unrelated test failure.
+  const { version } = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
   for (const flag of ["--version", "-v"]) {
     const result = await execFileAsync(process.execPath, ["bin/legion.js", flag], {
       ...EXEC_OPTIONS
     });
-    assert.match(result.stdout, /Legion v9\.0\.0-alpha\.0/);
+    assert.equal(result.stdout.trim(), `Legion v${version}`);
   }
 });
 
